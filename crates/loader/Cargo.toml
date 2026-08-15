@@ -1,0 +1,19 @@
+[package]
+name = "seekdeep-loader"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+indexmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yml.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+thiserror.workspace = true
+
+[lints]
+workspace = true
+
