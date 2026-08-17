@@ -8,7 +8,8 @@ use std::{
 };
 
 use parking_lot::Mutex;
-use seekdeep_llm::{ContentBlock, Message, MessageRole};
+pub use seekdeep_llm::SessionId;
+use seekdeep_llm::{ContentBlock, Message, MessageRole, ModelId, ProviderId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -19,37 +20,29 @@ use crate::request_header::{EpochHeader, canonical_header, fold_request_header};
 pub const SESSION_FORMAT_VERSION: u32 = 0;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
-/// Opaque session identity.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct SessionId(String);
-
-impl SessionId {
-    /// Brands a raw session identifier.
-    #[must_use]
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    /// Exposes the protocol string.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for SessionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
 /// Coarse durable origin classification.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SessionOrigin {
     /// Session was created as a child agent.
     Subagent,
+}
+
+/// Why an active agent driver was cancelled.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum AgentCancelCause {
+    /// Direct user cancellation.
+    User,
+    /// Owning parent stopped the child.
+    Parent,
+    /// A lifecycle hook cancelled with a diagnostic reason.
+    Hook {
+        /// Hook-authored reason.
+        reason: String,
+    },
+    /// Agent lifecycle teardown.
+    Disposed,
 }
 
 /// Immutable storage metadata kept outside the conversation log.
@@ -246,9 +239,9 @@ pub struct AppendOptions {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RequestContext {
     /// Registered provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Provider-owned model id.
-    pub model: String,
+    pub model: ModelId,
     /// Advertised combined input/output token capacity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_window: Option<u64>,
@@ -873,7 +866,7 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     };
     let message: Message = serde_json::from_value(message_value.clone())
         .map_err(|_| invalid(format!("{subject} lacks an identified message")))?;
-    if message.id.as_str().is_empty() {
+    if message.id().as_str().is_empty() {
         return Err(invalid(format!("{subject} lacks an identified message")));
     }
     let expected_role = if event.event_type == "assistant/message" {
@@ -881,7 +874,7 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     } else {
         MessageRole::User
     };
-    if message.role != expected_role {
+    if message.role() != expected_role {
         let role = if expected_role == MessageRole::Assistant {
             "assistant"
         } else {
@@ -891,17 +884,17 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
             "{subject} message must have role \"{role}\""
         )));
     }
-    if message.source.kind.is_empty() {
+    if message.source().kind.is_empty() {
         return Err(invalid(format!("{subject} message has invalid source")));
     }
     if event.event_type == "assistant/message" {
         let provider = message
-            .source
+            .source()
             .fields
             .get("provider")
             .and_then(Value::as_str);
-        let model = message.source.fields.get("model").and_then(Value::as_str);
-        if message.source.kind != "model"
+        let model = message.source().fields.get("model").and_then(Value::as_str);
+        if message.source().kind != "model"
             || provider.is_none_or(str::is_empty)
             || model.is_none_or(str::is_empty)
         {
@@ -910,12 +903,12 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     }
     if event.event_type == "tool/result" {
         let source_call_id = message
-            .source
+            .source()
             .fields
             .get("callId")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty());
-        if message.source.kind != "tool" || source_call_id.is_none() {
+        if message.source().kind != "tool" || source_call_id.is_none() {
             return Err(invalid(format!("{subject} message must have tool source")));
         }
         let [
@@ -924,7 +917,7 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
                 content: _,
                 is_error: _,
             },
-        ] = message.content.as_slice()
+        ] = message.content()
         else {
             return Err(invalid(format!(
                 "{subject} message must contain one tool-result block"
@@ -947,7 +940,7 @@ pub fn derive_event_message(event: &SessionEvent) -> Option<Message> {
         "assistant/message" => {
             let message = event.data.get("message")?;
             let message: Message = serde_json::from_value(message.clone()).ok()?;
-            if message.content.is_empty() {
+            if message.content().is_empty() {
                 None
             } else {
                 Some(message)

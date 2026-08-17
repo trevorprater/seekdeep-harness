@@ -30,6 +30,37 @@ struct SessionTrace {
     pending_calls: std::collections::HashSet<CallId>,
 }
 
+/// Relational balance after validating a detached event sequence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SessionEventBalance {
+    /// Open turn number, when the log ends mid-turn.
+    pub open_turn: Option<i64>,
+    /// Open step number, when the log ends mid-step.
+    pub open_step: Option<i64>,
+    /// Number of model-requested tool calls lacking a durable result.
+    pub pending_tool_calls: usize,
+}
+
+/// Validates a detached contiguous event sequence under the same relational
+/// contract enforced for live appends.
+///
+/// # Errors
+///
+/// Returns the first sequence, turn, step, or tool-correlation violation.
+pub fn validate_session_events(
+    events: &[SessionEvent],
+) -> Result<SessionEventBalance, SessionInvariantError> {
+    let mut trace = SessionTrace::default();
+    for event in events {
+        trace = validate_event(&trace, event)?;
+    }
+    Ok(SessionEventBalance {
+        open_turn: trace.open_turn,
+        open_step: trace.open_step,
+        pending_tool_calls: trace.pending_calls.len(),
+    })
+}
+
 impl Default for SessionTrace {
     fn default() -> Self {
         Self {

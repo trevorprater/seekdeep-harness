@@ -1,0 +1,34 @@
+[package]
+name = "seekdeep-settings-file"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "File-backed settings provider for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+notify = "8.2.0"
+parking_lot.workspace = true
+path-clean.workspace = true
+rowan.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-settings = { path = "../settings" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+serde_yml.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+yaml-edit.workspace = true
+
+[dev-dependencies]
+seekdeep-loader = { path = "../loader" }
+seekdeep-schemastery = { path = "../schemastery" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

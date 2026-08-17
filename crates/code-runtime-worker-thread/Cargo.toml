@@ -1,0 +1,37 @@
+[package]
+name = "seekdeep-code-runtime-worker-thread"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+boa_engine.workspace = true
+cpu-time.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+oxc_allocator.workspace = true
+oxc_ast.workspace = true
+oxc_ast_visit.workspace = true
+oxc_codegen.workspace = true
+oxc_diagnostics.workspace = true
+oxc_parser.workspace = true
+oxc_semantic.workspace = true
+oxc_span.workspace = true
+oxc_transformer.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+ryu-js.workspace = true
+seekdeep-code-runtime = { path = "../code-runtime" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

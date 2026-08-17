@@ -13,13 +13,26 @@ indexmap.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+ryu-js.workspace = true
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-code-runtime = { path = "../code-runtime" }
+seekdeep-core = { path = "../core" }
+seekdeep-agent = { path = "../agent" }
+seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-user-approval = { path = "../user-approval" }
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+unicode-ident.workspace = true
+unicode-normalization.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+seekdeep-code-runtime-worker-thread = { path = "../code-runtime-worker-thread" }
 
 [lints]
 workspace = true

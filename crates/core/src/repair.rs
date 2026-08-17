@@ -134,12 +134,11 @@ fn tool_result_closer(
 ) -> SessionEvent {
     let started = pending.call_seq.is_some();
     let call_id = CallId::new(call_id);
-    let message = Message {
-        id: MessageId::new(format!("interrupted-tool-result-{call_id}-{seq}")),
-        role: MessageRole::User,
-        source: MessageSource::tool(&call_id),
-        content: vec![ContentBlock::ToolResult {
-            tool_call_id: call_id,
+    let message = Message::from_existing(
+        MessageId::new(format!("interrupted-tool-result-{call_id}-{seq}")),
+        MessageRole::User,
+        vec![ContentBlock::ToolResult {
+            tool_call_id: call_id.clone(),
             is_error: Some(true),
             content: vec![ContentBlock::Text {
                 text: if started {
@@ -149,7 +148,9 @@ fn tool_result_closer(
                 },
             }],
         }],
-    };
+        MessageSource::tool(&call_id),
+        serde_json::Map::new(),
+    );
     SessionEvent {
         event_type: "tool/result".to_owned(),
         seq,

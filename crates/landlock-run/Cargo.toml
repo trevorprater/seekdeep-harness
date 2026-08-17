@@ -1,0 +1,29 @@
+[package]
+name = "seekdeep-landlock-run"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Fail-closed Rust Landlock self-restrict-then-exec launcher for SeekDeep Harness"
+readme = "README.md"
+
+[lib]
+name = "seekdeep_landlock_run"
+path = "src/lib.rs"
+
+[[bin]]
+name = "landlock-run"
+path = "src/main.rs"
+
+[dependencies]
+thiserror.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4.7"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,4 @@
+# Bilingual-pair consistency record. Both languages carry equal authority.
+# Hashes are Git blob identities of the paired files.
+README.md: 7327e5b254b774dc7a748bbd8a1289523d630471
+README.zh.md: 81a41954ffd5db8d169655900a9b26fa8115ebe3

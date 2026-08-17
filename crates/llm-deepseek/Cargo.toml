@@ -1,0 +1,41 @@
+[package]
+name = "seekdeep-llm-deepseek"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust DeepSeek chat-completions adapter for SeekDeep Harness"
+readme = "README.md"
+
+[dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-anonymous-user-id = { path = "../anonymous-user-id" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-credentials = { path = "../credentials" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-settings = { path = "../settings" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+seekdeep-attachment = { path = "../attachment" }
+seekdeep-credentials-local = { path = "../credentials-local" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-settings-file = { path = "../settings-file" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

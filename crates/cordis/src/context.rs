@@ -1,6 +1,12 @@
 //! Scoped dependency container.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    panic::{AssertUnwindSafe, catch_unwind},
+    sync::Arc,
+};
+
+use parking_lot::Mutex;
 
 use serde_json::Value;
 use uuid::Uuid;
@@ -13,10 +19,26 @@ use crate::{
 };
 
 type EventFilter = Arc<dyn Fn(&Context) -> bool + Send + Sync>;
+type ServiceChangeListener = Arc<dyn Fn() + Send + Sync>;
+
+#[derive(Default)]
+struct ServiceChangeBus {
+    listeners: Mutex<HashMap<Uuid, ServiceChangeListener>>,
+}
+
+impl ServiceChangeBus {
+    fn notify(&self) {
+        let listeners = self.listeners.lock().values().cloned().collect::<Vec<_>>();
+        for listener in listeners {
+            let _ = catch_unwind(AssertUnwindSafe(|| listener()));
+        }
+    }
+}
 
 struct Root {
     events: EventBus,
     services: Arc<ServiceStore>,
+    service_changes: Arc<ServiceChangeBus>,
     plugins: PluginRegistry,
 }
 
@@ -55,6 +77,7 @@ impl Context {
         let root = Arc::new(Root {
             events: EventBus::new(),
             services: Arc::new(ServiceStore::default()),
+            service_changes: Arc::new(ServiceChangeBus::default()),
             plugins: PluginRegistry::new(),
         });
         Self {
@@ -182,6 +205,38 @@ impl Context {
         self.fiber.own(effect)
     }
 
+    /// Observes every successful service provision and withdrawal.
+    ///
+    /// Listener failures are contained so one integration cannot prevent
+    /// plugin dependency reconciliation or later listeners.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CordisError::InactiveEffect`] after the owning fiber begins disposal.
+    pub fn on_service_change(
+        &self,
+        listener: impl Fn() + Send + Sync + 'static,
+    ) -> Result<EffectHandle, CordisError> {
+        let id = Uuid::now_v7();
+        self.root
+            .service_changes
+            .listeners
+            .lock()
+            .insert(id, Arc::new(listener));
+        let changes = self.root.service_changes.clone();
+        let effect = EffectHandle::synchronous("ctx.on_service_change", move || {
+            changes.listeners.lock().remove(&id);
+            Ok(())
+        });
+        match self.own(effect.clone()) {
+            Ok(effect) => Ok(effect),
+            Err(error) => {
+                self.root.service_changes.listeners.lock().remove(&id);
+                Err(error)
+            }
+        }
+    }
+
     /// Provides a typed service until the returned effect is disposed.
     ///
     /// # Errors
@@ -192,25 +247,47 @@ impl Context {
         key: ServiceKey<T>,
         value: Arc<T>,
     ) -> Result<EffectHandle, CordisError> {
-        let slot = self.slot(key.name());
+        self.provide_named(key.name(), value)
+    }
+
+    /// Provides a typed service under a runtime-computed name.
+    ///
+    /// Generated namespace services use this form while preserving the same
+    /// isolation, duplicate, lifecycle, and revision semantics as a static
+    /// [`ServiceKey`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CordisError::InactiveEffect`] after disposal begins or
+    /// [`CordisError::DuplicateService`] when the visible slot is occupied.
+    pub fn provide_named<T: Service>(
+        &self,
+        name: &str,
+        value: Arc<T>,
+    ) -> Result<EffectHandle, CordisError> {
+        let slot = self.slot(name);
         let Some(id) = self.root.services.insert(slot.clone(), &self.fiber, value) else {
-            return Err(CordisError::DuplicateService(key.name().to_owned()));
+            return Err(CordisError::DuplicateService(name.to_owned()));
         };
         self.root.plugins.notify_service_change();
+        self.root.service_changes.notify();
         let services = self.root.services.clone();
         let plugins = self.root.plugins.clone();
+        let service_changes = self.root.service_changes.clone();
         let disposal_slot = slot.clone();
-        let effect =
-            EffectHandle::synchronous(format!("ctx.provide({:?})", key.name()), move || {
-                services.remove(&disposal_slot, id);
+        let effect = EffectHandle::synchronous(format!("ctx.provide({name:?})"), move || {
+            if services.remove(&disposal_slot, id) {
                 plugins.notify_service_change();
-                Ok(())
-            });
+                service_changes.notify();
+            }
+            Ok(())
+        });
         match self.own(effect.clone()) {
             Ok(effect) => Ok(effect),
             Err(error) => {
                 self.root.services.remove(&slot, id);
                 self.root.plugins.notify_service_change();
+                self.root.service_changes.notify();
                 Err(error)
             }
         }
@@ -219,7 +296,13 @@ impl Context {
     /// Resolves the newest provider visible in this context's isolation scope.
     #[must_use]
     pub fn get<T: Service>(&self, key: ServiceKey<T>) -> Option<Arc<T>> {
-        self.root.services.get(&self.slot(key.name()), true)
+        self.get_named(key.name())
+    }
+
+    /// Resolves a typed service under a runtime-computed name.
+    #[must_use]
+    pub fn get_named<T: Service>(&self, name: &str) -> Option<Arc<T>> {
+        self.root.services.get(&self.slot(name), true)
     }
 
     /// Resolves a provider even while its owning plugin is loading.
@@ -235,6 +318,15 @@ impl Context {
             .services
             .provider_id(&self.slot(name), true)
             .is_some()
+    }
+
+    /// Monotonic revision of successful service provision and withdrawal.
+    ///
+    /// Consumers use this to invalidate reflection-derived caches without
+    /// retaining service instances or subscribing to an untyped event.
+    #[must_use]
+    pub fn service_revision(&self) -> u64 {
+        self.root.services.revision()
     }
 
     pub(crate) fn provider_id(&self, name: &str) -> Option<Uuid> {

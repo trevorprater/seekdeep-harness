@@ -1,0 +1,37 @@
+[package]
+name = "seekdeep-workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Durable workspace entity registry for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-storage-domain = { path = "../storage-domain" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-llm = { path = "../llm" }
+seekdeep-storage = { path = "../storage" }
+seekdeep-storage-json = { path = "../storage-json" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

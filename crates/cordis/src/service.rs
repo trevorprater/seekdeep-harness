@@ -4,7 +4,10 @@ use std::{
     any::Any,
     collections::HashMap,
     marker::PhantomData,
-    sync::{Arc, Weak},
+    sync::{
+        Arc, Weak,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use parking_lot::RwLock;
@@ -62,9 +65,18 @@ struct Provider {
 }
 
 /// Root-owned stack of service providers.
-#[derive(Default)]
 pub(crate) struct ServiceStore {
     providers: RwLock<HashMap<ServiceSlot, Vec<Provider>>>,
+    revision: AtomicU64,
+}
+
+impl Default for ServiceStore {
+    fn default() -> Self {
+        Self {
+            providers: RwLock::new(HashMap::new()),
+            revision: AtomicU64::new(0),
+        }
+    }
 }
 
 impl ServiceStore {
@@ -85,6 +97,7 @@ impl ServiceStore {
             owner: Arc::downgrade(owner),
             value,
         });
+        self.revision.fetch_add(1, Ordering::AcqRel);
         Some(id)
     }
 
@@ -100,6 +113,7 @@ impl ServiceStore {
         if entries.is_empty() {
             providers.remove(slot);
         }
+        self.revision.fetch_add(1, Ordering::AcqRel);
         true
     }
 
@@ -130,5 +144,9 @@ impl ServiceStore {
                         .is_some_and(|fiber| fiber.state() == FiberState::Active)
             })
             .map(|provider| provider.id)
+    }
+
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision.load(Ordering::Acquire)
     }
 }

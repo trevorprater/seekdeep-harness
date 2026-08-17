@@ -27,6 +27,9 @@ const ONE_OF_SIBLINGS: [&str; 6] = [
     "const",
 ];
 
+/// Stable code attached to unsupported-schema failures.
+pub const UNSUPPORTED_SCHEMA: &str = "UNSUPPORTED_SCHEMA";
+
 /// One validated node in Seekdeep's deliberately small JSON Schema subset.
 #[derive(Debug, PartialEq)]
 pub struct JsonSchemaNode(Value);
@@ -84,6 +87,8 @@ fn drop_value_iteratively(root: Value) {
 /// Every reason a raw schema fell outside the enforced subset.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JsonSchemaError {
+    /// Stable machine-readable failure code.
+    pub code: &'static str,
     /// Violations in deterministic schema-walk order.
     pub violations: Vec<String>,
 }
@@ -122,7 +127,10 @@ pub fn check_supported_json_schema(schema: &Value) -> Result<(), JsonSchemaError
     if violations.is_empty() {
         Ok(())
     } else {
-        Err(JsonSchemaError { violations })
+        Err(JsonSchemaError {
+            code: UNSUPPORTED_SCHEMA,
+            violations,
+        })
     }
 }
 
@@ -146,7 +154,10 @@ pub fn check_object_json_schema(schema: &Value) -> Result<(), JsonSchemaError> {
     if violations.is_empty() {
         Ok(())
     } else {
-        Err(JsonSchemaError { violations })
+        Err(JsonSchemaError {
+            code: UNSUPPORTED_SCHEMA,
+            violations,
+        })
     }
 }
 
@@ -750,7 +761,7 @@ fn check_scalar_value(
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use serde_json::{Number, json};
 
     use super::*;
 
@@ -760,18 +771,182 @@ mod tests {
             .violations
     }
 
+    fn asserted(schema: Value) -> JsonSchemaNode {
+        assert_supported_json_schema(schema).expect("supported schema")
+    }
+
+    fn validate(schema: Value, value: Value) -> Vec<String> {
+        let violations = validate_json_schema_value(&asserted(schema), &value);
+        drop(value);
+        violations
+    }
+
+    fn negative_zero() -> Value {
+        Value::Number(Number::from_f64(-0.0).expect("serde number retains negative zero"))
+    }
+
     #[test]
-    fn validates_supported_schema_vocabulary_and_reports_all_errors() {
-        assert_supported_json_schema(json!({
-            "type": "object",
-            "properties": {
-                "name": {"type": "string", "enum": ["a", "b"]},
-                "count": {"type": "integer"}
-            },
-            "required": ["name"],
-            "additionalProperties": false
-        }))
-        .expect("supported");
+    fn accepts_every_json_root_and_every_supported_node() {
+        for schema in [
+            json!({"type": "string"}),
+            json!({"type": "number"}),
+            json!({"type": "integer"}),
+            json!({"type": "boolean"}),
+            json!({"type": "null"}),
+            json!({"type": "array", "items": {"type": "string"}}),
+            json!({
+                "type": "object",
+                "properties": {
+                    "nested": {"type": "object", "properties": {}, "additionalProperties": false},
+                    "free": {},
+                },
+                "required": ["nested"],
+                "additionalProperties": true,
+            }),
+            json!({"oneOf": [{"type": "string"}, {"type": "number"}]}),
+            json!({
+                "description": "any JSON",
+                "title": "JSON",
+                "default": null,
+                "examples": [1, "x"],
+            }),
+        ] {
+            assert_supported_json_schema(schema).expect("supported node");
+        }
+    }
+
+    #[test]
+    fn retains_object_root_guard_only_for_object_consumers() {
+        assert_eq!(
+            assert_object_json_schema(json!({"type": "object"}))
+                .expect("object")
+                .as_value()["type"],
+            "object"
+        );
+        for schema in [
+            json!({}),
+            json!({"type": "string"}),
+            json!({"type": "array"}),
+            json!({"oneOf": [{"type": "string"}, {"type": "null"}]}),
+        ] {
+            assert_eq!(
+                assert_object_json_schema(schema)
+                    .expect_err("non-object root")
+                    .violations,
+                ["schema.type must be \"object\" (structured output is object-rooted)"]
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_non_schema_nodes_unknown_types_and_type_arrays() {
+        for schema in [Value::Null, json!([]), json!("no")] {
+            assert_eq!(violations(schema), ["schema must be a schema object"]);
+        }
+        assert!(violations(json!({"type": "tuple"}))[0].contains("type must be one of"));
+        assert_eq!(
+            violations(json!({"type": ["string", "null"]})),
+            ["schema.type must be a single type string (type arrays are not supported)"]
+        );
+    }
+
+    #[test]
+    fn enforces_one_of_vocabulary_and_minimum_branch_count() {
+        for schema in [
+            json!({"oneOf": []}),
+            json!({"oneOf": [{}]}),
+            json!({"oneOf": "x"}),
+        ] {
+            assert_eq!(
+                violations(schema),
+                ["schema.oneOf must be an array of at least two schemas"]
+            );
+        }
+        assert_eq!(
+            violations(json!({
+                "type": "string",
+                "oneOf": [{}, {}],
+            })),
+            ["schema cannot declare both type and oneOf"]
+        );
+        assert_eq!(
+            violations(json!({
+                "oneOf": [{"type": "string"}, {"type": "number"}],
+                "items": {},
+            })),
+            ["schema.items is not supported beside oneOf"]
+        );
+        assert!(
+            violations(json!({
+                "oneOf": [{"type": "string"}, {"type": "weird"}],
+            }))[0]
+                .contains("schema.oneOf[1].type")
+        );
+        // Rust's `Vec<Value>` structurally excludes sparse, decorated, exotic,
+        // and proxy arrays; every representable branch array is dense JSON.
+    }
+
+    #[test]
+    fn rejects_unknown_and_misplaced_keywords() {
+        for keyword in [
+            "anyOf",
+            "allOf",
+            "not",
+            "pattern",
+            "minimum",
+            "maxLength",
+            "$ref",
+        ] {
+            let mut schema =
+                Map::from_iter([("type".to_owned(), Value::String("object".to_owned()))]);
+            schema.insert(keyword.to_owned(), Value::Array(Vec::new()));
+            assert!(
+                violations(Value::Object(schema))[0]
+                    .contains(&format!("schema.{keyword} is not a supported keyword"))
+            );
+        }
+        for (schema, expected) in [
+            (
+                json!({"type": "object", "items": {}}),
+                "schema.items is not supported on type \"object\"",
+            ),
+            (
+                json!({"type": "array", "properties": {}}),
+                "schema.properties is not supported on type \"array\"",
+            ),
+            (
+                json!({"type": "object", "enum": ["x"]}),
+                "schema.enum is not supported on type \"object\"",
+            ),
+            (
+                json!({"type": "array", "const": null}),
+                "schema.const is not supported on type \"array\"",
+            ),
+        ] {
+            assert_eq!(violations(schema), [expected]);
+        }
+        assert_eq!(
+            violations(json!({
+                "properties": {},
+                "required": [],
+                "additionalProperties": true,
+                "items": {},
+                "enum": [],
+                "const": null,
+            })),
+            [
+                "schema.properties requires type or oneOf",
+                "schema.required requires type or oneOf",
+                "schema.additionalProperties requires type or oneOf",
+                "schema.items requires type or oneOf",
+                "schema.enum requires type or oneOf",
+                "schema.const requires type or oneOf",
+            ]
+        );
+    }
+
+    #[test]
+    fn reports_every_independent_schema_violation() {
         assert_eq!(
             violations(json!({
                 "type": "object",
@@ -787,22 +962,229 @@ mod tests {
     }
 
     #[test]
-    fn enforces_one_of_and_object_root_contracts() {
+    fn validates_object_properties_required_names_and_openness() {
         assert_eq!(
-            violations(json!({"oneOf": []})),
-            ["schema.oneOf must be an array of at least two schemas"]
+            violations(json!({"type": "object", "properties": []})),
+            ["schema.properties must be an object of schemas"]
         );
         assert_eq!(
-            assert_object_json_schema(json!({"type": "string"}))
-                .expect_err("not object")
-                .violations,
-            ["schema.type must be \"object\" (structured output is object-rooted)"]
+            violations(json!({"type": "object", "properties": {"a": "x"}})),
+            ["schema.properties.a must be a schema object"]
+        );
+        for required in [json!("a"), json!([1])] {
+            assert_eq!(
+                violations(json!({"type": "object", "required": required})),
+                ["schema.required must be an array of strings"]
+            );
+        }
+        assert_eq!(
+            violations(json!({
+                "type": "object",
+                "properties": {},
+                "required": ["missing"],
+            })),
+            ["schema.required names \"missing\" which is not in properties"]
+        );
+        assert_eq!(
+            violations(json!({"type": "object", "additionalProperties": "yes"})),
+            ["schema.additionalProperties must be a boolean"]
+        );
+        // `undefined` and sparse arrays are unrepresentable in `Value`; an
+        // explicit null remains present and is rejected with the same field diagnostic.
+        assert_eq!(
+            violations(json!({"type": "object", "properties": null})),
+            ["schema.properties must be an object of schemas"]
         );
     }
 
     #[test]
-    fn validates_nested_values_and_exact_one_unions() {
-        let schema = assert_supported_json_schema(json!({
+    fn requires_type_correct_scalar_enum_and_const_values() {
+        for schema in [
+            json!({"type": "string", "enum": ["a"], "const": "a"}),
+            json!({"type": "number", "enum": [1.5], "const": 1.5}),
+            json!({"type": "integer", "enum": [1], "const": 1}),
+            json!({"type": "boolean", "enum": [true], "const": true}),
+            json!({"type": "null", "enum": [null], "const": null}),
+        ] {
+            assert_supported_json_schema(schema).expect("valid scalar literals");
+        }
+        for (schema, expected) in [
+            (
+                json!({"type": "string", "enum": []}),
+                "schema.enum must be a non-empty array of string values",
+            ),
+            (
+                json!({"type": "number", "enum": ["1"]}),
+                "schema.enum must be a non-empty array of number values",
+            ),
+            (
+                json!({"type": "integer", "enum": [1.5]}),
+                "schema.enum must be a non-empty array of integer values",
+            ),
+            (
+                json!({"type": "boolean", "const": 1}),
+                "schema.const must be a boolean value",
+            ),
+            (
+                json!({"type": "string", "enum": ["a"], "const": "b"}),
+                "schema.const must be one of schema.enum when both are declared",
+            ),
+        ] {
+            assert_eq!(violations(schema), [expected]);
+        }
+        let mut negative_const = Map::from_iter([
+            ("type".to_owned(), json!("number")),
+            ("const".to_owned(), negative_zero()),
+        ]);
+        assert_eq!(
+            violations(Value::Object(std::mem::take(&mut negative_const))),
+            ["schema.const must be a number value"]
+        );
+        assert!(Number::from_f64(f64::NAN).is_none());
+    }
+
+    #[test]
+    fn validates_annotation_types_and_lossless_json_payloads() {
+        assert_eq!(
+            violations(json!({"description": 1})),
+            ["schema.description must be a string"]
+        );
+        assert_eq!(
+            violations(json!({"title": 1})),
+            ["schema.title must be a string"]
+        );
+        let mut schema = Map::new();
+        schema.insert("default".to_owned(), negative_zero());
+        assert_eq!(
+            violations(Value::Object(schema)),
+            ["schema.default annotation must be lossless JSON data"]
+        );
+        // `Value` excludes undefined, dates, getters, hidden/symbol keys, and cycles.
+    }
+
+    #[test]
+    fn accepts_lossless_annotation_containers_independent_of_origin() {
+        assert_supported_json_schema(json!({
+            "type": "object",
+            "properties": {"value": {"type": "string", "enum": ["x"]}},
+            "required": ["value"],
+            "default": {"x": 1},
+            "examples": [[{"ok": true}]],
+        }))
+        .expect("lossless annotations");
+    }
+
+    #[test]
+    fn structural_value_boundary_excludes_exotic_schemas_and_permits_reuse() {
+        let leaf = json!({"type": "string"});
+        assert_supported_json_schema(json!({
+            "type": "object",
+            "properties": {"a": leaf.clone(), "b": leaf},
+        }))
+        .expect("sibling reuse by value");
+        assert_eq!(
+            violations(json!({"type": "object", "properties": []})),
+            ["schema.properties must be an object of schemas"]
+        );
+        assert_eq!(
+            violations(json!({"type": "object", "properties": {"at": "date"}})),
+            ["schema.properties.at must be a schema object"]
+        );
+        // Cycles, prototypes, maps, proxies, non-enumerable and symbol keys
+        // cannot inhabit serde_json::Value, making this boundary stricter by type.
+    }
+
+    #[test]
+    fn asserts_deeply_nested_raw_unions_without_the_call_stack() {
+        let schema = deep_union(5_000);
+        assert_supported_json_schema(schema).expect("deep schema");
+    }
+
+    #[test]
+    fn map_lookup_has_own_property_semantics_for_required_declarations() {
+        assert_eq!(
+            violations(json!({
+                "type": "object",
+                "properties": {},
+                "required": ["toString"],
+            })),
+            ["schema.required names \"toString\" which is not in properties"]
+        );
+    }
+
+    #[test]
+    fn validates_scalar_array_object_and_null_roots() {
+        for (schema, value) in [
+            (json!({"type": "string"}), json!("x")),
+            (json!({"type": "number"}), json!(1.5)),
+            (json!({"type": "integer"}), json!(2)),
+            (json!({"type": "boolean"}), json!(true)),
+            (json!({"type": "null"}), Value::Null),
+            (
+                json!({"type": "array", "items": {"type": "string"}}),
+                json!(["x"]),
+            ),
+            (json!({"type": "object"}), json!({"x": 1})),
+        ] {
+            assert!(validate(schema, value).is_empty());
+        }
+    }
+
+    #[test]
+    fn rejects_wrong_scalar_types_and_lossy_numbers() {
+        for (schema, value, expected) in [
+            (
+                json!({"type": "string"}),
+                json!(1),
+                "\"value\" must be a string",
+            ),
+            (
+                json!({"type": "number"}),
+                json!("1"),
+                "\"value\" must be a number",
+            ),
+            (
+                json!({"type": "number"}),
+                negative_zero(),
+                "\"value\" must be a finite JSON number",
+            ),
+            (
+                json!({"type": "integer"}),
+                json!(1.5),
+                "\"value\" must be an integer",
+            ),
+            (
+                json!({"type": "boolean"}),
+                json!("true"),
+                "\"value\" must be a boolean",
+            ),
+            (json!({"type": "null"}), json!(0), "\"value\" must be null"),
+        ] {
+            assert_eq!(validate(schema, value), [expected]);
+        }
+    }
+
+    #[test]
+    fn enforces_scalar_enum_and_const_together() {
+        let schema = asserted(json!({
+            "type": "string",
+            "enum": ["a", "b"],
+            "const": "a",
+        }));
+        assert!(validate_json_schema_value(&schema, &json!("a")).is_empty());
+        assert_eq!(
+            validate_json_schema_value(&schema, &json!("c")),
+            ["\"value\" must be one of [\"a\",\"b\"]"]
+        );
+        assert_eq!(
+            validate_json_schema_value(&schema, &json!("b")),
+            ["\"value\" must be \"a\""]
+        );
+    }
+
+    #[test]
+    fn validates_object_requiredness_nested_values_and_open_defaults() {
+        let schema = asserted(json!({
             "type": "object",
             "properties": {
                 "file": {"type": "string"},
@@ -810,24 +1192,97 @@ mod tests {
                     "type": "object",
                     "properties": {"line": {"type": "integer"}},
                     "required": ["line"],
-                    "additionalProperties": false
-                }
+                    "additionalProperties": false,
+                },
             },
-            "required": ["file"]
-        }))
-        .expect("schema");
+            "required": ["file"],
+        }));
+        assert!(
+            validate_json_schema_value(
+                &schema,
+                &json!({"file": "a", "extra": [1], "nested": {"line": 2}})
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            validate_json_schema_value(&schema, &json!({"nested": {"line": 1}})),
+            ["missing required property \"value.file\""]
+        );
         assert_eq!(
             validate_json_schema_value(&schema, &json!({"file": 1, "nested": {}})),
             [
                 "\"value.file\" must be a string",
-                "missing required property \"value.nested.line\""
+                "missing required property \"value.nested.line\"",
             ]
         );
+        assert_eq!(
+            validate_json_schema_value(
+                &schema,
+                &json!({"file": "a", "nested": {"line": 1, "extra": true}})
+            ),
+            ["\"value.nested.extra\" is not a declared property (additionalProperties: false)"]
+        );
+        assert_eq!(
+            validate_json_schema_value(&schema, &json!("x")),
+            ["\"value\" must be an object"]
+        );
+    }
 
-        let overlap = assert_supported_json_schema(json!({
+    #[test]
+    fn rust_value_excludes_present_undefined_and_lossy_objects() {
+        let required = asserted(json!({
+            "type": "object",
+            "properties": {"x": {}},
+            "required": ["x"],
+        }));
+        assert_eq!(
+            validate_json_schema_value(&required, &json!({})),
+            ["missing required property \"value.x\""]
+        );
+        // A `Value::Object` is intrinsically plain and cannot contain undefined or a Date.
+        assert!(validate(json!({"type": "object"}), json!({"x": null})).is_empty());
+    }
+
+    #[test]
+    fn validation_is_total_for_every_structural_json_container() {
+        let schema = asserted(json!({
+            "type": "object",
+            "properties": {"answer": {"type": "integer"}},
+            "required": ["answer"],
+        }));
+        assert!(validate_json_schema_value(&schema, &json!({"answer": 42})).is_empty());
+        // Hostile getters cannot inhabit an owned serde_json::Map.
+    }
+
+    #[test]
+    fn validates_dense_arrays_per_index() {
+        let schema = asserted(json!({"type": "array", "items": {"type": "integer"}}));
+        assert!(validate_json_schema_value(&schema, &json!([1, 2])).is_empty());
+        assert_eq!(
+            validate_json_schema_value(&schema, &json!([1, 1.5])),
+            ["\"value[1]\" must be an integer"]
+        );
+        assert_eq!(
+            validate_json_schema_value(&schema, &json!("x")),
+            ["\"value\" must be an array"]
+        );
+        // `Vec<Value>` is always dense and has no JSON-invisible decorations.
+    }
+
+    #[test]
+    fn validates_exact_one_one_of_semantics_including_overlap() {
+        let disjoint = asserted(json!({
+            "oneOf": [{"type": "string"}, {"type": "number"}],
+        }));
+        assert!(validate_json_schema_value(&disjoint, &json!("x")).is_empty());
+        assert_eq!(
+            validate_json_schema_value(&disjoint, &Value::Null),
+            ["\"value\" must match exactly one oneOf branch (matched 0)"]
+        );
+
+        let overlap = asserted(json!({
             "oneOf": [{"type": "number"}, {"type": "integer"}]
-        }))
-        .expect("schema");
+        }));
         assert_eq!(
             validate_json_schema_value(&overlap, &json!(1)),
             ["\"value\" must match exactly one oneOf branch (matched 2)"]
@@ -836,9 +1291,84 @@ mod tests {
     }
 
     #[test]
-    fn traverses_deep_unions_without_recursion() {
+    fn validates_deeply_nested_unions_without_the_call_stack() {
+        let schema = assert_supported_json_schema(deep_union(5_000)).expect("deep schema");
+        assert!(validate_json_schema_value(&schema, &json!("leaf")).is_empty());
+        assert_eq!(
+            validate_json_schema_value(&schema, &json!(42)),
+            ["\"value\" must match exactly one oneOf branch (matched 0)"]
+        );
+    }
+
+    #[test]
+    fn unconstrained_schema_accepts_every_structural_lossless_json_value() {
+        let schema = asserted(json!({}));
+        for value in [
+            Value::Null,
+            json!(true),
+            json!(1),
+            json!("x"),
+            json!([1]),
+            json!({"x": null}),
+        ] {
+            assert!(validate_json_schema_value(&schema, &value).is_empty());
+        }
+        assert_eq!(
+            validate_json_schema_value(&schema, &negative_zero()),
+            ["\"value\" must be a lossless JSON value"]
+        );
+        // Undefined, functions, maps, proxy traps, and cyclic graphs are not Values.
+    }
+
+    #[test]
+    fn map_semantics_are_always_own_for_required_recursion_and_closed_checks() {
+        assert_eq!(
+            validate(
+                json!({
+                    "type": "object",
+                    "properties": {"toString": {"type": "string"}},
+                    "required": ["toString"],
+                }),
+                json!({}),
+            ),
+            ["missing required property \"value.toString\""]
+        );
+        assert_eq!(
+            validate(
+                json!({"type": "object", "additionalProperties": false}),
+                json!({"toString": 1}),
+            ),
+            ["\"value.toString\" is not a declared property (additionalProperties: false)"]
+        );
+        assert!(
+            validate(
+                json!({
+                    "type": "object",
+                    "properties": {"constructor": {"type": "string"}},
+                }),
+                json!({}),
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn forged_schema_backstop_panics_on_an_unreachable_type() {
+        let forged = JsonSchemaNode(json!({"type": "tuple"}));
+        let panic = std::panic::catch_unwind(|| {
+            let _ = validate_json_schema_value(&forged, &json!(1));
+        })
+        .expect_err("forged type must hit exhaustive backstop");
+        let message = panic.downcast_ref::<String>().map_or_else(
+            || panic.downcast_ref::<&str>().map_or("", |message| *message),
+            String::as_str,
+        );
+        assert!(message.contains("tuple"));
+    }
+
+    fn deep_union(depth: usize) -> Value {
         let mut schema = json!({"type": "string"});
-        for _ in 0..5_000 {
+        for _ in 0..depth {
             let mut object = Map::new();
             object.insert(
                 "oneOf".to_owned(),
@@ -846,8 +1376,6 @@ mod tests {
             );
             schema = Value::Object(object);
         }
-        let schema = assert_supported_json_schema(schema).expect("deep schema");
-        assert!(validate_json_schema_value(&schema, &json!("leaf")).is_empty());
-        std::mem::forget(schema);
+        schema
     }
 }

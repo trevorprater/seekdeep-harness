@@ -1,0 +1,3 @@
+# Bilingual-pair consistency record. Update both hashes after changing either README.
+README.md: 66509199d4b3a2b70b1d80c536c7cf6076e8cf49
+README.zh.md: 73e7a5cf92997e16783e544b34c22b957295a450

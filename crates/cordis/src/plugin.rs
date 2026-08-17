@@ -322,7 +322,8 @@ impl PluginFiber {
             return;
         };
 
-        if self.fiber.state() == FiberState::Active && previous_epoch.as_ref() == Some(&next_epoch)
+        if matches!(self.fiber.state(), FiberState::Active | FiberState::Failed)
+            && previous_epoch.as_ref() == Some(&next_epoch)
         {
             return;
         }
@@ -353,7 +354,12 @@ impl PluginFiber {
                 if let Err(cleanup_error) = self.fiber.fail().await {
                     tracing::error!(plugin = %self.plugin.name, %cleanup_error, "failed plugin rollback failed");
                 }
-                *self.epoch.lock() = None;
+                // A failed activation is settled for this exact dependency
+                // epoch. Keeping `None` here makes the service-change
+                // notification below immediately reschedule a dependency-free
+                // plugin forever; a config update explicitly clears the epoch,
+                // while a provider replacement naturally produces a new one.
+                *self.epoch.lock() = Some(next_epoch);
                 *self.error.lock() = Some(message.clone());
                 tracing::error!(plugin = %self.plugin.name, error = %message, "plugin startup failed");
             }
@@ -385,6 +391,31 @@ mod tests {
     use crate::ServiceKey;
 
     use super::*;
+
+    #[tokio::test]
+    async fn dependency_free_startup_failure_settles_until_configuration_changes() {
+        let context = Context::new();
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let plugin = Plugin::new("fallible", std::iter::empty::<String>(), {
+            let attempts = attempts.clone();
+            move |_, config| {
+                attempts.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move {
+                    anyhow::ensure!(config == json!(true), "configured failure");
+                    Ok(())
+                })
+            }
+        });
+        let fiber = context.plugin(plugin, json!(false)).unwrap();
+        assert!(fiber.await_settled().await.is_err());
+        tokio::task::yield_now().await;
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+
+        fiber.update(json!(true));
+        fiber.await_settled().await.unwrap();
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(fiber.fiber().state(), FiberState::Active);
+    }
 
     #[derive(Debug)]
     struct Dependency;

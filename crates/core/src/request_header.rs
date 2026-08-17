@@ -120,8 +120,8 @@ mod tests {
 
     fn config() -> LlmCallConfig {
         LlmCallConfig {
-            provider: "mock".to_owned(),
-            model: "m".to_owned(),
+            provider: "mock".into(),
+            model: "m".into(),
             reasoning_effort: None,
             temperature: None,
             max_tokens: None,

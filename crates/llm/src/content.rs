@@ -21,7 +21,7 @@ pub fn content_has_image(content: &[ContentBlock]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
+    use seekdeep_attachment::{AttachmentId, ImageAttachmentRef, ImageMediaType};
 
     use super::*;
     use crate::CallId;
@@ -32,7 +32,14 @@ mod tests {
             tool_call_id: CallId::new("c"),
             is_error: None,
             content: vec![ContentBlock::Image {
-                attachment: json!({"id": "image"}),
+                attachment: ImageAttachmentRef {
+                    attachment_id: AttachmentId::new("sha256:image"),
+                    media_type: ImageMediaType::Png,
+                    bytes: 1,
+                    width: 1,
+                    height: 1,
+                    name: None,
+                },
             }],
         }];
         assert!(content_has_image(&blocks));

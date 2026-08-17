@@ -8,7 +8,7 @@ use std::sync::{
 use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_cordis::{
-    Context, CordisError, EventArgs, PreparedEmission, ServiceKey, fiber::EffectHandle,
+    Context, CordisError, EventArgs, Plugin, PreparedEmission, ServiceKey, fiber::EffectHandle,
 };
 use serde_json::Value;
 use thiserror::Error;
@@ -20,6 +20,21 @@ use crate::session::{
 
 /// Typed context service key for the live session store.
 pub const SESSIONS: ServiceKey<SessionStore> = ServiceKey::new("sessions");
+/// Cordis service-plugin name.
+pub const NAME: &str = "sessions";
+/// The live store has no required services.
+pub const INJECT: &[&str] = &[];
+
+/// Builds the source-compatible `SessionStore` service plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), move |context, _config| {
+        Box::pin(async move {
+            SessionStore::install(&context)?;
+            Ok(())
+        })
+    })
+}
 
 /// Optional metadata and seed for a new session.
 #[derive(Clone, Debug, Default)]
@@ -248,6 +263,12 @@ impl std::fmt::Debug for SessionStore {
 }
 
 impl SessionStore {
+    /// Context that owns this store and receives its lifecycle events.
+    #[must_use]
+    pub fn context(&self) -> Context {
+        self.inner.context.clone()
+    }
+
     /// Installs a store in one context.
     ///
     /// # Errors
@@ -641,5 +662,17 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[tokio::test]
+    async fn plugin_publishes_and_withdraws_the_live_store() {
+        let context = Context::new();
+        let mounted = context
+            .plugin(plugin(), serde_json::Value::Null)
+            .expect("mount");
+        mounted.await_settled().await.expect("active");
+        assert!(context.get(SESSIONS).is_some());
+        mounted.dispose().await.expect("dispose");
+        assert!(context.get(SESSIONS).is_none());
     }
 }

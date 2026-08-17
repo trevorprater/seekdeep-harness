@@ -2,12 +2,14 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    future::Future,
     panic::{AssertUnwindSafe, catch_unwind},
     pin::Pin,
     sync::{
         Arc, Weak,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
+    task::{Context as TaskContext, Poll},
 };
 
 use async_stream::stream;
@@ -19,8 +21,8 @@ use seekdeep_cordis::{Context, EventArgs, ServiceKey, fiber::EffectHandle};
 use uuid::Uuid;
 
 use crate::{
-    LlmError, MessageRole,
-    adapter_failure::normalize_llm_failure,
+    LlmError, MessageRole, ModelId, ProviderId,
+    adapter_failure::{AdapterRejection, normalize_adapter_rejection, normalize_llm_failure},
     call_config::call_config_equals,
     retry_policy::{ResolvedRetryPolicy, resolve_retry_policy},
     types::{
@@ -33,12 +35,198 @@ use crate::{
 /// Typed Cordis service key for the LLM runtime.
 pub const LLM: ServiceKey<LlmRuntime> = ServiceKey::new("llm");
 
+/// Boxed fallible chunk iterator used when middleware wraps an existing LLM
+/// stream while retaining its managed close state.
+pub type BoxLlmChunkStream =
+    Pin<Box<dyn Stream<Item = anyhow::Result<StreamChunk>> + Send + 'static>>;
+type BoxAdapterChunkStream =
+    Pin<Box<dyn Stream<Item = Result<StreamChunk, AdapterRejection>> + Send + 'static>>;
+type CleanupFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>>;
+
+/// One fallible asynchronous adapter-iterator cleanup operation.
+pub type AdapterCleanup = Box<dyn FnOnce() -> CleanupFuture + Send + 'static>;
+
 /// A fallible provider chunk stream before runtime normalization.
-pub type AdapterStream = Pin<Box<dyn Stream<Item = anyhow::Result<StreamChunk>> + Send + 'static>>;
+///
+/// `with_cleanup` represents JavaScript async-iterator `return()`. The runtime
+/// invokes it only for downstream early close, never after normal completion
+/// or an adapter iteration failure.
+pub struct AdapterStream {
+    inner: BoxAdapterChunkStream,
+    cleanup: Option<AdapterCleanup>,
+}
+
+impl AdapterStream {
+    /// Boxes an adapter stream with no iterator-return operation.
+    pub fn new<S>(stream: S) -> Self
+    where
+        S: Stream<Item = anyhow::Result<StreamChunk>> + Send + 'static,
+    {
+        Self {
+            inner: Box::pin(stream.map(|result| result.map_err(AdapterRejection::Native))),
+            cleanup: None,
+        }
+    }
+
+    /// Boxes an adapter stream whose iterator can reject with an arbitrary
+    /// compatibility-boundary value.
+    pub fn from_rejections<S>(stream: S) -> Self
+    where
+        S: Stream<Item = Result<StreamChunk, AdapterRejection>> + Send + 'static,
+    {
+        Self {
+            inner: Box::pin(stream),
+            cleanup: None,
+        }
+    }
+
+    /// Boxes an adapter stream with a fallible asynchronous close operation.
+    pub fn with_cleanup<S, F, Fut>(stream: S, cleanup: F) -> Self
+    where
+        S: Stream<Item = anyhow::Result<StreamChunk>> + Send + 'static,
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: Future<Output = anyhow::Result<()>> + Send + 'static,
+    {
+        Self {
+            inner: Box::pin(stream.map(|result| result.map_err(AdapterRejection::Native))),
+            cleanup: Some(Box::new(move || Box::pin(cleanup()))),
+        }
+    }
+
+    fn into_parts(self) -> (BoxAdapterChunkStream, Option<AdapterCleanup>) {
+        (self.inner, self.cleanup)
+    }
+}
+
+impl Stream for AdapterStream {
+    type Item = Result<StreamChunk, AdapterRejection>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        context: &mut TaskContext<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        self.inner.as_mut().poll_next(context)
+    }
+}
+
+#[derive(Default)]
+struct StreamCloseState {
+    cleanup: Mutex<Option<AdapterCleanup>>,
+    closed: AtomicBool,
+}
+
+impl StreamCloseState {
+    fn install(&self, cleanup: Option<AdapterCleanup>) {
+        let mut slot = self.cleanup.lock();
+        if self.closed.load(Ordering::Acquire) {
+            return;
+        }
+        *slot = cleanup;
+    }
+
+    fn complete(&self) {
+        self.closed.store(true, Ordering::Release);
+        self.cleanup.lock().take();
+    }
+
+    fn take_for_close(&self) -> Option<AdapterCleanup> {
+        self.closed.store(true, Ordering::Release);
+        self.cleanup.lock().take()
+    }
+}
 
 /// Provider-neutral stream whose adapter failures are terminal chunks while
-/// middleware and invariant failures remain errors.
-pub type LlmStream = Pin<Box<dyn Stream<Item = anyhow::Result<StreamChunk>> + Send + 'static>>;
+/// middleware, invariant, consumer, and iterator-cleanup failures remain
+/// errors.
+pub struct LlmStream {
+    inner: Option<BoxLlmChunkStream>,
+    close: Arc<StreamCloseState>,
+    close_on_drop: bool,
+}
+
+impl LlmStream {
+    /// Boxes a stream which owns no adapter cleanup operation.
+    pub fn new<S>(stream: S) -> Self
+    where
+        S: Stream<Item = anyhow::Result<StreamChunk>> + Send + 'static,
+    {
+        Self {
+            inner: Some(Box::pin(stream)),
+            close: Arc::new(StreamCloseState::default()),
+            close_on_drop: true,
+        }
+    }
+
+    fn with_close_state(stream: BoxLlmChunkStream, close: Arc<StreamCloseState>) -> Self {
+        Self {
+            inner: Some(stream),
+            close,
+            close_on_drop: true,
+        }
+    }
+
+    /// Wraps the chunk iterator while preserving its asynchronous close path.
+    #[must_use]
+    pub fn wrap(mut self, wrapper: impl FnOnce(BoxLlmChunkStream) -> BoxLlmChunkStream) -> Self {
+        let inner = self
+            .inner
+            .take()
+            .unwrap_or_else(|| Box::pin(futures::stream::empty()));
+        let close = self.close.clone();
+        self.close_on_drop = false;
+        Self::with_close_state(wrapper(inner), close)
+    }
+
+    /// Performs and awaits adapter iterator cleanup after downstream early
+    /// close. Cleanup failures remain thrown to the closing caller.
+    ///
+    /// # Errors
+    ///
+    /// Returns the adapter's iterator-return failure.
+    pub async fn close(&mut self) -> anyhow::Result<()> {
+        self.close_on_drop = false;
+        self.inner.take();
+        match self.close.take_for_close() {
+            Some(cleanup) => cleanup().await,
+            None => Ok(()),
+        }
+    }
+}
+
+impl Stream for LlmStream {
+    type Item = anyhow::Result<StreamChunk>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        context: &mut TaskContext<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        self.inner
+            .as_mut()
+            .map_or(Poll::Ready(None), |inner| inner.as_mut().poll_next(context))
+    }
+}
+
+impl Drop for LlmStream {
+    fn drop(&mut self) {
+        if !self.close_on_drop {
+            return;
+        }
+        let Some(cleanup) = self.close.take_for_close() else {
+            return;
+        };
+        let cleanup = cleanup();
+        let run = async move {
+            if let Err(error) = cleanup.await {
+                tracing::warn!(%error, "LLM adapter cleanup failed after stream drop");
+            }
+        };
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(run);
+        } else {
+            std::thread::spawn(move || futures::executor::block_on(run));
+        }
+    }
+}
 
 /// Continuation supplied to one stream middleware.
 pub type LlmStreamNext = Box<dyn FnOnce(GenerateOptions) -> LlmStream + Send + 'static>;
@@ -53,7 +241,7 @@ pub trait LlmAdapter: Send + Sync + 'static {
     /// Describes one route owned by this adapter.
     fn provider_info(&self, provider: &str) -> LlmProviderInfo {
         LlmProviderInfo {
-            id: provider.to_owned(),
+            id: ProviderId::new(provider),
             name: provider.to_owned(),
         }
     }
@@ -76,8 +264,8 @@ pub trait LlmAdapter: Send + Sync + 'static {
         _signal: Option<&AbortSignal>,
     ) -> anyhow::Result<LlmResolvedModelInfo> {
         Ok(LlmResolvedModelInfo {
-            provider: provider.to_owned(),
-            id: model.to_owned(),
+            provider: ProviderId::new(provider),
+            id: ModelId::new(model),
             name: model.to_owned(),
             description: None,
             input_modalities: None,
@@ -137,7 +325,6 @@ struct RuntimeState {
 pub struct LlmRuntime {
     context: Context,
     state: Arc<Mutex<RuntimeState>>,
-    stream_invariants: Arc<AtomicUsize>,
 }
 
 impl std::fmt::Debug for LlmRuntime {
@@ -159,7 +346,6 @@ impl LlmRuntime {
         let runtime = Arc::new(Self {
             context: context.clone(),
             state: Arc::new(Mutex::new(RuntimeState::default())),
-            stream_invariants: Arc::new(AtomicUsize::new(0)),
         });
         context.provide(LLM, runtime.clone())?;
         Ok(runtime)
@@ -190,7 +376,7 @@ impl LlmRuntime {
             for registration in prepared {
                 state
                     .adapters
-                    .insert(registration.provider.id.clone(), registration);
+                    .insert(registration.provider.id.to_string(), registration);
             }
         }
         self.emit_adapters_updated()?;
@@ -250,7 +436,7 @@ impl LlmRuntime {
                 ));
             }
             let info = adapter.provider_info(provider);
-            if info.id != *provider || info.name.is_empty() {
+            if info.id.as_str() != provider || info.name.is_empty() {
                 return Err(llm_error(
                     format!(
                         "adapter metadata for provider \"{provider}\" must preserve its id and have a non-empty name"
@@ -294,7 +480,7 @@ impl LlmRuntime {
             for registration in prepared {
                 state
                     .adapters
-                    .insert(registration.provider.id.clone(), registration);
+                    .insert(registration.provider.id.to_string(), registration);
             }
         }
         self.emit_adapters_updated()
@@ -324,21 +510,31 @@ impl LlmRuntime {
             &EventArgs::new(),
         )?;
         let mut invariant = None;
-        emission.emit_contained(|error| {
-            let code = error
-                .downcast_ref::<LlmError>()
-                .map(LlmError::code)
-                .or_else(|| {
-                    error
-                        .downcast_ref::<crate::HarnessError>()
-                        .map(crate::HarnessError::code)
-                });
-            if code == Some("INVARIANT") && invariant.is_none() {
-                invariant = Some(error);
-            } else {
-                tracing::warn!(%error, "llm/adapters-updated listener failed");
-            }
-        });
+        let on_async_error: Arc<dyn Fn(anyhow::Error) + Send + Sync> =
+            Arc::new(|error| warn_adapters_listener_failure(&error));
+        emission.emit_contained_with_async_errors(
+            |error| {
+                let code = error
+                    .downcast_ref::<LlmError>()
+                    .map(LlmError::code)
+                    .or_else(|| {
+                        error
+                            .downcast_ref::<crate::HarnessError>()
+                            .map(crate::HarnessError::code)
+                    })
+                    .or_else(|| {
+                        error
+                            .downcast_ref::<seekdeep_invariants::InvariantError>()
+                            .map(|error| error.code)
+                    });
+                if code == Some("INVARIANT") && invariant.is_none() {
+                    invariant = Some(error);
+                } else {
+                    warn_adapters_listener_failure(&error);
+                }
+            },
+            &on_async_error,
+        );
         invariant.map_or(Ok(()), Err)
     }
 
@@ -435,6 +631,12 @@ impl LlmRuntime {
         candidates: &[LlmConfigurableProvider],
         current_owner: Option<Uuid>,
     ) -> anyhow::Result<()> {
+        if current_owner.is_some() && !self.state.lock().directory_registrations.contains(&owner) {
+            return Err(llm_error(
+                "this configurable-provider registration was disposed",
+                "REGISTRATION_DISPOSED",
+            ));
+        }
         let mut unique = HashSet::new();
         for entry in candidates {
             if entry.provider.is_empty()
@@ -455,14 +657,7 @@ impl LlmRuntime {
                     "INVALID_DIRECTORY",
                 ));
             }
-            if !unique.insert(entry.provider.clone())
-                || self
-                    .state
-                    .lock()
-                    .directory
-                    .get(&entry.provider)
-                    .is_some_and(|held| Some(held.owner) != current_owner)
-            {
+            if !unique.insert(entry.provider.clone()) {
                 return Err(llm_error(
                     format!(
                         "configurable provider \"{}\" is already declared",
@@ -480,10 +675,24 @@ impl LlmRuntime {
                     "REGISTRATION_DISPOSED",
                 ));
             }
+            if let Some(entry) = candidates.iter().find(|entry| {
+                state
+                    .directory
+                    .get(entry.provider.as_str())
+                    .is_some_and(|held| Some(held.owner) != current_owner)
+            }) {
+                return Err(llm_error(
+                    format!(
+                        "configurable provider \"{}\" is already declared",
+                        entry.provider
+                    ),
+                    "DUPLICATE_DIRECTORY",
+                ));
+            }
             state.directory.retain(|_, held| held.owner != owner);
             for value in candidates {
                 state.directory.insert(
-                    value.provider.clone(),
+                    value.provider.to_string(),
                     DirectoryEntry {
                         owner,
                         value: value.clone(),
@@ -644,7 +853,7 @@ impl LlmRuntime {
             .map_err(|payload| panic_as_error(payload.as_ref()))??;
         let mut seen = HashSet::new();
         for model in &models {
-            if model.provider != provider
+            if model.provider.as_str() != provider
                 || model.id.is_empty()
                 || model.name.is_empty()
                 || !seen.insert(model.id.clone())
@@ -687,7 +896,10 @@ impl LlmRuntime {
             .catch_unwind()
             .await
             .map_err(|payload| panic_as_error(payload.as_ref()))??;
-        if info.provider != *provider || info.id != model || info.name.is_empty() {
+        if info.provider.as_str() != provider.as_str()
+            || info.id.as_str() != model
+            || info.name.is_empty()
+        {
             return Err(llm_error(
                 format!(
                     "adapter returned invalid exact model metadata for provider \"{provider}\" model \"{model}\""
@@ -707,7 +919,10 @@ impl LlmRuntime {
                 "INVALID_MODEL_CONTEXT",
             ));
         }
-        if info.default_max_tokens == Some(0) {
+        if info
+            .default_max_tokens
+            .is_some_and(|value| value == 0 || value > 9_007_199_254_740_991)
+        {
             return Err(llm_error(
                 format!(
                     "adapter returned invalid default maxTokens for provider \"{provider}\" model \"{model}\""
@@ -826,12 +1041,7 @@ impl LlmRuntime {
     ) -> LlmStream {
         let middlewares: Arc<[StreamMiddlewareEntry]> =
             self.state.lock().stream_middlewares.clone().into();
-        let stream = build_middleware_chain(self, &middlewares, 0, options, prepared);
-        if self.stream_invariants.load(Ordering::Acquire) > 0 {
-            crate::invariant::validate_stream(stream)
-        } else {
-            stream
-        }
+        build_middleware_chain(self, &middlewares, 0, options, prepared)
     }
 
     fn adapter_stream_with_registration(
@@ -840,53 +1050,42 @@ impl LlmRuntime {
         prepared: Option<(AdapterRegistration, LlmCallConfig)>,
     ) -> LlmStream {
         let runtime = self.clone();
-        Box::pin(stream! {
+        let close = Arc::new(StreamCloseState::default());
+        let stream_close = close.clone();
+        let stream = Box::pin(stream! {
             let setup = runtime.prepare_adapter_stream(&options, prepared).await;
-            let mut adapter_stream = match setup {
-                Ok(stream) => stream,
+            let (mut adapter_stream, cleanup) = match setup {
+                Ok(stream) => stream.into_parts(),
                 Err(error) => {
+                    stream_close.complete();
                     yield Ok(adapter_failure_chunk(&error, options.signal.as_ref()));
                     return;
                 }
             };
+            stream_close.install(cleanup);
             loop {
                 let next = AssertUnwindSafe(adapter_stream.next()).catch_unwind().await;
                 match next {
                     Ok(Some(Ok(chunk))) => yield Ok(chunk),
                     Ok(Some(Err(error))) => {
-                        yield Ok(adapter_failure_chunk(&error, options.signal.as_ref()));
+                        stream_close.complete();
+                        yield Ok(adapter_rejection_chunk(&error, options.signal.as_ref()));
                         return;
                     }
-                    Ok(None) => return,
+                    Ok(None) => {
+                        stream_close.complete();
+                        return;
+                    }
                     Err(payload) => {
+                        stream_close.complete();
                         let error = panic_as_error(payload.as_ref());
                         yield Ok(adapter_failure_chunk(&error, options.signal.as_ref()));
                         return;
                     }
                 }
             }
-        })
-    }
-
-    /// Enables stream-grammar invariants until the returned effect is disposed.
-    ///
-    /// # Errors
-    ///
-    /// Returns when the owning context is inactive.
-    pub fn enable_stream_invariants(&self) -> Result<EffectHandle, seekdeep_cordis::CordisError> {
-        self.stream_invariants.fetch_add(1, Ordering::AcqRel);
-        let count = self.stream_invariants.clone();
-        let effect = EffectHandle::synchronous("llm stream invariants", move || {
-            count.fetch_sub(1, Ordering::AcqRel);
-            Ok(())
         });
-        match self.context.own(effect.clone()) {
-            Ok(effect) => Ok(effect),
-            Err(error) => {
-                self.stream_invariants.fetch_sub(1, Ordering::AcqRel);
-                Err(error)
-            }
-        }
+        LlmStream::with_close_state(stream, close)
     }
 
     async fn prepare_adapter_stream(
@@ -912,7 +1111,12 @@ impl LlmRuntime {
                 "INVALID_PREPARED_CALL",
             ));
         }
-        let resolved_options = apply_config(options.clone(), &resolved);
+        let unresolved = config_of(options);
+        let resolved_options = if call_config_equals(&unresolved, &resolved) {
+            options.clone_preserving_agent_loop_request()
+        } else {
+            apply_config(options.clone(), &resolved)
+        };
         let resolved_options = self.for_adapter(resolved_options, &registration.adapter);
         catch_unwind(AssertUnwindSafe(|| {
             registration.adapter.stream(resolved_options)
@@ -925,15 +1129,16 @@ impl LlmRuntime {
         mut options: GenerateOptions,
         adapter: &Arc<dyn LlmAdapter>,
     ) -> GenerateOptions {
+        let mut rebuilt = false;
         for message in &mut options.messages {
-            if message.role != MessageRole::Assistant
-                || message.source.kind != "model"
-                || !message.source.fields.contains_key("replayState")
+            if message.role() != MessageRole::Assistant
+                || message.source().kind != "model"
+                || !message.source().fields.contains_key("replayState")
             {
                 continue;
             }
             let provider = message
-                .source
+                .source()
                 .fields
                 .get("provider")
                 .and_then(serde_json::Value::as_str);
@@ -941,11 +1146,29 @@ impl LlmRuntime {
                 .and_then(|provider| self.state.lock().adapters.get(provider).cloned())
                 .is_some_and(|registration| Arc::ptr_eq(&registration.adapter, adapter));
             if !same_adapter {
-                message.source.fields.shift_remove("replayState");
+                rebuilt = true;
+                let mut detached = serde_json::Map::new();
+                for key in ["provider", "model"] {
+                    if let Some(value) = message.source().fields.get(key).cloned() {
+                        detached.insert(key.to_owned(), value);
+                    }
+                }
+                *message = message.clone().with_source(crate::MessageSource {
+                    kind: "model".to_owned(),
+                    fields: detached,
+                });
             }
+        }
+        if rebuilt {
+            options.clear_agent_loop_request();
         }
         options
     }
+}
+
+fn warn_adapters_listener_failure(error: &anyhow::Error) {
+    tracing::warn!("llm: an llm/adapters-updated listener failed");
+    tracing::warn!(%error);
 }
 
 fn build_middleware_chain(
@@ -974,7 +1197,7 @@ fn build_middleware_chain(
         Ok(stream) => stream,
         Err(payload) => {
             let error = panic_as_error(payload.as_ref());
-            Box::pin(futures::stream::once(async move { Err(error) }))
+            LlmStream::new(futures::stream::once(async move { Err(error) }))
         }
     }
 }
@@ -988,7 +1211,7 @@ fn ensure_routes_available(
         let provider = &registration.provider.id;
         if state
             .adapters
-            .get(provider)
+            .get(provider.as_str())
             .is_some_and(|existing| Some(existing.owner) != current_owner)
         {
             return Err(llm_error(
@@ -1081,6 +1304,18 @@ fn apply_config(mut options: GenerateOptions, config: &LlmCallConfig) -> Generat
 
 fn adapter_failure_chunk(error: &anyhow::Error, signal: Option<&AbortSignal>) -> StreamChunk {
     let failure = normalize_llm_failure(error);
+    terminal_failure_chunk(failure, signal)
+}
+
+fn adapter_rejection_chunk(
+    rejection: &AdapterRejection,
+    signal: Option<&AbortSignal>,
+) -> StreamChunk {
+    let failure = normalize_adapter_rejection(rejection);
+    terminal_failure_chunk(failure, signal)
+}
+
+fn terminal_failure_chunk(failure: crate::LlmFailure, signal: Option<&AbortSignal>) -> StreamChunk {
     let aborted = signal.is_some_and(AbortSignal::is_aborted) || failure.code == "ABORTED";
     StreamChunk::Finish {
         reason: if aborted {
@@ -1207,17 +1442,41 @@ pub struct PreparedLlmCall {
     runtime: Arc<LlmRuntime>,
     registration: AdapterRegistration,
     /// Resolved call config.
-    pub config: LlmCallConfig,
+    config: LlmCallConfig,
     /// Captured provider retry policy.
-    pub retry_policy: ResolvedRetryPolicy,
+    retry_policy: ResolvedRetryPolicy,
     /// Exact-model context metadata.
-    pub context: Option<LlmModelContext>,
+    context: Option<LlmModelContext>,
     /// Fields defaulted by the adapter.
-    pub adapter_defaults: LlmCallConfigAdapterDefaults,
+    adapter_defaults: LlmCallConfigAdapterDefaults,
     dispatched: AtomicBool,
 }
 
 impl PreparedLlmCall {
+    /// Resolved detached call configuration.
+    #[must_use]
+    pub const fn config(&self) -> &LlmCallConfig {
+        &self.config
+    }
+
+    /// Retry policy captured with the adapter registration.
+    #[must_use]
+    pub const fn retry_policy(&self) -> &ResolvedRetryPolicy {
+        &self.retry_policy
+    }
+
+    /// Exact-model context metadata.
+    #[must_use]
+    pub const fn context(&self) -> Option<&LlmModelContext> {
+        self.context.as_ref()
+    }
+
+    /// Fields materialized by exact adapter resolution.
+    #[must_use]
+    pub const fn adapter_defaults(&self) -> &LlmCallConfigAdapterDefaults {
+        &self.adapter_defaults
+    }
+
     /// Dispatches this prepared call exactly once.
     ///
     /// # Errors
@@ -1255,6 +1514,8 @@ impl PreparedLlmCall {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicUsize;
+
     use futures::stream;
 
     use super::*;
@@ -1265,7 +1526,7 @@ mod tests {
     #[async_trait]
     impl LlmAdapter for EchoAdapter {
         fn stream(&self, _options: GenerateOptions) -> AdapterStream {
-            Box::pin(stream::iter(vec![Ok(StreamChunk::Finish {
+            AdapterStream::new(stream::iter(vec![Ok(StreamChunk::Finish {
                 reason: FinishReason::Stop,
                 replay_state: None,
             })]))
@@ -1284,8 +1545,8 @@ mod tests {
             _signal: Option<&AbortSignal>,
         ) -> anyhow::Result<LlmResolvedModelInfo> {
             Ok(LlmResolvedModelInfo {
-                provider: provider.to_owned(),
-                id: model.to_owned(),
+                provider: ProviderId::new(provider),
+                id: ModelId::new(model),
                 name: model.to_owned(),
                 description: None,
                 input_modalities: None,
@@ -1305,28 +1566,108 @@ mod tests {
         }
 
         fn stream(&self, _options: GenerateOptions) -> AdapterStream {
-            Box::pin(stream::iter(vec![Ok(StreamChunk::Finish {
+            AdapterStream::new(stream::iter(vec![Ok(StreamChunk::Finish {
                 reason: FinishReason::Stop,
                 replay_state: None,
             })]))
         }
     }
 
-    fn options(provider: &str) -> GenerateOptions {
-        GenerateOptions {
-            provider: provider.to_owned(),
-            model: "m".to_owned(),
-            reasoning_effort: None,
-            messages: Vec::new(),
-            system: None,
-            tools: None,
-            temperature: None,
-            max_tokens: None,
-            stop: None,
-            signal: None,
-            session_id: None,
-            purpose: None,
+    #[derive(Debug)]
+    struct OversizedDefaultAdapter;
+
+    #[async_trait]
+    impl LlmAdapter for OversizedDefaultAdapter {
+        async fn resolve_model(
+            &self,
+            provider: &str,
+            model: &str,
+            _signal: Option<&AbortSignal>,
+        ) -> anyhow::Result<LlmResolvedModelInfo> {
+            Ok(LlmResolvedModelInfo {
+                provider: ProviderId::new(provider),
+                id: ModelId::new(model),
+                name: model.to_owned(),
+                description: None,
+                input_modalities: None,
+                context: None,
+                default_max_tokens: Some(9_007_199_254_740_992),
+                reasoning: None,
+            })
         }
+
+        fn stream(&self, _options: GenerateOptions) -> AdapterStream {
+            AdapterStream::new(stream::empty())
+        }
+    }
+
+    #[derive(Debug)]
+    struct CleanupAdapter {
+        cleanup_calls: Arc<AtomicUsize>,
+        fail_cleanup: bool,
+        fail_iteration: bool,
+    }
+
+    #[derive(Debug)]
+    struct MarkerDefaultAdapter {
+        seen: Arc<Mutex<Vec<bool>>>,
+        default_max_tokens: Option<u64>,
+    }
+
+    #[async_trait]
+    impl LlmAdapter for MarkerDefaultAdapter {
+        async fn resolve_model(
+            &self,
+            provider: &str,
+            model: &str,
+            _signal: Option<&AbortSignal>,
+        ) -> anyhow::Result<LlmResolvedModelInfo> {
+            Ok(LlmResolvedModelInfo {
+                provider: ProviderId::new(provider),
+                id: ModelId::new(model),
+                name: model.to_owned(),
+                description: None,
+                input_modalities: None,
+                context: None,
+                default_max_tokens: self.default_max_tokens,
+                reasoning: None,
+            })
+        }
+
+        fn stream(&self, options: GenerateOptions) -> AdapterStream {
+            self.seen.lock().push(options.is_agent_loop_request());
+            AdapterStream::new(stream::iter([Ok(StreamChunk::Finish {
+                reason: FinishReason::Stop,
+                replay_state: None,
+            })]))
+        }
+    }
+
+    #[async_trait]
+    impl LlmAdapter for CleanupAdapter {
+        fn stream(&self, _options: GenerateOptions) -> AdapterStream {
+            let chunks = if self.fail_iteration {
+                vec![Err(anyhow::anyhow!("iteration failed"))]
+            } else {
+                vec![Ok(StreamChunk::BlockStart {
+                    index: 0,
+                    block_type: "text".to_owned(),
+                })]
+            };
+            let calls = self.cleanup_calls.clone();
+            let fail_cleanup = self.fail_cleanup;
+            AdapterStream::with_cleanup(stream::iter(chunks), move || async move {
+                calls.fetch_add(1, Ordering::AcqRel);
+                if fail_cleanup {
+                    anyhow::bail!("cleanup failed");
+                }
+                Ok(())
+            })
+        }
+    }
+
+    fn options(provider: &str) -> GenerateOptions {
+        GenerateOptions::new(ProviderId::new(provider), ModelId::new("m"), Vec::new())
     }
 
     #[tokio::test]
@@ -1336,7 +1677,7 @@ mod tests {
         let handle = runtime
             .register_adapter(&["mock".to_owned()], Arc::new(EchoAdapter))
             .expect("register");
-        assert_eq!(runtime.list_providers()[0].id, "mock");
+        assert_eq!(runtime.list_providers()[0].id.as_str(), "mock");
         let chunks = runtime
             .stream(options("mock"))
             .collect::<Vec<_>>()
@@ -1389,7 +1730,7 @@ mod tests {
             .register_stream_middleware(
                 &context,
                 Arc::new(|mut request, next| {
-                    request.provider = "routed".to_owned();
+                    request.provider = ProviderId::new("routed");
                     next(request)
                 }),
                 false,
@@ -1442,7 +1783,7 @@ mod tests {
             .prepare_call(&config_of(&options("route")), None)
             .await
             .expect("prepare");
-        assert_eq!(prepared.config.max_tokens, Some(8_192));
+        assert_eq!(prepared.config().max_tokens, Some(8_192));
         assert_eq!(
             prepared
                 .config
@@ -1451,8 +1792,8 @@ mod tests {
                 .map(crate::ReasoningEffortId::as_str),
             Some("high")
         );
-        assert_eq!(prepared.adapter_defaults.max_tokens, Some(true));
-        assert_eq!(prepared.adapter_defaults.reasoning_effort, Some(true));
+        assert_eq!(prepared.adapter_defaults().max_tokens, Some(true));
+        assert_eq!(prepared.adapter_defaults().reasoning_effort, Some(true));
         let mut request = options("route");
         request.max_tokens = Some(8_192);
         request.reasoning_effort = Some(crate::ReasoningEffortId::new("high"));
@@ -1469,7 +1810,7 @@ mod tests {
         let context = Context::new();
         let runtime = LlmRuntime::install(&context).expect("runtime");
         let entry = LlmConfigurableProvider {
-            provider: "route".to_owned(),
+            provider: ProviderId::new("route"),
             display_name: "Route".to_owned(),
             settings_ns: "llm-test".to_owned(),
             settings_path: vec!["providers".to_owned(), "route".to_owned()],
@@ -1488,19 +1829,19 @@ mod tests {
                 Box::pin(async {
                     Ok(vec![
                         LlmDiscoveredModel {
-                            id: "m".to_owned(),
+                            id: ModelId::new("m"),
                             name: None,
                             context_window: None,
                             max_tokens: None,
                         },
                         LlmDiscoveredModel {
-                            id: "m".to_owned(),
+                            id: ModelId::new("m"),
                             name: Some("duplicate".to_owned()),
                             context_window: None,
                             max_tokens: None,
                         },
                         LlmDiscoveredModel {
-                            id: String::new(),
+                            id: ModelId::new(""),
                             name: None,
                             context_window: None,
                             max_tokens: None,
@@ -1521,5 +1862,157 @@ mod tests {
             .expect("models");
         assert_eq!(models.len(), 1);
         discovery.dispose().await.expect("dispose discovery");
+    }
+
+    #[tokio::test]
+    async fn exact_model_default_max_tokens_must_be_a_js_safe_integer() {
+        let context = Context::new();
+        let runtime = LlmRuntime::install(&context).expect("runtime");
+        runtime
+            .register_adapter(&["oversized".to_owned()], Arc::new(OversizedDefaultAdapter))
+            .expect("register");
+        let error = runtime
+            .resolve_model_info("oversized", "m", None)
+            .await
+            .expect_err("unsafe integer must fail");
+        assert_eq!(
+            error.downcast_ref::<LlmError>().map(LlmError::code),
+            Some("INVALID_MODEL_MAX_TOKENS")
+        );
+    }
+
+    #[tokio::test]
+    async fn topology_invariant_rethrows_an_incoherent_registry_notification() {
+        let context = Context::new();
+        let invariants = seekdeep_invariants::InvariantRegistry::install(
+            &context,
+            &seekdeep_invariants::InvariantConfig::default(),
+        )
+        .expect("invariants");
+        let registration = crate::register_invariant(&invariants).expect("reserve companion");
+        let runtime = LlmRuntime::install(&context).expect("runtime");
+        registration
+            .await_ready()
+            .await
+            .expect("activate companion");
+
+        let owner = Uuid::now_v7();
+        runtime.state.lock().adapters.insert(
+            "unreadable-key".to_owned(),
+            AdapterRegistration {
+                owner,
+                adapter: Arc::new(EchoAdapter),
+                provider: LlmProviderInfo {
+                    id: ProviderId::new("reported-route"),
+                    name: "Reported route".to_owned(),
+                },
+                retry_policy: resolve_retry_policy(None, "test policy").expect("policy"),
+            },
+        );
+
+        let error = runtime
+            .emit_adapters_updated()
+            .expect_err("incoherent registry must fail");
+        let invariant = error
+            .downcast_ref::<seekdeep_invariants::InvariantError>()
+            .expect("package invariant error");
+        assert_eq!(invariant.code, "INVARIANT");
+        assert!(invariant.message.contains("no readable registration"));
+    }
+
+    #[tokio::test]
+    async fn downstream_close_awaits_adapter_cleanup_and_propagates_its_failure() {
+        let context = Context::new();
+        let runtime = LlmRuntime::install(&context).expect("runtime");
+        let cleanup_calls = Arc::new(AtomicUsize::new(0));
+        runtime
+            .register_adapter(
+                &["cleanup".to_owned()],
+                Arc::new(CleanupAdapter {
+                    cleanup_calls: cleanup_calls.clone(),
+                    fail_cleanup: true,
+                    fail_iteration: false,
+                }),
+            )
+            .expect("register");
+
+        let mut output = runtime.stream(options("cleanup"));
+        assert!(output.next().await.is_some());
+        let error = output.close().await.expect_err("cleanup failure");
+        assert_eq!(error.to_string(), "cleanup failed");
+        assert_eq!(cleanup_calls.load(Ordering::Acquire), 1);
+        assert!(output.next().await.is_none());
+        output.close().await.expect("close remains idempotent");
+        assert_eq!(cleanup_calls.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test]
+    async fn adapter_failure_marks_iteration_complete_without_running_return_cleanup() {
+        let context = Context::new();
+        let runtime = LlmRuntime::install(&context).expect("runtime");
+        let cleanup_calls = Arc::new(AtomicUsize::new(0));
+        runtime
+            .register_adapter(
+                &["failure".to_owned()],
+                Arc::new(CleanupAdapter {
+                    cleanup_calls: cleanup_calls.clone(),
+                    fail_cleanup: false,
+                    fail_iteration: true,
+                }),
+            )
+            .expect("register");
+
+        let mut output = runtime.stream(options("failure"));
+        let chunk = output.next().await.expect("terminal chunk").expect("chunk");
+        assert!(matches!(
+            chunk,
+            StreamChunk::Finish {
+                reason: FinishReason::Error { .. },
+                ..
+            }
+        ));
+        assert!(output.next().await.is_none());
+        output
+            .close()
+            .await
+            .expect("no return cleanup after failure");
+        assert_eq!(cleanup_calls.load(Ordering::Acquire), 0);
+    }
+
+    #[tokio::test]
+    async fn adapter_default_reconstruction_clears_exact_object_agent_loop_identity() {
+        let context = Context::new();
+        let runtime = LlmRuntime::install(&context).expect("runtime");
+        let unchanged_seen = Arc::new(Mutex::new(Vec::new()));
+        let defaulted_seen = Arc::new(Mutex::new(Vec::new()));
+        runtime
+            .register_adapter(
+                &["unchanged".to_owned()],
+                Arc::new(MarkerDefaultAdapter {
+                    seen: unchanged_seen.clone(),
+                    default_max_tokens: None,
+                }),
+            )
+            .expect("unchanged");
+        runtime
+            .register_adapter(
+                &["defaulted".to_owned()],
+                Arc::new(MarkerDefaultAdapter {
+                    seen: defaulted_seen.clone(),
+                    default_max_tokens: Some(256),
+                }),
+            )
+            .expect("defaulted");
+
+        runtime
+            .stream(options("unchanged").mark_agent_loop_request())
+            .collect::<Vec<_>>()
+            .await;
+        runtime
+            .stream(options("defaulted").mark_agent_loop_request())
+            .collect::<Vec<_>>()
+            .await;
+        assert_eq!(*unchanged_seen.lock(), [true]);
+        assert_eq!(*defaulted_seen.lock(), [false]);
     }
 }
