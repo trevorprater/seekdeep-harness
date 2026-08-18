@@ -4,3 +4,4 @@ SeekDeep Harness is the all-Rust, behavior-compatible port of DeepSeek Harness. 
 
 The finished application will expose the `seekdeep` command while preserving the source harness's plugin composition, durable session log, model/tool lifecycle, configuration, server, client, SDK, sandbox, and web behavior.
 
+Runtime code reload uses native Rust as the host and Rust-produced WebAssembly as the reloadable plugin boundary. See [`porting/DYNAMIC_PLUGIN_RELOAD.md`](porting/DYNAMIC_PLUGIN_RELOAD.md) for the accepted architecture, lifecycle protocol, rollback rules, and verification requirements.
