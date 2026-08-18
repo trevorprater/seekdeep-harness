@@ -26,6 +26,7 @@ use seekdeep_session_persistence::{
     DEFAULT_PREPARED_SESSION_CACHE_SIZE, DEFAULT_WRITE_BATCH_MAX_DELAY_MS,
     MAX_WRITE_BATCH_DELAY_MS, SessionFormatUnsupportedError, SessionInspection, SessionLocation,
     SessionPersistence, SessionPersistenceRevision, SessionPersistenceSnapshot, SessionRawArtifact,
+    ensure_persistence_not_aborted,
     preparations::{
         DiscardReady, PreparedSource, SessionPreparationReservation, SessionPreparations,
     },
@@ -36,13 +37,13 @@ use serde::{Deserialize, Serialize};
 use tokio::{
     fs,
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::{Mutex as AsyncMutex, OnceCell},
+    sync::{Mutex as AsyncMutex, OnceCell, RwLock as AsyncRwLock},
 };
 use uuid::Uuid;
 
 use crate::format::{
-    JsonlCompression, SessionLogScan, event_lines, header_line, log_path, parse_header_meta,
-    scan_log, session_dir,
+    JsonlCompression, SessionLogScan, SessionLogScanner, event_lines, header_line, log_path,
+    parse_header_meta, scan_log, session_dir,
 };
 use crate::zstd::{
     compress_zstd_frame, decompress_zstd_frame, decompress_zstd_prefix, scan_zstd_frames,
@@ -110,6 +111,14 @@ struct LiveSessionState {
     writes: SessionWriteBehind,
 }
 
+#[derive(Clone)]
+struct RetirementEntry {
+    token: Uuid,
+    owner: usize,
+    session: Arc<Session>,
+    settlement: InitFuture,
+}
+
 #[derive(Debug)]
 struct StoredScan {
     scan: SessionLogScan,
@@ -143,9 +152,11 @@ pub struct JsonlSessionPersistence {
     sessions: Arc<SessionStore>,
     state: Mutex<HashMap<SessionId, BackendSession>>,
     locks: Mutex<HashMap<SessionId, Arc<AsyncMutex<()>>>>,
+    operation_gate: AsyncRwLock<()>,
     encoding_checked: OnceCell<()>,
     write_batch_max_delay: Duration,
     live: Mutex<HashMap<usize, LiveSessionState>>,
+    retirements: Mutex<HashMap<SessionId, RetirementEntry>>,
     preparations: SessionPreparations<JsonlPreparedSource, BackendSession>,
     self_weak: std::sync::Weak<Self>,
 }
@@ -224,8 +235,10 @@ impl JsonlSessionPersistence {
             sessions,
             state: Mutex::new(HashMap::new()),
             locks: Mutex::new(HashMap::new()),
+            operation_gate: AsyncRwLock::new(()),
             encoding_checked: OnceCell::new(),
             live: Mutex::new(HashMap::new()),
+            retirements: Mutex::new(HashMap::new()),
             preparations,
             self_weak: weak.clone(),
         });
@@ -248,6 +261,7 @@ impl JsonlSessionPersistence {
             move || {
                 Box::pin(async move {
                     if let Some(backend) = weak.upgrade() {
+                        let _closing = backend.operation_gate.write().await;
                         backend.drain_all().await?;
                     }
                     Ok(())
@@ -335,21 +349,46 @@ impl JsonlSessionPersistence {
         Ok(())
     }
 
-    async fn drain_all(&self) -> anyhow::Result<()> {
+    async fn drain_all(self: &Arc<Self>) -> anyhow::Result<()> {
         let lives = self.live.lock().values().cloned().collect::<Vec<_>>();
         let mut errors = Vec::new();
         for live in lives {
             live.writes.cancel_automatic_wait();
-            if let Err(error) = live
+            if live
                 .init
                 .await
                 .map_err(|error| anyhow::Error::msg((*error).clone()))
+                .is_err()
             {
-                errors.push(error.to_string());
+                // Initialization failures already settled through the caller's
+                // flush. They own no durable cursor to drain and must not be
+                // replayed as a second teardown failure.
                 continue;
             }
             if let Err(error) = live.writes.flush().await {
                 errors.push(error.to_string());
+            }
+        }
+        let retirements = self
+            .retirements
+            .lock()
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        for retirement in retirements {
+            if retirement.settlement.clone().await.is_err()
+                && let Err(error) = self.retire_core(&retirement.session).await
+            {
+                errors.push(error.to_string());
+                continue;
+            }
+            if self
+                .retirements
+                .lock()
+                .get(retirement.session.id())
+                .is_some_and(|current| current.token == retirement.token)
+            {
+                self.retirements.lock().remove(retirement.session.id());
             }
         }
         if errors.is_empty() {
@@ -398,7 +437,7 @@ impl JsonlSessionPersistence {
                     let backend = weak
                         .upgrade()
                         .ok_or_else(|| anyhow::anyhow!("JSONL persistence was disposed"))?;
-                    backend.append(&id, &events).await
+                    backend.append_owned(&id, &events).await
                 }
             },
             {
@@ -453,7 +492,7 @@ impl JsonlSessionPersistence {
                 return Err(Arc::new("JSONL persistence was disposed".to_owned()));
             };
             backend
-                .append(&id, &suffix)
+                .append_owned(&id, &suffix)
                 .await
                 .map_err(|error| Arc::new(error.to_string()))
         }
@@ -498,6 +537,7 @@ impl JsonlSessionPersistence {
     ) -> anyhow::Result<()> {
         let id = session.id();
         let owner = session_key(session);
+        self.wait_for_other_retirement(id, owner).await?;
         let lock = self.lock_for(id);
         let _guard = lock.lock().await;
 
@@ -593,18 +633,90 @@ impl JsonlSessionPersistence {
     }
 
     fn retire(self: &Arc<Self>, session: Arc<Session>) {
-        let backend = self.clone();
+        if !self.live.lock().contains_key(&session_key(&session)) {
+            return;
+        }
+        let weak = Arc::downgrade(self);
+        let id = session.id().clone();
+        let retiring_owner = session_key(&session);
+        let token = Uuid::now_v7();
+        let retiring_session = session.clone();
+        let retirement: InitFuture = async move {
+            let backend = weak
+                .upgrade()
+                .ok_or_else(|| Arc::new("JSONL persistence was disposed".to_owned()))?;
+            backend
+                .retire_core(&retiring_session)
+                .await
+                .map_err(|error| Arc::new(error.to_string()))
+        }
+        .boxed()
+        .shared();
+        self.retirements.lock().insert(
+            id.clone(),
+            RetirementEntry {
+                token,
+                owner: retiring_owner,
+                session,
+                settlement: retirement.clone(),
+            },
+        );
+        let weak = Arc::downgrade(self);
         tokio::spawn(async move {
-            if let Err(error) = backend.retire_core(&session).await {
-                tracing::warn!(session = %session.id(), %error, "JSONL session retirement failed");
+            let result = retirement.await;
+            if let Some(backend) = weak.upgrade() {
+                if result.is_ok()
+                    && backend
+                        .retirements
+                        .lock()
+                        .get(&id)
+                        .is_some_and(|current| current.token == token)
+                {
+                    backend.retirements.lock().remove(&id);
+                }
+                if let Err(error) = result {
+                    tracing::warn!(session = %id, %error, "JSONL session retirement failed");
+                }
             }
         });
     }
 
+    async fn wait_for_retirement(&self, id: &SessionId) -> anyhow::Result<()> {
+        let retirement = self
+            .retirements
+            .lock()
+            .get(id)
+            .map(|retirement| retirement.settlement.clone());
+        if let Some(retirement) = retirement {
+            retirement
+                .await
+                .map_err(|error| anyhow::Error::msg((*error).clone()))?;
+        }
+        Ok(())
+    }
+
+    async fn wait_for_other_retirement(&self, id: &SessionId, owner: usize) -> anyhow::Result<()> {
+        let retirement = self.retirements.lock().get(id).and_then(|retirement| {
+            (retirement.owner != owner).then(|| retirement.settlement.clone())
+        });
+        if let Some(retirement) = retirement {
+            retirement
+                .await
+                .map_err(|error| anyhow::Error::msg((*error).clone()))?;
+        }
+        Ok(())
+    }
+
     async fn retire_core(self: &Arc<Self>, session: &Arc<Session>) -> anyhow::Result<()> {
-        self.flush_live(session).await?;
         let key = session_key(session);
         let id = session.id();
+        let live = self.live.lock().get(&key).cloned();
+        if let Some(live) = live {
+            live.writes.cancel_automatic_wait();
+            if live.init.await.is_ok() {
+                live.writes.flush().await?;
+            }
+        }
         let lock = self.lock_for(id);
         let _guard = lock.lock().await;
         self.live.lock().remove(&key);
@@ -671,6 +783,15 @@ impl JsonlSessionPersistence {
         self.state.lock().insert(id.clone(), current);
         self.preparations.invalidate(id);
         Ok(())
+    }
+
+    async fn append_owned(&self, id: &SessionId, events: &[SessionEvent]) -> anyhow::Result<()> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        let lock = self.lock_for(id);
+        let _guard = lock.lock().await;
+        self.append_core(id, events).await
     }
 
     async fn prepare_core(&self, id: &SessionId) -> anyhow::Result<JsonlPreparedSource> {
@@ -774,6 +895,8 @@ impl JsonlSessionPersistence {
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<SessionPreparationReservation<JsonlPreparedSource, BackendSession>> {
         loop {
+            ensure_not_aborted(signal.as_ref())?;
+            self.wait_for_retirement(id).await?;
             ensure_not_aborted(signal.as_ref())?;
             anyhow::ensure!(
                 self.sessions.get(id).is_none(),
@@ -985,22 +1108,23 @@ impl JsonlSessionPersistence {
             !structure.frames.is_empty(),
             "empty or header-less Zstandard session log"
         );
-        let mut complete_plaintext = Vec::new();
-        for frame in &structure.frames {
-            complete_plaintext.extend(decompress_zstd_frame(&bytes[frame.start..frame.end])?);
+        let header =
+            decompress_zstd_frame(&bytes[structure.frames[0].start..structure.frames[0].end])?;
+        assert_zstd_header_frame(&header)?;
+        let mut scanner = SessionLogScanner::new(&header)?;
+        for frame in structure.frames.iter().skip(1) {
+            let plaintext = decompress_zstd_frame(&bytes[frame.start..frame.end])?;
+            scanner.write(&plaintext)?;
         }
-        assert_zstd_header_frame(&decompress_zstd_frame(
-            &bytes[structure.frames[0].start..structure.frames[0].end],
-        )?)?;
-        let complete = scan_log(&complete_plaintext)?;
+        let complete = scanner.checkpoint();
         anyhow::ensure!(
-            complete.committed_bytes == complete_plaintext.len(),
+            complete.committed_bytes == complete.input_bytes,
             "corrupt Zstandard session log: complete frame contains a torn JSONL record"
         );
-        let complete_event_count = complete.events.len();
+        let complete_event_count = complete.event_count;
         let Some(torn_start) = structure.torn_start else {
             return Ok(StoredScan {
-                scan: complete,
+                scan: scanner.finish(),
                 truncate_to: None,
                 recovered_events: Vec::new(),
                 revision: String::new(),
@@ -1009,8 +1133,8 @@ impl JsonlSessionPersistence {
 
         let recovered_plaintext =
             decompress_zstd_prefix(&bytes[torn_start..]).unwrap_or_else(|_| Vec::new());
-        complete_plaintext.extend(recovered_plaintext);
-        let recovered = scan_log(&complete_plaintext)?;
+        scanner.write(&recovered_plaintext)?;
+        let recovered = scanner.finish();
         let recovered_events = recovered.events[complete_event_count..].to_vec();
         Ok(StoredScan {
             scan: recovered,
@@ -1329,6 +1453,8 @@ impl SessionPersistence for JsonlSessionPersistence {
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<Option<SessionRawArtifact>> {
         ensure_not_aborted(signal.as_ref())?;
+        self.wait_for_retirement(id).await?;
+        ensure_not_aborted(signal.as_ref())?;
         let Some(path) = self.find_log(id).await? else {
             return Ok(None);
         };
@@ -1348,6 +1474,7 @@ impl SessionPersistence for JsonlSessionPersistence {
 
     async fn create(&self, meta: &SessionHeader) -> anyhow::Result<()> {
         anyhow::ensure!(!meta.id.as_str().is_empty(), "session id cannot be empty");
+        self.wait_for_retirement(&meta.id).await?;
         let lock = self.lock_for(&meta.id);
         let _guard = lock.lock().await;
         anyhow::ensure!(
@@ -1382,9 +1509,9 @@ impl SessionPersistence for JsonlSessionPersistence {
         if events.is_empty() {
             return Ok(());
         }
-        let lock = self.lock_for(id);
-        let _guard = lock.lock().await;
-        self.append_core(id, events).await
+        let _operation = self.operation_gate.read().await;
+        self.wait_for_retirement(id).await?;
+        self.append_owned(id, events).await
     }
 
     async fn prepare(
@@ -1408,6 +1535,7 @@ impl SessionPersistence for JsonlSessionPersistence {
     }
 
     async fn load(&self, id: &SessionId) -> anyhow::Result<SessionInspection> {
+        self.wait_for_retirement(id).await?;
         if let Some(live) = self.sessions.get(id) {
             let events = live.events();
             self.flush_existing(&live).await?;
@@ -1492,6 +1620,8 @@ impl SessionPersistence for JsonlSessionPersistence {
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<SessionInspection> {
         ensure_not_aborted(signal.as_ref())?;
+        self.wait_for_retirement(id).await?;
+        ensure_not_aborted(signal.as_ref())?;
         let path = self
             .find_log(id)
             .await?
@@ -1540,10 +1670,7 @@ impl SessionPersistence for JsonlSessionPersistence {
 }
 
 fn ensure_not_aborted(signal: Option<&AbortSignal>) -> anyhow::Result<()> {
-    if signal.is_some_and(AbortSignal::is_aborted) {
-        anyhow::bail!("session persistence operation aborted")
-    }
-    Ok(())
+    ensure_persistence_not_aborted(signal)
 }
 
 fn required_session(args: &EventArgs) -> anyhow::Result<Arc<Session>> {
@@ -1638,7 +1765,7 @@ fn revision_identity(metadata: &Metadata) -> String {
 
 #[cfg(test)]
 mod tests {
-    use seekdeep_cordis::Context;
+    use seekdeep_cordis::{Context, Fiber};
     use seekdeep_core::session::{AppendOptions, Session};
     use seekdeep_core::session_store::CreateSessionOptions;
     use seekdeep_session_persistence::SessionPersistence;
@@ -2168,5 +2295,111 @@ mod tests {
             .expect_err("alias must be rejected");
         assert!(error.to_string().contains("persisted state already owns"));
         detach.dispose().await.expect("detach alias");
+    }
+
+    #[tokio::test]
+    async fn settled_ownerless_collision_is_not_replayed_during_teardown() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, sessions, context) = backend(temporary.path());
+        let stored = balanced_session("ownerless-collision");
+        backend.create(stored.header()).await.expect("create");
+        backend
+            .append(stored.id(), &stored.events())
+            .await
+            .expect("append");
+        backend.load(stored.id()).await.expect("ownerless load");
+
+        let fresh = sessions
+            .create(
+                &context,
+                Some(stored.id().clone()),
+                CreateSessionOptions::default(),
+            )
+            .expect("fresh collision");
+        fresh
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("fresh event");
+        assert!(sessions.flush(&fresh).await.is_err());
+        context
+            .fiber()
+            .dispose()
+            .await
+            .expect("teardown does not replay settled initialization failure");
+    }
+
+    #[tokio::test]
+    async fn session_disposal_drains_buffered_events_before_releasing_live_owner() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, sessions, context) = backend(temporary.path());
+        let owner_fiber = Fiber::active_child("jsonl buffered owner");
+        let owner = context.with_fiber(owner_fiber.clone());
+        let session = sessions
+            .create(
+                &owner,
+                Some(SessionId::new("jsonl-buffered-retirement")),
+                CreateSessionOptions::default(),
+            )
+            .expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("start");
+        session
+            .append(
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+                AppendOptions::default(),
+            )
+            .expect("end");
+        owner_fiber.dispose().await.expect("dispose owner");
+
+        let loaded = tokio::time::timeout(Duration::from_secs(1), backend.load(session.id()))
+            .await
+            .expect("retirement-fenced load timed out")
+            .expect("load");
+        assert_eq!(
+            loaded
+                .events
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            [0, 1]
+        );
+        tokio::time::timeout(Duration::from_secs(1), context.fiber().dispose())
+            .await
+            .expect("context teardown timed out")
+            .expect("dispose context");
+    }
+
+    #[tokio::test]
+    async fn public_append_and_backend_teardown_are_ordered_by_lifecycle_gate() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, _sessions, context) = backend(temporary.path());
+        let session = balanced_session("operation-gate");
+        backend.create(session.header()).await.expect("create");
+
+        let closing = backend.operation_gate.write().await;
+        let append = tokio::spawn({
+            let backend = backend.clone();
+            let id = session.id().clone();
+            let events = session.events();
+            async move { backend.append(&id, &events).await }
+        });
+        tokio::task::yield_now().await;
+        assert!(!append.is_finished(), "append overtook closing writer");
+        drop(closing);
+        append.await.expect("append join").expect("append");
+
+        let in_flight = backend.operation_gate.read().await;
+        let dispose = tokio::spawn({
+            let fiber = context.fiber().clone();
+            async move { fiber.dispose().await }
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !dispose.is_finished(),
+            "teardown overtook in-flight append lease"
+        );
+        drop(in_flight);
+        dispose.await.expect("dispose join").expect("dispose");
     }
 }

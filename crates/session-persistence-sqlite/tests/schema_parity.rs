@@ -90,6 +90,66 @@ fn refuses_foreign_unversioned_objects_without_stamping() {
 }
 
 #[test]
+fn failed_initialization_rolls_back_schema_objects_without_changing_identity() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("conflict.sqlite");
+    let database = Connection::open(&path).expect("seed");
+    database
+        .pragma_update(
+            None,
+            "application_id",
+            SESSION_PERSISTENCE_SQLITE_APPLICATION_ID,
+        )
+        .expect("application id");
+    database
+        .pragma_update(None, "user_version", SCHEMA_VERSION)
+        .expect("user version");
+    database
+        .execute_batch(
+            "CREATE VIEW persistence_state AS SELECT 1 AS singleton, 'foreign' AS store_id",
+        )
+        .expect("conflicting view");
+    drop(database);
+
+    assert!(open_database(&path, JournalMode::Wal).is_err());
+    let unchanged = Connection::open(&path).expect("inspect unchanged");
+    let object_type: String = unchanged
+        .query_row(
+            "SELECT type FROM sqlite_schema WHERE name = 'persistence_state'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("view remains");
+    assert_eq!(object_type, "view");
+    for table in ["sessions", "events"] {
+        let count: i64 = unchanged
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_schema WHERE name = ?1",
+                [table],
+                |row| row.get(0),
+            )
+            .expect("object count");
+        assert_eq!(count, 0, "{table}");
+    }
+    assert_eq!(
+        unchanged
+            .pragma_query_value::<i64, _>(None, "application_id", |row| row.get(0))
+            .expect("application id"),
+        SESSION_PERSISTENCE_SQLITE_APPLICATION_ID
+    );
+    assert_eq!(
+        unchanged
+            .pragma_query_value::<i64, _>(None, "user_version", |row| row.get(0))
+            .expect("user version"),
+        SCHEMA_VERSION
+    );
+    let journal: String = unchanged
+        .pragma_query_value(None, "journal_mode", |row| row.get(0))
+        .expect("journal mode");
+    assert_eq!(journal, "delete");
+}
+
+#[test]
 fn sqlite_prefixed_user_table_is_not_mistaken_for_metadata() {
     let temporary = tempfile::tempdir().expect("tempdir");
     let path = temporary.path().join("foreign.sqlite");

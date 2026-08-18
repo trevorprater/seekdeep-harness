@@ -897,4 +897,151 @@ mod tests {
             assert!(text.contains(expected), "missing {expected}\n{text}");
         }
     }
+
+    #[test]
+    fn unsupported_schema_roots_degrade_to_any_and_literal_escaping_stays_parseable() {
+        for schema in [
+            Value::Null,
+            json!(42),
+            json!("string-schema"),
+            json!({}),
+            json!({"oneOf": 7}),
+            json!({"$ref": "#/defs/x"}),
+            json!({"type": "object", "properties": 7}),
+            json!({"type": "string", "enum": [1, 2]}),
+            json!({"type": "string", "enum": []}),
+        ] {
+            assert_eq!(json_schema_to_py(&schema), "Any", "{schema}");
+        }
+        for (schema, expected) in [
+            (
+                json!({"type": "string", "const": "a\0b"}),
+                r#"Literal["a\u0000b"]"#,
+            ),
+            (
+                json!({"type": "string", "const": "say \"hi\"\n"}),
+                r#"Literal["say \"hi\"\n"]"#,
+            ),
+            (
+                json!({"type": "string", "const": "ends\\"}),
+                r#"Literal["ends\\"]"#,
+            ),
+            (json!({"type": "boolean", "const": true}), "Literal[True]"),
+            (
+                json!({"type": "boolean", "enum": [false]}),
+                "Literal[False]",
+            ),
+            (
+                json!({"oneOf": [{"type": "string"}, {"type": "null"}]}),
+                "str | None",
+            ),
+        ] {
+            assert_eq!(json_schema_to_py(&schema), expected, "{schema}");
+        }
+    }
+
+    #[test]
+    fn open_closed_and_python_unsafe_object_fields_match_the_source_fallbacks() {
+        let schema = |name: &str, parameters: Value| ToolSdkSchema {
+            name: name.to_owned(),
+            description: String::new(),
+            parameters,
+            output: json!({"type": "string"}),
+        };
+        let text = render_tools_sdk_py(&[
+            schema(
+                "openness",
+                json!({
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "open": {"type": "object", "additionalProperties": true, "properties": {"x": {"type": "string"}}, "required": ["x"]},
+                        "closedEmpty": {"type": "object", "additionalProperties": false, "properties": {}},
+                    },
+                    "required": ["open", "closedEmpty"],
+                }),
+            ),
+            schema(
+                "mangled",
+                json!({"type": "object", "additionalProperties": false, "properties": {"__token": {"type": "string"}}, "required": ["__token"]}),
+            ),
+            schema(
+                "debugger",
+                json!({"type": "object", "additionalProperties": false, "properties": {"__debug__": {"type": "string"}}, "required": ["__debug__"]}),
+            ),
+            schema(
+                "soft",
+                json!({"type": "object", "additionalProperties": false, "properties": {"match": {"type": "string"}, "case": {"type": "string"}, "type": {"type": "string"}, "_": {"type": "string"}}}),
+            ),
+        ]);
+        for expected in [
+            "class OpennessArgsOpen(TypedDict):",
+            "    # Additional keys beyond those declared are allowed.",
+            "class OpennessArgsClosedEmpty(TypedDict):\n    pass",
+            "async def mangled(self, args: dict[str, Any]) -> str: ...",
+            "async def debugger(self, args: dict[str, Any]) -> str: ...",
+            "    match: NotRequired[str]",
+            "    case: NotRequired[str]",
+            "    type: NotRequired[str]",
+            "    _: NotRequired[str]",
+        ] {
+            assert!(text.contains(expected), "missing {expected}\n{text}");
+        }
+        assert!(!text.contains("__token:"));
+        assert!(!text.contains("__debug__:"));
+    }
+
+    #[test]
+    fn tool_members_keep_utf16_order_and_route_reserved_exotic_and_underscore_names() {
+        let schema = |name: &str| ToolSdkSchema {
+            name: name.to_owned(),
+            description: String::new(),
+            parameters: json!({"type": "object"}),
+            output: json!({"type": "string"}),
+        };
+        let text = render_tools_sdk_py(&[
+            schema("z"),
+            schema("a-tool"),
+            schema("class"),
+            schema("_foo"),
+            schema("__meta__"),
+            schema("\u{e000}"),
+            schema("\u{10000}"),
+        ]);
+        for expected in [
+            "# tools[\"a-tool\"]",
+            "# tools[\"class\"]",
+            "# tools[\"_foo\"]",
+            "# tools[\"__meta__\"]",
+            "async def z",
+        ] {
+            assert!(text.contains(expected), "missing {expected}\n{text}");
+        }
+        assert!(text.find("# tools[\"a-tool\"]") < text.find("async def z"));
+        assert!(text.find("# tools[\"𐀀\"]") < text.find("# tools[\"\u{e000}\"]"));
+        assert!(!text.contains("async def _foo"));
+    }
+
+    #[test]
+    fn empty_sdk_and_description_projection_are_exact_and_deterministic() {
+        let empty = render_tools_sdk_py(&[]);
+        assert!(empty.contains("from typing import Protocol"));
+        assert!(empty.contains("class Tools(Protocol):\n    pass"));
+
+        let described = || ToolSdkSchema {
+            name: "weird".to_owned(),
+            description: "tab\t newline\n quote \" slash \\ bell\u{7}".to_owned(),
+            parameters: json!({
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {"field": {"type": "string", "description": "tab\t newline\n quote \" slash \\ bell\u{7}"}},
+                "required": ["field"],
+            }),
+            output: json!({"type": "string"}),
+        };
+        let rendered = render_tools_sdk_py(&[described()]);
+        assert!(rendered.contains("# tab newline quote \" slash \\ bell\\x07"));
+        assert!(rendered.contains(r#""""tab newline quote \" slash \\ bell\\x07""""#));
+        assert_eq!(rendered, render_tools_sdk_py(&[described()]));
+    }
 }

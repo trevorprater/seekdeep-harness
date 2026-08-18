@@ -5,7 +5,7 @@ use std::sync::Arc;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
 /// Full source-compatible package identity.
-pub const PACKAGE_NAME: &str = "@deepseek-ai/dsh-settings-file";
+pub const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-settings-file";
 /// Stable companion name.
 pub const INVARIANT_NAME: &str = "settings-file-invariant";
 

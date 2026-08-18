@@ -3,15 +3,18 @@
 use std::{path::Path, sync::Arc};
 
 use rusqlite::Connection;
-use seekdeep_cordis::Context;
-use seekdeep_cordis::Fiber;
+use seekdeep_cordis::{Context, EventArgs, Fiber};
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionId},
+    session::{AppendOptions, Session, SessionHeader, SessionId, SurfaceOp},
     session_store::{CreateSessionOptions, SessionStore},
 };
-use seekdeep_session_persistence::{SESSION_PERSISTENCE, SessionPersistence};
+use seekdeep_llm::{AbortSignal, MessageSource, UserMessage};
+use seekdeep_session_persistence::{
+    SESSION_PERSISTENCE, SessionPersistence, SessionPersistenceAborted,
+};
 use seekdeep_session_persistence_sqlite::{
     JournalMode, SqliteConfig, SqliteSessionPersistence, install, invariant::register_invariant,
+    schema::open_database,
 };
 use serde_json::json;
 
@@ -660,6 +663,142 @@ async fn disposed_unmaterialized_lifecycle_releases_its_id_before_immediate_reus
 }
 
 #[tokio::test]
+async fn session_disposal_drains_buffered_events_before_retiring_ownership() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let context = Context::new();
+    let sessions = SessionStore::install(&context).expect("sessions");
+    let mounted = install(
+        &context,
+        SqliteConfig {
+            path,
+            journal_mode: JournalMode::Wal,
+            prepared_session_cache_size: 5,
+            write_batch_max_delay_ms: 60_000,
+        },
+    )
+    .expect("plugin");
+    mounted.await_settled().await.expect("active");
+
+    let first_fiber = Fiber::active_child("buffered owner");
+    let first_owner = context.with_fiber(first_fiber.clone());
+    let first = sessions
+        .create(
+            &first_owner,
+            Some(SessionId::new("buffered-retirement")),
+            CreateSessionOptions::default(),
+        )
+        .expect("first session");
+    first
+        .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+        .expect("start");
+    first
+        .append(
+            "turn/end",
+            json!({"turn": 1, "reason": {"kind": "completed"}}),
+            AppendOptions::default(),
+        )
+        .expect("end");
+    first_fiber.dispose().await.expect("dispose first owner");
+
+    let persistence = context
+        .get(SESSION_PERSISTENCE)
+        .expect("persistence")
+        .persistence();
+    let successor_fiber = Fiber::active_child("colliding successor");
+    let successor_owner = context.with_fiber(successor_fiber.clone());
+    let successor = sessions
+        .create(
+            &successor_owner,
+            Some(first.id().clone()),
+            CreateSessionOptions::default(),
+        )
+        .expect("successor session");
+    successor
+        .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+        .expect("successor event");
+    let collision = sessions
+        .flush(&successor)
+        .await
+        .expect_err("persisted id collision");
+    assert!(
+        collision.to_string().contains("persisted log")
+            || collision.to_string().contains("collision"),
+        "{collision:#}"
+    );
+    successor_fiber.dispose().await.expect("dispose successor");
+    assert_eq!(
+        persistence
+            .load(first.id())
+            .await
+            .expect("load drained log")
+            .events
+            .iter()
+            .map(|event| event.seq)
+            .collect::<Vec<_>>(),
+        [0, 1]
+    );
+    mounted.dispose().await.expect("dispose backend");
+}
+
+#[tokio::test]
+async fn backend_teardown_retries_failed_session_retirement_before_close() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let context = Context::new();
+    let sessions = SessionStore::install(&context).expect("sessions");
+    let mounted = install(
+        &context,
+        SqliteConfig {
+            path: path.clone(),
+            journal_mode: JournalMode::Wal,
+            prepared_session_cache_size: 5,
+            write_batch_max_delay_ms: 60_000,
+        },
+    )
+    .expect("plugin");
+    mounted.await_settled().await.expect("active");
+
+    let owner_fiber = Fiber::active_child("retrying retirement owner");
+    let owner = context.with_fiber(owner_fiber.clone());
+    let session = sessions
+        .create(
+            &owner,
+            Some(SessionId::new("retry-retirement")),
+            CreateSessionOptions::default(),
+        )
+        .expect("session");
+    sessions
+        .flush(&session)
+        .await
+        .expect("initialize lazy owner");
+
+    let lock = Connection::open(&path).expect("external lock connection");
+    lock.execute_batch("BEGIN IMMEDIATE")
+        .expect("hold SQLite writer lock");
+    session
+        .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+        .expect("start");
+    session
+        .append(
+            "turn/end",
+            json!({"turn": 1, "reason": {"kind": "completed"}}),
+            AppendOptions::default(),
+        )
+        .expect("end");
+    owner_fiber.dispose().await.expect("dispose owner");
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    lock.execute_batch("ROLLBACK").expect("release writer lock");
+    drop(lock);
+
+    mounted
+        .dispose()
+        .await
+        .expect("teardown retries retirement");
+    assert_eq!(physical_event_count(&path, session.id()), 2);
+}
+
+#[tokio::test]
 async fn hot_reload_adopts_live_prefix_and_persists_only_the_live_suffix() {
     let temporary = tempfile::tempdir().expect("tempdir");
     let path = temporary.path().join("sessions.sqlite");
@@ -713,6 +852,413 @@ async fn hot_reload_adopts_live_prefix_and_persists_only_the_live_suffix() {
     assert_eq!(event_types, ["turn/start", "turn/end", "turn/start"]);
     drop(database);
     second.dispose().await.expect("unmount second");
+}
+
+#[tokio::test]
+async fn repeated_created_notification_is_idempotent_for_the_exact_live_session() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let context = Context::new();
+    let sessions = SessionStore::install(&context).expect("sessions");
+    let mounted = install(&context, SqliteConfig::new(&path)).expect("backend");
+    mounted.await_settled().await.expect("active");
+    let session = sessions
+        .create(
+            &context,
+            Some(SessionId::new("idempotent-init")),
+            CreateSessionOptions::default(),
+        )
+        .expect("session");
+    session
+        .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+        .expect("start");
+    session
+        .append(
+            "turn/end",
+            json!({"turn": 1, "reason": {"kind": "completed"}}),
+            AppendOptions::default(),
+        )
+        .expect("end");
+    sessions.flush(&session).await.expect("first flush");
+    context
+        .events()
+        .emit(
+            &context,
+            "session/created",
+            &EventArgs::from_values(vec![session.clone()]),
+        )
+        .expect("repeat created");
+    sessions.flush(&session).await.expect("second flush");
+    assert_eq!(physical_event_count(&path, session.id()), 2);
+    mounted.dispose().await.expect("dispose");
+}
+
+#[test]
+fn public_configuration_defaults_and_schema_version_match_the_source() {
+    let config = SqliteConfig::new("sessions.sqlite");
+    assert_eq!(config.journal_mode, JournalMode::Wal);
+    assert_eq!(config.prepared_session_cache_size, 5);
+    assert_eq!(config.write_batch_max_delay_ms, 200);
+    assert_eq!(seekdeep_session_persistence_sqlite::SCHEMA_VERSION, 15);
+}
+
+#[test]
+fn every_configured_journal_mode_reaches_the_database() {
+    for (mode, expected) in [
+        (JournalMode::Wal, "wal"),
+        (JournalMode::Delete, "delete"),
+        (JournalMode::Truncate, "truncate"),
+        (JournalMode::Persist, "persist"),
+    ] {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let path = temporary.path().join(format!("{expected}.sqlite"));
+        let database = open_database(&path, mode).expect("configured database");
+        let actual: String = database
+            .pragma_query_value(None, "journal_mode", |row| row.get(0))
+            .expect("journal mode");
+        assert_eq!(actual.to_ascii_lowercase(), expected);
+    }
+}
+
+#[tokio::test]
+async fn recreated_session_identity_changes_even_when_revision_restarts_at_one() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let session = balanced_session("recreated-revision");
+    let (first, _, first_context) = mount(&path);
+    first.create(session.header()).await.expect("create");
+    first
+        .append(session.id(), &session.events())
+        .await
+        .expect("append");
+    let before = first
+        .list_snapshots(None)
+        .await
+        .expect("snapshot")
+        .remove(0)
+        .revision;
+    drop(first);
+    first_context
+        .fiber()
+        .dispose()
+        .await
+        .expect("dispose first");
+
+    let database = Connection::open(&path).expect("delete probe");
+    database
+        .execute(
+            "DELETE FROM sessions WHERE id = ?1",
+            [session.id().as_str()],
+        )
+        .expect("delete session");
+    drop(database);
+
+    let (second, _, second_context) = mount(&path);
+    second.create(session.header()).await.expect("recreate");
+    second
+        .append(session.id(), &session.events())
+        .await
+        .expect("reappend");
+    let after = second
+        .list_snapshots(None)
+        .await
+        .expect("snapshot")
+        .remove(0)
+        .revision;
+    assert_ne!(before, after);
+    assert!(before.as_str().ends_with(":revision:1"));
+    assert!(after.as_str().ends_with(":revision:1"));
+    second_context
+        .fiber()
+        .dispose()
+        .await
+        .expect("dispose second");
+}
+
+#[tokio::test]
+async fn append_and_load_round_trip_surface_columns_through_sqlite() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let (backend, _, context) = mount(&path);
+    let session =
+        Session::create(&SessionId::new("surface-roundtrip"), None, None).expect("session");
+    session
+        .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+        .expect("start");
+    session
+        .append(
+            "user/message",
+            serde_json::to_value(UserMessage::new(Vec::new(), MessageSource::user()))
+                .expect("user message"),
+            AppendOptions {
+                surface_op: Some(SurfaceOp::append()),
+                source_event_seqs: None,
+                ignorable: false,
+            },
+        )
+        .expect("user message");
+    session
+        .append(
+            "user/message",
+            serde_json::to_value(UserMessage::new(Vec::new(), MessageSource::user()))
+                .expect("second user message"),
+            AppendOptions {
+                surface_op: Some(SurfaceOp::append()),
+                source_event_seqs: Some(vec![1]),
+                ignorable: false,
+            },
+        )
+        .expect("second user message");
+    session
+        .append(
+            "turn/end",
+            json!({"turn": 1, "reason": {"kind": "completed"}}),
+            AppendOptions::default(),
+        )
+        .expect("end");
+    backend.create(session.header()).await.expect("create");
+    backend
+        .append(session.id(), &session.events())
+        .await
+        .expect("append");
+    let loaded = backend.load(session.id()).await.expect("load");
+    assert_eq!(loaded.events[1].surface_op, Some(SurfaceOp::append()));
+    assert_eq!(loaded.events[1].source_event_seqs, None);
+    assert_eq!(loaded.events[2].surface_op, Some(SurfaceOp::append()));
+    assert_eq!(loaded.events[2].source_event_seqs, Some(vec![1]));
+    context.fiber().dispose().await.expect("dispose");
+}
+
+#[tokio::test]
+async fn invalid_database_parent_and_preaborted_snapshot_list_fail_early() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let parent_file = temporary.path().join("not-a-directory");
+    std::fs::write(&parent_file, b"file").expect("parent file");
+    let invalid_path = parent_file.join("sessions.sqlite");
+    let (invalid, _, invalid_context) = mount(&invalid_path);
+    assert!(invalid.list(None).await.is_err());
+    invalid_context
+        .fiber()
+        .dispose()
+        .await
+        .expect("dispose invalid");
+
+    let valid_path = temporary.path().join("valid.sqlite");
+    let (valid, _, valid_context) = mount(&valid_path);
+    let signal = AbortSignal::default();
+    signal.abort_with_reason(json!("snapshot cancelled"));
+    let cancelled = valid
+        .list_snapshots(Some(signal))
+        .await
+        .expect_err("cancelled");
+    assert_eq!(
+        cancelled
+            .downcast_ref::<SessionPersistenceAborted>()
+            .expect("typed cancellation")
+            .reason,
+        json!("snapshot cancelled")
+    );
+    valid_context
+        .fiber()
+        .dispose()
+        .await
+        .expect("dispose valid");
+}
+
+#[tokio::test]
+async fn fresh_backend_append_adopts_storage_only_session_and_continues_sequence() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let first_turn = balanced_session("adopt-append");
+    let (first, _, first_context) = mount(&path);
+    first.create(first_turn.header()).await.expect("create");
+    first
+        .append(first_turn.id(), &first_turn.events())
+        .await
+        .expect("first append");
+    drop(first);
+    first_context
+        .fiber()
+        .dispose()
+        .await
+        .expect("dispose first");
+
+    let second_turn = [
+        seekdeep_core::session::SessionEvent {
+            event_type: "turn/start".to_owned(),
+            seq: 2,
+            time: 7,
+            data: json!({"turn": 2}),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        },
+        seekdeep_core::session::SessionEvent {
+            event_type: "turn/end".to_owned(),
+            seq: 3,
+            time: 8,
+            data: json!({"turn": 2, "reason": {"kind": "completed"}}),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        },
+    ];
+    let (second, _, second_context) = mount(&path);
+    second
+        .append(first_turn.id(), &second_turn)
+        .await
+        .expect("adopted append");
+    assert_eq!(
+        second
+            .load(first_turn.id())
+            .await
+            .expect("load")
+            .events
+            .iter()
+            .map(|event| event.seq)
+            .collect::<Vec<_>>(),
+        [0, 1, 2, 3]
+    );
+    second_context
+        .fiber()
+        .dispose()
+        .await
+        .expect("dispose second");
+}
+
+#[tokio::test]
+async fn empty_append_keeps_created_session_lazy_and_unlisted() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let (backend, _, context) = mount(&path);
+    let session = balanced_session("empty-batch");
+    backend.create(session.header()).await.expect("create");
+    backend
+        .append(session.id(), &[])
+        .await
+        .expect("empty append");
+    assert!(
+        backend
+            .list(None)
+            .await
+            .expect("list")
+            .iter()
+            .all(|header| header.id != *session.id())
+    );
+    context.fiber().dispose().await.expect("dispose");
+}
+
+#[tokio::test]
+async fn ownerless_state_rejects_fresh_reuse_and_cwd_mismatch() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let context = Context::new();
+    let sessions = SessionStore::install(&context).expect("sessions");
+    let mounted = install(&context, SqliteConfig::new(&path)).expect("plugin");
+    mounted.await_settled().await.expect("active");
+    let persistence = context
+        .get(SESSION_PERSISTENCE)
+        .expect("persistence")
+        .persistence();
+
+    let lazy_id = SessionId::new("wrong-cwd-claim");
+    let mut lazy_header = SessionHeader::new(lazy_id.clone());
+    lazy_header.cwd = Some("/other".to_owned());
+    persistence.create(&lazy_header).await.expect("lazy create");
+    let lazy_seed = balanced_session("lazy-seed").events();
+    let live = sessions
+        .create(
+            &context,
+            Some(lazy_id),
+            CreateSessionOptions {
+                seed: Some(lazy_seed),
+                cwd: Some("/work".to_owned()),
+                ..CreateSessionOptions::default()
+            },
+        )
+        .expect("live cwd mismatch");
+    let error = sessions.flush(&live).await.expect_err("cwd collision");
+    assert!(
+        error.to_string().contains("different cwd") || error.to_string().contains("collision"),
+        "{error:#}"
+    );
+
+    let stored = balanced_session("ownerless-loaded");
+    let mut stored_header = stored.header().clone();
+    stored_header.cwd = Some("/work".to_owned());
+    persistence
+        .create(&stored_header)
+        .await
+        .expect("stored create");
+    persistence
+        .append(stored.id(), &stored.events())
+        .await
+        .expect("stored append");
+    persistence.load(stored.id()).await.expect("ownerless load");
+    let fresh = sessions
+        .create(
+            &context,
+            Some(stored.id().clone()),
+            CreateSessionOptions {
+                cwd: Some("/work".to_owned()),
+                ..CreateSessionOptions::default()
+            },
+        )
+        .expect("fresh live collision");
+    fresh
+        .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+        .expect("fresh event");
+    assert!(sessions.flush(&fresh).await.is_err());
+    mounted.dispose().await.expect("dispose");
+}
+
+#[tokio::test]
+async fn matching_ownerless_prefix_is_claimed_and_only_seed_suffix_is_appended() {
+    let temporary = tempfile::tempdir().expect("tempdir");
+    let path = temporary.path().join("sessions.sqlite");
+    let context = Context::new();
+    let sessions = SessionStore::install(&context).expect("sessions");
+    let mounted = install(&context, SqliteConfig::new(&path)).expect("plugin");
+    mounted.await_settled().await.expect("active");
+    let persistence = context
+        .get(SESSION_PERSISTENCE)
+        .expect("persistence")
+        .persistence();
+
+    let stored = balanced_session("claim-prefix");
+    let mut header = stored.header().clone();
+    header.cwd = Some("/work".to_owned());
+    persistence.create(&header).await.expect("create");
+    persistence
+        .append(stored.id(), &stored.events())
+        .await
+        .expect("append");
+    let loaded = persistence.load(stored.id()).await.expect("load");
+    let live = sessions
+        .create(
+            &context,
+            Some(stored.id().clone()),
+            CreateSessionOptions {
+                seed: Some(loaded.events.clone()),
+                cwd: loaded.meta.cwd.clone(),
+                created_at: Some(loaded.meta.created_at),
+                ..CreateSessionOptions::default()
+            },
+        )
+        .expect("matching live session");
+    sessions.flush(&live).await.expect("claim and flush");
+    let claimed = persistence.load(stored.id()).await.expect("claimed load");
+    assert_eq!(claimed.meta, loaded.meta);
+    assert_eq!(
+        claimed.events[..loaded.events.len()],
+        loaded.events,
+        "stored prefix changed"
+    );
+    assert_eq!(
+        claimed.events.last().unwrap().event_type,
+        "session/end-seed"
+    );
+    mounted.dispose().await.expect("dispose");
 }
 
 fn physical_event_count(path: &Path, id: &SessionId) -> i64 {

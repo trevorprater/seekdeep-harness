@@ -3,7 +3,7 @@
 use std::{
     future::Future,
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -22,6 +22,8 @@ const CODEX_HOME_ENV: &str = "CODEX_HOME";
 const CODEX_AUTH_FILENAME: &str = "auth.json";
 const CHATGPT_AUTH_MODE: &str = "chatgpt";
 const OPENAI_AUTH_CLAIM: &str = "https://api.openai.com/auth";
+const OPENAI_CODEX_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+const OPENAI_CODEX_TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
 const MAX_CODEX_AUTH_BYTES: u64 = 1024 * 1024;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
@@ -75,6 +77,148 @@ pub struct CodexCredentialBridge {
     pub file_path: PathBuf,
     /// Symbolic, secret-free path used in diagnostics.
     pub display_path: String,
+}
+
+/// `OpenAI` Codex OAuth refresh transport used by the provider auth resolver.
+#[derive(Clone, Debug)]
+pub struct CodexOAuthRefresher {
+    http: reqwest::Client,
+    token_url: String,
+}
+
+impl CodexOAuthRefresher {
+    /// Creates the production `OpenAI` token refresher.
+    #[must_use]
+    pub fn new(http: reqwest::Client) -> Self {
+        Self {
+            http,
+            token_url: OPENAI_CODEX_TOKEN_URL.to_owned(),
+        }
+    }
+
+    #[cfg(test)]
+    fn with_token_url(http: reqwest::Client, token_url: impl Into<String>) -> Self {
+        Self {
+            http,
+            token_url: token_url.into(),
+        }
+    }
+
+    async fn refresh(&self, current: &OAuthCredential) -> anyhow::Result<Credential> {
+        let response = self
+            .http
+            .post(&self.token_url)
+            .form(&[
+                ("grant_type", "refresh_token"),
+                ("refresh_token", current.refresh.as_str()),
+                ("client_id", OPENAI_CODEX_CLIENT_ID),
+            ])
+            .send()
+            .await
+            .map_err(|error| anyhow::anyhow!("OpenAI Codex token refresh error: {error}"))?;
+        let status = response.status();
+        let status_text = status.canonical_reason().unwrap_or_default().to_owned();
+        let body = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            let detail = if body.is_empty() { status_text } else { body };
+            anyhow::bail!(
+                "OpenAI Codex token refresh failed ({}): {detail}",
+                status.as_u16()
+            );
+        }
+        let value: Value = serde_json::from_str(&body).map_err(|error| {
+            anyhow::anyhow!("OpenAI Codex token refresh response was not valid JSON: {error}")
+        })?;
+        let access = value
+            .get("access_token")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty());
+        let refresh = value
+            .get("refresh_token")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty());
+        let expires_in = value.get("expires_in").and_then(Value::as_f64);
+        let (Some(access), Some(refresh), Some(expires_in)) = (access, refresh, expires_in) else {
+            anyhow::bail!(
+                "OpenAI Codex token refresh response missing fields: {}",
+                serde_json::to_string(&value)?
+            );
+        };
+        let account_id = access_token_account_id(access)
+            .ok_or_else(|| anyhow::anyhow!("Failed to extract accountId from token"))?;
+        Ok(Credential::OAuth(OAuthCredential {
+            access: access.to_owned(),
+            refresh: refresh.to_owned(),
+            expires: unix_millis() + expires_in * 1000.0,
+            account_id: Some(account_id),
+        }))
+    }
+}
+
+impl CodexCredentialBridge {
+    /// Resolves the current Codex OAuth credential, refreshing and persisting
+    /// it under the shared writer lock when its access token has expired.
+    ///
+    /// # Errors
+    ///
+    /// Returns bounded-read, validation, refresh, lock, or atomic-write failures.
+    pub async fn resolve_oauth(
+        &self,
+        refresher: &CodexOAuthRefresher,
+    ) -> anyhow::Result<Option<OAuthCredential>> {
+        let Some(Credential::OAuth(stored)) = self.store.read(OPENAI_CODEX_PROVIDER_ID).await?
+        else {
+            return Ok(None);
+        };
+        if unix_millis() < stored.expires {
+            return Ok(Some(stored));
+        }
+        let refresher = refresher.clone();
+        let post = self
+            .store
+            .modify(OPENAI_CODEX_PROVIDER_ID, move |current| async move {
+                let Some(Credential::OAuth(current)) = current else {
+                    return Ok(None);
+                };
+                if unix_millis() < current.expires {
+                    return Ok(None);
+                }
+                refresher.refresh(&current).await.map(Some)
+            })
+            .await?;
+        Ok(match post {
+            Some(Credential::OAuth(credential)) => Some(credential),
+            Some(Credential::ApiKey { .. }) => {
+                unreachable!("Codex credential bridge is OAuth-only")
+            }
+            None => None,
+        })
+    }
+}
+
+fn unix_millis() -> f64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64()
+        * 1000.0
+}
+
+fn access_token_account_id(access: &str) -> Option<String> {
+    let mut parts = access.split('.');
+    let (Some(_), Some(payload), Some(_), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return None;
+    };
+    let decoded = URL_SAFE_NO_PAD.decode(payload).ok()?;
+    let claims: Value = serde_json::from_slice(&decoded).ok()?;
+    claims
+        .get(OPENAI_AUTH_CLAIM)?
+        .get("chatgpt_account_id")?
+        .as_str()
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
 }
 
 /// File-backed store exposing only the official Codex `ChatGPT` credential.
@@ -475,5 +619,242 @@ fn absolute_path(path: &Path) -> PathBuf {
             .unwrap_or_else(|_| PathBuf::from("."))
             .join(path)
             .clean()
+    }
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use std::{collections::BTreeMap, sync::Arc};
+
+    use parking_lot::Mutex;
+    use seekdeep_util::launch_environment::{
+        LaunchEnvironmentLayerInput, LaunchEnvironmentSource, create_launch_environment_snapshot,
+    };
+    use serde_json::json;
+    use tokio::{
+        io::{AsyncReadExt as _, AsyncWriteExt as _},
+        net::TcpListener,
+        task::JoinHandle,
+    };
+
+    use super::*;
+
+    struct TokenServer {
+        url: String,
+        requests: Arc<Mutex<Vec<String>>>,
+        task: JoinHandle<()>,
+    }
+
+    impl TokenServer {
+        async fn start(status: u16, body: Value) -> Self {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let task_requests = requests.clone();
+            let body = serde_json::to_string(&body).unwrap();
+            let task = tokio::spawn(async move {
+                loop {
+                    let Ok((mut socket, _)) = listener.accept().await else {
+                        return;
+                    };
+                    let requests = task_requests.clone();
+                    let body = body.clone();
+                    tokio::spawn(async move {
+                        let mut bytes = Vec::new();
+                        let header_end = loop {
+                            let mut buffer = [0_u8; 2048];
+                            let Ok(read) = socket.read(&mut buffer).await else {
+                                return;
+                            };
+                            if read == 0 {
+                                return;
+                            }
+                            bytes.extend_from_slice(&buffer[..read]);
+                            if let Some(index) =
+                                bytes.windows(4).position(|window| window == b"\r\n\r\n")
+                            {
+                                break index + 4;
+                            }
+                        };
+                        let headers = String::from_utf8_lossy(&bytes[..header_end]);
+                        let length = headers
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                name.eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse::<usize>().ok())
+                                    .flatten()
+                            })
+                            .unwrap_or_default();
+                        while bytes.len() - header_end < length {
+                            let mut buffer = vec![0_u8; length - (bytes.len() - header_end)];
+                            let Ok(read) = socket.read(&mut buffer).await else {
+                                return;
+                            };
+                            if read == 0 {
+                                return;
+                            }
+                            bytes.extend_from_slice(&buffer[..read]);
+                        }
+                        requests.lock().push(
+                            String::from_utf8_lossy(&bytes[header_end..header_end + length])
+                                .into_owned(),
+                        );
+                        let response = format!(
+                            "HTTP/1.1 {status} Test\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                            body.len()
+                        );
+                        let _ = socket.write_all(response.as_bytes()).await;
+                    });
+                }
+            });
+            Self {
+                url: format!("http://{address}/oauth/token"),
+                requests,
+                task,
+            }
+        }
+    }
+
+    impl Drop for TokenServer {
+        fn drop(&mut self) {
+            self.task.abort();
+        }
+    }
+
+    fn jwt(account: &str, expires: u64) -> String {
+        let encode = |value: Value| URL_SAFE_NO_PAD.encode(serde_json::to_vec(&value).unwrap());
+        format!(
+            "{}.{}.x",
+            encode(json!({"alg":"none"})),
+            encode(json!({"exp":expires,(OPENAI_AUTH_CLAIM):{"chatgpt_account_id":account}}))
+        )
+    }
+
+    fn future_expiry() -> u64 {
+        u64::try_from(Utc::now().timestamp()).unwrap() + 3600
+    }
+
+    fn auth_document(access: &str, refresh: &str) -> Value {
+        json!({
+            "auth_mode":"chatgpt",
+            "OPENAI_API_KEY":null,
+            "tokens":{
+                "id_token":"id-token-must-survive",
+                "access_token":access,
+                "refresh_token":refresh,
+                "account_id":"account-one",
+                "future_token_field":"kept"
+            },
+            "last_refresh":"2026-01-01T00:00:00.000Z",
+            "future_root_field":{"kept":true}
+        })
+    }
+
+    async fn write_auth(home: &tempfile::TempDir, value: &Value) {
+        let path = home.path().join("auth.json");
+        tokio::fs::write(&path, serde_json::to_vec_pretty(value).unwrap())
+            .await
+            .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            tokio::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                .await
+                .unwrap();
+        }
+    }
+
+    fn bridge(home: &Path) -> CodexCredentialBridge {
+        let snapshot = create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
+            source: LaunchEnvironmentSource::Process,
+            path: None,
+            values: BTreeMap::from([("CODEX_HOME".to_owned(), home.display().to_string())]),
+        }]);
+        create_codex_credential_bridge(&snapshot)
+    }
+
+    #[tokio::test]
+    async fn expired_token_refreshes_once_under_lock_and_preserves_shared_document() {
+        let home = tempfile::tempdir().unwrap();
+        write_auth(&home, &auth_document(&jwt("account-one", 1), "refresh-old")).await;
+        let next_access = jwt("account-one", future_expiry());
+        let server = TokenServer::start(
+            200,
+            json!({
+                "access_token":next_access,
+                "refresh_token":"refresh-new",
+                "expires_in":3600
+            }),
+        )
+        .await;
+        let refresher =
+            CodexOAuthRefresher::with_token_url(reqwest::Client::new(), server.url.clone());
+        let bridge = bridge(home.path());
+        let (first, second) = tokio::join!(
+            bridge.resolve_oauth(&refresher),
+            bridge.resolve_oauth(&refresher)
+        );
+        assert_eq!(first.unwrap().unwrap().refresh, "refresh-new");
+        assert_eq!(second.unwrap().unwrap().refresh, "refresh-new");
+        assert_eq!(server.requests.lock().len(), 1);
+        let form = server.requests.lock()[0].clone();
+        assert!(form.contains("grant_type=refresh_token"));
+        assert!(form.contains("refresh_token=refresh-old"));
+        assert!(form.contains(&format!("client_id={OPENAI_CODEX_CLIENT_ID}")));
+
+        let written: Value = serde_json::from_slice(
+            &tokio::fs::read(home.path().join("auth.json"))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(written["future_root_field"], json!({"kept":true}));
+        assert_eq!(written["tokens"]["future_token_field"], "kept");
+        assert_eq!(written["tokens"]["id_token"], "id-token-must-survive");
+        assert_eq!(written["tokens"]["access_token"], next_access);
+        assert_eq!(written["tokens"]["refresh_token"], "refresh-new");
+    }
+
+    #[tokio::test]
+    async fn fresh_token_skips_refresh_transport() {
+        let home = tempfile::tempdir().unwrap();
+        let access = jwt("account-one", future_expiry());
+        write_auth(&home, &auth_document(&access, "refresh-current")).await;
+        let refresher =
+            CodexOAuthRefresher::with_token_url(reqwest::Client::new(), "http://127.0.0.1:9/never");
+        let resolved = bridge(home.path())
+            .resolve_oauth(&refresher)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(resolved.access, access);
+        assert_eq!(resolved.refresh, "refresh-current");
+    }
+
+    #[tokio::test]
+    async fn refresh_failure_keeps_original_file_unchanged() {
+        let home = tempfile::tempdir().unwrap();
+        let original = auth_document(&jwt("account-one", 1), "refresh-old");
+        write_auth(&home, &original).await;
+        let server = TokenServer::start(400, json!({"error":"reused"})).await;
+        let refresher =
+            CodexOAuthRefresher::with_token_url(reqwest::Client::new(), server.url.clone());
+        let error = bridge(home.path())
+            .resolve_oauth(&refresher)
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("OpenAI Codex token refresh failed (400)")
+        );
+        let after: Value = serde_json::from_slice(
+            &tokio::fs::read(home.path().join("auth.json"))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(after, original);
     }
 }

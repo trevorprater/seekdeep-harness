@@ -3,8 +3,10 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
 use seekdeep_cordis::Context;
+use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
 use seekdeep_schemastery::Schema;
 use seekdeep_settings::{SETTINGS, SettingsRegisterOptions, settings_namespace};
+use seekdeep_settings_file::invariant::{INVARIANT_NAME, PACKAGE_NAME, register_invariant};
 use seekdeep_settings_file::{
     FileSettingsConfig, SETTINGS_FILENAME, SettingsFormat, install, resolve_spec,
 };
@@ -14,6 +16,28 @@ use tempfile::TempDir;
 struct Harness {
     context: Context,
     fiber: Arc<seekdeep_cordis::PluginFiber>,
+}
+
+#[tokio::test]
+async fn invariant_reserves_renamed_identity_and_releases_for_replacement() {
+    assert_eq!(INVARIANT_NAME, "settings-file-invariant");
+    assert_eq!(PACKAGE_NAME, "@deepseek-ai/seekdeep-settings-file");
+    let context = Context::new();
+    let registry = Arc::new(InvariantRegistry::new(&context, &InvariantConfig::default()).unwrap());
+    let registration = register_invariant(&registry).unwrap();
+    registration.await_ready().await.unwrap();
+    assert!(
+        register_invariant(&registry)
+            .unwrap_err()
+            .to_string()
+            .contains(PACKAGE_NAME)
+    );
+    registration.dispose().await.unwrap();
+    register_invariant(&registry)
+        .unwrap()
+        .await_ready()
+        .await
+        .unwrap();
 }
 
 impl Harness {

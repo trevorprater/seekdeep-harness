@@ -583,6 +583,42 @@ pub struct CodeDispatchLog {
     pub content: Vec<ContentBlock>,
 }
 
+/// Durable payload recorded when a nested Code Mode dispatch starts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CodeDispatchStartEventData {
+    /// Root model-requested call identity.
+    pub root_call_id: CallId,
+    /// Enclosing `run_code` call identity.
+    pub parent_call_id: CallId,
+    /// Deterministic nested call identity (`<parent>:code:<n>`).
+    pub sub_call_id: CallId,
+    /// Dispatched tool name.
+    pub name: String,
+    /// Lossless JSON argument snapshot dispatched to the nested tool.
+    pub arguments: Value,
+}
+
+/// Durable payload recorded when a started Code Mode dispatch settles.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CodeDispatchEventData {
+    /// Root model-requested call identity.
+    pub root_call_id: CallId,
+    /// Enclosing `run_code` call identity.
+    pub parent_call_id: CallId,
+    /// Deterministic nested call identity (`<parent>:code:<n>`).
+    pub sub_call_id: CallId,
+    /// Dispatched tool name.
+    pub name: String,
+    /// Lossless JSON argument snapshot used by the nested dispatch.
+    pub arguments: Value,
+    /// Whether the settled nested call failed.
+    pub is_error: bool,
+    /// Complete model-facing settled result content.
+    pub content: Vec<ContentBlock>,
+}
+
 impl std::fmt::Debug for ToolExecution {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -2949,13 +2985,13 @@ impl RunCodeDriver {
         }
         session.append(
             "tool/code-dispatch-start",
-            json!({
-                "rootCallId": self.outer.root_call_id,
-                "parentCallId": self.outer.call_id,
-                "subCallId": entry.sub_call_id,
-                "name": entry.name,
-                "arguments": entry.arguments,
-            }),
+            serde_json::to_value(CodeDispatchStartEventData {
+                root_call_id: self.outer.root_call_id.clone(),
+                parent_call_id: self.outer.call_id.clone(),
+                sub_call_id: entry.sub_call_id.clone(),
+                name: entry.name.clone(),
+                arguments: entry.arguments.clone(),
+            })?,
             AppendOptions::default(),
         )?;
         Ok(())
@@ -3101,19 +3137,21 @@ async fn append_code_dispatch_log(
             content: result.content().to_vec(),
         })
         .await;
-    if let Err(error) = session.append(
-        "tool/code-dispatch",
-        json!({
-            "rootCallId": outer.root_call_id,
-            "parentCallId": outer.call_id,
-            "subCallId": sub_call_id,
-            "name": name,
-            "arguments": arguments,
-            "isError": result.is_error(),
-            "content": content,
-        }),
-        AppendOptions::default(),
-    ) {
+    let event_data = serde_json::to_value(CodeDispatchEventData {
+        root_call_id: outer.root_call_id.clone(),
+        parent_call_id: outer.call_id.clone(),
+        sub_call_id,
+        name,
+        arguments,
+        is_error: result.is_error(),
+        content,
+    });
+    let append_result = event_data.map_err(anyhow::Error::from).and_then(|data| {
+        session
+            .append("tool/code-dispatch", data, AppendOptions::default())
+            .map_err(anyhow::Error::from)
+    });
+    if let Err(error) = append_result {
         tracing::warn!(%error, "tools: failed to append code dispatch log");
     }
 }
@@ -3477,6 +3515,56 @@ mod tests {
             parent: None,
             signal: AbortSignal::default(),
         }
+    }
+
+    #[test]
+    fn code_dispatch_event_types_pin_the_durable_session_shapes() {
+        let start = CodeDispatchStartEventData {
+            root_call_id: CallId::new("root"),
+            parent_call_id: CallId::new("parent"),
+            sub_call_id: CallId::new("parent:code:1"),
+            name: "read".to_owned(),
+            arguments: json!({"path": "README.md"}),
+        };
+        assert_eq!(
+            serde_json::to_value(&start).expect("start event"),
+            json!({
+                "rootCallId": "root",
+                "parentCallId": "parent",
+                "subCallId": "parent:code:1",
+                "name": "read",
+                "arguments": {"path": "README.md"},
+            })
+        );
+
+        let settled = CodeDispatchEventData {
+            root_call_id: start.root_call_id,
+            parent_call_id: start.parent_call_id,
+            sub_call_id: start.sub_call_id,
+            name: start.name,
+            arguments: start.arguments,
+            is_error: false,
+            content: vec![ContentBlock::Text {
+                text: "contents".to_owned(),
+            }],
+        };
+        let encoded = serde_json::to_value(&settled).expect("settled event");
+        assert_eq!(
+            encoded,
+            json!({
+                "rootCallId": "root",
+                "parentCallId": "parent",
+                "subCallId": "parent:code:1",
+                "name": "read",
+                "arguments": {"path": "README.md"},
+                "isError": false,
+                "content": [{"type": "text", "text": "contents"}],
+            })
+        );
+        assert_eq!(
+            serde_json::from_value::<CodeDispatchEventData>(encoded).expect("decode"),
+            settled
+        );
     }
 
     #[derive(Debug)]

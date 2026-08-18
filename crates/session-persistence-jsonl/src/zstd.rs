@@ -22,6 +22,86 @@ pub struct ZstdFrameScan {
     pub torn_start: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DecoderState {
+    Idle,
+    Started,
+    Closed,
+}
+
+/// One-shot synchronous decoder for complete frame ranges.
+///
+/// This is the Rust-native equivalent of the source package's interchangeable
+/// public and Node-private decoder implementations. One instance owns one
+/// decode traversal and has an idempotent close lifecycle.
+#[derive(Debug)]
+pub struct ZstdFrameDecoder {
+    state: DecoderState,
+}
+
+impl Default for ZstdFrameDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ZstdFrameDecoder {
+    /// Creates an idle decoder.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            state: DecoderState::Idle,
+        }
+    }
+
+    /// Decodes and checksum-validates complete frames in source order.
+    ///
+    /// # Errors
+    ///
+    /// Rejects reuse, use after close, invalid ranges, malformed frames, and
+    /// checksum failures. A failed traversal still consumes the decoder.
+    pub fn decode(
+        &mut self,
+        source: &[u8],
+        frames: &[ZstdFrameRange],
+    ) -> anyhow::Result<Vec<Vec<u8>>> {
+        match self.state {
+            DecoderState::Idle => self.state = DecoderState::Started,
+            DecoderState::Started => anyhow::bail!("Zstandard decoder already started"),
+            DecoderState::Closed => anyhow::bail!("Zstandard decoder is closed"),
+        }
+        frames
+            .iter()
+            .map(|frame| {
+                let bytes = source.get(frame.start..frame.end).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Zstandard frame range {}..{} lies outside source bytes",
+                        frame.start,
+                        frame.end
+                    )
+                })?;
+                decompress_zstd_frame(bytes).map_err(|error| {
+                    anyhow::anyhow!(
+                        "Zstandard frame at byte {} failed validation: {error}",
+                        frame.start
+                    )
+                })
+            })
+            .collect()
+    }
+
+    /// Releases decoder-owned state. Repeated calls are harmless.
+    pub const fn close(&mut self) {
+        self.state = DecoderState::Closed;
+    }
+}
+
+/// Selects the native Rust frame decoder.
+#[must_use]
+pub const fn create_zstd_frame_decoder() -> ZstdFrameDecoder {
+    ZstdFrameDecoder::new()
+}
+
 /// Locates structurally complete standard Zstandard frames without decoding.
 /// An EOF inside the last frame is returned as a torn start; invalid complete
 /// structure is rejected.
@@ -196,6 +276,29 @@ fn read_u24_le(source: &[u8], offset: usize) -> Option<u32> {
 mod tests {
     use super::*;
 
+    const MAGIC: [u8; 4] = [0x28, 0xB5, 0x2F, 0xFD];
+
+    fn empty_structural_frame(descriptor: u8) -> Vec<u8> {
+        let content_size_flag = descriptor >> 6;
+        let single_segment = descriptor & 0x20 != 0;
+        let dictionary_bytes = [0_usize, 1, 2, 4][usize::from(descriptor & 0x03)];
+        let content_size_bytes = if content_size_flag == 0 {
+            usize::from(single_segment)
+        } else {
+            1_usize << content_size_flag
+        };
+        let variable_header =
+            vec![0; usize::from(!single_segment) + dictionary_bytes + content_size_bytes];
+        let mut frame = MAGIC.to_vec();
+        frame.push(descriptor);
+        frame.extend(variable_header);
+        frame.extend([1, 0, 0]);
+        if descriptor & 0x04 != 0 {
+            frame.extend([0; 4]);
+        }
+        frame
+    }
+
     #[test]
     fn scans_independent_checksummed_frames_and_marks_torn_tail() {
         let first = compress_zstd_frame(b"header\n").expect("first");
@@ -231,5 +334,233 @@ mod tests {
         let error = scan_zstd_frames(&[0x28, 0xB5, 0x2F, 0xFD, 0x18], None)
             .expect_err("reserved descriptor");
         assert!(error.to_string().contains("reserved frame-header bit"));
+    }
+
+    #[test]
+    fn empty_stream_frame_limit_and_checksum_contract_are_exact() {
+        assert_eq!(
+            scan_zstd_frames(&[], None).expect("empty"),
+            ZstdFrameScan {
+                frames: Vec::new(),
+                torn_start: None,
+            }
+        );
+        let first = compress_zstd_frame(b"header\n").expect("first");
+        let second = compress_zstd_frame(b"event\n").expect("second");
+        assert_eq!(first[4] & 0x04, 0x04);
+        assert_eq!(second[4] & 0x04, 0x04);
+        let stream = [first.as_slice(), second.as_slice()].concat();
+        assert_eq!(
+            scan_zstd_frames(&stream, Some(1)).expect("limited").frames,
+            [ZstdFrameRange {
+                start: 0,
+                end: first.len(),
+            }]
+        );
+        assert_eq!(decompress_zstd_frame(&first).expect("decode"), b"header\n");
+
+        let mut corrupt = first;
+        let last = corrupt.len() - 1;
+        corrupt[last] ^= 0xff;
+        assert!(decompress_zstd_frame(&corrupt).is_err());
+    }
+
+    #[test]
+    fn native_decoder_preserves_order_and_enforces_one_shot_lifecycle() {
+        let first = compress_zstd_frame(b"first\n").expect("first");
+        let second = compress_zstd_frame(b"second\n").expect("second");
+        let stream = [first.as_slice(), second.as_slice()].concat();
+        let ranges = scan_zstd_frames(&stream, None).expect("ranges").frames;
+        let mut decoder = create_zstd_frame_decoder();
+        assert_eq!(
+            decoder.decode(&stream, &ranges).expect("decode"),
+            [b"first\n".to_vec(), b"second\n".to_vec()]
+        );
+        assert!(
+            decoder
+                .decode(&stream, &ranges)
+                .expect_err("reuse")
+                .to_string()
+                .contains("already started")
+        );
+        decoder.close();
+        decoder.close();
+        assert!(
+            decoder
+                .decode(&stream, &ranges)
+                .expect_err("closed")
+                .to_string()
+                .contains("closed")
+        );
+
+        let mut corrupt = first;
+        let last = corrupt.len() - 1;
+        corrupt[last] ^= 0xff;
+        let mut invalid = create_zstd_frame_decoder();
+        let error = invalid
+            .decode(
+                &corrupt,
+                &[ZstdFrameRange {
+                    start: 0,
+                    end: corrupt.len(),
+                }],
+            )
+            .expect_err("checksum");
+        assert!(
+            error
+                .to_string()
+                .contains("Zstandard frame at byte 0 failed validation")
+        );
+        assert!(
+            invalid
+                .decode(&corrupt, &[])
+                .expect_err("failed traversal consumed decoder")
+                .to_string()
+                .contains("already started")
+        );
+
+        let mut closed = create_zstd_frame_decoder();
+        closed.close();
+        assert!(closed.decode(&stream, &ranges).is_err());
+    }
+
+    #[test]
+    fn distinguishes_every_incomplete_region_from_reserved_complete_structure() {
+        assert_eq!(
+            scan_zstd_frames(&MAGIC[..2], None).expect("partial magic"),
+            ZstdFrameScan {
+                frames: Vec::new(),
+                torn_start: Some(0),
+            }
+        );
+        assert_eq!(
+            scan_zstd_frames(&MAGIC, None)
+                .expect("magic only")
+                .torn_start,
+            Some(0)
+        );
+        assert!(scan_zstd_frames(&[0; 4], None).is_err());
+        let mut reserved_header = MAGIC.to_vec();
+        reserved_header.push(0x08);
+        assert!(
+            scan_zstd_frames(&reserved_header, None)
+                .expect_err("reserved header")
+                .to_string()
+                .contains("reserved frame-header bit")
+        );
+
+        let mut missing_window = MAGIC.to_vec();
+        missing_window.push(0x00);
+        assert_eq!(
+            scan_zstd_frames(&missing_window, None)
+                .expect("missing window")
+                .torn_start,
+            Some(0)
+        );
+        let mut partial_block_header = MAGIC.to_vec();
+        partial_block_header.extend([0x20, 0x00, 0x01, 0x00]);
+        assert_eq!(
+            scan_zstd_frames(&partial_block_header, None)
+                .expect("partial block header")
+                .torn_start,
+            Some(0)
+        );
+        let mut partial_payload = MAGIC.to_vec();
+        partial_payload.extend([0x20, 0x00, (5 << 3) | 1, 0, 0, 0x01, 0x02]);
+        assert_eq!(
+            scan_zstd_frames(&partial_payload, None)
+                .expect("partial payload")
+                .torn_start,
+            Some(0)
+        );
+        let mut reserved_block = MAGIC.to_vec();
+        reserved_block.extend([0x20, 0x00, 0x07, 0x00, 0x00]);
+        assert!(
+            scan_zstd_frames(&reserved_block, None)
+                .expect_err("reserved block")
+                .to_string()
+                .contains("reserved block type")
+        );
+    }
+
+    #[test]
+    fn scans_header_variants_rle_multiple_blocks_and_checksums() {
+        for descriptor in [0x00, 0x21, 0x42, 0x83, 0xe3] {
+            let frame = empty_structural_frame(descriptor);
+            assert_eq!(
+                scan_zstd_frames(&frame, None).expect("variant"),
+                ZstdFrameScan {
+                    frames: vec![ZstdFrameRange {
+                        start: 0,
+                        end: frame.len(),
+                    }],
+                    torn_start: None,
+                },
+                "descriptor {descriptor:#04x}"
+            );
+        }
+
+        let mut rle = MAGIC.to_vec();
+        rle.extend([0x20, 0x01, (1 << 3) | (1 << 1) | 1, 0, 0, 0x41]);
+        assert_eq!(
+            scan_zstd_frames(&rle, None).expect("rle").frames[0].end,
+            rle.len()
+        );
+
+        let mut two_blocks = MAGIC.to_vec();
+        two_blocks.extend([0x20, 0x00, 0, 0, 0, 1, 0, 0]);
+        assert_eq!(
+            scan_zstd_frames(&two_blocks, None)
+                .expect("two blocks")
+                .frames[0]
+                .end,
+            two_blocks.len()
+        );
+
+        let checksummed = empty_structural_frame(0x24);
+        assert_eq!(
+            scan_zstd_frames(&checksummed[..checksummed.len() - 1], None)
+                .expect("torn checksum")
+                .torn_start,
+            Some(0)
+        );
+        assert_eq!(
+            scan_zstd_frames(&checksummed, None)
+                .expect("complete checksum")
+                .frames[0]
+                .end,
+            checksummed.len()
+        );
+    }
+
+    #[test]
+    fn torn_prefix_decoder_recovers_available_plaintext_when_blocks_have_emitted() {
+        let plaintext = (0..20_000)
+            .map(|index| char::from(b'!' + u8::try_from(index % 90).expect("range")))
+            .collect::<String>();
+        let frame = compress_zstd_frame(plaintext.as_bytes()).expect("frame");
+        let mut recovered = None;
+        for end in [
+            frame.len().saturating_sub(1),
+            frame.len().saturating_sub(4),
+            frame.len() * 3 / 4,
+            frame.len() / 2,
+        ] {
+            if scan_zstd_frames(&frame[..end], None)
+                .expect("torn scan")
+                .torn_start
+                != Some(0)
+            {
+                continue;
+            }
+            if let Ok(prefix) = decompress_zstd_prefix(&frame[..end])
+                && !prefix.is_empty()
+            {
+                recovered = Some(prefix);
+                break;
+            }
+        }
+        let recovered = recovered.expect("recoverable torn prefix");
+        assert!(plaintext.as_bytes().starts_with(&recovered));
     }
 }

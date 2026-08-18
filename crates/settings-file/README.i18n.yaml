@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record. Both languages carry equal authority.
+# After editing either side, update both values with:
+#   git hash-object crates/settings-file/README.md crates/settings-file/README.zh.md
+README.md: 7dd6b6e7b36cf53ffd0daab037f3e5d698558f9c
+README.zh.md: a18581b0185206e5ee0e4b36dbf7d614e48295cc
+

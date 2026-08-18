@@ -88,6 +88,11 @@ repository = "https://github.com/deepseek-ai/seekdeep-harness"
 anyhow = "1.0.100"
 async-trait = "0.1.89"
 async-stream = "0.3.6"
+aws-config = "1.8.18"
+aws-sdk-bedrockruntime = "1.135.0"
+aws-smithy-types = "1.5.0"
+aws-smithy-http-client = { version = "1.1.13", features = ["rustls-aws-lc"] }
+aws-smithy-runtime = { version = "1.11.3", features = ["connector-hyper-0-14-x"] }
 base64 = "0.22.1"
 bytes = "1.11.0"
 boa_engine = { version = "0.21.1", default-features = false }
@@ -98,6 +103,9 @@ cpu-time = "1.0.0"
 crc32fast = "1.5.0"
 dirs = "6.0.0"
 flate2 = "1.1.5"
+google-cloud-auth = "1.15.0"
+http = "1.5.0"
+hyper-rustls = { version = "0.24.2", features = ["webpki-tokio"] }
 futures = "0.3.31"
 hex = "0.4.3"
 libc = "0.2.180"

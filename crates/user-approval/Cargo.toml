@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "One-shot fail-closed user-approval seam for SeekDeep Harness"
+readme = "README.md"
 
 [dependencies]
 anyhow.workspace = true

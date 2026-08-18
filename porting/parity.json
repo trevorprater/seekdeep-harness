@@ -25340,7 +25340,14 @@
     {
       "source": "packages/core/tools/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/tools/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo metadata --no-deps --format-version 1 resolves seekdeep-tools 0.1.0-rc.5 with renamed description and repository"
+      ],
+      "note": "Rust package identity and dependency graph are present; README and source export-surface documentation remain pending."
     },
     {
       "source": "packages/core/tools/src/code-mode.ts",
@@ -25381,22 +25388,54 @@
     {
       "source": "packages/core/tools/src/presentation.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/presentation.rs"
+      ],
+      "evidence": [
+        "manual source-to-Rust wire-vocabulary audit",
+        "cargo test -p seekdeep-tools --all-features",
+        "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/tools/src/py-types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/py_types.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest --run packages/core/tools/tests/py-types.spec.ts",
+        "cargo test -p seekdeep-tools --all-features",
+        "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/tools/src/schema.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/schema.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest --run packages/core/tools/tests/schema.spec.ts",
+        "cargo test -p seekdeep-tools --all-features",
+        "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/tools/src/testing.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/testing.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest --run packages/core/tools/tests/tools.spec.ts packages/core/tools/tests/code-mode.spec.ts",
+        "cargo test -p seekdeep-tools --all-features",
+        "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/tools/src/ts-types.ts",
@@ -25414,7 +25453,15 @@
     {
       "source": "packages/core/tools/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/runtime.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest --run packages/core/tools/tests/tools.spec.ts packages/core/tools/tests/code-mode.spec.ts",
+        "cargo test -p seekdeep-tools --all-features",
+        "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/tools/tests/code-mode.spec.ts",
@@ -25553,52 +25600,75 @@
     {
       "source": "packages/credentials/README.i18n.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/credentials-family/README.i18n.yaml"],
+      "evidence": ["recorded Git blob hashes match both synchronized target documents"]
     },
     {
       "source": "packages/credentials/README.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/credentials-family/README.md"],
+      "evidence": ["Rust family index preserves the source package roles, context ownership, secret-reference boundary, child documentation routing, and subsystem link"]
     },
     {
       "source": "packages/credentials/README.zh.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/credentials-family/README.zh.md"],
+      "evidence": ["Chinese family index carries the same crate roles, context ownership, secret boundary, and documentation routing as English"]
     },
     {
       "source": "packages/credentials/credentials-local/README.i18n.yaml",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials-local/README.i18n.yaml",
         "crates/credentials-local/src/lib.rs"
+      ],
+      "evidence": [
+        "target Git blob hashes match the synchronized English and Chinese target documentation",
+        "both languages preserve the same ordered behavioral surface"
       ]
     },
     {
       "source": "packages/credentials/credentials-local/README.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials-local/README.md",
         "crates/credentials-local/src/lib.rs"
+      ],
+      "evidence": [
+        "target preserves source layering, file format, writes, watcher, lifecycle, model-experience, and limitation sections with SeekDeep native-Rust identity",
+        "cargo doc -p seekdeep-credentials-local --all-features --no-deps passed"
       ]
     },
     {
       "source": "packages/credentials/credentials-local/README.zh.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials-local/README.zh.md",
         "crates/credentials-local/src/lib.rs"
+      ],
+      "evidence": [
+        "Chinese target carries the same provider, precedence, storage, watcher, lifecycle, and limitation contracts as English",
+        "README.i18n.yaml records the current target Git blob hash"
       ]
     },
     {
       "source": "packages/credentials/credentials-local/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials-local/Cargo.toml",
         "crates/credentials-local/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo metadata reports seekdeep-credentials-local 0.1.0-rc.5, Rust 2024, rust-version 1.93.1, repository metadata, and README.md",
+        "cargo test -p seekdeep-credentials-local --all-features passed 36 tests",
+        "strict all-targets clippy passed"
       ]
     },
     {
@@ -25684,46 +25754,68 @@
     {
       "source": "packages/credentials/credentials-local/tsconfig.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials-local/Cargo.toml",
-        "crates/credentials-local/src/lib.rs"
+        "crates/credentials-local/src/lib.rs",
+        "Cargo.toml"
+      ],
+      "evidence": [
+        "Cargo workspace dependencies replace every source TypeScript project reference with typed Rust crates",
+        "cargo doc, test, and strict clippy gates passed"
       ]
     },
     {
       "source": "packages/credentials/credentials/README.i18n.yaml",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials/README.i18n.yaml",
         "crates/credentials/src/lib.rs"
+      ],
+      "evidence": [
+        "recorded target Git blob hashes match crates/credentials/README.md and README.zh.md",
+        "English and Chinese target documents preserve the same ordered behavioral surface"
       ]
     },
     {
       "source": "packages/credentials/credentials/README.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials/README.md",
         "crates/credentials/src/lib.rs"
+      ],
+      "evidence": [
+        "target documents the complete service, provider, notification, lifecycle, model-experience, and limitation contract",
+        "cargo doc -p seekdeep-credentials --all-features --no-deps passed"
       ]
     },
     {
       "source": "packages/credentials/credentials/README.zh.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials/README.zh.md",
         "crates/credentials/src/lib.rs"
+      ],
+      "evidence": [
+        "Chinese target carries the same service, provider, event, lifecycle, and limitation contracts as English",
+        "README.i18n.yaml records the current target Git blob hash"
       ]
     },
     {
       "source": "packages/credentials/credentials/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials/Cargo.toml",
         "crates/credentials/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo metadata reports seekdeep-credentials 0.1.0-rc.5, Rust 2024, rust-version 1.93.1, repository metadata, and README.md",
+        "source credentials and invariant oracles passed 10/10; Rust tests passed 11/11",
+        "strict all-targets clippy passed"
       ]
     },
     {
@@ -25796,18 +25888,27 @@
     {
       "source": "packages/credentials/credentials/tests/memory.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials/tests/credentials_parity.rs"
+      ],
+      "evidence": [
+        "Rust MemoryCredentials mirror is seeded from a map, reports source=memory, treats empty as absent, rejects empty set, emits only committed set/unset changes, and is always writable",
+        "cargo test -p seekdeep-credentials --all-features passed 11 tests"
       ]
     },
     {
       "source": "packages/credentials/credentials/tsconfig.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/credentials/Cargo.toml",
-        "crates/credentials/src/lib.rs"
+        "crates/credentials/src/lib.rs",
+        "Cargo.toml"
+      ],
+      "evidence": [
+        "Cargo workspace dependencies replace every source TypeScript project reference with typed Rust crates",
+        "cargo test, doc, and strict clippy gates passed"
       ]
     },
     {
@@ -29058,22 +29159,48 @@
     {
       "source": "packages/interaction/user-approval/README.i18n.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/user-approval/README.i18n.yaml"
+      ],
+      "evidence": [
+        "git hash-object crates/user-approval/README.md crates/user-approval/README.zh.md matches the recorded bilingual pair hashes"
+      ]
     },
     {
       "source": "packages/interaction/user-approval/README.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/user-approval/README.md"
+      ],
+      "evidence": [
+        "manual source-to-Rust API and model-experience documentation audit"
+      ],
+      "note": "Behavioral documentation is ported; linked repository-wide subsystem and Agent Note documents remain pending."
     },
     {
       "source": "packages/interaction/user-approval/README.zh.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/user-approval/README.zh.md"
+      ],
+      "evidence": [
+        "manual bilingual parity audit against the English Rust README"
+      ],
+      "note": "Behavioral documentation is ported; linked repository-wide subsystem and Agent Note documents remain pending."
     },
     {
       "source": "packages/interaction/user-approval/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/user-approval/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo metadata --no-deps --format-version 1 resolves seekdeep-user-approval 0.1.0-rc.5 with renamed description, repository, README, library, and tests"
+      ]
     },
     {
       "source": "packages/interaction/user-approval/src/index.ts",
@@ -29152,12 +29279,28 @@
     {
       "source": "packages/interaction/user-approval/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/user-approval/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-user-approval --all-features",
+        "cargo clippy -p seekdeep-user-approval --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/interaction/user-approval/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/user-approval/Cargo.toml",
+        "crates/user-approval/src/lib.rs",
+        "crates/user-approval/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo doc -p seekdeep-user-approval --all-features --no-deps",
+        "cargo test -p seekdeep-user-approval --all-features"
+      ]
     },
     {
       "source": "packages/interaction/user-questions/README.i18n.yaml",
@@ -29568,32 +29711,97 @@
     {
       "source": "packages/llm/llm-pi-ai/README.i18n.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/README.i18n.yaml"
+      ],
+      "evidence": [
+        "git hash-object crates/llm-pi-ai/README.md crates/llm-pi-ai/README.zh.md matches both recorded pairing hashes",
+        "English and Chinese target documentation preserve the same ordered heading surface and synchronized native-Rust corrections"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/README.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/README.md"
+      ],
+      "evidence": [
+        "Target preserves every source heading and behavioral section while renaming the product and replacing JavaScript implementation claims with the native Rust architecture",
+        "cargo doc -p seekdeep-llm-pi-ai --all-features --no-deps passed",
+        "cargo metadata reports crates/llm-pi-ai/README.md as the published crate README"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/README.zh.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/README.zh.md"
+      ],
+      "evidence": [
+        "Target preserves every source Chinese heading and behavioral section with synchronized SeekDeep and native-Rust corrections",
+        "cargo doc -p seekdeep-llm-pi-ai --all-features --no-deps passed",
+        "README.i18n.yaml records the current target Git blob hash"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/Cargo.toml",
+        "crates/llm-pi-ai/src/lib.rs",
+        "Cargo.lock"
+      ],
+      "evidence": [
+        "cargo metadata --no-deps --format-version 1 reports seekdeep-llm-pi-ai 0.1.0-rc.5, Rust 2024, rust-version 1.93.1, repository metadata, and README.md",
+        "Cargo dependencies and public Rust modules replace the source peer, runtime, export, and declaration metadata without a foreign-language production runtime",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/adapter.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/adapter.rs",
+        "crates/llm-pi-ai/src/openai_completions.rs",
+        "crates/llm-pi-ai/src/openai_responses.rs",
+        "crates/llm-pi-ai/src/anthropic_messages.rs",
+        "crates/llm-pi-ai/src/google_generative.rs",
+        "crates/llm-pi-ai/src/bedrock.rs",
+        "crates/llm-pi-ai/src/executor.rs"
+      ],
+      "evidence": [
+        "pinned source adapter.spec.ts oracle passed 45/45 tests",
+        "Rust adapter tests pass snapshot, metadata, option, reasoning, image, abort, timeout, and setup-error delivery cases",
+        "Rust local protocol tests pass Chat Completions and Mistral, standard and Azure Responses, Anthropic Messages, Google Generative AI and Vertex, Bedrock Converse Stream, and Codex SSE plus WebSocket request and stream behavior",
+        "Rust Bedrock request tests pass explicit maxTokens, Claude cache points and long TTL, grouped tool results, tool-result images and empty placeholders, adaptive and budget thinking, native xhigh, GovCloud display omission, and pre-SigV4 custom-header filtering",
+        "Rust Bedrock tests pass pi-ai's UTF-16 token estimator and 4096-token context reserve, ARN/env/endpoint/profile region precedence, standard/custom endpoint pinning, snapshot HTTP/HTTPS proxy plus NO_PROXY, and forced HTTP/1.1 client construction",
+        "Rust Codex transport tests pass exact WebSocket headers and response.create body, connect and connection-limit fallback, no midstream fallback, session fallback pinning, cached connection reuse, continuation delta, missing-continuation full retry, connect timeout, zstd SSE bodies, and session-disposed socket closure",
+        "Rust Codex diagnostics match the source camelCase counter shape and pass per-session/global reset plus selected/all cached-session close control",
+        "pinned pi-ai ambient-auth captures match Rust generic keys plus Anthropic bearer, Cloudflare endpoint/header, Bedrock credential-chain gating, and Vertex ADC resolution shapes",
+        "Rust adapter freezes resolved provider auth into the call, materializes endpoint placeholders and nullable headers before dispatch, and emits Provider is not configured before executor I/O when ambient auth misses",
+        "pinned pi-ai 0.82.1 wire captures confirm Google and Vertex collection URLs, x-goog-api-key authentication, top-level system and tool fields, version handling, and thinking configuration",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/catalog.rs",
+        "crates/llm-pi-ai/src/catalog_snapshot.rs"
+      ],
+      "evidence": [
+        "pinned source catalog.spec.ts oracle passed 52/52 tests",
+        "checksum-verified pi-ai 0.82.1 snapshot contains 38 lookup providers, 37 directory providers, and 1109 models",
+        "Rust catalog tests pass defaults, overrides, lossless unknown fields, reasoning maps, compat switches, provider ordering, and validation diagnostics",
+        "Rust adapter and directory tests prove resolved catalog facts through native dispatch and registration lifecycle"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/codex-auth.ts",
@@ -29604,50 +29812,126 @@
       ],
       "evidence": [
         "pinned source codex-auth oracle passed 17/17 tests",
-        "cargo test -p seekdeep-llm-pi-ai --all-features passed 9 grouped credential-bridge tests",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 12 grouped credential-bridge and refresh tests within the 101-test crate suite",
         "cargo clippy -p seekdeep-llm-pi-ai --all-targets --all-features -- -D warnings",
-        "Rust bridge proves bounded private-file reads, JWT and account validation, provider scoping, unknown-field preservation, atomic owner-only updates, exact callback-error identity, concurrent official refresh precedence, disappearing-login handling, and official login/logout ownership"
+        "Rust bridge proves bounded private-file reads, JWT and account validation, provider scoping, unknown-field preservation, atomic owner-only updates, exact callback-error identity, concurrent official refresh precedence, disappearing-login handling, and official login/logout ownership",
+        "Rust OAuth resolver proves fresh-token fast path, exact OpenAI refresh form, one refresh under double-checked locking, atomic persistence, and no mutation on refresh failure"
       ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/config.rs",
+        "crates/llm-pi-ai/src/provider.rs"
+      ],
+      "evidence": [
+        "pinned source config.spec.ts oracle passed 6/6 tests",
+        "Rust schema and resolution tests pass materialized defaults, nullable reasoning, legacy rejection, detached options, retry policy, and serviceability",
+        "Rust provider tests pass protocol ordering, catalog reuse, auth inheritance, repointing, and OAuth-only Codex key augmentation",
+        "Verified dynamic settings and adapter suites prove every profile option reaches the next immutable request or registration fact"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/context.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/context.rs"
+      ],
+      "evidence": [
+        "pinned source convert.spec.ts oracle passed 68/68 tests and context.spec.ts passed 5/5 tests",
+        "Rust context parity tests cover request fields, ordered history, nested image resolution, text flattening, tool-name recovery, fallbacks, and unsupported image failures",
+        "cargo test -p seekdeep-llm-pi-ai --all-features and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/discovery.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/discovery.rs"
+      ],
+      "evidence": [
+        "pinned source discovery.spec.ts oracle passed 24/24 tests",
+        "Rust discovery tests pass catalog short-circuit, lazy credentials, path and header behavior, row filtering, status and schema diagnostics, both four-megabyte limits, and cancellation",
+        "cargo test -p seekdeep-llm-pi-ai --all-features and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/plugin.rs",
+        "crates/llm-pi-ai/src/executor.rs",
+        "crates/llm-pi-ai/src/codex_auth.rs",
+        "crates/llm-pi-ai/src/google_generative.rs",
+        "crates/llm-pi-ai/src/bedrock.rs",
+        "crates/core/src/session_store.rs"
+      ],
+      "evidence": [
+        "Rust package tests pass dormant mount, executable provider directory including Vertex and Bedrock, catalog discovery, ordered atomic route registration, metadata, and complete disposal",
+        "Rust dynamic settings test passes route activation, display and retry replacement, rejected update retention, and route removal",
+        "Rust Codex integration passes official auth file through the package into a local Codex SSE response and refreshes an expired token once under lock before atomically preserving it",
+        "Rust loader composition passes dormant external-settings activation, stored-key lookup, Codex dispatch, and exact missing and malformed shared-session diagnostics",
+        "Rust loader composition proves provider-native OPENAI_API_KEY and ANTHROPIC_AUTH_TOKEN routes without apiKeyEnv, including Anthropic bearer-header precedence",
+        "Rust SessionStore integration proves session/disposed aborts, closes, and forgets the matching cached Codex WebSocket while the plugin remains mounted",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/invariant.rs",
+        "crates/llm-pi-ai/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "Rust companion reserves the exact renamed package identity with a no-op installer",
+        "Rust lifecycle test proves duplicate refusal, disposal, and replacement registration"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/provider.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/provider.rs"
+      ],
+      "evidence": [
+        "Rust provider tests pass supported protocol ordering, catalog reuse, explicit repointing, harness auth, and OAuth-only Codex behavior",
+        "configuration resolution constructs the typed provider atomically with its materialized models",
+        "Every pinned catalog protocol has a typed native executor and ambient auth resolution is covered across standard and special providers"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/replay.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/replay.rs"
+      ],
+      "evidence": [
+        "pinned source convert.spec.ts oracle passed 68/68 tests",
+        "Rust replay tests cover native metadata projection, foreign history, malformed arguments, stable validation diagnostics, source matching, content matching, and image rejection",
+        "cargo test -p seekdeep-llm-pi-ai --all-features and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/src/stream.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/stream.rs"
+      ],
+      "evidence": [
+        "pinned source convert.spec.ts oracle passed 68/68 tests",
+        "Rust stream tests cover every event class, usage and finish ordering, replay emission, error routing, overflow detection, ECMAScript JSON number formatting, source-error identity, and premature EOF",
+        "cargo test -p seekdeep-llm-pi-ai --all-features and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/adapter.e2e.ts",
@@ -29657,22 +29941,70 @@
     {
       "source": "packages/llm/llm-pi-ai/tests/adapter.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/adapter_parity.rs",
+        "crates/llm-pi-ai/tests/openai_completions_parity.rs",
+        "crates/llm-pi-ai/tests/openai_responses_parity.rs",
+        "crates/llm-pi-ai/tests/anthropic_messages_parity.rs",
+        "crates/llm-pi-ai/tests/google_generative_parity.rs",
+        "crates/llm-pi-ai/tests/bedrock_parity.rs",
+        "crates/llm-pi-ai/tests/codex_engine_parity.rs",
+        "crates/llm-pi-ai/tests/codex_websocket_parity.rs",
+        "crates/llm-pi-ai/tests/plugin_parity.rs"
+      ],
+      "evidence": [
+        "pinned source adapter.spec.ts passed 45/45 tests",
+        "Rust grouped suites cover adapter lifecycle, package registration, Chat Completions and Mistral, standard and Azure Responses, Anthropic Messages, Google Generative AI and Vertex, Bedrock Converse Stream, and Codex SSE plus WebSocket transports",
+        "Rust adapter tests prove late-mounted attachment resolution, immutable pre-await snapshots, provider-native auth materialization, pre-I/O validation, cancellation ownership, and exact in-stream setup failures",
+        "Rust crate root exports the plugin, adapter, schema, supported protocols, and public profile vocabulary while helper functions remain under explicit module subpaths",
+        "pnpm exec vitest run packages/llm/llm-pi-ai/tests/adapter.spec.ts packages/llm/llm-pi-ai/tests/sdk-options.spec.ts passed 47/47 source tests",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/assemble.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/support/assemble.rs",
+        "crates/llm-pi-ai/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "Rust shared helper drives LlmRuntime::stream through BlockAssembler, returns message, optional usage, and finish, and attaches provider/model plus replayState to the model source",
+        "Real loader composition uses the helper and verifies assembled text, usage, stop finish, stored credential, and provider route",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/catalog-directory.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/src/plugin.rs",
+        "crates/llm-pi-ai/tests/plugin_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/llm/llm-pi-ai/tests/catalog-directory.spec.ts passed 1/1 source test",
+        "Rust exact mocked-catalog mirror exposes openai and withholds future-oauth-only with the same provider-native authentication, settings namespace/path, and declared=false facts",
+        "Rust package lifecycle test exposes every executable API-key or provider-native catalog route including Vertex and Bedrock, withholds unsupported OAuth-only routes, and exposes file-backed Codex OAuth",
+        "strict seekdeep-llm-pi-ai all-targets clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/catalog.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/catalog_resolution_parity.rs",
+        "crates/llm-pi-ai/tests/provider_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/llm/llm-pi-ai/tests/catalog.spec.ts passed 52/52 source tests",
+        "Rust catalog and provider suites cover pure resolution, generated data, reasoning, compat, overrides, auth construction, and exact validation diagnostics",
+        "Rust adapter, dynamic settings, and directory suites prove resolved catalog facts through wire dispatch and registration lifecycle",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/codex-auth.spec.ts",
@@ -29689,37 +30021,104 @@
     {
       "source": "packages/llm/llm-pi-ai/tests/config.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/config_parity.rs"
+      ],
+      "evidence": [
+        "pinned source config.spec.ts passed 6/6 tests",
+        "Rust config suite passes all reasoning and modality schema boundary and materialization behaviors"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/context.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/context_parity.rs"
+      ],
+      "evidence": [
+        "pinned source context.spec.ts passed 5/5 tests",
+        "Rust context parity suite passed 5/5 grouped tests"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/convert.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/replay_parity.rs",
+        "crates/llm-pi-ai/tests/stream_parity.rs"
+      ],
+      "evidence": [
+        "pinned source convert.spec.ts passed 68/68 tests",
+        "Rust replay and stream parity suites passed 12/12 grouped tests"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/discovery.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/discovery_parity.rs",
+        "crates/llm-pi-ai/tests/plugin_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/llm/llm-pi-ai/tests/discovery.spec.ts passed 24/24 tests against the pinned source",
+        "Rust discovery suite passes every direct catalog, endpoint, stored and probe credential, path, response bound, parse, status, unsupported protocol, and cancellation behavior",
+        "Rust package lifecycle test proves namespace offer, wrong-namespace and empty-endpoint diagnostics, and NO_DISCOVERY after unload",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/dynamic-config.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/dynamic_plugin_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/llm/llm-pi-ai/tests/dynamic-config.spec.ts passed 7/7 tests against the pinned source",
+        "Rust dynamic settings suite passed 7/7 grouped tests covering dormant activation, static and user-layer composition, real credential-service rotation, retry replacement, refused invalid writes, cross-adapter collision retention and recovery, provider reorder stability, and reset removal",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests",
+        "cargo clippy -p seekdeep-llm-pi-ai --all-targets --all-features -- -D warnings passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/loader_composition.rs",
+        "crates/llm-pi-ai/tests/codex_engine_parity.rs",
+        "crates/llm-pi-ai/src/codex_auth.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/llm/llm-pi-ai/tests/loader-composition.spec.ts passed 5/5 tests against the pinned source",
+        "Rust PluginCatalog YAML composition loads the real LLM, watched settings-file, credentials-local, and bare llm-pi-ai plugins; an external settings edit activates DeepSeek and the stored credential reaches the next request",
+        "Rust loader tests pass official Codex auth dispatch plus missing and malformed shared-session diagnostics before network access",
+        "Rust Codex resolver test passes provider-driven expired-token refresh, one refresh under double-checked locking, atomic persistence, unknown-field preservation, and failure rollback",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/mock-server.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/support/mock_server.rs",
+        "crates/llm-pi-ai/tests/mock_server_parity.rs",
+        "crates/llm-pi-ai/tests/openai_completions_parity.rs",
+        "crates/llm-pi-ai/tests/openai_responses_parity.rs",
+        "crates/llm-pi-ai/tests/anthropic_messages_parity.rs",
+        "crates/llm-pi-ai/tests/codex_engine_parity.rs"
+      ],
+      "evidence": [
+        "Rust shared scripted server consumes one behavior per request and captures paths, lowercase headers, empty or parsed JSON bodies, and zstd-compressed request bodies",
+        "Rust fixture parity test passes delayed ordered SSE, custom error status/body/headers, normal close counting, and client-cancelled response close counting",
+        "Protocol suites use equivalent local fixtures for complete, error, delayed, cancelled, and incomplete streams",
+        "cargo test -p seekdeep-llm-pi-ai --all-features passed 126 tests and strict crate clippy passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/provider-apis.e2e.ts",
@@ -29729,12 +30128,30 @@
     {
       "source": "packages/llm/llm-pi-ai/tests/sdk-options.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/adapter_parity.rs",
+        "crates/llm-pi-ai/tests/provider_parity.rs"
+      ],
+      "evidence": [
+        "pinned source sdk-options.spec.ts passed 2/2 tests",
+        "Rust tests prove maxRetries zero, exact configured provider/model dispatch, and synchronous executor setup failure as an in-stream error finish"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/Cargo.toml",
+        "crates/llm-pi-ai/src/lib.rs",
+        "Cargo.toml"
+      ],
+      "evidence": [
+        "Cargo workspace dependencies replace every source TypeScript project reference with typed Rust crate dependencies",
+        "cargo doc -p seekdeep-llm-pi-ai --all-features --no-deps passed",
+        "cargo clippy -p seekdeep-llm-pi-ai --all-targets --all-features -- -D warnings passed"
+      ]
     },
     {
       "source": "packages/llm/llm-retry/README.i18n.yaml",
@@ -32549,22 +32966,31 @@
     {
       "source": "packages/session/session-persistence-jsonl/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence-jsonl/Cargo.toml"],
+      "evidence": ["cargo metadata --no-deps --format-version 1 resolves the renamed seekdeep-session-persistence-jsonl 0.1.0-rc.5 package"]
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/format.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence-jsonl/src/format.rs", "crates/session-persistence-jsonl/src/backend.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts", "cargo test -p seekdeep-session-persistence-jsonl --all-features", "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-persistence-jsonl/src/backend.rs", "crates/session-persistence-jsonl/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-session-persistence-jsonl --all-features", "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"],
+      "note": "Core JSONL/Zstandard persistence, live adoption, repair, listing, raw export, revisions, preparation, and teardown are implemented; Windows publication and the remaining filesystem race/fault matrix keep this surface unverified."
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/session-persistence-jsonl/src/invariant.rs", "crates/session-persistence-jsonl/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-session-persistence-jsonl --all-features"]
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/win32.ts",
@@ -32574,22 +33000,33 @@
     {
       "source": "packages/session/session-persistence-jsonl/src/zstd-private-decoder.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence-jsonl/src/zstd.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts packages/session/session-persistence-jsonl/tests/zstd.spec.ts", "cargo test -p seekdeep-session-persistence-jsonl zstd::tests --all-features", "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"],
+      "note": "The Node-private and public decoder implementations collapse into one native Rust Zstandard decoder with the same one-shot lifecycle and checksum contract."
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/zstd-public-decoder.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence-jsonl/src/zstd.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts packages/session/session-persistence-jsonl/tests/zstd.spec.ts", "cargo test -p seekdeep-session-persistence-jsonl zstd::tests --all-features", "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"],
+      "note": "The Node-private and public decoder implementations collapse into one native Rust Zstandard decoder with the same one-shot lifecycle and checksum contract."
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/zstd.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence-jsonl/src/zstd.rs", "crates/session-persistence-jsonl/src/backend.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts packages/session/session-persistence-jsonl/tests/zstd.spec.ts", "cargo test -p seekdeep-session-persistence-jsonl --all-features", "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-persistence-jsonl/tests/jsonl.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-persistence-jsonl/src/format.rs", "crates/session-persistence-jsonl/src/backend.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts", "cargo test -p seekdeep-session-persistence-jsonl --all-features"],
+      "note": "Format, scanner, compressed recovery, core persistence, ownership, preparation, HMR, and teardown cases are represented; remaining filesystem stat/list/read fault injections and full coordinator races are outstanding."
     },
     {
       "source": "packages/session/session-persistence-jsonl/tests/win32.spec.ts",
@@ -32599,7 +33036,9 @@
     {
       "source": "packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence-jsonl/src/zstd.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts", "cargo test -p seekdeep-session-persistence-jsonl zstd::tests --all-features"]
     },
     {
       "source": "packages/session/session-persistence-jsonl/tests/zstd.spec.ts",
@@ -32609,7 +33048,9 @@
     {
       "source": "packages/session/session-persistence-jsonl/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence-jsonl/Cargo.toml"],
+      "evidence": ["cargo test -p seekdeep-session-persistence-jsonl --all-features", "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-persistence-sqlite/README.i18n.yaml",
@@ -32629,7 +33070,9 @@
     {
       "source": "packages/session/session-persistence-sqlite/package.json",
       "kind": "configuration",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/session-persistence-sqlite/Cargo.toml"],
+      "evidence": ["cargo metadata --no-deps --format-version 1 resolves the renamed seekdeep-session-persistence-sqlite 0.1.0-rc.5 package"]
     },
     {
       "source": "packages/session/session-persistence-sqlite/src/index.ts",
@@ -32639,22 +33082,31 @@
     {
       "source": "packages/session/session-persistence-sqlite/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/session-persistence-sqlite/src/invariant.rs", "crates/session-persistence-sqlite/tests/backend_parity.rs"],
+      "evidence": ["cargo test -p seekdeep-session-persistence-sqlite --all-features"]
     },
     {
       "source": "packages/session/session-persistence-sqlite/src/schema.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/session-persistence-sqlite/src/schema.rs", "crates/session-persistence-sqlite/tests/schema_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-sqlite/tests/sqlite.spec.ts", "cargo test -p seekdeep-session-persistence-sqlite --test schema_parity --all-features", "cargo clippy -p seekdeep-session-persistence-sqlite --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-persistence-sqlite/tests/sqlite.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-persistence-sqlite/tests/backend_parity.rs", "crates/session-persistence-sqlite/tests/schema_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-sqlite/tests/sqlite.spec.ts", "cargo test -p seekdeep-session-persistence-sqlite --all-features"],
+      "note": "Schema, medium, revision, surface-column, permissions, journal, append, and repair cases are ported; remaining shared coordinator/preparation cancellation cases keep this test surface unverified."
     },
     {
       "source": "packages/session/session-persistence-sqlite/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence-sqlite/Cargo.toml"],
+      "evidence": ["cargo test -p seekdeep-session-persistence-sqlite --all-features", "cargo clippy -p seekdeep-session-persistence-sqlite --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-persistence/README.i18n.yaml",
@@ -32674,67 +33126,97 @@
     {
       "source": "packages/session/session-persistence/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence/Cargo.toml"],
+      "evidence": ["cargo metadata --no-deps --format-version 1 resolves the renamed seekdeep-session-persistence 0.1.0-rc.5 package"]
     },
     {
       "source": "packages/session/session-persistence/src/coordinator.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-persistence/src/preparations.rs", "crates/session-persistence/src/write_behind.rs", "crates/session-persistence-jsonl/src/backend.rs", "crates/session-persistence-sqlite/src/backend.rs"],
+      "evidence": ["cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"],
+      "note": "Cold preparation, live adoption, write-behind, storage-only append, lazy empty append, revision, repair, and teardown paths are implemented; the remaining shared retirement and cancellation race matrix is not yet fully ported."
     },
     {
       "source": "packages/session/session-persistence/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-persistence/src/lib.rs", "crates/session-persistence-jsonl/src/lib.rs", "crates/session-persistence-sqlite/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"],
+      "note": "The typed seam, service publication, revisions, raw artifacts, preparation default, and concrete plugin composition are implemented; full coordinator teardown evidence remains outstanding."
     },
     {
       "source": "packages/session/session-persistence/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/session-persistence/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-session-persistence --all-features"]
     },
     {
       "source": "packages/session/session-persistence/src/preparations.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence/src/preparations.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence/tests/preparations.spec.ts", "cargo test -p seekdeep-session-persistence --all-features", "cargo clippy -p seekdeep-session-persistence --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-persistence/src/revision.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/session-persistence/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-session-persistence --all-features"]
     },
     {
       "source": "packages/session/session-persistence/src/write-behind.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence/src/write_behind.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence/tests/write-behind.spec.ts", "cargo test -p seekdeep-session-persistence --all-features", "cargo clippy -p seekdeep-session-persistence --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-persistence/tests/contract.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/repair.rs", "crates/session-persistence/src/lib.rs", "crates/session-persistence-jsonl/src/backend.rs", "crates/session-persistence-sqlite/tests/backend_parity.rs", "crates/session-persistence-sqlite/tests/schema_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts packages/session/session-persistence-sqlite/tests/sqlite.spec.ts", "cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features", "cargo clippy -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-persistence/tests/coordinator-contract.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-persistence/src/preparations.rs", "crates/session-persistence/src/write_behind.rs", "crates/session-persistence-jsonl/src/backend.rs", "crates/session-persistence-sqlite/tests/backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts packages/session/session-persistence-sqlite/tests/sqlite.spec.ts", "cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"],
+      "note": "Core adoption, preparation, append, repair, HMR, collision, and lazy-materialization cases are represented; remaining retirement-chain and detached-append race cases keep this surface unverified."
     },
     {
       "source": "packages/session/session-persistence/tests/persistence.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-persistence/src/lib.rs", "crates/session-persistence/src/preparations.rs", "crates/session-persistence/src/write_behind.rs", "crates/session-persistence-jsonl/src/backend.rs", "crates/session-persistence-sqlite/src/backend.rs"],
+      "evidence": ["cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"],
+      "note": "Service, preparation, exact cancellation, write-behind, legacy refusal, live adoption, and teardown behavior are ported; the remaining retirement-chain and injected backend-failure cases keep this surface unverified."
     },
     {
       "source": "packages/session/session-persistence/tests/preparations.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence/src/preparations.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence/tests/preparations.spec.ts", "cargo test -p seekdeep-session-persistence preparations::tests --all-features"]
     },
     {
       "source": "packages/session/session-persistence/tests/write-behind.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence/src/write_behind.rs"],
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence/tests/write-behind.spec.ts", "cargo test -p seekdeep-session-persistence write_behind::tests --all-features"]
     },
     {
       "source": "packages/session/session-persistence/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-persistence/Cargo.toml"],
+      "evidence": ["cargo test -p seekdeep-session-persistence --all-features", "cargo clippy -p seekdeep-session-persistence --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session/session-projection-cache/README.i18n.yaml",
@@ -33282,40 +33764,77 @@
     {
       "source": "packages/settings/settings-file/README.i18n.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/settings-file/README.i18n.yaml"],
+      "evidence": [
+        "target Git blob hashes match crates/settings-file/README.md and README.zh.md",
+        "both target languages preserve the same ordered heading surface"
+      ]
     },
     {
       "source": "packages/settings/settings-file/README.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/settings-file/README.md"],
+      "evidence": [
+        "target preserves every source behavioral section with SeekDeep and native-Rust identity",
+        "cargo doc -p seekdeep-settings-file --all-features --no-deps passed",
+        "cargo metadata reports README.md as the published crate readme"
+      ]
     },
     {
       "source": "packages/settings/settings-file/README.zh.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/settings-file/README.zh.md"],
+      "evidence": [
+        "target preserves every source Chinese behavioral section with synchronized SeekDeep and native-Rust identity",
+        "cargo doc -p seekdeep-settings-file --all-features --no-deps passed",
+        "README.i18n.yaml records the current target Git blob hash"
+      ]
     },
     {
       "source": "packages/settings/settings-file/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/settings-file/Cargo.toml"
+        "crates/settings-file/Cargo.toml",
+        "crates/settings-file/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo metadata reports seekdeep-settings-file 0.1.0-rc.5, Rust 2024, rust-version 1.93.1, repository metadata, and README.md",
+        "Cargo dependencies and public Rust modules replace source peer, runtime, and export metadata",
+        "cargo clippy -p seekdeep-settings-file --all-targets --all-features -- -D warnings passed"
       ]
     },
     {
       "source": "packages/settings/settings-file/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/settings-file/src/lib.rs"
+        "crates/settings-file/src/lib.rs",
+        "crates/settings-file/tests/file_parity.rs"
+      ],
+      "evidence": [
+        "pinned local, lock-race, watcher, concurrency, and loader source oracles passed 48/48 tests",
+        "cargo test -p seekdeep-settings-file --all-features passed 18 Rust tests",
+        "cargo test -p seekdeep-util --all-features atomic_write passed 6 lock, cleanup, permission, and replacement tests",
+        "strict settings-file clippy passed",
+        "Rust coverage includes resolution, YAML/JSON round-trip, comments, arrays, ownership modes, symlink safety, serialized writes, stale-lock refusal, watcher recovery, invalid-edit retention, removal, shutdown quiescence, and loader composition"
       ]
     },
     {
       "source": "packages/settings/settings-file/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/settings-file/src/invariant.rs"
+        "crates/settings-file/src/invariant.rs",
+        "crates/settings-file/tests/file_parity.rs"
+      ],
+      "evidence": [
+        "Rust companion reserves the renamed @deepseek-ai/seekdeep-settings-file package identity with the explained no-op installer",
+        "lifecycle test proves readiness, duplicate refusal, disposal, and replacement registration",
+        "cargo clippy -p seekdeep-settings-file --all-targets --all-features -- -D warnings passed"
       ]
     },
     {
@@ -33351,34 +33870,58 @@
     {
       "source": "packages/settings/settings-file/tests/local.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/settings-file/tests/file_parity.rs"
+      ],
+      "evidence": [
+        "pnpm source settings-file oracle passed every local.spec.ts case within the 48/48 aggregate",
+        "Rust grouped file parity tests cover every default, read, write, merge, comment, array, JSON, symlink, watcher, removal, and self-write behavior",
+        "cargo test -p seekdeep-settings-file --all-features passed 18 tests"
       ]
     },
     {
       "source": "packages/settings/settings-file/tests/lock-race.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/settings-file/tests/file_parity.rs",
+        "crates/settings-file/src/lib.rs",
         "crates/util/src/atomic_write.rs"
+      ],
+      "evidence": [
+        "pnpm source settings-file oracle passed lock-race.spec.ts 3/3 within the 48/48 aggregate",
+        "Rust shutdown race test proves queued document creation completes without publication and disposal waits for the operation drain",
+        "Rust atomic-write tests prove exclusive-create failure, operation-error lock release, temp cleanup, and untouched target behavior"
       ]
     },
     {
       "source": "packages/settings/settings-file/tests/watcher.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
+        "crates/settings-file/src/lib.rs",
         "crates/settings-file/tests/file_parity.rs"
+      ],
+      "evidence": [
+        "pnpm source settings-file oracle passed watcher.spec.ts 9/9 within the 48/48 aggregate",
+        "Rust watcher queue test proves backend-error containment, later edit recovery, stop-before-later-events, and zero-debounce operation",
+        "Rust integration tests prove last-good retention, recovery, removal, unobserved-edit folding, invalid-write refusal, startup reconciliation, and shutdown drain"
       ]
     },
     {
       "source": "packages/settings/settings-file/tsconfig.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/settings-file/Cargo.toml"
+        "crates/settings-file/Cargo.toml",
+        "crates/settings-file/src/lib.rs",
+        "Cargo.toml"
+      ],
+      "evidence": [
+        "Cargo workspace dependencies replace every source TypeScript project reference with typed Rust crate dependencies",
+        "cargo test -p seekdeep-settings-file --all-features passed 18 tests",
+        "cargo clippy -p seekdeep-settings-file --all-targets --all-features -- -D warnings passed"
       ]
     },
     {
@@ -34622,57 +35165,79 @@
     {
       "source": "packages/storage/storage-domain/package.json",
       "kind": "configuration",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/Cargo.toml"],
+      "evidence": ["cargo metadata --no-deps --format-version 1 resolves the renamed seekdeep-storage-domain 0.1.0-rc.5 package"]
     },
     {
       "source": "packages/storage/storage-domain/src/domain.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/src/lib.rs", "crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-domain/tests/domain.spec.ts packages/storage/storage-domain/tests/invariant.spec.ts", "cargo test -p seekdeep-storage-domain --all-features", "cargo clippy -p seekdeep-storage-domain --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/storage/storage-domain/src/error.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/src/lib.rs", "crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-domain/tests/domain.spec.ts", "cargo test -p seekdeep-storage-domain --all-features"]
     },
     {
       "source": "packages/storage/storage-domain/src/events.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/src/lib.rs", "crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-domain/tests/domain.spec.ts packages/storage/storage-domain/tests/invariant.spec.ts", "cargo test -p seekdeep-storage-domain --all-features"]
     },
     {
       "source": "packages/storage/storage-domain/src/index.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/src/lib.rs", "crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-domain/tests/domain.spec.ts", "cargo test -p seekdeep-storage-domain --all-features", "cargo doc -p seekdeep-storage-domain --all-features --no-deps"]
     },
     {
       "source": "packages/storage/storage-domain/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/src/lib.rs", "crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-domain/tests/invariant.spec.ts", "cargo test -p seekdeep-storage-domain --all-features"]
     },
     {
       "source": "packages/storage/storage-domain/src/spec.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/src/lib.rs", "crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-domain/tests/domain.spec.ts", "cargo test -p seekdeep-storage-domain --all-features"]
     },
     {
       "source": "packages/storage/storage-domain/tests/domain.spec.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-domain/tests/domain.spec.ts", "cargo test -p seekdeep-storage-domain --test domain_parity --all-features"]
     },
     {
       "source": "packages/storage/storage-domain/tests/helpers/memory-backend.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["cargo test -p seekdeep-storage-domain --test domain_parity --all-features"]
     },
     {
       "source": "packages/storage/storage-domain/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-domain/tests/domain_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-domain/tests/invariant.spec.ts", "cargo test -p seekdeep-storage-domain --test domain_parity --all-features"]
     },
     {
       "source": "packages/storage/storage-domain/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/storage-domain/Cargo.toml"],
+      "evidence": ["cargo clippy -p seekdeep-storage-domain --all-targets --all-features -- -D warnings", "cargo doc -p seekdeep-storage-domain --all-features --no-deps"]
     },
     {
       "source": "packages/storage/storage-json/README.i18n.yaml",
@@ -34692,42 +35257,58 @@
     {
       "source": "packages/storage/storage-json/package.json",
       "kind": "configuration",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-json/Cargo.toml"],
+      "evidence": ["cargo metadata --no-deps --format-version 1 resolves the renamed seekdeep-storage-json 0.1.0-rc.5 package"]
     },
     {
       "source": "packages/storage/storage-json/src/atomic.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-json/src/atomic.rs", "crates/storage-json/tests/json_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-json/tests/json-backend.spec.ts", "cargo test -p seekdeep-storage-json --all-features"]
     },
     {
       "source": "packages/storage/storage-json/src/format.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-json/src/format.rs", "crates/storage-json/tests/json_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-json/tests/json-backend.spec.ts", "cargo test -p seekdeep-storage-json --all-features"]
     },
     {
       "source": "packages/storage/storage-json/src/index.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-json/src/lib.rs", "crates/storage-json/tests/json_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-json/tests/json-backend.spec.ts", "cargo test -p seekdeep-storage-json --all-features", "cargo doc -p seekdeep-storage-json --all-features --no-deps"]
     },
     {
       "source": "packages/storage/storage-json/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-json/src/lib.rs", "crates/storage-json/tests/json_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-json/tests/json-backend.spec.ts", "cargo test -p seekdeep-storage-json --all-features"]
     },
     {
       "source": "packages/storage/storage-json/src/unit.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-json/src/unit.rs", "crates/storage-json/tests/json_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-json/tests/json-backend.spec.ts", "cargo test -p seekdeep-storage-json --all-features"]
     },
     {
       "source": "packages/storage/storage-json/tests/json-backend.spec.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-json/tests/json_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-json/tests/json-backend.spec.ts", "cargo test -p seekdeep-storage-json --test json_backend_parity --all-features"]
     },
     {
       "source": "packages/storage/storage-json/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/storage-json/Cargo.toml"],
+      "evidence": ["cargo clippy -p seekdeep-storage-json --all-targets --all-features -- -D warnings", "cargo doc -p seekdeep-storage-json --all-features --no-deps"]
     },
     {
       "source": "packages/storage/storage-sqlite/README.i18n.yaml",
@@ -34747,42 +35328,58 @@
     {
       "source": "packages/storage/storage-sqlite/package.json",
       "kind": "configuration",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-sqlite/Cargo.toml"],
+      "evidence": ["cargo metadata --no-deps --format-version 1 resolves the renamed seekdeep-storage-sqlite 0.1.0-rc.5 package"]
     },
     {
       "source": "packages/storage/storage-sqlite/src/index.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-sqlite/src/lib.rs", "crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-sqlite/tests/invariant.spec.ts packages/storage/storage-sqlite/tests/sqlite-backend.spec.ts", "cargo test -p seekdeep-storage-sqlite --all-features", "cargo doc -p seekdeep-storage-sqlite --all-features --no-deps"]
     },
     {
       "source": "packages/storage/storage-sqlite/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-sqlite/src/invariant.rs", "crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-sqlite/tests/invariant.spec.ts", "cargo test -p seekdeep-storage-sqlite --all-features"]
     },
     {
       "source": "packages/storage/storage-sqlite/src/schema.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-sqlite/src/schema.rs", "crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-sqlite/tests/sqlite-backend.spec.ts", "cargo test -p seekdeep-storage-sqlite --all-features"]
     },
     {
       "source": "packages/storage/storage-sqlite/src/unit.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-sqlite/src/unit.rs", "crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-sqlite/tests/sqlite-backend.spec.ts", "cargo test -p seekdeep-storage-sqlite --all-features"]
     },
     {
       "source": "packages/storage/storage-sqlite/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-sqlite/src/invariant.rs", "crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-sqlite/tests/invariant.spec.ts", "cargo test -p seekdeep-storage-sqlite --test sqlite_backend_parity --all-features"]
     },
     {
       "source": "packages/storage/storage-sqlite/tests/sqlite-backend.spec.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-sqlite/tests/sqlite-backend.spec.ts", "cargo test -p seekdeep-storage-sqlite --test sqlite_backend_parity --all-features"]
     },
     {
       "source": "packages/storage/storage-sqlite/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/storage-sqlite/Cargo.toml"],
+      "evidence": ["cargo clippy -p seekdeep-storage-sqlite --all-targets --all-features -- -D warnings", "cargo doc -p seekdeep-storage-sqlite --all-features --no-deps"]
     },
     {
       "source": "packages/storage/storage/README.i18n.yaml",
@@ -34802,47 +35399,65 @@
     {
       "source": "packages/storage/storage/package.json",
       "kind": "configuration",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage/Cargo.toml"],
+      "evidence": ["cargo metadata --no-deps --format-version 1 resolves the renamed seekdeep-storage 0.1.0-rc.5 package"]
     },
     {
       "source": "packages/storage/storage/src/backend.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage/src/lib.rs", "crates/storage-json/tests/json_backend_parity.rs", "crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage/tests/registry.spec.ts packages/storage/storage-json/tests/json-backend.spec.ts packages/storage/storage-sqlite/tests/sqlite-backend.spec.ts", "cargo test -p seekdeep-storage -p seekdeep-storage-json -p seekdeep-storage-sqlite --all-features"]
     },
     {
       "source": "packages/storage/storage/src/error.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage/src/lib.rs", "crates/storage-json/tests/json_backend_parity.rs", "crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage/tests/registry.spec.ts packages/storage/storage-json/tests/json-backend.spec.ts packages/storage/storage-sqlite/tests/sqlite-backend.spec.ts", "cargo test -p seekdeep-storage -p seekdeep-storage-json -p seekdeep-storage-sqlite --all-features"]
     },
     {
       "source": "packages/storage/storage/src/index.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage/src/lib.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage/tests/registry.spec.ts", "cargo test -p seekdeep-storage --all-features", "cargo doc -p seekdeep-storage --all-features --no-deps"]
     },
     {
       "source": "packages/storage/storage/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-storage --all-features"]
     },
     {
       "source": "packages/storage/storage/src/registry.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage/src/lib.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage/tests/registry.spec.ts", "cargo test -p seekdeep-storage --all-features"]
     },
     {
       "source": "packages/storage/storage/tests/contract.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage-json/tests/json_backend_parity.rs", "crates/storage-sqlite/tests/sqlite_backend_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage-json/tests/json-backend.spec.ts packages/storage/storage-sqlite/tests/sqlite-backend.spec.ts", "cargo test -p seekdeep-storage-json -p seekdeep-storage-sqlite --all-features"]
     },
     {
       "source": "packages/storage/storage/tests/registry.spec.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": ["crates/storage/src/lib.rs"],
+      "evidence": ["pnpm exec vitest --run packages/storage/storage/tests/registry.spec.ts", "cargo test -p seekdeep-storage --all-features"]
     },
     {
       "source": "packages/storage/storage/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/storage/Cargo.toml"],
+      "evidence": ["cargo clippy -p seekdeep-storage --all-targets --all-features -- -D warnings", "cargo doc -p seekdeep-storage --all-features --no-deps"]
     },
     {
       "source": "packages/subagent/README.i18n.yaml",

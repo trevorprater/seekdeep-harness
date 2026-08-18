@@ -11,14 +11,15 @@ use std::{
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use indexmap::IndexMap;
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, EventOptions, FiberState};
+use seekdeep_cordis::{Context, EventArgs, EventOptions, FiberState};
+use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
 use seekdeep_storage::{
     KvFacet, KvSnapshot, KvUnit, KvUnitDescriptor, Storage, StorageBackend, StorageError,
     StorageErrorCode, storage_backend_service_key,
 };
 use seekdeep_storage_domain::{
     DomainChanged, DomainConfig, DomainError, DomainErrorCode, DomainGlobalSpec, DomainSpec,
-    DomainTableSpec, ValueSchema, define_domain, descriptor_of, domain_table,
+    DomainTableSpec, ValueSchema, define_domain, descriptor_of, domain_table, register_invariant,
 };
 use serde_json::{Map, Value, json};
 
@@ -628,6 +629,114 @@ async fn events_follow_durability_and_failures_leave_memory_untouched() {
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn invariant_accepts_real_writes_and_rejects_each_stale_known_shape() {
+    let harness = harness(None, None);
+    let registry = InvariantRegistry::install(&harness.context, &InvariantConfig::default())
+        .expect("invariant registry");
+    let registration = register_invariant(&registry).expect("domain invariant");
+    registration.await_ready().await.expect("invariant ready");
+
+    let domain = harness.facility.open(spec()).await.expect("open domain");
+    let table = domain.table("items").expect("items table");
+    table
+        .put("a".to_owned(), json!({"label": "x", "count": 1}))
+        .await
+        .expect("real put");
+    table
+        .update("a".to_owned(), |current| {
+            Ok(json!({"label": "x", "count": current["count"].as_i64().unwrap() + 1}))
+        })
+        .await
+        .expect("real update");
+    domain
+        .global_set(json!({"theme": "dark"}))
+        .await
+        .expect("real global set");
+
+    for (change, diagnostic) in [
+        (
+            DomainChanged::Put {
+                domain: "ghost".to_owned(),
+                table: "items".to_owned(),
+                key: "a".to_owned(),
+                value: json!({"label": "x", "count": 2}),
+            },
+            "not open",
+        ),
+        (
+            DomainChanged::Put {
+                domain: "demo".to_owned(),
+                table: "items".to_owned(),
+                key: "a".to_owned(),
+                value: json!({"label": "x", "count": 999}),
+            },
+            "differs from the in-memory record",
+        ),
+        (
+            DomainChanged::Deleted {
+                domain: "demo".to_owned(),
+                table: "items".to_owned(),
+                key: "a".to_owned(),
+            },
+            "still in memory",
+        ),
+        (
+            DomainChanged::Put {
+                domain: "demo".to_owned(),
+                table: String::new(),
+                key: String::new(),
+                value: json!({"theme": "wrong"}),
+            },
+            "differs from the in-memory global",
+        ),
+    ] {
+        let error = harness
+            .context
+            .events()
+            .emit(&harness.context, "domain/changed", &EventArgs::one(change))
+            .expect_err("stale change must violate the invariant");
+        assert!(error.to_string().contains(diagnostic), "{error:#}");
+        assert!(
+            error
+                .to_string()
+                .contains("@deepseek-ai/seekdeep-storage-domain"),
+            "{error:#}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn invariant_tolerates_an_untyped_operation_outside_the_closed_union() {
+    let harness = harness(None, None);
+    let registry = InvariantRegistry::install(&harness.context, &InvariantConfig::default())
+        .expect("invariant registry");
+    let registration = register_invariant(&registry).expect("domain invariant");
+    registration.await_ready().await.expect("invariant ready");
+    let domain = harness.facility.open(spec()).await.expect("open domain");
+    domain
+        .table("items")
+        .expect("items table")
+        .put("a".to_owned(), json!({"label": "x", "count": 1}))
+        .await
+        .expect("seed record");
+
+    harness
+        .context
+        .events()
+        .emit(
+            &harness.context,
+            "domain/changed",
+            &EventArgs::one(json!({
+                "domain": "demo",
+                "table": "items",
+                "key": "a",
+                "operation": "exotic",
+            })),
+        )
+        .expect("unknown operation is ignored at the untyped event boundary");
 }
 
 #[tokio::test]

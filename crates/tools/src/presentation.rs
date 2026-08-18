@@ -417,6 +417,164 @@ mod tests {
     }
 
     #[test]
+    fn every_pending_view_matches_the_source_wire_vocabulary() {
+        let diff = FileDiff {
+            path: "src/lib.rs".to_owned(),
+            old_text: None,
+            new_text: "fn main() {}\n".to_owned(),
+        };
+        let location = FileLocation {
+            path: "src/lib.rs".to_owned(),
+            line: None,
+        };
+        let pending = [
+            ToolCallView::Terminal(TerminalCallView {
+                title: "cargo test".to_owned(),
+                description: None,
+                cwd: Some("workspace".to_owned()),
+            }),
+            ToolCallView::Diff(DiffCallView {
+                title: "Write src/lib.rs".to_owned(),
+                diffs: vec![diff.clone()],
+                locations: Some(vec![location]),
+            }),
+        ];
+        assert_eq!(
+            serde_json::to_value(pending).expect("pending views"),
+            json!([
+                {"card": "terminal", "title": "cargo test", "cwd": "workspace"},
+                {
+                    "card": "diff",
+                    "title": "Write src/lib.rs",
+                    "diffs": [{"path": "src/lib.rs", "oldText": null, "newText": "fn main() {}\n"}],
+                    "locations": [{"path": "src/lib.rs"}],
+                },
+            ])
+        );
+    }
+
+    #[test]
+    fn every_completed_view_matches_the_source_wire_vocabulary() {
+        let diff = FileDiff {
+            path: "src/lib.rs".to_owned(),
+            old_text: None,
+            new_text: "fn main() {}\n".to_owned(),
+        };
+        let content = vec![ContentBlock::Text {
+            text: "rendered".to_owned(),
+        }];
+        let completed = [
+            ToolResultView::Generic(GenericResultView {
+                title: None,
+                content: Some(content.clone()),
+            }),
+            ToolResultView::Terminal(TerminalResultView {
+                title: Some("Tests passed".to_owned()),
+                output: Some("ok\n".to_owned()),
+                exit_code: Some(0),
+                signal: None,
+            }),
+            ToolResultView::Diff(DiffResultView {
+                title: None,
+                diffs: vec![diff],
+            }),
+            ToolResultView::Search(SearchResultView::Paths(SearchPathsResultView {
+                title: None,
+                paths: vec!["src/lib.rs".to_owned()],
+                truncated: true,
+                total: 2,
+            })),
+            ToolResultView::Read(ReadResultView {
+                title: Some("Read src/lib.rs".to_owned()),
+                path: "src/lib.rs".to_owned(),
+                offset: 2,
+                lines: vec![ReadFileLine {
+                    number: 2,
+                    text: "fn main() {}".to_owned(),
+                }],
+                total_lines: 3,
+                lang: Some("rs".to_owned()),
+                content: Some(content),
+            }),
+            ToolResultView::Web(WebResultView::Search(WebSearchResultView {
+                title: None,
+                sources: vec![WebSource {
+                    url: "https://example.com/source".to_owned(),
+                    title: Some("Source".to_owned()),
+                    snippet: None,
+                    published_at: Some("2026-08-17T00:00:00Z".to_owned()),
+                }],
+                answer: Some("answer".to_owned()),
+                truncated: false,
+            })),
+        ];
+        assert_eq!(
+            serde_json::to_value(completed).expect("completed views"),
+            json!([
+                {"card": "generic", "content": [{"type": "text", "text": "rendered"}]},
+                {"card": "terminal", "title": "Tests passed", "output": "ok\n", "exitCode": 0},
+                {"card": "diff", "diffs": [{"path": "src/lib.rs", "oldText": null, "newText": "fn main() {}\n"}]},
+                {"card": "search", "shape": "paths", "paths": ["src/lib.rs"], "truncated": true, "total": 2},
+                {
+                    "card": "read",
+                    "title": "Read src/lib.rs",
+                    "path": "src/lib.rs",
+                    "offset": 2,
+                    "lines": [{"number": 2, "text": "fn main() {}"}],
+                    "totalLines": 3,
+                    "lang": "rs",
+                    "content": [{"type": "text", "text": "rendered"}],
+                },
+                {
+                    "card": "web",
+                    "kind": "search",
+                    "sources": [{
+                        "url": "https://example.com/source",
+                        "title": "Source",
+                        "publishedAt": "2026-08-17T00:00:00Z",
+                    }],
+                    "answer": "answer",
+                    "truncated": false,
+                },
+            ])
+        );
+    }
+
+    #[test]
+    fn presentation_wire_unions_fail_closed_on_unknown_tags_and_fields() {
+        for value in [
+            json!({"card": "unknown", "title": "x"}),
+            json!({"card": "generic", "title": "x", "extra": true}),
+        ] {
+            assert!(serde_json::from_value::<ToolCallView>(value).is_err());
+        }
+        for value in [
+            json!({"card": "search", "shape": "unknown", "paths": [], "truncated": false, "total": 0}),
+            json!({"card": "web", "kind": "unknown", "truncated": false}),
+            json!({"card": "read", "path": "x", "offset": 1, "lines": [], "totalLines": 0, "extra": true}),
+        ] {
+            assert!(serde_json::from_value::<ToolResultView>(value).is_err());
+        }
+
+        let kinds = [
+            ToolCallKind::Read,
+            ToolCallKind::Edit,
+            ToolCallKind::Delete,
+            ToolCallKind::Move,
+            ToolCallKind::Search,
+            ToolCallKind::Execute,
+            ToolCallKind::Fetch,
+            ToolCallKind::Other,
+        ];
+        assert_eq!(
+            serde_json::to_value(kinds).expect("tool call kinds"),
+            json!([
+                "read", "edit", "delete", "move", "search", "execute", "fetch", "other"
+            ])
+        );
+    }
+
+    #[test]
     fn durable_presenter_result_round_trips_content_failure_and_meta() {
         let result = ToolResult {
             content: vec![ContentBlock::Text {

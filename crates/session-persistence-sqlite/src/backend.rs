@@ -27,6 +27,7 @@ use seekdeep_session_persistence::{
     DEFAULT_PREPARED_SESSION_CACHE_SIZE, DEFAULT_WRITE_BATCH_MAX_DELAY_MS,
     MAX_WRITE_BATCH_DELAY_MS, SessionFormatUnsupportedError, SessionInspection, SessionPersistence,
     SessionPersistenceRevision, SessionPersistenceService, SessionPersistenceSnapshot,
+    ensure_persistence_not_aborted,
     preparations::{
         DiscardReady, PreparedSource, SessionPreparationReservation, SessionPreparations,
     },
@@ -36,7 +37,7 @@ use seekdeep_session_persistence::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::{Mutex as AsyncMutex, OnceCell};
+use tokio::sync::{Mutex as AsyncMutex, OnceCell, RwLock as AsyncRwLock};
 use uuid::Uuid;
 
 use crate::schema::{
@@ -130,6 +131,14 @@ struct LiveSessionState {
     writes: SessionWriteBehind,
 }
 
+#[derive(Clone)]
+struct RetirementEntry {
+    token: Uuid,
+    owner: usize,
+    session: Arc<Session>,
+    settlement: InitFuture,
+}
+
 /// `SQLite` durable session persistence service.
 pub struct SqliteSessionPersistence {
     path: PathBuf,
@@ -138,8 +147,9 @@ pub struct SqliteSessionPersistence {
     database: OnceCell<Result<DatabaseState, Arc<String>>>,
     state: Mutex<HashMap<SessionId, BackendSession>>,
     locks: Mutex<HashMap<SessionId, Arc<AsyncMutex<()>>>>,
+    operation_gate: AsyncRwLock<()>,
     live: Mutex<HashMap<usize, LiveSessionState>>,
-    retirements: Mutex<HashMap<SessionId, (Uuid, usize, InitFuture)>>,
+    retirements: Mutex<HashMap<SessionId, RetirementEntry>>,
     preparations: SessionPreparations<PreparedSqliteSource, BackendSession>,
     write_batch_max_delay: Duration,
     self_weak: std::sync::Weak<Self>,
@@ -191,6 +201,7 @@ impl SqliteSessionPersistence {
             database: OnceCell::new(),
             state: Mutex::new(HashMap::new()),
             locks: Mutex::new(HashMap::new()),
+            operation_gate: AsyncRwLock::new(()),
             live: Mutex::new(HashMap::new()),
             retirements: Mutex::new(HashMap::new()),
             preparations,
@@ -226,6 +237,7 @@ impl SqliteSessionPersistence {
             move || {
                 Box::pin(async move {
                     if let Some(backend) = weak.upgrade() {
+                        let _closing = backend.operation_gate.write().await;
                         let drain = backend.drain_all().await;
                         backend.close_database();
                         drain?;
@@ -307,17 +319,20 @@ impl SqliteSessionPersistence {
         }
     }
 
-    async fn drain_all(&self) -> anyhow::Result<()> {
+    async fn drain_all(self: &Arc<Self>) -> anyhow::Result<()> {
         let lives = self.live.lock().values().cloned().collect::<Vec<_>>();
         let mut errors = Vec::new();
         for live in lives {
             live.writes.cancel_automatic_wait();
-            if let Err(error) = live
+            if live
                 .init
                 .await
                 .map_err(|error| anyhow::Error::msg((*error).clone()))
+                .is_err()
             {
-                errors.push(error.to_string());
+                // Initialization failures already settled through the caller's
+                // flush. They own no durable cursor to drain and must not be
+                // replayed as a second teardown failure.
                 continue;
             }
             if let Err(error) = live.writes.flush().await {
@@ -328,11 +343,22 @@ impl SqliteSessionPersistence {
             .retirements
             .lock()
             .values()
-            .map(|(_, _, retirement)| retirement.clone())
+            .cloned()
             .collect::<Vec<_>>();
         for retirement in retirements {
-            if let Err(error) = retirement.await {
-                errors.push((*error).clone());
+            if retirement.settlement.clone().await.is_err()
+                && let Err(error) = self.retire_core(&retirement.session).await
+            {
+                errors.push(error.to_string());
+                continue;
+            }
+            if self
+                .retirements
+                .lock()
+                .get(retirement.session.id())
+                .is_some_and(|current| current.token == retirement.token)
+            {
+                self.retirements.lock().remove(retirement.session.id());
             }
         }
         if errors.is_empty() {
@@ -401,7 +427,7 @@ impl SqliteSessionPersistence {
                     let backend = weak
                         .upgrade()
                         .ok_or_else(|| anyhow::anyhow!("SQLite persistence was disposed"))?;
-                    backend.append(&id, &events).await
+                    backend.append_owned(&id, &events).await
                 }
             },
             {
@@ -441,7 +467,7 @@ impl SqliteSessionPersistence {
                 .upgrade()
                 .ok_or_else(|| Arc::new("SQLite persistence was disposed".to_owned()))?;
             backend
-                .append(&id, &suffix)
+                .append_owned(&id, &suffix)
                 .await
                 .map_err(|error| Arc::new(error.to_string()))
         }
@@ -568,29 +594,37 @@ impl SqliteSessionPersistence {
         let id = session.id().clone();
         let retiring_owner = session_key(&session);
         let token = Uuid::now_v7();
+        let retiring_session = session.clone();
         let retirement: InitFuture = async move {
             let backend = weak
                 .upgrade()
                 .ok_or_else(|| Arc::new("SQLite persistence was disposed".to_owned()))?;
             backend
-                .retire_core(&session)
+                .retire_core(&retiring_session)
                 .await
                 .map_err(|error| Arc::new(error.to_string()))
         }
         .boxed()
         .shared();
-        self.retirements
-            .lock()
-            .insert(id.clone(), (token, retiring_owner, retirement.clone()));
+        self.retirements.lock().insert(
+            id.clone(),
+            RetirementEntry {
+                token,
+                owner: retiring_owner,
+                session,
+                settlement: retirement.clone(),
+            },
+        );
         let weak = Arc::downgrade(self);
         tokio::spawn(async move {
             let result = retirement.await;
             if let Some(backend) = weak.upgrade() {
-                if backend
-                    .retirements
-                    .lock()
-                    .get(&id)
-                    .is_some_and(|(current, _, _)| *current == token)
+                if result.is_ok()
+                    && backend
+                        .retirements
+                        .lock()
+                        .get(&id)
+                        .is_some_and(|current| current.token == token)
                 {
                     backend.retirements.lock().remove(&id);
                 }
@@ -606,7 +640,7 @@ impl SqliteSessionPersistence {
             .retirements
             .lock()
             .get(id)
-            .map(|(_, _, retirement)| retirement.clone());
+            .map(|retirement| retirement.settlement.clone());
         if let Some(retirement) = retirement {
             retirement
                 .await
@@ -616,13 +650,9 @@ impl SqliteSessionPersistence {
     }
 
     async fn wait_for_other_retirement(&self, id: &SessionId, owner: usize) -> anyhow::Result<()> {
-        let retirement =
-            self.retirements
-                .lock()
-                .get(id)
-                .and_then(|(_, retiring_owner, retirement)| {
-                    (*retiring_owner != owner).then(|| retirement.clone())
-                });
+        let retirement = self.retirements.lock().get(id).and_then(|retirement| {
+            (retirement.owner != owner).then(|| retirement.settlement.clone())
+        });
         if let Some(retirement) = retirement {
             retirement
                 .await
@@ -632,9 +662,15 @@ impl SqliteSessionPersistence {
     }
 
     async fn retire_core(self: &Arc<Self>, session: &Arc<Session>) -> anyhow::Result<()> {
-        self.flush_live(session).await?;
         let key = session_key(session);
         let id = session.id();
+        let live = self.live.lock().get(&key).cloned();
+        if let Some(live) = live {
+            live.writes.cancel_automatic_wait();
+            if live.init.await.is_ok() {
+                live.writes.flush().await?;
+            }
+        }
         let lock = self.lock_for(id);
         let _guard = lock.lock().await;
         self.live.lock().remove(&key);
@@ -693,6 +729,15 @@ impl SqliteSessionPersistence {
         self.state.lock().insert(id.clone(), current);
         self.preparations.invalidate(id);
         Ok(())
+    }
+
+    async fn append_owned(&self, id: &SessionId, events: &[SessionEvent]) -> anyhow::Result<()> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        let lock = self.lock_for(id);
+        let _guard = lock.lock().await;
+        self.append_core(id, events).await
     }
 
     async fn prepare_core(&self, id: &SessionId) -> anyhow::Result<PreparedSqliteSource> {
@@ -1087,10 +1132,9 @@ impl SessionPersistence for SqliteSessionPersistence {
         if events.is_empty() {
             return Ok(());
         }
+        let _operation = self.operation_gate.read().await;
         self.wait_for_retirement(id).await?;
-        let lock = self.lock_for(id);
-        let _guard = lock.lock().await;
-        self.append_core(id, events).await
+        self.append_owned(id, events).await
     }
 
     async fn prepare(
@@ -1234,9 +1278,9 @@ impl SessionPersistence for SqliteSessionPersistence {
         let database = self.database().await?;
         ensure_not_aborted(signal.as_ref())?;
         let identity = database.store_identity.clone();
-        self.stored_headers()
-            .await?
-            .into_iter()
+        let rows = self.stored_headers().await?;
+        ensure_not_aborted(signal.as_ref())?;
+        rows.into_iter()
             .map(|(header, row)| {
                 Ok(SessionPersistenceSnapshot {
                     header,
@@ -1540,10 +1584,7 @@ fn sqlite_revision(identity: &str, row: &SessionRow) -> SessionPersistenceRevisi
 }
 
 fn ensure_not_aborted(signal: Option<&AbortSignal>) -> anyhow::Result<()> {
-    if signal.is_some_and(AbortSignal::is_aborted) {
-        anyhow::bail!("session persistence operation aborted");
-    }
-    Ok(())
+    ensure_persistence_not_aborted(signal)
 }
 
 fn assert_supported_version(meta: &SessionHeader) -> anyhow::Result<()> {

@@ -6,6 +6,8 @@ use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_core::session::{Session, SessionId};
 use seekdeep_llm::AbortSignal;
+use serde_json::Value;
+use thiserror::Error;
 use tokio::sync::{Notify, OnceCell};
 use uuid::Uuid;
 
@@ -512,6 +514,80 @@ pub enum DiscardReady {
     Missing,
 }
 
+/// Observer-local queued cancellation retaining the exact JSON reason.
+#[derive(Clone, Debug, Error, PartialEq)]
+#[error("queued observation aborted: {reason}")]
+pub struct QueuedObservationAborted {
+    /// Exact first cancellation reason carried by the signal.
+    pub reason: Value,
+}
+
+/// Observes shared queued work with prompt observer-local cancellation.
+///
+/// The shared operation is never cancelled. Cancellation wins until the
+/// operation crosses its caller-defined ownership cutoff.
+///
+/// # Errors
+///
+/// Returns the operation failure or [`QueuedObservationAborted`].
+pub async fn observe_queued_abort<T, Operation>(
+    operation: Operation,
+    signal: &AbortSignal,
+) -> anyhow::Result<T>
+where
+    T: Send + 'static,
+    Operation: Future<Output = anyhow::Result<T>> + Send + 'static,
+{
+    observe_queued_abort_with(operation, signal, || false).await
+}
+
+/// Observes shared work with a dynamic cancellation cutoff predicate.
+///
+/// Once `started` returns true, the operation owns settlement even if the
+/// observer signal is cancelled.
+///
+/// # Errors
+///
+/// Returns the operation failure or [`QueuedObservationAborted`].
+pub async fn observe_queued_abort_with<T, Operation, Started>(
+    operation: Operation,
+    signal: &AbortSignal,
+    started: Started,
+) -> anyhow::Result<T>
+where
+    T: Send + 'static,
+    Operation: Future<Output = anyhow::Result<T>> + Send + 'static,
+    Started: Fn() -> bool,
+{
+    let mut operation = tokio::spawn(operation);
+    if signal.is_aborted() && !started() {
+        return Err(queued_abort_error(signal));
+    }
+    tokio::select! {
+        result = &mut operation => flatten_observed_operation(result),
+        () = signal.cancelled() => {
+            if started() {
+                flatten_observed_operation(operation.await)
+            } else {
+                Err(queued_abort_error(signal))
+            }
+        }
+    }
+}
+
+fn flatten_observed_operation<T>(
+    result: Result<anyhow::Result<T>, tokio::task::JoinError>,
+) -> anyhow::Result<T> {
+    result.map_err(anyhow::Error::from)?
+}
+
+fn queued_abort_error(signal: &AbortSignal) -> anyhow::Error {
+    QueuedObservationAborted {
+        reason: signal.reason().unwrap_or(Value::Null),
+    }
+    .into()
+}
+
 async fn await_result<Source, CommitState>(
     entry: &Arc<PreparationEntry<Source, CommitState>>,
     signal: Option<&AbortSignal>,
@@ -747,5 +823,536 @@ mod tests {
         assert!(pool.has(&SessionId::new("two")));
         assert!(pool.has(&SessionId::new("held")));
         pool.discard(&held);
+    }
+
+    #[tokio::test]
+    async fn failed_and_invalidated_loads_leave_no_cached_ownership() {
+        let pool = SessionPreparations::<Source, String>::new(1).expect("pool");
+        let failed_id = SessionId::new("failed-load");
+        let failure = pool
+            .inspect(
+                &failed_id,
+                || async { Err(anyhow::anyhow!("load failed")) },
+                None,
+            )
+            .await
+            .expect_err("failed load");
+        assert_eq!(failure.to_string(), "load failed");
+        assert!(!pool.has(&failed_id));
+
+        let invalidated_id = SessionId::new("invalidated-load");
+        let release = Arc::new(Notify::new());
+        let inspection = tokio::spawn({
+            let pool = pool.clone();
+            let id = invalidated_id.clone();
+            let release = release.clone();
+            async move {
+                pool.inspect(
+                    &id,
+                    move || async move {
+                        release.notified().await;
+                        Ok(source("invalidated-load", "loaded"))
+                    },
+                    None,
+                )
+                .await
+            }
+        });
+        tokio::task::yield_now().await;
+        pool.invalidate(&invalidated_id);
+        release.notify_one();
+        assert_eq!(
+            inspection
+                .await
+                .expect("join")
+                .expect("original observer")
+                .label,
+            "loaded"
+        );
+        assert!(!pool.has(&invalidated_id));
+    }
+
+    #[tokio::test]
+    async fn cancelled_observers_still_feed_ready_lru_eviction() {
+        let pool = SessionPreparations::<Source, String>::new(1).expect("pool");
+        let first_signal = AbortSignal::default();
+        let second_signal = AbortSignal::default();
+        let first_gate = Arc::new(Notify::new());
+        let second_gate = Arc::new(Notify::new());
+        let first = tokio::spawn({
+            let pool = pool.clone();
+            let signal = first_signal.clone();
+            let gate = first_gate.clone();
+            async move {
+                pool.inspect(
+                    &SessionId::new("cancelled-ready-first"),
+                    move || async move {
+                        gate.notified().await;
+                        Ok(source("cancelled-ready-first", "first"))
+                    },
+                    Some(signal),
+                )
+                .await
+            }
+        });
+        let second = tokio::spawn({
+            let pool = pool.clone();
+            let signal = second_signal.clone();
+            let gate = second_gate.clone();
+            async move {
+                pool.inspect(
+                    &SessionId::new("cancelled-ready-second"),
+                    move || async move {
+                        gate.notified().await;
+                        Ok(source("cancelled-ready-second", "second"))
+                    },
+                    Some(signal),
+                )
+                .await
+            }
+        });
+        tokio::task::yield_now().await;
+        first_signal.abort();
+        second_signal.abort();
+        assert!(first.await.expect("first join").is_err());
+        assert!(second.await.expect("second join").is_err());
+        first_gate.notify_one();
+        pool.inspect(
+            &SessionId::new("cancelled-ready-first"),
+            || async { Ok(source("cancelled-ready-first", "unused")) },
+            None,
+        )
+        .await
+        .expect("first ready");
+        second_gate.notify_one();
+        pool.inspect(
+            &SessionId::new("cancelled-ready-second"),
+            || async { Ok(source("cancelled-ready-second", "unused")) },
+            None,
+        )
+        .await
+        .expect("second ready");
+        assert!(!pool.has(&SessionId::new("cancelled-ready-first")));
+        assert!(pool.has(&SessionId::new("cancelled-ready-second")));
+    }
+
+    #[tokio::test]
+    async fn discard_ready_is_exact_and_never_breaks_a_reservation() {
+        let pool = SessionPreparations::<Source, String>::new(1).expect("pool");
+        let id = SessionId::new("discard-ready");
+        let ready = pool
+            .inspect(&id, || async { Ok(source("discard-ready", "ready")) }, None)
+            .await
+            .expect("ready");
+        let different = Arc::new(source("discard-ready", "different"));
+        assert_eq!(pool.discard_ready(&id, &different), DiscardReady::Missing);
+        assert_eq!(pool.discard_ready(&id, &ready), DiscardReady::Discarded);
+
+        let reservation = pool
+            .reserve(
+                &id,
+                || async { Ok(source("discard-ready", "reserved")) },
+                |source| async move { Ok(Some((source, "state".to_owned()))) },
+                None,
+            )
+            .await
+            .expect("reserve")
+            .expect("reservation");
+        assert_eq!(
+            pool.discard_ready(&id, &reservation.source),
+            DiscardReady::Retained
+        );
+        pool.release(&reservation, false);
+        assert!(!pool.has(&id));
+    }
+
+    #[tokio::test]
+    async fn reservation_wait_reuses_exact_source_and_attach_consumes_once() {
+        let pool = SessionPreparations::<Source, String>::new(2).expect("pool");
+        let id = SessionId::new("reservation-wait");
+        let first = pool
+            .reserve(
+                &id,
+                || async { Ok(source("reservation-wait", "source")) },
+                |source| async move { Ok(Some((source, "first".to_owned()))) },
+                None,
+            )
+            .await
+            .expect("first")
+            .expect("first reservation");
+        let second = tokio::spawn({
+            let pool = pool.clone();
+            let id = id.clone();
+            async move {
+                pool.reserve(
+                    &id,
+                    || async { Ok(source("reservation-wait", "unused")) },
+                    |source| async move { Ok(Some((source, "second".to_owned()))) },
+                    None,
+                )
+                .await
+            }
+        });
+        tokio::task::yield_now().await;
+        assert!(!second.is_finished());
+        pool.release(&first, true);
+        let second = second
+            .await
+            .expect("join")
+            .expect("second")
+            .expect("second reservation");
+        assert!(Arc::ptr_eq(&first.source, &second.source));
+        pool.attach(&second).expect("attach");
+        assert!(pool.attach(&second).is_err());
+        assert!(
+            pool.reservation_for(second.source.session())
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn reservation_wait_is_abortable_without_cancelling_held_owner() {
+        let pool = SessionPreparations::<Source, String>::new(1).expect("pool");
+        let id = SessionId::new("abortable-reservation-wait");
+        let first = pool
+            .reserve(
+                &id,
+                || async { Ok(source("abortable-reservation-wait", "source")) },
+                |source| async move { Ok(Some((source, "state".to_owned()))) },
+                None,
+            )
+            .await
+            .expect("first")
+            .expect("reservation");
+        let signal = AbortSignal::default();
+        let waiting = tokio::spawn({
+            let pool = pool.clone();
+            let id = id.clone();
+            let signal = signal.clone();
+            async move {
+                pool.reserve(
+                    &id,
+                    || async { Ok(source("abortable-reservation-wait", "unused")) },
+                    |source| async move { Ok(Some((source, "state".to_owned()))) },
+                    Some(signal),
+                )
+                .await
+            }
+        });
+        tokio::task::yield_now().await;
+        signal.abort_with_reason(serde_json::json!({"kind": "cancelled"}));
+        assert!(waiting.await.expect("join").is_err());
+        assert!(
+            pool.reservation_for(first.source.session())
+                .expect("reservation lookup")
+                .is_some()
+        );
+        pool.release(&first, false);
+        assert!(!pool.has(&id));
+    }
+
+    #[tokio::test]
+    async fn failed_or_invalidated_commit_wakes_waiters_without_reviving_entry() {
+        let pool = SessionPreparations::<Source, String>::new(1).expect("pool");
+        let id = SessionId::new("failed-commit");
+        let started = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let first = tokio::spawn({
+            let pool = pool.clone();
+            let id = id.clone();
+            let started = started.clone();
+            let release = release.clone();
+            async move {
+                pool.reserve(
+                    &id,
+                    || async { Ok(source("failed-commit", "source")) },
+                    move |_source| async move {
+                        started.notify_one();
+                        release.notified().await;
+                        Err(anyhow::anyhow!("commit failed"))
+                    },
+                    None,
+                )
+                .await
+            }
+        });
+        started.notified().await;
+        let second = tokio::spawn({
+            let pool = pool.clone();
+            let id = id.clone();
+            async move {
+                pool.reserve(
+                    &id,
+                    || async { Ok(source("failed-commit", "unused")) },
+                    |source| async move { Ok(Some((source, "state".to_owned()))) },
+                    None,
+                )
+                .await
+            }
+        });
+        release.notify_one();
+        assert_eq!(
+            first
+                .await
+                .expect("first join")
+                .expect_err("commit failure")
+                .to_string(),
+            "commit failed"
+        );
+        assert!(
+            second
+                .await
+                .expect("second join")
+                .expect("second")
+                .is_none()
+        );
+        assert!(!pool.has(&id));
+
+        let invalidated_id = SessionId::new("invalidated-commit");
+        let started = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let reservation = tokio::spawn({
+            let pool = pool.clone();
+            let id = invalidated_id.clone();
+            let started = started.clone();
+            let release = release.clone();
+            async move {
+                pool.reserve(
+                    &id,
+                    || async { Ok(source("invalidated-commit", "source")) },
+                    move |source| async move {
+                        started.notify_one();
+                        release.notified().await;
+                        Ok(Some((source, "state".to_owned())))
+                    },
+                    None,
+                )
+                .await
+            }
+        });
+        started.notified().await;
+        pool.invalidate(&invalidated_id);
+        release.notify_one();
+        assert!(
+            reservation
+                .await
+                .expect("reservation join")
+                .expect("reservation")
+                .is_none()
+        );
+        assert!(!pool.has(&invalidated_id));
+    }
+
+    #[tokio::test]
+    async fn post_commit_cancellation_returns_exact_source_to_ready_pool() {
+        let pool = SessionPreparations::<Source, String>::new(1).expect("pool");
+        let id = SessionId::new("post-commit-cancel");
+        let signal = AbortSignal::default();
+        let commit_signal = signal.clone();
+        let error = pool
+            .reserve(
+                &id,
+                || async { Ok(source("post-commit-cancel", "source")) },
+                move |source| async move {
+                    commit_signal.abort_with_reason(serde_json::json!({"kind": "cancelled"}));
+                    Ok(Some((source, "state".to_owned())))
+                },
+                Some(signal),
+            )
+            .await
+            .expect_err("post-commit cancellation");
+        assert!(error.to_string().contains("cancelled"));
+        let ready = pool.take_ready(&id).expect("ready source");
+        assert_eq!(ready.label, "source");
+        assert!(pool.take_ready(&id).is_none());
+    }
+
+    #[tokio::test]
+    async fn post_commit_cancellation_does_not_revive_an_invalidated_entry() {
+        let pool = SessionPreparations::<Source, String>::new(1).expect("pool");
+        let id = SessionId::new("invalidated-commit-cancel");
+        let signal = AbortSignal::default();
+        let started = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let reservation = tokio::spawn({
+            let pool = pool.clone();
+            let id = id.clone();
+            let signal = signal.clone();
+            let started = started.clone();
+            let release = release.clone();
+            async move {
+                pool.reserve(
+                    &id,
+                    || async { Ok(source("invalidated-commit-cancel", "source")) },
+                    move |source| async move {
+                        started.notify_one();
+                        release.notified().await;
+                        Ok(Some((source, "state".to_owned())))
+                    },
+                    Some(signal),
+                )
+                .await
+            }
+        });
+        started.notified().await;
+        pool.invalidate(&id);
+        signal.abort_with_reason(serde_json::json!("cancel invalidated commit"));
+        release.notify_one();
+        assert!(
+            reservation
+                .await
+                .expect("join")
+                .expect_err("cancelled")
+                .to_string()
+                .contains("cancel invalidated commit")
+        );
+        assert!(!pool.has(&id));
+    }
+
+    #[tokio::test]
+    async fn invalidated_pending_reservation_and_inspection_publication_fail_closed() {
+        let pool = SessionPreparations::<Source, String>::new(1).expect("pool");
+        let id = SessionId::new("invalidated-reservation");
+        let release = Arc::new(Notify::new());
+        let reservation = tokio::spawn({
+            let pool = pool.clone();
+            let id = id.clone();
+            let release = release.clone();
+            async move {
+                pool.reserve(
+                    &id,
+                    move || async move {
+                        release.notified().await;
+                        Ok(source("invalidated-reservation", "source"))
+                    },
+                    |source| async move { Ok(Some((source, "state".to_owned()))) },
+                    None,
+                )
+                .await
+            }
+        });
+        tokio::task::yield_now().await;
+        assert!(pool.take_ready(&id).is_none());
+        pool.invalidate(&id);
+        release.notify_one();
+        assert!(
+            reservation
+                .await
+                .expect("join")
+                .expect("reservation")
+                .is_none()
+        );
+
+        let inspected = pool
+            .inspect(
+                &SessionId::new("inspection-publication"),
+                || async { Ok(source("inspection-publication", "source")) },
+                None,
+            )
+            .await
+            .expect("inspection");
+        assert!(pool.reservation_for(inspected.session()).is_err());
+    }
+
+    #[tokio::test]
+    async fn queued_abort_relays_fulfillment_and_operation_failure() {
+        let signal = AbortSignal::default();
+        assert_eq!(
+            observe_queued_abort(async { Ok("value") }, &signal)
+                .await
+                .expect("value"),
+            "value"
+        );
+        let failure = observe_queued_abort::<(), _>(
+            async { Err(anyhow::anyhow!("operation failed")) },
+            &signal,
+        )
+        .await
+        .expect_err("failure");
+        assert_eq!(failure.to_string(), "operation failed");
+    }
+
+    #[tokio::test]
+    async fn queued_abort_is_prompt_retains_reason_and_does_not_cancel_shared_work() {
+        let signal = AbortSignal::default();
+        let completed = Arc::new(Notify::new());
+        let completed_task = completed.clone();
+        let release = Arc::new(Notify::new());
+        let release_task = release.clone();
+        let observed = tokio::spawn({
+            let signal = signal.clone();
+            async move {
+                observe_queued_abort(
+                    async move {
+                        release_task.notified().await;
+                        completed_task.notify_one();
+                        Ok("late")
+                    },
+                    &signal,
+                )
+                .await
+            }
+        });
+        tokio::task::yield_now().await;
+        signal.abort_with_reason(serde_json::json!({"kind": "aborted"}));
+        let error = observed
+            .await
+            .expect("observer join")
+            .expect_err("observer abort");
+        assert_eq!(
+            error
+                .downcast_ref::<QueuedObservationAborted>()
+                .expect("typed abort")
+                .reason,
+            serde_json::json!({"kind": "aborted"})
+        );
+        release.notify_one();
+        tokio::time::timeout(std::time::Duration::from_secs(1), completed.notified())
+            .await
+            .expect("shared work continued");
+    }
+
+    #[tokio::test]
+    async fn preaborted_observer_rejects_but_started_operation_owns_settlement() {
+        let preaborted = AbortSignal::default();
+        preaborted.abort_with_reason(serde_json::json!("pre-aborted"));
+        let error = observe_queued_abort(async { Ok::<_, anyhow::Error>("ignored") }, &preaborted)
+            .await
+            .expect_err("pre-aborted");
+        assert_eq!(
+            error
+                .downcast_ref::<QueuedObservationAborted>()
+                .expect("typed abort")
+                .reason,
+            serde_json::json!("pre-aborted")
+        );
+
+        let signal = AbortSignal::default();
+        let started = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let gate = Arc::new(Notify::new());
+        let gate_task = gate.clone();
+        let observed = tokio::spawn({
+            let signal = signal.clone();
+            let started = started.clone();
+            async move {
+                observe_queued_abort_with(
+                    async move {
+                        gate_task.notified().await;
+                        Ok("owned")
+                    },
+                    &signal,
+                    move || started.load(Ordering::Acquire),
+                )
+                .await
+            }
+        });
+        tokio::task::yield_now().await;
+        signal.abort_with_reason(serde_json::json!("too late"));
+        gate.notify_one();
+        assert_eq!(
+            observed.await.expect("join").expect("owned settlement"),
+            "owned"
+        );
     }
 }

@@ -597,6 +597,23 @@ mod tests {
         assert!(context.get(STORAGE).is_none());
     }
 
+    #[tokio::test]
+    async fn explained_empty_invariant_reserves_and_releases_package_identity() {
+        let context = Context::new();
+        let registry =
+            InvariantRegistry::install(&context, &seekdeep_invariants::InvariantConfig::default())
+                .expect("invariant registry");
+        let registration = register_invariant(&registry).expect("storage invariant");
+        registration.await_ready().await.expect("invariant ready");
+        assert!(register_invariant(&registry).is_err());
+        registration.dispose().await.expect("dispose invariant");
+        register_invariant(&registry)
+            .expect("replacement invariant")
+            .await_ready()
+            .await
+            .expect("replacement ready");
+    }
+
     #[test]
     fn backend_service_keys_and_descriptor_validation_are_exact() {
         assert_eq!(storage_backend_service_key("json"), "storage.backend.json");

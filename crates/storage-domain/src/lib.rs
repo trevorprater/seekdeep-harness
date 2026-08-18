@@ -1176,10 +1176,9 @@ async fn install_invariant(context: Context, failure: InvariantFailure) -> anyho
         &context,
         "domain/changed",
         move |context, args| {
-            let change = args
-                .get::<DomainChanged>(0)
-                .ok_or_else(|| anyhow::anyhow!("domain/changed lacks change payload"))?;
-            validate_change(&context, &change, &failure)?;
+            if let Some(change) = decode_change_argument(&args)? {
+                validate_change(&context, &change, &failure)?;
+            }
             Ok(EventReply::Undefined)
         },
         EventOptions {
@@ -1188,6 +1187,24 @@ async fn install_invariant(context: Context, failure: InvariantFailure) -> anyho
         },
     )?;
     Ok(())
+}
+
+fn decode_change_argument(args: &EventArgs) -> anyhow::Result<Option<DomainChanged>> {
+    if let Some(change) = args.get::<DomainChanged>(0) {
+        return Ok(Some((*change).clone()));
+    }
+    let value = args
+        .get::<Value>(0)
+        .ok_or_else(|| anyhow::anyhow!("domain/changed lacks change payload"))?;
+    let operation = value
+        .as_object()
+        .and_then(|object| object.get("operation"))
+        .and_then(Value::as_str);
+    match operation {
+        Some("put" | "deleted") => Ok(Some(serde_json::from_value((*value).clone())?)),
+        Some(_) => Ok(None),
+        None => Err(anyhow::anyhow!("domain/changed payload lacks operation")),
+    }
 }
 
 fn validate_change(

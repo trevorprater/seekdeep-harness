@@ -108,6 +108,31 @@ impl SessionFormatUnsupportedError {
 #[error("{0}")]
 pub struct SessionPersistenceCorruptionError(pub String);
 
+/// Caller-local cancellation retaining the exact lossless JSON reason.
+#[derive(Clone, Debug, Error, PartialEq)]
+#[error("session persistence operation aborted: {reason}")]
+pub struct SessionPersistenceAborted {
+    /// Exact first reason carried by the cancellation signal.
+    pub reason: serde_json::Value,
+}
+
+/// Enforces one persistence observation cancellation boundary.
+///
+/// # Errors
+///
+/// Returns [`SessionPersistenceAborted`] with the exact signal reason.
+pub fn ensure_persistence_not_aborted(signal: Option<&AbortSignal>) -> anyhow::Result<()> {
+    if let Some(signal) = signal
+        && signal.is_aborted()
+    {
+        return Err(SessionPersistenceAborted {
+            reason: signal.reason().unwrap_or(serde_json::Value::Null),
+        }
+        .into());
+    }
+    Ok(())
+}
+
 /// Builds the standard unsupported-version refusal.
 #[must_use]
 pub fn session_format_version_refusal(id: &str, version: &serde_json::Value) -> String {
@@ -269,8 +294,55 @@ pub trait SessionPersistence: Send + Sync + 'static {
 }
 
 fn ensure_not_aborted(signal: Option<&AbortSignal>) -> anyhow::Result<()> {
-    if signal.is_some_and(AbortSignal::is_aborted) {
-        anyhow::bail!("session persistence operation aborted")
+    ensure_persistence_not_aborted(signal)
+}
+
+#[cfg(test)]
+mod tests {
+    use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
+
+    use super::*;
+
+    #[test]
+    fn revision_is_an_opaque_string_newtype_on_the_wire() {
+        let revision = SessionPersistenceRevision::new("jsonl:/root:42:100");
+        assert_eq!(revision.as_str(), "jsonl:/root:42:100");
+        let encoded = serde_json::to_value(&revision).expect("encode revision");
+        assert_eq!(encoded, serde_json::json!("jsonl:/root:42:100"));
+        assert_eq!(
+            serde_json::from_value::<SessionPersistenceRevision>(encoded).expect("decode revision"),
+            revision
+        );
     }
-    Ok(())
+
+    #[test]
+    fn cancellation_boundary_retains_the_exact_json_reason() {
+        let signal = AbortSignal::default();
+        signal.abort_with_reason(serde_json::json!({"kind": "cancelled", "by": "caller"}));
+        let error = ensure_persistence_not_aborted(Some(&signal)).expect_err("cancelled");
+        assert_eq!(
+            error
+                .downcast_ref::<SessionPersistenceAborted>()
+                .expect("typed cancellation")
+                .reason,
+            serde_json::json!({"kind": "cancelled", "by": "caller"})
+        );
+        assert!(ensure_persistence_not_aborted(None).is_ok());
+    }
+
+    #[tokio::test]
+    async fn explained_empty_invariant_reserves_and_releases_package_identity() {
+        let context = Context::new();
+        let registry = InvariantRegistry::install(&context, &InvariantConfig::default())
+            .expect("invariant registry");
+        let registration = register_invariant(&registry).expect("persistence invariant");
+        registration.await_ready().await.expect("invariant ready");
+        assert!(register_invariant(&registry).is_err());
+        registration.dispose().await.expect("dispose invariant");
+        register_invariant(&registry)
+            .expect("replacement invariant")
+            .await_ready()
+            .await
+            .expect("replacement ready");
+    }
 }

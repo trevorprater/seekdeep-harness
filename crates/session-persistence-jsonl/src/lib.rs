@@ -22,10 +22,13 @@ pub use backend::{JsonlConfig, JsonlSessionPersistence};
 pub use invariant::{INVARIANT_NAME, register_invariant};
 
 pub use format::{
-    JsonlCompression, SessionLogScan, encode_segment, encode_segment_units, event_lines,
-    header_line, log_path, parse_header_meta, project_dir, project_key, scan_log, session_dir,
+    JsonlCompression, SessionLogCheckpoint, SessionLogScan, SessionLogScanner, encode_segment,
+    encode_segment_units, event_lines, header_line, log_path, parse_header_meta, project_dir,
+    project_key, scan_log, session_dir,
 };
-pub use zstd::{ZstdFrameRange, ZstdFrameScan, scan_zstd_frames};
+pub use zstd::{
+    ZstdFrameDecoder, ZstdFrameRange, ZstdFrameScan, create_zstd_frame_decoder, scan_zstd_frames,
+};
 
 /// Cordis plugin name.
 pub const NAME: &str = "session-persistence-jsonl";
@@ -81,6 +84,7 @@ mod plugin_tests {
         session::{AppendOptions, SessionId},
         session_store::{CreateSessionOptions, SessionStore},
     };
+    use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
     use seekdeep_session_persistence::SESSION_PERSISTENCE;
     use serde_json::json;
 
@@ -132,5 +136,21 @@ mod plugin_tests {
                 .events,
             session.events()
         );
+    }
+
+    #[tokio::test]
+    async fn explained_empty_invariant_reserves_and_releases_package_identity() {
+        let context = Context::new();
+        let registry = InvariantRegistry::install(&context, &InvariantConfig::default())
+            .expect("invariant registry");
+        let registration = register_invariant(&registry).expect("jsonl invariant");
+        registration.await_ready().await.expect("invariant ready");
+        assert!(register_invariant(&registry).is_err());
+        registration.dispose().await.expect("dispose invariant");
+        register_invariant(&registry)
+            .expect("replacement invariant")
+            .await_ready()
+            .await
+            .expect("replacement ready");
     }
 }

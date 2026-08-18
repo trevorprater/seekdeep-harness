@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "File-backed settings provider for SeekDeep Harness"
+readme = "README.md"
 
 [dependencies]
 anyhow.workspace = true

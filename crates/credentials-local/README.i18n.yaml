@@ -1,3 +1,5 @@
 # Bilingual-pair consistency record. Both languages carry equal authority.
-README.md: f3cb3d8b205d8c8ae43713ee2224d584fda53b4c
-README.zh.md: 50b1b73abefa0b771c3f80c9dfb26e3628b2ba07
+# Update both values with:
+#   git hash-object crates/credentials-local/README.md crates/credentials-local/README.zh.md
+README.md: b39e53cd1f973acbbf29b2e79394b761239be8dc
+README.zh.md: f2603d78935a226f2e99ffed52588e0f8522fd30

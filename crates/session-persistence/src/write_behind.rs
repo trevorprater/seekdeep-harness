@@ -465,4 +465,269 @@ mod tests {
         );
         assert!(writes.has_work());
     }
+
+    #[tokio::test(start_paused = true)]
+    async fn twenty_staggered_events_share_the_first_fixed_window() {
+        let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
+        let sink = batches.clone();
+        let writes = SessionWriteBehind::new(
+            Duration::from_millis(200),
+            move |events| {
+                let sink = sink.clone();
+                async move {
+                    sink.lock()
+                        .expect("batches")
+                        .push(events.iter().map(|event| event.seq).collect());
+                    Ok(())
+                }
+            },
+            |_| {},
+        );
+        writes.enqueue(&event(0)).expect("enqueue first");
+        tokio::task::yield_now().await;
+        for sequence in 1..20 {
+            tokio::time::advance(Duration::from_millis(10)).await;
+            writes.enqueue(&event(sequence)).expect("enqueue tail");
+            tokio::task::yield_now().await;
+        }
+        assert!(batches.lock().expect("batches").is_empty());
+        tokio::time::advance(Duration::from_millis(10)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(
+            *batches.lock().expect("batches"),
+            vec![(0..20).collect::<Vec<_>>()]
+        );
+        writes.flush().await.expect("flush");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn work_after_a_quiescent_barrier_starts_a_new_window() {
+        let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
+        let sink = batches.clone();
+        let writes = SessionWriteBehind::new(
+            Duration::from_millis(200),
+            move |events| {
+                let sink = sink.clone();
+                async move {
+                    sink.lock()
+                        .expect("batches")
+                        .push(events.iter().map(|event| event.seq).collect());
+                    Ok(())
+                }
+            },
+            |_| {},
+        );
+        writes.flush().await.expect("empty barrier");
+        writes.enqueue(&event(0)).expect("enqueue after barrier");
+        tokio::task::yield_now().await;
+        assert!(batches.lock().expect("batches").is_empty());
+        tokio::time::advance(Duration::from_millis(199)).await;
+        tokio::task::yield_now().await;
+        assert!(batches.lock().expect("batches").is_empty());
+        tokio::time::advance(Duration::from_millis(1)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(*batches.lock().expect("batches"), vec![vec![0]]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn expired_tail_runs_immediately_after_active_write() {
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
+        let attempt = Arc::new(AtomicUsize::new(0));
+        let writes = SessionWriteBehind::new(
+            Duration::from_millis(200),
+            {
+                let entered = entered.clone();
+                let release = release.clone();
+                let batches = batches.clone();
+                let attempt = attempt.clone();
+                move |events| {
+                    let entered = entered.clone();
+                    let release = release.clone();
+                    let batches = batches.clone();
+                    let attempt = attempt.clone();
+                    async move {
+                        batches
+                            .lock()
+                            .expect("batches")
+                            .push(events.iter().map(|event| event.seq).collect());
+                        if attempt.fetch_add(1, Ordering::SeqCst) == 0 {
+                            entered.notify_one();
+                            release.notified().await;
+                        }
+                        Ok(())
+                    }
+                }
+            },
+            |_| {},
+        );
+        writes.enqueue(&event(0)).expect("enqueue first");
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(200)).await;
+        entered.notified().await;
+        writes.enqueue(&event(1)).expect("enqueue tail");
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(200)).await;
+        release.notify_one();
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+            if batches.lock().expect("batches").len() == 2 {
+                break;
+            }
+        }
+        assert_eq!(*batches.lock().expect("batches"), vec![vec![0], vec![1]]);
+        writes.flush().await.expect("flush");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn unexpired_tail_keeps_its_original_deadline() {
+        let entered = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
+        let attempt = Arc::new(AtomicUsize::new(0));
+        let writes = SessionWriteBehind::new(
+            Duration::from_millis(200),
+            {
+                let entered = entered.clone();
+                let release = release.clone();
+                let batches = batches.clone();
+                let attempt = attempt.clone();
+                move |events| {
+                    let entered = entered.clone();
+                    let release = release.clone();
+                    let batches = batches.clone();
+                    let attempt = attempt.clone();
+                    async move {
+                        batches
+                            .lock()
+                            .expect("batches")
+                            .push(events.iter().map(|event| event.seq).collect());
+                        if attempt.fetch_add(1, Ordering::SeqCst) == 0 {
+                            entered.notify_one();
+                            release.notified().await;
+                        }
+                        Ok(())
+                    }
+                }
+            },
+            |_| {},
+        );
+        writes.enqueue(&event(0)).expect("enqueue first");
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(200)).await;
+        entered.notified().await;
+        writes.enqueue(&event(1)).expect("enqueue tail");
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(50)).await;
+        release.notify_one();
+        tokio::task::yield_now().await;
+        assert_eq!(*batches.lock().expect("batches"), vec![vec![0]]);
+        tokio::time::advance(Duration::from_millis(149)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(*batches.lock().expect("batches"), vec![vec![0]]);
+        tokio::time::advance(Duration::from_millis(1)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(*batches.lock().expect("batches"), vec![vec![0], vec![1]]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn automatic_failure_pauses_retries_and_preserves_new_work_order() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let reports = Arc::new(AtomicUsize::new(0));
+        let batches = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
+        let writes = SessionWriteBehind::new(
+            Duration::from_millis(200),
+            {
+                let attempts = attempts.clone();
+                let batches = batches.clone();
+                move |events| {
+                    let attempts = attempts.clone();
+                    let batches = batches.clone();
+                    async move {
+                        batches
+                            .lock()
+                            .expect("batches")
+                            .push(events.iter().map(|event| event.seq).collect());
+                        if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                            anyhow::bail!("storage unavailable");
+                        }
+                        Ok(())
+                    }
+                }
+            },
+            {
+                let reports = reports.clone();
+                move |_| {
+                    reports.fetch_add(1, Ordering::SeqCst);
+                }
+            },
+        );
+        writes.enqueue(&event(0)).expect("enqueue first");
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(200)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(reports.load(Ordering::SeqCst), 1);
+        tokio::time::advance(Duration::from_millis(1_000)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(*batches.lock().expect("batches"), vec![vec![0]]);
+        writes.enqueue(&event(1)).expect("enqueue second");
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(200)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(*batches.lock().expect("batches"), vec![vec![0], vec![0, 1]]);
+        writes.flush().await.expect("flush");
+    }
+
+    #[tokio::test]
+    async fn explicit_barrier_failure_is_not_reported_and_retains_large_batch() {
+        const BATCH_SIZE: u64 = 150_000;
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let reports = Arc::new(AtomicUsize::new(0));
+        let sizes = Arc::new(Mutex::new(Vec::<usize>::new()));
+        let writes = SessionWriteBehind::new(
+            Duration::from_secs(60),
+            {
+                let attempts = attempts.clone();
+                let sizes = sizes.clone();
+                move |events| {
+                    let attempts = attempts.clone();
+                    let sizes = sizes.clone();
+                    async move {
+                        sizes.lock().expect("sizes").push(events.len());
+                        if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                            anyhow::bail!("durability failed");
+                        }
+                        Ok(())
+                    }
+                }
+            },
+            {
+                let reports = reports.clone();
+                move |_| {
+                    reports.fetch_add(1, Ordering::SeqCst);
+                }
+            },
+        );
+        for sequence in 0..BATCH_SIZE {
+            writes.enqueue(&event(sequence)).expect("enqueue");
+        }
+        assert!(
+            writes
+                .flush()
+                .await
+                .expect_err("first barrier")
+                .to_string()
+                .contains("durability failed")
+        );
+        assert_eq!(reports.load(Ordering::SeqCst), 0);
+        assert!(writes.has_work());
+        writes.flush().await.expect("retry barrier");
+        let expected_size = usize::try_from(BATCH_SIZE).expect("bounded batch size");
+        assert_eq!(
+            *sizes.lock().expect("sizes"),
+            vec![expected_size, expected_size]
+        );
+        assert!(!writes.has_work());
+    }
 }

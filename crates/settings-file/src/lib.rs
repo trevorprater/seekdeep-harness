@@ -17,7 +17,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{RecursiveMode, Watcher};
 use parking_lot::Mutex;
 use path_clean::PathClean;
 use rowan::ast::AstNode as _;
@@ -670,15 +670,15 @@ async fn start_watcher(
     let (stop, stop_rx) = watch::channel(false);
     let weak = Arc::downgrade(storage);
     let debounce = Duration::from_secs_f64(storage.spec.debounce_ms / 1_000.0);
-    let task = tokio::spawn(watcher_loop(
-        weak, watcher, events_rx, stop_rx, target, debounce,
-    ));
+    let task = tokio::spawn(async move {
+        let _watcher = watcher;
+        watcher_loop(weak, events_rx, stop_rx, target, debounce).await;
+    });
     Ok(Some(WatchLifecycle { stop, task }))
 }
 
 async fn watcher_loop(
     storage: Weak<FileSettingsStorage>,
-    _watcher: RecommendedWatcher,
     mut events: tokio::sync::mpsc::UnboundedReceiver<notify::Result<notify::Event>>,
     mut stop: watch::Receiver<bool>,
     target: PathBuf,
@@ -785,4 +785,119 @@ pub fn install(
     config: FileSettingsConfig,
 ) -> anyhow::Result<Arc<seekdeep_cordis::PluginFiber>> {
     Ok(context.plugin(plugin(), serde_json::to_value(config)?)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use notify::event::{DataChange, ModifyKind};
+    use seekdeep_cordis::{EventOptions, EventReply};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn watcher_queue_survives_backend_error_then_stops_before_later_events() {
+        let home = tempfile::tempdir().unwrap();
+        let target = home.path().join("settings.yaml");
+        tokio::fs::write(&target, "ui:\n  theme: light\n")
+            .await
+            .unwrap();
+        let spec = resolve_spec(&FileSettingsConfig {
+            path: Some(target.clone()),
+            watch: false,
+            debounce_ms: 0.0,
+            ..FileSettingsConfig::default()
+        })
+        .unwrap();
+        let storage = FileSettingsStorage::new(spec);
+        storage.load().await.unwrap();
+        let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (stop_tx, stop_rx) = watch::channel(false);
+        let task_storage = Arc::downgrade(&storage);
+        let task_target = target.clone();
+        let task = tokio::spawn(async move {
+            watcher_loop(
+                task_storage,
+                events_rx,
+                stop_rx,
+                task_target,
+                Duration::ZERO,
+            )
+            .await;
+        });
+        events_tx
+            .send(Err(notify::Error::generic("watch backend failure")))
+            .unwrap();
+        tokio::fs::write(&target, "ui:\n  theme: darker\n")
+            .await
+            .unwrap();
+        events_tx
+            .send(Ok(notify::Event::new(notify::EventKind::Modify(
+                ModifyKind::Data(DataChange::Any),
+            ))
+            .add_path(target.clone())))
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if storage.state.lock().text.as_deref() == Some("ui:\n  theme: darker\n") {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        storage.begin_shutdown();
+        stop_tx.send(true).unwrap();
+        task.await.unwrap();
+        tokio::fs::write(&target, "ui:\n  theme: ignored\n")
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.state.lock().text.as_deref(),
+            Some("ui:\n  theme: darker\n")
+        );
+    }
+
+    #[tokio::test]
+    async fn queued_document_create_after_shutdown_creates_file_without_publication() {
+        let home = tempfile::tempdir().unwrap();
+        let target = home.path().join("settings.yaml");
+        let spec = resolve_spec(&FileSettingsConfig {
+            path: Some(target.clone()),
+            watch: false,
+            ..FileSettingsConfig::default()
+        })
+        .unwrap();
+        let storage = FileSettingsStorage::new(spec);
+        let context = Context::new();
+        let service = SettingsService::install(&context, storage.clone())
+            .await
+            .unwrap();
+        storage.set_publisher(service.publisher());
+        let publications = Arc::new(AtomicUsize::new(0));
+        let observed = publications.clone();
+        context
+            .events()
+            .on_sync(
+                &context,
+                "settings/document-updated",
+                move |_, _| {
+                    observed.fetch_add(1, Ordering::SeqCst);
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )
+            .unwrap();
+        let held = storage.operation.lock().await;
+        let preparing_storage = storage.clone();
+        let preparing = tokio::spawn(async move { preparing_storage.prepare_document().await });
+        tokio::task::yield_now().await;
+        storage.begin_shutdown();
+        drop(held);
+        assert_eq!(preparing.await.unwrap().unwrap(), Some(target.clone()));
+        assert_eq!(tokio::fs::read(&target).await.unwrap(), b"");
+        assert_eq!(publications.load(Ordering::SeqCst), 0);
+    }
 }
