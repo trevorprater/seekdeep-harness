@@ -4454,8 +4454,11 @@ name = "seekdeep-compaction"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "parking_lot",
  "seekdeep-commands",
+ "seekdeep-cordis",
  "seekdeep-core",
+ "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-util",
  "serde",

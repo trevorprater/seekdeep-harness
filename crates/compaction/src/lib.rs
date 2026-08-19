@@ -2,6 +2,8 @@
 //! the backend-independent checkpoint provenance marker, surface-balanced cut
 //! detection, and the service-definition vocabulary.
 
+/// Package-owned compaction log-stream invariants.
+pub mod invariant;
 /// Service-definition vocabulary: triggers, classified failures, and agent context.
 pub mod service;
 /// Surface-balanced cut detection over a session.
