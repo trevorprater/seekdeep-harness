@@ -25194,7 +25194,10 @@
     {
       "source": "packages/core/session/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/core/src/invariant.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/session/tests/invariant.spec.ts", "cargo test -p seekdeep-core invariant::tests --all-features"],
+      "note": "The relational validation matrix (turn/step/tool enclosure, numbering, open-step identity, tool-result append/replacement rules, not-started repair, cross-step isolation, non-monotonic seq, end-seed) plus seeded-session replay, reload trace rebuild, and dispose listener-removal are ported; the remaining scoped-registration, dispatch-veto rollback, and postcommit-observer warning cases keep this surface unverified."
     },
     {
       "source": "packages/core/session/tests/json.spec.ts",
