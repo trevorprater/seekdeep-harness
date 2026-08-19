@@ -27178,17 +27178,26 @@
     {
       "source": "packages/fs/fs/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/fs/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-fs --all-features && cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"],
+      "note": "FileSystem trait, FS service key, FileSystemService wrapper, and ctx.fs seat are ported; the fs/write-intent, fs/edit-intent, and fs/observed event declarations remain"
     },
     {
       "source": "packages/fs/fs/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/fs/src/invariant.rs"],
+      "evidence": ["cargo test -p seekdeep-fs --all-features && cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/fs/fs/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/fs/src/types.rs"],
+      "evidence": ["cargo test -p seekdeep-fs --all-features && cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"],
+      "note": "FsTargetKey/FsVersion brands, FsObservation/FsTarget/FsInfo/FsPathInfo/FsDirEntry, FsWriteIntent/FsWriteOutcome, FsEditRequest/FsEditOutcome, and FsErrorCode/FsError are ported"
     },
     {
       "source": "packages/fs/fs/tests/invariant.spec.ts",
