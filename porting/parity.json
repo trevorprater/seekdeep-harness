@@ -35022,7 +35022,7 @@
       "status": "ported",
       "targets": ["crates/skill/src/lib.rs"],
       "evidence": ["cargo test -p seekdeep-skill --all-features && cargo clippy -p seekdeep-skill --all-targets --all-features -- -D warnings"],
-      "note": "skill types (summary/candidate/definition/resource base/invocation policy), isSkillName, isModelInvocable/isUserInvocable, renderSkillContent/escapeAttr/escapeText, SkillProvider, and the SkillRegistry merge/resolve/collect service (register_provider/register/list/snapshot/get) are ported; SkillInvocationSource, SkillProviderControl, Config, the registerProvider factory/control signature, and SkillRegistration optional-field defaults remain"
+      "note": "skill types (summary/candidate/definition/resource base/invocation policy), SkillInvocationSource, Config, isSkillName, isModelInvocable/isUserInvocable, renderSkillContent/escapeAttr/escapeText, SkillProvider, the SKILLS service key + install, and the SkillRegistry merge/resolve/collect service (register_provider/register/list/snapshot/get) are ported; SkillProviderControl, the registerProvider factory/control signature, and SkillRegistration optional-field defaults remain"
     },
     {
       "source": "packages/skill/skill/src/invariant.ts",
