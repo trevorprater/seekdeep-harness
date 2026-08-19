@@ -222,13 +222,13 @@ fn is_safe_integer(value: i64) -> bool {
     (-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&value)
 }
 
-fn parse_utc_instant(value: &str) -> i64 {
+pub(crate) fn parse_utc_instant(value: &str) -> i64 {
     DateTime::parse_from_rfc3339(value)
         .map(|instant| instant.timestamp_millis())
         .unwrap_or(i64::MIN)
 }
 
-fn format_utc_instant(epoch_millis: i64) -> String {
+pub(crate) fn format_utc_instant(epoch_millis: i64) -> String {
     DateTime::from_timestamp_millis(epoch_millis)
         .expect("bounded epoch formats")
         .to_rfc3339_opts(SecondsFormat::Millis, true)

@@ -58032,7 +58032,11 @@
     {
       "source": "packages/schedule/schedule/src/runtime.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/schedule/src/runtime.rs"
+      ],
+      "note": "dueDecision pure fold ported; ScheduleRuntime timer service deferred"
     },
     {
       "source": "packages/schedule/schedule/src/tools.ts",
