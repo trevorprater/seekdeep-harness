@@ -33396,17 +33396,26 @@
     {
       "source": "packages/session/session-projection-cache/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-projection-cache/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-session-projection-cache --all-features && cargo clippy -p seekdeep-session-projection-cache --all-targets --all-features -- -D warnings"],
+      "note": "cachedSnapshot, write (checkpoint + flush + durable put), coldSnapshot cold-read ladder, and the count/interval/turn-end/detach write-behind are ported; the source cache.spec.ts end-to-end cases await a full harness"
     },
     {
       "source": "packages/session/session-projection-cache/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-projection-cache/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-session-projection-cache --all-features && cargo clippy -p seekdeep-session-projection-cache --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/session/session-projection-cache/src/spec.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/session-projection-cache/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-session-projection-cache --all-features && cargo clippy -p seekdeep-session-projection-cache --all-targets --all-features -- -D warnings"],
+      "note": "checkpointIdentity/checkpointRecord and the session_projcache domain (version 3, one sessions table) are ported"
     },
     {
       "source": "packages/session/session-projection-cache/tests/cache.spec.ts",

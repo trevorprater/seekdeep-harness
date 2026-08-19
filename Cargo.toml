@@ -50,6 +50,7 @@ members = [
   "crates/session-persistence-sqlite",
   "crates/session-checkpoint-policy",
   "crates/session-projection",
+  "crates/session-projection-cache",
   "crates/session-stats",
   "crates/spill",
   "crates/spill-local",
