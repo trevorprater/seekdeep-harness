@@ -25113,7 +25113,9 @@
     {
       "source": "packages/core/scope/tests/store.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/scope/src/store.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/scope/tests/store.spec.ts", "cargo test -p seekdeep-scope store::tests --all-features", "NamedEntries live generations and exact idempotent undo, AnonymousEntries independence and generation drain, and ScopedLayers eager-global/non-creating-reads, merge shadowing, lazy ownership, empty-aggregate reclaim, action/notify/undo/disposal ordering, failed factory/action cleanup, and notification-throw rollback are covered"]
     },
     {
       "source": "packages/core/scope/tsconfig.json",
