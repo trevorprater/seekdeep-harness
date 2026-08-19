@@ -5078,12 +5078,14 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
  "seekdeep-scope",
  "seekdeep-util",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

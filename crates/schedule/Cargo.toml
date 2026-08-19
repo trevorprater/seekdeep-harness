@@ -18,11 +18,13 @@ seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
