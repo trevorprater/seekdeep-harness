@@ -27640,7 +27640,10 @@
     {
       "source": "packages/goal/goal/src/domain.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/goal/src/domain.rs"],
+      "evidence": ["cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"],
+      "note": "GoalOperation, GoalSnapshotChangeMeta/GoalClearChangeMeta, GoalMessageSource, FoldedGoal, GoalChanged, and GoalErrorCode are ported"
     },
     {
       "source": "packages/goal/goal/src/fold.ts",
@@ -27665,7 +27668,10 @@
     {
       "source": "packages/goal/goal/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/goal/src/types.rs"],
+      "evidence": ["cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"],
+      "note": "GoalId, GoalRef, CreateGoalRequest/Result, EditGoalRequest, GoalPhase, GoalBlockReason, GoalSnapshot, GoalActivation, GoalView, and GoalProjection are ported"
     },
     {
       "source": "packages/goal/goal/tests/goal.e2e.ts",
