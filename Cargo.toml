@@ -42,6 +42,7 @@ members = [
   "crates/invariants",
   "crates/landlock-run",
   "crates/persona",
+  "crates/plan-mode",
   "crates/process-exit-hook",
   "crates/repeat-tool-reminder",
   "crates/sandbox",
