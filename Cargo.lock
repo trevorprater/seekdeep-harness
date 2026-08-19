@@ -5075,6 +5075,7 @@ dependencies = [
  "parking_lot",
  "regex",
  "seekdeep-agent",
+ "seekdeep-agent-loop",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",

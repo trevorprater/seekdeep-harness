@@ -15,6 +15,7 @@ indexmap.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-core = { path = "../core" }

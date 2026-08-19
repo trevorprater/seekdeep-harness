@@ -58003,7 +58003,14 @@
     {
       "source": "packages/schedule/schedule/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schedule/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-schedule --all-features",
+        "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/schedule/schedule/src/invariant.ts",

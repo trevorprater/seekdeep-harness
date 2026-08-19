@@ -2,6 +2,7 @@
 //! The domain fold and tool service are ported separately.
 
 pub mod domain;
+pub mod index;
 pub mod invariant;
 pub mod persistence;
 pub mod runtime;
@@ -17,6 +18,7 @@ pub use domain::{
     fold_schedule_events, render_every_reminder_batch_framing, render_reminder_framing,
     resolve_every_occurrence, schedule_view,
 };
+pub use index::{INJECT, NAME as PACKAGE_NAME, apply};
 pub use invariant::{NAME, register_invariant};
 pub use persistence::{SchedulePersistenceError, flush_schedule_persistence};
 pub use runtime::{DueDecision, MAX_TIMER_DELAY_MS, due_decision};

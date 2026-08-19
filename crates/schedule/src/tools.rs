@@ -508,6 +508,7 @@ fn schedule_list_definition(
     )
 }
 
+#[allow(clippy::too_many_lines)]
 fn schedule_delete_definition(
     root_ctx: &Context,
     agent: Arc<Agent>,
