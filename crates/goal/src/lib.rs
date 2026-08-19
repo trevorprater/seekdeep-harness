@@ -1,7 +1,9 @@
 //! The goal domain: pure types, host-side vocabulary, and replay fold.
 
+pub mod client;
 pub mod domain;
 pub mod fold;
+pub mod invariant;
 pub mod runtime;
 pub mod types;
 

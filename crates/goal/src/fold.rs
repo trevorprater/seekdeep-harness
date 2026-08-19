@@ -14,7 +14,7 @@ use crate::runtime::GOAL_CHANGE_VERSION;
 use crate::types::{GoalBlockReason, GoalId, GoalPhase, GoalRef, GoalSnapshot};
 
 /// Mutable accumulator kept private to the pure fold.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct GoalFoldState {
     /// Current goal.
     pub goal: Option<GoalSnapshot>,
