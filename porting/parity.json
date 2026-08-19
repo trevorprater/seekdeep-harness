@@ -26853,12 +26853,18 @@
     {
       "source": "packages/feedback/command-feedback/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/command-feedback/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-command-feedback --all-features && cargo clippy -p seekdeep-command-feedback --all-targets --all-features -- -D warnings"],
+      "note": "recordFeedback, the /feedback command, and the acknowledgement are ported; the telemetry sharing disclosure awaits the session-telemetry crate and currently reports not-configured"
     },
     {
       "source": "packages/feedback/command-feedback/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/command-feedback/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-command-feedback --all-features && cargo clippy -p seekdeep-command-feedback --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/feedback/command-feedback/tests/command-feedback.spec.ts",

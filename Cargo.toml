@@ -18,6 +18,7 @@ members = [
   "crates/cosmokit",
   "crates/code-runtime",
   "crates/code-runtime-worker-thread",
+  "crates/command-feedback",
   "crates/commands",
   "crates/credentials",
   "crates/credentials-local",
