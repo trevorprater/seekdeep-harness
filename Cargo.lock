@@ -5589,6 +5589,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-fs"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-fs",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "seekdeep-tool-skill"
 version = "0.1.0-rc.5"
 dependencies = [
