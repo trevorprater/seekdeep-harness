@@ -27381,7 +27381,10 @@
     {
       "source": "packages/fs/tool-fs/src/sandbox.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-fs/src/sandbox.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"],
+      "note": "FsEscalationArgs, EscalationSchemaFields, and FsSandboxController (advertisement gating, schema fields, and denial-marker mapError) are ported; resolvePolicy's approval choreography remains"
     },
     {
       "source": "packages/fs/tool-fs/src/session-cwd.ts",
