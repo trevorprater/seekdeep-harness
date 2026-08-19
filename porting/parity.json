@@ -26918,17 +26918,26 @@
     {
       "source": "packages/feedback/message-feedback/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/message-feedback/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-message-feedback --all-features && cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/feedback/message-feedback/src/spec.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/message-feedback/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-message-feedback --all-features && cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"],
+      "note": "rating/version/item/session-identity/row schemas and the message_feedback domain (version 0, one sessions table) are ported with duplicate-id/version validation"
     },
     {
       "source": "packages/feedback/message-feedback/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/message-feedback/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-message-feedback --all-features && cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"],
+      "note": "MessageFeedbackRating/Version/Item/SessionIdentity/Row and the identity_of projection are ported"
     },
     {
       "source": "packages/feedback/message-feedback/tests/helpers.ts",

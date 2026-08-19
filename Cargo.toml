@@ -28,6 +28,7 @@ members = [
   "crates/shell",
   "crates/shell-env",
   "crates/loader",
+  "crates/message-feedback",
     "crates/llm",
     "crates/llm-deepseek",
   "crates/llm-pi-ai",

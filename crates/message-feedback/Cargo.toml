@@ -1,0 +1,24 @@
+[package]
+name = "seekdeep-message-feedback"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+indexmap.workspace = true
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-storage-domain = { path = "../storage-domain" }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+seekdeep-cordis = { path = "../cordis" }
+tokio.workspace = true
+
+[lints]
+workspace = true
