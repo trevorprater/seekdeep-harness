@@ -51,7 +51,10 @@ fn parse_positive_integer(value: f64, name: &str) -> anyhow::Result<u64> {
     if !value.is_finite() || value.fract() != 0.0 || value < 1.0 {
         anyhow::bail!("{name} must be a positive integer");
     }
-    u64::try_from(value).map_err(|_| anyhow::anyhow!("{name} must be a positive integer"))
+    // The guard above proves the value is a positive finite integer, so the
+    // saturating float-to-int cast is exact within the representable range.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Ok(value as u64)
 }
 
 /// Validates value constraints the schema cannot express and applies defaults.
