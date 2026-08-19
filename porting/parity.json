@@ -58041,7 +58041,11 @@
     {
       "source": "packages/schedule/schedule/src/tools.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/schedule/src/tools.rs"
+      ],
+      "note": "argument validation and error mapping ported; registerScheduleTools deferred"
     },
     {
       "source": "packages/schedule/schedule/src/transaction.ts",

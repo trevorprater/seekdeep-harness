@@ -5,6 +5,7 @@ pub mod domain;
 pub mod invariant;
 pub mod persistence;
 pub mod runtime;
+pub mod tools;
 pub mod transaction;
 pub mod types;
 
@@ -19,6 +20,10 @@ pub use domain::{
 pub use invariant::{NAME, register_invariant};
 pub use persistence::{SchedulePersistenceError, flush_schedule_persistence};
 pub use runtime::{DueDecision, MAX_TIMER_DELAY_MS, due_decision};
+pub use tools::{
+    ScheduleCreateArgs, corrupt_log_error, input_error, internal_error, persistence_error,
+    validate_create_args,
+};
 pub use transaction::run_schedule_transaction;
 pub use types::{
     AfterScheduleRecord, AtInput, AtScheduleRecord, EveryScheduleRecord, LocalAtInput,
