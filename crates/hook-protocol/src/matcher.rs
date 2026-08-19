@@ -26,7 +26,9 @@ pub fn matcher_diagnostic(matcher: Option<&str>, mode: MatcherMode) -> Option<St
     if is_match_all(matcher) {
         return None;
     }
-    let pattern = matcher.expect("non-match-all");
+    let Some(pattern) = matcher else {
+        return None;
+    };
     if mode == MatcherMode::ClaudeCode && CLAUDE_LITERAL.is_match(pattern) {
         return None;
     }
@@ -45,7 +47,9 @@ pub fn matches_matcher(matcher: Option<&str>, query: &str, mode: MatcherMode) ->
     if is_match_all(matcher) {
         return true;
     }
-    let pattern = matcher.expect("non-match-all");
+    let Some(pattern) = matcher else {
+        return false;
+    };
     if mode == MatcherMode::ClaudeCode && CLAUDE_LITERAL.is_match(pattern) {
         return pattern.split('|').any(|alternative| alternative == query);
     }
