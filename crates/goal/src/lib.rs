@@ -1,11 +1,14 @@
-//! The goal domain: pure types and host-side vocabulary.
+//! The goal domain: pure types, host-side vocabulary, and replay fold.
 
 pub mod domain;
+pub mod fold;
+pub mod runtime;
 pub mod types;
 
 pub use domain::{
-    FoldedGoal, GoalChangeKind, GoalChanged, GoalClearChangeMeta, GoalClearOperation,
-    GoalErrorCode, GoalMessageSource, GoalOperation, GoalSnapshotChangeMeta, GoalSourceKind,
+    FoldedGoal, GoalChangeKind, GoalChangeMeta, GoalChanged, GoalClearChangeMeta,
+    GoalClearOperation, GoalErrorCode, GoalMessageSource, GoalOperation, GoalSnapshotChangeMeta,
+    GoalSourceKind,
 };
 pub use types::{
     CreateGoalRequest, CreateGoalResult, EditGoalRequest, GoalActivation, GoalBlockReason, GoalId,

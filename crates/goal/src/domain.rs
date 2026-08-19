@@ -118,6 +118,15 @@ pub struct FoldedGoal {
     pub last_ref: Option<GoalRef>,
 }
 
+/// Decoded durable goal change union.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GoalChangeMeta {
+    /// Full-snapshot mutation.
+    Snapshot(GoalSnapshotChangeMeta),
+    /// Clear tombstone.
+    Clear(GoalClearChangeMeta),
+}
+
 /// Live notification after one durable goal mutation commits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
