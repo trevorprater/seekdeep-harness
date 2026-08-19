@@ -26838,7 +26838,9 @@
     {
       "source": "packages/feedback/command-feedback/README.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/command-feedback/README.md"],
+      "evidence": ["crate README documents the /feedback command, the feedback/record event, model experience, and limitations"]
     },
     {
       "source": "packages/feedback/command-feedback/README.zh.md",
@@ -26848,7 +26850,9 @@
     {
       "source": "packages/feedback/command-feedback/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/command-feedback/Cargo.toml"],
+      "evidence": ["cargo test -p seekdeep-command-feedback --all-features && cargo clippy -p seekdeep-command-feedback --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/feedback/command-feedback/src/index.ts",
@@ -26882,7 +26886,9 @@
     {
       "source": "packages/feedback/command-feedback/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/command-feedback/Cargo.toml"],
+      "evidence": ["cargo test -p seekdeep-command-feedback --all-features && cargo clippy -p seekdeep-command-feedback --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/feedback/message-feedback/README.i18n.yaml",
@@ -37768,7 +37774,9 @@
     {
       "source": "packages/todo/tool-todo/README.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-todo/README.md"],
+      "evidence": ["crate README documents the todo_write tool, the todos projection, rendering, model experience, and limitations"]
     },
     {
       "source": "packages/todo/tool-todo/README.zh.md",
@@ -37778,7 +37786,9 @@
     {
       "source": "packages/todo/tool-todo/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-todo/Cargo.toml"],
+      "evidence": ["cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/todo/tool-todo/src/client.ts",
@@ -37843,7 +37853,9 @@
     {
       "source": "packages/todo/tool-todo/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-todo/Cargo.toml"],
+      "evidence": ["cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/typert/README.i18n.yaml",
