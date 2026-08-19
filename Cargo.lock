@@ -4583,6 +4583,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-fs-observation-policy"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-fs",
+ "seekdeep-invariants",
+ "seekdeep-tools",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-goal"
 version = "0.1.0-rc.5"
 dependencies = [

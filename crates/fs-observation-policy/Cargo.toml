@@ -1,0 +1,21 @@
+[package]
+name = "seekdeep-fs-observation-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-fs = { path = "../fs" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-tools = { path = "../tools" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

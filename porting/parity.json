@@ -50193,22 +50193,49 @@
     {
       "source": "packages/fs/fs-observation-policy/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-observation-policy/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-fs-observation-policy --all-features"
+      ],
+      "note": "ObservedStateGate plus the three fs/* listeners; the structural FsObservationActor narrowing maps to the ToolExecution concrete actor via observed_owner."
     },
     {
       "source": "packages/fs/fs-observation-policy/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-observation-policy/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-fs-observation-policy --all-features"
+      ]
     },
     {
       "source": "packages/fs/fs-observation-policy/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-observation-policy/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-fs-observation-policy --all-features"
+      ],
+      "note": "ObservedOwner narrows the structural FsObservationActor agent.session identity; Rust has no structural typing, so the actor stays the concrete ToolExecution."
     },
     {
       "source": "packages/fs/fs-observation-policy/tests/policy.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-observation-policy/tests/policy_parity.rs",
+        "crates/fs-observation-policy/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-fs-observation-policy --all-features"
+      ]
     },
     {
       "source": "packages/fs/fs-observation-policy/tsconfig.json",
