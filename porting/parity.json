@@ -25025,12 +25025,18 @@
     {
       "source": "packages/core/agent/tests/agent-initiator.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/agent/src/registry.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/agent/tests/agent-initiator.spec.ts", "cargo test -p seekdeep-agent registry::tests --all-features"],
+      "note": "initiator-boundary enter/restore/drain/invalidate and overlapping-scope isolation are covered by the registry initiator tests; the branded-Promise species, overridable-then, and cross-realm cases are JavaScript-specific and adapted to Rust Futures"
     },
     {
       "source": "packages/core/agent/tests/agent.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/agent/src/registry.rs", "crates/agent/src/inbox.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/agent/tests/agent.spec.ts", "cargo test -p seekdeep-agent --all-features"],
+      "note": "Inbox splice/replace/clear and AgentRegistry entry registration, lifecycle pairing, identity mismatch, detach deferral, rollback, and factory seam are covered by 11 inbox+registry tests; Typert-live lookup and agentEvents fused-subject dispatch await their integration surfaces"
     },
     {
       "source": "packages/core/agent/tests/consumed-work.spec.ts",
