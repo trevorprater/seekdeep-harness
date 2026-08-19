@@ -59272,7 +59272,14 @@
     {
       "source": "packages/session/session-persistence-sqlite/src/index.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/session-persistence-sqlite/src/backend.rs",
+        "crates/session-persistence-sqlite/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-persistence-sqlite --all-features"
+      ]
     },
     {
       "source": "packages/session/session-persistence-sqlite/src/invariant.ts",
