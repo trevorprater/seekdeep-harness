@@ -24121,12 +24121,18 @@
     {
       "source": "packages/compaction/compaction/src/brand.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/compaction/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"],
+      "note": "CompactionId brand newtype ported"
     },
     {
       "source": "packages/compaction/compaction/src/checkpoint.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/compaction/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"],
+      "note": "compactCheckpointSource and isCompactCheckpointSource ported"
     },
     {
       "source": "packages/compaction/compaction/src/index.ts",
@@ -24146,7 +24152,10 @@
     {
       "source": "packages/compaction/compaction/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/compaction/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"],
+      "note": "CompactionResult and ShadowedRange ported; the compaction/* SessionEventMap declaration-merging remains"
     },
     {
       "source": "packages/compaction/compaction/tests/compaction.spec.ts",
