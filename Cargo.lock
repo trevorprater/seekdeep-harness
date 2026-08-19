@@ -5596,6 +5596,7 @@ dependencies = [
  "regex",
  "seekdeep-cordis",
  "seekdeep-fs",
+ "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-sandbox",
  "seekdeep-tools",

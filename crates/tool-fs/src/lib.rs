@@ -1,6 +1,7 @@
 //! Model-facing filesystem tools over the filesystem service.
 
 pub mod error;
+pub mod invariant;
 pub mod read_target;
 pub mod session_cwd;
 
