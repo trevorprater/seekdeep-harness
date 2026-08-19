@@ -245,6 +245,27 @@ pub fn definition(config: Config) -> anyhow::Result<seekdeep_tools::ToolDefiniti
     define_tool(options)
 }
 
+/// Builds the todos projection: latest whole todo/write list, cleared by the
+/// next turn/start, null before the first write.
+#[must_use]
+pub fn todos_projection() -> ProjectionDefinition {
+    ProjectionDefinition::new(
+        "todos",
+        2,
+        || Ok(Value::Null),
+        |_state, event: &SessionEvent| {
+            if event.event_type == "todo/write" {
+                Ok(ProjectionTransition::Changed(event.data["todos"].clone()))
+            } else if event.event_type == "turn/start" {
+                Ok(ProjectionTransition::Changed(Value::Null))
+            } else {
+                Ok(ProjectionTransition::Unchanged)
+            }
+        },
+        |state| Ok(state.clone()),
+    )
+}
+
 /// Registers the `todos` projection and the `todo_write` tool.
 ///
 /// # Errors
@@ -252,24 +273,7 @@ pub fn definition(config: Config) -> anyhow::Result<seekdeep_tools::ToolDefiniti
 /// Returns when a dependency is absent or registration fails.
 pub fn apply(context: &Context, config: Config) -> anyhow::Result<EffectHandle> {
     if let Some(projections) = context.get::<SessionProjectionRegistry>(SESSION_PROJECTIONS) {
-        projections.register(
-            context,
-            ProjectionDefinition::new(
-                "todos",
-                2,
-                || Ok(Value::Null),
-                |_state, event: &SessionEvent| {
-                    if event.event_type == "todo/write" {
-                        Ok(ProjectionTransition::Changed(event.data["todos"].clone()))
-                    } else if event.event_type == "turn/start" {
-                        Ok(ProjectionTransition::Changed(Value::Null))
-                    } else {
-                        Ok(ProjectionTransition::Unchanged)
-                    }
-                },
-                |state| Ok(state.clone()),
-            ),
-        )?;
+        projections.register(context, todos_projection())?;
     }
     let tools: Arc<ToolRuntime> = context
         .get(TOOLS)
@@ -362,5 +366,87 @@ mod tests {
         assert!(register_invariant(&registry).is_err());
         registration.dispose().await.expect("dispose");
         register_invariant(&registry).expect("replacement");
+    }
+
+    fn event(event_type: &str, data: Value) -> SessionEvent {
+        SessionEvent {
+            event_type: event_type.to_owned(),
+            seq: 0,
+            time: 1,
+            data,
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        }
+    }
+
+    #[test]
+    fn todos_projection_folds_latest_list_and_clears_on_turn_start() {
+        let projection = todos_projection();
+        let mut state = projection.initial_state().expect("init");
+        assert_eq!(state, Value::Null);
+
+        // Unrelated events leave the standing plan unchanged.
+        assert_eq!(
+            projection
+                .apply_event(&state, &event("turn/end", json!({"turn": 1})))
+                .expect("apply"),
+            ProjectionTransition::Unchanged
+        );
+
+        let first = event(
+            "todo/write",
+            json!({"todos": [{"content": "a", "status": "pending"}]}),
+        );
+        let next = projection.apply_event(&state, &first).expect("apply");
+        assert_eq!(
+            next,
+            ProjectionTransition::Changed(json!([{"content": "a", "status": "pending"}]))
+        );
+        if let ProjectionTransition::Changed(value) = next {
+            state = value;
+        }
+
+        let second = event(
+            "todo/write",
+            json!({"todos": [{"content": "a", "status": "completed"}, {"content": "b", "status": "in_progress"}]}),
+        );
+        assert_eq!(
+            projection.apply_event(&state, &second).expect("apply"),
+            ProjectionTransition::Changed(json!([
+                {"content": "a", "status": "completed"},
+                {"content": "b", "status": "in_progress"}
+            ]))
+        );
+
+        // turn/start clears the standing plan; turn/end keeps it.
+        assert_eq!(
+            projection
+                .apply_event(&state, &event("turn/start", json!({"turn": 2})))
+                .expect("apply"),
+            ProjectionTransition::Changed(Value::Null)
+        );
+    }
+
+    #[test]
+    fn present_call_uses_a_stable_title_and_the_list_as_raw_input() {
+        let definition = definition(Config {
+            allow_parallel_in_progress: true,
+        })
+        .expect("definition");
+        let presenter = definition.present_call.as_ref().expect("presenter");
+        let view =
+            presenter(&json!({"todos": [{"content": "a", "status": "pending"}]})).expect("present");
+        match view {
+            ToolCallView::Generic(view) => {
+                assert_eq!(view.title, "Update todo list");
+                assert_eq!(view.kind, Some(ToolCallKind::Other));
+                assert_eq!(
+                    view.raw_input,
+                    Some(json!([{"content": "a", "status": "pending"}]))
+                );
+            }
+            _ => panic!("expected a generic call card"),
+        }
     }
 }
