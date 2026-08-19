@@ -9,6 +9,7 @@ license.workspace = true
 anyhow.workspace = true
 hex.workspace = true
 regex.workspace = true
+seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-skill = { path = "../skill" }
 serde.workspace = true

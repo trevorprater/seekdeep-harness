@@ -5561,6 +5561,7 @@ dependencies = [
  "anyhow",
  "hex",
  "regex",
+ "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-skill",
  "serde",

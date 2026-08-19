@@ -2,9 +2,10 @@
 //! catalog prose and the slash-name invocation gesture, shared by the skill loader
 //! tool and the step listeners that publish and replace the catalog.
 
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use regex::Regex;
+use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
 use seekdeep_skill::{SkillSummary, escape_text};
 use serde::{Deserialize, Serialize};
@@ -267,6 +268,17 @@ pub fn invoked_skill_names(messages: &[UserMessage]) -> Vec<String> {
         }
     }
     names
+}
+
+/// Registers the package's explained empty invariant companion.
+///
+/// # Errors
+///
+/// Returns ordinary invariant registration failures.
+pub fn register_invariant(
+    registry: &Arc<InvariantRegistry>,
+) -> anyhow::Result<InvariantRegistration> {
+    registry.register("seekdeep-tool-skill", InvariantInstaller::noop())
 }
 
 static WHITESPACE: LazyLock<Regex> =
