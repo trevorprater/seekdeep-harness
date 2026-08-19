@@ -1,7 +1,9 @@
 //! Compaction vocabulary: the stable transaction identity, the result shape,
-//! the backend-independent checkpoint provenance marker, and surface-balanced
-//! cut detection.
+//! the backend-independent checkpoint provenance marker, surface-balanced cut
+//! detection, and the service-definition vocabulary.
 
+/// Service-definition vocabulary: triggers, classified failures, and agent context.
+pub mod service;
 /// Surface-balanced cut detection over a session.
 pub mod tool_pairing;
 
