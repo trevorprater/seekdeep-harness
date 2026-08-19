@@ -575,3 +575,29 @@ fn detach_late_answer(answer: Pin<Box<dyn Future<Output = ApprovalOutcome> + Sen
         std::thread::spawn(move || futures::executor::block_on(task));
     }
 }
+
+#[async_trait::async_trait]
+impl seekdeep_sandbox::EscalationApprover<Arc<Agent>, CallId> for ApprovalService {
+    async fn request(
+        &self,
+        ask: seekdeep_sandbox::EscalationAsk<Arc<Agent>, CallId>,
+    ) -> seekdeep_sandbox::EscalationOutcome {
+        let request = ApprovalRequest {
+            agent: ask.agent,
+            tool_name: ask.tool_name,
+            call_id: Some(ask.call_id),
+            reason: Some(ask.reason),
+            signal: ask.signal,
+        };
+        match self.request(request).await {
+            Ok(ApprovalOutcome::AllowedOnce) => {
+                seekdeep_sandbox::EscalationOutcome::AllowedOnce
+            }
+            Ok(ApprovalOutcome::Rejected) => seekdeep_sandbox::EscalationOutcome::Rejected,
+            Ok(ApprovalOutcome::Cancelled) => seekdeep_sandbox::EscalationOutcome::Cancelled,
+            Ok(ApprovalOutcome::Unavailable) | Err(_) => {
+                seekdeep_sandbox::EscalationOutcome::Unavailable
+            }
+        }
+    }
+}

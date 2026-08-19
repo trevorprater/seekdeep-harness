@@ -10,6 +10,7 @@ readme = "README.md"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }
@@ -17,6 +18,7 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-sandbox = { path = "../sandbox" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 serde.workspace = true

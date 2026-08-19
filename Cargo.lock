@@ -5885,6 +5885,7 @@ name = "seekdeep-user-approval"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "parking_lot",
  "seekdeep-agent",
@@ -5892,6 +5893,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-sandbox",
  "seekdeep-scope",
  "seekdeep-system-prompt",
  "serde",
