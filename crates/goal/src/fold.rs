@@ -595,8 +595,8 @@ mod tests {
     }
 
     #[test]
-    fn rejects_edit_that_changes_objective() {
-        let events = vec![
+    fn edit_may_change_objective_but_not_phase() {
+        let valid = vec![
             create("g1", 0, 100),
             event(
                 "goal/change",
@@ -612,6 +612,24 @@ mod tests {
                 }),
             ),
         ];
-        assert!(fold_goal(&events).is_err());
+        assert!(fold_goal(&valid).is_ok());
+
+        let invalid = vec![
+            create("g1", 0, 100),
+            event(
+                "goal/change",
+                1,
+                json!({
+                    "kind": "goal/change",
+                    "version": 1,
+                    "operation": "edit",
+                    "goal": {"id": "g1", "revision": 2, "objective": "port it", "phase": "paused", "maxGoalRounds": 10},
+                    "roundsStarted": 0,
+                    "createdAt": 100,
+                    "updatedAt": 200,
+                }),
+            ),
+        ];
+        assert!(fold_goal(&invalid).is_err());
     }
 }
