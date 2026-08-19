@@ -7,6 +7,8 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
 parking_lot.workspace = true
 seekdeep-commands = { path = "../commands" }
 seekdeep-cordis = { path = "../cordis" }
@@ -17,6 +19,9 @@ seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
 
 [lints]
 workspace = true

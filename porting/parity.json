@@ -46139,72 +46139,78 @@
     {
       "source": "packages/compaction/compaction/src/brand.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/compaction/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-compaction --all-features",
+        "cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
       ],
       "note": "CompactionId brand newtype ported"
     },
     {
       "source": "packages/compaction/compaction/src/checkpoint.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/compaction/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-compaction --all-features",
+        "cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
       ],
       "note": "compactCheckpointSource and isCompactCheckpointSource ported"
     },
     {
       "source": "packages/compaction/compaction/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/compaction/src/service.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-compaction --all-features",
+        "cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
       ],
-      "note": "CompactionTrigger, ManualCompactionErrorCode, ManualCompactionError, CompactionRoutingOptions, and CompactionAgentContext are ported; the abstract CompactionEngine trait, COMPACTION service key, and ManualCompactAgentContext.runMaintenance remain"
+      "note": "CompactionEngine trait, COMPACTION key, and ManualCompactAgentContext complete the service definition; runMaintenance is monomorphic to the compaction result (the engine only invokes it with Option<CompactionResult>)."
     },
     {
       "source": "packages/compaction/compaction/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/compaction/src/invariant.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-compaction --all-features",
+        "cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
       ],
       "note": "compaction start/summary/end trace validation, checkpoint correlation, turn-boundary and owner checks, orphan-start handling, and pre-commit staging are ported; the source spec's differential harness test is not yet ported"
     },
     {
       "source": "packages/compaction/compaction/src/tool-pairing.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/compaction/src/tool_pairing.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-compaction --all-features",
+        "cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
       ],
       "note": "toolPairingBalancedBefore/toolPairingBalancedAfter ported with per-cut fold and corrupt-surface rejection"
     },
     {
       "source": "packages/compaction/compaction/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/compaction/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-compaction --all-features",
+        "cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"
       ],
       "note": "CompactionResult and ShadowedRange ported; the compaction/* SessionEventMap declaration-merging remains"
     },
