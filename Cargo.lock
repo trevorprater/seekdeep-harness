@@ -5555,6 +5555,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-skill"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "hex",
+ "regex",
+ "seekdeep-llm",
+ "seekdeep-skill",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-tool-timeout-policy"
 version = "0.1.0-rc.5"
 dependencies = [
