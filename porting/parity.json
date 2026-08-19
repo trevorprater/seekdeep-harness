@@ -35019,12 +35019,18 @@
     {
       "source": "packages/skill/skill/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/skill/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-skill --all-features && cargo clippy -p seekdeep-skill --all-targets --all-features -- -D warnings"],
+      "note": "the skill types (summary/candidate/definition/resource base/invocation policy), isSkillName, isModelInvocable/isUserInvocable, and the model-facing renderSkillContent/escapeAttr/escapeText are ported; the SkillRegistry merge/resolve/collect service remains"
     },
     {
       "source": "packages/skill/skill/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/skill/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-skill --all-features && cargo clippy -p seekdeep-skill --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/skill/skill/tests/skill.spec.ts",

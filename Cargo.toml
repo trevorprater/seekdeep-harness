@@ -46,6 +46,7 @@ members = [
   "crates/sandbox-windows-acl",
   "crates/sandbox-windows-acl-native",
   "crates/scope",
+  "crates/skill",
   "crates/session-persistence",
   "crates/session-persistence-jsonl",
   "crates/session-persistence-sqlite",
