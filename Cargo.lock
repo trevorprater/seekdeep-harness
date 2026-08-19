@@ -5080,6 +5080,7 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-scope",
+ "seekdeep-tools",
  "seekdeep-util",
  "serde",
  "serde_json",

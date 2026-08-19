@@ -20,6 +20,7 @@ seekdeep-invariants = { path = "../invariants" }
 seekdeep-core = { path = "../core" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-tools = { path = "../tools" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true

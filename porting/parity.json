@@ -58044,11 +58044,14 @@
     {
       "source": "packages/schedule/schedule/src/tools.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/schedule/src/tools.rs"
       ],
-      "note": "argument validation and error mapping ported; registerScheduleTools deferred"
+      "evidence": [
+        "cargo test -p seekdeep-schedule --all-features",
+        "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/schedule/schedule/src/transaction.ts",
