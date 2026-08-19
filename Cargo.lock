@@ -5238,6 +5238,7 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-session-title",
  "seekdeep-util",
  "serde",
  "serde_json",

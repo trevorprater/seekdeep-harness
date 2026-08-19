@@ -58803,7 +58803,14 @@
     {
       "source": "packages/session-query/session-query/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-query --all-features",
+        "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-query/tests/search-helpers.spec.ts",

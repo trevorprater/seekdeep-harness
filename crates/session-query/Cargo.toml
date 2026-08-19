@@ -10,6 +10,7 @@ anyhow.workspace = true
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-session-title = { path = "../session-title" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
