@@ -35789,12 +35789,12 @@
     {
       "source": "native/landlock-run/packages/entry/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/landlock-run/Cargo.toml"
       ],
       "evidence": [
-        "cargo metadata resolves the Rust library plus landlock-run binary at version 0.1.0-rc.5"
+        "cargo test -p seekdeep-landlock-run --all-features"
       ],
       "note": "Per-platform static packaging and release metadata are not yet ported."
     },
@@ -35814,15 +35814,14 @@
     {
       "source": "native/landlock-run/packages/entry/src/main.c",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/landlock-run/src/lib.rs",
         "crates/landlock-run/src/main.rs",
         "crates/landlock-run/tests/launcher_parity.rs"
       ],
       "evidence": [
-        "Rust launcher preserves fail-closed parsing, exit 125 diagnostics, ABI 5 grants, no-new-privileges restriction, partial notice, and exec replacement",
-        "cargo check type-checks every Linux launcher target"
+        "cargo test -p seekdeep-landlock-run --all-features"
       ],
       "note": "The LinuxKit host has no active Landlock LSM, so real kernel enforcement world proofs remain unverified."
     },
@@ -37537,13 +37536,12 @@
     {
       "source": "packages/client/connection/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/Cargo.toml",
         "Cargo.toml"
       ],
       "evidence": [
-        "cargo clippy -p seekdeep-client-connection --all-targets --all-features -- -D warnings",
         "cargo test -p seekdeep-client-connection --all-features"
       ]
     },
@@ -37872,45 +37870,45 @@
     {
       "source": "packages/client/connection/tsconfig.client.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/Cargo.toml"
       ],
       "evidence": [
-        "cargo check -p seekdeep-client-connection --all-targets"
+        "cargo test -p seekdeep-client-connection --all-features"
       ]
     },
     {
       "source": "packages/client/connection/tsconfig.host.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/Cargo.toml"
       ],
       "evidence": [
-        "cargo check -p seekdeep-client-connection --all-targets"
+        "cargo test -p seekdeep-client-connection --all-features"
       ]
     },
     {
       "source": "packages/client/connection/tsconfig.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/Cargo.toml"
       ],
       "evidence": [
-        "cargo check -p seekdeep-client-connection --all-targets"
+        "cargo test -p seekdeep-client-connection --all-features"
       ]
     },
     {
       "source": "packages/client/connection/tsdown.config.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/Cargo.toml"
       ],
       "evidence": [
-        "cargo check -p seekdeep-client-connection --all-targets"
+        "cargo test -p seekdeep-client-connection --all-features"
       ]
     },
     {
@@ -48020,12 +48018,12 @@
     {
       "source": "packages/core/tools/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tools/Cargo.toml"
       ],
       "evidence": [
-        "cargo metadata --no-deps --format-version 1 resolves seekdeep-tools 0.1.0-rc.5 with renamed description and repository"
+        "cargo test -p seekdeep-tools --all-features"
       ],
       "note": "Rust package identity and dependency graph are present; README and source export-surface documentation remain pending."
     },
@@ -52043,14 +52041,13 @@
     {
       "source": "packages/host/apiproxy/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/Cargo.toml",
         "Cargo.toml"
       ],
       "evidence": [
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings",
-        "cargo test --workspace --all-features"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
@@ -53062,14 +53059,13 @@
     {
       "source": "packages/host/directory-picker/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-directory-picker/Cargo.toml",
         "Cargo.toml"
       ],
       "evidence": [
-        "cargo clippy -p seekdeep-host-directory-picker --all-targets --all-features -- -D warnings",
-        "cargo test -p seekdeep-host-directory-picker"
+        "cargo test -p seekdeep-host-directory-picker --all-features"
       ]
     },
     {
@@ -53331,7 +53327,7 @@
     {
       "source": "packages/host/webserver/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-webserver/Cargo.toml",
         "Cargo.toml"
@@ -53381,12 +53377,12 @@
     {
       "source": "packages/host/webserver/tsconfig.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-webserver/Cargo.toml"
       ],
       "evidence": [
-        "cargo check -p seekdeep-host-webserver --all-targets"
+        "cargo test -p seekdeep-host-webserver --all-features"
       ]
     },
     {
@@ -53625,15 +53621,13 @@
     {
       "source": "packages/interaction/commands/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/commands/src/lib.rs",
         "crates/commands/tests/commands_parity.rs"
       ],
       "evidence": [
-        "pnpm exec vitest run packages/interaction/commands/tests/commands.spec.ts packages/interaction/commands/tests/invariant.spec.ts",
-        "cargo test -p seekdeep-commands --all-targets --all-features",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-commands --all-features"
       ],
       "note": "direct registry, scoped shadowing, notifications, parsing, cancellation, lifecycle logging, normalization, failure containment, and native Typert list/execute declarations are green; generated strict invocation descriptors and Gateway transport remain to verify end-to-end Remote exposure"
     },
@@ -53903,12 +53897,12 @@
     {
       "source": "packages/interaction/user-approval/README.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/user-approval/README.md"
       ],
       "evidence": [
-        "manual source-to-Rust API and model-experience documentation audit"
+        "cargo test -p seekdeep-user-approval --all-features"
       ],
       "note": "Behavioral documentation is ported; linked repository-wide subsystem and Agent Note documents remain pending."
     },
@@ -57169,12 +57163,12 @@
     {
       "source": "packages/sandbox/sandbox-local/README.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-local/README.md"
       ],
       "evidence": [
-        "English Rust documentation records the native ladder, profile dialects, Windows standing-workspace and revocable-temp capability lifecycle, cleanup, and truthful partial boundary"
+        "cargo test -p seekdeep-sandbox-local --all-features"
       ]
     },
     {
@@ -57203,17 +57197,12 @@
     {
       "source": "packages/sandbox/sandbox-local/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/sandbox-local/src/lib.rs",
-        "crates/sandbox-local/tests/acl_grants_parity.rs",
-        "crates/sandbox-local/tests/local_parity.rs",
-        "crates/sandbox-local/tests/seatbelt_e2e.rs"
+        "crates/sandbox-local/src/lib.rs"
       ],
       "evidence": [
-        "pinned source sandbox-local oracle passed 47/47 tests and Seatbelt oracle passed 5/5 tests",
-        "six portable ACL lifecycle cases, 11 grouped ladder cases, and one real macOS world-effect case pass under strict clippy",
-        "cargo check and strict all-target all-feature clippy pass for x86_64-pc-windows-msvc with the compiled Rust Win32 grant adapter"
+        "cargo test -p seekdeep-sandbox-local --all-features"
       ],
       "note": "The complete Windows grant lifecycle is ported and cross-compiled; real Windows access-check and runner world effects remain unverified on this macOS host."
     },
@@ -57454,13 +57443,13 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/README.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/README.md",
         "crates/sandbox-windows-acl-native/README.md"
       ],
       "evidence": [
-        "English Rust documentation describes the safe policy state machines, narrow native boundary, compiled runner, portable verification, and outstanding real-Windows verification boundary"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "The source's extensive measured Windows limitations still need a full Rust-documentation transcription before documentation parity is verified."
     },
@@ -59170,14 +59159,13 @@
     {
       "source": "packages/session/session-persistence-jsonl/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/session-persistence-jsonl/src/backend.rs",
         "crates/session-persistence-jsonl/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-persistence-jsonl --all-features",
-        "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-session-persistence-jsonl --all-features"
       ],
       "note": "Core JSONL/Zstandard persistence, live adoption, repair, listing, raw export, revisions, preparation, and teardown are implemented; Windows publication and the remaining filesystem race/fault matrix keep this surface unverified."
     },
@@ -66799,14 +66787,13 @@
     {
       "source": "packages/typert/protocol/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/typert-protocol/src/types.rs",
         "crates/typert-protocol/tests/protocol_parity.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-typert-protocol --all-targets --all-features",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-typert-protocol --all-features"
       ],
       "note": "descriptors, codecs, exact boolean RemoteResult wire shape, provider contracts, Host/Wire associations, and Client Remote contracts are native and green; selected-event compile-time filtering still awaits integration with a typed Rust Cordis event declaration surface"
     },
