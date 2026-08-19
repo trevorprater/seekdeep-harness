@@ -26913,7 +26913,10 @@
     {
       "source": "packages/feedback/message-feedback/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/message-feedback/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-message-feedback --all-features && cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"],
+      "note": "list/put/delete with inspect-session, append-origin target check, durability barrier, per-session mutation serialization, note validation, and version reconciliation are ported; the Typert @Remote registration and the source spec tests await the typert registry seam"
     },
     {
       "source": "packages/feedback/message-feedback/src/invariant.ts",
