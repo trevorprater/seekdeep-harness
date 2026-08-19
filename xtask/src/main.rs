@@ -28,14 +28,27 @@ enum Command {
         /// Source checkout recorded in `SOURCE_SNAPSHOT`.
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
+        /// Surfaces enforced: `all` is the final gate, `runtime` defers
+        /// localization artifacts (Chinese translations and their metadata).
+        #[arg(long, value_enum, default_value_t = Scope::All)]
+        scope: Scope,
     },
+}
+
+/// Which surfaces the parity gate enforces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+enum Scope {
+    /// Enforce every tracked source surface (the final manifest gate).
+    All,
+    /// Enforce runtime surfaces only; defer localization artifacts.
+    Runtime,
 }
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
         Command::Inventory { source } => inventory(&source),
-        Command::Parity { source } => parity(&source),
+        Command::Parity { source, scope } => parity(&source, scope),
     }
 }
 
@@ -113,7 +126,7 @@ fn inventory(source: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parity(source: &Path) -> anyhow::Result<()> {
+fn parity(source: &Path, scope: Scope) -> anyhow::Result<()> {
     verify_source(source)?;
     let manifest = read_manifest()?;
     let expected = source_files(source)?;
@@ -130,7 +143,15 @@ fn parity(source: &Path) -> anyhow::Result<()> {
 
     let mut pending = Vec::new();
     let mut ported = Vec::new();
+    let mut deferred = 0usize;
     for surface in &manifest.surfaces {
+        if scope == Scope::Runtime
+            && is_localization(&surface.source)
+            && surface.status != Status::Verified
+        {
+            deferred += 1;
+            continue;
+        }
         match surface.status {
             Status::Pending => pending.push(surface.source.as_str()),
             Status::Ported => ported.push(surface.source.as_str()),
@@ -156,6 +177,10 @@ fn parity(source: &Path) -> anyhow::Result<()> {
     }
 
     verify_rust_only()?;
+    let scope_label = match scope {
+        Scope::All => "all",
+        Scope::Runtime => "runtime",
+    };
     if !pending.is_empty() || !ported.is_empty() {
         let sample = pending
             .iter()
@@ -165,16 +190,26 @@ fn parity(source: &Path) -> anyhow::Result<()> {
             .collect::<Vec<_>>()
             .join(", ");
         anyhow::bail!(
-            "parity incomplete: {} pending, {} ported but unverified (sample: {sample})",
+            "{scope_label} parity incomplete: {} pending, {} ported but unverified (deferred: {deferred}) (sample: {sample})",
             pending.len(),
             ported.len()
         );
     }
     println!(
-        "verified {} source surfaces at 100% parity",
-        manifest.surfaces.len()
+        "verified {} {scope_label} source surfaces at 100% parity (deferred: {deferred})",
+        manifest.surfaces.len() - deferred
     );
     Ok(())
+}
+
+/// Whether a surface is a localization artifact (Chinese translation or its
+/// translation metadata), deferred from the runtime parity gate.
+fn is_localization(source: &str) -> bool {
+    if source.contains(".zh.") {
+        return true;
+    }
+    let base = source.rsplit('/').next().unwrap_or(source);
+    base.contains(".i18n.")
 }
 
 fn read_manifest() -> anyhow::Result<Manifest> {
@@ -279,4 +314,21 @@ fn verify_rust_only() -> anyhow::Result<()> {
         violations.join(", ")
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_localization;
+
+    #[test]
+    fn localization_predicate_defers_only_chinese_and_translation_metadata() {
+        assert!(is_localization(".agents/notes/README.zh.md"));
+        assert!(is_localization("packages/core/README.zh.md"));
+        assert!(is_localization(".agents/notes/README.i18n.yaml"));
+        assert!(is_localization("packages/core/README.i18n.yaml"));
+        assert!(!is_localization(".agents/notes/README.md"));
+        assert!(!is_localization("packages/core/src/session.rs"));
+        assert!(!is_localization("packages/core/package.json"));
+        assert!(!is_localization("packages/core/tests/session.spec.ts"));
+    }
 }
