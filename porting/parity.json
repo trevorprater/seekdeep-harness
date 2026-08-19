@@ -25047,7 +25047,9 @@
     {
       "source": "packages/core/agent/tests/model-selection.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/model_selection.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/agent/tests/model-selection.spec.ts", "cargo test -p seekdeep-agent model_selection::tests --all-features", "prompt-variable and request-routing snapshot, assembled-variable reflection, reasoning-effort inheritance override, and dispose-restores-empty behavior are covered"]
     },
     {
       "source": "packages/core/agent/tests/verify-export-jsdoc.spec.ts",
