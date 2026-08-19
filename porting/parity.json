@@ -25035,7 +25035,9 @@
     {
       "source": "packages/core/scope/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/scope/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-scope --all-features && cargo clippy -p seekdeep-scope --all-targets --all-features -- -D warnings", "ScopeKey, ScopeParentBinding, bind_scope_parent, scope_parent_of, scope_chain_of, Scope, create_scope, scope_of, and scope_target are ported; the JS-branded Scoped<T>/isScopeCarrier/carrierKeyOf carrier mechanism is adapted to Context-based event-filter routing (scope_target returns a filtered Context)"]
     },
     {
       "source": "packages/core/scope/src/invariant.ts",
@@ -25050,7 +25052,9 @@
     {
       "source": "packages/core/scope/src/store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/scope/src/store.rs"],
+      "evidence": ["cargo test -p seekdeep-scope --all-features && cargo clippy -p seekdeep-scope --all-targets --all-features -- -D warnings", "NamedEntries (get/has/keys/entries/values/isEmpty), AnonymousEntries append-with-undo, and ScopedLayers peek/chainLayers/merge/effect are ported with 5 inline tests"]
     },
     {
       "source": "packages/core/scope/tests/invariant.spec.ts",
@@ -25075,7 +25079,9 @@
     {
       "source": "packages/core/scope/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/scope/Cargo.toml", "crates/scope/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-scope --all-features && cargo clippy -p seekdeep-scope --all-targets --all-features -- -D warnings", "build configuration is represented by the Rust 2024 workspace crate manifest and module layout"]
     },
     {
       "source": "packages/core/session/README.i18n.yaml",
