@@ -1,5 +1,6 @@
 //! Host BFF entry and Loader shell for the Remote contribution assembly.
 
+pub mod agent_lookup;
 pub mod invariant;
 pub mod remote_events;
 pub mod types;
