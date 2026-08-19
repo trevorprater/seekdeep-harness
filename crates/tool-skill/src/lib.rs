@@ -5,11 +5,20 @@
 use std::sync::{Arc, LazyLock};
 
 use regex::Regex;
+use seekdeep_cordis::{Context, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
-use seekdeep_skill::{SkillSummary, escape_text};
+use seekdeep_skill::{
+    SKILLS, SkillDefinition, SkillInvocationPolicy, SkillLookupOptions, SkillRegistry,
+    SkillResourceBase, SkillSource, SkillSummary, SkillViewOptions, escape_text,
+    is_model_invocable, is_skill_name, render_skill_content,
+};
+use seekdeep_tools::{
+    DefineToolOptions, DefineToolOutput, GenericCallView, TOOLS, ToolCallKind, ToolCallView,
+    ToolDefinition, ToolRunContext, ToolRuntime, define_tool,
+};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
 /// Default maximum normalized description length rendered in the session catalog.
@@ -281,6 +290,198 @@ pub fn register_invariant(
     registry.register("seekdeep-tool-skill", InvariantInstaller::noop())
 }
 
+/// Typed `skill` tool arguments.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillToolArgs {
+    /// Exact skill name from the session catalog.
+    name: String,
+}
+
+/// Typed `skill` tool output.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillToolOutput {
+    /// Loaded skill name.
+    name: String,
+    /// Provider that owns the body.
+    provider: String,
+    /// Provider-specific resource base.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    resource_base: Option<SkillResourceBase>,
+    /// Markdown instruction body.
+    content: String,
+}
+
+fn parameter_schema() -> Value {
+    json!({
+        "name": {
+            "type": "string",
+            "required": true,
+            "description": "The exact skill name from the available skills list."
+        }
+    })
+}
+
+fn output_schema() -> Value {
+    json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "name": {"type": "string", "required": true},
+            "provider": {"type": "string", "required": true},
+            "resourceBase": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "kind": {"type": "string", "required": true, "const": "directory"},
+                            "path": {"type": "string", "required": true}
+                        }
+                    },
+                    {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "kind": {"type": "string", "required": true, "const": "url"},
+                            "url": {"type": "string", "required": true}
+                        }
+                    },
+                    {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "kind": {"type": "string", "required": true, "const": "opaque"},
+                            "description": {"type": "string", "required": true}
+                        }
+                    }
+                ]
+            },
+            "content": {"type": "string", "required": true}
+        }
+    })
+}
+
+/// Builds the model-facing skill loader tool.
+///
+/// # Errors
+///
+/// Returns a missing-skills-service or author-schema compilation failure.
+pub fn definition(context: &Context) -> anyhow::Result<ToolDefinition> {
+    let skills: Arc<SkillRegistry> = context
+        .get(SKILLS)
+        .ok_or_else(|| anyhow::anyhow!("tool-skill requires skills"))?;
+    let output = DefineToolOutput::new(
+        output_schema(),
+        Arc::new(|_args: &SkillToolArgs, value: &SkillToolOutput| {
+            let definition = SkillDefinition {
+                summary: SkillSummary {
+                    name: value.name.clone(),
+                    description: String::new(),
+                    when_to_use: None,
+                    invocation: SkillInvocationPolicy {
+                        model_invocable: true,
+                        user_invocable: true,
+                    },
+                    source: SkillSource("runtime".to_owned()),
+                    provider: value.provider.clone(),
+                    resource_base: value.resource_base.clone(),
+                },
+                content: value.content.clone(),
+                path: None,
+                metadata: None,
+            };
+            Ok(vec![ContentBlock::Text {
+                text: render_skill_content(&definition),
+            }])
+        }),
+    );
+    let mut options = DefineToolOptions::new(
+        "skill",
+        "Load the full instructions for an available skill. Call this with the exact skill name from the session skill catalog before acting on a task that names or clearly matches that skill.",
+        parameter_schema(),
+        output,
+        Arc::new(move |args: SkillToolArgs, run: ToolRunContext| {
+            let skills = skills.clone();
+            Box::pin(async move { execute_skill(args, run, &skills).await })
+        }),
+    );
+    options.present_call = Some(Arc::new(|args: &SkillToolArgs| {
+        Some(ToolCallView::Generic(GenericCallView {
+            title: format!("Load skill {}", args.name),
+            kind: Some(ToolCallKind::Read),
+            raw_input: Some(json!(args.name)),
+            content: None,
+            locations: None,
+        }))
+    }));
+    define_tool(options)
+}
+
+/// Registers the model-facing skill loader tool on the calling context.
+///
+/// # Errors
+///
+/// Returns missing-service or registration failures.
+pub fn register_skill_tool(context: &Context) -> anyhow::Result<EffectHandle> {
+    let tools: Arc<ToolRuntime> = context
+        .get(TOOLS)
+        .ok_or_else(|| anyhow::anyhow!("tool-skill requires tools"))?;
+    let definition = definition(context)?;
+    tools.register(context, definition)
+}
+
+async fn execute_skill(
+    args: SkillToolArgs,
+    run: ToolRunContext,
+    skills: &SkillRegistry,
+) -> anyhow::Result<SkillToolOutput> {
+    if !is_skill_name(&args.name) {
+        anyhow::bail!("invalid skill name {:?}", args.name);
+    }
+    let lookup = SkillViewOptions {
+        lookup: SkillLookupOptions {
+            cwd: run
+                .agent
+                .as_ref()
+                .and_then(|agent| agent.session().header().cwd.clone()),
+            signal: Some(run.signal()),
+        },
+        scope: run.scope_key(),
+    };
+    let summary = skills
+        .list(&lookup)
+        .await?
+        .into_iter()
+        .find(|summary| summary.name == args.name);
+    let Some(summary) = summary else {
+        anyhow::bail!("skill {:?} is unknown or no longer available", args.name);
+    };
+    if !is_model_invocable(&summary) {
+        anyhow::bail!(
+            "skill {:?} is not available for model invocation",
+            args.name
+        );
+    }
+    let skill = skills.get(&args.name, &lookup).await?;
+    let Some(skill) = skill else {
+        anyhow::bail!("skill {:?} is unknown or no longer available", args.name);
+    };
+    if !is_model_invocable(&skill.summary) {
+        anyhow::bail!(
+            "skill {:?} is not available for model invocation",
+            args.name
+        );
+    }
+    Ok(SkillToolOutput {
+        name: skill.summary.name.clone(),
+        provider: skill.summary.provider.clone(),
+        resource_base: skill.summary.resource_base.clone(),
+        content: skill.content.clone(),
+    })
+}
+
 static WHITESPACE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\s+").expect("static whitespace regex"));
 static SKILL_GESTURE: LazyLock<Regex> = LazyLock::new(|| {
@@ -374,5 +575,15 @@ mod tests {
             invoked_skill_names(&[user, plugin]),
             vec!["dsh-badge".to_owned(), "skill-filesystem".to_owned()]
         );
+    }
+
+    #[test]
+    fn skill_definition_requires_skills_service() {
+        let context = Context::new();
+        assert!(definition(&context).is_err());
+        SkillRegistry::install(&context, &seekdeep_skill::Config::default()).expect("skills");
+        let tool = definition(&context).expect("definition");
+        assert_eq!(tool.name, "skill");
+        assert!(register_skill_tool(&context).is_err());
     }
 }
