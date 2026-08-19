@@ -51,6 +51,7 @@ pub struct SubagentRunEndInfo {
 }
 
 /// Which start-time features a provider supports.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubagentCapabilities {

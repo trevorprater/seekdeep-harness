@@ -11,7 +11,12 @@ pub const SUBAGENT_DESCRIPTOR_VERSION: u32 = 2;
 /// The supported durable subagent identity and optional continuation
 /// composition.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "mode", rename_all = "kebab-case", rename_all_fields = "camelCase", deny_unknown_fields)]
+#[serde(
+    tag = "mode",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub enum SubagentDescriptorData {
     /// A terminal one-shot child.
     #[serde(rename = "one-shot")]
@@ -47,9 +52,14 @@ pub enum SubagentDescriptorData {
     },
 }
 
-/// Inputs snapshot_subagent_descriptor validates and detaches.
+/// Inputs `snapshot_subagent_descriptor` validates and detaches.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "mode", rename_all = "kebab-case", rename_all_fields = "camelCase", deny_unknown_fields)]
+#[serde(
+    tag = "mode",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
 pub enum SubagentDescriptorInput {
     /// A one-shot child identity.
     #[serde(rename = "one-shot")]
@@ -86,7 +96,9 @@ pub enum SubagentDescriptorInput {
 /// # Errors
 ///
 /// Returns when the input is not losslessly JSON-serializable.
-pub fn snapshot_subagent_descriptor(input: &SubagentDescriptorInput) -> anyhow::Result<SubagentDescriptorData> {
+pub fn snapshot_subagent_descriptor(
+    input: &SubagentDescriptorInput,
+) -> anyhow::Result<SubagentDescriptorData> {
     let data = match input {
         SubagentDescriptorInput::OneShot { provider, label } => SubagentDescriptorData::OneShot {
             version: SUBAGENT_DESCRIPTOR_VERSION,
@@ -123,10 +135,16 @@ pub fn snapshot_subagent_descriptor(input: &SubagentDescriptorInput) -> anyhow::
 pub fn fold_subagent_descriptor(
     events: &[SessionEvent],
 ) -> anyhow::Result<Option<SubagentDescriptorData>> {
-    let Some(event) = events.iter().find(|e| e.event_type == "subagent/descriptor") else {
+    let Some(event) = events
+        .iter()
+        .find(|e| e.event_type == "subagent/descriptor")
+    else {
         return Ok(None);
     };
-    let version = event.data.get("version").and_then(|v| v.as_u64());
+    let version = event
+        .data
+        .get("version")
+        .and_then(serde_json::Value::as_u64);
     if version != Some(u64::from(SUBAGENT_DESCRIPTOR_VERSION)) {
         return Ok(None);
     }
@@ -158,13 +176,17 @@ mod tests {
         let events = vec![event(json!({
             "version": 2, "mode": "one-shot", "provider": "spawn", "label": "audit",
         }))];
-        let folded = fold_subagent_descriptor(&events).expect("fold").expect("some");
+        let folded = fold_subagent_descriptor(&events)
+            .expect("fold")
+            .expect("some");
         assert!(matches!(folded, SubagentDescriptorData::OneShot { .. }));
     }
 
     #[test]
     fn ignores_unrecognized_version() {
-        let events = vec![event(json!({"version": 99, "mode": "one-shot", "provider": "x"}))];
+        let events = vec![event(
+            json!({"version": 99, "mode": "one-shot", "provider": "x"}),
+        )];
         assert!(fold_subagent_descriptor(&events).expect("fold").is_none());
     }
 }
