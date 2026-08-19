@@ -2,16 +2,20 @@
 //! catalog prose and the slash-name invocation gesture, shared by the skill loader
 //! tool and the step listeners that publish and replace the catalog.
 
+use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
 use regex::Regex;
-use seekdeep_cordis::{Context, fiber::EffectHandle};
+use seekdeep_agent::{Agent, AgentEvent, PreStepDecision};
+use seekdeep_agent_loop::AgentPreStepEvent;
+use seekdeep_cordis::events::Next;
+use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
-use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
+use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
 use seekdeep_skill::{
-    SKILLS, SkillDefinition, SkillInvocationPolicy, SkillLookupOptions, SkillRegistry,
-    SkillResourceBase, SkillSource, SkillSummary, SkillViewOptions, escape_text,
-    is_model_invocable, is_skill_name, render_skill_content,
+    SKILLS, SkillCatalogSnapshot, SkillDefinition, SkillInvocationPolicy, SkillLookupOptions,
+    SkillRegistry, SkillResourceBase, SkillSource, SkillSummary, SkillViewOptions, escape_text,
+    is_model_invocable, is_skill_name, is_user_invocable, render_skill_content,
 };
 use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, GenericCallView, TOOLS, ToolCallKind, ToolCallView,
@@ -215,7 +219,11 @@ pub fn render_catalog_update(entries: &[CatalogEntry]) -> UserMessage {
 /// Reads entries of one durable catalog source, or none when unreadable.
 #[must_use]
 pub fn read_catalog_entries(source: &MessageSource) -> Option<Vec<CatalogEntry>> {
-    let entries = source.fields.get("entries")?.as_array()?;
+    parse_entries(source.fields.get("entries")?)
+}
+
+fn parse_entries(entries: &Value) -> Option<Vec<CatalogEntry>> {
+    let entries = entries.as_array()?;
     let mut readable = Vec::with_capacity(entries.len());
     for entry in entries {
         let object = entry.as_object()?;
@@ -480,6 +488,291 @@ async fn execute_skill(
         resource_base: skill.summary.resource_base.clone(),
         content: skill.content.clone(),
     })
+}
+
+/// Durable catalog history for one agent session.
+struct CatalogHistory {
+    visible_digest: Option<String>,
+    published: bool,
+}
+
+fn catalog_history(agent: &Agent) -> CatalogHistory {
+    let visible: HashSet<u64> = agent.session().surface_nodes().into_iter().collect();
+    let events = agent.session().events();
+    let mut published = false;
+    for event in events.iter().rev() {
+        if event.event_type != "user/message" {
+            continue;
+        }
+        let Some(source) = event.data.get("source") else {
+            continue;
+        };
+        if source.get("kind").and_then(Value::as_str) != Some("skill-catalog") {
+            continue;
+        }
+        let Some(entries) = source.get("entries").and_then(parse_entries) else {
+            continue;
+        };
+        let digest = digest_catalog_entries(&entries);
+        published = true;
+        if visible.contains(&event.seq) {
+            return CatalogHistory {
+                visible_digest: Some(digest),
+                published,
+            };
+        }
+    }
+    CatalogHistory {
+        visible_digest: None,
+        published,
+    }
+}
+
+fn throw_if_aborted(signal: &AbortSignal) -> anyhow::Result<()> {
+    if signal.is_aborted() {
+        anyhow::bail!(
+            "skill lookup aborted: {}",
+            signal
+                .reason()
+                .map_or_else(|| "null".to_owned(), |r| r.to_string())
+        );
+    }
+    Ok(())
+}
+
+/// Registers the skill loader tool and its two step listeners.
+///
+/// # Errors
+///
+/// Returns missing-service, registration, or configuration-validation failures.
+pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
+    let description_max = config
+        .catalog_description_max_length
+        .unwrap_or(DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH);
+    anyhow::ensure!(
+        description_max >= 3,
+        "tool-skill: catalogDescriptionMaxLength must be an integer greater than or equal to 3"
+    );
+    let skills: Arc<SkillRegistry> = context
+        .get(SKILLS)
+        .ok_or_else(|| anyhow::anyhow!("tool-skill requires skills"))?;
+    let tools: Arc<ToolRuntime> = context
+        .get(TOOLS)
+        .ok_or_else(|| anyhow::anyhow!("tool-skill requires tools"))?;
+
+    tools.register(context, definition(context)?)?;
+    let skill_tool = tools
+        .get("skill", None)
+        .ok_or_else(|| anyhow::anyhow!("tool-skill registered tool missing"))?;
+
+    {
+        let skills = skills.clone();
+        context
+            .events()
+            .on_waterfall(
+                context,
+                "agent/pre-step",
+                move |_ctx: Context, args: EventArgs, next: Next| {
+                    let skills = skills.clone();
+                    Box::pin(async move { gesture_step(args, next, &skills).await })
+                },
+                EventOptions::default(),
+            )
+            .map_err(anyhow::Error::from)?;
+    }
+
+    {
+        let skills = skills.clone();
+        let tools = tools.clone();
+        let skill_tool = skill_tool.clone();
+        context
+            .events()
+            .on_waterfall(
+                context,
+                "agent/pre-step",
+                move |_ctx: Context, args: EventArgs, next: Next| {
+                    let skills = skills.clone();
+                    let tools = tools.clone();
+                    let skill_tool = skill_tool.clone();
+                    Box::pin(async move {
+                        catalog_step(args, next, &skills, &tools, &skill_tool, description_max)
+                            .await
+                    })
+                },
+                EventOptions::default(),
+            )
+            .map_err(anyhow::Error::from)?;
+    }
+
+    Ok(())
+}
+
+async fn gesture_step(
+    args: EventArgs,
+    next: Next,
+    skills: &SkillRegistry,
+) -> anyhow::Result<EventReply> {
+    let Some(event) = args.get::<AgentEvent<AgentPreStepEvent>>(0) else {
+        return next.run().await;
+    };
+    let reply = next.run().await?;
+    let Some(decision) = reply.downcast::<PreStepDecision>() else {
+        return Ok(reply);
+    };
+    let PreStepDecision::Enter { messages } = (*decision).clone() else {
+        return Ok(reply);
+    };
+    let names = invoked_skill_names(&event.payload.messages);
+    if names.is_empty() {
+        return Ok(reply);
+    }
+    throw_if_aborted(&event.payload.signal)?;
+    let lookup = SkillViewOptions {
+        lookup: SkillLookupOptions {
+            cwd: event.agent.session().header().cwd.clone(),
+            signal: Some(event.payload.signal.clone()),
+        },
+        scope: Some(event.agent.scope_key()),
+    };
+    let mut injections = Vec::new();
+    for name in names {
+        let skill = skills.get(&name, &lookup).await?;
+        throw_if_aborted(&event.payload.signal)?;
+        let Some(skill) = skill else {
+            continue;
+        };
+        if !is_user_invocable(&skill.summary) {
+            continue;
+        }
+        let mut fields = Map::new();
+        fields.insert("name".to_owned(), json!(name));
+        fields.insert("form".to_owned(), json!("instructions"));
+        injections.push(UserMessage::new(
+            vec![ContentBlock::Text {
+                text: render_skill_content(&skill),
+            }],
+            MessageSource {
+                kind: "skill-invocation".to_owned(),
+                fields,
+            },
+        ));
+    }
+    if injections.is_empty() {
+        return Ok(reply);
+    }
+    let mut extended = messages;
+    extended.extend(injections);
+    Ok(EventReply::Value(Arc::new(PreStepDecision::Enter {
+        messages: extended,
+    })))
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn catalog_step(
+    args: EventArgs,
+    next: Next,
+    skills: &SkillRegistry,
+    tools: &ToolRuntime,
+    skill_tool: &Arc<ToolDefinition>,
+    description_max: usize,
+) -> anyhow::Result<EventReply> {
+    let Some(event) = args.get::<AgentEvent<AgentPreStepEvent>>(0) else {
+        return next.run().await;
+    };
+    let reply = next.run().await?;
+    let Some(decision) = reply.downcast::<PreStepDecision>() else {
+        return Ok(reply);
+    };
+    let PreStepDecision::Enter { messages } = (*decision).clone() else {
+        return Ok(reply);
+    };
+    throw_if_aborted(&event.payload.signal)?;
+    let scope = event.agent.scope_key();
+    let tool_visible = tools
+        .get("skill", Some(scope))
+        .is_some_and(|visible| Arc::ptr_eq(&visible, skill_tool));
+    let snapshot = if tool_visible {
+        skills
+            .snapshot(&SkillViewOptions {
+                lookup: SkillLookupOptions {
+                    cwd: event.agent.session().header().cwd.clone(),
+                    signal: Some(event.payload.signal.clone()),
+                },
+                scope: Some(scope),
+            })
+            .await?
+    } else {
+        SkillCatalogSnapshot {
+            skills: Vec::new(),
+            complete: true,
+        }
+    };
+    throw_if_aborted(&event.payload.signal)?;
+    if !snapshot.complete {
+        return Ok(reply);
+    }
+    let skills_list: Vec<SkillSummary> = snapshot
+        .skills
+        .into_iter()
+        .filter(is_model_invocable)
+        .collect();
+    let entries = catalog_source_entries(&skills_list, description_max);
+    let digest = digest_catalog_entries(&entries);
+    let history = catalog_history(&event.agent);
+    let existing = catalog_message(&messages);
+
+    if history.visible_digest.as_deref() == Some(digest.as_str()) {
+        return match existing {
+            None => Ok(reply),
+            Some((message, _)) => Ok(EventReply::Value(Arc::new(PreStepDecision::Enter {
+                messages: messages
+                    .into_iter()
+                    .filter(|m| m.id() != message.id())
+                    .collect(),
+            }))),
+        };
+    }
+    if let Some((_, existing_entries)) = &existing
+        && digest_catalog_entries(existing_entries) == digest
+    {
+        return Ok(reply);
+    }
+    if !history.published && skills_list.is_empty() {
+        return match existing {
+            None => Ok(reply),
+            Some((message, _)) => Ok(EventReply::Value(Arc::new(PreStepDecision::Enter {
+                messages: messages
+                    .into_iter()
+                    .filter(|m| m.id() != message.id())
+                    .collect(),
+            }))),
+        };
+    }
+    let catalog = if history.published {
+        render_catalog_update(&entries)
+    } else {
+        render_catalog_message(&entries)
+    };
+    let extended = match existing {
+        None => {
+            let mut extended = messages;
+            extended.push(catalog);
+            extended
+        }
+        Some((message, _)) => messages
+            .into_iter()
+            .map(|m| {
+                if m.id() == message.id() {
+                    catalog.clone()
+                } else {
+                    m
+                }
+            })
+            .collect(),
+    };
+    Ok(EventReply::Value(Arc::new(PreStepDecision::Enter {
+        messages: extended,
+    })))
 }
 
 static WHITESPACE: LazyLock<Regex> =

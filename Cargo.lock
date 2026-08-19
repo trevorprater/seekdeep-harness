@@ -5561,6 +5561,8 @@ dependencies = [
  "anyhow",
  "hex",
  "regex",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
  "seekdeep-cordis",
  "seekdeep-invariants",
  "seekdeep-llm",

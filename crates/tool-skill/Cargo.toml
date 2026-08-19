@@ -9,6 +9,8 @@ license.workspace = true
 anyhow.workspace = true
 hex.workspace = true
 regex.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }

@@ -35068,7 +35068,7 @@
       "status": "ported",
       "targets": ["crates/tool-skill/src/lib.rs"],
       "evidence": ["cargo test -p seekdeep-tool-skill --all-features && cargo clippy -p seekdeep-tool-skill --all-targets --all-features -- -D warnings"],
-      "note": "catalog rendering/types (SkillCatalogSource, CatalogEntry, Config), catalogSourceEntries, catalogDescription, digestCatalogEntries, renderCatalogEntries/renderCatalogMessage/renderCatalogUpdate, readCatalogEntries, catalogMessage, invokedSkillNames, and the skill loader tool (definition()/register_skill_tool with typed args/output, schema, render, execute, and presentCall) are ported; the two agent/pre-step listeners and apply() remain"
+      "note": "catalog rendering/types (SkillCatalogSource, CatalogEntry, Config), catalogSourceEntries, catalogDescription, digestCatalogEntries, renderCatalogEntries/renderCatalogMessage/renderCatalogUpdate, readCatalogEntries, catalogMessage, invokedSkillNames, the skill loader tool (definition()/register_skill_tool with typed args/output, schema, render, execute, and presentCall), apply(), and the two agent/pre-step listeners (user /name injection and durable catalog publish/replace with catalogHistory identity) are ported"
     },
     {
       "source": "packages/skill/tool-skill/src/invariant.ts",
