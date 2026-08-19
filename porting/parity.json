@@ -27635,7 +27635,10 @@
     {
       "source": "packages/goal/goal/src/client.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/goal/src/client.rs"],
+      "evidence": ["cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"],
+      "note": "pure client-namespace re-export of the types outlet ported"
     },
     {
       "source": "packages/goal/goal/src/domain.ts",
@@ -27661,7 +27664,10 @@
     {
       "source": "packages/goal/goal/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/goal/src/invariant.rs"],
+      "evidence": ["cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"],
+      "note": "independent incremental fold with pre-commit staging ported as register_invariant"
     },
     {
       "source": "packages/goal/goal/src/runtime.ts",
