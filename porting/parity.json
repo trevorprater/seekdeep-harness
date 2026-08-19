@@ -50381,36 +50381,39 @@
     {
       "source": "packages/fs/fs/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/fs/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-fs --all-features && cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-fs --all-features",
+        "cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"
       ],
       "note": "FileSystem trait, FS service key, FileSystemService wrapper, and ctx.fs seat are ported; the fs/write-intent, fs/edit-intent, and fs/observed event declarations remain"
     },
     {
       "source": "packages/fs/fs/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/fs/src/invariant.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-fs --all-features && cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-fs --all-features",
+        "cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"
       ],
       "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/fs/fs/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/fs/src/types.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-fs --all-features && cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-fs --all-features",
+        "cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"
       ],
       "note": "FsTargetKey/FsVersion brands, FsObservation/FsTarget/FsInfo/FsPathInfo/FsDirEntry, FsWriteIntent/FsWriteOutcome, FsEditRequest/FsEditOutcome, and FsErrorCode/FsError are ported"
     },
@@ -51092,36 +51095,39 @@
     {
       "source": "packages/goal/goal/src/client.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal/src/client.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-goal --all-features",
+        "cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
       ],
       "note": "pure client-namespace re-export of the types outlet ported"
     },
     {
       "source": "packages/goal/goal/src/domain.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal/src/domain.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-goal --all-features",
+        "cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
       ],
       "note": "GoalOperation, GoalSnapshotChangeMeta/GoalClearChangeMeta, GoalMessageSource, FoldedGoal, GoalChanged, and GoalErrorCode are ported"
     },
     {
       "source": "packages/goal/goal/src/fold.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal/src/fold.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-goal --all-features",
+        "cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
       ],
       "note": "emptyGoalFoldState, decodeGoalChange, goalChangeRef, applyGoalChange, applyGoalEvent, and foldGoal are ported with the strict decoder and transition validation"
     },
@@ -51140,36 +51146,39 @@
     {
       "source": "packages/goal/goal/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal/src/invariant.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-goal --all-features",
+        "cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
       ],
       "note": "independent incremental fold with pre-commit staging ported as register_invariant"
     },
     {
       "source": "packages/goal/goal/src/runtime.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal/src/runtime.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-goal --all-features",
+        "cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
       ],
       "note": "GOAL_CHANGE_VERSION and GoalError are ported"
     },
     {
       "source": "packages/goal/goal/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal/src/types.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-goal --all-features",
+        "cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
       ],
       "note": "GoalId, GoalRef, CreateGoalRequest/Result, EditGoalRequest, GoalPhase, GoalBlockReason, GoalSnapshot, GoalActivation, GoalView, and GoalProjection are ported"
     },
@@ -56543,12 +56552,13 @@
     {
       "source": "packages/plan/plan-mode/src/client.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/plan-mode/src/client.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-plan-mode --all-features && cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-plan-mode --all-features",
+        "cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
       ],
       "note": "pure client-namespace re-export of the types outlet ported"
     },
@@ -56567,24 +56577,26 @@
     {
       "source": "packages/plan/plan-mode/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/plan-mode/src/invariant.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-plan-mode --all-features && cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-plan-mode --all-features",
+        "cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
       ],
       "note": "plan/mode boolean-shape validation ported as register_invariant"
     },
     {
       "source": "packages/plan/plan-mode/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/plan-mode/src/types.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-plan-mode --all-features && cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-plan-mode --all-features",
+        "cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
       ],
       "note": "PlanProjection ported"
     },
