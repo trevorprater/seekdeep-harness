@@ -7,16 +7,19 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
 regress.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
-
-[dev-dependencies]
 tokio.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

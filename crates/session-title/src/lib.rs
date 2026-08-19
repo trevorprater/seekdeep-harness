@@ -2,11 +2,17 @@
 //! invariant. The model/provider service lives in the deferred service module.
 
 pub mod client;
+pub mod index;
 pub mod invariant;
 pub mod model;
 pub mod normalize;
 pub mod types;
 
+pub use index::{
+    INJECT, SESSION_TITLE, SessionTitleInvalidError, SessionTitleProvider,
+    SessionTitleProviderRequest, SessionTitleProviderResult, SessionTitleService,
+    collect_session_title_messages, plugin,
+};
 pub use model::{
     Config as SessionTitleConfig, SessionTitleAutomaticMode, SessionTitleEventData,
     SessionTitleModelProvenance, SessionTitleProviderId, SessionTitleSnapshot, SessionTitleSource,

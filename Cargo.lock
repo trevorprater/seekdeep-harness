@@ -5310,14 +5310,19 @@ name = "seekdeep-session-title"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "parking_lot",
  "regress 0.11.1",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-session-projection",
  "seekdeep-util",
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

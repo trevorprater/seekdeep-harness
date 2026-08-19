@@ -60439,7 +60439,13 @@
     {
       "source": "packages/session/session-title/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features && cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/src/invariant.ts",
