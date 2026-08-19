@@ -1,5 +1,9 @@
 //! Compaction vocabulary: the stable transaction identity, the result shape,
-//! and the backend-independent checkpoint provenance marker.
+//! the backend-independent checkpoint provenance marker, and surface-balanced
+//! cut detection.
+
+/// Surface-balanced cut detection over a session.
+pub mod tool_pairing;
 
 use seekdeep_commands::CommandId;
 use seekdeep_llm::{ContentBlock, MessageSource};

@@ -4453,7 +4453,9 @@ dependencies = [
 name = "seekdeep-compaction"
 version = "0.1.0-rc.5"
 dependencies = [
+ "anyhow",
  "seekdeep-commands",
+ "seekdeep-core",
  "seekdeep-llm",
  "seekdeep-util",
  "serde",
