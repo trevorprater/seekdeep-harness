@@ -24,6 +24,7 @@ members = [
   "crates/credentials",
   "crates/credentials-local",
   "crates/fs",
+  "crates/goal",
   "crates/schemastery",
   "crates/settings",
   "crates/settings-file",
