@@ -9,7 +9,11 @@ use seekdeep_tools::ToolExecution;
 use crate::session_resolve_options;
 
 /// Emits a present-or-absent observation for one resolved target.
-fn emit_observed(
+///
+/// # Errors
+///
+/// Returns a listener failure or panic before the emission detaches.
+pub fn emit_fs_observed(
     context: &Context,
     target: &FsTarget,
     observation: FsObservation,
@@ -47,7 +51,7 @@ pub async fn resolve_regular_read_target(
         .await?;
     let info = filesystem.stat(&target, Some(&exec.signal())).await?;
     let Some(info) = info else {
-        emit_observed(context, &target, FsObservation::Absent, exec)?;
+        emit_fs_observed(context, &target, FsObservation::Absent, exec)?;
         return Err(anyhow::Error::new(FsError::new(
             format!("cannot read {:?}: not found", target.display_path),
             FsErrorCode::FsNotFound,

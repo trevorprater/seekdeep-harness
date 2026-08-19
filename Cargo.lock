@@ -5749,7 +5749,9 @@ name = "seekdeep-tool-fs"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "futures",
  "regex",
+ "seekdeep-agent",
  "seekdeep-attachment",
  "seekdeep-cordis",
  "seekdeep-fs",
@@ -5757,7 +5759,9 @@ dependencies = [
  "seekdeep-llm",
  "seekdeep-sandbox",
  "seekdeep-sandbox-policy",
+ "seekdeep-system-prompt",
  "seekdeep-tools",
+ "seekdeep-user-approval",
  "serde",
  "serde_json",
  "thiserror 2.0.20",

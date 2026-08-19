@@ -7,7 +7,9 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+futures.workspace = true
 regex.workspace = true
+seekdeep-agent = { path = "../agent" }
 seekdeep-attachment = { path = "../attachment" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-fs = { path = "../fs" }
@@ -15,7 +17,9 @@ seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-tools = { path = "../tools" }
+seekdeep-user-approval = { path = "../user-approval" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

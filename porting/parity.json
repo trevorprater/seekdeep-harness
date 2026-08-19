@@ -50590,7 +50590,7 @@
     {
       "source": "packages/fs/tool-fs/src/diff.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/diff.rs"
       ],
@@ -50602,7 +50602,7 @@
     {
       "source": "packages/fs/tool-fs/src/edit.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/edit.rs"
       ],
@@ -50614,7 +50614,7 @@
     {
       "source": "packages/fs/tool-fs/src/error.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/error.rs"
       ],
@@ -50626,12 +50626,18 @@
     {
       "source": "packages/fs/tool-fs/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-fs/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/tool-fs/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/invariant.rs"
       ],
@@ -50643,7 +50649,7 @@
     {
       "source": "packages/fs/tool-fs/src/read-image.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/read_image.rs"
       ],
@@ -50655,7 +50661,7 @@
     {
       "source": "packages/fs/tool-fs/src/read-render.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/read_render.rs"
       ],
@@ -50667,7 +50673,7 @@
     {
       "source": "packages/fs/tool-fs/src/read-target.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/read_target.rs"
       ],
@@ -50679,7 +50685,7 @@
     {
       "source": "packages/fs/tool-fs/src/read.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/read.rs"
       ],
@@ -50691,7 +50697,7 @@
     {
       "source": "packages/fs/tool-fs/src/sandbox.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/sandbox.rs"
       ],
@@ -50703,7 +50709,7 @@
     {
       "source": "packages/fs/tool-fs/src/session-cwd.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/session_cwd.rs"
       ],
@@ -50715,7 +50721,7 @@
     {
       "source": "packages/fs/tool-fs/src/write.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-fs/src/write.rs"
       ],
