@@ -37826,7 +37826,10 @@
     {
       "source": "packages/todo/tool-todo/tests/tool-todo.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-todo/tests/tool_todo_parity.rs", "crates/tool-todo/src/lib.rs"],
+      "evidence": ["pnpm exec vitest --run packages/todo/tool-todo/tests/tool-todo.spec.ts", "cargo test -p seekdeep-tool-todo --all-features"],
+      "note": "schema registration, successful execute + durable todo/write, parallel policy, non-agent rejection, empty/duplicate rejection, presentCall, and HMR unregistration are covered by 11 tests; the status-enum/non-array schema rejections and the JS loader export-shape case are adapted to the Rust registry boundary and module system"
     },
     {
       "source": "packages/todo/tool-todo/tsconfig.json",

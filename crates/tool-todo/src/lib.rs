@@ -74,6 +74,7 @@ struct ToolOutput {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Counts {
     pending: usize,
     in_progress: usize,
