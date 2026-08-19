@@ -37768,22 +37768,34 @@
     {
       "source": "packages/todo/tool-todo/src/client.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-todo/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"],
+      "note": "type-only re-export is absorbed into the Rust crate root"
     },
     {
       "source": "packages/todo/tool-todo/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-todo/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"],
+      "note": "todo_write tool definition, describe(), toTodoList validation, apply() tool+projection registration, and presentCall are ported; the source integration/projection/tool-todo tests remain to be ported for full verification"
     },
     {
       "source": "packages/todo/tool-todo/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-todo/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/todo/tool-todo/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-todo/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"],
+      "note": "TodoItem/TodoStatus and the todos projection definition are ported; the SessionProjectionMap type-level merge is absorbed"
     },
     {
       "source": "packages/todo/tool-todo/tests/integration.spec.ts",

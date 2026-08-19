@@ -66,6 +66,7 @@ members = [
   "crates/tmux-context",
   "crates/tool-timeout-policy",
   "crates/tool-ask-user",
+  "crates/tool-todo",
   "crates/tools",
   "crates/typert-protocol",
   "crates/typert-registry",
