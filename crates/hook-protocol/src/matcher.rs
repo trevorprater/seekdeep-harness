@@ -26,9 +26,7 @@ pub fn matcher_diagnostic(matcher: Option<&str>, mode: MatcherMode) -> Option<St
     if is_match_all(matcher) {
         return None;
     }
-    let Some(pattern) = matcher else {
-        return None;
-    };
+    let pattern = matcher?;
     if mode == MatcherMode::ClaudeCode && CLAUDE_LITERAL.is_match(pattern) {
         return None;
     }
