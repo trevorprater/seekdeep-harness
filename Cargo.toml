@@ -23,6 +23,7 @@ members = [
   "crates/compaction",
   "crates/credentials",
   "crates/credentials-local",
+  "crates/fs",
   "crates/schemastery",
   "crates/settings",
   "crates/settings-file",

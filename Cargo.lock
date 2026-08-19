@@ -4554,6 +4554,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-fs"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-sandbox",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "seekdeep-host-apiproxy"
 version = "0.1.0-rc.5"
 dependencies = [
