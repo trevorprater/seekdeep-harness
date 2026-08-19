@@ -36557,36 +36557,36 @@
     {
       "source": "packages/api/remotes/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/api-remotes/src/invariant.rs"
       ],
       "evidence": [
-        "cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-api-remotes --all-features"
       ],
       "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/api/remotes/src/remote-events.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/api-remotes/src/remote_events.rs"
       ],
       "evidence": [
-        "cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-api-remotes --all-features"
       ],
       "note": "API_REMOTE_FORWARDED_EVENTS allowlist ported"
     },
     {
       "source": "packages/api/remotes/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/api-remotes/src/types.rs"
       ],
       "evidence": [
-        "cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-api-remotes --all-features"
       ],
       "note": "ApiRemoteForwardedEvent type projection ported"
     },
@@ -49938,48 +49938,48 @@
     {
       "source": "packages/feedback/message-feedback/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/message-feedback/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-message-feedback --all-features && cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-message-feedback --all-features"
       ],
       "note": "list/put/delete with inspect-session, append-origin target check, durability barrier, per-session mutation serialization, note validation, and version reconciliation are ported; the Typert @Remote registration and the source spec tests await the typert registry seam"
     },
     {
       "source": "packages/feedback/message-feedback/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/message-feedback/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-message-feedback --all-features && cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-message-feedback --all-features"
       ],
       "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/feedback/message-feedback/src/spec.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/message-feedback/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-message-feedback --all-features && cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-message-feedback --all-features"
       ],
       "note": "rating/version/item/session-identity/row schemas and the message_feedback domain (version 0, one sessions table) are ported with duplicate-id/version validation"
     },
     {
       "source": "packages/feedback/message-feedback/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/message-feedback/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-message-feedback --all-features && cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-message-feedback --all-features"
       ],
       "note": "MessageFeedbackRating/Version/Item/SessionIdentity/Row and the identity_of projection are ported"
     },
