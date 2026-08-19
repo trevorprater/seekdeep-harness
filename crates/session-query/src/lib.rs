@@ -4,6 +4,7 @@
 pub mod config;
 pub mod cursor;
 pub mod extraction;
+pub mod invariant;
 pub mod sources;
 
 pub use config::{

@@ -58775,7 +58775,13 @@
     {
       "source": "packages/session-query/session-query/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-query --all-features"
+      ]
     },
     {
       "source": "packages/session-query/session-query/src/sources.ts",
