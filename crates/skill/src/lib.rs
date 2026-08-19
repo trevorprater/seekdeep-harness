@@ -355,10 +355,30 @@ impl SkillProvider for RuntimeSkillProvider {
     }
 }
 
+/// A resolved candidate carrying its owning provider and within-layer precedence.
+#[derive(Clone)]
+struct IndexedCandidate {
+    candidate: SkillCandidate,
+    provider: Arc<dyn SkillProvider>,
+    provider_order: i64,
+    local_order: usize,
+    layer: Arc<SkillLayer>,
+}
+
+/// One merged collect result: winning entries plus discovery completeness.
+struct CollectResult {
+    entries: std::collections::HashMap<String, IndexedCandidate>,
+    cacheable: bool,
+}
+
 /// Agent skill provider registry.
 pub struct SkillRegistry {
     layers: seekdeep_scope::store::ScopedLayers<SkillLayer>,
-    collect_cache: parking_lot::Mutex<std::collections::HashMap<String, Arc<SkillCatalogSnapshot>>>,
+    collect_cache: Arc<
+        parking_lot::Mutex<
+            indexmap::IndexMap<String, std::collections::HashMap<String, IndexedCandidate>>,
+        >,
+    >,
     revision: Arc<parking_lot::Mutex<usize>>,
     next_provider_order: parking_lot::Mutex<usize>,
     next_scope_id: parking_lot::Mutex<usize>,
@@ -380,15 +400,22 @@ impl SkillRegistry {
     #[must_use]
     pub fn new(collect_cache_max_entries: usize) -> Arc<Self> {
         let revision = Arc::new(parking_lot::Mutex::new(0usize));
+        let collect_cache: Arc<
+            parking_lot::Mutex<
+                indexmap::IndexMap<String, std::collections::HashMap<String, IndexedCandidate>>,
+            >,
+        > = Arc::new(parking_lot::Mutex::new(indexmap::IndexMap::new()));
         let layers = seekdeep_scope::store::ScopedLayers::new(SkillLayer::new, {
             let revision = revision.clone();
+            let collect_cache = collect_cache.clone();
             move || {
                 *revision.lock() += 1;
+                collect_cache.lock().clear();
             }
         });
         Arc::new(Self {
             layers,
-            collect_cache: parking_lot::Mutex::new(std::collections::HashMap::new()),
+            collect_cache,
             revision,
             next_provider_order: parking_lot::Mutex::new(0),
             next_scope_id: parking_lot::Mutex::new(1),
@@ -482,7 +509,17 @@ impl SkillRegistry {
         &self,
         options: &SkillViewOptions,
     ) -> anyhow::Result<SkillCatalogSnapshot> {
-        self.collect(options).await
+        let collected = self.collect(options).await?;
+        let mut skills: Vec<SkillSummary> = collected
+            .entries
+            .values()
+            .map(|entry| to_summary(&entry.candidate))
+            .collect();
+        skills.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(SkillCatalogSnapshot {
+            skills,
+            complete: collected.cacheable,
+        })
     }
 
     /// Loads and validates the winning candidate for one name.
@@ -498,65 +535,22 @@ impl SkillRegistry {
         if !is_skill_name(name) {
             return Ok(None);
         }
-        let snapshot = self.collect(options).await?;
-        let entry = snapshot
-            .skills
-            .iter()
-            .find(|summary| summary.name == name)
-            .cloned();
-        // Reload through the winning provider.
-        if entry.is_none() {
-            return Ok(None);
-        }
-        // The snapshot lost the provider; re-collect the candidate directly.
-        let candidate = self.collect_candidate(name, options).await?;
-        let Some((provider, candidate)) = candidate else {
+        let collected = self.collect(options).await?;
+        let Some(entry) = collected.entries.get(name) else {
             return Ok(None);
         };
-        let definition = provider.get(&candidate, &options.lookup).await?;
+        let definition = entry
+            .provider
+            .get(&entry.candidate, &options.lookup)
+            .await?;
         let Some(definition) = definition else {
             return Ok(None);
         };
-        anyhow::ensure!(
-            definition.summary.name == candidate.name,
-            "loaded skill name mismatch"
-        );
+        if definition.summary.name != entry.candidate.name {
+            self.invalidate_entry(entry);
+            return Ok(None);
+        }
         Ok(Some(definition))
-    }
-
-    async fn collect_candidate(
-        &self,
-        name: &str,
-        options: &SkillViewOptions,
-    ) -> anyhow::Result<Option<(Arc<dyn SkillProvider>, SkillCandidate)>> {
-        let layers = self.layer_chain(options.scope);
-        for layer in &layers {
-            let (candidates, _cacheable) = self.collect_layer(layer, options).await?;
-            for candidate in candidates {
-                if candidate.name == name {
-                    let provider = Self::provider_for(layer, &candidate);
-                    return Ok(Some((provider, candidate)));
-                }
-            }
-        }
-        Ok(None)
-    }
-
-    fn provider_for(layer: &SkillLayer, candidate: &SkillCandidate) -> Arc<dyn SkillProvider> {
-        if candidate.provider == RUNTIME_PROVIDER {
-            return Arc::new(RuntimeSkillProvider);
-        }
-        layer
-            .providers
-            .entries()
-            .find_map(|(_, entry)| {
-                if entry.provider.name() == candidate.provider {
-                    Some(entry.provider.clone())
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| Arc::new(RuntimeSkillProvider))
     }
 
     fn layer_chain(&self, scope: Option<seekdeep_scope::ScopeKey>) -> Vec<Arc<SkillLayer>> {
@@ -565,61 +559,116 @@ impl SkillRegistry {
         layers
     }
 
-    async fn collect(&self, options: &SkillViewOptions) -> anyhow::Result<SkillCatalogSnapshot> {
-        let revision = *self.revision.lock();
-        let key = self.collect_cache_key(options.lookup.cwd.as_deref(), options.scope, revision);
-        if let Some(cached) = self.collect_cache.lock().get(&key).cloned() {
-            return Ok((*cached).clone());
+    async fn collect(&self, options: &SkillViewOptions) -> anyhow::Result<CollectResult> {
+        const MAX_COLLECT_ATTEMPTS: usize = 2;
+        let mut attempt = 1;
+        loop {
+            let revision = *self.revision.lock();
+            let key =
+                self.collect_cache_key(options.lookup.cwd.as_deref(), options.scope, revision);
+            if let Some(cached) = self.collect_cache.lock().get(&key).cloned() {
+                return Ok(CollectResult {
+                    entries: cached,
+                    cacheable: true,
+                });
+            }
+            let result = self.collect_fresh(options).await?;
+            if *self.revision.lock() != revision {
+                if attempt < MAX_COLLECT_ATTEMPTS {
+                    attempt += 1;
+                    continue;
+                }
+                return Ok(CollectResult {
+                    entries: result.entries,
+                    cacheable: false,
+                });
+            }
+            if result.cacheable {
+                let mut cache = self.collect_cache.lock();
+                cache.insert(key, result.entries.clone());
+                if cache.len() > self.collect_cache_max_entries {
+                    cache.shift_remove_index(0);
+                }
+            }
+            return Ok(result);
         }
-        let snapshot = self.collect_fresh(options).await?;
-        if *self.revision.lock() == revision && snapshot.complete {
-            self.collect_cache
-                .lock()
-                .insert(key, Arc::new(snapshot.clone()));
-        }
-        Ok(snapshot)
     }
 
-    async fn collect_fresh(
-        &self,
-        options: &SkillViewOptions,
-    ) -> anyhow::Result<SkillCatalogSnapshot> {
+    async fn collect_fresh(&self, options: &SkillViewOptions) -> anyhow::Result<CollectResult> {
         let layers = self.layer_chain(options.scope);
-        let mut merged: std::collections::HashMap<String, SkillCandidate> =
+        let mut merged: std::collections::HashMap<String, IndexedCandidate> =
             std::collections::HashMap::new();
-        let mut complete = true;
+        let mut cacheable = true;
         for layer in &layers {
-            let (collected, cacheable) = self.collect_layer(layer, options).await?;
-            if !cacheable {
-                complete = false;
+            let (collected, layer_cacheable) = self.collect_layer(layer, &options.lookup).await?;
+            if !layer_cacheable {
+                cacheable = false;
             }
-            for candidate in collected {
-                merged.insert(candidate.name.clone(), candidate);
+            for entry in collected {
+                merged.insert(entry.candidate.name.clone(), entry);
             }
         }
-        let mut skills: Vec<SkillSummary> = merged.values().map(to_summary).collect();
-        skills.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(SkillCatalogSnapshot { skills, complete })
+        Ok(CollectResult {
+            entries: merged,
+            cacheable,
+        })
     }
 
     async fn collect_layer(
         &self,
-        layer: &SkillLayer,
-        options: &SkillViewOptions,
-    ) -> anyhow::Result<(Vec<SkillCandidate>, bool)> {
-        // Indexed candidates: (candidate, provider_order, local_order). The rank
-        // lives on the candidate; provider order breaks rank ties across
-        // providers, and local order breaks ties within one provider.
-        let mut indexed: Vec<(SkillCandidate, i64, usize)> = Vec::new();
+        layer: &Arc<SkillLayer>,
+        options: &SkillLookupOptions,
+    ) -> anyhow::Result<(Vec<IndexedCandidate>, bool)> {
+        let (mut indexed, cacheable) = self.list_layer_candidates(layer, options).await?;
+        // Lower ranks win within one layer; runtime entries (rank 250) lose to
+        // project and user ranks, equal ranks resolve by provider registration
+        // order, then by within-provider listing order.
+        indexed.sort_by(|a, b| {
+            a.candidate
+                .rank
+                .partial_cmp(&b.candidate.rank)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.provider_order.cmp(&b.provider_order))
+                .then(a.local_order.cmp(&b.local_order))
+        });
+        // Dedupe by name within one layer: first (highest-priority) wins.
+        let mut seen = std::collections::HashSet::new();
+        let mut result = Vec::new();
+        for entry in indexed {
+            if seen.insert(entry.candidate.name.clone()) {
+                result.push(entry);
+            } else {
+                tracing::warn!(
+                    "skill {:?} from {} ignored because a higher-priority skill already exists",
+                    entry.candidate.name,
+                    entry.candidate.source
+                );
+            }
+        }
+        Ok((result, cacheable))
+    }
+
+    async fn list_layer_candidates(
+        &self,
+        layer: &Arc<SkillLayer>,
+        options: &SkillLookupOptions,
+    ) -> anyhow::Result<(Vec<IndexedCandidate>, bool)> {
+        let mut indexed = Vec::new();
         let mut cacheable = true;
         let mut runtime: Vec<SkillDefinition> = layer.runtime.values().collect();
         runtime.sort_by(|a, b| a.summary.name.cmp(&b.summary.name));
         for (local_order, skill) in runtime.into_iter().enumerate() {
-            indexed.push((runtime_candidate(&skill), -1, local_order));
+            indexed.push(IndexedCandidate {
+                candidate: runtime_candidate(&skill),
+                provider: Arc::new(RuntimeSkillProvider),
+                provider_order: -1,
+                local_order,
+                layer: layer.clone(),
+            });
         }
         for (_, entry) in layer.providers.entries() {
             let provider_order = i64::try_from(entry.order).unwrap_or(i64::MAX);
-            let observation = match entry.provider.list(&options.lookup).await {
+            let observation = match entry.provider.list(options).await {
                 Ok(observation) => observation,
                 Err(error) => {
                     cacheable = false;
@@ -634,31 +683,35 @@ impl SkillRegistry {
                 cacheable = false;
             }
             for (local_order, candidate) in observation.candidates.into_iter().enumerate() {
-                indexed.push((candidate, provider_order, local_order));
+                indexed.push(IndexedCandidate {
+                    candidate,
+                    provider: entry.provider.clone(),
+                    provider_order,
+                    local_order,
+                    layer: layer.clone(),
+                });
             }
         }
-        // Lower ranks win within one layer; runtime entries (rank 250) lose to
-        // project and user ranks, and equal ranks keep runtime-first insertion order.
-        indexed.sort_by(|a, b| {
-            a.0.rank
-                .partial_cmp(&b.0.rank)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(a.1.cmp(&b.1))
-                .then(a.2.cmp(&b.2))
-        });
-        // Dedupe by name within one layer: first (highest-priority) wins.
-        let mut seen = std::collections::HashSet::new();
-        let candidates = indexed
-            .into_iter()
-            .filter_map(|(candidate, _, _)| {
-                if seen.insert(candidate.name.clone()) {
-                    Some(candidate)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        Ok((candidates, cacheable))
+        Ok((indexed, cacheable))
+    }
+
+    /// Invalidates after a stale definition load, only while the exact
+    /// registration that produced the entry is still live.
+    fn invalidate_entry(&self, entry: &IndexedCandidate) {
+        let name = entry.provider.name();
+        let still_live = entry
+            .layer
+            .providers
+            .get(name)
+            .is_some_and(|registered| Arc::ptr_eq(&registered.provider, &entry.provider));
+        if still_live {
+            self.invalidate_cache();
+        }
+    }
+
+    fn invalidate_cache(&self) {
+        *self.revision.lock() += 1;
+        self.collect_cache.lock().clear();
     }
 
     fn collect_cache_key(
@@ -809,5 +862,106 @@ mod tests {
         assert!(register_invariant(&registry).is_err());
         registration.dispose().await.expect("dispose");
         register_invariant(&registry).expect("replacement");
+    }
+
+    struct StubProvider {
+        definition: SkillDefinition,
+    }
+
+    #[async_trait::async_trait]
+    impl SkillProvider for StubProvider {
+        fn name(&self) -> &'static str {
+            "stub"
+        }
+
+        async fn list(
+            &self,
+            _options: &SkillLookupOptions,
+        ) -> anyhow::Result<SkillProviderObservation> {
+            Ok(SkillProviderObservation {
+                candidates: vec![SkillCandidate {
+                    name: self.definition.summary.name.clone(),
+                    description: self.definition.summary.description.clone(),
+                    when_to_use: self.definition.summary.when_to_use.clone(),
+                    invocation: self.definition.summary.invocation,
+                    source: self.definition.summary.source.clone(),
+                    provider: "stub".to_owned(),
+                    resource_base: self.definition.summary.resource_base.clone(),
+                    rank: 600.0,
+                    locator: Value::Null,
+                    path: self.definition.path.clone(),
+                    metadata: self.definition.metadata.clone(),
+                }],
+                complete: true,
+            })
+        }
+
+        async fn get(
+            &self,
+            _candidate: &SkillCandidate,
+            _options: &SkillLookupOptions,
+        ) -> anyhow::Result<Option<SkillDefinition>> {
+            Ok(Some(self.definition.clone()))
+        }
+    }
+
+    #[tokio::test]
+    async fn registry_merges_runtime_skills_and_provider_catalogs() {
+        let context = Context::new();
+        let registry = SkillRegistry::new(DEFAULT_COLLECT_CACHE_ENTRIES);
+
+        let mut runtime = skill();
+        runtime.summary.provider = RUNTIME_PROVIDER.to_owned();
+        registry
+            .register(&context, runtime)
+            .expect("register runtime");
+
+        let provided = SkillDefinition {
+            summary: SkillSummary {
+                name: "fs-read".to_owned(),
+                description: "Read a file".to_owned(),
+                when_to_use: None,
+                invocation: SkillInvocationPolicy {
+                    model_invocable: true,
+                    user_invocable: true,
+                },
+                source: SkillSource("bundled".to_owned()),
+                provider: "stub".to_owned(),
+                resource_base: None,
+            },
+            content: "read".to_owned(),
+            path: None,
+            metadata: None,
+        };
+        registry
+            .register_provider(
+                &context,
+                Arc::new(StubProvider {
+                    definition: provided.clone(),
+                }),
+            )
+            .expect("register provider");
+
+        let options = SkillViewOptions::default();
+        let listed = registry.list(&options).await.expect("list");
+        let names = listed
+            .iter()
+            .map(|summary| summary.name.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["dsh-badge", "fs-read"]);
+
+        let loaded = registry
+            .get("fs-read", &options)
+            .await
+            .expect("get")
+            .expect("present");
+        assert_eq!(loaded.content, "read");
+
+        let runtime_loaded = registry
+            .get("dsh-badge", &options)
+            .await
+            .expect("get")
+            .expect("present");
+        assert_eq!(runtime_loaded.summary.provider, RUNTIME_PROVIDER);
     }
 }

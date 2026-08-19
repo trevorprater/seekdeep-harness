@@ -5212,6 +5212,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "async-trait",
+ "indexmap 2.14.0",
  "parking_lot",
  "seekdeep-cordis",
  "seekdeep-invariants",
