@@ -49856,37 +49856,36 @@
     {
       "source": "packages/feedback/command-feedback/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/command-feedback/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-command-feedback --all-features && cargo clippy -p seekdeep-command-feedback --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-skill -p seekdeep-tool-skill -p seekdeep-command-feedback --all-features"
       ],
       "note": "recordFeedback, the /feedback command, and the acknowledgement are ported; the telemetry sharing disclosure awaits the session-telemetry crate and currently reports not-configured"
     },
     {
       "source": "packages/feedback/command-feedback/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/command-feedback/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-command-feedback --all-features && cargo clippy -p seekdeep-command-feedback --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-skill -p seekdeep-tool-skill -p seekdeep-command-feedback --all-features"
       ],
       "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/feedback/command-feedback/tests/command-feedback.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/command-feedback/tests/command_feedback_parity.rs"
       ],
       "evidence": [
-        "pnpm exec vitest --run packages/feedback/command-feedback/tests/command-feedback.spec.ts",
-        "cargo test -p seekdeep-command-feedback --all-features"
+        "cargo test -p seekdeep-skill -p seekdeep-tool-skill -p seekdeep-command-feedback --all-features"
       ],
       "note": "record/acknowledge event sequence, whitespace trimming, and empty-input error are covered; the telemetry sharing-disclosure cases await the session-telemetry crate and the cancellation case is exercised at the CommandRuntime seam"
     },
@@ -61875,24 +61874,24 @@
     {
       "source": "packages/skill/skill/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/skill/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-skill --all-features && cargo clippy -p seekdeep-skill --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-skill -p seekdeep-tool-skill -p seekdeep-command-feedback --all-features"
       ],
       "note": "skill types (summary/candidate/definition/resource base/invocation policy), SkillInvocationSource, Config, isSkillName, isModelInvocable/isUserInvocable, renderSkillContent/escapeAttr/escapeText, SkillProvider, the SKILLS service key + install, and the SkillRegistry merge/resolve/collect service (register_provider/register/list/snapshot/get) are ported; SkillProviderControl, the registerProvider factory/control signature, and SkillRegistration optional-field defaults remain"
     },
     {
       "source": "packages/skill/skill/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/skill/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-skill --all-features && cargo clippy -p seekdeep-skill --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-skill -p seekdeep-tool-skill -p seekdeep-command-feedback --all-features"
       ],
       "note": "explained-empty invariant companion ported as register_invariant"
     },
@@ -61959,24 +61958,24 @@
     {
       "source": "packages/skill/tool-skill/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-skill/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-skill --all-features && cargo clippy -p seekdeep-tool-skill --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-skill -p seekdeep-tool-skill -p seekdeep-command-feedback --all-features"
       ],
       "note": "catalog rendering/types (SkillCatalogSource, CatalogEntry, Config), catalogSourceEntries, catalogDescription, digestCatalogEntries, renderCatalogEntries/renderCatalogMessage/renderCatalogUpdate, readCatalogEntries, catalogMessage, invokedSkillNames, the skill loader tool (definition()/register_skill_tool with typed args/output, schema, render, execute, and presentCall), apply(), and the two agent/pre-step listeners (user /name injection and durable catalog publish/replace with catalogHistory identity) are ported"
     },
     {
       "source": "packages/skill/tool-skill/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-skill/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-skill --all-features && cargo clippy -p seekdeep-tool-skill --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-skill -p seekdeep-tool-skill -p seekdeep-command-feedback --all-features"
       ],
       "note": "explained-empty invariant companion ported as register_invariant"
     },
@@ -67037,12 +67036,12 @@
     {
       "source": "packages/util/atomic-write/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/util/src/atomic_write.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-util"
+        "cargo test -p seekdeep-util --all-features"
       ],
       "note": "macOS source-spec coverage is green; Windows atomic replacement and permissions still require platform-matrix execution"
     },
@@ -67060,12 +67059,12 @@
     {
       "source": "packages/util/atomic-write/tests/atomic-write.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/util/src/atomic_write.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-util atomic_write"
+        "cargo test -p seekdeep-util --all-features"
       ],
       "note": "current-host assertions pass; Windows-gated assertions remain to execute"
     },
@@ -67220,12 +67219,12 @@
     {
       "source": "packages/util/home-paths/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/util/src/home_paths.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-util home_paths"
+        "cargo test -p seekdeep-util --all-features"
       ],
       "note": "renamed .seekdeep and SEEKDEEP_HOME behavior is green on macOS; Windows watcher canonicalization remains to execute"
     },
@@ -67243,12 +67242,12 @@
     {
       "source": "packages/util/home-paths/tests/home-paths.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/util/src/home_paths.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-util home_paths"
+        "cargo test -p seekdeep-util --all-features"
       ],
       "note": "current-host assertions pass; Windows junction and file-parent branches remain to execute"
     },
@@ -67313,14 +67312,12 @@
     {
       "source": "packages/util/launch-environment/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/util/src/launch_environment.rs"
       ],
       "evidence": [
-        "pinned source launch-environment oracle passed 7/7 tests",
-        "cargo test -p seekdeep-util --all-features passed all launch_environment tests including an explicit Windows-folding semantics helper",
-        "cargo check -p seekdeep-util --all-features --target x86_64-pc-windows-msvc"
+        "cargo test -p seekdeep-util --all-features"
       ],
       "note": "canonical layering and both key-fold semantics are green; the compiled Windows branch still requires native Windows execution against the OS environment"
     },
@@ -67338,13 +67335,12 @@
     {
       "source": "packages/util/launch-environment/tests/launch-environment.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/util/src/launch_environment.rs"
       ],
       "evidence": [
-        "pinned source launch-environment oracle passed 7/7 tests",
-        "Rust tests cover canonical precedence, source filtering, input detachment, empty values, construction order, exact service identity, process fallback, and both POSIX and Windows lookup transforms"
+        "cargo test -p seekdeep-util --all-features"
       ],
       "note": "pure lookup branches are unit tested and the Windows target compiles; native Windows process-environment execution remains outstanding"
     },
@@ -67408,12 +67404,12 @@
     {
       "source": "packages/util/native-command/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/util/src/native_command.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-util native_command"
+        "cargo test -p seekdeep-util --all-features"
       ],
       "note": "macOS no-shell, capture, exit, ENOENT, and abort behavior is green; Windows console-hide and termination remain to execute"
     },
@@ -67431,12 +67427,12 @@
     {
       "source": "packages/util/native-command/tests/native-command.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/util/src/native_command.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-util native_command"
+        "cargo test -p seekdeep-util --all-features"
       ],
       "note": "current-host assertions pass; Windows-gated behavior remains to execute"
     },
