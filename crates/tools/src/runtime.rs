@@ -352,11 +352,14 @@ impl Default for ToolRuntimeConfig {
 }
 
 /// Per-scope intersection filter over inherited tools.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolRestriction {
     /// Inherited names retained by this restriction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allow: Option<Vec<String>>,
     /// Inherited names removed by this restriction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deny: Option<Vec<String>>,
 }
 
