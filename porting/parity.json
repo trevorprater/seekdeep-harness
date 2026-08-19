@@ -25180,7 +25180,9 @@
     {
       "source": "packages/core/session/tests/fork.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/session_store.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/session/tests/fork.spec.ts", "cargo test -p seekdeep-core session_store::tests::fork --all-features", "empty lineage, default/earlier boundaries, log-only tail, bracket seed boundary, every turn/end reason, invalid boundaries, detached/stale sources, open-turn slices, and child-id collisions are covered; the corrupted-live-seq case is unreachable by construction (seq contiguity is enforced) and the fork-by-id overload is subsumed by the detached-object path"]
     },
     {
       "source": "packages/core/session/tests/gen-persistence-catalog.spec.ts",
