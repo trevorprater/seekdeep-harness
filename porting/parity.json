@@ -24710,32 +24710,44 @@
     {
       "source": "packages/core/agent-loop/src/agent.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/controller.rs", "crates/agent-loop/src/driver.rs"],
+      "evidence": ["cargo test -p seekdeep-agent-loop --all-features && cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings", "ReactLoopAgent maps to LoopAgent (controller) and DefaultAgentDriver (driver) with 31 inline loop/interception/resume tests"]
     },
     {
       "source": "packages/core/agent-loop/src/constants.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-agent-loop --all-features && cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings", "DEFAULT_MAX_PARALLEL_TOOL_CALLS = 10 is exported from lib.rs"]
     },
     {
       "source": "packages/core/agent-loop/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/factory.rs", "crates/agent-loop/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-agent-loop --all-features && cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings", "AgentLoop, AgentSetup, CreateAgentOptions, ResumeAgentOptions, AgentHandle, and Config are ported in factory.rs"]
     },
     {
       "source": "packages/core/agent-loop/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/invariant.rs"],
+      "evidence": ["cargo test -p seekdeep-agent-loop --all-features && cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings", "agent-loop-invariant maps to validate_agent_loop_request and install_request_invariant"]
     },
     {
       "source": "packages/core/agent-loop/src/runtime-context.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/runtime_context.rs"],
+      "evidence": ["cargo test -p seekdeep-agent-loop --all-features && cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings", "RuntimeContextProjection with inline projection tests"]
     },
     {
       "source": "packages/core/agent-loop/src/tool-calls.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/tool_calls.rs"],
+      "evidence": ["cargo test -p seekdeep-agent-loop --all-features && cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings", "executeToolCalls maps to ToolCall/ToolCallBatch execution with inline tool-order tests"]
     },
     {
       "source": "packages/core/agent-loop/tests/agent-initiator.spec.ts",
@@ -24845,7 +24857,9 @@
     {
       "source": "packages/core/agent-loop/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/Cargo.toml", "crates/agent-loop/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-agent-loop --all-features && cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings", "build configuration is represented by the Rust 2024 workspace crate manifest and module layout"]
     },
     {
       "source": "packages/core/agent-tool-presentation/README.i18n.yaml",
