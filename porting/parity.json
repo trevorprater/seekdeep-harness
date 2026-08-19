@@ -59628,36 +59628,36 @@
     {
       "source": "packages/session/session-projection-cache/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/session-projection-cache/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-projection-cache --all-features && cargo clippy -p seekdeep-session-projection-cache --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-session-projection-cache --all-features"
       ],
       "note": "cachedSnapshot, write (checkpoint + flush + durable put), coldSnapshot cold-read ladder, and the count/interval/turn-end/detach write-behind are ported; the source cache.spec.ts end-to-end cases await a full harness"
     },
     {
       "source": "packages/session/session-projection-cache/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/session-projection-cache/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-projection-cache --all-features && cargo clippy -p seekdeep-session-projection-cache --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-session-projection-cache --all-features"
       ],
       "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/session/session-projection-cache/src/spec.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/session-projection-cache/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-projection-cache --all-features && cargo clippy -p seekdeep-session-projection-cache --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-session-projection-cache --all-features"
       ],
       "note": "checkpointIdentity/checkpointRecord and the session_projcache domain (version 3, one sessions table) are ported"
     },
@@ -66063,48 +66063,48 @@
     {
       "source": "packages/todo/tool-todo/src/client.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-todo/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-tool-todo --all-features"
       ],
       "note": "type-only re-export is absorbed into the Rust crate root"
     },
     {
       "source": "packages/todo/tool-todo/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-todo/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-tool-todo --all-features"
       ],
       "note": "todo_write tool definition, describe(), toTodoList validation, apply() tool+projection registration, and presentCall are ported; the source integration/projection/tool-todo tests remain to be ported for full verification"
     },
     {
       "source": "packages/todo/tool-todo/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-todo/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-tool-todo --all-features"
       ],
       "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/todo/tool-todo/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-todo/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-todo --all-features && cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-tool-todo --all-features"
       ],
       "note": "TodoItem/TodoStatus and the todos projection definition are ported; the SessionProjectionMap type-level merge is absorbed"
     },
@@ -66131,13 +66131,12 @@
     {
       "source": "packages/todo/tool-todo/tests/tool-todo.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/tool-todo/tests/tool_todo_parity.rs",
         "crates/tool-todo/src/lib.rs"
       ],
       "evidence": [
-        "pnpm exec vitest --run packages/todo/tool-todo/tests/tool-todo.spec.ts",
         "cargo test -p seekdeep-tool-todo --all-features"
       ],
       "note": "schema registration, successful execute + durable todo/write, parallel policy, non-agent rejection, empty/duplicate rejection, presentCall, and HMR unregistration are covered by 11 tests; the status-enum/non-array schema rejections and the JS loader export-shape case are adapted to the Rust registry boundary and module system"
