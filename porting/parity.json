@@ -27366,7 +27366,10 @@
     {
       "source": "packages/fs/tool-fs/src/read-render.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-fs/src/read_render.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"],
+      "note": "buildWindow, formatReadOutput, langFromPath, FsReadMeta, and readMetaFromMeta are ported"
     },
     {
       "source": "packages/fs/tool-fs/src/read-target.ts",
