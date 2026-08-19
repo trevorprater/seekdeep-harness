@@ -2876,7 +2876,13 @@
     {
       "source": ".agents/notes/archived/testing/2026-06-20-remove-redundant-snapshot-log-expected-output.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/archived/testing/2026-06-20-remove-redundant-snapshot-log-expected-output.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/archived/testing/2026-06-20-remove-redundant-snapshot-log-expected-output.zh.md",
@@ -2891,7 +2897,13 @@
     {
       "source": ".agents/notes/archived/testing/2026-06-22-fork-snapshot-scenarios.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/archived/testing/2026-06-22-fork-snapshot-scenarios.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/archived/testing/2026-06-22-fork-snapshot-scenarios.zh.md",
@@ -2906,7 +2918,13 @@
     {
       "source": ".agents/notes/archived/testing/2026-07-04-hook-snapshot-matrix.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/archived/testing/2026-07-04-hook-snapshot-matrix.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/archived/testing/2026-07-04-hook-snapshot-matrix.zh.md",
@@ -2963,7 +2981,13 @@
     {
       "source": ".agents/notes/archived/testing/2026-07-08-shared-acp-snapshot-package.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/archived/testing/2026-07-08-shared-acp-snapshot-package.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/archived/testing/2026-07-08-shared-acp-snapshot-package.zh.md",
@@ -2978,7 +3002,13 @@
     {
       "source": ".agents/notes/archived/testing/2026-07-18-tui-terminal-state-snapshots.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/archived/testing/2026-07-18-tui-terminal-state-snapshots.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/archived/testing/2026-07-18-tui-terminal-state-snapshots.zh.md",
@@ -5976,7 +6006,13 @@
     {
       "source": ".agents/notes/implemented/bug-fix/2026-07-27-stable-snapshot-refresh-volatiles.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/implemented/bug-fix/2026-07-27-stable-snapshot-refresh-volatiles.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/implemented/bug-fix/2026-07-27-stable-snapshot-refresh-volatiles.zh.md",
@@ -13425,7 +13461,13 @@
     {
       "source": ".agents/notes/implemented/testing/2026-06-19-acp-snapshot-tests.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/implemented/testing/2026-06-19-acp-snapshot-tests.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/implemented/testing/2026-06-19-acp-snapshot-tests.zh.md",
@@ -13482,7 +13524,13 @@
     {
       "source": ".agents/notes/implemented/testing/2026-06-22-subagent-snapshot-replay.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/implemented/testing/2026-06-22-subagent-snapshot-replay.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/implemented/testing/2026-06-22-subagent-snapshot-replay.zh.md",
@@ -13581,7 +13629,13 @@
     {
       "source": ".agents/notes/implemented/testing/2026-07-30-web-browser-snapshot-ci-gate.md",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/notes/implemented/testing/2026-07-30-web-browser-snapshot-ci-gate.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/notes/implemented/testing/2026-07-30-web-browser-snapshot-ci-gate.zh.md",
@@ -14389,102 +14443,222 @@
     {
       "source": ".agents/skills/dsh-archive-agent-notes/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-archive-agent-notes/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-archive-agent-notes/agents/openai.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-archive-agent-notes/agents/openai.yaml"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-code-review/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-code-review/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-doc-site-sync/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-doc-site-sync/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-doc-site-sync/agents/openai.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-doc-site-sync/agents/openai.yaml"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-doc-standards/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-doc-standards/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-find-simplifications/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-find-simplifications/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-merging-stacked-prs/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-merging-stacked-prs/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-pre-push-checks/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-pre-push-checks/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-pre-push-checks/agents/openai.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-pre-push-checks/agents/openai.yaml"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-prose-standard/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-prose-standard/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-prose-standard/agents/openai.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-prose-standard/agents/openai.yaml"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-prose-standard/references/examples.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-prose-standard/references/examples.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-translate-docs/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-translate-docs/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-translate-docs/agents/openai.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-translate-docs/agents/openai.yaml"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-trim-cot-leakage/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-trim-cot-leakage/references/examples.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-trim-cot-leakage/references/examples.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/dsh-trim-cot-leakage/references/recall-batteries.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/seekdeep-trim-cot-leakage/references/recall-batteries.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/record-browser-gif/SKILL.md",
       "kind": "documentation",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/record-browser-gif/SKILL.md"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/record-browser-gif/agents/openai.yaml",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        ".agents/skills/record-browser-gif/agents/openai.yaml"
+      ],
+      "evidence": [
+        "mechanical documentation rename port (dsh to seekdeep)"
+      ]
     },
     {
       "source": ".agents/skills/record-browser-gif/scripts/encode_gif.py",
