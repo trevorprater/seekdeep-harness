@@ -24145,7 +24145,10 @@
     {
       "source": "packages/compaction/compaction/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/compaction/src/invariant.rs"],
+      "evidence": ["cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"],
+      "note": "compaction start/summary/end trace validation, checkpoint correlation, turn-boundary and owner checks, orphan-start handling, and pre-commit staging are ported; the source spec's differential harness test is not yet ported"
     },
     {
       "source": "packages/compaction/compaction/src/tool-pairing.ts",
