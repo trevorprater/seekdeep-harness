@@ -965,6 +965,7 @@ fn now_millis() -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use seekdeep_llm::MessageSource;
     use serde_json::json;
 
     use super::*;
@@ -1222,5 +1223,176 @@ mod tests {
             session.request_context().as_ref().map(|c| c.context_window),
             Some(Some(128_000))
         );
+    }
+
+    fn user_text(session: &Session, text: &str) -> SessionEvent {
+        let message = Message::user(
+            vec![ContentBlock::Text {
+                text: text.to_owned(),
+            }],
+            MessageSource::user(),
+        );
+        session
+            .append(
+                "user/message",
+                serde_json::to_value(message).expect("serialize user message"),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("user message")
+    }
+
+    fn assistant_text(session: &Session, text: &str, step: i64) -> SessionEvent {
+        let message = Message::assistant(
+            vec![ContentBlock::Text {
+                text: text.to_owned(),
+            }],
+            "mock",
+            "mock",
+        );
+        session
+            .append(
+                "assistant/message",
+                json!({"turn": 1, "step": step, "message": message}),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("assistant message")
+    }
+
+    fn scratch(session: &Arc<Session>) -> Vec<Message> {
+        Session::create(
+            &SessionId::new(format!(
+                "{}-scratch-{}",
+                session.id().as_str(),
+                session.seq()
+            )),
+            Some(session.events()),
+            None,
+        )
+        .expect("scratch session")
+        .derive_messages()
+    }
+
+    #[test]
+    fn derive_messages_stays_value_equal_to_scratch_replay_as_the_log_grows() {
+        let session = Session::create(&SessionId::new("cache-grow"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        user_text(&session, "one");
+        assert_eq!(session.derive_messages(), scratch(&session));
+
+        user_text(&session, "two");
+        assistant_text(&session, "reply", 1);
+        assert_eq!(session.derive_messages(), scratch(&session));
+
+        session
+            .append(
+                "assistant/message",
+                json!({"turn": 1, "step": 2, "message": Message::assistant(vec![], "mock", "mock")}),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("empty assistant");
+        assert_eq!(session.derive_messages(), scratch(&session));
+    }
+
+    #[test]
+    fn derive_messages_rebuilds_on_a_surface_replace() {
+        let session =
+            Session::create(&SessionId::new("cache-replace"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        user_text(&session, "one");
+        user_text(&session, "two");
+        let before_replace = session.derive_messages();
+        assert_eq!(before_replace.len(), 2);
+
+        let nodes = session.surface_nodes();
+        let summary = Message::user(
+            vec![ContentBlock::Text {
+                text: "summary".to_owned(),
+            }],
+            MessageSource::plugin("compact"),
+        );
+        session
+            .append(
+                "user/message",
+                serde_json::to_value(summary).expect("serialize summary"),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::replace(nodes[0], nodes[1])),
+                    source_event_seqs: Some(nodes.clone()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("replace");
+
+        assert_eq!(session.derive_messages().len(), 1);
+        assert_eq!(session.derive_messages(), scratch(&session));
+        assert_eq!(before_replace.len(), 2);
+    }
+
+    #[test]
+    fn derive_messages_returns_a_fresh_array_per_call() {
+        let session =
+            Session::create(&SessionId::new("cache-snapshot"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        user_text(&session, "one");
+        let first = session.derive_messages();
+        user_text(&session, "two");
+        let second = session.derive_messages();
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 2);
+    }
+
+    #[test]
+    fn derive_event_message_matches_the_full_derivation_projection() {
+        let session = Session::create(&SessionId::new("per-event"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        let event = user_text(&session, "hi");
+        let projected = derive_event_message(&event).expect("projected");
+        let full = session.derive_messages();
+        assert_eq!(projected, full[full.len() - 1].clone());
+    }
+
+    #[test]
+    fn derive_event_message_projects_none_for_boundaries_and_empty_assistant() {
+        let session =
+            Session::create(&SessionId::new("per-event-null"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        let boundary = session
+            .append(
+                "step/start",
+                json!({"turn": 1, "step": 1}),
+                AppendOptions::default(),
+            )
+            .expect("step start");
+        assert!(derive_event_message(&boundary).is_none());
+
+        let empty = session
+            .append(
+                "assistant/message",
+                json!({"turn": 1, "step": 1, "message": Message::assistant(vec![], "mock", "mock")}),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("empty assistant");
+        assert!(derive_event_message(&empty).is_none());
     }
 }

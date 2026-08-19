@@ -25175,7 +25175,9 @@
     {
       "source": "packages/core/session/tests/derived-cache.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/session.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/session/tests/derived-cache.spec.ts", "cargo test -p seekdeep-core session::tests::derive --all-features", "scratch-replay equality, surface-replace rebuild, fresh-array snapshots, per-event projection, and boundary/empty-assistant nulls are covered; frozen-content sharing is replaced by owned-clone detachment (Rust immutability by construction)"]
     },
     {
       "source": "packages/core/session/tests/fork.spec.ts",
