@@ -24935,22 +24935,30 @@
     {
       "source": "packages/core/agent/src/consumed-work.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/consumed_work.rs"],
+      "evidence": ["cargo test -p seekdeep-agent --all-features && cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings", "ConsumedWork and foldConsumedWork with 2 inline tests"]
     },
     {
       "source": "packages/core/agent/src/dispatch.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/dispatch.rs", "crates/agent/src/registry.rs"],
+      "evidence": ["cargo test -p seekdeep-agent --all-features && cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings", "AgentEvent, AgentEvents, and assemble_context_for are ported; the Scoped<Agent> carrier (agentCarrier/agentEvents) rides the Context-based scope routing"]
     },
     {
       "source": "packages/core/agent/src/inbox.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/inbox.rs"],
+      "evidence": ["cargo test -p seekdeep-agent --all-features && cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings", "Inbox, InboxTarget, InboxNotifications, and InboxError with 3 inline splice/replay/replacement tests"]
     },
     {
       "source": "packages/core/agent/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/lib.rs", "crates/agent/src/registry.rs"],
+      "evidence": ["cargo test -p seekdeep-agent --all-features && cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings", "module re-exports, AgentSetup, AgentHandle, AgentFactory, and AgentRegistry with 8 inline registry lifecycle tests"]
     },
     {
       "source": "packages/core/agent/src/invariant.ts",
@@ -24960,17 +24968,23 @@
     {
       "source": "packages/core/agent/src/model-selection.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/model_selection.rs"],
+      "evidence": ["cargo test -p seekdeep-agent --all-features && cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings", "ModelSelection, ModelSelectionRef, and installModelSelection with 1 inline snapshot test"]
     },
     {
       "source": "packages/core/agent/src/runtime-types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/runtime_types.rs"],
+      "evidence": ["cargo test -p seekdeep-agent --all-features && cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings", "Agent, AgentOptions, CancelOptions, AgentStatus, PreStepDecision, RequestErrorAction, SessionStartSource, and AgentController"]
     },
     {
       "source": "packages/core/agent/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/inbox.rs"],
+      "evidence": ["cargo test -p seekdeep-agent --all-features && cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings", "InboxTarget is represented by the InboxTarget enum"]
     },
     {
       "source": "packages/core/agent/tests/agent-initiator.spec.ts",
@@ -25010,7 +25024,9 @@
     {
       "source": "packages/core/agent/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/Cargo.toml", "crates/agent/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-agent --all-features && cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings", "build configuration is represented by the Rust 2024 workspace crate manifest and module layout"]
     },
     {
       "source": "packages/core/scope/README.i18n.yaml",
