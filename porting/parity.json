@@ -25100,52 +25100,72 @@
     {
       "source": "packages/core/session/src/chunk-rows.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/chunk_rows.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "compact durable encoding of assistant delta runs: ChunkRow, StorageRecord, packChunkRuns, decodeStorageRecord, and 4 inline round-trip/rejection tests"]
     },
     {
       "source": "packages/core/session/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/lib.rs", "crates/core/src/session.rs", "crates/core/src/session_store.rs", "crates/session-persistence/src/stored_events.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "module re-exports, Session and SessionStore classes, adoptSessionEvent/snapshotSessionEvent (stored-events normalization and owned clone) are all represented"]
     },
     {
       "source": "packages/core/session/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/invariant.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "validateSessionEvents, installSessionInvariants, and SessionEventBalance with 2 inline balance/turn-boundary tests"]
     },
     {
       "source": "packages/core/session/src/json.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/session.rs", "crates/session-persistence/src/stored_events.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "lossless-JSON contract is enforced by serde_json::Value (which cannot represent -0 or non-finite numbers); snapshotJsonValue/snapshotSessionEvent are owned clones and stored-events detachment"]
     },
     {
       "source": "packages/core/session/src/known-event-types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/known_event_types.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "KNOWN_SESSION_EVENT_TYPES vocabulary with 1 inline membership test"]
     },
     {
       "source": "packages/core/session/src/preparation.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/preparation.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "SessionPreparation ownership with a one-shot release callback and 1 inline release test"]
     },
     {
       "source": "packages/core/session/src/repair.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/repair.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "interruptedTurnClosers, TOOL_NOT_STARTED, and TOOL_OUTCOME_UNKNOWN with 3 inline closer/ordering tests"]
     },
     {
       "source": "packages/core/session/src/request-header.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/request_header.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "canonicalHeader, headerEquals, and foldRequestHeader with 2 inline canonicalization/equality tests"]
     },
     {
       "source": "packages/core/session/src/surface.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/session.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "isSurfaceEligibleType, isSurfaceEvent, isAppendSurfaceEvent, isReplacementSurfaceEvent, foldSurface, deriveEventMessage, and SurfaceOp with a fold_surface inline test"]
     },
     {
       "source": "packages/core/session/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/session.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "SessionId, SessionHeader, SessionEvent, SessionEventType, SurfaceOp, SurfaceEvent, EpochHeader, and TurnEndReason types"]
     },
     {
       "source": "packages/core/session/tests/chunk-rows.spec.ts",
@@ -25220,7 +25240,9 @@
     {
       "source": "packages/core/session/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/Cargo.toml", "crates/core/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-core --all-features && cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings", "build configuration is represented by the Rust 2024 workspace crate manifest and module layout"]
     },
     {
       "source": "packages/core/system-prompt/README.i18n.yaml",
