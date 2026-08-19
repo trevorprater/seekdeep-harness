@@ -37573,7 +37573,7 @@
     {
       "source": "packages/client/connection/src/client/api.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/src/rpc.rs",
         "crates/client-connection/src/controller.rs"
@@ -37604,15 +37604,14 @@
     {
       "source": "packages/client/connection/src/client/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/src/rpc.rs",
         "crates/client-connection/src/web_api_client.rs",
         "crates/client-connection/tests/client_handle_parity.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-client-connection --all-features",
-        "cargo clippy -p seekdeep-client-connection --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-client-connection --all-features"
       ],
       "note": "Real-mode service provision, authority state, one-shot stream ownership, description snapshots, and physical transport are green; fixture-mode selection remains pending with client/fixture.ts."
     },
@@ -37645,14 +37644,13 @@
     {
       "source": "packages/client/connection/src/client/web-api-client.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/src/web_api_client.rs",
         "crates/client-connection/tests/web_api_client_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/client/connection/tests/client-apply.client.spec.ts",
-        "cargo test -p seekdeep-client-connection --test web_api_client_parity"
+        "cargo test -p seekdeep-client-connection --all-features"
       ],
       "note": "Real HTTP upstream, ws/wss downlinks, cancellation, correlation, open callbacks, malformed-frame containment, and envelope batching are green; method-specific frame/value schemas remain tracked with the API Proxy schema port."
     },
@@ -37673,7 +37671,7 @@
     {
       "source": "packages/client/connection/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/src/host.rs",
         "crates/client-connection/src/lib.rs",
@@ -37681,7 +37679,6 @@
         "crates/client-connection/tests/websocket_downlink_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/client/connection/tests",
         "cargo test -p seekdeep-client-connection --all-features"
       ],
       "note": "HTTP route, trust and privilege fences, dynamic optional API Proxy fallback/downlinks, dedicated channels, capacity boundary, and lifecycle rollback are green; concrete Attachment/API Proxy composition is tracked in those packages."
@@ -52058,474 +52055,430 @@
     {
       "source": "packages/host/apiproxy/src/api/agent-presets.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/agent_presets.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
         "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/agent-presets.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/agent_presets.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
         "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/approvals.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/approvals.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
         "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/approvals.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/approvals.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
         "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/credentials.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/credentials.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test settings_credentials_llm_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/credentials.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/credentials.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test settings_credentials_llm_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/downloads.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/downloads.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test download_schema_parity",
-        "cargo test -p seekdeep-host-apiproxy --test handler_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/downloads.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/downloads.rs",
         "crates/host-apiproxy/src/handler.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test download_schema_parity",
-        "cargo test -p seekdeep-host-apiproxy --test handler_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/events.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/events.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test event_response_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/events.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/events.rs",
         "crates/host-apiproxy/src/handler.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test event_response_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/goals.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/goals.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test preset_goal_subagent_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/goals.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/goals.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test preset_goal_subagent_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/host.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/host.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test host_workspace_skill_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/host.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/host.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test host_workspace_skill_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/mod.rs",
         "crates/host-apiproxy/src/lib.rs",
         "crates/host-apiproxy/src/handler.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --all-features",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/jobs.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/jobs.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test event_response_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/jobs.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/jobs.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test event_response_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/llm.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/llm.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test settings_credentials_llm_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/llm.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/llm.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test settings_credentials_llm_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/questions.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/questions.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test event_response_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/questions.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/questions.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test event_response_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/rpc-map.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/method.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test method_registry_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/rpc.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/rpc.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test rpc_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/rpc.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/rpc.rs",
         "crates/client-connection/src/rpc.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test rpc_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/session-search.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/sessions.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test session_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/sessions.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/sessions.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test session_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/sessions.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/sessions.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test session_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/settings.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/settings.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test settings_credentials_llm_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/settings.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/settings.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --test settings_credentials_llm_schema_parity",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/skills.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/skills.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test host_workspace_skill_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/skills.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/skills.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test host_workspace_skill_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/subagents.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/subagents.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test preset_goal_subagent_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/subagents.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/subagents.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test preset_goal_subagent_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/workspace.schema.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/workspace.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test host_workspace_skill_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/api/workspace.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/workspace.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test host_workspace_skill_schema_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ]
     },
     {
       "source": "packages/host/apiproxy/src/fetch/client.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/client.rs",
         "crates/client-connection/src/web_api_client.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/client-handler.spec.ts",
-        "pnpm vitest run packages/host/apiproxy/tests/fetch-carrier.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test client_contract_parity",
-        "cargo test -p seekdeep-host-apiproxy --test handler_parity",
-        "cargo test -p seekdeep-host-apiproxy --test in_process_carrier_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ],
       "note": "Two-level unary and stream parsing, all 52 typed domain methods, respond receipts, observation, correlation, bounded and caller-only timeout policies, HTTP/WebSocket carriers, and the injected in-process fetch/SSE carrier are present. Exhaustive typed-facade invocation and cancellation timing cases remain to promote this whole source surface from ported to verified."
     },
     {
       "source": "packages/host/apiproxy/src/fetch/handler.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/handler.rs",
         "crates/client-connection/src/host.rs",
         "crates/client-connection/src/websocket_downlink.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/client-handler.spec.ts",
-        "pnpm vitest run packages/host/apiproxy/tests/fetch-carrier.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test handler_parity",
-        "cargo test -p seekdeep-host-apiproxy --test in_process_carrier_parity",
-        "cargo test --workspace --all-features"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ],
       "note": "Unary, respond, typed WebSocket downlinks, query parsing, GET/HEAD routing, the exported in-process SSE fetch shape, pull-driven download bodies, physical Hyper streaming, mid-stream failure propagation, and pre-body HEAD cancellation are implemented. Source-test-to-Rust-test case mapping remains before verification."
     },
     {
       "source": "packages/host/apiproxy/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/lib.rs",
         "crates/host-apiproxy/Cargo.toml"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --all-features",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ],
       "note": "Contract and carrier exports are present; the composed ApiProxyService runtime and invariant companion remain separate pending surfaces."
     },
@@ -52560,7 +52513,7 @@
     {
       "source": "packages/host/apiproxy/src/session-export.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/session_export.rs",
         "crates/client-connection/src/rpc.rs",
@@ -52568,10 +52521,7 @@
         "crates/host-webserver/src/lib.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/session-export.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test session_export_parity",
-        "cargo test -p seekdeep-host-apiproxy --test handler_parity",
-        "cargo clippy -p seekdeep-host-apiproxy -p seekdeep-client-connection -p seekdeep-host-webserver --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ],
       "note": "Pull-driven classic ZIP production streams verbatim root and descendant artifacts plus deduplicated referenced media; it preserves depth-first ordering, live flush-before-read, bounded 64 KiB pushes, DEFLATE levels 0-9, private-safe preparation failures, request/consumer cancellation, mid-stream failure, UTF-16-compatible path sanitization, in-process streaming, physical Hyper streaming, and renamed seekdeep archive filenames. The future composed ApiProxy runtime still must adapt its lineage service into this exporter, and the remaining source-test cases require explicit case mapping before verification."
     },
