@@ -7,9 +7,13 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
+tracing.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

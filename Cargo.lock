@@ -4409,6 +4409,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-command-feedback"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-agent",
+ "seekdeep-anonymous-user-id",
+ "seekdeep-commands",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-commands"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -4787,6 +4804,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-message-feedback"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-session-persistence",
+ "seekdeep-storage-domain",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "seekdeep-persona"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5043,6 +5080,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-session-projection-cache"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-session-persistence",
+ "seekdeep-session-projection",
+ "seekdeep-storage-domain",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "seekdeep-session-stats"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5147,6 +5204,23 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-skill"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5489,6 +5563,25 @@ dependencies = [
  "seekdeep-llm",
  "seekdeep-tools",
  "seekdeep-util",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-tool-todo"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-session-projection",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "serde",
  "serde_json",
  "tokio",
 ]
