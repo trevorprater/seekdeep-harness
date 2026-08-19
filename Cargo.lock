@@ -5577,6 +5577,8 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-llm",
+ "seekdeep-tools",
+ "seekdeep-util",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
