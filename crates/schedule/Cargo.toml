@@ -7,10 +7,16 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
 futures.workspace = true
+icu_timezone.workspace = true
+indexmap.workspace = true
 parking_lot.workspace = true
+regex.workspace = true
 seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
 seekdeep-core = { path = "../core" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-util = { path = "../util" }

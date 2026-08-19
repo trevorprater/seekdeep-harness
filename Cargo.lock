@@ -5067,11 +5067,17 @@ name = "seekdeep-schedule"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "chrono",
+ "chrono-tz",
  "futures",
+ "icu_timezone",
+ "indexmap 2.14.0",
  "parking_lot",
+ "regex",
  "seekdeep-agent",
  "seekdeep-cordis",
  "seekdeep-core",
+ "seekdeep-invariants",
  "seekdeep-scope",
  "seekdeep-util",
  "serde",
