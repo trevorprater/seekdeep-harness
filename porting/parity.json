@@ -17240,22 +17240,34 @@
     {
       "source": "packages/api/remotes/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/api-remotes/src/lib.rs"],
+      "evidence": ["cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"],
+      "note": "re-exports and apply() ported; the forwarded-event shape assertion is compile-time-only"
     },
     {
       "source": "packages/api/remotes/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/api-remotes/src/invariant.rs"],
+      "evidence": ["cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/api/remotes/src/remote-events.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/api-remotes/src/remote_events.rs"],
+      "evidence": ["cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"],
+      "note": "API_REMOTE_FORWARDED_EVENTS allowlist ported"
     },
     {
       "source": "packages/api/remotes/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/api-remotes/src/types.rs"],
+      "evidence": ["cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"],
+      "note": "ApiRemoteForwardedEvent type projection ported"
     },
     {
       "source": "packages/api/remotes/tests/agent-lookup.spec.ts",
