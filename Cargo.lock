@@ -5242,6 +5242,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-session-title"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "regress 0.11.1",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-settings"
 version = "0.1.0-rc.5"
 dependencies = [

@@ -62,6 +62,7 @@ members = [
   "crates/session-projection-cache",
   "crates/session-stats",
   "crates/session-telemetry",
+  "crates/session-title",
   "crates/spill",
   "crates/spill-local",
   "crates/spill-policy",

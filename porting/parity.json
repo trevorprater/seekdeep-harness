@@ -60371,7 +60371,14 @@
     {
       "source": "packages/session/session-title/src/client.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/src/client.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/src/index.ts",
@@ -60381,22 +60388,50 @@
     {
       "source": "packages/session/session-title/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/src/normalize.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/src/normalize.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/tests/persistence.spec.ts",
