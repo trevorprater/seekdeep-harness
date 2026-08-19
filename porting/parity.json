@@ -27659,7 +27659,10 @@
     {
       "source": "packages/goal/goal/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/goal/src/index.rs"],
+      "evidence": ["cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"],
+      "note": "applyGoalProjection, resolveMaxGoalRounds, resolveObjective, resolveCreateGoal, resolveBlockReason, and Config/ResolvedConfig are ported; the GoalService class (Typert remote + agent registry + session append) remains"
     },
     {
       "source": "packages/goal/goal/src/invariant.ts",
