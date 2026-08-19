@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 regex.workspace = true
+seekdeep-cordis = { path = "../cordis" }
 seekdeep-fs = { path = "../fs" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-sandbox = { path = "../sandbox" }
