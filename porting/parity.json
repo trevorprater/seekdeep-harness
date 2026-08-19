@@ -27350,7 +27350,10 @@
     {
       "source": "packages/fs/tool-fs/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-fs/src/invariant.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/fs/tool-fs/src/read-image.ts",
