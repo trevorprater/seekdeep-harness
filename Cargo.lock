@@ -5282,6 +5282,8 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-util",
+ "serde",
  "serde_json",
  "tokio",
 ]

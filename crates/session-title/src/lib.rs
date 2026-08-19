@@ -3,9 +3,15 @@
 
 pub mod client;
 pub mod invariant;
+pub mod model;
 pub mod normalize;
 pub mod types;
 
+pub use model::{
+    Config as SessionTitleConfig, SessionTitleAutomaticMode, SessionTitleEventData,
+    SessionTitleModelProvenance, SessionTitleProviderId, SessionTitleSnapshot, SessionTitleSource,
+    SessionTitleUserMessage,
+};
 pub use normalize::{fallback_session_title, normalize_session_title, truncate_title_utf8};
 pub use types::TitleProjection;
 
