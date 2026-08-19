@@ -24705,7 +24705,9 @@
     {
       "source": "packages/core/agent-loop/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/Cargo.toml"],
+      "evidence": ["crates/agent-loop/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/agent-loop/src/agent.ts",
@@ -24852,7 +24854,9 @@
     {
       "source": "packages/core/agent-loop/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/Cargo.toml"],
+      "evidence": ["crates/agent-loop/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/agent-loop/tsdown.config.ts",
@@ -24879,7 +24883,9 @@
     {
       "source": "packages/core/agent-tool-presentation/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-tool-presentation/Cargo.toml"],
+      "evidence": ["crates/agent-tool-presentation/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/agent-tool-presentation/src/index.ts",
@@ -24924,7 +24930,9 @@
     {
       "source": "packages/core/agent-tool-presentation/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-tool-presentation/Cargo.toml"],
+      "evidence": ["crates/agent-tool-presentation/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/agent/README.i18n.yaml",
@@ -24944,7 +24952,9 @@
     {
       "source": "packages/core/agent/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/Cargo.toml"],
+      "evidence": ["crates/agent/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/agent/src/consumed-work.ts",
@@ -25033,7 +25043,9 @@
     {
       "source": "packages/core/agent/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/Cargo.toml"],
+      "evidence": ["crates/agent/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/agent/tsdown.config.ts",
@@ -25060,7 +25072,9 @@
     {
       "source": "packages/core/scope/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/scope/Cargo.toml"],
+      "evidence": ["crates/scope/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/scope/src/index.ts",
@@ -25104,7 +25118,9 @@
     {
       "source": "packages/core/scope/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/scope/Cargo.toml"],
+      "evidence": ["crates/scope/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/scope/tsdown.config.ts",
@@ -25131,7 +25147,9 @@
     {
       "source": "packages/core/session/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/Cargo.toml"],
+      "evidence": ["crates/core/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/session/src/chunk-rows.ts",
@@ -25282,7 +25300,9 @@
     {
       "source": "packages/core/session/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/Cargo.toml"],
+      "evidence": ["crates/core/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/session/tsdown.config.ts",
@@ -25309,7 +25329,9 @@
     {
       "source": "packages/core/system-prompt/package.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/system-prompt/Cargo.toml"],
+      "evidence": ["crates/system-prompt/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/system-prompt/src/index.ts",
@@ -25389,7 +25411,9 @@
     {
       "source": "packages/core/system-prompt/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/system-prompt/Cargo.toml"],
+      "evidence": ["crates/system-prompt/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/core/tools/README.i18n.yaml",
@@ -25664,7 +25688,9 @@
     {
       "source": "packages/core/tools/tsconfig.json",
       "kind": "configuration",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tools/Cargo.toml"],
+      "evidence": ["crates/tools/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration", "cargo metadata resolves the crate as a workspace member"]
     },
     {
       "source": "packages/credentials/README.i18n.yaml",
