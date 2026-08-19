@@ -17230,7 +17230,10 @@
     {
       "source": "packages/api/remotes/src/agent-lookup.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/api-remotes/src/agent_lookup.rs"],
+      "evidence": ["cargo test -p seekdeep-api-remotes --all-features && cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"],
+      "note": "ApiRemoteLookupError/ApiRemoteAgentResult/ApiRemoteAgentOptions, ApiRemoteSessionNotFound/ApiRemoteSubagentSessionOwnership, and apiRemoteSubagentOwnershipError are ported; hasApiRemoteSubagentOwner, inspectApiRemoteSession, and createApiRemoteAgentResolver remain"
     },
     {
       "source": "packages/api/remotes/src/client/index.ts",
