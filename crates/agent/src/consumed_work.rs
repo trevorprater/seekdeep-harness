@@ -152,6 +152,48 @@ mod tests {
     }
 
     #[test]
+    fn empty_log_reports_no_work() {
+        assert_eq!(
+            fold_consumed_work(&[]),
+            ConsumedWork {
+                end: None,
+                dropped_unrun: false,
+            }
+        );
+    }
+
+    #[test]
+    fn ignores_turns_that_stopped_failed_or_blocked_without_claiming() {
+        let events = events(&[
+            ("turn/start", json!({"turn": 1})),
+            ("step/start", json!({"turn": 1, "step": 1})),
+            ("step/end", json!({"turn": 1, "step": 1})),
+            (
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+            ),
+            ("turn/start", json!({"turn": 2})),
+            (
+                "turn/end",
+                json!({"turn": 2, "reason": {"kind": "aborted", "reason": {"kind": "parent"}}}),
+            ),
+            ("turn/start", json!({"turn": 3})),
+            (
+                "turn/end",
+                json!({"turn": 3, "reason": {"kind": "error", "error": {"message": "x", "code": "UNKNOWN"}}}),
+            ),
+            ("turn/start", json!({"turn": 4})),
+            (
+                "turn/end",
+                json!({"turn": 4, "reason": {"kind": "blocked"}}),
+            ),
+        ]);
+        let folded = fold_consumed_work(&events);
+        assert_eq!(folded.end.expect("end").data["turn"], 1);
+        assert!(!folded.dropped_unrun);
+    }
+
+    #[test]
     fn replacement_is_pending_but_empty_cancellation_is_dropped() {
         let replaced = events(&[(
             "agent/inbox/spliced",

@@ -25023,7 +25023,9 @@
     {
       "source": "packages/core/agent/tests/consumed-work.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent/src/consumed_work.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/agent/tests/consumed-work.spec.ts", "cargo test -p seekdeep-agent consumed_work::tests --all-features", "empty-log, latest-stepped-turn, claimed-then-failed/stopped, no-claim ignored, blocked-after-claim, emptied-claim, claim-without-turn, inbox-cancellation dropped, replacement-pending, and later-turn-absorb cases are covered"]
     },
     {
       "source": "packages/core/agent/tests/invariant.spec.ts",
