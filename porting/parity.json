@@ -26869,7 +26869,10 @@
     {
       "source": "packages/feedback/command-feedback/tests/command-feedback.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/command-feedback/tests/command_feedback_parity.rs"],
+      "evidence": ["pnpm exec vitest --run packages/feedback/command-feedback/tests/command-feedback.spec.ts", "cargo test -p seekdeep-command-feedback --all-features"],
+      "note": "record/acknowledge event sequence, whitespace trimming, and empty-input error are covered; the telemetry sharing-disclosure cases await the session-telemetry crate and the cancellation case is exercised at the CommandRuntime seam"
     },
     {
       "source": "packages/feedback/command-feedback/tests/loader-composition.spec.ts",

@@ -15,6 +15,10 @@ seekdeep-invariants = { path = "../invariants" }
 serde_json.workspace = true
 
 [dev-dependencies]
+seekdeep-agent = { path = "../agent" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
 tokio.workspace = true
 
 [lints]
