@@ -1,0 +1,106 @@
+{
+  "name": "@seekdeep-ai/seekdeep-subagent",
+  "description": "Abstract subagent seam (ctx.subagents): named-provider registry for delegating to child agents",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/subagent/subagent"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client.d.ts",
+      "default": "./lib/types/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-presets": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-scope": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection-cache": "workspace:^",
+    "@seekdeep-ai/seekdeep-jobs": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@seekdeep-ai/seekdeep-agent-presets": {
+      "optional": true
+    },
+    "@seekdeep-ai/seekdeep-sandbox": {
+      "optional": true
+    },
+    "@seekdeep-ai/seekdeep-sandbox-policy": {
+      "optional": true
+    },
+    "@seekdeep-ai/seekdeep-session-persistence": {
+      "optional": true
+    },
+    "@seekdeep-ai/seekdeep-session-projection": {
+      "optional": true
+    },
+    "@seekdeep-ai/seekdeep-session-projection-cache": {
+      "optional": true
+    },
+    "@seekdeep-ai/seekdeep-jobs": {
+      "optional": true
+    },
+    "@seekdeep-ai/seekdeep-user-approval": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-presets": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-scope": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection-cache": "workspace:^",
+    "@seekdeep-ai/seekdeep-storage": "workspace:^",
+    "@seekdeep-ai/seekdeep-storage-domain": "workspace:^",
+    "@seekdeep-ai/seekdeep-jobs": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  }
+}

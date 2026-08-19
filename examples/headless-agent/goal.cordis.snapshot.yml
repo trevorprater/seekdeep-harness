@@ -1,0 +1,18 @@
+# Replay counterpart to goal.cordis.yml. It includes cordis.yml directly because
+# a config patch cannot target an entry behind a nested include, then restates
+# the goal overlay while replacing the live model with keyless replay.
+- id: base
+  name: '@seekdeep-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@seekdeep-ai/seekdeep-llm-deepseek'
+        disabled: true
+      - insert:
+          - id: goal
+            name: '@seekdeep-ai/seekdeep-goal'
+          - id: tool-goal
+            name: '@seekdeep-ai/seekdeep-tool-goal'
+          - id: llm-replay
+            name: '@seekdeep-ai/seekdeep-llm-replay'

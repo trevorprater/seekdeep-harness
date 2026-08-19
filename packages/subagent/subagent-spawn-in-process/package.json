@@ -1,0 +1,60 @@
+{
+  "name": "@seekdeep-ai/seekdeep-subagent-spawn-in-process",
+  "description": "In-process spawn subagent backend: runs a fresh child agent on ctx.agents",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/subagent/subagent-spawn-in-process"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent-in-process-driver": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-loop": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-loop-testkit": "workspace:^",
+    "@seekdeep-ai/seekdeep-bash-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm-deepseek": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent-in-process-driver": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-bash": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-subagent": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  }
+}

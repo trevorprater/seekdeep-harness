@@ -1,0 +1,81 @@
+{
+  "name": "@seekdeep-ai/seekdeep-client-locale",
+  "description": "Locale plugin: Host-backed zh/en preference, browser-derived fallback, locale snapshots, and typed namespace dictionaries",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/client/locale"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": {
+      "inject": [
+        "@seekdeep-ai/seekdeep-client-connection",
+        "@seekdeep-ai/seekdeep-client-runtime",
+        "@seekdeep-ai/seekdeep-client-ui-settings",
+        "@seekdeep-ai/seekdeep-api-remotes"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
+  },
+  "dependencies": {
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "scripts": {
+    "bundle": "tsdown",
+    "watch": "tsdown --watch"
+  }
+}

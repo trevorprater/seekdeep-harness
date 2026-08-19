@@ -1,0 +1,79 @@
+{
+  "name": "@seekdeep-ai/seekdeep-cordis-client-runner",
+  "description": "Browser half of dynamic dual-half plugin packages: event subscription, closure evaluation, guard facade, and loader entries",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/extensions/cordis-client-runner"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": {
+      "inject": [
+        "@seekdeep-ai/seekdeep-client-runtime",
+        "@seekdeep-ai/seekdeep-api-remotes",
+        "@seekdeep-ai/seekdeep-client-modules",
+        "@seekdeep-ai/seekdeep-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "bundle": "tsdown",
+    "watch": "tsdown --watch"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-modules": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-theme": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-modules": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-theme": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@types/react": "~18.3.1",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ]
+}

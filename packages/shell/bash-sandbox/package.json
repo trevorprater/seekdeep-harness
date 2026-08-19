@@ -1,0 +1,53 @@
+{
+  "name": "@seekdeep-ai/seekdeep-bash-sandbox",
+  "description": "Sandbox-consuming implementation of the SeekDeep Harness bash executor seam (confines every command via ctx.sandbox, reports denial/enforcement result facts)",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/shell/bash-sandbox"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-shell": "workspace:^",
+    "@seekdeep-ai/seekdeep-bash-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-shell": "workspace:^",
+    "@seekdeep-ai/seekdeep-bash-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/node-addon-landlock-run": "workspace:^"
+  }
+}

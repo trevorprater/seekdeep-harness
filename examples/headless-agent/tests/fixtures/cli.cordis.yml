@@ -1,0 +1,29 @@
+- id: cli-mock-llm
+  name: './cli-mock-llm.ts'
+
+- id: base
+  name: '@seekdeep-ai/cordis-plugin-include'
+  config:
+    path: ../../cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@seekdeep-ai/seekdeep-llm-deepseek'
+        disabled: true
+      - id: agent-spine
+        name: '@seekdeep-ai/seekdeep-agent-spine-demo'
+        config:
+          agents:
+            - id: main
+              provider: cli-mock
+              model: cli-mock
+              cwd: !!js process.cwd()
+          workspaceContext: false
+          seekdeepHome: './.seekdeep-home'
+          skills:
+            filesystem:
+              agentsHome: './.agents-home'
+          persona: 'Keyless headless-agent smoke.'
+      - id: persistence
+        name: '@seekdeep-ai/seekdeep-session-persistence-jsonl'
+        config:
+          root: './.sessions'

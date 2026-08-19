@@ -1,0 +1,86 @@
+{
+  "name": "@seekdeep-ai/seekdeep-client-ui-message-feedback",
+  "description": "Per-message feedback controls contributed to the assistant-message action strip, backed by the messageFeedback Host Remote",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/client/ui-message-feedback"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": {
+      "inject": [
+        "@seekdeep-ai/seekdeep-client-runtime",
+        "@seekdeep-ai/seekdeep-api-remotes",
+        "@seekdeep-ai/seekdeep-client-locale",
+        "@seekdeep-ai/seekdeep-client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "bundle": "tsdown",
+    "watch": "tsdown --watch"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-conversation": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-message-feedback": "workspace:^",
+    "@seekdeep-ai/seekdeep-typert-protocol": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-test-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-conversation": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-message-feedback": "workspace:^",
+    "@seekdeep-ai/seekdeep-typert-protocol": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ]
+}

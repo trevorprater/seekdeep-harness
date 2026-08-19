@@ -1,0 +1,76 @@
+{
+  "name": "@seekdeep-ai/seekdeep-acp-demo",
+  "description": "ACP automation server app: agent spine + JSONL persistence + ACP transport, with a JSON-RPC stdio bin",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/examples/acp-demo"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "bin": {
+    "seekdeep-acp-demo": "lib/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./bin": {
+      "types": "./lib/types/bin.d.ts",
+      "default": "./lib/bin.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/bin.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/cordis-plugin-include": "workspace:^",
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-acp": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-spine-demo": "workspace:^",
+    "@seekdeep-ai/seekdeep-app-boot": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-checkpoint-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-persistence-jsonl": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-query": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-query-sqlite": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-instructions": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis-plugin-include": "workspace:^",
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-acp": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-spine-demo": "workspace:^",
+    "@seekdeep-ai/seekdeep-app-boot": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-checkpoint-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-persistence-jsonl": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-query": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-query-sqlite": "workspace:^",
+    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-instructions": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/schemastery": "workspace:^"
+  }
+}
