@@ -5841,6 +5841,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-workflow"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-workflow",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "seekdeep-tools"
 version = "0.1.0-rc.5"
 dependencies = [

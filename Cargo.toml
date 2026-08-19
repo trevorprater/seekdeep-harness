@@ -83,6 +83,7 @@ members = [
   "crates/tool-ask-user",
   "crates/tool-fs",
   "crates/tool-skill",
+  "crates/tool-workflow",
   "crates/tool-todo",
   "crates/tools",
   "crates/typert-protocol",
