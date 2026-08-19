@@ -5,6 +5,7 @@ pub mod edit;
 pub mod error;
 pub mod invariant;
 pub mod read;
+pub mod read_image;
 pub mod read_render;
 pub mod read_target;
 pub mod sandbox;
