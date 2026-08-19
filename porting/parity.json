@@ -57432,15 +57432,14 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/src/acl.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/src/acl.rs",
         "crates/sandbox-windows-acl-native/src/windows.rs",
         "crates/sandbox-windows-acl/tests/acl_contract_parity.rs"
       ],
       "evidence": [
-        "portable injected tests cover exact 48-byte access packing, lock ownership, exact-ACE skip, bounded ACL walking, merge/apply/revoke order, and every cleanup failure",
-        "native GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW, lock, and LocalFree bindings cross-compile under strict Windows clippy"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "Real NTFS ACL merge, propagation, idempotence, and concurrent lock effects remain unverified on Windows."
     },
@@ -57459,35 +57458,34 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/src/ffi.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/src/acl.rs",
         "crates/sandbox-windows-acl/src/token.rs",
         "crates/sandbox-windows-acl-native/src/windows.rs"
       ],
       "evidence": [
-        "safe typed handles and pointers, bounded temp and SID buffers, returned-code versus last-error identity, and exact SID comparison are implemented without unsafe code",
-        "the sole raw windows-sys adapter cross-compiles and passes strict x86_64-pc-windows-msvc clippy"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "Real FormatMessageW, GetTempPathW, SID, handle, and allocation effects remain unverified on Windows."
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/src/grant.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/src/grant.rs",
         "crates/sandbox-windows-acl/tests/acl_contract_parity.rs"
       ],
       "evidence": [
-        "injected Rust contracts preserve parse-before-grant, standing versus revocable ownership, path order, best-effort revocation, SID release, and aggregate cleanup failures"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "Native NTFS coexistence and independent revocation still require the Windows-only world-effect tests."
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/src/lib.rs",
         "crates/sandbox-windows-acl/src/sandbox.rs",
@@ -57495,8 +57493,7 @@
         "crates/sandbox-windows-acl/tests/sandbox_lifecycle_parity.rs"
       ],
       "evidence": [
-        "seven injected lifecycle cases cover constructor timing, workspace-write and read-only pipelines, caller-managed DACLs, retryable rollback, aggregate cleanup, both stdio modes, idempotent wait, and pre-init disposal",
-        "the concrete Win32 adapter cross-compiles under strict Windows clippy"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "The state machine is ported, but real restricted-token file access effects remain unverified on Windows."
     },
@@ -57527,60 +57524,56 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/src/runner.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/src/runner.rs",
         "crates/sandbox-windows-acl-native/src/bin/windows-acl-run.rs",
         "crates/sandbox-windows-acl/tests/pure_parity.rs"
       ],
       "evidence": [
-        "portable tests preserve the stable argv grammar, exact diagnostics, option pairing, derived-SID validation, path boundaries, and command split",
-        "the compiled Rust runner owns Ctrl+C, temp selection and cleanup, inherited stdio, full-width exit propagation, and signature-plus-127 failure behavior and passes strict Windows cross-clippy"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "Real child access checks, job death, Ctrl+C, stdio, and exit propagation remain unverified on Windows."
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/src/spawn.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/src/spawn.rs",
         "crates/sandbox-windows-acl-native/src/windows.rs",
         "crates/sandbox-windows-acl/tests/spawn_contract_parity.rs"
       ],
       "evidence": [
-        "seven grouped injected tests cover every pipe, inheritability, process, job, assignment, resume, peek, read, wait, exit-code, and close failure plus exact ownership order",
-        "CreateProcessAsUserW, anonymous pipe, inherited stdio, job, terminate, resume, drain, and wait bindings cross-compile under strict Windows clippy"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "Real Windows process, pipe, job, and inherited-stdio effects remain unverified."
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/src/token.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/src/token.rs",
         "crates/sandbox-windows-acl-native/src/windows.rs",
         "crates/sandbox-windows-acl/tests/token_contract_parity.rs"
       ],
       "evidence": [
-        "five grouped injected tests cover current-token ownership, bounded logon SID scan and copy, well-known SID validation, default-DACL merge/apply/free, exact restricting lists, and restricted-token failure cleanup",
-        "the corresponding Win32 token APIs cross-compile under strict Windows clippy"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "Real token creation, default DACL, and access-check behavior remain unverified on Windows."
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/src/win32-abi.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/src/abi.rs",
         "crates/sandbox-windows-acl/src/acl.rs",
         "crates/sandbox-windows-acl/tests/acl_contract_parity.rs"
       ],
       "evidence": [
-        "Rust pins the complete constant vocabulary and exact x64 48-byte EXPLICIT_ACCESS_W layout used by the source",
-        "windows-sys signatures compile for x86_64-pc-windows-msvc"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "The source C++ header probe has not yet been executed against the Rust layout on Windows."
     },
