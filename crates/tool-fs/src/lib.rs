@@ -3,6 +3,7 @@
 pub mod error;
 pub mod invariant;
 pub mod read_target;
+pub mod sandbox;
 pub mod session_cwd;
 
 pub use error::remediate_fs_error;

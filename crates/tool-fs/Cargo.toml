@@ -12,8 +12,11 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-fs = { path = "../fs" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-sandbox = { path = "../sandbox" }
 seekdeep-tools = { path = "../tools" }
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 
 [lints]
