@@ -24137,7 +24137,10 @@
     {
       "source": "packages/compaction/compaction/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/compaction/src/service.rs"],
+      "evidence": ["cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"],
+      "note": "CompactionTrigger, ManualCompactionErrorCode, ManualCompactionError, CompactionRoutingOptions, and CompactionAgentContext are ported; the abstract CompactionEngine trait, COMPACTION service key, and ManualCompactAgentContext.runMaintenance remain"
     },
     {
       "source": "packages/compaction/compaction/src/invariant.ts",
