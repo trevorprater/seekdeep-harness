@@ -27648,7 +27648,10 @@
     {
       "source": "packages/goal/goal/src/fold.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/goal/src/fold.rs"],
+      "evidence": ["cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"],
+      "note": "emptyGoalFoldState, decodeGoalChange, goalChangeRef, applyGoalChange, applyGoalEvent, and foldGoal are ported with the strict decoder and transition validation"
     },
     {
       "source": "packages/goal/goal/src/index.ts",
@@ -27663,7 +27666,10 @@
     {
       "source": "packages/goal/goal/src/runtime.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/goal/src/runtime.rs"],
+      "evidence": ["cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"],
+      "note": "GOAL_CHANGE_VERSION and GoalError are ported"
     },
     {
       "source": "packages/goal/goal/src/types.ts",
