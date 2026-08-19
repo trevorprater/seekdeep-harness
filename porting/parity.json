@@ -56410,22 +56410,50 @@
     {
       "source": "packages/plan/plan-mode/src/client.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/plan-mode/src/client.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-plan-mode --all-features && cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+      ],
+      "note": "pure client-namespace re-export of the types outlet ported"
     },
     {
       "source": "packages/plan/plan-mode/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/plan-mode/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-plan-mode --all-features && cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+      ],
+      "note": "firstHeading, resolveConfig, foldPlanMode, hasOpenTurn, planModeAtLastHeader, PlanModeConfig, and the exit-tool constants are ported; the PlanModeController service remains"
     },
     {
       "source": "packages/plan/plan-mode/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/plan-mode/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-plan-mode --all-features && cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+      ],
+      "note": "plan/mode boolean-shape validation ported as register_invariant"
     },
     {
       "source": "packages/plan/plan-mode/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/plan-mode/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-plan-mode --all-features && cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+      ],
+      "note": "PlanProjection ported"
     },
     {
       "source": "packages/plan/plan-mode/tests/integration.spec.ts",
