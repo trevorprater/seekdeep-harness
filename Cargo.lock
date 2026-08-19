@@ -5235,6 +5235,7 @@ name = "seekdeep-session-query"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "regex",
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",

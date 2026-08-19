@@ -58748,7 +58748,14 @@
     {
       "source": "packages/session-query/session-query/src/documents.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query/src/documents.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-query --all-features",
+        "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-query/src/extraction.ts",
@@ -58765,7 +58772,14 @@
     {
       "source": "packages/session-query/session-query/src/filters.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query/src/filters.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-query --all-features",
+        "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-query/src/index.ts",
@@ -58798,7 +58812,14 @@
     {
       "source": "packages/session-query/session-query/src/tracing.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query/src/tracing.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-query --all-features",
+        "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-query/src/types.ts",

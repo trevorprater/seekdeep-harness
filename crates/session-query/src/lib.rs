@@ -1,12 +1,16 @@
 //! Session-query domain: configuration, failure taxonomy, pagination cursor,
-//! source-header compatibility, semantic text extraction, and the public record
+//! source-header compatibility, semantic text extraction, provider-independent
+//! filters, document projection, lineage tracing, and the public record
 //! vocabulary. The corpus and query service are ported separately.
 
 pub mod config;
 pub mod cursor;
+pub mod documents;
 pub mod extraction;
+pub mod filters;
 pub mod invariant;
 pub mod sources;
+pub mod tracing;
 pub mod types;
 
 pub use config::{
@@ -14,8 +18,14 @@ pub use config::{
     SessionQueryError, SessionQueryErrorCode,
 };
 pub use cursor::SessionSearchCursor;
+pub use documents::{build_session_event_records, build_session_event_search_documents};
 pub use extraction::extract_session_event_text;
+pub use filters::{
+    compile_session_text_filter, filter_session_event_documents, filter_session_results,
+    materialize_session_event_result_filters, materialize_session_result_filters,
+};
 pub use sources::assert_session_headers_compatible;
+pub use tracing::{current_surface_events, event_records, trace_event, trace_session};
 pub use types::{
     SessionAvailability, SessionEventReadRequest, SessionEventRecord, SessionEventResultFilter,
     SessionEventSearchDocument, SessionEventSearchHit, SessionEventSurface, SessionEventTrace,
