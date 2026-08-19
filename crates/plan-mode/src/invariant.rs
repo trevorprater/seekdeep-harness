@@ -104,7 +104,7 @@ fn validate_event(event: &SessionEvent, failure: &InvariantFailure) -> anyhow::R
         return Err(failure
             .fail(format!(
                 "plan/mode carries invalid active state {}; expected a boolean",
-                active.map_or_else(|| "undefined".to_owned(), |value| value.to_string())
+                active.map_or_else(|| "undefined".to_owned(), std::string::ToString::to_string,)
             ))
             .into());
     }

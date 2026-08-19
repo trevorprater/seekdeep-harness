@@ -35,10 +35,10 @@ static HEADING: LazyLock<Regex> =
 #[must_use]
 pub fn first_heading(plan: &str) -> Option<String> {
     for line in plan.split('\n') {
-        if let Some(captures) = HEADING.captures(line) {
-            if let Some(heading) = captures.get(1) {
-                return Some(heading.as_str().to_owned());
-            }
+        if let Some(captures) = HEADING.captures(line)
+            && let Some(heading) = captures.get(1)
+        {
+            return Some(heading.as_str().to_owned());
         }
     }
     None
