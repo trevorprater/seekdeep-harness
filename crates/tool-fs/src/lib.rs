@@ -1,5 +1,6 @@
 //! Model-facing filesystem tools over the filesystem service.
 
+pub mod diff;
 pub mod error;
 pub mod invariant;
 pub mod read_target;
