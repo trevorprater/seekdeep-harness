@@ -51564,7 +51564,14 @@
     {
       "source": "packages/hooks/hook-protocol/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/hook-protocol/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol --all-features && cargo clippy -p seekdeep-hook-protocol --all-targets --all-features -- -D warnings"
+      ],
+      "note": "re-exports ported; codec, runner, merge, events, and detached remain"
     },
     {
       "source": "packages/hooks/hook-protocol/src/invariant.ts",
@@ -51574,7 +51581,14 @@
     {
       "source": "packages/hooks/hook-protocol/src/matcher.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/hook-protocol/src/matcher.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol --all-features && cargo clippy -p seekdeep-hook-protocol --all-targets --all-features -- -D warnings"
+      ],
+      "note": "matcherDiagnostic and matchesMatcher ported"
     },
     {
       "source": "packages/hooks/hook-protocol/src/merge.ts",
@@ -51589,7 +51603,14 @@
     {
       "source": "packages/hooks/hook-protocol/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": [
+        "crates/hook-protocol/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol --all-features && cargo clippy -p seekdeep-hook-protocol --all-targets --all-features -- -D warnings"
+      ],
+      "note": "HookDialect, CommandHook, MatcherGroup, MatcherMode, HookDecision, and HookOutput ported"
     },
     {
       "source": "packages/hooks/hook-protocol/tests/codec.spec.ts",
