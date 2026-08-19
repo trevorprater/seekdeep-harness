@@ -590,9 +590,7 @@ impl seekdeep_sandbox::EscalationApprover<Arc<Agent>, CallId> for ApprovalServic
             signal: ask.signal,
         };
         match self.request(request).await {
-            Ok(ApprovalOutcome::AllowedOnce) => {
-                seekdeep_sandbox::EscalationOutcome::AllowedOnce
-            }
+            Ok(ApprovalOutcome::AllowedOnce) => seekdeep_sandbox::EscalationOutcome::AllowedOnce,
             Ok(ApprovalOutcome::Rejected) => seekdeep_sandbox::EscalationOutcome::Rejected,
             Ok(ApprovalOutcome::Cancelled) => seekdeep_sandbox::EscalationOutcome::Cancelled,
             Ok(ApprovalOutcome::Unavailable) | Err(_) => {

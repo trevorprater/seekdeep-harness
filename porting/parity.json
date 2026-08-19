@@ -51125,7 +51125,7 @@
     {
       "source": "packages/goal/goal/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/goal/src/index.rs"
       ],
@@ -56516,7 +56516,7 @@
     {
       "source": "packages/plan/plan-mode/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/plan-mode/src/index.rs"
       ],

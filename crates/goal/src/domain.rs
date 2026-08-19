@@ -70,9 +70,9 @@ pub enum GoalChangeKind {
 
 /// Closed clear operation marker.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename = "clear")]
 pub enum GoalClearOperation {
     /// Clear.
+    #[serde(rename = "clear")]
     Clear,
 }
 
@@ -125,6 +125,13 @@ pub enum GoalChangeMeta {
     Snapshot(GoalSnapshotChangeMeta),
     /// Clear tombstone.
     Clear(GoalClearChangeMeta),
+}
+
+/// Agent-subject payload wrapping one live goal mutation notification.
+#[derive(Clone, Debug)]
+pub struct GoalChangedEvent {
+    /// Mutation notification.
+    pub change: GoalChanged,
 }
 
 /// Live notification after one durable goal mutation commits.

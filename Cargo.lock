@@ -4606,14 +4606,20 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-session-projection",
+ "seekdeep-typert-protocol",
  "seekdeep-util",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "uuid",
 ]
 
 [[package]]
@@ -4943,11 +4949,20 @@ dependencies = [
  "anyhow",
  "parking_lot",
  "regex",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-commands",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-session-projection",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-user-questions",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]
