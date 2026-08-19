@@ -4450,6 +4450,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-compaction"
+version = "0.1.0-rc.5"
+dependencies = [
+ "seekdeep-commands",
+ "seekdeep-llm",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "seekdeep-cordis"
 version = "0.1.0-rc.5"
 dependencies = [

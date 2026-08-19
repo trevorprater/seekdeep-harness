@@ -20,6 +20,7 @@ members = [
   "crates/code-runtime-worker-thread",
   "crates/command-feedback",
   "crates/commands",
+  "crates/compaction",
   "crates/credentials",
   "crates/credentials-local",
   "crates/schemastery",
