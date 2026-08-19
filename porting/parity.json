@@ -68698,22 +68698,46 @@
     {
       "source": "packages/workflow/workflow/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow --all-features && cargo clippy -p seekdeep-workflow --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow --all-features && cargo clippy -p seekdeep-workflow --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow/src/runtime-types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow/src/runtime_types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow --all-features && cargo clippy -p seekdeep-workflow --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow --all-features && cargo clippy -p seekdeep-workflow --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow/tests/invariant.spec.ts",

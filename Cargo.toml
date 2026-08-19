@@ -91,6 +91,7 @@ members = [
   "crates/user-questions",
   "crates/util",
   "crates/workspace",
+  "crates/workflow",
   "xtask",
 ]
 resolver = "3"
