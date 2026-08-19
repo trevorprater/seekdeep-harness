@@ -15,6 +15,7 @@ members = [
   "crates/host-directory-picker",
   "crates/host-frontend-static",
   "crates/host-webserver",
+  "crates/hook-protocol",
   "crates/cordis",
   "crates/cosmokit",
   "crates/code-runtime",

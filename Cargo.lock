@@ -4599,6 +4599,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-hook-protocol"
+version = "0.1.0-rc.5"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "seekdeep-host-apiproxy"
 version = "0.1.0-rc.5"
 dependencies = [
