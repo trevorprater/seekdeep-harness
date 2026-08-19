@@ -24147,7 +24147,10 @@
     {
       "source": "packages/compaction/compaction/src/tool-pairing.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/compaction/src/tool_pairing.rs"],
+      "evidence": ["cargo test -p seekdeep-compaction --all-features && cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"],
+      "note": "toolPairingBalancedBefore/toolPairingBalancedAfter ported with per-cut fold and corrupt-surface rejection"
     },
     {
       "source": "packages/compaction/compaction/src/types.ts",
