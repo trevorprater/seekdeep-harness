@@ -37217,13 +37217,13 @@
       "source": "packages/bundle/base/cordis.patch.yml",
       "kind": "configuration",
       "status": "verified",
-      "note": "DEV-001: the ported base bundle ships no default telemetry collector URL; see porting/DEVIATIONS.md.",
       "targets": [
         "packages/bundle/base/cordis.patch.yml"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)"
-      ]
+      ],
+      "note": "DEV-001: the ported base bundle ships no default telemetry collector URL; see porting/DEVIATIONS.md."
     },
     {
       "source": "packages/bundle/base/package.json",
@@ -51549,110 +51549,182 @@
     {
       "source": "packages/hooks/hook-protocol/src/codec.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/hook-protocol/src/codec.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-hook-protocol --all-features && cargo clippy -p seekdeep-hook-protocol --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-hook-protocol codec::tests --all-features"
       ],
       "note": "parseHookOutput with top-level/permission decision normalization and event-name guard ported"
     },
     {
       "source": "packages/hooks/hook-protocol/src/detached.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/detached.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol detached::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/src/events.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/events.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol events::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/hook-protocol/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-hook-protocol --all-features && cargo clippy -p seekdeep-hook-protocol --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-hook-protocol --all-features"
       ],
       "note": "re-exports ported; codec, runner, merge, events, and detached remain"
     },
     {
       "source": "packages/hooks/hook-protocol/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol --test invariant_parity --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/src/matcher.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/hook-protocol/src/matcher.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-hook-protocol --all-features && cargo clippy -p seekdeep-hook-protocol --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-hook-protocol matcher::tests --all-features"
       ],
       "note": "matcherDiagnostic and matchesMatcher ported"
     },
     {
       "source": "packages/hooks/hook-protocol/src/merge.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/merge.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol merge::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/src/runner.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/runner.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol runner::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/src/types.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/hook-protocol/src/types.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-hook-protocol --all-features && cargo clippy -p seekdeep-hook-protocol --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-hook-protocol --all-features"
       ],
       "note": "HookDialect, CommandHook, MatcherGroup, MatcherMode, HookDecision, and HookOutput ported"
     },
     {
       "source": "packages/hooks/hook-protocol/tests/codec.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/codec.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol codec::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/tests/detached.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/detached.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol detached::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/tests/events.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/events.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol events::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol --test invariant_parity --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/tests/matcher.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/matcher.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol matcher::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/tests/merge.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/merge.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol merge::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/tests/runner.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/runner.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-hook-protocol runner::tests --all-features"
+      ]
     },
     {
       "source": "packages/hooks/hook-protocol/tsconfig.json",

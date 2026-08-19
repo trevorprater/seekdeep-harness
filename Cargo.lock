@@ -4602,9 +4602,19 @@ dependencies = [
 name = "seekdeep-hook-protocol"
 version = "0.1.0-rc.5"
 dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
  "regex",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-shell",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
