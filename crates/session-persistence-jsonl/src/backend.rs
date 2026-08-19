@@ -707,6 +707,41 @@ impl JsonlSessionPersistence {
         Ok(())
     }
 
+    /// Waits for any in-flight retirement with caller-local cancellation.
+    ///
+    /// Once the signal is aborted the observation rejects with the exact
+    /// abort reason even when the retirement settles at the same time,
+    /// matching the source's queued-abort precedence for an operation that
+    /// never started. A failed retirement still propagates its failure.
+    async fn wait_for_retirement_abortable(
+        &self,
+        id: &SessionId,
+        signal: Option<&AbortSignal>,
+    ) -> anyhow::Result<()> {
+        let retirement = self
+            .retirements
+            .lock()
+            .get(id)
+            .map(|retirement| retirement.settlement.clone());
+        let Some(retirement) = retirement else {
+            return Ok(());
+        };
+        match signal {
+            Some(signal) => {
+                tokio::select! {
+                    biased;
+                    () = signal.cancelled() => ensure_not_aborted(Some(signal)),
+                    result = retirement => {
+                        result.map_err(|error| anyhow::Error::msg((*error).clone()))
+                    }
+                }
+            }
+            None => retirement
+                .await
+                .map_err(|error| anyhow::Error::msg((*error).clone())),
+        }
+    }
+
     async fn retire_core(self: &Arc<Self>, session: &Arc<Session>) -> anyhow::Result<()> {
         let key = session_key(session);
         let id = session.id();
@@ -1573,14 +1608,16 @@ impl SessionPersistence for JsonlSessionPersistence {
         id: &SessionId,
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<SessionInspection> {
-        ensure_not_aborted(signal.as_ref())?;
-        if let Some(live) = self.sessions.get(id) {
-            return Ok(SessionInspection {
-                meta: live.header().clone(),
-                events: live.events(),
-            });
-        }
         loop {
+            ensure_not_aborted(signal.as_ref())?;
+            self.wait_for_retirement_abortable(id, signal.as_ref())
+                .await?;
+            if let Some(live) = self.sessions.get(id) {
+                return Ok(SessionInspection {
+                    meta: live.header().clone(),
+                    events: live.events(),
+                });
+            }
             let weak = self.self_weak.clone();
             let load_id = id.clone();
             let source = self
@@ -1765,10 +1802,12 @@ fn revision_identity(metadata: &Metadata) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     use seekdeep_cordis::{Context, Fiber};
     use seekdeep_core::session::{AppendOptions, Session};
     use seekdeep_core::session_store::CreateSessionOptions;
-    use seekdeep_session_persistence::SessionPersistence;
+    use seekdeep_session_persistence::{SessionPersistence, SessionPersistenceAborted};
     use serde_json::json;
 
     use super::*;
@@ -2401,5 +2440,459 @@ mod tests {
         );
         drop(in_flight);
         dispose.await.expect("dispose join").expect("dispose");
+    }
+    async fn wait_until(timeout: Duration, mut predicate: impl FnMut() -> bool) -> bool {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            if predicate() {
+                return true;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn superseded_retirement_leaves_successor_drain_in_place() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, sessions, context) = backend(temporary.path());
+        let id = SessionId::new("superseded-retirement");
+        let lock = backend.lock_for(&id);
+        let guard = lock.lock().await;
+
+        let first_fiber = Fiber::active_child("first retired owner");
+        let first_owner = context.with_fiber(first_fiber.clone());
+        sessions
+            .create(
+                &first_owner,
+                Some(id.clone()),
+                CreateSessionOptions::default(),
+            )
+            .expect("first session");
+        first_fiber.dispose().await.expect("dispose first owner");
+        let first_entry = backend
+            .retirements
+            .lock()
+            .get(&id)
+            .cloned()
+            .expect("first retirement registered");
+        let first_token = first_entry.token;
+        let first_settlement = first_entry.settlement.clone();
+
+        let second_fiber = Fiber::active_child("successor retired owner");
+        let second_owner = context.with_fiber(second_fiber.clone());
+        sessions
+            .create(
+                &second_owner,
+                Some(id.clone()),
+                CreateSessionOptions::default(),
+            )
+            .expect("successor session");
+        second_fiber
+            .dispose()
+            .await
+            .expect("dispose successor owner");
+        let second_entry = backend
+            .retirements
+            .lock()
+            .get(&id)
+            .cloned()
+            .expect("successor retirement replaced the entry synchronously");
+        let second_token = second_entry.token;
+        let second_settlement = second_entry.settlement.clone();
+        assert_ne!(
+            second_token, first_token,
+            "retirement superseded synchronously"
+        );
+
+        let successor_settled = Arc::new(AtomicBool::new(false));
+        {
+            let flag = successor_settled.clone();
+            tokio::spawn(async move {
+                let _ = second_settlement.await;
+                flag.store(true, Ordering::SeqCst);
+            });
+        }
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            !successor_settled.load(Ordering::SeqCst),
+            "successor retirement must stay parked behind the pinned first drain"
+        );
+        assert_eq!(
+            backend.retirements.lock().get(&id).map(|entry| entry.token),
+            Some(second_token)
+        );
+
+        drop(guard);
+        first_settlement.await.expect("first retirement drained");
+        // The superseded retirement's own cleanup (token-guarded) must not clear
+        // the successor's entry: only the successor's cleanup empties the map
+        // once its drain settles. Both retirements then converge to a clean
+        // release, and the id is immediately reusable.
+        assert!(
+            wait_until(Duration::from_secs(2), || successor_settled
+                .load(Ordering::SeqCst))
+            .await,
+            "successor retirement never settled"
+        );
+        assert!(!backend.retirements.lock().contains_key(&id));
+        assert!(!backend.state.lock().contains_key(&id));
+
+        let reuse = sessions
+            .create(&context, Some(id.clone()), CreateSessionOptions::default())
+            .expect("id reusable after both retirements");
+        sessions.flush(&reuse).await.expect("fresh lifecycle flush");
+    }
+
+    #[tokio::test]
+    async fn queued_replacement_before_retirement_cleanup_collides_with_retired_owner() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, sessions, context) = backend(temporary.path());
+        let id = SessionId::new("retiring-live-owner");
+        let lock = backend.lock_for(&id);
+        let guard = lock.lock().await;
+
+        let first_fiber = Fiber::active_child("buffered first owner");
+        let first_owner = context.with_fiber(first_fiber.clone());
+        let first = sessions
+            .create(
+                &first_owner,
+                Some(id.clone()),
+                CreateSessionOptions::default(),
+            )
+            .expect("first session");
+        first
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("start");
+        first
+            .append(
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+                AppendOptions::default(),
+            )
+            .expect("end");
+        first_fiber.dispose().await.expect("dispose first owner");
+
+        let successor_fiber = Fiber::active_child("colliding successor");
+        let successor_owner = context.with_fiber(successor_fiber.clone());
+        let successor = sessions
+            .create(
+                &successor_owner,
+                Some(id.clone()),
+                CreateSessionOptions::default(),
+            )
+            .expect("successor session");
+        let collision = tokio::spawn({
+            let sessions = sessions.clone();
+            let successor = successor.clone();
+            async move { sessions.flush(&successor).await }
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !collision.is_finished(),
+            "replacement flush overtook the pinned retirement drain"
+        );
+
+        drop(guard);
+        let error = collision
+            .await
+            .expect("flush join")
+            .expect_err("replacement must collide with the retired owner's drain");
+        assert!(error.to_string().contains("id collision"), "{error:#}");
+        successor_fiber.dispose().await.expect("dispose successor");
+
+        assert_eq!(
+            backend
+                .load(&id)
+                .await
+                .expect("retired drain persisted")
+                .events
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            [0, 1]
+        );
+    }
+
+    #[tokio::test]
+    async fn racing_cold_load_survives_retirement_and_reservation_rejects_reuse() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, sessions, context) = backend(temporary.path());
+        let id = SessionId::new("retiring-buffered-owner");
+        let lock = backend.lock_for(&id);
+        let guard = lock.lock().await;
+
+        let first_fiber = Fiber::active_child("buffered owner");
+        let first_owner = context.with_fiber(first_fiber.clone());
+        let first = sessions
+            .create(
+                &first_owner,
+                Some(id.clone()),
+                CreateSessionOptions::default(),
+            )
+            .expect("first session");
+        first
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("start");
+        first
+            .append(
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+                AppendOptions::default(),
+            )
+            .expect("end");
+        first_fiber.dispose().await.expect("dispose first owner");
+
+        let cold_load = tokio::spawn({
+            let backend = backend.clone();
+            let id = id.clone();
+            async move { backend.load(&id).await }
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !cold_load.is_finished(),
+            "cold load overtook the pinned retirement fence"
+        );
+
+        drop(guard);
+        let inspection = cold_load
+            .await
+            .expect("load join")
+            .expect("cold load after retirement");
+        assert_eq!(
+            inspection
+                .events
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            [0, 1]
+        );
+
+        let reservation = backend
+            .prepare(&sessions, &id, None)
+            .await
+            .expect("prepare");
+        let reuse_error = sessions
+            .create(&context, Some(id.clone()), CreateSessionOptions::default())
+            .expect_err("persisted state owns the identity");
+        assert!(
+            reuse_error
+                .to_string()
+                .contains("persisted state already owns"),
+            "{reuse_error:#}"
+        );
+        drop(reservation);
+        backend.preparations.invalidate(&id);
+
+        let successor_fiber = Fiber::active_child("late successor");
+        let successor_owner = context.with_fiber(successor_fiber.clone());
+        let successor = sessions
+            .create(
+                &successor_owner,
+                Some(id.clone()),
+                CreateSessionOptions::default(),
+            )
+            .expect("released id is creatable");
+        let collision = sessions
+            .flush(&successor)
+            .await
+            .expect_err("persisted log collides");
+        assert!(
+            collision.to_string().contains("id collision"),
+            "{collision:#}"
+        );
+        successor_fiber.dispose().await.expect("dispose successor");
+    }
+
+    #[tokio::test]
+    async fn settled_chain_tail_serializes_same_id_appends_in_order() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, _sessions, _context) = backend(temporary.path());
+        let session = balanced_session("chain-tail");
+        backend.create(session.header()).await.expect("create");
+        let id = session.id().clone();
+        let lock = backend.lock_for(&id);
+        let guard = lock.lock().await;
+
+        let events = session.events();
+        let first_append = tokio::spawn({
+            let backend = backend.clone();
+            let id = id.clone();
+            let first = events[0].clone();
+            async move { backend.append(&id, &[first]).await }
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !first_append.is_finished(),
+            "first append overtook the held chain"
+        );
+
+        let second_append = tokio::spawn({
+            let backend = backend.clone();
+            let id = id.clone();
+            let second = events[1].clone();
+            async move { backend.append(&id, &[second]).await }
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !second_append.is_finished(),
+            "second append overtook the held chain"
+        );
+
+        drop(guard);
+        first_append
+            .await
+            .expect("first join")
+            .expect("first append");
+        second_append
+            .await
+            .expect("second join")
+            .expect("second append");
+        assert_eq!(
+            backend
+                .inspect(&id, None)
+                .await
+                .expect("settled chain")
+                .events
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            [0, 1]
+        );
+
+        let third = session
+            .append("turn/start", json!({"turn": 2}), AppendOptions::default())
+            .expect("third event");
+        backend.append(&id, &[third]).await.expect("third append");
+        assert_eq!(
+            backend
+                .read_from(&id, 0, None)
+                .await
+                .expect("extended chain")
+                .events
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            [0, 1, 2]
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cancelled_inspect_during_pending_retirement_rejects_without_a_reservation() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, sessions, context) = backend(temporary.path());
+        let id = SessionId::new("retiring-inspect");
+        let lock = backend.lock_for(&id);
+        let guard = lock.lock().await;
+
+        let owner_fiber = Fiber::active_child("retiring inspect owner");
+        let owner = context.with_fiber(owner_fiber.clone());
+        sessions
+            .create(&owner, Some(id.clone()), CreateSessionOptions::default())
+            .expect("session");
+        owner_fiber.dispose().await.expect("dispose owner");
+        assert!(
+            backend.retirements.lock().contains_key(&id),
+            "retirement must be pending"
+        );
+
+        let signal = AbortSignal::default();
+        let inspect = tokio::spawn({
+            let backend = backend.clone();
+            let id = id.clone();
+            let signal = signal.clone();
+            async move { backend.inspect(&id, Some(signal)).await }
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !inspect.is_finished(),
+            "inspect must fence on the pending retirement"
+        );
+
+        let reason = json!({"kind": "cancelled", "by": "caller"});
+        signal.abort_with_reason(reason.clone());
+        let error = inspect
+            .await
+            .expect("inspect join")
+            .expect_err("cancelled during retirement");
+        let aborted = error
+            .downcast_ref::<SessionPersistenceAborted>()
+            .expect("typed cancellation");
+        assert_eq!(aborted.reason, reason);
+        assert!(
+            !backend.preparations.has(&id),
+            "cancelled inspect must not create a reservation"
+        );
+        drop(guard);
+    }
+
+    #[tokio::test]
+    async fn backend_teardown_retries_a_failed_retirement_before_close() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let root = temporary.path();
+        let context = Context::new();
+        let sessions = SessionStore::install(&context).expect("sessions");
+        let backend = JsonlSessionPersistence::new(
+            sessions.clone(),
+            JsonlConfig {
+                root: root.to_owned(),
+                pack_chunks: true,
+                compression: JsonlCompression::None,
+                write_batch_max_delay_ms: 60_000,
+                prepared_session_cache_size: 5,
+            },
+        )
+        .expect("backend");
+        let id = SessionId::new("retry-retirement");
+
+        // Occupy the project directory slot with a file. find_log skips
+        // non-directory project entries, so reads still succeed, while
+        // materialize's create_dir_all fails on the file — a write-only fault.
+        let project = crate::project_dir(root, None).expect("project directory");
+        std::fs::write(&project, b"blocked").expect("blocking project file");
+
+        let owner_fiber = Fiber::active_child("retiring owner");
+        let owner = context.with_fiber(owner_fiber.clone());
+        let session = sessions
+            .create(&owner, Some(id.clone()), CreateSessionOptions::default())
+            .expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("start");
+        session
+            .append(
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+                AppendOptions::default(),
+            )
+            .expect("end");
+        owner_fiber.dispose().await.expect("dispose owner");
+
+        let _ = backend
+            .load(&id)
+            .await
+            .expect_err("retirement drain failed");
+
+        std::fs::remove_file(&project).expect("unblock project directory");
+        context
+            .fiber()
+            .dispose()
+            .await
+            .expect("teardown retries retirement");
+        assert_eq!(
+            backend
+                .cold_inspection(&id, false)
+                .await
+                .expect("retry persisted the drain")
+                .events
+                .iter()
+                .map(|event| event.seq)
+                .collect::<Vec<_>>(),
+            [0, 1]
+        );
     }
 }

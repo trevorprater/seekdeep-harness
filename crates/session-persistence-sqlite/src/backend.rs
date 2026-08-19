@@ -661,6 +661,41 @@ impl SqliteSessionPersistence {
         Ok(())
     }
 
+    /// Waits for any in-flight retirement with caller-local cancellation.
+    ///
+    /// Once the signal is aborted the observation rejects with the exact
+    /// abort reason even when the retirement settles at the same time,
+    /// matching the source's queued-abort precedence for an operation that
+    /// never started. A failed retirement still propagates its failure.
+    async fn wait_for_retirement_abortable(
+        &self,
+        id: &SessionId,
+        signal: Option<&AbortSignal>,
+    ) -> anyhow::Result<()> {
+        let retirement = self
+            .retirements
+            .lock()
+            .get(id)
+            .map(|retirement| retirement.settlement.clone());
+        let Some(retirement) = retirement else {
+            return Ok(());
+        };
+        match signal {
+            Some(signal) => {
+                tokio::select! {
+                    biased;
+                    () = signal.cancelled() => ensure_not_aborted(Some(signal)),
+                    result = retirement => {
+                        result.map_err(|error| anyhow::Error::msg((*error).clone()))
+                    }
+                }
+            }
+            None => retirement
+                .await
+                .map_err(|error| anyhow::Error::msg((*error).clone())),
+        }
+    }
+
     async fn retire_core(self: &Arc<Self>, session: &Arc<Session>) -> anyhow::Result<()> {
         let key = session_key(session);
         let id = session.id();
@@ -1197,15 +1232,16 @@ impl SessionPersistence for SqliteSessionPersistence {
         id: &SessionId,
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<SessionInspection> {
-        ensure_not_aborted(signal.as_ref())?;
-        self.wait_for_retirement(id).await?;
-        if let Some(live) = self.sessions.get(id) {
-            return Ok(SessionInspection {
-                meta: live.header().clone(),
-                events: live.events(),
-            });
-        }
         loop {
+            ensure_not_aborted(signal.as_ref())?;
+            self.wait_for_retirement_abortable(id, signal.as_ref())
+                .await?;
+            if let Some(live) = self.sessions.get(id) {
+                return Ok(SessionInspection {
+                    meta: live.header().clone(),
+                    events: live.events(),
+                });
+            }
             let weak = self.self_weak.clone();
             let load_id = id.clone();
             let source = self

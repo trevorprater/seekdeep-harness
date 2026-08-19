@@ -33133,18 +33133,16 @@
     {
       "source": "packages/session/session-persistence/src/coordinator.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": ["crates/session-persistence/src/preparations.rs", "crates/session-persistence/src/write_behind.rs", "crates/session-persistence-jsonl/src/backend.rs", "crates/session-persistence-sqlite/src/backend.rs"],
-      "evidence": ["cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"],
-      "note": "Cold preparation, live adoption, write-behind, storage-only append, lazy empty append, revision, repair, and teardown paths are implemented; the remaining shared retirement and cancellation race matrix is not yet fully ported."
+      "evidence": ["cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features", "cargo clippy -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-targets --all-features -- -D warnings", "retirement races (superseded generations, queued replacement, cold-load cleanup, chain-tail serialization, teardown retry) and abortable retirement-fenced inspect cancellation are deterministically covered in crates/session-persistence-jsonl/src/backend.rs and crates/session-persistence-sqlite/tests/backend_parity.rs"]
     },
     {
       "source": "packages/session/session-persistence/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": ["crates/session-persistence/src/lib.rs", "crates/session-persistence-jsonl/src/lib.rs", "crates/session-persistence-sqlite/src/lib.rs"],
-      "evidence": ["cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"],
-      "note": "The typed seam, service publication, revisions, raw artifacts, preparation default, and concrete plugin composition are implemented; full coordinator teardown evidence remains outstanding."
+      "evidence": ["cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features", "cargo clippy -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-targets --all-features -- -D warnings", "coordinator teardown evidence: JSONL and SQLite retry a failed session retirement before close, drain buffered events before releasing ownership, and order teardown behind in-flight appends"]
     },
     {
       "source": "packages/session/session-persistence/src/invariant.ts",
@@ -33184,10 +33182,9 @@
     {
       "source": "packages/session/session-persistence/tests/coordinator-contract.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": ["crates/session-persistence/src/preparations.rs", "crates/session-persistence/src/write_behind.rs", "crates/session-persistence-jsonl/src/backend.rs", "crates/session-persistence-sqlite/tests/backend_parity.rs"],
-      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts packages/session/session-persistence-sqlite/tests/sqlite.spec.ts", "cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"],
-      "note": "Core adoption, preparation, append, repair, HMR, collision, and lazy-materialization cases are represented; remaining retirement-chain and detached-append race cases keep this surface unverified."
+      "evidence": ["pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts packages/session/session-persistence-sqlite/tests/sqlite.spec.ts", "cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features", "retirement-chain (superseded generations, queued replacement, cold-load cleanup, chain-tail serialization) and detached-append-vs-close ordering are covered by crates/session-persistence-jsonl/src/backend.rs"]
     },
     {
       "source": "packages/session/session-persistence/tests/persistence.spec.ts",
@@ -33195,7 +33192,7 @@
       "status": "ported",
       "targets": ["crates/session-persistence/src/lib.rs", "crates/session-persistence/src/preparations.rs", "crates/session-persistence/src/write_behind.rs", "crates/session-persistence-jsonl/src/backend.rs", "crates/session-persistence-sqlite/src/backend.rs"],
       "evidence": ["cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"],
-      "note": "Service, preparation, exact cancellation, write-behind, legacy refusal, live adoption, and teardown behavior are ported; the remaining retirement-chain and injected backend-failure cases keep this surface unverified."
+      "note": "Service, preparation, exact cancellation, write-behind, legacy refusal, live adoption, teardown, and the full retirement-chain race matrix (superseded generations, queued replacement, cold-load cleanup, chain-tail serialization, teardown retry, aborted retirement-fenced inspect) are ported; the remaining injected backend-failure cases (restored-suffix initialization rejection and storage-disappears-during-post-repair-reload) keep this surface unverified."
     },
     {
       "source": "packages/session/session-persistence/tests/preparations.spec.ts",
