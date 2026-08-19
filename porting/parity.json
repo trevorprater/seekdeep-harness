@@ -60030,12 +60030,27 @@
     {
       "source": "packages/session/session-telemetry/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-telemetry --all-features",
+        "cargo clippy -p seekdeep-session-telemetry --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Record vocabulary plus the SessionTelemetrySink/SessionTelemetryBackend traits and the sessionTelemetry seat; the coordinator (capture side) is ported separately."
     },
     {
       "source": "packages/session/session-telemetry/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-telemetry --all-features",
+        "cargo clippy -p seekdeep-session-telemetry --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-telemetry/tests/redact.spec.ts",
