@@ -27382,7 +27382,10 @@
     {
       "source": "packages/fs/tool-fs/src/read.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-fs/src/read.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"],
+      "note": "READ_LIMIT, STREAM_MIN_SIZE, ReadToolCaps, ReadArgsRaw/ReadInput, and parseReadArgs are ported; the applyReadTool definition (schemas, execute, presentResult/presentCall) remains"
     },
     {
       "source": "packages/fs/tool-fs/src/sandbox.ts",
