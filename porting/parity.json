@@ -53139,37 +53139,45 @@
     {
       "source": "packages/host/frontend-static/README.i18n.yaml",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/host-frontend-static/README.i18n.yaml",
-        "crates/host-frontend-static/src/lib.rs"
+        "crates/host-frontend-static/README.i18n.yaml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-frontend-static --all-features"
       ]
     },
     {
       "source": "packages/host/frontend-static/README.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/host-frontend-static/README.md",
-        "crates/host-frontend-static/src/lib.rs"
+        "crates/host-frontend-static/README.md"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-frontend-static --all-features"
       ]
     },
     {
       "source": "packages/host/frontend-static/README.zh.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/host-frontend-static/README.zh.md",
-        "crates/host-frontend-static/src/lib.rs"
+        "crates/host-frontend-static/README.zh.md"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-frontend-static --all-features"
       ]
     },
     {
       "source": "packages/host/frontend-static/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/host-frontend-static/Cargo.toml",
-        "crates/host-frontend-static/src/lib.rs"
+        "crates/host-frontend-static/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-frontend-static --all-features"
       ]
     },
     {
@@ -53215,10 +53223,12 @@
     {
       "source": "packages/host/frontend-static/tsconfig.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/host-frontend-static/Cargo.toml",
-        "crates/host-frontend-static/src/lib.rs"
+        "crates/host-frontend-static/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-frontend-static --all-features"
       ]
     },
     {
@@ -53431,37 +53441,45 @@
     {
       "source": "packages/identity/anonymous-user-id/README.i18n.yaml",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/anonymous-user-id/README.i18n.yaml",
-        "crates/anonymous-user-id/src/lib.rs"
+        "crates/anonymous-user-id/README.i18n.yaml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-anonymous-user-id --all-features"
       ]
     },
     {
       "source": "packages/identity/anonymous-user-id/README.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/anonymous-user-id/README.md",
-        "crates/anonymous-user-id/src/lib.rs"
+        "crates/anonymous-user-id/README.md"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-anonymous-user-id --all-features"
       ]
     },
     {
       "source": "packages/identity/anonymous-user-id/README.zh.md",
       "kind": "documentation",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/anonymous-user-id/README.zh.md",
-        "crates/anonymous-user-id/src/lib.rs"
+        "crates/anonymous-user-id/README.zh.md"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-anonymous-user-id --all-features"
       ]
     },
     {
       "source": "packages/identity/anonymous-user-id/package.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/anonymous-user-id/Cargo.toml",
-        "crates/anonymous-user-id/src/lib.rs"
+        "crates/anonymous-user-id/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-anonymous-user-id --all-features"
       ]
     },
     {
@@ -53521,10 +53539,12 @@
     {
       "source": "packages/identity/anonymous-user-id/tsconfig.json",
       "kind": "configuration",
-      "status": "ported",
+      "status": "verified",
       "targets": [
-        "crates/anonymous-user-id/Cargo.toml",
-        "crates/anonymous-user-id/src/lib.rs"
+        "crates/anonymous-user-id/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-anonymous-user-id --all-features"
       ]
     },
     {
@@ -68692,47 +68712,101 @@
     {
       "source": "packages/workspace/workspace/package.json",
       "kind": "configuration",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/src/entity.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/src/entity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/src/index.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/src/invariant.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/src/paths.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/src/paths.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/src/spec.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/src/spec.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/src/types.ts",
       "kind": "production-code",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/tests/workspace_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/tests/workspace.spec.ts",
       "kind": "test",
-      "status": "ported"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/tests/workspace_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace --all-features"
+      ]
     },
     {
       "source": "packages/workspace/workspace/tsconfig.json",
