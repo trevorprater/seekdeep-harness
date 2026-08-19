@@ -61,12 +61,12 @@ pub fn parse_hook_output(
         }
     }
 
-    if exit_code == Some(0) && trimmed_out.starts_with('{') {
-        if let Ok(parsed) = serde_json::from_str::<Value>(trimmed_out)
-            && let Some(object) = parsed.as_object()
-        {
-            apply_structured(&mut output, object, expected_event_name);
-        }
+    if exit_code == Some(0)
+        && trimmed_out.starts_with('{')
+        && let Ok(parsed) = serde_json::from_str::<Value>(trimmed_out)
+        && let Some(object) = parsed.as_object()
+    {
+        apply_structured(&mut output, object, expected_event_name);
     }
 
     output
@@ -99,10 +99,10 @@ fn apply_structured(
         if let Some(event_name) = str_field(hso, "hookEventName") {
             output.hook_event_name = Some(event_name.to_owned());
         }
-        if let Some(expected) = expected_event_name {
-            if str_field(hso, "hookEventName") != Some(expected) {
-                return;
-            }
+        if let Some(expected) = expected_event_name
+            && str_field(hso, "hookEventName") != Some(expected)
+        {
+            return;
         }
         if let Some(permission) = permission_decision_of(str_field(hso, "permissionDecision")) {
             output.decision = Some(permission);
