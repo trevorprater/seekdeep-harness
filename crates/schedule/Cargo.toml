@@ -7,12 +7,17 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
+seekdeep-scope = { path = "../scope" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

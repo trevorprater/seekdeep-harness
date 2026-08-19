@@ -5067,8 +5067,12 @@ name = "seekdeep-schedule"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
  "seekdeep-cordis",
  "seekdeep-core",
+ "seekdeep-scope",
  "seekdeep-util",
  "serde",
  "serde_json",
