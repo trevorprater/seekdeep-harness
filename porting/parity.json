@@ -27380,7 +27380,10 @@
     {
       "source": "packages/fs/tool-fs/src/session-cwd.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-fs/src/session_cwd.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-fs --all-features && cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"],
+      "note": "sessionCwd and sessionResolveOptions ported with parent-traversal detection"
     },
     {
       "source": "packages/fs/tool-fs/src/write.ts",
