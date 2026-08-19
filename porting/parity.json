@@ -35065,12 +35065,18 @@
     {
       "source": "packages/skill/tool-skill/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-skill/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-skill --all-features && cargo clippy -p seekdeep-tool-skill --all-targets --all-features -- -D warnings"],
+      "note": "catalog rendering/types (SkillCatalogSource, CatalogEntry, Config), catalogSourceEntries, catalogDescription, digestCatalogEntries, renderCatalogEntries/renderCatalogMessage/renderCatalogUpdate, readCatalogEntries, catalogMessage, and invokedSkillNames are ported; the skill tool definition, the two agent/pre-step listeners, and apply() remain"
     },
     {
       "source": "packages/skill/tool-skill/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "ported",
+      "targets": ["crates/tool-skill/src/lib.rs"],
+      "evidence": ["cargo test -p seekdeep-tool-skill --all-features && cargo clippy -p seekdeep-tool-skill --all-targets --all-features -- -D warnings"],
+      "note": "explained-empty invariant companion ported as register_invariant"
     },
     {
       "source": "packages/skill/tool-skill/tests/tool-skill.spec.ts",
