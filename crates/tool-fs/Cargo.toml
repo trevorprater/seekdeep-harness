@@ -7,7 +7,11 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+regex.workspace = true
 seekdeep-fs = { path = "../fs" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-tools = { path = "../tools" }
 thiserror.workspace = true
 
 [lints]

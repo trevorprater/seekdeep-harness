@@ -5593,7 +5593,11 @@ name = "seekdeep-tool-fs"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "regex",
  "seekdeep-fs",
+ "seekdeep-llm",
+ "seekdeep-sandbox",
+ "seekdeep-tools",
  "thiserror 2.0.20",
 ]
 
