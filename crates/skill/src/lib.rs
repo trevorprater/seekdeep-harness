@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use seekdeep_cordis::Context;
+use seekdeep_cordis::{Context, ServiceKey};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -117,6 +117,36 @@ pub fn is_model_invocable(skill: &SkillSummary) -> bool {
 #[must_use]
 pub fn is_user_invocable(skill: &SkillSummary) -> bool {
     skill.invocation.user_invocable
+}
+
+/// Durable source for a user-explicit skill invocation injection: the user's
+/// own words ride a plain user message, and the rendered body follows as
+/// injected `instructions`-form context.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInvocationSource {
+    /// Invocation source kind.
+    pub kind: SkillInvocationSourceKind,
+    /// Invoked skill name, validated user-invocable at the injecting boundary.
+    pub name: String,
+    /// Injected skill bodies are instructions for the model to follow.
+    pub form: SkillInvocationForm,
+}
+
+/// Closed source kind for skill-invocation messages.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SkillInvocationSourceKind {
+    /// A user-explicit skill invocation injected by the host.
+    SkillInvocation,
+}
+
+/// Closed injected-form for skill-invocation messages.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SkillInvocationForm {
+    /// Injected bodies are instructions.
+    Instructions,
 }
 
 /// Renders one loaded skill for the model as a canonical `skill_content` block.
@@ -286,6 +316,15 @@ pub trait SkillProvider: Send + Sync + 'static {
     ) -> anyhow::Result<Option<SkillDefinition>>;
 }
 
+/// Skill registry configuration.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Config {
+    /// Maximum number of completed cwd/provider catalogs kept in memory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collect_cache_max_entries: Option<usize>,
+}
+
 /// The reserved provider name for runtime skill registrations.
 pub const RUNTIME_PROVIDER: &str = "runtime";
 /// Default maximum completed catalogs kept in memory.
@@ -395,6 +434,9 @@ impl std::fmt::Debug for SkillRegistry {
     }
 }
 
+/// The Cordis service key carrying the agent skill registry.
+pub const SKILLS: ServiceKey<SkillRegistry> = ServiceKey::new("skills");
+
 impl SkillRegistry {
     /// Constructs the registry with the configured cache capacity.
     #[must_use]
@@ -422,6 +464,26 @@ impl SkillRegistry {
             scope_ids: parking_lot::Mutex::new(std::collections::HashMap::new()),
             collect_cache_max_entries,
         })
+    }
+
+    /// Installs the registry service and provides it on the context.
+    ///
+    /// # Errors
+    ///
+    /// Returns configuration-validation or service-provision failures.
+    pub fn install(context: &Context, config: &Config) -> anyhow::Result<Arc<Self>> {
+        let max = config
+            .collect_cache_max_entries
+            .unwrap_or(DEFAULT_COLLECT_CACHE_ENTRIES);
+        anyhow::ensure!(
+            max >= 1,
+            "skill: collectCacheMaxEntries must be an integer greater than or equal to 1"
+        );
+        let registry = Self::new(max);
+        context
+            .provide(SKILLS, registry.clone())
+            .map_err(anyhow::Error::from)?;
+        Ok(registry)
     }
 
     /// Registers a borrowed same-process provider into the calling scope's layer.
@@ -963,5 +1025,34 @@ mod tests {
             .expect("get")
             .expect("present");
         assert_eq!(runtime_loaded.summary.provider, RUNTIME_PROVIDER);
+    }
+
+    #[test]
+    fn install_provides_the_skills_service_and_validates_config() {
+        let context = Context::new();
+        let registry = SkillRegistry::install(&context, &Config::default()).expect("install");
+        assert!(Arc::ptr_eq(
+            &registry,
+            context.get(SKILLS).as_ref().expect("provided")
+        ));
+        let invalid = Config {
+            collect_cache_max_entries: Some(0),
+        };
+        assert!(SkillRegistry::install(&context, &invalid).is_err());
+    }
+
+    #[test]
+    fn skill_invocation_source_round_trips() {
+        let source = SkillInvocationSource {
+            kind: SkillInvocationSourceKind::SkillInvocation,
+            name: "dsh-badge".to_owned(),
+            form: SkillInvocationForm::Instructions,
+        };
+        let value = serde_json::to_value(&source).expect("serialize");
+        assert_eq!(value["kind"], "skill-invocation");
+        assert_eq!(value["form"], "instructions");
+        assert_eq!(value["name"], "dsh-badge");
+        let decoded: SkillInvocationSource = serde_json::from_value(value).expect("deserialize");
+        assert_eq!(decoded, source);
     }
 }
