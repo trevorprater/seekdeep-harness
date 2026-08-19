@@ -9,6 +9,7 @@ members = [
   "crates/agent-tool-presentation",
   "crates/anonymous-user-id",
   "crates/api-gateway",
+  "crates/api-remotes",
   "crates/client-connection",
   "crates/host-apiproxy",
   "crates/host-directory-picker",

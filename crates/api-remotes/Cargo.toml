@@ -1,0 +1,13 @@
+[package]
+name = "seekdeep-api-remotes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-invariants = { path = "../invariants" }
+
+[lints]
+workspace = true
