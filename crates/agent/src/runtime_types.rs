@@ -143,6 +143,9 @@ pub struct AgentOptions {
     /// Maximum output tokens per conversation-model request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<u64>,
+    /// Delegation depth: zero for a top-level agent and parent depth + 1 for a child.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subagent_depth: Option<u64>,
 }
 
 /// Observable whole-agent driver state.

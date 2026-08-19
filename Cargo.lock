@@ -5567,6 +5567,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-subagent"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "seekdeep-subprocess"
 version = "0.1.0-rc.5"
 dependencies = [

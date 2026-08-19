@@ -55,6 +55,7 @@ members = [
   "crates/schedule",
   "crates/scope",
   "crates/skill",
+  "crates/subagent",
   "crates/session-persistence",
   "crates/session-persistence-jsonl",
   "crates/session-persistence-sqlite",
