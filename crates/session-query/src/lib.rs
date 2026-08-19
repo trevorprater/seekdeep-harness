@@ -3,6 +3,7 @@
 
 pub mod config;
 pub mod cursor;
+pub mod extraction;
 pub mod sources;
 
 pub use config::{
@@ -10,4 +11,5 @@ pub use config::{
     SessionQueryError, SessionQueryErrorCode,
 };
 pub use cursor::SessionSearchCursor;
+pub use extraction::extract_session_event_text;
 pub use sources::assert_session_headers_compatible;

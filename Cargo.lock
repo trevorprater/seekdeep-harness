@@ -5236,6 +5236,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "seekdeep-core",
+ "seekdeep-llm",
  "seekdeep-util",
  "serde",
  "serde_json",
