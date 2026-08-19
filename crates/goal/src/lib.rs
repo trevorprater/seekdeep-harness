@@ -3,6 +3,7 @@
 pub mod client;
 pub mod domain;
 pub mod fold;
+pub mod index;
 pub mod invariant;
 pub mod runtime;
 pub mod types;
