@@ -13,7 +13,7 @@ pub struct AppIdentity<'a> {
     pub url: &'a str,
 }
 
-/// Seekdeep's default static attribution identity.
+/// `SeekDeep Harness`'s default static attribution identity.
 pub const APP_IDENTITY: AppIdentity<'static> = AppIdentity {
     product: "seekdeep-harness",
     version: env!("CARGO_PKG_VERSION"),

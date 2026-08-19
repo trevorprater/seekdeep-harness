@@ -25205,7 +25205,9 @@
     {
       "source": "packages/core/session/tests/repair.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/repair.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/session/tests/repair.spec.ts", "cargo test -p seekdeep-core repair::tests --all-features", "all 11 interruptedTurnClosers cases ported: balanced/empty, open-turn and step ordering, not-started versus unknown-outcome, already-answered, step-closed, cross-turn isolation, multiple unanswered calls in log order, surfaceOp/sourceEventSeqs, and orphan tool/call"]
     },
     {
       "source": "packages/core/session/tests/request-header.spec.ts",

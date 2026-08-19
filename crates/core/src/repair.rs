@@ -11,7 +11,7 @@ pub const TOOL_NOT_STARTED: &str = "TOOL_NOT_STARTED";
 /// A started tool has no durable outcome, so retry safety is unknown.
 pub const TOOL_OUTCOME_UNKNOWN: &str = "TOOL_OUTCOME_UNKNOWN";
 
-const NOT_STARTED_TEXT: &str = "The tool call was interrupted before Seekdeep recorded it as started. Retry it if it is still needed.";
+const NOT_STARTED_TEXT: &str = "The tool call was interrupted before the SeekDeep Harness recorded it as started. Retry it if it is still needed.";
 const OUTCOME_UNKNOWN_TEXT: &str = "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.";
 
 #[derive(Clone, Debug)]
@@ -265,5 +265,219 @@ mod tests {
         let unknown = interrupted_turn_closers(&started);
         assert_eq!(unknown[0].data["error"]["code"], TOOL_OUTCOME_UNKNOWN);
         assert_eq!(unknown[0].source_event_seqs, Some(vec![3]));
+    }
+    fn turn_start(turn: i64, seq: u64) -> SessionEvent {
+        event("turn/start", seq, json!({"turn": turn}))
+    }
+
+    fn step_start(turn: i64, step: i64, seq: u64) -> SessionEvent {
+        event("step/start", seq, json!({"turn": turn, "step": step}))
+    }
+
+    fn step_end(turn: i64, step: i64, seq: u64) -> SessionEvent {
+        event("step/end", seq, json!({"turn": turn, "step": step}))
+    }
+
+    fn turn_end(turn: i64, seq: u64) -> SessionEvent {
+        event(
+            "turn/end",
+            seq,
+            json!({"turn": turn, "reason": {"kind": "completed"}}),
+        )
+    }
+
+    fn assistant(seq: u64, turn: i64, step: i64, calls: &[&str]) -> SessionEvent {
+        let content = calls
+            .iter()
+            .map(|id| json!({"type": "tool-call", "id": id, "name": "bash", "arguments": "{}"}))
+            .collect::<Vec<_>>();
+        event(
+            "assistant/message",
+            seq,
+            json!({
+                "turn": turn,
+                "step": step,
+                "message": {
+                    "id": format!("m-{seq}"),
+                    "role": "assistant",
+                    "source": {"kind": "model", "provider": "mock", "model": "mock"},
+                    "content": content,
+                }
+            }),
+        )
+    }
+
+    fn tool_call(seq: u64, turn: i64, step: i64, call_id: &str) -> SessionEvent {
+        event(
+            "tool/call",
+            seq,
+            json!({"turn": turn, "step": step, "callId": call_id, "name": "bash", "arguments": "{}"}),
+        )
+    }
+
+    fn tool_result(seq: u64, turn: i64, step: i64, call_id: &str) -> SessionEvent {
+        event(
+            "tool/result",
+            seq,
+            json!({
+                "turn": turn,
+                "step": step,
+                "message": {
+                    "id": format!("r-{seq}"),
+                    "role": "user",
+                    "source": {"kind": "tool", "callId": call_id},
+                    "content": [{"type": "tool-result", "toolCallId": call_id, "isError": false, "content": [{"type": "text", "text": "ok"}]}],
+                }
+            }),
+        )
+    }
+
+    fn closer_types(events: &[SessionEvent]) -> Vec<&str> {
+        events
+            .iter()
+            .map(|event| event.event_type.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn closes_an_open_turn_with_no_open_step() {
+        let closers = interrupted_turn_closers(&[turn_start(1, 0)]);
+        assert_eq!(closer_types(&closers), ["turn/end"]);
+        assert_eq!(closers[0].seq, 1);
+        assert_eq!(closers[0].data["reason"], json!({"kind": "interrupted"}));
+    }
+
+    #[test]
+    fn not_started_result_carries_message_text_and_contiguous_sequences() {
+        let events = vec![
+            turn_start(2, 0),
+            step_start(2, 1, 1),
+            assistant(2, 2, 1, &["call-1"]),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(
+            closer_types(&closers),
+            ["tool/result", "step/end", "turn/end"]
+        );
+        assert_eq!(
+            closers.iter().map(|event| event.seq).collect::<Vec<_>>(),
+            [3, 4, 5]
+        );
+        let result = &closers[0];
+        assert_eq!(result.data["turn"], json!(2));
+        assert_eq!(result.data["step"], json!(1));
+        assert_eq!(result.data["error"]["code"], TOOL_NOT_STARTED);
+        assert!(matches!(
+            &result.surface_op,
+            Some(SurfaceOp::Marker(marker)) if marker == "append"
+        ));
+        let text = &result.data["message"]["content"][0]["content"][0]["text"];
+        assert_eq!(
+            text,
+            "The tool call was interrupted before the SeekDeep Harness recorded it as started. Retry it if it is still needed."
+        );
+    }
+
+    #[test]
+    fn does_not_synthesize_a_result_for_an_already_answered_call() {
+        let events = vec![
+            turn_start(2, 0),
+            step_start(2, 1, 1),
+            assistant(2, 2, 1, &["call-1"]),
+            tool_result(3, 2, 1, "call-1"),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(closer_types(&closers), ["step/end", "turn/end"]);
+    }
+
+    #[test]
+    fn does_not_synthesize_a_result_after_the_owning_step_closed() {
+        let events = vec![
+            turn_start(2, 0),
+            step_start(2, 1, 1),
+            assistant(2, 2, 1, &["call-1"]),
+            step_end(2, 1, 3),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(closer_types(&closers), ["turn/end"]);
+        assert_eq!(closers[0].seq, 4);
+    }
+
+    #[test]
+    fn synthesizes_results_only_for_the_still_open_turn() {
+        let events = vec![
+            turn_start(1, 0),
+            step_start(1, 1, 1),
+            assistant(2, 1, 1, &["old-call"]),
+            tool_result(3, 1, 1, "old-call"),
+            step_end(1, 1, 4),
+            turn_end(1, 5),
+            turn_start(2, 6),
+            step_start(2, 1, 7),
+            assistant(8, 2, 1, &["new-call"]),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(
+            closer_types(&closers),
+            ["tool/result", "step/end", "turn/end"]
+        );
+        assert_eq!(closers[0].data["message"]["source"]["callId"], "new-call");
+    }
+
+    #[test]
+    fn synthesizes_one_result_per_unanswered_call_in_log_order() {
+        let events = vec![
+            turn_start(1, 0),
+            step_start(1, 1, 1),
+            assistant(2, 1, 1, &["call-a", "call-b"]),
+            tool_result(3, 1, 1, "call-a"),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(
+            closer_types(&closers),
+            ["tool/result", "step/end", "turn/end"]
+        );
+        assert_eq!(closers[0].data["message"]["source"]["callId"], "call-b");
+    }
+
+    #[test]
+    fn unknown_outcome_result_carries_surface_op_source_seqs_and_text() {
+        let events = vec![
+            turn_start(1, 0),
+            step_start(1, 1, 1),
+            assistant(2, 1, 1, &["call-1"]),
+            tool_call(3, 1, 1, "call-1"),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(
+            closer_types(&closers),
+            ["tool/result", "step/end", "turn/end"]
+        );
+        let result = &closers[0];
+        assert!(matches!(
+            &result.surface_op,
+            Some(SurfaceOp::Marker(marker)) if marker == "append"
+        ));
+        assert_eq!(result.source_event_seqs, Some(vec![3]));
+        assert_eq!(
+            result.data["error"],
+            json!({"name": "ToolOutcomeUnknownError", "code": TOOL_OUTCOME_UNKNOWN})
+        );
+        let text = result.data["message"]["content"][0]["content"][0]["text"]
+            .as_str()
+            .expect("text");
+        assert!(text.contains("retry only if the operation is read-only or idempotent"));
+        assert!(text.contains("first verify external state or ask the user"));
+    }
+
+    #[test]
+    fn handles_an_orphan_tool_call_without_a_matching_assistant_entry() {
+        let events = vec![
+            turn_start(1, 0),
+            step_start(1, 1, 1),
+            tool_call(2, 1, 1, "orphan"),
+        ];
+        let closers = interrupted_turn_closers(&events);
+        assert_eq!(closer_types(&closers), ["step/end", "turn/end"]);
     }
 }

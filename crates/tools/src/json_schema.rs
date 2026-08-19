@@ -30,7 +30,7 @@ const ONE_OF_SIBLINGS: [&str; 6] = [
 /// Stable code attached to unsupported-schema failures.
 pub const UNSUPPORTED_SCHEMA: &str = "UNSUPPORTED_SCHEMA";
 
-/// One validated node in Seekdeep's deliberately small JSON Schema subset.
+/// One validated node in `SeekDeep Harness`'s deliberately small JSON Schema subset.
 #[derive(Debug, PartialEq)]
 pub struct JsonSchemaNode(Value);
 

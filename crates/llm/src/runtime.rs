@@ -235,7 +235,7 @@ pub type LlmStreamNext = Box<dyn FnOnce(GenerateOptions) -> LlmStream + Send + '
 pub type LlmStreamMiddleware =
     Arc<dyn Fn(GenerateOptions, LlmStreamNext) -> LlmStream + Send + Sync + 'static>;
 
-/// Provider-wire adapter for Seekdeep's message and stream vocabulary.
+/// Provider-wire adapter for `SeekDeep Harness`'s message and stream vocabulary.
 #[async_trait]
 pub trait LlmAdapter: Send + Sync + 'static {
     /// Describes one route owned by this adapter.
