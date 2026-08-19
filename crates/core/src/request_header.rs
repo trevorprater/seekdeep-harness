@@ -113,8 +113,8 @@ pub fn fold_request_header(
 
 #[cfg(test)]
 mod tests {
-    use seekdeep_llm::ToolSchema;
-    use serde_json::Map;
+    use seekdeep_llm::{ReasoningEffortId, ToolSchema};
+    use serde_json::{Map, Value, json};
 
     use super::*;
 
@@ -164,5 +164,115 @@ mod tests {
         let mut right = left.clone();
         right.tools.as_mut().expect("tools").reverse();
         assert!(!header_equals(&left, &right));
+    }
+
+    fn header_event(seq: u64, header: Value) -> SessionEvent {
+        let mut data = Map::new();
+        data.insert("header".to_owned(), header);
+        SessionEvent {
+            event_type: "request/header".to_owned(),
+            seq,
+            time: i64::try_from(seq).expect("test seq"),
+            data: Value::Object(data),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        }
+    }
+
+    #[test]
+    fn fold_returns_baseline_without_a_snapshot_and_skips_unrelated_events() {
+        let baseline = EpochHeader {
+            config: config(),
+            adapter_defaults: None,
+            system: Some("baseline".to_owned()),
+            tools: None,
+        };
+        let unrelated = SessionEvent {
+            event_type: "turn/start".to_owned(),
+            seq: 0,
+            time: 1,
+            data: json!({"turn": 1}),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        };
+        assert_eq!(fold_request_header(&[], None), None);
+        assert_eq!(
+            fold_request_header(&[unrelated], Some(baseline.clone())),
+            Some(baseline.clone())
+        );
+    }
+
+    #[test]
+    fn fold_takes_the_latest_full_snapshot_and_canonicalizes_it() {
+        let config = config();
+        let events = vec![
+            header_event(0, json!({"config": config, "system": "first"})),
+            header_event(1, json!({"config": config, "tools": []})),
+        ];
+        assert_eq!(
+            fold_request_header(&events, None),
+            Some(EpochHeader {
+                config,
+                adapter_defaults: None,
+                system: None,
+                tools: None,
+            })
+        );
+    }
+
+    #[test]
+    fn treats_absent_and_empty_tools_as_equivalent_absence() {
+        let a = EpochHeader {
+            config: config(),
+            adapter_defaults: None,
+            system: None,
+            tools: None,
+        };
+        let mut b = a.clone();
+        b.tools = Some(Vec::new());
+        assert!(header_equals(&a, &b));
+    }
+
+    #[test]
+    fn compares_every_canonical_field() {
+        let tool = |name: &str, description: &str| ToolSchema {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            parameters: Map::new(),
+        };
+        let base = canonical_header(EpochHeader {
+            config: config(),
+            adapter_defaults: None,
+            system: Some("s".to_owned()),
+            tools: Some(vec![tool("a", "d")]),
+        });
+        assert!(header_equals(&base, &base.clone()));
+
+        let mut other_model = base.clone();
+        other_model.config.model = "other".into();
+        assert!(!header_equals(&base, &other_model));
+
+        let mut other_reasoning = base.clone();
+        other_reasoning.config.reasoning_effort = Some(ReasoningEffortId::new("high"));
+        assert!(!header_equals(&base, &other_reasoning));
+
+        let mut resolved_max = base.clone();
+        resolved_max.config.max_tokens = Some(256_000);
+        let mut unresolved_max = resolved_max.clone();
+        unresolved_max.adapter_defaults = Some(AdapterDefaults {
+            reasoning_effort: None,
+            max_tokens: Some(true),
+        });
+        assert!(!header_equals(&resolved_max, &unresolved_max));
+
+        let mut other_system = base.clone();
+        other_system.system = Some("other".to_owned());
+        assert!(!header_equals(&base, &other_system));
+
+        let mut other_tool = base.clone();
+        other_tool.tools = Some(vec![tool("a", "changed")]);
+        assert!(!header_equals(&base, &other_tool));
     }
 }

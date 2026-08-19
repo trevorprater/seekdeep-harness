@@ -25212,7 +25212,9 @@
     {
       "source": "packages/core/session/tests/request-header.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/core/src/request_header.rs", "crates/core/src/session.rs", "crates/session-persistence/src/stored_events.rs"],
+      "evidence": ["pnpm exec vitest --run packages/core/session/tests/request-header.spec.ts", "cargo test -p seekdeep-core request_header::tests --all-features", "cargo test -p seekdeep-core session::tests::request_context --all-features", "canonicalHeader/headerEquals/foldRequestHeader, Session.requestContext fold/advance/batch/freeze, and legacy request/header-delta plus fallback-reason rejection are all covered"]
     },
     {
       "source": "packages/core/session/tests/scoped.spec.ts",

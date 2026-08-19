@@ -1057,4 +1057,170 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(session.events(), before);
     }
+
+    fn turn_start_event(seq: u64) -> SessionEvent {
+        SessionEvent {
+            event_type: "turn/start".to_owned(),
+            seq,
+            time: 1,
+            data: json!({"turn": 1}),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        }
+    }
+
+    fn context_event(
+        seq: u64,
+        provider: &str,
+        model: &str,
+        context_window: Option<u64>,
+    ) -> SessionEvent {
+        let mut data = serde_json::Map::new();
+        data.insert("provider".to_owned(), json!(provider));
+        data.insert("model".to_owned(), json!(model));
+        if let Some(window) = context_window {
+            data.insert("contextWindow".to_owned(), json!(window));
+        }
+        SessionEvent {
+            event_type: "request/context".to_owned(),
+            seq,
+            time: 1,
+            data: Value::Object(data),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        }
+    }
+
+    fn capacity_session(id: &str, records: &[(&str, &str, Option<u64>)]) -> Arc<Session> {
+        let mut seed = vec![turn_start_event(0)];
+        for (index, (provider, model, window)) in records.iter().enumerate() {
+            seed.push(context_event(
+                u64::try_from(index + 1).expect("seq"),
+                provider,
+                model,
+                *window,
+            ));
+        }
+        Session::create(&SessionId::new(id), Some(seed), None).expect("seeded capacity session")
+    }
+
+    #[test]
+    fn request_context_is_none_before_any_record_exists() {
+        let session = Session::create(&SessionId::new("no-capacity"), None, None).expect("new");
+        assert_eq!(session.request_context(), None);
+    }
+
+    #[test]
+    fn request_context_folds_a_seeded_log_taking_the_last_record() {
+        let session = capacity_session(
+            "seeded-capacity",
+            &[
+                ("mock", "m", Some(128_000)),
+                ("mock", "later", Some(256_000)),
+            ],
+        );
+        assert_eq!(
+            session.request_context(),
+            Some(RequestContext {
+                provider: ProviderId::new("mock"),
+                model: ModelId::new("later"),
+                context_window: Some(256_000),
+            })
+        );
+    }
+
+    #[test]
+    fn request_context_advances_incrementally_and_skips_unrelated_events() {
+        let session = capacity_session("incremental-capacity", &[("mock", "m", Some(128_000))]);
+        assert_eq!(
+            session.request_context(),
+            Some(RequestContext {
+                provider: ProviderId::new("mock"),
+                model: ModelId::new("m"),
+                context_window: Some(128_000),
+            })
+        );
+        session
+            .append("todo/write", json!({"todos": []}), AppendOptions::default())
+            .expect("unrelated append");
+        assert_eq!(
+            session.request_context().as_ref().map(|c| c.model.clone()),
+            Some(ModelId::new("m"))
+        );
+        session
+            .append(
+                "request/context",
+                json!({"provider": "mock", "model": "next", "contextWindow": 64_000}),
+                AppendOptions::default(),
+            )
+            .expect("capacity append");
+        assert_eq!(
+            session.request_context(),
+            Some(RequestContext {
+                provider: ProviderId::new("mock"),
+                model: ModelId::new("next"),
+                context_window: Some(64_000),
+            })
+        );
+        session
+            .append(
+                "request/context",
+                json!({"provider": "mock", "model": "unknown"}),
+                AppendOptions::default(),
+            )
+            .expect("capacity append without window");
+        assert_eq!(
+            session.request_context(),
+            Some(RequestContext {
+                provider: ProviderId::new("mock"),
+                model: ModelId::new("unknown"),
+                context_window: None,
+            })
+        );
+    }
+
+    #[test]
+    fn request_context_folds_a_batch_appended_between_reads() {
+        let session = capacity_session("batched-capacity", &[("mock", "m", Some(128_000))]);
+        assert_eq!(
+            session.request_context().as_ref().map(|c| c.context_window),
+            Some(Some(128_000))
+        );
+        session
+            .append(
+                "request/context",
+                json!({"provider": "mock", "model": "m", "contextWindow": 200_000}),
+                AppendOptions::default(),
+            )
+            .expect("capacity append");
+        session
+            .append("todo/write", json!({"todos": []}), AppendOptions::default())
+            .expect("unrelated append");
+        session
+            .append(
+                "request/context",
+                json!({"provider": "mock", "model": "m", "contextWindow": 300_000}),
+                AppendOptions::default(),
+            )
+            .expect("capacity append");
+        assert_eq!(
+            session.request_context().as_ref().map(|c| c.context_window),
+            Some(Some(300_000))
+        );
+    }
+
+    #[test]
+    fn request_context_returns_a_detached_record() {
+        let session = capacity_session("frozen-capacity", &[("mock", "m", Some(128_000))]);
+        let held = session.request_context().expect("folded capacity record");
+        // Mutating the returned owned clone cannot desync the session's state.
+        let mut mutated = held.clone();
+        mutated.context_window = Some(1);
+        assert_eq!(
+            session.request_context().as_ref().map(|c| c.context_window),
+            Some(Some(128_000))
+        );
+    }
 }
