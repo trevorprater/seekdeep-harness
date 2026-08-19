@@ -52,6 +52,7 @@ members = [
   "crates/sandbox-policy",
   "crates/sandbox-windows-acl",
   "crates/sandbox-windows-acl-native",
+  "crates/schedule",
   "crates/scope",
   "crates/skill",
   "crates/session-persistence",

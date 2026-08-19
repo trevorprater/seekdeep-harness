@@ -58074,7 +58074,14 @@
     {
       "source": "packages/schedule/schedule/src/persistence.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schedule/src/persistence.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-schedule --all-features",
+        "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/schedule/schedule/src/runtime.ts",
@@ -58094,7 +58101,14 @@
     {
       "source": "packages/schedule/schedule/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schedule/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-schedule --all-features",
+        "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/schedule/schedule/tests/domain.spec.ts",

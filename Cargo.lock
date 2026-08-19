@@ -5063,6 +5063,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-schedule"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-schemastery"
 version = "0.1.0-rc.5"
 dependencies = [
