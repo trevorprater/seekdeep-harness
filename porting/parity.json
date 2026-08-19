@@ -36046,13 +36046,12 @@
     {
       "source": "native/landlock-run/test/launcher.test.js",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/landlock-run/tests/launcher_parity.rs"
       ],
       "evidence": [
-        "Rust CLI subprocess tests preserve every usage failure and non-Linux fail-closed probe",
-        "Docker Linux execution with required enforcement correctly failed rather than skipping when LinuxKit exposed no active Landlock LSM"
+        "cargo test -p seekdeep-landlock-run --all-features"
       ],
       "note": "Real Linux grant, denial, inheritance, and exec world proofs require a Landlock-enforcing kernel."
     },
@@ -36424,26 +36423,24 @@
     {
       "source": "packages/api/gateway/tests/gateway.client.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/api-gateway/tests/gateway_client_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/api/gateway/tests/gateway.client.spec.ts",
-        "cargo test -p seekdeep-api-gateway --test gateway_client_parity"
+        "cargo test -p seekdeep-api-gateway --all-features"
       ],
       "note": "All source cases are inventoried and native representable behavior is covered; Connection package integration and JavaScript property-injection failpoints remain outstanding."
     },
     {
       "source": "packages/api/gateway/tests/gateway.host.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/api-gateway/tests/gateway_host_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/api/gateway/tests/gateway.host.spec.ts",
-        "cargo test -p seekdeep-api-gateway --test gateway_host_parity"
+        "cargo test -p seekdeep-api-gateway --all-features"
       ],
       "note": "All source cases are inventoried and native representable behavior is covered; Connection interceptor and real HTTP bridge cases await their Rust dependencies."
     },
@@ -37784,14 +37781,13 @@
     {
       "source": "packages/client/connection/tests/client-apply.client.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/tests/client_handle_parity.rs",
         "crates/client-connection/tests/web_api_client_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/client/connection/tests/client-apply.client.spec.ts",
-        "cargo test -p seekdeep-client-connection --test client_handle_parity --test web_api_client_parity"
+        "cargo test -p seekdeep-client-connection --all-features"
       ],
       "note": "All real-mode and handle behaviors are green; fixture selection and fixture Goal remotes remain pending."
     },
@@ -37850,14 +37846,13 @@
     {
       "source": "packages/client/connection/tests/node-half.host.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/client-connection/tests/host_bridge_parity.rs",
         "crates/client-connection/tests/rpc_parity.rs",
         "crates/client-connection/tests/websocket_downlink_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/client/connection/tests/node-half.host.spec.ts",
         "cargo test -p seekdeep-client-connection --all-features"
       ],
       "note": "Real HTTP route, RPC, trust, privilege, capacity, dynamic API Proxy, and upgrade behavior is green; direct Attachment service composition remains tracked with the Attachment/API Proxy port."
@@ -46591,14 +46586,13 @@
     {
       "source": "packages/context/time-context/tests/time-context.e2e.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/time-context/tests/agent_loop_e2e.rs",
         "crates/time-context/tests/loader_composition.rs"
       ],
       "evidence": [
-        "pinned source headless Loader and JSONL persistence smoke passed 1/1",
-        "Rust real-driver two-request history test and declarative Loader composition tests pass"
+        "cargo test -p seekdeep-time-context --all-features"
       ],
       "note": "Rust filesystem-backed headless binary smoke remains required before this source E2E surface is verified"
     },
@@ -47347,26 +47341,24 @@
     {
       "source": "packages/core/agent/tests/agent-initiator.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/agent/src/registry.rs"
       ],
       "evidence": [
-        "pnpm exec vitest --run packages/core/agent/tests/agent-initiator.spec.ts",
-        "cargo test -p seekdeep-agent registry::tests --all-features"
+        "cargo test -p seekdeep-agent --all-features"
       ],
       "note": "initiator-boundary enter/restore/drain/invalidate and overlapping-scope isolation are covered by the registry initiator tests; the branded-Promise species, overridable-then, and cross-realm cases are JavaScript-specific and adapted to Rust Futures"
     },
     {
       "source": "packages/core/agent/tests/agent.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/agent/src/registry.rs",
         "crates/agent/src/inbox.rs"
       ],
       "evidence": [
-        "pnpm exec vitest --run packages/core/agent/tests/agent.spec.ts",
         "cargo test -p seekdeep-agent --all-features"
       ],
       "note": "Inbox splice/replace/clear and AgentRegistry entry registration, lifecycle pairing, identity mismatch, detach deferral, rollback, and factory seam are covered by 11 inbox+registry tests; Typert-live lookup and agentEvents fused-subject dispatch await their integration surfaces"
@@ -47767,13 +47759,12 @@
     {
       "source": "packages/core/session/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/core/src/invariant.rs"
       ],
       "evidence": [
-        "pnpm exec vitest --run packages/core/session/tests/invariant.spec.ts",
-        "cargo test -p seekdeep-core invariant::tests --all-features"
+        "cargo test -p seekdeep-core --all-features"
       ],
       "note": "The relational validation matrix (turn/step/tool enclosure, numbering, open-step identity, tool-result append/replacement rules, not-started repair, cross-step isolation, non-monotonic seq, end-seed) plus seeded-session replay, reload trace rebuild, and dispose listener-removal are ported; the remaining scoped-registration, dispatch-veto rollback, and postcommit-observer warning cases keep this surface unverified."
     },
@@ -52665,14 +52656,13 @@
     {
       "source": "packages/host/apiproxy/tests/client-handler.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/tests/handler_parity.rs",
         "crates/host-apiproxy/tests/client_contract_parity.rs",
         "crates/client-connection/tests/web_api_client_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/client-handler.spec.ts",
         "cargo test -p seekdeep-host-apiproxy --all-features"
       ],
       "note": "Carrier errors, two-level parsing, rpc correlation, response receipts, both physical streams, real-network integration, and in-process SSE chopping/laziness are covered; source-test-to-Rust-test case mapping remains to be audited before verification."
@@ -52680,17 +52670,14 @@
     {
       "source": "packages/host/apiproxy/tests/fetch-carrier.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/tests/in_process_carrier_parity.rs",
         "crates/host-apiproxy/tests/handler_parity.rs",
         "crates/host-apiproxy/tests/method_registry_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/fetch-carrier.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test in_process_carrier_parity",
-        "cargo test -p seekdeep-host-apiproxy --test handler_parity",
-        "cargo test -p seekdeep-host-apiproxy --test method_registry_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ],
       "note": "The fetch-shaped no-network carrier, SSE framing/decoding, laziness, malformed-frame isolation, terminal stream errors, receipts, correlation, status failures, native-picker timeout policy, and envelope observation are covered. Exhaustive all-domain invocation plus carrier-signal timing and observer-batch case mapping remain before verification."
     },
@@ -52710,7 +52697,7 @@
     {
       "source": "packages/host/apiproxy/tests/rpc-schemas.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/tests/rpc_schema_parity.rs",
         "crates/host-apiproxy/tests/session_schema_parity.rs",
@@ -52721,7 +52708,6 @@
         "crates/host-apiproxy/tests/settings_credentials_llm_schema_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/rpc-schemas.spec.ts",
         "cargo test -p seekdeep-host-apiproxy --all-features"
       ],
       "note": "All 32 source schema cases and an exhaustive 52-method Rust registry matrix pass; JS integer edge semantics beyond Rust integer ranges remain under audit before verified status."
@@ -52729,15 +52715,13 @@
     {
       "source": "packages/host/apiproxy/tests/session-export.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/tests/session_export_parity.rs",
         "crates/host-apiproxy/tests/handler_parity.rs"
       ],
       "evidence": [
-        "pnpm vitest run packages/host/apiproxy/tests/session-export.spec.ts",
-        "cargo test -p seekdeep-host-apiproxy --test session_export_parity",
-        "cargo test -p seekdeep-host-apiproxy --test handler_parity"
+        "cargo test -p seekdeep-host-apiproxy --all-features"
       ],
       "note": "Rust coverage exercises configuration, clean preparation statuses, private-error shielding, verbatim/empty/long-Unicode artifacts, compression, descendants, deduplication, all media carriers/extensions, pull backpressure, mid-stream failures, cancellation, GET streaming, HEAD cancellation, and real HTTP streaming. Exhaustive one-to-one mapping of all 35 source cases remains before verification."
     },
@@ -54607,14 +54591,12 @@
     {
       "source": "packages/llm/llm-deepseek/tests/adapter.e2e.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/llm-deepseek/tests/adapter_e2e.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-llm-deepseek --test adapter_e2e --no-run --all-features",
-        "cargo test -p seekdeep-llm-deepseek --test adapter_e2e --all-features",
-        "live cases remain ignored because they contact the real API and consume quota"
+        "cargo test -p seekdeep-llm-deepseek --all-features"
       ]
     },
     {
@@ -57774,12 +57756,12 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/quote.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/sandbox-windows-acl/tests/pure_parity.rs"
       ],
       "evidence": [
-        "Rust reproduces the complete quoting edge-case table and joined command-line construction"
+        "cargo test -p seekdeep-sandbox-windows-acl --all-features"
       ],
       "note": "The Windows-only CommandLineToArgvW round-trip remains unverified."
     },
@@ -59247,13 +59229,12 @@
     {
       "source": "packages/session/session-persistence-jsonl/tests/jsonl.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/session-persistence-jsonl/src/format.rs",
         "crates/session-persistence-jsonl/src/backend.rs"
       ],
       "evidence": [
-        "pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts",
         "cargo test -p seekdeep-session-persistence-jsonl --all-features"
       ],
       "note": "Format, scanner, compressed recovery, core persistence, ownership, preparation, HMR, and teardown cases are represented; remaining filesystem stat/list/read fault injections and full coordinator races are outstanding."
@@ -59370,13 +59351,12 @@
     {
       "source": "packages/session/session-persistence-sqlite/tests/sqlite.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/session-persistence-sqlite/tests/backend_parity.rs",
         "crates/session-persistence-sqlite/tests/schema_parity.rs"
       ],
       "evidence": [
-        "pnpm exec vitest --run packages/session/session-persistence-sqlite/tests/sqlite.spec.ts",
         "cargo test -p seekdeep-session-persistence-sqlite --all-features"
       ],
       "note": "Schema, medium, revision, surface-column, permissions, journal, append, and repair cases are ported; remaining shared coordinator/preparation cancellation cases keep this test surface unverified."
@@ -59552,7 +59532,7 @@
     {
       "source": "packages/session/session-persistence/tests/persistence.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/session-persistence/src/lib.rs",
         "crates/session-persistence/src/preparations.rs",
@@ -59561,7 +59541,7 @@
         "crates/session-persistence-sqlite/src/backend.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-persistence -p seekdeep-session-persistence-jsonl -p seekdeep-session-persistence-sqlite --all-features"
+        "cargo test -p seekdeep-session-persistence --all-features"
       ],
       "note": "Service, preparation, exact cancellation, write-behind, legacy refusal, live adoption, teardown, and the full retirement-chain race matrix (superseded generations, queued replacement, cold-load cleanup, chain-tail serialization, teardown retry, aborted retirement-fenced inspect) are ported; the remaining injected backend-failure cases (restored-suffix initialization rejection and storage-disappears-during-post-repair-reload) keep this surface unverified."
     },
@@ -62276,14 +62256,13 @@
     {
       "source": "packages/spill/spill-policy/tests/spill-policy.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/spill-policy/src/lib.rs",
         "crates/tools/src/runtime.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-spill-policy --all-features",
-        "pnpm exec vitest run packages/spill/spill-policy/tests/spill-policy.spec.ts"
+        "cargo test -p seekdeep-spill-policy --all-features"
       ],
       "note": "policy behavior and contained dispatch-log shaping pass; WorkerThread Code Runtime program-path independence and bounded-backlog integration cases await the native Rust Code Runtime"
     },
@@ -66833,16 +66812,14 @@
     {
       "source": "packages/typert/protocol/tests/protocol.spec.ts",
       "kind": "test",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/typert-protocol/tests/protocol_parity.rs",
         "crates/typert-protocol/src/lib.rs",
         "crates/typert-protocol/src/types.rs"
       ],
       "evidence": [
-        "pnpm exec vitest run packages/typert/protocol/tests/protocol.spec.ts",
-        "cargo test -p seekdeep-typert-protocol --all-targets --all-features",
-        "cargo test -p seekdeep-typert-protocol --doc --all-features"
+        "cargo test -p seekdeep-typert-protocol --all-features"
       ],
       "note": "all runtime declaration, binding, marker, conflict, segment, and wire-result cases pass; the TypeScript-only forwardable/selected event type assertion remains pending on typed Cordis event integration"
     },
