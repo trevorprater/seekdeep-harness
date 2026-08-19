@@ -5235,15 +5235,20 @@ name = "seekdeep-session-query"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "parking_lot",
  "regex",
+ "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-session-persistence",
  "seekdeep-session-title",
  "seekdeep-util",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]

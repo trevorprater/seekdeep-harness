@@ -1,5 +1,6 @@
 //! Durable and provider-facing session-title model types.
 
+use seekdeep_core::session::SessionEvent;
 use serde::{Deserialize, Serialize};
 
 seekdeep_util::string_brand!(
@@ -96,6 +97,24 @@ pub enum SessionTitleAutomaticMode {
     AllPrompts,
 }
 
+/// Folds the latest logged title without consulting mutable metadata.
+///
+/// Returns the latest immutable title snapshot, or `None` when the observed
+/// log has no `session/title` event.
+#[must_use]
+pub fn fold_session_title(events: &[SessionEvent]) -> Option<SessionTitleSnapshot> {
+    let event = events
+        .iter()
+        .rev()
+        .find(|event| event.event_type == "session/title")?;
+    let event_data: SessionTitleEventData = serde_json::from_value(event.data.clone()).ok()?;
+    Some(SessionTitleSnapshot {
+        event: event_data,
+        event_seq: event.seq,
+        updated_at: u64::try_from(event.time).unwrap_or_default(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +150,26 @@ mod tests {
         assert_eq!(value["kind"], "provider");
         assert_eq!(value["provider"], "p1");
         assert_eq!(value["model"]["model"], "chat-model");
+    }
+
+    #[test]
+    fn fold_session_title_reads_the_latest_logged_title() {
+        use seekdeep_core::session::SessionEvent;
+        use serde_json::json;
+
+        let title = |seq: u64, text: &str| SessionEvent {
+            event_type: "session/title".to_owned(),
+            seq,
+            time: i64::try_from(seq).expect("seq"),
+            data: json!({"title": text, "messageSeqs": [seq], "source": {"kind": "fallback"}}),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        };
+        let events = vec![title(0, "first"), title(1, "second")];
+        let folded = fold_session_title(&events).expect("latest title");
+        assert_eq!(folded.event.title, "second");
+        assert_eq!(folded.event_seq, 1);
+        assert!(fold_session_title(&[]).is_none());
     }
 }

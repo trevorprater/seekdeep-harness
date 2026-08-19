@@ -2,6 +2,7 @@
 //! live-preferred logical session corpus.
 
 use seekdeep_core::session::{SessionEvent, SessionHeader, SessionId};
+use seekdeep_llm::AbortSignal;
 use seekdeep_session_title::SessionTitleSnapshot;
 use serde::{Deserialize, Serialize};
 
@@ -333,3 +334,105 @@ pub struct SessionSearchHit {
     /// Strongest matching event for this session.
     pub best_match: SessionEventSearchHit,
 }
+
+/// Event predicates a full-text provider can apply before relevance ranking.
+///
+/// Excludes the literal `text` clause, which the provider interprets as query
+/// text rather than a metadata predicate.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum SessionEventMetadataFilter {
+    /// Seq range clause.
+    Seq {
+        /// Inclusive lower bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<u64>,
+        /// Inclusive upper bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<u64>,
+    },
+    /// Time range clause.
+    Time {
+        /// Inclusive lower bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<u64>,
+        /// Inclusive upper bound.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<u64>,
+    },
+    /// Type clause.
+    Type {
+        /// Event type discriminants.
+        values: Vec<SessionEventType>,
+    },
+    /// Surface clause.
+    Surface {
+        /// Surface placements.
+        values: Vec<SessionEventSurface>,
+    },
+}
+
+/// Event-search results bound to the indexed target-session observation.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEventSearchPage {
+    /// The cursor-paginated event hits.
+    #[serde(flatten)]
+    pub page: SessionSearchPage<SessionEventSearchHit>,
+    /// Cloned target header from the same indexed generation as the items.
+    pub session: SessionHeader,
+}
+
+/// Controls shared by cross-session and within-session search calls.
+#[derive(Clone, Debug, Default)]
+pub struct SessionSearchExecContext {
+    /// Abort caller waiting and interrupt provider work where supported.
+    pub signal: Option<AbortSignal>,
+}
+
+/// Cross-session full-text search request.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSearchRequest {
+    /// Full-text query interpreted as data, never executable FTS syntax.
+    pub query: String,
+    /// Logical-session predicates applied before event ranking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_filters: Option<Vec<SessionResultFilter>>,
+    /// Event predicates applied before event ranking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_filters: Option<Vec<SessionEventMetadataFilter>>,
+    /// Maximum sessions in this page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
+    /// Opaque cursor returned for the identical normalized request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<SessionSearchCursor>,
+}
+
+/// Within-session full-text search request.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEventSearchRequest {
+    /// Session whose live-preferred logical log is searched.
+    pub session_id: SessionId,
+    /// Full-text query interpreted as data, never executable FTS syntax.
+    pub query: String,
+    /// Event predicates applied before ranking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filters: Option<Vec<SessionEventMetadataFilter>>,
+    /// Maximum events in this page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u64>,
+    /// Opaque cursor returned for the identical normalized request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<SessionSearchCursor>,
+}
+
+/// One ordered result from a batch title observation.
+pub type SessionTitleObservationResult =
+    crate::corpus::LogicalProjectionResult<SessionTitleObservation>;
