@@ -1,33 +1,25 @@
 [package]
-name = "seekdeep-compaction-basic"
+name = "seekdeep-session-title-llm"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Replay-aware basic compaction backend"
+description = "Shared model-backed session-title provider policy"
 
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
-parking_lot.workspace = true
-seekdeep-agent = { path = "../agent" }
-seekdeep-agent-loop = { path = "../agent-loop" }
-seekdeep-commands = { path = "../commands" }
-seekdeep-compaction = { path = "../compaction" }
-seekdeep-compaction-tool-result-pruner = { path = "../compaction-tool-result-pruner" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-schemastery = { path = "../schemastery" }
-seekdeep-token-meter = { path = "../token-meter" }
+seekdeep-session-title = { path = "../session-title" }
+seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
-uuid.workspace = true
 
 [lints]
 workspace = true

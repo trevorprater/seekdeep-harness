@@ -1,26 +1,22 @@
 [package]
-name = "seekdeep-session-telemetry"
+name = "seekdeep-web"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Service definition for the web access capability seam"
 
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-futures.workspace = true
 parking_lot.workspace = true
-seekdeep-agent = { path = "../agent" }
-seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-cordis = { path = "../cordis" }
-seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
 serde.workspace = true
 serde_json.workspace = true
-tracing.workspace = true
-
-[dev-dependencies]
-tokio.workspace = true
 
 [lints]
 workspace = true

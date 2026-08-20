@@ -445,8 +445,8 @@ async fn summarize_compaction(
     source_command_id: Option<&CommandId>,
     signal: Option<AbortSignal>,
 ) -> anyhow::Result<SummarizedCompaction> {
-    let result = (dependencies.summarize)(prepared.input.clone(), session.clone(), fallback, signal)
-        .await?;
+    let result =
+        (dependencies.summarize)(prepared.input.clone(), session.clone(), fallback, signal).await?;
     let checkpoint_message = UserMessage::new(
         frame_summary(&result.summary),
         compact_checkpoint_source(compaction_id, source_command_id),

@@ -8,6 +8,10 @@ use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+pub use coordinator::{SessionTelemetryCapture, SessionTelemetryCoordinator};
+
+/// Capture coordinator for the telemetry capability.
+pub mod coordinator;
 /// Package-owned invariant companion.
 pub mod invariant;
 

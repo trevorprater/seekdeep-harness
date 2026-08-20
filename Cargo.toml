@@ -5,6 +5,7 @@ members = [
   "crates/attachment-local",
   "crates/agent",
   "crates/agent-default-model",
+  "crates/agent-instructions",
   "crates/agent-loop",
   "crates/agent-tool-presentation",
   "crates/anonymous-user-id",
@@ -30,8 +31,10 @@ members = [
   "crates/credentials",
   "crates/credentials-local",
   "crates/fs",
+  "crates/fs-local",
   "crates/fs-observation-policy",
   "crates/goal",
+  "crates/goal-round-driver",
   "crates/schemastery",
   "crates/settings",
   "crates/settings-file",
@@ -49,6 +52,7 @@ members = [
   "crates/jobs",
   "crates/jobs-local",
   "crates/landlock-run",
+  "crates/permission-presets",
   "crates/persona",
   "crates/plan-mode",
   "crates/process-exit-hook",
@@ -69,9 +73,13 @@ members = [
   "crates/session-projection",
   "crates/session-projection-cache",
   "crates/session-query",
+  "crates/session-reference",
   "crates/session-stats",
   "crates/session-telemetry",
   "crates/session-title",
+  "crates/session-title-all-prompts-llm",
+  "crates/session-title-first-prompt-llm",
+  "crates/session-title-llm",
   "crates/spill",
   "crates/spill-local",
   "crates/spill-policy",
@@ -98,6 +106,9 @@ members = [
   "crates/tools",
   "crates/typert-protocol",
   "crates/typert-registry",
+  "crates/web",
+  "crates/web-fetch-http",
+  "crates/web-search-deepseek",
   "crates/user-approval",
   "crates/user-questions",
   "crates/util",
@@ -133,6 +144,7 @@ clap = { version = "4.5.54", features = ["derive", "env"] }
 cpu-time = "1.0.0"
 crc32fast = "1.5.0"
 dirs = "6.0.0"
+encoding_rs = "0.8.35"
 flate2 = "1.1.5"
 google-cloud-auth = "1.15.0"
 http = "1.5.0"
@@ -171,6 +183,7 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.148", features = ["preserve_order"] }
 serde_yml = "0.0.12"
+sha1 = "0.10"
 sha2 = "0.10.9"
 socket2 = "0.6.2"
 thiserror = "2.0.17"

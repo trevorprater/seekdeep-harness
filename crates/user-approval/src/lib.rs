@@ -251,6 +251,12 @@ impl ApprovalService {
         context.provide(APPROVAL, self.clone())
     }
 
+    /// Deployment default approval policy.
+    #[must_use]
+    pub const fn policy(&self) -> ApprovalPolicy {
+        self.config.policy
+    }
+
     /// Registers a typed scoped answerer.
     ///
     /// # Errors

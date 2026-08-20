@@ -1,26 +1,21 @@
 [package]
-name = "seekdeep-session-telemetry"
+name = "seekdeep-session-title-all-prompts-llm"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "All-human-messages model title provider"
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
-futures.workspace = true
-parking_lot.workspace = true
-seekdeep-agent = { path = "../agent" }
-seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-cordis = { path = "../cordis" }
-seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-session-title = { path = "../session-title" }
+seekdeep-session-title-llm = { path = "../session-title-llm" }
 serde.workspace = true
 serde_json.workspace = true
-tracing.workspace = true
-
-[dev-dependencies]
-tokio.workspace = true
 
 [lints]
 workspace = true
