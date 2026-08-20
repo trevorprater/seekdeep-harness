@@ -5582,6 +5582,7 @@ dependencies = [
  "indexmap 2.14.0",
  "parking_lot",
  "seekdeep-agent",
+ "seekdeep-agent-loop",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",

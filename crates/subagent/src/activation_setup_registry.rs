@@ -66,7 +66,7 @@ impl SubagentActivationSetupRegistry {
     pub fn register(
         self: &Arc<Self>,
         contribution: ContinuableSetupContribution,
-    ) -> impl Fn() + Send + Sync {
+    ) -> Box<dyn Fn() + Send + Sync> {
         let id = self.alloc_id();
         self.registrations.lock().insert(
             id,
@@ -77,7 +77,7 @@ impl SubagentActivationSetupRegistry {
             }),
         );
         let registry = Arc::downgrade(self);
-        move || {
+        Box::new(move || {
             let Some(registry) = registry.upgrade() else {
                 return;
             };
@@ -92,7 +92,7 @@ impl SubagentActivationSetupRegistry {
             for iid in install_ids {
                 registry.release(iid);
             }
-        }
+        })
     }
 
     /// Installs every live contribution into one unpublished child context.

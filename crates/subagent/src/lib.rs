@@ -5,6 +5,7 @@ pub mod activation_setup_registry;
 pub mod assistant_output;
 pub mod child_agent;
 pub mod client;
+pub mod continuation;
 pub mod depth;
 pub mod descriptor;
 pub mod descriptor_seed;
@@ -29,6 +30,11 @@ pub use child_agent::{
     capture_delegated_policy_overrides, child_session_meta, resolve_child_agent_options,
     resolve_child_depth,
 };
+pub use continuation::{
+    ContinuableStart, ContinuableStartRequest, ContinuableStartSpec, ContinuationHost,
+    SubagentContinuationManager, SubagentFollowupOptions, SubagentInterruptAuthority,
+    SubagentReportDelivery, SubagentReportOptions,
+};
 pub use depth::{assert_subagent_max_depth, delegation_depth_of};
 pub use descriptor::{
     SUBAGENT_DESCRIPTOR_VERSION, SubagentDescriptorData, SubagentDescriptorInput,
@@ -37,7 +43,10 @@ pub use descriptor::{
 pub use descriptor_seed::seed_descriptor_turn;
 pub use error::SubagentError;
 pub use index::{INJECT, NAME, SUBAGENTS, SubagentRuntime, plugin};
-pub use lifecycle::{emit_subagent_lifecycle, epoch_output, epoch_stop_reason, observe_run};
+pub use lifecycle::{
+    ActivationObserver, ActivationTerminal, create_activation_observer, emit_subagent_lifecycle,
+    epoch_output, epoch_stop_reason, observe_run,
+};
 pub use list_children::{
     SubagentActivity, SubagentDescendantListEntry, SubagentDiagnosticReason, SubagentListEntry,
     SubagentListMode, list_children, list_descendants,

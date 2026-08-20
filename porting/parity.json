@@ -63809,92 +63809,218 @@
     {
       "source": "packages/subagent/subagent/src/activation-setup-registry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/activation_setup_registry.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/assistant-output.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/assistant_output.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/child-agent.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/child_agent.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/client.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/client.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/continuation.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/continuation.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/depth.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/depth.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/descriptor-seed.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/descriptor_seed.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/descriptor.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/descriptor.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/error.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/error.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/lifecycle.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/lifecycle.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/list-children.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/list_children.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/out-of-process.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/out_of_process.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/projection-types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/projection_types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/projection.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/projection.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/run-settlement.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/run_settlement.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/tests/activation-setup-registry.spec.ts",
