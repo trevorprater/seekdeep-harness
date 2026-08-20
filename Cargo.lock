@@ -5826,6 +5826,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-ralph"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-subagent",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-workflow",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-tool-skill"
 version = "0.1.0-rc.5"
 dependencies = [

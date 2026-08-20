@@ -68519,12 +68519,26 @@
     {
       "source": "packages/workflow/tool-ralph/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-ralph/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-ralph --all-features",
+        "cargo clippy -p seekdeep-tool-ralph --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/tool-ralph/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-ralph/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-ralph --all-features",
+        "cargo clippy -p seekdeep-tool-ralph --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/tool-ralph/tests/integration.spec.ts",
