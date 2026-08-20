@@ -5573,15 +5573,20 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "parking_lot",
  "seekdeep-agent",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-llm",
+ "seekdeep-scope",
  "seekdeep-tools",
  "seekdeep-util",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
