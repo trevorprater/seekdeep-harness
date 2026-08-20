@@ -1,6 +1,7 @@
 //! Subagent capability seam: provider registry, one-shot runs, and
 //! continuable-child operations.
 
+pub mod activation_setup_registry;
 pub mod assistant_output;
 pub mod client;
 pub mod depth;
@@ -16,6 +17,9 @@ pub mod projection_types;
 pub mod run_settlement;
 pub mod types;
 
+pub use activation_setup_registry::{
+    ContinuableSetupContribution, SubagentActivationSetupRegistry,
+};
 pub use assistant_output::{AssistantOutputFold, final_assistant_output};
 pub use depth::{assert_subagent_max_depth, delegation_depth_of};
 pub use descriptor::{
