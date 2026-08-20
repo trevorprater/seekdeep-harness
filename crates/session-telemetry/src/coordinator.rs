@@ -25,7 +25,7 @@ pub enum SessionTelemetryCapture {
 }
 
 /// The handoff cursor: per session, the highest seq handed to a backend.
-static HANDOFF_CURSOR: LazyLock<Mutex<HashMap<usize, u64>>> =
+static HANDOFF_CURSOR: LazyLock<Mutex<HashMap<usize, i64>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn session_key(session: &Arc<Session>) -> usize {
@@ -145,7 +145,7 @@ impl SessionTelemetryCoordinator {
                     .unwrap_or_default();
                 for key in adopted {
                     if let Some(session) = sessions.iter().find(|s| session_key(s) == key) {
-                        cleanup.deliver(session, cleanup.redact(shutdown_record(session)), None);
+                        cleanup.deliver(session, cleanup.redact(shutdown_record(session))?, None);
                     }
                 }
                 if let Err(error) = cleanup.backend.shutdown().await {
@@ -182,9 +182,10 @@ impl SessionTelemetryCoordinator {
                 };
                 Self::contain(|| {
                     if !disposed.adopted.lock().remove(&session_key(&session)) {
-                        return;
+                        return Ok(());
                     }
-                    disposed.deliver(&session, disposed.redact(shutdown_record(&session)), None);
+                    disposed.deliver(&session, disposed.redact(shutdown_record(&session))?, None);
+                    Ok(())
                 });
                 Ok(EventReply::Undefined)
             },
@@ -216,7 +217,10 @@ impl SessionTelemetryCoordinator {
                 let Some(session) = args.get::<Session>(0) else {
                     return Ok(EventReply::Undefined);
                 };
-                Self::contain(|| flush.hint_flush(&session));
+                Self::contain(|| {
+                    flush.hint_flush(&session);
+                    Ok(())
+                });
                 Ok(EventReply::Undefined)
             },
             EventOptions::default(),
@@ -236,7 +240,7 @@ impl SessionTelemetryCoordinator {
                         event.payload.turn,
                         event.payload.step,
                         &event.payload.error,
-                    );
+                    )
                 });
                 Ok(EventReply::Undefined)
             },
@@ -257,17 +261,18 @@ impl SessionTelemetryCoordinator {
             .lock()
             .get(&session_key(session))
             .copied()
-            .unwrap_or_else(|| session.first_live_seq().saturating_sub(1));
+            .unwrap_or_else(|| i64::try_from(session.first_live_seq()).unwrap_or(i64::MAX) - 1);
         let events = session.events();
         for event in &events {
             if through_seq.is_some_and(|seq| event.seq > seq) {
                 break;
             }
             Self::contain(|| {
-                if event.seq <= cursor {
+                if i64::try_from(event.seq).unwrap_or(i64::MAX) <= cursor {
                     self.track(session, event);
+                    Ok(())
                 } else {
-                    self.capture_event(session, event);
+                    self.capture_event(session, event)
                 }
             });
         }
@@ -291,7 +296,7 @@ impl SessionTelemetryCoordinator {
         }
     }
 
-    fn capture_event(&self, session: &Arc<Session>, event: &SessionEvent) {
+    fn capture_event(&self, session: &Arc<Session>, event: &SessionEvent) -> anyhow::Result<()> {
         if event.event_type == "assistant/chunk" {
             let key = format!(
                 "{}:{}",
@@ -300,7 +305,7 @@ impl SessionTelemetryCoordinator {
             );
             let mut seen = self.seen(session);
             if !seen.insert(key) {
-                return;
+                return Ok(());
             }
         }
         let record = SessionTelemetryRecord {
@@ -310,14 +315,16 @@ impl SessionTelemetryCoordinator {
             attributes: identity_of(session, event),
             body: event.data.clone(),
         };
-        self.deliver(session, self.redact(record), Some(event.seq));
+        self.deliver(session, self.redact(record)?, Some(event.seq));
+        Ok(())
     }
 
-    fn redact(&self, record: SessionTelemetryRecord) -> SessionTelemetryRecord {
+    #[allow(clippy::needless_pass_by_value)]
+    fn redact(&self, record: SessionTelemetryRecord) -> anyhow::Result<SessionTelemetryRecord> {
         let args = EventArgs::one(record.clone());
         let passthrough = record.clone();
         let inner_fallback = record.clone();
-        let result: anyhow::Result<SessionTelemetryRecord> = futures::executor::block_on(async {
+        futures::executor::block_on(async {
             let reply = self
                 .context
                 .events()
@@ -331,14 +338,15 @@ impl SessionTelemetryCoordinator {
             Ok(reply
                 .downcast::<SessionTelemetryRecord>()
                 .map_or(inner_fallback, |record| (*record).clone()))
-        });
-        result.unwrap_or(record)
+        })
     }
 
     fn deliver(&self, session: &Arc<Session>, record: SessionTelemetryRecord, seq: Option<u64>) {
         self.backend.emit(record);
         if let Some(seq) = seq {
-            HANDOFF_CURSOR.lock().insert(session_key(session), seq);
+            HANDOFF_CURSOR
+                .lock()
+                .insert(session_key(session), i64::try_from(seq).unwrap_or(i64::MAX));
         }
     }
 
@@ -348,7 +356,13 @@ impl SessionTelemetryCoordinator {
         }
     }
 
-    fn relay_agent_error(&self, agent: &Arc<Agent>, turn: u64, step: u64, error: &str) {
+    fn relay_agent_error(
+        &self,
+        agent: &Arc<Agent>,
+        turn: u64,
+        step: u64,
+        error: &str,
+    ) -> anyhow::Result<()> {
         let detail = error_detail(error);
         let mut attributes = Map::new();
         attributes.insert("telemetry.op".to_owned(), json!("agent-error"));
@@ -367,7 +381,8 @@ impl SessionTelemetryCoordinator {
             attributes,
             body: serde_json::to_value(detail).unwrap_or(Value::Null),
         };
-        self.deliver(agent.session(), self.redact(record), None);
+        self.deliver(agent.session(), self.redact(record)?, None);
+        Ok(())
     }
 
     fn seen(&self, session: &Arc<Session>) -> parking_lot::MappedMutexGuard<'_, HashSet<String>> {
@@ -376,9 +391,11 @@ impl SessionTelemetryCoordinator {
         })
     }
 
-    fn contain(step: impl FnOnce()) {
-        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(step)).is_err() {
-            tracing::warn!("telemetry: capture step failed");
+    fn contain(step: impl FnOnce() -> anyhow::Result<()>) {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(step)) {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => tracing::warn!("telemetry: capture step failed: {error:#}"),
+            Err(_) => tracing::warn!("telemetry: capture step failed"),
         }
     }
 }

@@ -45888,7 +45888,14 @@
     {
       "source": "packages/compaction/command-compact/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/command-compact/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-command-compact --all-features",
+        "cargo clippy -p seekdeep-command-compact --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/command-compact/tests/loader-composition.spec.ts",
@@ -50173,7 +50180,14 @@
     {
       "source": "packages/feedback/message-feedback/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/message-feedback/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-message-feedback --all-features",
+        "cargo clippy -p seekdeep-message-feedback --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/feedback/message-feedback/tests/loader-composition.spec.ts",
@@ -50615,7 +50629,14 @@
     {
       "source": "packages/fs/fs/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-fs --all-features",
+        "cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/fs/tests/service.spec.ts",
@@ -56951,7 +56972,14 @@
     {
       "source": "packages/plan/plan-mode/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/plan-mode/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-plan-mode --all-features",
+        "cargo clippy -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/plan/plan-mode/tests/plan-mode.spec.ts",
@@ -58490,7 +58518,14 @@
     {
       "source": "packages/schedule/schedule/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schedule/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-schedule --all-features",
+        "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/schedule/schedule/tests/jsonl-restart.spec.ts",
@@ -60541,12 +60576,26 @@
     {
       "source": "packages/session/session-telemetry/tests/redact.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry/tests/redact_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-telemetry --all-features",
+        "cargo clippy -p seekdeep-session-telemetry --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-telemetry/tests/telemetry.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry/tests/telemetry_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-telemetry --all-features",
+        "cargo clippy -p seekdeep-session-telemetry --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-telemetry/tsconfig.json",
@@ -60630,7 +60679,14 @@
     {
       "source": "packages/session/session-title-all-prompts-llm/tests/provider.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title-all-prompts-llm/tests/provider_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title-all-prompts-llm --all-features",
+        "cargo clippy -p seekdeep-session-title-all-prompts-llm --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title-all-prompts-llm/tsconfig.json",
@@ -60724,7 +60780,14 @@
     {
       "source": "packages/session/session-title-first-prompt-llm/tests/provider.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title-first-prompt-llm/tests/provider_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title-first-prompt-llm --all-features",
+        "cargo clippy -p seekdeep-session-title-first-prompt-llm --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title-first-prompt-llm/tsconfig.json",
@@ -60808,7 +60871,14 @@
     {
       "source": "packages/session/session-title-llm/tests/llm.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title-llm/tests/llm_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title-llm --all-features",
+        "cargo clippy -p seekdeep-session-title-llm --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title-llm/tsconfig.json",
@@ -60939,32 +61009,74 @@
     {
       "source": "packages/session/session-title/tests/persistence.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/tests/persistence_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/tests/projection.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/tests/projection_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/tests/provider.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/tests/provider_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/tests/rename.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/tests/rename_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/tests/service-contracts.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/tests/service_contracts_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/tests/session-title.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title/tests/session_title_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-title --all-features",
+        "cargo clippy -p seekdeep-session-title --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-title/tsconfig.json",
@@ -66799,7 +66911,14 @@
     {
       "source": "packages/todo/tool-todo/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-todo/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-todo --all-features",
+        "cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/todo/tool-todo/tests/loader-composition.spec.ts",
@@ -69278,7 +69397,14 @@
     {
       "source": "packages/workflow/tool-workflow/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-workflow/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-workflow --all-features",
+        "cargo clippy -p seekdeep-tool-workflow --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/tool-workflow/tests/tool-workflow.spec.ts",
@@ -69625,7 +69751,14 @@
     {
       "source": "packages/workflow/workflow/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow --all-features",
+        "cargo clippy -p seekdeep-workflow --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow/tests/workflow.spec.ts",

@@ -5169,6 +5169,7 @@ dependencies = [
  "seekdeep-user-questions",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 
@@ -5547,16 +5548,21 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "parking_lot",
  "regress 0.11.1",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
+ "seekdeep-session-persistence-sqlite",
  "seekdeep-session-projection",
  "seekdeep-util",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
 ]
@@ -5566,13 +5572,19 @@ name = "seekdeep-session-title-all-prompts-llm"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
  "seekdeep-cordis",
+ "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
  "seekdeep-schemastery",
  "seekdeep-session-title",
  "seekdeep-session-title-llm",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -5580,13 +5592,19 @@ name = "seekdeep-session-title-first-prompt-llm"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
  "seekdeep-cordis",
+ "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
  "seekdeep-schemastery",
  "seekdeep-session-title",
  "seekdeep-session-title-llm",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -5596,6 +5614,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "parking_lot",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
@@ -5605,6 +5624,7 @@ dependencies = [
  "seekdeep-util",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -6478,6 +6498,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
  "tracing",
 ]
 

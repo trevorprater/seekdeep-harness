@@ -14,8 +14,8 @@ use futures::StreamExt;
 use seekdeep_cordis::Context;
 use seekdeep_core::session::AppendOptions;
 use seekdeep_llm::{
-    BlockAssembler, ContentBlock, FinishReason, GenerateOptions, LLM, LlmError, LlmRequestPurpose,
-    Message, MessageSource, ModelId, ProviderId, UserMessage,
+    AbortSignal, BlockAssembler, ContentBlock, FinishReason, GenerateOptions, LLM, LlmError,
+    LlmRequestPurpose, Message, MessageSource, ModelId, ProviderId, UserMessage,
 };
 use seekdeep_schemastery::Schema;
 use seekdeep_session_title::{
@@ -23,7 +23,7 @@ use seekdeep_session_title::{
     SessionTitleProviderId, SessionTitleProviderRequest, SessionTitleProviderResult,
     SessionTitleUserMessage, normalize_session_title,
 };
-use seekdeep_util::timeout::{MAX_TIMER_DELAY_MS, deadline};
+use seekdeep_util::timeout::{MAX_TIMER_DELAY_MS, TimeoutReason, deadline};
 use serde::{Deserialize, Serialize};
 
 /// Capability-owned timeout reason code for auxiliary title requests.
@@ -223,6 +223,19 @@ fn frame_messages(messages: &[SessionTitleUserMessage]) -> String {
     )
 }
 
+fn abort_error(signal: &AbortSignal) -> anyhow::Error {
+    if let Some(timeout) = signal.typed_reason::<TimeoutReason>() {
+        return anyhow::Error::new((*timeout).clone());
+    }
+    if let Some(reason) = signal
+        .reason()
+        .and_then(|value| value.as_str().map(str::to_owned))
+    {
+        return anyhow::Error::msg(reason);
+    }
+    anyhow::Error::msg("aborted")
+}
+
 fn finish_error(finish: &FinishReason) -> Option<anyhow::Error> {
     match finish {
         FinishReason::Stop => None,
@@ -258,7 +271,7 @@ pub async fn generate_session_title_with_llm(
     title_provider: &SessionTitleProviderId,
 ) -> anyhow::Result<SessionTitleProviderResult> {
     if request.signal.is_aborted() {
-        anyhow::bail!("aborted");
+        return Err(abort_error(&request.signal));
     }
     if selected_messages.is_empty() {
         anyhow::bail!("session-title-llm: at least one source message is required");
@@ -311,7 +324,7 @@ pub async fn generate_session_title_with_llm(
     )?;
 
     if call_deadline.signal.is_aborted() {
-        anyhow::bail!("aborted");
+        return Err(abort_error(&call_deadline.signal));
     }
     let llm = ctx
         .get(LLM)
@@ -320,12 +333,12 @@ pub async fn generate_session_title_with_llm(
     let mut stream = llm.stream(options);
     while let Some(chunk) = stream.next().await {
         if call_deadline.signal.is_aborted() {
-            anyhow::bail!("aborted");
+            return Err(abort_error(&call_deadline.signal));
         }
         assembler.push(chunk?);
     }
     if call_deadline.signal.is_aborted() {
-        anyhow::bail!("aborted");
+        return Err(abort_error(&call_deadline.signal));
     }
     if let Some(error) = finish_error(&assembler.finish()) {
         call_deadline.dispose();

@@ -21,5 +21,9 @@ seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 
+[dev-dependencies]
+parking_lot.workspace = true
+tokio.workspace = true
+
 [lints]
 workspace = true

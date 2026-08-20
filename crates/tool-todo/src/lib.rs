@@ -2,9 +2,16 @@
 
 use std::sync::Arc;
 
-use seekdeep_cordis::{Context, fiber::EffectHandle};
-use seekdeep_core::session::{AppendOptions, SessionEvent};
-use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
+use seekdeep_cordis::{
+    Context, DispatchMode, EventArgs, EventOptions, EventReply, fiber::EffectHandle,
+};
+use seekdeep_core::{
+    session::{AppendOptions, SessionEvent},
+    session_store::SESSIONS,
+};
+use seekdeep_invariants::{
+    InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
+};
 use seekdeep_llm::ContentBlock;
 use seekdeep_session_projection::{
     ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS, SessionProjectionRegistry,
@@ -282,7 +289,7 @@ pub fn apply(context: &Context, config: Config) -> anyhow::Result<EffectHandle> 
     tools.register(context, definition(config)?)
 }
 
-/// Registers the package's explained empty invariant companion.
+/// Registers the package's durable todo-snapshot invariant companion.
 ///
 /// # Errors
 ///
@@ -290,7 +297,107 @@ pub fn apply(context: &Context, config: Config) -> anyhow::Result<EffectHandle> 
 pub fn register_invariant(
     registry: &Arc<InvariantRegistry>,
 ) -> anyhow::Result<InvariantRegistration> {
-    registry.register("seekdeep-tool-todo", InvariantInstaller::noop())
+    registry.register(
+        "seekdeep-tool-todo",
+        InvariantInstaller::new(["sessions"], |context, fail| {
+            Box::pin(async move {
+                install(&context, &fail)?;
+                Ok(())
+            })
+        }),
+    )
+}
+
+const TODO_STATUSES: [&str; 3] = ["pending", "in_progress", "completed"];
+
+fn install(context: &Context, fail: &InvariantFailure) -> anyhow::Result<()> {
+    let sessions = context
+        .get(SESSIONS)
+        .ok_or_else(|| anyhow::anyhow!("seekdeep-tool-todo invariant requires sessions"))?;
+    for session in sessions.list() {
+        for event in session.events() {
+            validate_event(&event, fail)?;
+        }
+    }
+    let listener_fail = fail.clone();
+    context.events().on_sync(
+        context,
+        "internal/dispatch",
+        move |_, args| {
+            args.get::<DispatchMode>(0)
+                .ok_or_else(|| anyhow::anyhow!("internal/dispatch lacks a dispatch mode"))?;
+            let event_name = args
+                .get::<String>(1)
+                .ok_or_else(|| anyhow::anyhow!("internal/dispatch lacks an event name"))?;
+            let event_args = args
+                .get::<EventArgs>(2)
+                .ok_or_else(|| anyhow::anyhow!("internal/dispatch lacks event arguments"))?;
+            if event_name.as_str() != "session/event" {
+                return Ok(EventReply::Undefined);
+            }
+            let event = event_args
+                .get::<SessionEvent>(1)
+                .ok_or_else(|| anyhow::anyhow!("session/event lacks its event"))?;
+            validate_event(event.as_ref(), &listener_fail)?;
+            Ok(EventReply::Undefined)
+        },
+        global_events(),
+    )?;
+    Ok(())
+}
+
+fn validate_event(event: &SessionEvent, fail: &InvariantFailure) -> anyhow::Result<()> {
+    if event.event_type == "todo/write" {
+        validate_todos(event.data.get("todos"), fail)?;
+    }
+    Ok(())
+}
+
+/// Validates one whole-list todo snapshot before it reaches the durable log. Deliberately silent
+/// on how many items are `in_progress`: that is the tool's per-deployment policy, not a durable
+/// shape rule.
+fn validate_todos(value: Option<&Value>, fail: &InvariantFailure) -> anyhow::Result<()> {
+    let Some(array) = value.and_then(Value::as_array) else {
+        return Err(fail.fail("todo/write todos must be an array").into());
+    };
+    let mut seen = std::collections::HashSet::new();
+    for item in array {
+        let Some(object) = item.as_object() else {
+            return Err(fail.fail("todo/write entries must be objects").into());
+        };
+        let content = object.get("content").and_then(Value::as_str);
+        if content.is_none_or(|content| content.is_empty() || content.trim() != content) {
+            return Err(fail
+                .fail("todo/write content must be non-empty and already trimmed")
+                .into());
+        }
+        let content = content.expect("checked above");
+        if !seen.insert(content.to_owned()) {
+            return Err(fail
+                .fail(format!(
+                    "todo/write repeats content {}",
+                    serde_json::to_string(content).unwrap_or_default()
+                ))
+                .into());
+        }
+        let status = object.get("status").and_then(Value::as_str);
+        if status.is_none_or(|status| !TODO_STATUSES.contains(&status)) {
+            let rendered = object
+                .get("status")
+                .map_or_else(|| "null".to_owned(), ToString::to_string);
+            return Err(fail
+                .fail(format!("todo/write carries unknown status {rendered}"))
+                .into());
+        }
+    }
+    Ok(())
+}
+
+fn global_events() -> EventOptions {
+    EventOptions {
+        global: true,
+        ..EventOptions::default()
+    }
 }
 
 #[cfg(test)]

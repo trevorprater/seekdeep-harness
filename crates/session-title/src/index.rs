@@ -264,6 +264,7 @@ impl SessionTitleService {
         service.register_listeners(context)?;
         Self::register_projection(context)?;
         service.register_stream_middleware(context)?;
+        service.register_lifecycle(context)?;
         Ok(service)
     }
 
@@ -337,12 +338,14 @@ impl SessionTitleService {
         session: &Arc<Session>,
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<Option<SessionTitleSnapshot>> {
+        Self::ensure_not_aborted(signal.as_ref())?;
         self.assert_service_active()?;
         self.assert_live(session)?;
         let registration = self.registration.lock().clone();
         let messages = collect_session_title_messages(&session.events(), None);
         let Some(latest) = messages.last() else {
             let fallback = self.ensure_fallback(session).await?;
+            Self::ensure_not_aborted(signal.as_ref())?;
             return Ok(fallback);
         };
         let Some(registration) = registration.filter(|r| !r.closing.load(Ordering::Acquire)) else {
@@ -353,9 +356,11 @@ impl SessionTitleService {
                     .is_some_and(|c| matches!(c.event.source, SessionTitleSource::User))
             {
                 self.append_fallback(session, first);
+                Self::ensure_not_aborted(signal.as_ref())?;
                 return Ok(self.get(session));
             }
             let fallback = self.ensure_fallback(session).await?;
+            Self::ensure_not_aborted(signal.as_ref())?;
             return Ok(fallback);
         };
         let state = self.state_for(session);
@@ -433,6 +438,38 @@ impl SessionTitleService {
         }))
     }
 
+    fn register_lifecycle(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
+        let weak = Arc::downgrade(self);
+        let effect = EffectHandle::new("sessionTitle lifecycle", move || {
+            let weak = weak.clone();
+            Box::pin(async move {
+                if let Some(service) = weak.upgrade() {
+                    service
+                        .lifetime
+                        .abort_with_reason(json!("session-title service disposed"));
+                    if let Some(registration) = service.registration.lock().clone() {
+                        registration.closing.store(true, Ordering::Release);
+                    }
+                    *service.registration.lock() = None;
+                    for state in service.work.lock().values() {
+                        let mut state = state.lock();
+                        state.pending = None;
+                        if let Some(active) = &state.active {
+                            active
+                                .signal
+                                .abort_with_reason(json!("session-title service disposed"));
+                        }
+                    }
+                    service.in_flight.drain().await;
+                    service.work.lock().clear();
+                }
+                Ok(())
+            })
+        });
+        context.own(effect)?;
+        Ok(())
+    }
+
     fn register_listeners(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
         let service = Arc::clone(self);
         context.events().on_sync(
@@ -440,7 +477,7 @@ impl SessionTitleService {
             "session/event",
             move |_, args| {
                 let session = args
-                    .get::<Arc<Session>>(0)
+                    .get::<Session>(0)
                     .ok_or_else(|| anyhow::anyhow!("session/event lacks its session"))?;
                 let event = args
                     .get::<SessionEvent>(1)
@@ -462,7 +499,7 @@ impl SessionTitleService {
             "session/disposed",
             move |_, args| {
                 let session = args
-                    .get::<Arc<Session>>(0)
+                    .get::<Session>(0)
                     .ok_or_else(|| anyhow::anyhow!("session/disposed lacks its session"))?;
                 let key = session_key(&session);
                 let state = service.work.lock().remove(&key);
@@ -701,9 +738,11 @@ impl SessionTitleService {
         route: Option<SessionTitleModelProvenance>,
     ) -> anyhow::Result<Option<SessionTitleSnapshot>> {
         let registration = Arc::clone(&work.pending.registration);
-        let guard = registration.active.guard();
+        let registration_guard = registration.active.guard();
+        let in_flight_guard = self.in_flight.guard();
         let result = self.run_provider(session, &work, route).await;
-        drop(guard);
+        drop(registration_guard);
+        drop(in_flight_guard);
         result
     }
 
@@ -967,6 +1006,19 @@ impl SessionTitleService {
     fn assert_service_active(&self) -> anyhow::Result<()> {
         if !self.service_active() {
             anyhow::bail!("session-title service disposed");
+        }
+        Ok(())
+    }
+
+    fn ensure_not_aborted(signal: Option<&AbortSignal>) -> anyhow::Result<()> {
+        if let Some(signal) = signal
+            && signal.is_aborted()
+        {
+            let reason = signal
+                .reason()
+                .and_then(|value| value.as_str().map(str::to_owned))
+                .unwrap_or_else(|| "aborted".to_owned());
+            anyhow::bail!("{reason}");
         }
         Ok(())
     }

@@ -21,5 +21,12 @@ serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+futures.workspace = true
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-session-persistence-sqlite = { path = "../session-persistence-sqlite" }
+tempfile.workspace = true
+
 [lints]
 workspace = true

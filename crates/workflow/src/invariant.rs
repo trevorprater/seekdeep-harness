@@ -209,7 +209,7 @@ fn validate(
             if result.agents_started < trace.starts {
                 reject(
                     fail,
-                    "workflow/end agentsStarted must cover every observed agent start",
+                    "workflow/end agentsStarted must be a safe integer covering every observed agent start",
                 )?;
             }
             let error_consistency =

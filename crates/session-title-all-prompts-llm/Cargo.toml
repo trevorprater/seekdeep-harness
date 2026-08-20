@@ -17,5 +17,13 @@ seekdeep-session-title-llm = { path = "../session-title-llm" }
 serde.workspace = true
 serde_json.workspace = true
 
+[dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+tokio.workspace = true
+
 [lints]
 workspace = true
