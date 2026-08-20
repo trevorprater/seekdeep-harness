@@ -9,6 +9,7 @@ license.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+indexmap.workspace = true
 parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
@@ -18,6 +19,7 @@ seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-sandbox = { path = "../sandbox" }
 seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-user-approval = { path = "../user-approval" }
