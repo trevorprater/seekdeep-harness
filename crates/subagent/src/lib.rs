@@ -13,6 +13,7 @@ pub mod lifecycle;
 pub mod out_of_process;
 pub mod projection;
 pub mod projection_types;
+pub mod run_settlement;
 pub mod types;
 
 pub use assistant_output::{AssistantOutputFold, final_assistant_output};
@@ -33,6 +34,7 @@ pub use projection::{
     subagent_identity_projection_definition, subagent_timing_projection_definition,
 };
 pub use projection_types::{SubagentIdentityProjection, SubagentTimingProjection};
+pub use run_settlement::{JobOutcome, run_outcome, settle_run};
 pub use types::{
     ContinuableCreateRequest, ContinuableCreateSpec, ResolvedSubagentStartRequest,
     SubagentCapabilities, SubagentProvider, SubagentResult, SubagentRun, SubagentRunEndInfo,

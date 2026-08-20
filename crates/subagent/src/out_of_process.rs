@@ -217,7 +217,7 @@ impl SubagentRun for SubprocessRunHandle {
         })
     }
 
-    fn dispose(&self) -> futures::future::BoxFuture<'static, ()> {
+    fn dispose(&self) -> futures::future::BoxFuture<'static, anyhow::Result<()>> {
         if !self.started.swap(true, Ordering::AcqRel) {
             let teardown = self.teardown.lock().take();
             let notify = self.notify.clone();
@@ -234,9 +234,10 @@ impl SubagentRun for SubprocessRunHandle {
         let notify = self.notify.clone();
         Box::pin(async move {
             if completed.load(Ordering::Acquire) {
-                return;
+                return Ok(());
             }
             notify.notified().await;
+            Ok(())
         })
     }
 }

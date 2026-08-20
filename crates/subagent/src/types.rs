@@ -132,6 +132,20 @@ pub enum SubagentStopReason {
     Refusal,
 }
 
+impl SubagentStopReason {
+    /// Exact wire spelling.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Aborted => "aborted",
+            Self::Error => "error",
+            Self::MaxTokens => "max-tokens",
+            Self::Refusal => "refusal",
+        }
+    }
+}
+
 /// The terminal outcome of a subagent run.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -155,7 +169,7 @@ pub trait SubagentRun: Send + Sync {
     /// Resolves with the child's terminal result.
     fn result(&self) -> BoxFuture<'static, SubagentResult>;
     /// Cancels remaining work, reaches quiescence, and releases resources.
-    fn dispose(&self) -> BoxFuture<'static, ()>;
+    fn dispose(&self) -> BoxFuture<'static, anyhow::Result<()>>;
 }
 
 /// One registered transport for running child agents.
