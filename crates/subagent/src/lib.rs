@@ -5,9 +5,12 @@ pub mod assistant_output;
 pub mod client;
 pub mod depth;
 pub mod descriptor;
+pub mod descriptor_seed;
 pub mod error;
 pub mod index;
+pub mod invariant;
 pub mod lifecycle;
+pub mod projection;
 pub mod projection_types;
 pub mod types;
 
@@ -17,9 +20,13 @@ pub use descriptor::{
     SUBAGENT_DESCRIPTOR_VERSION, SubagentDescriptorData, SubagentDescriptorInput,
     fold_subagent_descriptor, snapshot_subagent_descriptor,
 };
+pub use descriptor_seed::seed_descriptor_turn;
 pub use error::SubagentError;
 pub use index::{INJECT, NAME, SUBAGENTS, SubagentRuntime, plugin};
 pub use lifecycle::{emit_subagent_lifecycle, epoch_output, epoch_stop_reason, observe_run};
+pub use projection::{
+    subagent_identity_projection_definition, subagent_timing_projection_definition,
+};
 pub use projection_types::{SubagentIdentityProjection, SubagentTimingProjection};
 pub use types::{
     ContinuableCreateRequest, ContinuableCreateSpec, ResolvedSubagentStartRequest,

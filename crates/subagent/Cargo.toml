@@ -13,8 +13,10 @@ parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-tools = { path = "../tools" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true
