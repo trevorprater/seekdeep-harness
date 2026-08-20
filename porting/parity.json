@@ -68716,17 +68716,38 @@
     {
       "source": "packages/workflow/workflow-worker-thread/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow-worker-thread/src/meta.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/meta.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow-worker-thread/src/protocol.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/protocol.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow-worker-thread/src/realm.ts",
@@ -68746,7 +68767,14 @@
     {
       "source": "packages/workflow/workflow-worker-thread/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow-worker-thread/src/worker.ts",

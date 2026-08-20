@@ -6063,6 +6063,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-workflow-worker-thread"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-workflow",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "seekdeep-workspace"
 version = "0.1.0-rc.5"
 dependencies = [

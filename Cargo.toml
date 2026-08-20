@@ -95,6 +95,7 @@ members = [
   "crates/util",
   "crates/workspace",
   "crates/workflow",
+  "crates/workflow-worker-thread",
   "xtask",
 ]
 resolver = "3"
