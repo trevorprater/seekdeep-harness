@@ -16,7 +16,11 @@ seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-user-approval = { path = "../user-approval" }
 seekdeep-tools = { path = "../tools" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true
