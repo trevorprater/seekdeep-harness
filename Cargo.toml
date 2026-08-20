@@ -42,6 +42,7 @@ members = [
   "crates/token-meter",
   "crates/core",
   "crates/invariants",
+  "crates/jobs",
   "crates/landlock-run",
   "crates/persona",
   "crates/plan-mode",

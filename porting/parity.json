@@ -54250,22 +54250,50 @@
     {
       "source": "packages/jobs/jobs/src/brand.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs/src/brand.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs --all-features",
+        "cargo clippy -p seekdeep-jobs --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/jobs/jobs/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs --all-features",
+        "cargo clippy -p seekdeep-jobs --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/jobs/jobs/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs --all-features",
+        "cargo clippy -p seekdeep-jobs --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/jobs/jobs/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs --all-features",
+        "cargo clippy -p seekdeep-jobs --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/jobs/jobs/tests/invariant.spec.ts",
