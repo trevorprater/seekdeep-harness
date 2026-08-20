@@ -67,7 +67,9 @@ pub fn validate_configured_cwd(prefix: &str, cwd: Option<&str>) -> anyhow::Resul
         return Ok(None);
     };
     if cwd.is_empty() {
-        anyhow::bail!("{prefix}: config cwd must not be empty — omit the key to inherit the parent session cwd");
+        anyhow::bail!(
+            "{prefix}: config cwd must not be empty — omit the key to inherit the parent session cwd"
+        );
     }
     let resolved = if Path::new(cwd).is_absolute() {
         cwd.to_owned()
@@ -94,23 +96,32 @@ pub fn resolve_child_cwd(
         return Ok(configured.to_owned());
     }
     let Some(parent_cwd) = parent_cwd else {
-        anyhow::bail!("{prefix}: no working directory for the child — configure cwd or delegate from a parent session that has one");
+        anyhow::bail!(
+            "{prefix}: no working directory for the child — configure cwd or delegate from a parent session that has one"
+        );
     };
     assert_usable_cwd(prefix, "parent session cwd", parent_cwd)
 }
 
-/// Inputs to settle_run_result.
+/// A one-shot turn attempt returning the terminal result.
+#[allow(clippy::type_complexity)]
+type AttemptClosure =
+    dyn FnOnce() -> futures::future::BoxFuture<'static, anyhow::Result<SubagentResult>> + Send;
+
+/// A diagnostic sink for a failure flattened to a stop reason.
+#[allow(clippy::type_complexity)]
+type ErrorSink = dyn Fn(&anyhow::Error, SubagentStopReason) + Send + Sync;
+
+/// Inputs to `settle_run_result`.
 pub struct RunResultSettlement {
     /// The turn attempt returning the terminal result.
-    pub attempt: Box<
-        dyn FnOnce() -> futures::future::BoxFuture<'static, anyhow::Result<SubagentResult>> + Send,
-    >,
+    pub attempt: Box<AttemptClosure>,
     /// Snapshot the provider exposes when cancellation wins settlement.
     pub collect_output: Box<dyn Fn() -> Vec<ContentBlock> + Send + Sync>,
     /// Whether local cancellation settled before the attempt's outcome is observed.
     pub cancelled: Box<dyn Fn() -> bool + Send + Sync>,
     /// Diagnostic sink for a failure flattened to a stop reason.
-    pub on_error: Option<Box<dyn Fn(&anyhow::Error, SubagentStopReason) + Send + Sync>>,
+    pub on_error: Option<Box<ErrorSink>>,
     /// The request's cancellation signal.
     pub signal: AbortSignal,
     /// The abort callback registered on the signal at start.

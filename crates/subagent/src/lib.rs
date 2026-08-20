@@ -10,6 +10,7 @@ pub mod error;
 pub mod index;
 pub mod invariant;
 pub mod lifecycle;
+pub mod out_of_process;
 pub mod projection;
 pub mod projection_types;
 pub mod types;
@@ -24,6 +25,10 @@ pub use descriptor_seed::seed_descriptor_turn;
 pub use error::SubagentError;
 pub use index::{INJECT, NAME, SUBAGENTS, SubagentRuntime, plugin};
 pub use lifecycle::{emit_subagent_lifecycle, epoch_output, epoch_stop_reason, observe_run};
+pub use out_of_process::{
+    RunResultSettlement, SubprocessRunHandle, assert_positive_finite, assert_usable_cwd,
+    no_start_capabilities, resolve_child_cwd, settle_run_result, validate_configured_cwd,
+};
 pub use projection::{
     subagent_identity_projection_definition, subagent_timing_projection_definition,
 };
