@@ -6071,15 +6071,19 @@ dependencies = [
  "futures",
  "parking_lot",
  "ryu-js",
+ "seekdeep-agent",
+ "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-subagent",
  "seekdeep-tools",
  "seekdeep-workflow",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

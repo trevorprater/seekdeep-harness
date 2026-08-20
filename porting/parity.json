@@ -68706,12 +68706,26 @@
     {
       "source": "packages/workflow/workflow-worker-thread/src/host.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/host.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow-worker-thread/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow-worker-thread/src/invariant.ts",
@@ -68777,7 +68791,15 @@
     {
       "source": "packages/workflow/workflow-worker-thread/src/session.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/runtime.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The worker-side RPC session collapses into the runtime's run_script drive loop plus the host-side ChildPort bridge; no message-passing thread boundary is needed in-process."
     },
     {
       "source": "packages/workflow/workflow-worker-thread/src/types.ts",
@@ -68794,7 +68816,15 @@
     {
       "source": "packages/workflow/workflow-worker-thread/src/worker.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/runtime.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Node worker entry collapses into WorkflowExecution::drive, which spawns a dedicated thread and runs the script."
     },
     {
       "source": "packages/workflow/workflow-worker-thread/tests/built-worker.e2e.ts",
@@ -68857,7 +68887,15 @@
     {
       "source": "packages/workflow/workflow-worker-thread/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The TS build config is replaced by Cargo compilation; no JavaScript bundle is produced."
     },
     {
       "source": "packages/workflow/workflow/README.i18n.yaml",
