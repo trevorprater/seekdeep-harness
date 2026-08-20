@@ -9,13 +9,17 @@ license.workspace = true
 anyhow.workspace = true
 boa_engine.workspace = true
 futures.workspace = true
+parking_lot.workspace = true
 ryu-js.workspace = true
+seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-tools = { path = "../tools" }
 seekdeep-workflow = { path = "../workflow" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

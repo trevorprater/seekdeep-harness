@@ -3,13 +3,16 @@
 //! host subagents.
 
 pub mod invariant;
+pub(crate) mod job_executor;
 pub mod meta;
 pub mod protocol;
 pub mod realm;
+pub mod runtime;
 pub mod types;
 
 pub use invariant::register_invariant;
 pub use meta::validate_meta;
 pub use protocol::{HostToWorkerMessage, HostToWorkerType, WorkerToHostMessage, WorkerToHostType};
 pub use realm::{MaterializeError, materialize_from_realm, render_thrown};
+pub use runtime::{ExecutionObserver, WorkflowExecution};
 pub use types::{ChildHandle, ChildPort, ChildResult, ChildStartRequest, WorkerInit, WorkerLimits};

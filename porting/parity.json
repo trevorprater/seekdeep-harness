@@ -68764,7 +68764,15 @@
     {
       "source": "packages/workflow/workflow-worker-thread/src/runtime.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/runtime.rs",
+        "crates/workflow-worker-thread/src/job_executor.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workflow-worker-thread --all-features",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow-worker-thread/src/session.ts",

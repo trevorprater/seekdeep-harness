@@ -6069,13 +6069,17 @@ dependencies = [
  "anyhow",
  "boa_engine",
  "futures",
+ "parking_lot",
  "ryu-js",
+ "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-tools",
  "seekdeep-workflow",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
