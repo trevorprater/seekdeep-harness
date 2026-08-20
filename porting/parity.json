@@ -45859,12 +45859,26 @@
     {
       "source": "packages/compaction/command-compact/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/command-compact/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-command-compact --all-features",
+        "cargo clippy -p seekdeep-command-compact --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/command-compact/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/command-compact/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-command-compact --all-features",
+        "cargo clippy -p seekdeep-command-compact --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/command-compact/tests/command-compact.spec.ts",
@@ -45939,7 +45953,14 @@
     {
       "source": "packages/compaction/compaction-basic/src/config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-basic/src/config.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-basic --all-features",
+        "cargo clippy -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/src/index.ts",
@@ -45949,22 +45970,50 @@
     {
       "source": "packages/compaction/compaction-basic/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-basic/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-basic --all-features",
+        "cargo clippy -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/src/region.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-basic/src/region.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-basic --all-features",
+        "cargo clippy -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/src/summarizer.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-basic/src/summarizer.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-basic --all-features",
+        "cargo clippy -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-basic/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-basic --all-features",
+        "cargo clippy -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/tests/compaction-basic.spec.ts",
@@ -46044,22 +46093,50 @@
     {
       "source": "packages/compaction/compaction-tool-result-pruner/src/config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-tool-result-pruner/src/config.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-tool-result-pruner --all-features",
+        "cargo clippy -p seekdeep-compaction-tool-result-pruner --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-tool-result-pruner/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-tool-result-pruner/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-tool-result-pruner --all-features",
+        "cargo clippy -p seekdeep-compaction-tool-result-pruner --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-tool-result-pruner/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-tool-result-pruner/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-tool-result-pruner --all-features",
+        "cargo clippy -p seekdeep-compaction-tool-result-pruner --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-tool-result-pruner/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-tool-result-pruner/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-compaction-tool-result-pruner --all-features",
+        "cargo clippy -p seekdeep-compaction-tool-result-pruner --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/compaction/compaction-tool-result-pruner/tests/loader-composition.spec.ts",
@@ -50931,12 +51008,26 @@
     {
       "source": "packages/goal/command-goal/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/command-goal/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-command-goal --all-features",
+        "cargo clippy -p seekdeep-command-goal --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/goal/command-goal/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/command-goal/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-command-goal --all-features",
+        "cargo clippy -p seekdeep-command-goal --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/goal/command-goal/tests/command-goal.spec.ts",
@@ -51256,22 +51347,50 @@
     {
       "source": "packages/goal/tool-goal/src/authority.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-goal/src/authority.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-goal --all-features",
+        "cargo clippy -p seekdeep-tool-goal --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/goal/tool-goal/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-goal/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-goal --all-features",
+        "cargo clippy -p seekdeep-tool-goal --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/goal/tool-goal/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-goal/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-goal --all-features",
+        "cargo clippy -p seekdeep-tool-goal --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/goal/tool-goal/src/wrapup.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-goal/src/wrapup.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-goal --all-features",
+        "cargo clippy -p seekdeep-tool-goal --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/goal/tool-goal/tests/tool-goal.spec.ts",
@@ -54175,22 +54294,50 @@
     {
       "source": "packages/jobs/jobs-local/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs-local/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs-local --all-features",
+        "cargo clippy -p seekdeep-jobs-local --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/jobs/jobs-local/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs-local/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs-local --all-features",
+        "cargo clippy -p seekdeep-jobs-local --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/jobs/jobs-local/tests/jobs.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs-local/tests/jobs_local_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs-local",
+        "pnpm exec vitest run packages/jobs/jobs-local/tests/jobs.spec.ts"
+      ]
     },
     {
       "source": "packages/jobs/jobs-local/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs-local/tests/jobs_local_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs-local",
+        "pnpm exec vitest run packages/jobs/jobs-local/tests/loader-composition.spec.ts"
+      ]
     },
     {
       "source": "packages/jobs/jobs-local/tsconfig.json",
@@ -54298,12 +54445,26 @@
     {
       "source": "packages/jobs/jobs/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs",
+        "pnpm exec vitest run packages/jobs/jobs/tests/invariant.spec.ts"
+      ]
     },
     {
       "source": "packages/jobs/jobs/tests/service.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jobs/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-jobs",
+        "pnpm exec vitest run packages/jobs/jobs/tests/service.spec.ts"
+      ]
     },
     {
       "source": "packages/jobs/jobs/tsconfig.json",
@@ -54363,17 +54524,38 @@
     {
       "source": "packages/jobs/tool-jobs/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-jobs/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-jobs --all-features",
+        "cargo clippy -p seekdeep-tool-jobs --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/jobs/tool-jobs/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-jobs/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-jobs --all-features",
+        "cargo clippy -p seekdeep-tool-jobs --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/jobs/tool-jobs/tests/tool-jobs.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-jobs/tests/tool_jobs_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-jobs",
+        "pnpm exec vitest run packages/jobs/tool-jobs/tests/tool-jobs.spec.ts"
+      ]
     },
     {
       "source": "packages/jobs/tool-jobs/tsconfig.json",

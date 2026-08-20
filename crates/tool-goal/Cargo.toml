@@ -1,25 +1,27 @@
 [package]
-name = "seekdeep-jobs"
+name = "seekdeep-tool-goal"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Model-facing goal control tools over the persisted same-session goal domain"
 
 [dependencies]
 anyhow.workspace = true
-futures.workspace = true
 seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
+seekdeep-goal = { path = "../goal" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
-seekdeep-util = { path = "../util" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
 
 [dev-dependencies]
-seekdeep-scope = { path = "../scope" }
 tokio.workspace = true
 
 [lints]

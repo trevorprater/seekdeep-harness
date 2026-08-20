@@ -1,25 +1,19 @@
 [package]
-name = "seekdeep-jobs"
+name = "seekdeep-command-compact"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Human-facing /compact command over the backend-independent compaction seam"
 
 [dependencies]
 anyhow.workspace = true
-futures.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-commands = { path = "../commands" }
+seekdeep-compaction = { path = "../compaction" }
 seekdeep-cordis = { path = "../cordis" }
-seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
-seekdeep-llm = { path = "../llm" }
-seekdeep-util = { path = "../util" }
-serde.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
-
-[dev-dependencies]
-seekdeep-scope = { path = "../scope" }
 tokio.workspace = true
 
 [lints]

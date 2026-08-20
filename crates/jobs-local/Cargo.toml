@@ -1,26 +1,31 @@
 [package]
-name = "seekdeep-jobs"
+name = "seekdeep-jobs-local"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Process-local implementation of the SeekDeep Harness background job registry seam"
 
 [dependencies]
 anyhow.workspace = true
 futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
-seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
-seekdeep-llm = { path = "../llm" }
+seekdeep-jobs = { path = "../jobs" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-scope = { path = "../scope" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
-seekdeep-scope = { path = "../scope" }
-tokio.workspace = true
+seekdeep-core = { path = "../core" }
 
 [lints]
 workspace = true

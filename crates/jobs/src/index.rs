@@ -98,7 +98,7 @@ pub trait JobRegistry: Service + Send + Sync {
     fn wait(
         &self,
         id: &JobId,
-        timeout_ms: u64,
+        timeout_ms: f64,
         caller: Option<&Arc<Agent>>,
         signal: Option<AbortSignal>,
     ) -> BoxFuture<'static, anyhow::Result<JobSnapshot>>;
@@ -111,4 +111,101 @@ pub trait JobRegistry: Service + Send + Sync {
 
     /// Attach an effect-scoped controller that can read and stop jobs.
     fn attach_controller(&self, name: &str) -> EffectHandle;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use futures::future::BoxFuture;
+    use seekdeep_agent::Agent;
+    use seekdeep_cordis::Context;
+    use seekdeep_llm::AbortSignal;
+
+    use super::*;
+    use crate::types::{JobRead, JobStart};
+    use crate::{JobId, JobKillOutcome, JobStatus, JobsChangedListener};
+
+    /// Minimal concrete registry for the seam's publication contract.
+    struct Stub;
+
+    impl JobRegistry for Stub {
+        fn start(&self, _spec: JobStart) -> JobId {
+            JobId::new("bash-1")
+        }
+
+        fn list(&self, _caller: Option<&Arc<Agent>>) -> Vec<JobSnapshot> {
+            vec![JobSnapshot {
+                id: JobId::new("bash-1"),
+                kind: "bash".to_owned(),
+                label: "sleep 60".to_owned(),
+                output_limit_bytes: None,
+                owner_session: None,
+                status: JobStatus::Running,
+                detail: None,
+                started_at: 0,
+                finished_at: None,
+                reported: false,
+            }]
+        }
+
+        fn get(&self, id: &JobId, _caller: Option<&Arc<Agent>>) -> anyhow::Result<JobSnapshot> {
+            Ok(self
+                .list(None)
+                .into_iter()
+                .find(|s| &s.id == id)
+                .expect("stub"))
+        }
+
+        fn read(&self, id: &JobId, caller: Option<&Arc<Agent>>) -> anyhow::Result<JobRead> {
+            Ok(JobRead {
+                text: String::new(),
+                snapshot: self.get(id, caller)?,
+            })
+        }
+
+        fn kill(
+            &self,
+            _id: &JobId,
+            _caller: Option<&Arc<Agent>>,
+            _reason: Option<&str>,
+        ) -> anyhow::Result<JobKillOutcome> {
+            Ok(JobKillOutcome::Requested)
+        }
+
+        fn wait(
+            &self,
+            id: &JobId,
+            _timeout_ms: f64,
+            _caller: Option<&Arc<Agent>>,
+            _signal: Option<AbortSignal>,
+        ) -> BoxFuture<'static, anyhow::Result<JobSnapshot>> {
+            let snapshot = self.get(id, None).expect("stub");
+            Box::pin(async { Ok(snapshot) })
+        }
+
+        fn on_job_done(&self, _listener: JobDoneListener) -> EffectHandle {
+            EffectHandle::synchronous("stub.onJobDone", || Ok(()))
+        }
+
+        fn on_jobs_changed(&self, _listener: JobsChangedListener) -> EffectHandle {
+            EffectHandle::synchronous("stub.onJobsChanged", || Ok(()))
+        }
+
+        fn attach_controller(&self, _name: &str) -> EffectHandle {
+            EffectHandle::synchronous("stub.attachController", || Ok(()))
+        }
+    }
+
+    #[test]
+    fn concrete_registry_registers_and_a_second_publication_fails() {
+        let ctx = Context::new();
+        let service = JobRegistryService::new(Arc::new(Stub));
+        service.provide(&ctx).expect("first publication");
+        assert!(ctx.get(JOBS).is_some());
+
+        let second = JobRegistryService::new(Arc::new(Stub));
+        let error = second.provide(&ctx).expect_err("duplicate must fail");
+        assert!(format!("{error}").contains("jobs"), "{error}");
+    }
 }

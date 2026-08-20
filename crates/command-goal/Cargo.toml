@@ -1,0 +1,18 @@
+[package]
+name = "seekdeep-command-goal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Human-facing /goal command over the persisted same-session goal domain"
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-commands = { path = "../commands" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-goal = { path = "../goal" }
+seekdeep-invariants = { path = "../invariants" }
+
+[lints]
+workspace = true

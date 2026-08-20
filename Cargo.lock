@@ -4427,6 +4427,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-command-compact"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-agent",
+ "seekdeep-commands",
+ "seekdeep-compaction",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-command-feedback"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -4441,6 +4454,17 @@ dependencies = [
  "seekdeep-scope",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "seekdeep-command-goal"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-commands",
+ "seekdeep-cordis",
+ "seekdeep-goal",
+ "seekdeep-invariants",
 ]
 
 [[package]]
@@ -4485,6 +4509,41 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
+]
+
+[[package]]
+name = "seekdeep-compaction-basic"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "seekdeep-agent",
+ "seekdeep-commands",
+ "seekdeep-compaction",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-token-meter",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "seekdeep-compaction-tool-result-pruner"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-schemastery",
+ "seekdeep-token-meter",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -4763,10 +4822,34 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-scope",
  "seekdeep-util",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-jobs-local"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-invariants",
+ "seekdeep-jobs",
+ "seekdeep-schemastery",
+ "seekdeep-scope",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5840,6 +5923,47 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "seekdeep-tool-goal"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-goal",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-schemastery",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-tool-jobs"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "seekdeep-jobs",
+ "seekdeep-jobs-local",
+ "seekdeep-llm",
+ "seekdeep-schemastery",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

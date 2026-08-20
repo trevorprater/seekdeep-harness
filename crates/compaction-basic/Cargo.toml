@@ -1,26 +1,29 @@
 [package]
-name = "seekdeep-jobs"
+name = "seekdeep-compaction-basic"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Replay-aware basic compaction backend"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 futures.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-commands = { path = "../commands" }
+seekdeep-compaction = { path = "../compaction" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
-seekdeep-util = { path = "../util" }
+seekdeep-token-meter = { path = "../token-meter" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-
-[dev-dependencies]
-seekdeep-scope = { path = "../scope" }
-tokio.workspace = true
+uuid.workspace = true
 
 [lints]
 workspace = true

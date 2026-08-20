@@ -1,26 +1,22 @@
 [package]
-name = "seekdeep-jobs"
+name = "seekdeep-compaction-tool-result-pruner"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Replay-safe, model-free tool-result pruning service"
 
 [dependencies]
 anyhow.workspace = true
-futures.workspace = true
-seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
-seekdeep-util = { path = "../util" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-token-meter = { path = "../token-meter" }
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
-
-[dev-dependencies]
-seekdeep-scope = { path = "../scope" }
-tokio.workspace = true
 
 [lints]
 workspace = true
