@@ -7,12 +7,15 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+boa_engine.workspace = true
 futures.workspace = true
+ryu-js.workspace = true
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-workflow = { path = "../workflow" }
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

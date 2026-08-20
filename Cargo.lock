@@ -6067,12 +6067,15 @@ name = "seekdeep-workflow-worker-thread"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "boa_engine",
  "futures",
+ "ryu-js",
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-workflow",
  "serde",
  "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

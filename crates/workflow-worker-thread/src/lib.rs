@@ -5,9 +5,11 @@
 pub mod invariant;
 pub mod meta;
 pub mod protocol;
+pub mod realm;
 pub mod types;
 
 pub use invariant::register_invariant;
 pub use meta::validate_meta;
 pub use protocol::{HostToWorkerMessage, HostToWorkerType, WorkerToHostMessage, WorkerToHostType};
+pub use realm::{MaterializeError, materialize_from_realm, render_thrown};
 pub use types::{ChildHandle, ChildPort, ChildResult, ChildStartRequest, WorkerInit, WorkerLimits};
