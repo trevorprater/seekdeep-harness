@@ -3,17 +3,29 @@
 use std::{collections::HashMap, sync::Arc};
 
 use parking_lot::Mutex;
-use seekdeep_cordis::{EventOptions, EventReply};
-use seekdeep_core::session::{Session, SessionEvent};
-use seekdeep_invariants::{InvariantFailure, InvariantInstaller, InvariantRegistry};
+use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply};
+use seekdeep_core::{
+    session::{Session, SessionEvent},
+    session_store::SESSIONS,
+};
+use seekdeep_invariants::{
+    InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
+};
 
 const PACKAGE_NAME: &str = "seekdeep-tool-workflow";
 
 /// Per-run trace accumulated across one workflow-record lifecycle.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct RunTrace {
     ended: bool,
     members: HashMap<u64, bool>,
+}
+
+/// Shared fold: committed per-session traces plus staged pre-publication candidates.
+#[derive(Debug, Default)]
+struct InvariantState {
+    traces: HashMap<String, HashMap<String, RunTrace>>,
+    staged: HashMap<usize, (String, HashMap<String, RunTrace>)>,
 }
 
 /// Registers the workflow-record invariant companion.
@@ -23,50 +35,118 @@ struct RunTrace {
 /// Returns ordinary invariant registration failures.
 pub fn register_invariant(
     registry: &Arc<InvariantRegistry>,
-) -> anyhow::Result<seekdeep_invariants::InvariantRegistration> {
+) -> anyhow::Result<InvariantRegistration> {
     registry.register(
         PACKAGE_NAME,
-        InvariantInstaller::new(["sessions"], move |context, fail| {
+        InvariantInstaller::new(["sessions"], |context, fail| {
             Box::pin(async move {
-                let traces = Arc::new(Mutex::new(
-                    HashMap::<String, HashMap<String, RunTrace>>::new(),
-                ));
-                // Seed from existing sessions.
-                let sessions = context.get(seekdeep_core::session_store::SESSIONS);
-                if let Some(store) = sessions {
-                    for session in store.list() {
-                        seed_session(&session, &traces, &fail)?;
-                    }
-                }
-                let listener_traces = Arc::clone(&traces);
-                let listener_fail = fail.clone();
-                context.events().on_sync(
-                    &context,
-                    "session/event",
-                    move |_, args| {
-                        let Some(session) = args.get::<Arc<Session>>(0) else {
-                            return Ok(EventReply::Undefined);
-                        };
-                        let Some(event) = args.get::<SessionEvent>(1) else {
-                            return Ok(EventReply::Undefined);
-                        };
-                        if !event.event_type.starts_with("tool-workflow/") {
-                            return Ok(EventReply::Undefined);
-                        }
-                        validate_event(&session, event.as_ref(), &listener_traces, &listener_fail)?;
-                        Ok(EventReply::Undefined)
-                    },
-                    global_events(),
-                )?;
+                install(&context, &fail)?;
                 Ok(())
             })
         }),
     )
 }
 
+fn install(context: &Context, fail: &InvariantFailure) -> anyhow::Result<()> {
+    let sessions = context
+        .get(SESSIONS)
+        .ok_or_else(|| anyhow::anyhow!("seekdeep-tool-workflow invariant requires sessions"))?;
+    let state = Arc::new(Mutex::new(InvariantState::default()));
+    for session in sessions.list() {
+        seed_session(&state, &session, fail)?;
+    }
+
+    let created_state = state.clone();
+    let created_fail = fail.clone();
+    context.events().on_sync(
+        context,
+        "session/created",
+        move |_, args| {
+            let Some(session) = args.get::<Session>(0) else {
+                return Ok(EventReply::Undefined);
+            };
+            seed_session(&created_state, &session, &created_fail)?;
+            Ok(EventReply::Undefined)
+        },
+        global_events(),
+    )?;
+
+    let dispatch_state = state.clone();
+    let dispatch_fail = fail.clone();
+    context.events().on_sync(
+        context,
+        "internal/dispatch",
+        move |_, args| {
+            args.get::<DispatchMode>(0)
+                .ok_or_else(|| anyhow::anyhow!("internal/dispatch lacks a dispatch mode"))?;
+            let event_name = args
+                .get::<String>(1)
+                .ok_or_else(|| anyhow::anyhow!("internal/dispatch lacks an event name"))?;
+            let event_args = args
+                .get::<EventArgs>(2)
+                .ok_or_else(|| anyhow::anyhow!("internal/dispatch lacks event arguments"))?;
+            if event_name.as_str() != "session/event" {
+                return Ok(EventReply::Undefined);
+            }
+            let session = event_args
+                .get::<Session>(0)
+                .ok_or_else(|| anyhow::anyhow!("session/event lacks its session"))?;
+            let event = event_args
+                .get::<SessionEvent>(1)
+                .ok_or_else(|| anyhow::anyhow!("session/event lacks its event"))?;
+            if !event.event_type.starts_with("tool-workflow/") {
+                return Ok(EventReply::Undefined);
+            }
+            let mut candidate = clone_for(&dispatch_state, &session, &dispatch_fail)?;
+            validate_into(&mut candidate, event.as_ref(), &dispatch_fail)?;
+            dispatch_state.lock().staged.insert(
+                Arc::as_ptr(&event) as usize,
+                (session.id().as_str().to_owned(), candidate),
+            );
+            Ok(EventReply::Undefined)
+        },
+        global_events(),
+    )?;
+
+    let commit_state = state;
+    let commit_fail = fail.clone();
+    context.events().on_sync(
+        context,
+        "session/event",
+        move |_, args| {
+            let session = args
+                .get::<Session>(0)
+                .ok_or_else(|| anyhow::anyhow!("session/event lacks its session"))?;
+            let event = args
+                .get::<SessionEvent>(1)
+                .ok_or_else(|| anyhow::anyhow!("session/event lacks its event"))?;
+            if !event.event_type.starts_with("tool-workflow/") {
+                return Ok(EventReply::Undefined);
+            }
+            let key = session.id().as_str().to_owned();
+            let staged = commit_state
+                .lock()
+                .staged
+                .remove(&(Arc::as_ptr(&event) as usize));
+            let Some((staged_key, candidate)) = staged.filter(|(staged_key, _)| *staged_key == key)
+            else {
+                return Err(commit_fail
+                    .fail(
+                        "session/event reached publication without matching workflow-record validation",
+                    )
+                    .into());
+            };
+            commit_state.lock().traces.insert(staged_key, candidate);
+            Ok(EventReply::Undefined)
+        },
+        global_events(),
+    )?;
+    Ok(())
+}
+
 fn seed_session(
+    state: &Arc<Mutex<InvariantState>>,
     session: &Arc<Session>,
-    traces: &Arc<Mutex<HashMap<String, HashMap<String, RunTrace>>>>,
     fail: &InvariantFailure,
 ) -> anyhow::Result<()> {
     let mut map = HashMap::new();
@@ -75,19 +155,24 @@ fn seed_session(
             validate_into(&mut map, &event, fail)?;
         }
     }
-    traces.lock().insert(session.id().as_str().to_owned(), map);
+    state
+        .lock()
+        .traces
+        .insert(session.id().as_str().to_owned(), map);
     Ok(())
 }
 
-fn validate_event(
+fn clone_for(
+    state: &Arc<Mutex<InvariantState>>,
     session: &Arc<Session>,
-    event: &SessionEvent,
-    traces: &Arc<Mutex<HashMap<String, HashMap<String, RunTrace>>>>,
     fail: &InvariantFailure,
-) -> anyhow::Result<()> {
-    let mut all = traces.lock();
-    let map = all.entry(session.id().as_str().to_owned()).or_default();
-    validate_into(map, event, fail)
+) -> anyhow::Result<HashMap<String, RunTrace>> {
+    let key = session.id().as_str().to_owned();
+    if let Some(trace) = state.lock().traces.get(&key) {
+        return Ok(trace.clone());
+    }
+    seed_session(state, session, fail)?;
+    Ok(state.lock().traces.get(&key).expect("seeded").clone())
 }
 
 fn record_of<'a>(
@@ -108,7 +193,7 @@ fn string_id<'a>(
     label: &str,
     fail: &InvariantFailure,
 ) -> anyhow::Result<&'a str> {
-    let Some(value) = object.get(key).and_then(|v| v.as_str()) else {
+    let Some(value) = object.get(key).and_then(|value| value.as_str()) else {
         return Err(fail
             .fail(format!("{label} must be a non-empty string"))
             .into());
@@ -149,7 +234,11 @@ fn validate_into(
         "tool-workflow/agent-start" => {
             let run = open_run(map, &run_id, &event.event_type, fail)?;
             let seq = member_seq(object, fail)?;
-            if object.get("label").and_then(|v| v.as_str()).is_none() {
+            if object
+                .get("label")
+                .and_then(|value| value.as_str())
+                .is_none()
+            {
                 return Err(fail
                     .fail("tool-workflow/agent-start label must be a string")
                     .into());
@@ -174,11 +263,15 @@ fn validate_into(
         "tool-workflow/agent-end" => {
             let run = open_run(map, &run_id, &event.event_type, fail)?;
             let seq = member_seq(object, fail)?;
-            let outcome = object.get("outcome").and_then(|v| v.as_str());
-            if !matches!(outcome, Some("completed" | "failed" | "cancelled")) {
+            let outcome = object.get("outcome");
+            if !matches!(
+                outcome.and_then(serde_json::Value::as_str),
+                Some("completed" | "failed" | "cancelled")
+            ) {
                 return Err(fail
                     .fail(format!(
-                        "tool-workflow/agent-end outcome {outcome:?} is invalid"
+                        "tool-workflow/agent-end outcome {} is invalid",
+                        outcome.map_or_else(|| "undefined".to_owned(), display_value)
                     ))
                     .into());
             }
@@ -201,11 +294,15 @@ fn validate_into(
         }
         "tool-workflow/run-end" => {
             let run = open_run(map, &run_id, &event.event_type, fail)?;
-            let reason = object.get("stopReason").and_then(|v| v.as_str());
-            if !matches!(reason, Some("completed" | "cancelled" | "error")) {
+            let reason = object.get("stopReason");
+            if !matches!(
+                reason.and_then(serde_json::Value::as_str),
+                Some("completed" | "cancelled" | "error")
+            ) {
                 return Err(fail
                     .fail(format!(
-                        "tool-workflow/run-end stopReason {reason:?} is invalid"
+                        "tool-workflow/run-end stopReason {} is invalid",
+                        reason.map_or_else(|| "undefined".to_owned(), display_value)
                     ))
                     .into());
             }
@@ -260,6 +357,14 @@ fn open_run<'a>(
             .into());
     }
     Ok(run)
+}
+
+/// Renders a field the way the source's `String(value)` coercion does for scalars: a bare
+/// string stays bare, while other JSON scalars use their JSON text.
+fn display_value(value: &serde_json::Value) -> String {
+    value
+        .as_str()
+        .map_or_else(|| value.to_string(), str::to_owned)
 }
 
 fn member_seq(

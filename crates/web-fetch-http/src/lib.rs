@@ -1,4 +1,7 @@
-//! Rust anonymous public HTTP(S) fetch provider for the SeekDeep web capability seam.
+//! Rust anonymous public HTTP(S) fetch provider for the `SeekDeep` web capability seam.
+
+/// Safe `f64` limit to integer count conversions.
+mod numeric;
 
 /// Configuration resolution and Cordis composition.
 pub mod index;

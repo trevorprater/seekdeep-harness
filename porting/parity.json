@@ -68507,27 +68507,62 @@
     {
       "source": "packages/web/web-fetch-http/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-fetch-http/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-fetch-http --all-features",
+        "cargo clippy -p seekdeep-web-fetch-http --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-fetch-http/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-fetch-http/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-fetch-http --all-features",
+        "cargo clippy -p seekdeep-web-fetch-http --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-fetch-http/src/policy.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-fetch-http/src/policy.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-fetch-http --all-features",
+        "cargo clippy -p seekdeep-web-fetch-http --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-fetch-http/src/provider.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-fetch-http/src/provider.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-fetch-http --all-features",
+        "cargo clippy -p seekdeep-web-fetch-http --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-fetch-http/tests/fetch-http.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-fetch-http/tests/fetch_http_spec.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-fetch-http --all-features",
+        "cargo clippy -p seekdeep-web-fetch-http --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-fetch-http/tsconfig.json",
@@ -68738,32 +68773,74 @@
     {
       "source": "packages/web/web-search-exa/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-exa/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-exa --all-features",
+        "cargo clippy -p seekdeep-web-search-exa --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-exa/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-exa/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-exa --all-features",
+        "cargo clippy -p seekdeep-web-search-exa --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-exa/src/provider.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-exa/src/provider.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-exa --all-features",
+        "cargo clippy -p seekdeep-web-search-exa --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-exa/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-exa/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-exa --all-features",
+        "cargo clippy -p seekdeep-web-search-exa --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-exa/tests/exa.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-exa/tests/exa_e2e.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-exa --all-features",
+        "cargo clippy -p seekdeep-web-search-exa --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-exa/tests/exa.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-exa/tests/exa_spec.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-exa --all-features",
+        "cargo clippy -p seekdeep-web-search-exa --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-exa/tsconfig.json",
@@ -68823,32 +68900,74 @@
     {
       "source": "packages/web/web-search-perplexity/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-perplexity/src/index.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-perplexity --all-features",
+        "cargo clippy -p seekdeep-web-search-perplexity --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-perplexity/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-perplexity/src/invariant.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-perplexity --all-features",
+        "cargo clippy -p seekdeep-web-search-perplexity --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-perplexity/src/provider.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-perplexity/src/provider.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-perplexity --all-features",
+        "cargo clippy -p seekdeep-web-search-perplexity --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-perplexity/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-perplexity/src/types.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-perplexity --all-features",
+        "cargo clippy -p seekdeep-web-search-perplexity --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-perplexity/tests/perplexity.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-perplexity/tests/perplexity_e2e.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-perplexity --all-features",
+        "cargo clippy -p seekdeep-web-search-perplexity --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-perplexity/tests/perplexity.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-search-perplexity/tests/perplexity_spec.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-web-search-perplexity --all-features",
+        "cargo clippy -p seekdeep-web-search-perplexity --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/web-search-perplexity/tsconfig.json",

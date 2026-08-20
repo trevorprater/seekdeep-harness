@@ -6423,6 +6423,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-web-search-exa"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-schemastery",
+ "seekdeep-util",
+ "seekdeep-web",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "seekdeep-web-search-perplexity"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-schemastery",
+ "seekdeep-util",
+ "seekdeep-web",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "seekdeep-workflow"
 version = "0.1.0-rc.5"
 dependencies = [

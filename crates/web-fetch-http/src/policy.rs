@@ -18,9 +18,9 @@ pub enum FetchableKind {
 ///
 /// # Errors
 ///
-/// Returns a WEB_INVALID_URL or WEB_BLOCKED_URL error on rejection.
+/// Returns a `WEB_INVALID_URL` or `WEB_BLOCKED_URL` error on rejection.
 pub fn validate_fetch_url(input: &str, max_url_length: f64) -> anyhow::Result<Url> {
-    if input.len() as f64 > max_url_length {
+    if crate::numeric::exceeds(input.len(), max_url_length) {
         anyhow::bail!(web_error(
             format!("URL exceeds the maximum length of {max_url_length}"),
             "WEB_INVALID_URL"
@@ -103,7 +103,7 @@ pub fn parse_charset(content_type: Option<&str>) -> Option<String> {
 ///
 /// # Errors
 ///
-/// Returns a WEB_UNSUPPORTED_CONTENT_TYPE error when the label is present but unrecognized.
+/// Returns a `WEB_UNSUPPORTED_CONTENT_TYPE` error when the label is present but unrecognized.
 pub fn decoder_for_charset(charset: Option<&str>) -> anyhow::Result<&'static Encoding> {
     let Some(charset) = charset else {
         return Ok(encoding_rs::UTF_8);

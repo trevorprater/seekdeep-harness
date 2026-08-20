@@ -8,9 +8,7 @@
 use async_trait::async_trait;
 use seekdeep_llm::AbortSignal;
 use seekdeep_util::timeout::{deadline, timeout_of};
-use seekdeep_web::{
-    WebFetchBody, WebFetchProvider, WebFetchRequest, WebFetchResult, web_error,
-};
+use seekdeep_web::{WebFetchBody, WebFetchProvider, WebFetchRequest, WebFetchResult, web_error};
 use url::Url;
 
 use crate::policy::{
@@ -169,11 +167,12 @@ impl HttpFetchProvider {
         let (bytes, truncated_by_bytes) = self.read_capped(response, signal).await?;
         let (decoded, _used_encoding, _had_errors) = encoding.decode(&bytes);
         let decoded = decoded.into_owned();
-        let truncated_by_chars = decoded.chars().count() as f64 > self.limits.max_body_chars;
+        let truncated_by_chars =
+            crate::numeric::exceeds(decoded.chars().count(), self.limits.max_body_chars);
         let content = if truncated_by_chars {
             decoded
                 .chars()
-                .take(self.limits.max_body_chars as usize)
+                .take(crate::numeric::floor_to_usize(self.limits.max_body_chars))
                 .collect()
         } else {
             decoded
@@ -200,21 +199,20 @@ impl HttpFetchProvider {
             .headers()
             .get("content-length")
             .and_then(|value| value.to_str().ok())
+            && let Ok(length) = declared.parse::<f64>()
+            && length.is_finite()
+            && length > self.limits.max_response_bytes
         {
-            if let Ok(length) = declared.parse::<f64>()
-                && length.is_finite()
-                && length > self.limits.max_response_bytes
-            {
-                return Err(web_error(
-                    format!(
-                        "response exceeds the maximum of {} bytes",
-                        self.limits.max_response_bytes
-                    ),
-                    "WEB_FETCH_TOO_LARGE",
-                )
-                .into());
-            }
+            return Err(web_error(
+                format!(
+                    "response exceeds the maximum of {} bytes",
+                    self.limits.max_response_bytes
+                ),
+                "WEB_FETCH_TOO_LARGE",
+            )
+            .into());
         }
+        let max_bytes = crate::numeric::floor_to_usize(self.limits.max_response_bytes);
         let mut bytes = Vec::new();
         let mut truncated = false;
         loop {
@@ -225,9 +223,9 @@ impl HttpFetchProvider {
             };
             match chunk {
                 Ok(Some(chunk)) => {
-                    let remaining = self.limits.max_response_bytes - bytes.len() as f64;
-                    if chunk.len() as f64 > remaining {
-                        bytes.extend_from_slice(&chunk[..remaining as usize]);
+                    let remaining = max_bytes - bytes.len();
+                    if chunk.len() > remaining {
+                        bytes.extend_from_slice(&chunk[..remaining]);
                         truncated = true;
                         break;
                     }
@@ -286,8 +284,11 @@ fn resolve_redirect(location: &str, base: &Url) -> anyhow::Result<Url> {
     })
 }
 
-/// Translates a thrown request/stream error into a WebError, classified by the deadline signal.
-fn translate_abort_or_network(error: Option<&reqwest::Error>, signal: &AbortSignal) -> anyhow::Error {
+/// Translates a thrown request/stream error into a `WebError`, classified by the deadline signal.
+fn translate_abort_or_network(
+    error: Option<&reqwest::Error>,
+    signal: &AbortSignal,
+) -> anyhow::Error {
     if timeout_of(signal, Some("WEB_FETCH_TIMEOUT")).is_some() {
         return web_error("web fetch timed out", "WEB_FETCH_TIMEOUT").into();
     }

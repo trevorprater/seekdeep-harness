@@ -109,6 +109,8 @@ members = [
   "crates/web",
   "crates/web-fetch-http",
   "crates/web-search-deepseek",
+  "crates/web-search-exa",
+  "crates/web-search-perplexity",
   "crates/user-approval",
   "crates/user-questions",
   "crates/util",

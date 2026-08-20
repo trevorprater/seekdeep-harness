@@ -1,4 +1,4 @@
-//! Shared test fixtures for the web-fetch-http parity suites.
+//! Shared test fixtures for the web-search-exa parity suites.
 
 #![allow(
     dead_code,
@@ -10,6 +10,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use parking_lot::Mutex;
+use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt as _, AsyncWriteExt as _},
     net::{TcpListener, TcpStream},
@@ -28,7 +29,7 @@ pub struct CapturedRequest {
     pub body: Vec<u8>,
 }
 
-/// A fixed HTTP response.
+/// A fixed HTTP response the mock server replays.
 #[derive(Clone)]
 pub struct ResponseSpec {
     status: u16,
@@ -37,45 +38,32 @@ pub struct ResponseSpec {
 }
 
 impl ResponseSpec {
-    /// Builds a response with the given status, optional headers, and body.
-    pub fn new(status: u16, headers: Vec<(String, String)>, body: Vec<u8>) -> Self {
+    /// A JSON response with a content-type header.
+    pub fn json(status: u16, body: Value) -> Self {
         Self {
             status,
-            headers,
-            body,
+            headers: vec![("content-type".to_owned(), "application/json".to_owned())],
+            body: serde_json::to_vec(&body).expect("fixture body serializes"),
         }
     }
 
     /// A plain-text response.
-    pub fn plain(status: u16, content_type: &str, body: impl Into<Vec<u8>>) -> Self {
-        Self::new(
+    pub fn plain(status: u16, body: impl Into<String>) -> Self {
+        Self {
             status,
-            vec![("content-type".to_owned(), content_type.to_owned())],
-            body.into(),
-        )
+            headers: Vec::new(),
+            body: body.into().into_bytes(),
+        }
+    }
+
+    /// Adds a response header.
+    pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.push((name.into(), value.into()));
+        self
     }
 }
 
-/// How one request is answered.
-#[derive(Clone)]
-pub enum MockResponse {
-    /// Write a complete response and close.
-    Respond(ResponseSpec),
-    /// Write nothing and hold the connection open.
-    Stall,
-    /// Write headers and a partial body, then hold the connection open.
-    StallAfterPartial {
-        /// Status line and headers.
-        head: ResponseSpec,
-        /// Partial body bytes written before stalling.
-        partial: Vec<u8>,
-    },
-}
-
-/// Handler deciding one request's response.
-pub type Handler = Arc<dyn Fn(&CapturedRequest) -> MockResponse + Send + Sync>;
-
-/// A loopback HTTP server driven by a request handler.
+/// A loopback HTTP server that replays the first scripted response and records requests.
 pub struct MockServer {
     /// Origin URL.
     pub url: String,
@@ -84,10 +72,16 @@ pub struct MockServer {
 }
 
 impl MockServer {
-    /// Starts a server answering every request via the handler.
-    pub async fn start(handler: Handler) -> Self {
+    /// Starts a server replaying one response for every request.
+    pub async fn start(response: ResponseSpec) -> Self {
+        Self::start_script(vec![response]).await
+    }
+
+    /// Starts a server replaying the first scripted response for every request.
+    pub async fn start_script(responses: Vec<ResponseSpec>) -> Self {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await.expect("bind");
         let address = listener.local_addr().expect("local addr");
+        let responses = Arc::new(Mutex::new(responses));
         let requests = Arc::new(Mutex::new(Vec::new()));
         let captured = requests.clone();
         let task = tokio::spawn(async move {
@@ -95,10 +89,10 @@ impl MockServer {
                 let Ok((stream, _)) = listener.accept().await else {
                     return;
                 };
-                let handler = handler.clone();
+                let responses = responses.clone();
                 let captured = captured.clone();
                 tokio::spawn(async move {
-                    let _ = serve(stream, handler, captured).await;
+                    let _ = serve(stream, responses, captured).await;
                 });
             }
         });
@@ -127,43 +121,27 @@ const CRLF: &str = "\r\n";
 
 async fn serve(
     mut stream: TcpStream,
-    handler: Handler,
+    responses: Arc<Mutex<Vec<ResponseSpec>>>,
     captured: Arc<Mutex<Vec<CapturedRequest>>>,
 ) -> anyhow::Result<()> {
     let request = read_request(&mut stream).await?;
-    captured.lock().push(request.clone());
-    match handler(&request) {
-        MockResponse::Respond(spec) => write_response(&mut stream, &spec).await,
-        MockResponse::Stall => {
-            futures::future::pending::<()>().await;
-            Ok(())
-        }
-        MockResponse::StallAfterPartial { head, partial } => {
-            write_response_head(&mut stream, head.status, &head.headers).await?;
-            stream.write_all(&partial).await?;
-            futures::future::pending::<()>().await;
-            Ok(())
-        }
-    }
-}
-
-async fn write_response(stream: &mut TcpStream, spec: &ResponseSpec) -> anyhow::Result<()> {
-    write_response_head(stream, spec.status, &spec.headers).await?;
-    stream.write_all(&spec.body).await?;
-    Ok(())
-}
-
-async fn write_response_head(
-    stream: &mut TcpStream,
-    status: u16,
-    headers: &[(String, String)],
-) -> anyhow::Result<()> {
-    let mut head = format!("HTTP/1.1 {status} Test{CRLF}connection: close{CRLF}");
-    for (name, value) in headers {
+    captured.lock().push(request);
+    let response = responses
+        .lock()
+        .first()
+        .cloned()
+        .unwrap_or_else(|| ResponseSpec::plain(500, ""));
+    let mut head = format!(
+        "HTTP/1.1 {} Test{CRLF}content-length: {}{CRLF}connection: close{CRLF}",
+        response.status,
+        response.body.len()
+    );
+    for (name, value) in response.headers {
         head.push_str(&format!("{name}: {value}{CRLF}"));
     }
     head.push_str(CRLF);
     stream.write_all(head.as_bytes()).await?;
+    stream.write_all(&response.body).await?;
     Ok(())
 }
 

@@ -49,11 +49,17 @@ pub struct HttpFetchConfig {
 pub fn config_schema() -> Schema {
     Schema::object([
         ("maxUrlLength", Schema::number().with_default(2048.0)),
-        ("maxResponseBytes", Schema::number().with_default(5_000_000.0)),
+        (
+            "maxResponseBytes",
+            Schema::number().with_default(5_000_000.0),
+        ),
         ("maxBodyChars", Schema::number().with_default(100_000.0)),
         ("timeoutMs", Schema::number().with_default(30_000.0)),
         ("maxRedirects", Schema::number().with_default(5.0)),
-        ("userAgent", Schema::string().with_default(DEFAULT_USER_AGENT)),
+        (
+            "userAgent",
+            Schema::string().with_default(DEFAULT_USER_AGENT),
+        ),
     ])
 }
 
@@ -85,7 +91,7 @@ pub fn resolve_limits(config: &HttpFetchConfig) -> anyhow::Result<HttpFetchLimit
         max_response_bytes,
         max_body_chars,
         timeout_ms,
-        max_redirects: max_redirects as u64,
+        max_redirects: crate::numeric::trunc_to_u64(max_redirects),
         user_agent,
     })
 }
