@@ -5,16 +5,15 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use futures::future::BoxFuture;
 use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_agent::{
-    Agent, AgentDetach, AgentEvents, AgentOptions, AgentRegistry, SessionStartSource,
+    Agent, AgentDetach, AgentEvents, AgentFactory, AgentHandle, AgentOptions, AgentRegistry,
+    CreateAgentMeta, CreateAgentOptions, ResumeAgentOptions, SessionStartSource,
 };
 use seekdeep_cordis::{Context, fiber::EffectHandle};
 use seekdeep_core::{
     preparation::SessionPreparation,
-    session::{SessionEvent, SessionId, SessionOrigin},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_llm::AbortSignal;
@@ -22,139 +21,6 @@ use seekdeep_session_persistence::SessionPersistence;
 use uuid::Uuid;
 
 use crate::{AgentLoopServices, LoopAgent};
-
-/// Synchronous validation/commit at the exact publication boundary.
-pub trait AgentSetupCommit: Send + Sync + 'static {
-    /// Validates and commits prepared setup.
-    ///
-    /// # Errors
-    ///
-    /// Rejects publication and triggers complete rollback.
-    fn commit(&self) -> anyhow::Result<()>;
-}
-
-/// Trusted unpublished agent-scope composition callback.
-pub type AgentSetup = Arc<
-    dyn Fn(Context) -> BoxFuture<'static, anyhow::Result<Option<Arc<dyn AgentSetupCommit>>>>
-        + Send
-        + Sync
-        + 'static,
->;
-
-/// Durable session metadata accepted by programmatic creation.
-#[derive(Clone, Debug, Default)]
-pub struct CreateAgentMeta {
-    /// Validated absolute working directory.
-    pub cwd: Option<String>,
-    /// Durable fork lineage.
-    pub parent_session: Option<SessionId>,
-    /// Inherited prefix boundary.
-    pub seed_length: Option<u64>,
-    /// Coarse subagent classification.
-    pub origin: Option<SessionOrigin>,
-    /// Persisted recursion depth.
-    pub delegation_depth: Option<u64>,
-    /// Agent preset that composed this session.
-    pub agent_preset: Option<String>,
-}
-
-/// Programmatic create transaction input.
-#[derive(Clone)]
-pub struct CreateAgentOptions {
-    /// Shared live agent/session identity.
-    pub session_id: SessionId,
-    /// Durable session metadata.
-    pub meta: CreateAgentMeta,
-    /// Initial replay/fork history.
-    pub seed: Option<Vec<SessionEvent>>,
-    /// Per-agent model options.
-    pub agent_options: AgentOptions,
-    /// Optional creation-only cancellation.
-    pub signal: Option<AbortSignal>,
-    /// Optional unpublished scoped composition.
-    pub setup: Option<AgentSetup>,
-    /// Runtime owner agent, independent of durable lineage.
-    pub owner_agent: Option<Arc<Agent>>,
-}
-
-impl CreateAgentOptions {
-    /// Builds the mandatory exact-identity portion with default composition.
-    #[must_use]
-    pub fn new(session_id: SessionId) -> Self {
-        Self {
-            session_id,
-            meta: CreateAgentMeta::default(),
-            seed: None,
-            agent_options: AgentOptions::default(),
-            signal: None,
-            setup: None,
-            owner_agent: None,
-        }
-    }
-}
-
-impl std::fmt::Debug for CreateAgentOptions {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("CreateAgentOptions")
-            .field("session_id", &self.session_id)
-            .field("meta", &self.meta)
-            .field("seed_length", &self.seed.as_ref().map(Vec::len))
-            .field("agent_options", &self.agent_options)
-            .field("signal", &self.signal)
-            .field("setup", &self.setup.is_some())
-            .field(
-                "owner_agent",
-                &self.owner_agent.as_ref().map(|agent| agent.id()),
-            )
-            .finish()
-    }
-}
-
-/// Programmatic resume transaction input.
-#[derive(Clone)]
-pub struct ResumeAgentOptions {
-    /// Persisted identity to load and publish.
-    pub resume_session_id: SessionId,
-    /// Per-agent model options.
-    pub agent_options: AgentOptions,
-    /// Optional creation-only cancellation.
-    pub signal: Option<AbortSignal>,
-    /// Optional unpublished scoped composition.
-    pub setup: Option<AgentSetup>,
-    /// Runtime owner agent, independent of durable lineage.
-    pub owner_agent: Option<Arc<Agent>>,
-}
-
-impl ResumeAgentOptions {
-    /// Builds the mandatory persisted-identity portion.
-    #[must_use]
-    pub fn new(resume_session_id: SessionId) -> Self {
-        Self {
-            resume_session_id,
-            agent_options: AgentOptions::default(),
-            signal: None,
-            setup: None,
-            owner_agent: None,
-        }
-    }
-}
-
-impl std::fmt::Debug for ResumeAgentOptions {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("ResumeAgentOptions")
-            .field("resume_session_id", &self.resume_session_id)
-            .field("agent_options", &self.agent_options)
-            .field("signal", &self.signal)
-            .field("setup", &self.setup.is_some())
-            .field(
-                "owner_agent",
-                &self.owner_agent.as_ref().map(|agent| agent.id()),
-            )
-            .finish()
-    }
-}
 
 /// `agent/session-start` payload fields.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -248,25 +114,6 @@ impl AgentLifecycle {
             Ok(()) => Ok(()),
             Err(error) => Err(anyhow::anyhow!(error.clone())),
         }
-    }
-}
-
-/// Owned published agent plus the capability that tears down exactly it.
-#[derive(Clone, Debug)]
-pub struct AgentHandle {
-    /// Public exact live agent.
-    pub agent: Arc<Agent>,
-    lifecycle: Arc<AgentLifecycle>,
-}
-
-impl AgentHandle {
-    /// Stops/drains, unregisters, detaches the session, and unwinds scope.
-    ///
-    /// # Errors
-    ///
-    /// Returns the shared aggregate teardown failure.
-    pub async fn dispose(&self) -> anyhow::Result<()> {
-        self.lifecycle.dispose().await
     }
 }
 
@@ -501,10 +348,13 @@ impl AgentLoop {
             }
             lifecycle.assert_live()?;
             self.publish(&lifecycle, options.owner_agent, source)?;
-            Ok(AgentHandle {
-                agent: lifecycle.loop_agent.agent.clone(),
-                lifecycle: lifecycle.clone(),
-            })
+            Ok(AgentHandle::new(lifecycle.loop_agent.agent.clone(), {
+                let lifecycle = lifecycle.clone();
+                Box::new(move || {
+                    let lifecycle = lifecycle.clone();
+                    Box::pin(async move { lifecycle.dispose().await })
+                })
+            }))
         }
         .await;
         preparation.release();
@@ -596,14 +446,34 @@ fn json_reason(message: &str) -> serde_json::Value {
     serde_json::json!({"kind": "disposed", "message": message})
 }
 
+#[async_trait::async_trait]
+impl AgentFactory for AgentLoop {
+    async fn create_agent(
+        &self,
+        owner_ctx: &Context,
+        options: CreateAgentOptions,
+    ) -> anyhow::Result<AgentHandle> {
+        AgentLoop::create_agent(self, owner_ctx, options).await
+    }
+
+    async fn resume(
+        &self,
+        owner_ctx: &Context,
+        options: ResumeAgentOptions,
+    ) -> anyhow::Result<AgentHandle> {
+        AgentLoop::resume_agent(self, owner_ctx, options).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
     use futures::stream;
-    use seekdeep_agent::{AGENT, AgentEvent, AgentLifecycleEvent};
+    use seekdeep_agent::{AGENT, AgentEvent, AgentLifecycleEvent, AgentSetupCommit};
     use seekdeep_cordis::{EventOptions, EventReply, Fiber};
+    use seekdeep_core::session::{SessionEvent, SessionId};
     use seekdeep_llm::{
         AdapterStream, FinishReason, GenerateOptions, LlmAdapter, LlmRuntime, StreamChunk,
     };
@@ -783,6 +653,7 @@ mod tests {
             provider: Some("mock".into()),
             model: Some("model".into()),
             max_tokens: None,
+            subagent_depth: None,
         };
         options
     }
@@ -927,6 +798,7 @@ mod tests {
             provider: Some("mock".into()),
             model: Some("model".into()),
             max_tokens: None,
+            subagent_depth: None,
         };
         let resumed = factory
             .resume_agent(&context, resume)

@@ -264,6 +264,7 @@ impl Harness {
                 provider: Some("deepseek-official".into()),
                 model: Some("mock-model".into()),
                 max_tokens: None,
+                subagent_depth: None,
             },
             None,
             AgentLoopServices {

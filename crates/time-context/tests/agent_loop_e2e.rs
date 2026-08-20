@@ -165,6 +165,7 @@ async fn real_driver_persists_one_ordered_reading_per_request_without_header_lea
             provider: Some("mock".into()),
             model: Some("model".into()),
             max_tokens: None,
+            subagent_depth: None,
         },
         None,
         services,

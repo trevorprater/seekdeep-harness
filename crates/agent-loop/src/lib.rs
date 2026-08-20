@@ -23,10 +23,11 @@ pub use driver::{
     AgentErrorEvent, AgentLoopServices, AgentPreStepEvent, AgentRequestErrorEvent,
     AgentRequestEvent, AgentTurnStoppingEvent, DefaultAgentDriver,
 };
-pub use factory::{
-    AgentHandle, AgentLoop, AgentSetup, AgentSetupCommit, CreateAgentMeta, CreateAgentOptions,
-    ResumeAgentOptions, SessionStartEvent,
-};
+pub use factory::{AgentLoop, SessionStartEvent};
 pub use invariant::{install_request_invariant, validate_agent_loop_request};
 pub use runtime_context::RuntimeContextProjection;
+pub use seekdeep_agent::factory::{
+    AgentFactory, AgentHandle, AgentSetup, AgentSetupCommit, CreateAgentMeta, CreateAgentOptions,
+    ResumeAgentOptions,
+};
 pub use tool_calls::{ToolCall, ToolCallBatch, ToolCallBatchOutcome, execute_tool_calls};

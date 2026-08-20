@@ -188,6 +188,7 @@ fn create_agent(
             provider: Some(provider.into()),
             model: Some("model".into()),
             max_tokens: None,
+            subagent_depth: None,
         },
         None,
         services,

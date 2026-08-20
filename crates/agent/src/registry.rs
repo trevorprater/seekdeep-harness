@@ -15,6 +15,7 @@ use tokio::sync::Notify;
 use uuid::Uuid;
 
 use crate::Agent;
+use crate::factory::{AgentFactory, AgentHandle, CreateAgentOptions, ResumeAgentOptions};
 
 /// Typed Cordis slot corresponding to `ctx.agents`.
 pub const AGENTS: ServiceKey<AgentRegistry> = ServiceKey::new("agents");
@@ -46,6 +47,7 @@ struct RegistryInner {
     context: Context,
     store: Mutex<IndexMap<SessionId, Arc<AgentEntry>>>,
     initiators: Arc<InitiatorTracker>,
+    factory: Mutex<Option<Arc<dyn AgentFactory>>>,
 }
 
 impl std::fmt::Debug for RegistryInner {
@@ -236,6 +238,7 @@ impl AgentRegistry {
                 id: Uuid::now_v7(),
                 context,
                 store: Mutex::new(IndexMap::new()),
+                factory: Mutex::new(None),
                 initiators: Arc::new(InitiatorTracker {
                     state: Mutex::new(InitiatorState {
                         lifecycle: InitiatorLifecycle::Active,
@@ -564,6 +567,46 @@ impl AgentRegistry {
             .filter(|entry| entry.owner.is_none())
             .map(|entry| entry.agent.clone())
             .collect()
+    }
+
+    /// Registers the agent-creation factory the loop implementation provides.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a duplicate factory registration.
+    pub fn set_factory(&self, factory: Arc<dyn AgentFactory>) -> anyhow::Result<()> {
+        let mut slot = self.inner.factory.lock();
+        if slot.is_some() {
+            anyhow::bail!("an agent factory is already registered");
+        }
+        *slot = Some(factory);
+        Ok(())
+    }
+
+    fn require_factory(&self) -> anyhow::Result<Arc<dyn AgentFactory>> {
+        self.inner.factory.lock().clone().ok_or_else(|| {
+            anyhow::anyhow!("no agent factory registered (load an agent-loop plugin)")
+        })
+    }
+
+    /// Creates and publishes a new agent through the registered factory.
+    ///
+    /// # Errors
+    ///
+    /// Returns no-factory or creation failures.
+    pub async fn create(&self, options: CreateAgentOptions) -> anyhow::Result<AgentHandle> {
+        let factory = self.require_factory()?;
+        factory.create_agent(&self.inner.context, options).await
+    }
+
+    /// Loads a persisted session and resumes an agent through the factory.
+    ///
+    /// # Errors
+    ///
+    /// Returns no-factory or resume failures.
+    pub async fn resume(&self, options: ResumeAgentOptions) -> anyhow::Result<AgentHandle> {
+        let factory = self.require_factory()?;
+        factory.resume(&self.inner.context, options).await
     }
 }
 
