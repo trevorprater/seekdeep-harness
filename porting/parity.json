@@ -36528,7 +36528,7 @@
     {
       "source": "packages/api/remotes/src/agent-lookup.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/api-remotes/src/agent_lookup.rs"
       ],
@@ -36545,12 +36545,12 @@
     {
       "source": "packages/api/remotes/src/index.ts",
       "kind": "production-code",
-      "status": "ported",
+      "status": "verified",
       "targets": [
         "crates/api-remotes/src/lib.rs"
       ],
       "evidence": [
-        "cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-api-remotes --all-features && cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"
       ],
       "note": "re-exports and apply() ported; the forwarded-event shape assertion is compile-time-only"
     },
