@@ -23,30 +23,35 @@ pub struct MaterializeError {
 /// stack, fall back to message, then the string coercion.
 #[must_use]
 pub fn render_thrown(value: &JsValue, context: &mut Context) -> String {
-    if let Some(object) = value.as_object() {
-        if let Some(stack) = read_string_field(&object, "stack", context) {
-            return stack;
+    let attempt = (|| -> Result<String, ()> {
+        if let Some(object) = value.as_object() {
+            if let Some(stack) = string_field(&object, "stack", context)? {
+                return Ok(stack);
+            }
+            if let Some(message) = string_field(&object, "message", context)? {
+                return Ok(message);
+            }
         }
-        if let Some(message) = read_string_field(&object, "message", context) {
-            return message;
-        }
-    }
-    value.to_string(context).map_or_else(
-        |_| "[unrenderable thrown value]".to_owned(),
-        |text| text.to_std_string_escaped(),
-    )
+        value
+            .to_string(context)
+            .map(|text| text.to_std_string_escaped())
+            .map_err(|_| ())
+    })();
+    attempt.unwrap_or_else(|()| "[unrenderable thrown value]".to_owned())
 }
 
-fn read_string_field(object: &JsObject, key: &str, context: &mut Context) -> Option<String> {
-    object
+fn string_field(object: &JsObject, key: &str, context: &mut Context) -> Result<Option<String>, ()> {
+    let value = object
         .get(PropertyKey::from(js_string!(key)), context)
-        .ok()
-        .and_then(|value| value.as_string().map(|text| text.to_std_string_escaped()))
-        .filter(|text| !text.is_empty())
+        .map_err(|_| ())?;
+    Ok(value
+        .as_string()
+        .map(|text| text.to_std_string_escaped())
+        .filter(|text| !text.is_empty()))
 }
 
-/// Copy a realm value into plain host JSON data. The caller must handle a root
-/// undefined value before invoking this; a nested undefined is rejected.
+/// Copy a realm value into plain host JSON data. Root `undefined` is returned
+/// unchanged as `None`; a nested undefined is rejected.
 ///
 /// # Errors
 ///
@@ -56,8 +61,11 @@ pub fn materialize_from_realm(
     value: &JsValue,
     context: &mut Context,
     root: &str,
-) -> Result<Value, MaterializeError> {
-    materialize(value, context, root, &mut HashSet::new())
+) -> Result<Option<Value>, MaterializeError> {
+    if value.is_undefined() {
+        return Ok(None);
+    }
+    materialize(value, context, root, &mut HashSet::new()).map(Some)
 }
 
 fn materialize(
@@ -237,6 +245,17 @@ fn materialize_object(
                 reason: "symbol-keyed properties are not plain JSON data".to_owned(),
             });
         };
+        // Object.keys (and therefore JSON.stringify) selects only own enumerable
+        // string keys; non-enumerable own properties never reach JSON output.
+        if object
+            .borrow()
+            .properties()
+            .get(&key)
+            .and_then(|descriptor| descriptor.enumerable())
+            != Some(true)
+        {
+            continue;
+        }
         let key_string = text.to_std_string_escaped();
         let child_path = format!("{path}.{key_string}");
         let child = object.get(key, context).map_err(|error| MaterializeError {
@@ -255,4 +274,110 @@ fn has_plain_prototype(object: &JsObject) -> bool {
         return true;
     };
     prototype.prototype().is_none()
+}
+
+#[cfg(test)]
+mod tests {
+    use boa_engine::{Source, context::ContextBuilder};
+    use serde_json::json;
+
+    use super::*;
+
+    fn evaluated(source: &str) -> (Context, JsValue) {
+        let mut context = ContextBuilder::new().build().unwrap();
+        let value = context
+            .eval(Source::from_bytes(&format!("({source})")))
+            .unwrap();
+        (context, value)
+    }
+
+    fn materialize(source: &str) -> Value {
+        let (mut context, value) = evaluated(source);
+        materialize_from_realm(&value, &mut context, "value")
+            .unwrap()
+            .unwrap()
+    }
+
+    fn rejection(source: &str) -> String {
+        let (mut context, value) = evaluated(source);
+        materialize_from_realm(&value, &mut context, "value")
+            .expect_err("expected rejection")
+            .to_string()
+    }
+
+    #[test]
+    fn copies_realm_data_deeply() {
+        assert_eq!(
+            materialize("{ a: 1, b: 'x', c: true, d: null, list: [1, [2, { deep: 'y' }]] }"),
+            json!({ "a": 1, "b": "x", "c": true, "d": null, "list": [1, [2, { "deep": "y" }]] })
+        );
+    }
+
+    #[test]
+    fn accepts_undefined_only_at_the_root() {
+        let (mut context, value) = evaluated("undefined");
+        assert_eq!(
+            materialize_from_realm(&value, &mut context, "value").unwrap(),
+            None
+        );
+        assert!(rejection("{ a: undefined }").contains("value.a"));
+    }
+
+    #[test]
+    fn rejects_non_json_values_with_paths() {
+        assert!(rejection("{ fn: () => 1 }").contains("value.fn"));
+        assert!(rejection("{ s: Symbol('v') }").contains("value.s"));
+        assert!(rejection("{ big: 1n }").contains("value.big"));
+        assert!(rejection("{ n: NaN }").contains("non-finite"));
+        assert!(rejection("[Infinity]").contains("non-finite"));
+    }
+
+    #[test]
+    fn rejects_exotic_prototypes_but_accepts_null_prototype() {
+        assert!(rejection("{ d: new Date(0) }").contains("exotic prototype"));
+        assert!(rejection("new Map()").contains("exotic prototype"));
+        assert_eq!(
+            materialize("Object.assign(Object.create(null), { a: 1 })"),
+            json!({ "a": 1 })
+        );
+    }
+
+    #[test]
+    fn rejects_cycles_and_accepts_dags() {
+        assert!(rejection("(() => { const o = {}; o.self = o; return o })()").contains("circular"));
+        assert_eq!(
+            materialize("(() => { const leaf = { v: 1 }; return { a: leaf, b: leaf } })()"),
+            json!({ "a": { "v": 1 }, "b": { "v": 1 } })
+        );
+    }
+
+    #[test]
+    fn rejects_sparse_and_decorated_arrays() {
+        assert!(rejection("[1, , 3]").contains("sparse"));
+        assert!(
+            rejection("(() => { const a = [1]; a.total = 3; return a })()").contains("non-index")
+        );
+    }
+
+    #[test]
+    fn skips_non_enumerable_properties() {
+        assert_eq!(
+            materialize(
+                "(() => { const o = { visible: 1 }; Object.defineProperty(o, 'hidden', { value: () => 1, enumerable: false }); return o })()"
+            ),
+            json!({ "visible": 1 })
+        );
+    }
+
+    #[test]
+    fn render_thrown_prefers_message_then_string() {
+        let (mut context, value) = evaluated("new Error('host failure')");
+        assert!(render_thrown(&value, &mut context).contains("host failure"));
+        let (mut context, value) = evaluated("{ code: 42 }");
+        assert_eq!(render_thrown(&value, &mut context), "[object Object]");
+        let (mut context, value) = evaluated("'plain'");
+        assert_eq!(render_thrown(&value, &mut context), "plain");
+        let (mut context, value) = evaluated("null");
+        assert_eq!(render_thrown(&value, &mut context), "null");
+    }
 }
