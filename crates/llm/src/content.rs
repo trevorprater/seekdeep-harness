@@ -19,6 +19,22 @@ pub fn content_has_image(content: &[ContentBlock]) -> bool {
     false
 }
 
+/// Concatenates only visible text blocks from one Assistant lifecycle.
+#[must_use]
+pub fn assistant_text(content: &[ContentBlock]) -> String {
+    content
+        .iter()
+        .filter_map(|block| match block {
+            ContentBlock::Text { text } => Some(text.as_str()),
+            ContentBlock::Reasoning { .. }
+            | ContentBlock::Image { .. }
+            | ContentBlock::ToolCall { .. }
+            | ContentBlock::ToolResult { .. }
+            | ContentBlock::Unknown { .. } => None,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use seekdeep_attachment::{AttachmentId, ImageAttachmentRef, ImageMediaType};
@@ -43,5 +59,27 @@ mod tests {
             }],
         }];
         assert!(content_has_image(&blocks));
+    }
+
+    #[test]
+    fn assistant_text_concatenates_only_visible_prose() {
+        let blocks = vec![
+            ContentBlock::Text {
+                text: "first ".to_owned(),
+            },
+            ContentBlock::Reasoning {
+                text: "hidden".to_owned(),
+            },
+            ContentBlock::ToolCall {
+                id: CallId::new("call"),
+                name: "probe".to_owned(),
+                arguments: "{}".to_owned(),
+            },
+            ContentBlock::Text {
+                text: "second".to_owned(),
+            },
+        ];
+        assert_eq!(assistant_text(&blocks), "first second");
+        assert_eq!(assistant_text(&[]), "");
     }
 }

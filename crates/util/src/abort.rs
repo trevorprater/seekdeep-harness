@@ -2,6 +2,7 @@
 
 use std::{
     any::Any,
+    error::Error,
     fmt,
     sync::{
         Arc,
@@ -16,6 +17,7 @@ use serde_json::Value;
 struct StoredReason {
     json: Value,
     typed: Option<Arc<dyn Any + Send + Sync>>,
+    error: Option<Arc<dyn Error + Send + Sync>>,
 }
 
 impl fmt::Debug for StoredReason {
@@ -24,6 +26,7 @@ impl fmt::Debug for StoredReason {
             .debug_struct("StoredReason")
             .field("json", &self.json)
             .field("typed", &self.typed.as_ref().map(|_| ".."))
+            .field("error", &self.error.as_ref().map(|_| ".."))
             .finish()
     }
 }
@@ -56,6 +59,7 @@ impl AbortSignal {
         self.abort_with_stored_reason(StoredReason {
             json: reason,
             typed: None,
+            error: None,
         });
     }
 
@@ -70,6 +74,20 @@ impl AbortSignal {
         self.abort_with_stored_reason(StoredReason {
             json,
             typed: Some(reason),
+            error: None,
+        });
+    }
+
+    /// Requests cancellation with one reason available through typed, JSON,
+    /// and generic Error views.
+    pub fn abort_with_error<T>(&self, reason: Arc<T>, json: Value)
+    where
+        T: Any + Error + Send + Sync,
+    {
+        self.abort_with_stored_reason(StoredReason {
+            json,
+            typed: Some(reason.clone()),
+            error: Some(reason),
         });
     }
 
@@ -107,6 +125,12 @@ impl AbortSignal {
     {
         let typed = self.winning_reason()?.typed?;
         Arc::downcast::<T>(typed).ok()
+    }
+
+    /// Recovers the chronologically winning shared Error reason.
+    #[must_use]
+    pub fn error_reason(&self) -> Option<Arc<dyn Error + Send + Sync>> {
+        self.winning_reason()?.error
     }
 
     fn winning_reason(&self) -> Option<StoredReason> {

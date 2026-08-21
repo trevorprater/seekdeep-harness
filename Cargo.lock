@@ -4903,6 +4903,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-host-plugin-inventory"
+version = "0.1.0-rc.5"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "seekdeep-host-webserver"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5136,6 +5144,36 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yml",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-lsp"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-llm",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-lsp-stdio"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-llm",
+ "seekdeep-lsp",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
  "thiserror 2.0.20",
  "tokio",
 ]
@@ -5482,6 +5520,7 @@ dependencies = [
  "anyhow",
  "indexmap 2.14.0",
  "parking_lot",
+ "ryu-js",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
@@ -6147,6 +6186,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-bash"
+version = "0.1.0-rc.5"
+dependencies = [
+ "async-trait",
+ "seekdeep-jobs",
+ "seekdeep-sandbox",
+ "seekdeep-shell",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-tool-fs"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -6208,6 +6258,15 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "seekdeep-tool-pwsh"
+version = "0.1.0-rc.5"
+dependencies = [
+ "seekdeep-sandbox",
+ "seekdeep-shell",
+ "seekdeep-tool-bash",
 ]
 
 [[package]]

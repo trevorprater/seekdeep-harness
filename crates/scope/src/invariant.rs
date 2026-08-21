@@ -6,7 +6,7 @@ use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
 use crate::{
-    scope_of,
+    carrier_key_of, is_scope_carrier,
     scoped_events::{ScopedSubjectRequirement, scoped_subject_requirement},
 };
 
@@ -47,18 +47,18 @@ pub fn register_invariant(
                     let Some(requirement) = scoped_subject_requirement(&event) else {
                         return Ok(EventReply::Undefined);
                     };
-                    let Some(carrier) = scope_of(&dispatch) else {
+                    if !is_scope_carrier(&dispatch) {
                         return Err(failure
                             .fail(format!(
                                 "\"{event}\" is a scope-filtered event but was dispatched without a scope carrier — pass scopeTarget(base, subject) as the dispatch thisArg (agent events: use agentEvents(ctx, agent))"
                             ))
                             .into());
-                    };
+                    }
                     if requirement == ScopedSubjectRequirement::Subject
                         && event_args
                             .scope_subject()
                             .map(seekdeep_cordis::EventSubjectToken::as_uuid)
-                            != Some(carrier.as_uuid())
+                            != carrier_key_of(&dispatch).map(crate::ScopeKey::as_uuid)
                     {
                         return Err(failure
                             .fail(format!(

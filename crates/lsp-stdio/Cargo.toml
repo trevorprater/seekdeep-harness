@@ -1,0 +1,23 @@
+[package]
+name = "seekdeep-lsp-stdio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Content-Length framed stdio LSP provider for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-lsp = { path = "../lsp" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+
+[dev-dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true

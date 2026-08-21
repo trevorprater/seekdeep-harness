@@ -37,7 +37,7 @@ pub use brand::{
     CallId, MessageId, ModelId, ProviderId, ProviderRequestId, ReasoningEffortId, SessionId,
 };
 pub use call_config::call_config_equals;
-pub use content::content_has_image;
+pub use content::{assistant_text, content_has_image};
 pub use error::{
     ApiKeyCheck, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, ErrorChainGraph, HarnessError,
     INVALID_CREDENTIAL_CODE, LlmError, LlmFailure, QUOTA_EXCEEDED_CODE, assert_usable_api_key,

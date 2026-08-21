@@ -151,6 +151,31 @@ impl EffectHandle {
 struct FiberInner {
     state: FiberState,
     effects: Vec<EffectHandle>,
+    transition: Option<Arc<FiberTransition>>,
+    disposed_outcome: Option<EffectOutcome>,
+}
+
+#[derive(Debug, Default)]
+struct FiberTransition {
+    outcome: Mutex<Option<EffectOutcome>>,
+    notify: Notify,
+}
+
+impl FiberTransition {
+    fn complete(&self, outcome: EffectOutcome) {
+        *self.outcome.lock() = Some(outcome);
+        self.notify.notify_waiters();
+    }
+
+    async fn wait(&self) -> EffectOutcome {
+        loop {
+            let notified = self.notify.notified();
+            if let Some(outcome) = self.outcome.lock().clone() {
+                return outcome;
+            }
+            notified.await;
+        }
+    }
 }
 
 /// Runtime instance of one plugin application.
@@ -173,6 +198,8 @@ impl Fiber {
             inner: Mutex::new(FiberInner {
                 state: FiberState::Active,
                 effects: Vec::new(),
+                transition: None,
+                disposed_outcome: None,
             }),
         })
     }
@@ -187,6 +214,8 @@ impl Fiber {
             inner: Mutex::new(FiberInner {
                 state: FiberState::Pending,
                 effects: Vec::new(),
+                transition: None,
+                disposed_outcome: None,
             }),
         })
     }
@@ -201,6 +230,8 @@ impl Fiber {
             inner: Mutex::new(FiberInner {
                 state: FiberState::Active,
                 effects: Vec::new(),
+                transition: None,
+                disposed_outcome: None,
             }),
         })
     }
@@ -271,13 +302,38 @@ impl Fiber {
     }
 
     async fn clear_effects(&self, final_state: FiberState) -> anyhow::Result<()> {
-        let effects = {
+        enum Clear {
+            Run {
+                effects: Vec<EffectHandle>,
+                transition: Arc<FiberTransition>,
+            },
+            Join(Arc<FiberTransition>),
+            Done(EffectOutcome),
+        }
+
+        let clear = {
             let mut inner = self.inner.lock();
             if inner.state == FiberState::Disposed {
-                return Ok(());
+                Clear::Done(inner.disposed_outcome.clone().unwrap_or(EffectOutcome::Ok))
+            } else if let Some(transition) = &inner.transition {
+                Clear::Join(transition.clone())
+            } else {
+                let transition = Arc::new(FiberTransition::default());
+                inner.state = FiberState::Unloading;
+                inner.transition = Some(transition.clone());
+                Clear::Run {
+                    effects: std::mem::take(&mut inner.effects),
+                    transition,
+                }
             }
-            inner.state = FiberState::Unloading;
-            std::mem::take(&mut inner.effects)
+        };
+        let (effects, transition) = match clear {
+            Clear::Run {
+                effects,
+                transition,
+            } => (effects, transition),
+            Clear::Join(transition) => return effect_outcome(transition.wait().await),
+            Clear::Done(outcome) => return effect_outcome(outcome),
         };
         let mut errors = Vec::new();
         for effect in effects.into_iter().rev() {
@@ -285,11 +341,94 @@ impl Fiber {
                 errors.push(format!("{}: {error:#}", effect.label()));
             }
         }
-        self.inner.lock().state = final_state;
-        if errors.is_empty() {
-            Ok(())
+        let outcome = if errors.is_empty() {
+            EffectOutcome::Ok
         } else {
-            Err(anyhow::anyhow!(errors.join("\n")))
+            EffectOutcome::Error(errors.join("\n"))
+        };
+        {
+            let mut inner = self.inner.lock();
+            inner.state = final_state;
+            inner.transition = None;
+            inner.disposed_outcome = (final_state == FiberState::Disposed).then(|| outcome.clone());
+        }
+        transition.complete(outcome.clone());
+        effect_outcome(outcome)
+    }
+}
+
+fn effect_outcome(outcome: EffectOutcome) -> anyhow::Result<()> {
+    match outcome {
+        EffectOutcome::Ok => Ok(()),
+        EffectOutcome::Error(message) => Err(anyhow::anyhow!(message)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::atomic::{AtomicUsize, Ordering},
+        time::Duration,
+    };
+
+    use tokio::sync::oneshot;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn concurrent_disposal_joins_quiescence_and_replays_the_same_failure() {
+        let fiber = Fiber::active_child("concurrent");
+        let (started, started_rx) = oneshot::channel();
+        let (release, release_rx) = oneshot::channel();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let effect_calls = calls.clone();
+        fiber
+            .own(EffectHandle::new("delayed", move || {
+                effect_calls.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move {
+                    let _ = started.send(());
+                    let _ = release_rx.await;
+                    anyhow::bail!("cleanup exploded")
+                })
+            }))
+            .unwrap();
+        let first_fiber = fiber.clone();
+        let first = tokio::spawn(async move { first_fiber.dispose().await });
+        started_rx.await.unwrap();
+        let second_fiber = fiber.clone();
+        let mut second = tokio::spawn(async move { second_fiber.dispose().await });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), &mut second)
+                .await
+                .is_err(),
+            "a racing disposer returned before quiescence"
+        );
+        release.send(()).unwrap();
+        let first_error = first.await.unwrap().unwrap_err().to_string();
+        let second_error = second.await.unwrap().unwrap_err().to_string();
+        assert_eq!(first_error, "delayed: cleanup exploded");
+        assert_eq!(second_error, first_error);
+        assert_eq!(fiber.dispose().await.unwrap_err().to_string(), first_error);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(fiber.state(), FiberState::Disposed);
+    }
+
+    #[tokio::test]
+    async fn root_restart_can_own_a_fresh_generation_after_each_joined_transition() {
+        let root = Fiber::root();
+        let calls = Arc::new(AtomicUsize::new(0));
+        for expected in 1..=2 {
+            let effect_calls = calls.clone();
+            root.own(EffectHandle::synchronous("generation", move || {
+                effect_calls.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }))
+            .unwrap();
+            let (left, right) = tokio::join!(root.restart(), root.restart());
+            left.unwrap();
+            right.unwrap();
+            assert_eq!(calls.load(Ordering::SeqCst), expected);
+            assert_eq!(root.state(), FiberState::Active);
         }
     }
 }

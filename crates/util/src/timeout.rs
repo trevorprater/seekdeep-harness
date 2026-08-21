@@ -147,7 +147,7 @@ fn abort_for_timeout(signal: &AbortSignal, code: String, timeout_ms: f64) {
         "code": reason.code,
         "timeoutMs": reason.timeout_ms,
     });
-    signal.abort_with_typed_reason(reason, json);
+    signal.abort_with_error(reason, json);
 }
 
 /// Something that may carry a typed timeout reason.

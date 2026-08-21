@@ -7,7 +7,7 @@ mod spec;
 
 pub use entity::{Workspace, WorkspaceMoveInvalidError, WorkspaceStatus};
 pub use invariant::{INVARIANT_NAME, register_invariant};
-pub use paths::realpath_normalize;
+pub use paths::{realpath_normalize, resolve_workspace_path};
 pub use spec::{
     PendingMutation, PendingOperation, WorkspaceDomainState, WorkspaceRecord, workspace_domain_spec,
 };

@@ -38504,7 +38504,15 @@
     {
       "source": "packages/client/runtime/src/client/sessions/failure-display.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-projection/src/failure_display.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-session-projection failure_display::tests --all-features",
+        "cargo clippy -p seekdeep-session-projection --all-targets --all-features -- -D warnings"
+      ],
+      "note": "AUTH redaction, primitive String conversion, message selection, JavaScript number formatting, integer-key enumeration, and compact fallback JSON are preserved"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/lineage.ts",
@@ -38599,7 +38607,15 @@
     {
       "source": "packages/client/runtime/src/client/workspaces/path.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workspace/src/paths.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-workspace client_workspace_resolution_is_lexical_and_cross_platform --all-features",
+        "cargo clippy -p seekdeep-workspace --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Target-neutral lexical resolver preserves POSIX, Windows drive, UNC, empty-root, separator trimming, and original-path behavior for later browser WASM use"
     },
     {
       "source": "packages/client/runtime/src/client/workspaces/service.ts",
@@ -39670,7 +39686,15 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/turn-assistant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm/src/content.rs",
+        "crates/subagent/src/run_settlement.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-llm assistant_text_concatenates_only_visible_prose --all-features",
+        "cargo clippy -p seekdeep-llm -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/turn-metrics.ts",
@@ -41480,7 +41504,14 @@
     {
       "source": "packages/client/ui-permission-presets/src/client/presentation.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/permission-presets/src/client.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-permission-presets client_preset_labels_preserve_source_title_and_risk_rules --all-features",
+        "cargo clippy -p seekdeep-permission-presets --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/src/client/settings-store.ts",
@@ -48165,7 +48196,17 @@
     {
       "source": "packages/core/scope/tests/scope.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/scope/src/lib.rs",
+        "crates/cordis/src/fiber.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/scope/tests/scope.spec.ts (pinned source: 11 passed)",
+        "cargo test -p seekdeep-scope --all-features (12 passed)",
+        "cargo test -p seekdeep-cordis fiber::tests --all-features",
+        "cargo clippy -p seekdeep-scope -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/scope/tests/store.spec.ts",
@@ -54159,7 +54200,14 @@
     {
       "source": "packages/host/plugin-inventory/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-plugin-inventory/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-plugin-inventory --all-features",
+        "cargo clippy -p seekdeep-host-plugin-inventory --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/host/plugin-inventory/tests/invariant.spec.ts",
@@ -57051,7 +57099,17 @@
     {
       "source": "packages/lsp/lsp-stdio/src/abort.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp-stdio/src/abort.rs",
+        "crates/util/src/abort.rs",
+        "crates/util/src/timeout.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-lsp-stdio abort::tests --all-features (4 passed)",
+        "cargo test -p seekdeep-util --all-features (44 passed)",
+        "cargo clippy -p seekdeep-util -p seekdeep-lsp-stdio --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp-stdio/src/connection.ts",
@@ -57061,7 +57119,15 @@
     {
       "source": "packages/lsp/lsp-stdio/src/framing.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp-stdio/src/framing.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/lsp/lsp-stdio/tests/framing.spec.ts (pinned source: 12 passed)",
+        "cargo test -p seekdeep-lsp-stdio --all-features (4 passed)",
+        "cargo clippy -p seekdeep-lsp-stdio --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp-stdio/src/host.ts",
@@ -57095,12 +57161,29 @@
     {
       "source": "packages/lsp/lsp-stdio/src/protocol.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp-stdio/src/protocol.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-lsp-stdio protocol::tests --all-features",
+        "cargo clippy -p seekdeep-lsp-stdio --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp-stdio/src/translate.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp/src/lib.rs",
+        "crates/lsp/src/types.rs",
+        "crates/lsp-stdio/src/translate.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/lsp/lsp-stdio/tests/translate.spec.ts (pinned source: 29 passed)",
+        "cargo test -p seekdeep-lsp -p seekdeep-lsp-stdio --all-features (16 passed)",
+        "cargo clippy -p seekdeep-lsp -p seekdeep-lsp-stdio --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp-stdio/tests/built-lib.e2e.ts",
@@ -57120,7 +57203,15 @@
     {
       "source": "packages/lsp/lsp-stdio/tests/framing.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp-stdio/src/framing.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/lsp/lsp-stdio/tests/framing.spec.ts (pinned source: 12 passed)",
+        "cargo test -p seekdeep-lsp-stdio framing::tests --all-features",
+        "cargo clippy -p seekdeep-lsp-stdio --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp-stdio/tests/host.spec.ts",
@@ -57145,7 +57236,15 @@
     {
       "source": "packages/lsp/lsp-stdio/tests/translate.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp-stdio/src/translate.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/lsp/lsp-stdio/tests/translate.spec.ts (pinned source: 29 passed)",
+        "cargo test -p seekdeep-lsp -p seekdeep-lsp-stdio --all-features (16 passed)",
+        "cargo clippy -p seekdeep-lsp -p seekdeep-lsp-stdio --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp-stdio/tests/typescript-server.e2e.ts",
@@ -57210,12 +57309,28 @@
     {
       "source": "packages/lsp/lsp/src/brand.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-lsp --all-features",
+        "cargo clippy -p seekdeep-lsp --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp/src/lib.rs",
+        "crates/lsp/tests/lsp_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/lsp/lsp/tests/lsp.spec.ts (pinned source: 19 passed)",
+        "cargo test -p seekdeep-lsp --all-features (5 passed)",
+        "cargo clippy -p seekdeep-lsp --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp/src/invariant.ts",
@@ -57234,12 +57349,28 @@
     {
       "source": "packages/lsp/lsp/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp/src/types.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/lsp/lsp/tests/lsp.spec.ts (pinned source: 19 passed)",
+        "cargo test -p seekdeep-lsp --all-features",
+        "cargo clippy -p seekdeep-lsp --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp/tests/lsp.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/lsp/tests/lsp_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/lsp/lsp/tests/lsp.spec.ts (pinned source: 19 passed)",
+        "cargo test -p seekdeep-lsp --all-features (5 passed)",
+        "cargo clippy -p seekdeep-lsp --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp/tsconfig.json",
@@ -62962,7 +63093,14 @@
     {
       "source": "packages/shell/tool-bash/src/background.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-bash/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-bash --all-features",
+        "cargo clippy -p seekdeep-tool-bash --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-bash/src/index.ts",
@@ -62986,7 +63124,16 @@
     {
       "source": "packages/shell/tool-bash/src/render.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-bash/src/lib.rs",
+        "crates/shell/src/render.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/shell/tool-bash/tests/tools.spec.ts -t 'renderProcessRead|renderResult' (pinned source: 15 passed)",
+        "cargo test -p seekdeep-tool-bash --all-features (3 passed)",
+        "cargo clippy -p seekdeep-tool-bash --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-bash/tests/integration.spec.ts",
@@ -63056,7 +63203,16 @@
     {
       "source": "packages/shell/tool-pwsh/src/background.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-pwsh/src/lib.rs",
+        "crates/tool-bash/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/shell/tool-pwsh/tests/tools.spec.ts -t 'renderPwshResult|renderPwshProcessRead|processOutcome' (pinned source: 15 passed)",
+        "cargo test -p seekdeep-tool-pwsh --all-features",
+        "cargo clippy -p seekdeep-tool-pwsh --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-pwsh/src/index.ts",
@@ -63080,7 +63236,16 @@
     {
       "source": "packages/shell/tool-pwsh/src/render.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-pwsh/src/lib.rs",
+        "crates/tool-bash/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/shell/tool-pwsh/tests/tools.spec.ts -t 'renderPwshResult|renderPwshProcessRead|processOutcome' (pinned source: 15 passed)",
+        "cargo test -p seekdeep-tool-pwsh --all-features",
+        "cargo clippy -p seekdeep-tool-pwsh --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-pwsh/tests/integration.spec.ts",

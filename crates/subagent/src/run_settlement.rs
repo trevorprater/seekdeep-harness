@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use seekdeep_llm::ContentBlock;
+use seekdeep_llm::assistant_text;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{SubagentResult, SubagentRun, SubagentStopReason};
@@ -33,22 +33,12 @@ pub enum JobOutcome {
 }
 
 /// Flattens final output blocks to the task's final text.
-fn final_text(blocks: &[ContentBlock]) -> String {
-    blocks
-        .iter()
-        .filter_map(|block| match block {
-            ContentBlock::Text { text } => Some(text.as_str()),
-            _ => None,
-        })
-        .collect()
-}
-
 /// Maps a child result to the task outcome.
 #[must_use]
 pub fn run_outcome(result: &SubagentResult) -> JobOutcome {
     match result.stop_reason {
         SubagentStopReason::Completed => JobOutcome::Completed {
-            output: final_text(&result.output),
+            output: assistant_text(&result.output),
         },
         SubagentStopReason::Aborted => JobOutcome::Killed,
         SubagentStopReason::Error | SubagentStopReason::MaxTokens | SubagentStopReason::Refusal => {

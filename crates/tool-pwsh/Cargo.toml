@@ -1,0 +1,16 @@
+[package]
+name = "seekdeep-tool-pwsh"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "PowerShell tool adapters for SeekDeep Harness"
+
+[dependencies]
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-tool-bash = { path = "../tool-bash" }
+
+[lints]
+workspace = true
