@@ -10,7 +10,6 @@ pub mod layered_env;
 pub mod process_shutdown;
 
 use std::{
-    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -22,11 +21,15 @@ use seekdeep_agent_default_model::{
 use seekdeep_agent_loop::{
     AgentLoop, AgentLoopServices, DEFAULT_MAX_PARALLEL_TOOL_CALLS, install_request_invariant,
 };
+use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
 use seekdeep_code_runtime_worker_thread::WorkerThreadCodeRuntimeConfig;
 use seekdeep_cordis::Context;
 use seekdeep_core::session_store::SessionStore;
 use seekdeep_credentials_local::{LocalCredentialConfig, install as install_credentials};
-use seekdeep_headless::{HeadlessRunResult, HeadlessRunner};
+use seekdeep_headless::{
+    HeadlessRunResult, HeadlessRunner,
+    startup::{HEADLESS_STARTUP, install as install_headless_startup},
+};
 use seekdeep_llm::{LlmRuntime, ModelId, ProviderId};
 use seekdeep_llm_deepseek::{DeepSeekConfig, install as install_deepseek};
 use seekdeep_llm_retry::{RetryConfig, install as install_llm_retry};
@@ -39,11 +42,7 @@ use seekdeep_tool_todo::{Config as TodoConfig, apply as install_todo};
 use seekdeep_tools::{ToolPresentationMode, ToolRuntimeConfig, install as install_tools};
 use seekdeep_util::{
     abort::AbortSignal,
-    home_paths::resolve_process_seekdeep_home,
-    launch_environment::{
-        LaunchEnvironmentLayerInput, LaunchEnvironmentSnapshot, LaunchEnvironmentSource,
-        SEEKDEEP_LAUNCH_ENVIRONMENT, create_launch_environment_snapshot,
-    },
+    launch_environment::{LaunchEnvironmentSnapshot, SEEKDEEP_LAUNCH_ENVIRONMENT},
 };
 
 /// Shipped headless persona after the product rename.
@@ -66,10 +65,14 @@ pub struct HeadlessBootOptions {
     pub seekdeep_home: PathBuf,
     /// Absolute workspace recorded in the new Session and prompt.
     pub cwd: PathBuf,
-    /// Native DeepSeek provider configuration.
+    /// Native `DeepSeek` provider configuration.
     pub deepseek: DeepSeekConfig,
     /// Frozen launcher environment consumed by providers and credentials.
     pub launch_environment: LaunchEnvironmentSnapshot,
+    /// Launcher-owned inner argv and bounded application-exit request.
+    pub cmdline: Option<CmdlineHost>,
+    /// Whether file-backed settings and credentials watch for external edits.
+    pub watch_files: bool,
     /// Deployment-wide model-facing tool presentation.
     pub tools_mode: ToolPresentationMode,
     /// Initial provider route for new agents.
@@ -79,20 +82,25 @@ pub struct HeadlessBootOptions {
 }
 
 impl HeadlessBootOptions {
-    /// Resolves process defaults without reading profile files.
+    /// Resolves process defaults and the launcher-owned `.env` layers without
+    /// reading profile files.
     ///
     /// # Errors
     ///
     /// Returns when the operating-system home or current directory cannot be
-    /// resolved.
+    /// resolved, or a discovered `.env` layer attempts to change process
+    /// bootstrap.
     pub fn from_process() -> anyhow::Result<Self> {
-        let launch_environment = process_environment_snapshot();
+        let cwd = std::env::current_dir()?;
+        let layered = layered_env::load_layered_env("seekdeep", &cwd)?;
         Ok(Self {
-            seekdeep_home: resolve_process_seekdeep_home(None)?,
-            cwd: std::env::current_dir()?,
+            seekdeep_home: layered.seekdeep_home,
+            cwd,
             deepseek: DeepSeekConfig::default(),
-            tools_mode: resolve_tools_mode(&launch_environment)?,
-            launch_environment,
+            tools_mode: resolve_tools_mode(&layered.launch_environment)?,
+            launch_environment: layered.launch_environment,
+            cmdline: None,
+            watch_files: true,
             provider: ProviderId::new(DEFAULT_PROVIDER),
             model: ModelId::new(DEFAULT_MODEL),
         })
@@ -101,15 +109,26 @@ impl HeadlessBootOptions {
     fn validate(&self) -> anyhow::Result<()> {
         anyhow::ensure!(
             self.seekdeep_home.is_absolute(),
-            "seekdeep home must be absolute, got {:?}",
-            self.seekdeep_home
+            "seekdeep home must be absolute, got {}",
+            self.seekdeep_home.display()
         );
         anyhow::ensure!(
             self.cwd.is_absolute(),
-            "headless working directory must be absolute, got {:?}",
-            self.cwd
+            "headless working directory must be absolute, got {}",
+            self.cwd.display()
+        );
+        anyhow::ensure!(
+            self.cmdline.is_some(),
+            "headless application requires launcher cmdline services"
         );
         Ok(())
+    }
+
+    /// Attaches the launcher facts that must exist before entries mount.
+    #[must_use]
+    pub fn with_cmdline(mut self, cmdline: CmdlineHost) -> Self {
+        self.cmdline = Some(cmdline);
+        self
     }
 }
 
@@ -124,8 +143,16 @@ pub struct HeadlessApplication {
     factory_registration: AgentFactoryRegistration,
     agent_loop: AgentLoop,
     runner: HeadlessRunner,
+    startup_task: String,
     shutdown: tokio::sync::OnceCell<ApplicationShutdown>,
 }
+
+type HeadlessAssembly = (
+    Arc<AgentRegistry>,
+    AgentFactoryRegistration,
+    HeadlessRunner,
+    String,
+);
 
 impl std::fmt::Debug for HeadlessApplication {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -175,60 +202,25 @@ impl HeadlessApplication {
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<Self> {
         options.validate()?;
-        let root = Context::new();
-        let mut agent_loop = None;
-        let assembled = {
-            let assembly = assemble(&root, &options, &mut agent_loop);
-            tokio::pin!(assembly);
-            if let Some(signal) = &signal {
-                tokio::select! {
-                    biased;
-                    () = signal.cancelled() => {
-                        Err(anyhow::anyhow!("headless application boot interrupted"))
-                    }
-                    result = &mut assembly => result,
-                }
-            } else {
-                assembly.await
-            }
-        };
-        match assembled {
-            Ok((agents, factory_registration, runner)) => Ok(Self {
-                root,
-                agents,
-                factory_registration,
-                agent_loop: agent_loop
-                    .take()
-                    .expect("successful assembly installs the agent loop"),
-                runner,
-                shutdown: tokio::sync::OnceCell::new(),
-            }),
-            Err(primary) => {
-                let mut cleanup_errors = Vec::new();
-                if let Some(loop_) = agent_loop
-                    && let Err(error) = loop_.dispose().await
-                {
-                    cleanup_errors.push(format!("agent-loop rollback failed: {error:#}"));
-                }
-                if let Err(error) = root.fiber().dispose().await {
-                    cleanup_errors.push(format!("root rollback failed: {error:#}"));
-                }
-                if cleanup_errors.is_empty() {
-                    Err(primary)
-                } else {
-                    Err(anyhow::anyhow!(
-                        "{primary:#}\n{}",
-                        cleanup_errors.join("\n")
-                    ))
-                }
-            }
-        }
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        drop(tokio::spawn(async move {
+            boot_owned(options, signal, sender).await;
+        }));
+        receiver
+            .await
+            .map_err(|_| anyhow::anyhow!("headless application boot task ended without a result"))?
     }
 
     /// Drives one fresh Agent through a single task.
     #[must_use]
     pub async fn run(&self, task: &str) -> HeadlessRunResult {
         self.runner.run(task).await
+    }
+
+    /// Drives the task published by the headless startup provider.
+    #[must_use]
+    pub async fn run_startup(&self) -> HeadlessRunResult {
+        self.runner.run(&self.startup_task).await
     }
 
     /// Deterministically drains live Agents before plugin and persistence
@@ -250,6 +242,74 @@ impl HeadlessApplication {
             .await
             .wait()
             .await
+    }
+}
+
+async fn boot_owned(
+    options: HeadlessBootOptions,
+    signal: Option<AbortSignal>,
+    mut sender: tokio::sync::oneshot::Sender<anyhow::Result<HeadlessApplication>>,
+) {
+    let root = Context::new();
+    let mut agent_loop = None;
+    let assembled = {
+        let assembly = assemble(&root, &options, &mut agent_loop);
+        tokio::pin!(assembly);
+        let cancellation = async {
+            if let Some(signal) = &signal {
+                signal.cancelled().await;
+            } else {
+                std::future::pending::<()>().await;
+            }
+        };
+        tokio::pin!(cancellation);
+        tokio::select! {
+            biased;
+            () = sender.closed() => {
+                Err(anyhow::anyhow!("headless application boot caller was dropped"))
+            }
+            () = &mut cancellation => {
+                Err(anyhow::anyhow!("headless application boot interrupted"))
+            }
+            result = &mut assembly => result,
+        }
+    };
+    let outcome = match assembled {
+        Ok((agents, factory_registration, runner, startup_task)) => Ok(HeadlessApplication {
+            root,
+            agents,
+            factory_registration,
+            agent_loop: agent_loop
+                .take()
+                .expect("successful assembly installs the agent loop"),
+            runner,
+            startup_task,
+            shutdown: tokio::sync::OnceCell::new(),
+        }),
+        Err(primary) => {
+            let mut cleanup_errors = Vec::new();
+            if let Some(loop_) = agent_loop
+                && let Err(error) = loop_.dispose().await
+            {
+                cleanup_errors.push(format!("agent-loop rollback failed: {error:#}"));
+            }
+            if let Err(error) = root.fiber().dispose().await {
+                cleanup_errors.push(format!("root rollback failed: {error:#}"));
+            }
+            if cleanup_errors.is_empty() {
+                Err(primary)
+            } else {
+                Err(anyhow::anyhow!(
+                    "{primary:#}\n{}",
+                    cleanup_errors.join("\n")
+                ))
+            }
+        }
+    };
+    if let Err(outcome) = sender.send(outcome)
+        && let Ok(application) = outcome
+    {
+        let _ = application.shutdown().await;
     }
 }
 
@@ -318,16 +378,14 @@ async fn assemble(
     root: &Context,
     options: &HeadlessBootOptions,
     agent_loop_slot: &mut Option<AgentLoop>,
-) -> anyhow::Result<(Arc<AgentRegistry>, AgentFactoryRegistration, HeadlessRunner)> {
-    root.provide(
-        SEEKDEEP_LAUNCH_ENVIRONMENT,
-        Arc::new(options.launch_environment.clone()),
-    )?;
+) -> anyhow::Result<HeadlessAssembly> {
+    let startup_task = install_launcher_services(root, options).await?;
 
     let settings = install_settings(
         root,
         FileSettingsConfig {
             seekdeep_home: Some(options.seekdeep_home.clone()),
+            watch: options.watch_files,
             ..FileSettingsConfig::default()
         },
     )?;
@@ -337,6 +395,7 @@ async fn assemble(
         root,
         LocalCredentialConfig {
             seekdeep_home: Some(options.seekdeep_home.clone()),
+            watch: options.watch_files,
             ..LocalCredentialConfig::default()
         },
     )?;
@@ -422,23 +481,32 @@ async fn assemble(
         selection,
         display_path(&options.cwd),
     )?;
-    Ok((agents, factory_registration, runner))
+    Ok((agents, factory_registration, runner, startup_task))
 }
 
-fn process_environment_snapshot() -> seekdeep_util::launch_environment::LaunchEnvironmentSnapshot {
-    let values = std::env::vars_os()
-        .map(|(name, value)| {
-            (
-                name.to_string_lossy().into_owned(),
-                value.to_string_lossy().into_owned(),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
-        source: LaunchEnvironmentSource::Process,
-        path: None,
-        values,
-    }])
+async fn install_launcher_services(
+    root: &Context,
+    options: &HeadlessBootOptions,
+) -> anyhow::Result<String> {
+    root.provide(
+        SEEKDEEP_LAUNCH_ENVIRONMENT,
+        Arc::new(options.launch_environment.clone()),
+    )?;
+    provide_cmdline(
+        root,
+        options
+            .cmdline
+            .clone()
+            .expect("validated boot options carry launcher cmdline services"),
+    )?;
+    let startup = install_headless_startup(root)?;
+    startup.await_settled().await?;
+    let startup_task = root
+        .get(HEADLESS_STARTUP)
+        .ok_or_else(|| anyhow::anyhow!("headless-startup did not publish headlessStartup"))?
+        .task
+        .clone();
+    Ok(startup_task)
 }
 
 fn resolve_tools_mode(

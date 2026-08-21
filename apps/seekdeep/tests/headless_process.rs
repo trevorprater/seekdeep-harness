@@ -2,6 +2,7 @@
 
 use std::{
     collections::BTreeMap,
+    path::Path,
     process::Stdio,
     sync::{
         Arc,
@@ -17,15 +18,18 @@ use seekdeep_session_persistence::SessionPersistence as _;
 use seekdeep_session_persistence_jsonl::{JsonlConfig, JsonlSessionPersistence};
 use serde_json::Value;
 use tokio::{
-    io::{AsyncReadExt as _, AsyncWriteExt as _},
+    io::{AsyncRead, AsyncReadExt as _, AsyncWriteExt as _},
     net::{TcpListener, TcpStream},
-    process::Command,
+    process::{Child, Command},
+    task::JoinHandle,
 };
 
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(20);
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
 const TASK: &str = "prove the executable path";
 const ANSWER: &str = "HEADLESS_PROCESS_ROUND_TRIP";
+
+type PipeReader = JoinHandle<std::io::Result<Vec<u8>>>;
 
 #[derive(Debug)]
 struct CapturedRequest {
@@ -196,18 +200,15 @@ fn ordered_subsequence(events: &[String], expected: &[&str]) -> bool {
     cursor == expected.len()
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Result<()> {
-    let temporary = tempfile::tempdir()?;
-    let workspace = temporary.path().join("workspace");
-    std::fs::create_dir(&workspace)?;
-    let home = temporary.path().join("home");
-    let request_count = Arc::new(AtomicUsize::new(0));
-    let (base_url, server) = loopback_server(request_count.clone()).await?;
-
+async fn run_process(
+    workspace: &Path,
+    home: &Path,
+    base_url: &str,
+    request_count: &AtomicUsize,
+) -> anyhow::Result<std::process::Output> {
     let mut command = Command::new(env!("CARGO_BIN_EXE_seekdeep"));
     command
-        .current_dir(&workspace)
+        .current_dir(workspace)
         .args([
             "--profile",
             "headless",
@@ -217,9 +218,9 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
             "path",
         ])
         .env_clear()
-        .env("SEEKDEEP_HOME", &home)
+        .env("SEEKDEEP_HOME", home)
         .env("DEEPSEEK_API_KEY", "fake-process-key")
-        .env("DEEPSEEK_BASE_URL", &base_url)
+        .env("DEEPSEEK_BASE_URL", base_url)
         .env("SEEKDEEP_TOOLS_MODE", "native")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -227,55 +228,121 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
         .kill_on_drop(true);
 
     let mut child = command.spawn()?;
-    let mut child_stdout = child
+    let child_stdout = child
         .stdout
         .take()
         .ok_or_else(|| anyhow::anyhow!("seekdeep stdout pipe missing"))?;
-    let mut child_stderr = child
+    let child_stderr = child
         .stderr
         .take()
         .ok_or_else(|| anyhow::anyhow!("seekdeep stderr pipe missing"))?;
-    let stdout_reader = tokio::spawn(async move {
-        let mut output = Vec::new();
-        child_stdout.read_to_end(&mut output).await?;
-        std::io::Result::Ok(output)
-    });
-    let stderr_reader = tokio::spawn(async move {
-        let mut output = Vec::new();
-        child_stderr.read_to_end(&mut output).await?;
-        std::io::Result::Ok(output)
-    });
+    let stdout_reader = spawn_pipe_reader(child_stdout);
+    let stderr_reader = spawn_pipe_reader(child_stderr);
     let status = match tokio::time::timeout(PROCESS_TIMEOUT, child.wait()).await {
-        Ok(status) => status?,
-        Err(_) => {
-            child.kill().await?;
-            let stdout = tokio::time::timeout(IO_TIMEOUT, stdout_reader)
-                .await
-                .map_err(|_| anyhow::anyhow!("timed-out seekdeep stdout did not close"))???;
-            let stderr = tokio::time::timeout(IO_TIMEOUT, stderr_reader)
-                .await
-                .map_err(|_| anyhow::anyhow!("timed-out seekdeep stderr did not close"))???;
-            server.abort();
+        Ok(Ok(status)) => status,
+        Ok(Err(error)) => {
+            let cleanup = force_reap(&mut child).await;
+            let (stdout, stderr) = finish_pipe_readers(stdout_reader, stderr_reader).await?;
             anyhow::bail!(
-                "seekdeep process timed out after receiving {} requests; stdout: {:?}; stderr: {:?}",
+                "waiting for seekdeep failed after receiving {} requests: {error}; cleanup: {cleanup:#?}; stdout: {:?}; stderr: {:?}",
+                request_count.load(Ordering::Acquire),
+                String::from_utf8_lossy(&stdout),
+                String::from_utf8_lossy(&stderr)
+            );
+        }
+        Err(_) => {
+            let cleanup = force_reap(&mut child).await;
+            let (stdout, stderr) = finish_pipe_readers(stdout_reader, stderr_reader).await?;
+            anyhow::bail!(
+                "seekdeep process timed out after receiving {} requests; cleanup: {cleanup:#?}; stdout: {:?}; stderr: {:?}",
                 request_count.load(Ordering::Acquire),
                 String::from_utf8_lossy(&stdout),
                 String::from_utf8_lossy(&stderr)
             );
         }
     };
-    let output = std::process::Output {
+    let (stdout, stderr) = finish_pipe_readers(stdout_reader, stderr_reader).await?;
+    Ok(std::process::Output {
         status,
-        stdout: tokio::time::timeout(IO_TIMEOUT, stdout_reader)
-            .await
-            .map_err(|_| anyhow::anyhow!("seekdeep stdout did not close"))???,
-        stderr: tokio::time::timeout(IO_TIMEOUT, stderr_reader)
-            .await
-            .map_err(|_| anyhow::anyhow!("seekdeep stderr did not close"))???,
-    };
-    if output.status.code() != Some(0) {
-        server.abort();
+        stdout,
+        stderr,
+    })
+}
+
+fn spawn_pipe_reader(mut pipe: impl AsyncRead + Unpin + Send + 'static) -> PipeReader {
+    tokio::spawn(async move {
+        let mut output = Vec::new();
+        pipe.read_to_end(&mut output).await?;
+        Ok(output)
+    })
+}
+
+async fn finish_pipe_readers(
+    stdout: PipeReader,
+    stderr: PipeReader,
+) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
+    let (stdout, stderr) = tokio::join!(
+        finish_pipe_reader(stdout, "stdout"),
+        finish_pipe_reader(stderr, "stderr"),
+    );
+    Ok((stdout?, stderr?))
+}
+
+async fn finish_pipe_reader(mut reader: PipeReader, name: &str) -> anyhow::Result<Vec<u8>> {
+    if let Ok(joined) = tokio::time::timeout(IO_TIMEOUT, &mut reader).await {
+        Ok(joined??)
+    } else {
+        reader.abort();
+        match tokio::time::timeout(IO_TIMEOUT, &mut reader).await {
+            Ok(Err(error)) if error.is_cancelled() => {}
+            Ok(Err(error)) => anyhow::bail!("seekdeep {name} reader abort failed: {error}"),
+            Ok(Ok(result)) => anyhow::bail!(
+                "seekdeep {name} reader completed during abort after failing to close: {result:?}"
+            ),
+            Err(_) => anyhow::bail!("seekdeep {name} reader did not join after abort"),
+        }
+        anyhow::bail!("seekdeep {name} did not close")
     }
+}
+
+async fn finish_server(
+    mut server: JoinHandle<anyhow::Result<Vec<CapturedRequest>>>,
+) -> anyhow::Result<Vec<CapturedRequest>> {
+    if let Ok(joined) = tokio::time::timeout(IO_TIMEOUT, &mut server).await {
+        joined?
+    } else {
+        server.abort();
+        let cleanup = tokio::time::timeout(IO_TIMEOUT, &mut server).await;
+        anyhow::bail!("loopback server did not finish; cleanup: {cleanup:#?}")
+    }
+}
+
+async fn abort_server(
+    mut server: JoinHandle<anyhow::Result<Vec<CapturedRequest>>>,
+) -> anyhow::Result<()> {
+    server.abort();
+    match tokio::time::timeout(IO_TIMEOUT, &mut server).await {
+        Ok(Err(error)) if error.is_cancelled() => Ok(()),
+        Ok(Err(error)) => Err(error.into()),
+        Ok(Ok(result)) => {
+            result?;
+            Ok(())
+        }
+        Err(_) => anyhow::bail!("loopback server did not join after abort"),
+    }
+}
+
+async fn force_reap(child: &mut Child) -> anyhow::Result<std::process::ExitStatus> {
+    if child.try_wait()?.is_none() {
+        child.start_kill()?;
+    }
+    tokio::time::timeout(IO_TIMEOUT, child.wait())
+        .await
+        .map_err(|_| anyhow::anyhow!("seekdeep child did not reap after kill"))?
+        .map_err(Into::into)
+}
+
+fn assert_process_output(output: &std::process::Output) {
     assert_eq!(
         output.status.code(),
         Some(0),
@@ -285,10 +352,9 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
     );
     assert_eq!(output.stdout, format!("{ANSWER}\n").as_bytes());
     assert_eq!(output.stderr, b"");
+}
 
-    let captured = tokio::time::timeout(IO_TIMEOUT, server)
-        .await
-        .map_err(|_| anyhow::anyhow!("loopback server did not finish"))???;
+fn assert_requests(captured: &[CapturedRequest]) {
     assert_eq!(captured.len(), 2);
     assert!(
         captured
@@ -319,33 +385,97 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
             .to_string()
             .contains("headless-process-tool")
     );
+}
 
+#[derive(Debug)]
+struct ColdEvidence {
+    session_id: String,
+    cwd: Option<String>,
+    canonical_workspace: String,
+    event_types: Vec<String>,
+    has_task: bool,
+    todo_content: Option<String>,
+    has_answer: bool,
+    final_reason: Option<String>,
+    has_request_header: bool,
+}
+
+async fn collect_cold_jsonl(home: &Path, workspace: &Path) -> anyhow::Result<ColdEvidence> {
     let cold_root = Context::new();
-    let cold_sessions = SessionStore::install(&cold_root)?;
-    let cold =
-        JsonlSessionPersistence::new(cold_sessions, JsonlConfig::new(home.join("sessions")))?;
-    let headers = tokio::time::timeout(IO_TIMEOUT, cold.list(None))
-        .await
-        .map_err(|_| anyhow::anyhow!("cold session listing timed out"))??;
-    assert_eq!(headers.len(), 1);
-    let header = &headers[0];
-    let canonical_workspace = std::fs::canonicalize(&workspace)?;
-    assert!(header.id.as_str().starts_with("session-"));
+    let operation = async {
+        let cold_sessions = SessionStore::install(&cold_root)?;
+        let cold =
+            JsonlSessionPersistence::new(cold_sessions, JsonlConfig::new(home.join("sessions")))?;
+        let headers = tokio::time::timeout(IO_TIMEOUT, cold.list(None))
+            .await
+            .map_err(|_| anyhow::anyhow!("cold session listing timed out"))??;
+        anyhow::ensure!(
+            headers.len() == 1,
+            "expected one cold session, got {}",
+            headers.len()
+        );
+        let header = &headers[0];
+        let inspection = tokio::time::timeout(IO_TIMEOUT, cold.inspect(&header.id, None))
+            .await
+            .map_err(|_| anyhow::anyhow!("cold session inspection timed out"))??;
+        let events = &inspection.events;
+        Ok::<_, anyhow::Error>(ColdEvidence {
+            session_id: header.id.to_string(),
+            cwd: header.cwd.clone(),
+            canonical_workspace: std::fs::canonicalize(workspace)?
+                .to_string_lossy()
+                .into_owned(),
+            event_types: events
+                .iter()
+                .map(|event| event.event_type.clone())
+                .collect(),
+            has_task: events.iter().any(|event| {
+                event.event_type == "user/message" && event.data.to_string().contains(TASK)
+            }),
+            todo_content: events
+                .iter()
+                .find(|event| event.event_type == "todo/write")
+                .and_then(|event| event.data.pointer("/todos/0/content"))
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            has_answer: events.iter().any(|event| {
+                event.event_type == "assistant/message" && event.data.to_string().contains(ANSWER)
+            }),
+            final_reason: events
+                .iter()
+                .rev()
+                .find(|event| event.event_type == "turn/end")
+                .and_then(|event| event.data.pointer("/reason/kind"))
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            has_request_header: events.iter().any(|event| {
+                event.event_type == "request/header"
+                    && event.data.to_string().contains(DEFAULT_PROVIDER)
+                    && event.data.to_string().contains(DEFAULT_MODEL)
+            }),
+        })
+    }
+    .await;
+    let cleanup = cold_root.fiber().dispose().await;
+    match (operation, cleanup) {
+        (Ok(evidence), Ok(())) => Ok(evidence),
+        (Err(primary), Ok(())) => Err(primary),
+        (Ok(_), Err(cleanup)) => Err(cleanup),
+        (Err(primary), Err(cleanup)) => Err(anyhow::anyhow!(
+            "{primary:#}\ncold-root cleanup failed: {cleanup:#}"
+        )),
+    }
+}
+
+fn assert_cold_jsonl(evidence: &ColdEvidence) {
+    assert!(evidence.session_id.starts_with("session-"));
     assert_eq!(
-        header.cwd.as_deref(),
-        Some(canonical_workspace.to_string_lossy().as_ref())
+        evidence.cwd.as_deref(),
+        Some(evidence.canonical_workspace.as_str())
     );
-    let inspection = tokio::time::timeout(IO_TIMEOUT, cold.inspect(&header.id, None))
-        .await
-        .map_err(|_| anyhow::anyhow!("cold session inspection timed out"))??;
-    let event_types = inspection
-        .events
-        .iter()
-        .map(|event| event.event_type.clone())
-        .collect::<Vec<_>>();
     assert!(
         ordered_subsequence(
-            &event_types,
+            &evidence.event_types,
             &[
                 "turn/start",
                 "user/message",
@@ -357,38 +487,45 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
                 "turn/end",
             ],
         ),
-        "unexpected cold event sequence: {event_types:?}"
+        "unexpected cold event sequence: {:?}",
+        evidence.event_types
     );
-    assert!(inspection.events.iter().any(|event| {
-        event.event_type == "user/message" && event.data.to_string().contains(TASK)
-    }));
+    assert!(evidence.has_task);
     assert_eq!(
-        inspection
-            .events
-            .iter()
-            .find(|event| event.event_type == "todo/write")
-            .and_then(|event| event.data.pointer("/todos/0/content"))
-            .and_then(Value::as_str),
+        evidence.todo_content.as_deref(),
         Some("prove the process boundary")
     );
-    assert!(inspection.events.iter().any(|event| {
-        event.event_type == "assistant/message" && event.data.to_string().contains(ANSWER)
-    }));
-    assert_eq!(
-        inspection
-            .events
-            .iter()
-            .rev()
-            .find(|event| event.event_type == "turn/end")
-            .and_then(|event| event.data.pointer("/reason/kind"))
-            .and_then(Value::as_str),
-        Some("completed")
-    );
-    assert!(inspection.events.iter().any(|event| {
-        event.event_type == "request/header"
-            && event.data.to_string().contains(DEFAULT_PROVIDER)
-            && event.data.to_string().contains(DEFAULT_MODEL)
-    }));
-    cold_root.fiber().dispose().await?;
+    assert!(evidence.has_answer);
+    assert_eq!(evidence.final_reason.as_deref(), Some("completed"));
+    assert!(evidence.has_request_header);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let workspace = temporary.path().join("workspace");
+    std::fs::create_dir(&workspace)?;
+    let home = temporary.path().join("home");
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let (base_url, server) = loopback_server(request_count.clone()).await?;
+
+    let output = run_process(&workspace, &home, &base_url, request_count.as_ref()).await;
+    let output = match output {
+        Ok(output) => output,
+        Err(primary) => {
+            return match abort_server(server).await {
+                Ok(()) => Err(primary),
+                Err(cleanup) => Err(anyhow::anyhow!(
+                    "{primary:#}\nloopback-server cleanup failed: {cleanup:#}"
+                )),
+            };
+        }
+    };
+    let captured = finish_server(server).await?;
+    let cold = collect_cold_jsonl(&home, &workspace).await?;
+
+    assert_process_output(&output);
+    assert_requests(&captured);
+    assert_cold_jsonl(&cold);
     Ok(())
 }

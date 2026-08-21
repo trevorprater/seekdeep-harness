@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, EventArgs, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::SessionId;
-use seekdeep_scope::scope_target;
+use seekdeep_scope::{scope_target, scoped_event_args};
 use thiserror::Error;
 use tokio::sync::Notify;
 use uuid::Uuid;
@@ -260,9 +260,12 @@ impl RegistryInner {
 
     fn emit_disposed(&self, entry: &AgentEntry) {
         let dispatch = scope_target(&self.context, Some(entry.agent.scope_key()));
-        let args = EventArgs::one(AgentLifecycleEvent {
-            agent: entry.agent.clone(),
-        });
+        let args = scoped_event_args(
+            entry.agent.scope_key(),
+            EventArgs::one(AgentLifecycleEvent {
+                agent: entry.agent.clone(),
+            }),
+        );
         match self
             .context
             .events()
@@ -531,9 +534,12 @@ impl AgentRegistry {
         }
 
         let dispatch = scope_target(&self.inner.context, Some(entry.agent.scope_key()));
-        let args = EventArgs::one(AgentLifecycleEvent {
-            agent: entry.agent.clone(),
-        });
+        let args = scoped_event_args(
+            entry.agent.scope_key(),
+            EventArgs::one(AgentLifecycleEvent {
+                agent: entry.agent.clone(),
+            }),
+        );
         let result = self
             .inner
             .context

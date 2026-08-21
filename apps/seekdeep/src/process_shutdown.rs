@@ -546,7 +546,12 @@ mod tests {
         let shutdown = deferred_controller(&disposal, &recorder);
         let pending = shutdown.shutdown(0);
 
-        tokio::time::advance(PROCESS_SHUTDOWN_TIMEOUT - Duration::from_millis(1)).await;
+        tokio::time::advance(
+            PROCESS_SHUTDOWN_TIMEOUT
+                .checked_sub(Duration::from_millis(1))
+                .expect("the production shutdown bound exceeds one millisecond"),
+        )
+        .await;
         settle_tasks().await;
         assert!(recorder.forced().is_empty());
 

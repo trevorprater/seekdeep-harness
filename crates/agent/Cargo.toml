@@ -15,6 +15,7 @@ serde.workspace = true
 serde_json.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-system-prompt = { path = "../system-prompt" }

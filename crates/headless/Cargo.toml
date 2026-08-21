@@ -11,18 +11,21 @@ description = "One-shot direct Agent runner for SeekDeep Harness"
 anyhow.workspace = true
 parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-cmdline = { path = "../cmdline" }
+seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-system-prompt = { path = "../system-prompt" }
+serde.workspace = true
 serde_json.workspace = true
+terminal_size.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
 futures.workspace = true
 seekdeep-agent-loop = { path = "../agent-loop" }
-seekdeep-cordis = { path = "../cordis" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
 seekdeep-session-projection = { path = "../session-projection" }

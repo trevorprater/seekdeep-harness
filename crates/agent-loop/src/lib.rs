@@ -16,9 +16,7 @@ pub mod runtime_context;
 /// Ordered, bounded scheduling for one assistant step's tool calls.
 pub mod tool_calls;
 
-pub use controller::{
-    AgentInboxClaimed, AgentInboxMessage, AgentStatusChanged, DriverTask, LoopAgent, LoopController,
-};
+pub use controller::{AgentInboxClaimed, AgentInboxMessage, DriverTask, LoopAgent, LoopController};
 pub use driver::{
     AgentErrorEvent, AgentLoopServices, AgentPreStepEvent, AgentRequestErrorEvent,
     AgentRequestEvent, AgentTurnStoppingEvent, DefaultAgentDriver,
@@ -26,6 +24,7 @@ pub use driver::{
 pub use factory::{AgentLoop, SessionStartEvent};
 pub use invariant::{install_request_invariant, validate_agent_loop_request};
 pub use runtime_context::RuntimeContextProjection;
+pub use seekdeep_agent::AgentStatusChanged;
 pub use seekdeep_agent::factory::{
     AgentFactory, AgentHandle, AgentSetup, AgentSetupCommit, CreateAgentMeta, CreateAgentOptions,
     ResumeAgentOptions,

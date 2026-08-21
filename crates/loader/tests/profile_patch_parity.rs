@@ -4,8 +4,9 @@ use std::{cell::Cell, collections::HashSet};
 
 use seekdeep_loader::profile_patch::{
     JavaScriptExpression, ProfileEntry, ProfileEntryId, ProfileNode, ProfilePatchError,
-    ProfilePatchWarning, apply_entry_patches, compose_profile_layers, ensure_entry_id_with,
-    parse_entry_list_yaml, parse_patch_list_yaml, render_entry_list_yaml, render_patch_list_yaml,
+    ProfilePatchWarning, apply_entry_patches, apply_entry_patches_with_warning_sink,
+    compose_profile_layers, ensure_entry_id_with, parse_entry_list_yaml, parse_patch_list_yaml,
+    render_entry_list_yaml, render_patch_list_yaml,
 };
 
 fn entries(source: &str) -> Vec<ProfileEntry> {
@@ -77,6 +78,39 @@ fn yaml_ast_preserves_javascript_and_loader_context_fields() {
     let rendered_patches = render_patch_list_yaml(&patches).unwrap();
     assert!(rendered_patches.contains("!!js"), "{rendered_patches}");
     assert_eq!(parse_patch_list_yaml(&rendered_patches).unwrap(), patches);
+}
+
+#[test]
+fn yaml_renderer_quotes_strings_that_plain_yaml_would_resolve_as_other_types() {
+    let source = concat!(
+        "- id: strings\n",
+        "  config:\n",
+        "    empty: ''\n",
+        "    null_word: 'null'\n",
+        "    tilde: '~'\n",
+        "    true_word: 'true'\n",
+        "    false_word: 'false'\n",
+        "    integer: '1'\n",
+        "    leading_zero: '01'\n",
+        "    float: '1.5'\n",
+        "    nan: '.nan'\n",
+        "    infinity: '.inf'\n",
+    );
+    let parsed = entries(source);
+    let rendered = render_entry_list_yaml(&parsed).unwrap();
+    assert_eq!(
+        parse_entry_list_yaml(&rendered).unwrap(),
+        parsed,
+        "rendered YAML changed string node types:\n{rendered}"
+    );
+    for value in [
+        "''", "'null'", "'~'", "'true'", "'false'", "'1'", "'01'", "'1.5'", "'.nan'", "'.inf'",
+    ] {
+        assert!(
+            rendered.contains(value),
+            "expected an explicit string scalar {value:?}:\n{rendered}"
+        );
+    }
 }
 
 #[test]
@@ -165,6 +199,56 @@ fn ordered_insert_override_and_warning_rules_match_the_include() {
             "patch insert: entry \"plain\" is not a group",
             "patch insert: entry \"absent-group\" not found",
         ]
+    );
+}
+
+#[test]
+fn insertion_target_is_resolved_before_a_truthy_insert_shape_is_validated() {
+    let base = entries(concat!(
+        "- id: plain\n",
+        "  name: plain-plugin\n",
+        "- id: group\n",
+        "  name: group-plugin\n",
+        "  group: true\n",
+    ));
+    let skipped = parse_patch_list_yaml(concat!(
+        "- id: missing\n",
+        "  insert: { malformed: true }\n",
+        "- id: plain\n",
+        "  insert: { malformed: true }\n",
+    ))
+    .unwrap();
+    assert_eq!(
+        apply_entry_patches(&base, &skipped).unwrap().warnings(),
+        [
+            ProfilePatchWarning::InsertTargetNotFound {
+                id: ProfileEntryId::from_wire("missing"),
+            },
+            ProfilePatchWarning::InsertTargetNotGroup {
+                id: ProfileEntryId::from_wire("plain"),
+            },
+        ]
+    );
+
+    let failing = parse_patch_list_yaml(concat!(
+        "- id: missing\n",
+        "  insert: { still: skipped }\n",
+        "- id: group\n",
+        "  insert: { now: validated }\n",
+    ))
+    .unwrap();
+    let mut delivered = Vec::new();
+    assert!(matches!(
+        apply_entry_patches_with_warning_sink(&base, &failing, |warning| {
+            delivered.push(warning);
+        }),
+        Err(ProfilePatchError::InsertArrayRequired { patch_index: 1 })
+    ));
+    assert_eq!(
+        delivered,
+        [ProfilePatchWarning::InsertTargetNotFound {
+            id: ProfileEntryId::from_wire("missing"),
+        }]
     );
 }
 
@@ -333,12 +417,22 @@ fn id_generation_happens_only_at_the_explicit_materialization_seam() {
     assert_eq!(stable_id.as_str(), " ");
 
     let mut empty = entries("- id: ''\n  name: generated\n").pop().unwrap();
+    let candidates = [
+        ProfileEntryId::from_wire(""),
+        ProfileEntryId::from_wire("0123abcd"),
+    ];
+    let next = Cell::new(0);
     let replacement = ensure_entry_id_with(
         &mut empty,
         |_| false,
-        || ProfileEntryId::from_wire("0123abcd"),
+        || {
+            let index = next.get();
+            next.set(index + 1);
+            candidates[index].clone()
+        },
     );
     assert_eq!(replacement.as_str(), "0123abcd");
+    assert_eq!(next.get(), 2, "falsey generated ids must be rejected");
 }
 
 #[test]

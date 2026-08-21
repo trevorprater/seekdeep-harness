@@ -6,11 +6,15 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use seekdeep_cordis::{Context, Fiber};
+use seekdeep_cordis::{Context, EventArgs, EventSubjectToken, Fiber};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+/// Package-owned scoped-dispatch invariants.
+pub mod invariant;
+/// Generated scope-filtered event catalog.
+pub mod scoped_events;
 /// Insertion-ordered named and anonymous registry entries.
 pub mod store;
 
@@ -180,12 +184,21 @@ pub fn scope_of(context: &Context) -> Option<ScopeKey> {
 /// dispatch key or one of its ancestors.
 #[must_use]
 pub fn scope_target(context: &Context, key: Option<ScopeKey>) -> Context {
-    context.with_event_filter(move |listener| {
+    let target = context.with_event_filter(move |listener| {
         let Some(tag) = scope_of(listener) else {
             return true;
         };
         scope_chain_of(key).contains(&tag)
+    });
+    key.map_or(target.clone(), |key| {
+        target.with_meta(SCOPE_META, Value::String(key.0.to_string()))
     })
+}
+
+/// Attaches the payload subject used to verify one scoped dispatch carrier.
+#[must_use]
+pub fn scoped_event_args(subject: ScopeKey, args: EventArgs) -> EventArgs {
+    args.with_scope_subject(EventSubjectToken::new(subject.as_uuid()))
 }
 
 #[cfg(test)]

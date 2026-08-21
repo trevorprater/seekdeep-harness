@@ -18,9 +18,7 @@ use seekdeep::{
     },
     process_shutdown::ProcessShutdown,
 };
-use seekdeep_headless::startup::{
-    HeadlessStartupAction, HeadlessStartupValues, parse_headless_args,
-};
+use seekdeep_cmdline::CmdlineHost;
 use seekdeep_util::abort::AbortSignal;
 
 const EXIT_CODE_UNSET: i32 = i32::MIN;
@@ -79,18 +77,7 @@ fn dispatch_profile(invocation: ProfileInvocation) -> i32 {
         return 1;
     }
 
-    match parse_headless_args(&invocation.args) {
-        HeadlessStartupAction::Exit {
-            code,
-            stdout,
-            stderr,
-        } => {
-            write_stdout(&stdout);
-            write_stderr(&stderr);
-            code
-        }
-        HeadlessStartupAction::Run(HeadlessStartupValues { task }) => run_headless(task),
-    }
+    run_headless(invocation.args)
 }
 
 fn dump_not_yet_available(invocation: &DumpConfigInvocation) -> i32 {
@@ -114,7 +101,14 @@ fn plugin_not_yet_available(invocation: &PluginInvocation) -> i32 {
     1
 }
 
-fn run_headless(task: String) -> i32 {
+fn run_headless(args: Vec<String>) -> i32 {
+    let options = match HeadlessBootOptions::from_process() {
+        Ok(options) => options,
+        Err(error) => {
+            write_headless_startup_error(&error);
+            return 1;
+        }
+    };
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -127,8 +121,8 @@ fn run_headless(task: String) -> i32 {
             return 1;
         }
     };
-    let result = runtime.block_on(run_headless_async(task));
-    runtime.shutdown_background();
+    let result = runtime.block_on(run_headless_async(args, options));
+    drop(runtime);
     match result {
         Ok(code) => code,
         Err(error) => {
@@ -138,12 +132,15 @@ fn run_headless(task: String) -> i32 {
     }
 }
 
-async fn run_headless_async(task: String) -> anyhow::Result<i32> {
+async fn run_headless_async(
+    args: Vec<String>,
+    mut options: HeadlessBootOptions,
+) -> anyhow::Result<i32> {
     let signals = SignalSources::prepare()?;
-    let options = HeadlessBootOptions::from_process()?;
     let application_slot = Arc::new(ApplicationSlot::default());
     let startup_abort = AbortSignal::default();
     let completed_code = Arc::new(AtomicI32::new(EXIT_CODE_UNSET));
+    let app_exit_code = Arc::new(AtomicI32::new(EXIT_CODE_UNSET));
     let application_for_shutdown = Arc::clone(&application_slot);
     let completion_for_shutdown = Arc::clone(&completed_code);
     let shutdown = ProcessShutdown::new(
@@ -152,12 +149,32 @@ async fn run_headless_async(task: String) -> anyhow::Result<i32> {
         move |code| completion_for_shutdown.store(code, Ordering::Release),
     );
     let signal_tasks = signals.spawn(shutdown.clone(), startup_abort.clone());
+    options = attach_cmdline_host(options, args, &shutdown, &startup_abort, &app_exit_code);
 
     let application =
         match HeadlessApplication::boot_with_abort(options, startup_abort.clone()).await {
             Ok(application) => {
                 let application = Arc::new(application);
-                application_slot.publish(Arc::clone(&application))?;
+                if let Err(error) = application_slot.publish(Arc::clone(&application)) {
+                    use std::fmt::Write as _;
+
+                    application_slot.finish_without_application();
+                    let application_cleanup = application.shutdown().await;
+                    let signal_cleanup = stop_signal_tasks(signal_tasks).await;
+                    let mut message = format!("{error:#}");
+                    if let Err(cleanup) = application_cleanup {
+                        write!(
+                            message,
+                            "\nunpublished application cleanup failed: {cleanup:#}"
+                        )
+                        .expect("writing to a String is infallible");
+                    }
+                    if let Err(cleanup) = signal_cleanup {
+                        write!(message, "\nsignal-task cleanup failed: {cleanup:#}")
+                            .expect("writing to a String is infallible");
+                    }
+                    return Err(anyhow::anyhow!(message));
+                }
                 application
             }
             Err(error) => {
@@ -165,27 +182,85 @@ async fn run_headless_async(task: String) -> anyhow::Result<i32> {
                 if startup_abort.is_aborted() {
                     shutdown.shutdown(1).await;
                 }
-                abort_tasks(signal_tasks);
-                return Err(error);
+                let signal_result = stop_signal_tasks(signal_tasks).await;
+                if app_exit_code.load(Ordering::Acquire) != EXIT_CODE_UNSET {
+                    signal_result?;
+                    return require_completed_code(
+                        completed_code.as_ref(),
+                        "application exit disposal ended without selecting an exit code",
+                    );
+                }
+                return match signal_result {
+                    Ok(()) => Err(error),
+                    Err(cleanup) => Err(anyhow::anyhow!(
+                        "{error:#}\nsignal-task cleanup failed: {cleanup:#}"
+                    )),
+                };
             }
         };
 
     if startup_abort.is_aborted() {
         shutdown.shutdown(1).await;
+        let signal_result = stop_signal_tasks(signal_tasks).await;
+        if app_exit_code.load(Ordering::Acquire) != EXIT_CODE_UNSET {
+            signal_result?;
+            return require_completed_code(
+                completed_code.as_ref(),
+                "application exit disposal ended without selecting an exit code",
+            );
+        }
+        anyhow::bail!("signal-driven shutdown returned without forcing process exit");
     }
 
-    let result = application.run(&task).await;
-    let output_result = write_run_output(&result.stdout, &result.stderr);
-    shutdown.shutdown(result.exit_code).await;
-    abort_tasks(signal_tasks);
-    output_result?;
+    let result = application.run_startup().await;
+    let (exit_code, stdout, stderr) = (result.exit_code, result.stdout, result.stderr);
+    let output_result = write_run_output(&stdout, &stderr);
+    shutdown.shutdown(exit_code).await;
+    let signal_result = stop_signal_tasks(signal_tasks).await;
+    match (output_result, signal_result) {
+        (Err(output), Err(signals)) => {
+            return Err(anyhow::anyhow!(
+                "headless output failed: {output}\nsignal-task cleanup failed: {signals:#}"
+            ));
+        }
+        (Err(output), Ok(())) => return Err(output.into()),
+        (Ok(()), Err(signals)) => return Err(signals),
+        (Ok(()), Ok(())) => {}
+    }
 
-    let completed_code = completed_code.load(Ordering::Acquire);
-    anyhow::ensure!(
-        completed_code != EXIT_CODE_UNSET,
-        "application disposal ended without selecting an exit code"
-    );
-    Ok(completed_code)
+    require_completed_code(
+        completed_code.as_ref(),
+        "application disposal ended without selecting an exit code",
+    )
+}
+
+fn attach_cmdline_host(
+    options: HeadlessBootOptions,
+    args: Vec<String>,
+    shutdown: &ProcessShutdown,
+    startup_abort: &AbortSignal,
+    app_exit_code: &Arc<AtomicI32>,
+) -> HeadlessBootOptions {
+    let shutdown = shutdown.clone();
+    let startup_abort = startup_abort.clone();
+    let app_exit_code = app_exit_code.clone();
+    options.with_cmdline(CmdlineHost::new(args, move |code| {
+        let _ = app_exit_code.compare_exchange(
+            EXIT_CODE_UNSET,
+            code,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+        startup_abort.abort();
+        drop(shutdown.shutdown(code));
+        Ok(())
+    }))
+}
+
+fn require_completed_code(value: &AtomicI32, missing: &str) -> anyhow::Result<i32> {
+    let value = value.load(Ordering::Acquire);
+    anyhow::ensure!(value != EXIT_CODE_UNSET, "{missing}");
+    Ok(value)
 }
 
 #[derive(Debug, Default)]
@@ -224,9 +299,22 @@ impl ApplicationSlot {
     }
 }
 
-fn abort_tasks(tasks: Vec<tokio::task::JoinHandle<()>>) {
-    for task in tasks {
+async fn stop_signal_tasks(tasks: Vec<tokio::task::JoinHandle<()>>) -> anyhow::Result<()> {
+    for task in &tasks {
         task.abort();
+    }
+    let mut errors = Vec::new();
+    for task in tasks {
+        match task.await {
+            Ok(()) => {}
+            Err(error) if error.is_cancelled() => {}
+            Err(error) => errors.push(error.to_string()),
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(errors.join("\n")))
     }
 }
 
@@ -241,6 +329,17 @@ fn write_stdout(output: &str) {
 
 fn write_stderr(output: &str) {
     let _ = io::stderr().lock().write_all(output.as_bytes());
+}
+
+fn write_headless_startup_error(error: &anyhow::Error) {
+    if matches!(
+        error.downcast_ref::<seekdeep::layered_env::LoadLayeredEnvError>(),
+        Some(seekdeep::layered_env::LoadLayeredEnvError::BootstrapOnly { .. })
+    ) {
+        write_stderr(&format!("{error}\n"));
+    } else {
+        write_stderr(&format!("seekdeep: {error}\n"));
+    }
 }
 
 fn normalize_exit_code(code: i32) -> u8 {
@@ -292,10 +391,37 @@ impl SignalSources {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+struct SignalSources {
+    ctrl_c: tokio::signal::windows::CtrlC,
+}
+
+#[cfg(windows)]
+impl SignalSources {
+    fn prepare() -> io::Result<Self> {
+        Ok(Self {
+            ctrl_c: tokio::signal::windows::ctrl_c()?,
+        })
+    }
+
+    fn spawn(
+        mut self,
+        shutdown: ProcessShutdown,
+        startup_abort: AbortSignal,
+    ) -> Vec<tokio::task::JoinHandle<()>> {
+        vec![tokio::spawn(async move {
+            while self.ctrl_c.recv().await.is_some() {
+                startup_abort.abort();
+                shutdown.interrupt_sigint();
+            }
+        })]
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
 struct SignalSources;
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 impl SignalSources {
     fn prepare() -> io::Result<Self> {
         Ok(Self)

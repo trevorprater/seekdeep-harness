@@ -1,13 +1,91 @@
 //! Headless profile command-line parsing.
 
+use std::sync::Arc;
+
+use seekdeep_cmdline::{
+    CmdlineOutput, CmdlineProgram, CmdlineProgramOutcome, parse_cmdline, parse_cmdline_with_output,
+};
+use seekdeep_cordis::{Context, Plugin, PluginFiber, ServiceKey};
+
+/// Stable source-compatible plugin name.
+pub const NAME: &str = "headless-startup";
+/// Services required before the startup provider activates.
+pub const INJECT: &[&str] = &["cmdlineArgs"];
+
 /// Stable service name used by the source composition.
 pub const HEADLESS_STARTUP_SERVICE: &str = "headlessStartup";
+/// Typed Cordis slot for the parsed one-shot task.
+pub const HEADLESS_STARTUP: ServiceKey<HeadlessStartupValues> =
+    ServiceKey::new(HEADLESS_STARTUP_SERVICE);
 
 /// Parsed task published by the headless startup provider.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HeadlessStartupValues {
     /// Exact task text after joining positional words with one ASCII space.
     pub task: String,
+}
+
+#[derive(Debug, Default)]
+struct HeadlessProgram;
+
+impl CmdlineProgram for HeadlessProgram {
+    type Action = HeadlessStartupValues;
+
+    fn name(&self) -> &'static str {
+        "seekdeep --profile headless"
+    }
+
+    fn has_action(&self) -> bool {
+        true
+    }
+
+    fn parse(&mut self, args: &[String]) -> anyhow::Result<CmdlineProgramOutcome<Self::Action>> {
+        Ok(match parse_headless_args(args) {
+            HeadlessStartupAction::Run(values) => CmdlineProgramOutcome::Action(values),
+            HeadlessStartupAction::Exit {
+                code,
+                stdout,
+                stderr,
+            } => CmdlineProgramOutcome::Exit {
+                code,
+                stdout,
+                stderr,
+            },
+        })
+    }
+
+    fn run_action(&mut self, context: &Context, action: Self::Action) -> anyhow::Result<()> {
+        context.provide(HEADLESS_STARTUP, Arc::new(action))?;
+        Ok(())
+    }
+}
+
+/// Builds the loader-compatible headless startup provider.
+#[must_use]
+pub fn plugin() -> Plugin {
+    build_plugin(None)
+}
+
+fn build_plugin(output: Option<Arc<dyn CmdlineOutput>>) -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), move |context, _config| {
+        let output = output.clone();
+        Box::pin(async move {
+            if let Some(output) = output {
+                parse_cmdline_with_output(&context, &mut HeadlessProgram, output.as_ref())
+            } else {
+                parse_cmdline(&context, &mut HeadlessProgram)
+            }
+        })
+    })
+}
+
+/// Mounts the headless startup provider as a lifecycle-owned plugin fiber.
+///
+/// # Errors
+///
+/// Returns inactive-context failures.
+pub fn install(context: &Context) -> anyhow::Result<Arc<PluginFiber>> {
+    Ok(context.plugin(plugin(), serde_json::Value::Null)?)
 }
 
 /// Terminal or runnable result of parsing the headless profile's arguments.
@@ -86,17 +164,64 @@ pub fn parse_headless_args(args: &[String]) -> HeadlessStartupAction {
 }
 
 fn help_text() -> String {
-    concat!(
-        "Usage: seekdeep --profile headless [options] [task...]\n\n",
-        "Answer one task, print the final assistant message, and exit.\n\n",
-        "Arguments:\n",
-        "  task        the task text; multiple words are joined by spaces\n\n",
-        "Options:\n",
-        "  -h, --help  show this help\n\n",
-        "Examples:\n",
-        "  seekdeep --profile headless \"run the tests\"     answer one task and exit\n\n"
+    stdout_help_width().map_or_else(|| render_help_text_at_width(80), render_help_text_at_width)
+}
+
+#[cfg(any(unix, windows))]
+fn stdout_help_width() -> Option<usize> {
+    terminal_size::terminal_size_of(std::io::stdout())
+        .map(|(terminal_size::Width(width), _)| usize::from(width))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn stdout_help_width() -> Option<usize> {
+    None
+}
+
+fn render_help_text_at_width(width: usize) -> String {
+    const MINIMUM_WRAP_WIDTH: usize = 40;
+    const TERM_WIDTH: usize = 10;
+    const ITEM_PREFIX_WIDTH: usize = 14;
+    const DESCRIPTION: &str = "Answer one task, print the final assistant message, and exit.";
+    const ARGUMENT_DESCRIPTION: &str = "the task text; multiple words are joined by spaces";
+
+    let description = wrap(DESCRIPTION, width, MINIMUM_WRAP_WIDTH);
+    let remaining = width.saturating_sub(ITEM_PREFIX_WIDTH);
+    let argument = wrap(ARGUMENT_DESCRIPTION, remaining, MINIMUM_WRAP_WIDTH)
+        .replace('\n', &format!("\n{}", " ".repeat(ITEM_PREFIX_WIDTH)));
+    format!(
+        "Usage: seekdeep --profile headless [options] [task...]\n\n\
+{description}\n\n\
+Arguments:\n  {term:<TERM_WIDTH$}  {argument}\n\n\
+Options:\n  -h, --help  show this help\n\n\
+Examples:\n  seekdeep --profile headless \"run the tests\"     answer one task and exit\n\n",
+        term = "task",
     )
-    .to_owned()
+}
+
+fn wrap(value: &str, width: usize, minimum: usize) -> String {
+    if width < minimum {
+        return value.to_owned();
+    }
+    let mut words = value.split_whitespace();
+    let Some(first) = words.next() else {
+        return String::new();
+    };
+    let mut output = first.to_owned();
+    let mut line_width = first.encode_utf16().count();
+    for word in words {
+        let word_width = word.encode_utf16().count();
+        if line_width.saturating_add(1).saturating_add(word_width) <= width {
+            output.push(' ');
+            output.push_str(word);
+            line_width = line_width.saturating_add(1).saturating_add(word_width);
+        } else {
+            output.push('\n');
+            output.push_str(word);
+            line_width = word_width;
+        }
+    }
+    output
 }
 
 fn is_unknown_option(argument: &str) -> bool {
@@ -182,10 +307,32 @@ fn optimal_string_alignment_distance(a: &[u16], b: &[u16], max_distance: usize) 
 
 #[cfg(test)]
 mod tests {
+    use parking_lot::Mutex;
+    use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
+    use seekdeep_cordis::FiberState;
+
     use super::*;
 
     fn strings(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| (*value).to_owned()).collect()
+    }
+
+    #[derive(Default)]
+    struct RecordingOutput {
+        stdout: Mutex<String>,
+        stderr: Mutex<String>,
+    }
+
+    impl CmdlineOutput for RecordingOutput {
+        fn write_stdout(&self, text: &str) -> anyhow::Result<()> {
+            self.stdout.lock().push_str(text);
+            Ok(())
+        }
+
+        fn write_stderr(&self, text: &str) -> anyhow::Result<()> {
+            self.stderr.lock().push_str(text);
+            Ok(())
+        }
     }
 
     #[test]
@@ -246,6 +393,82 @@ mod tests {
             )
         );
         assert!(stderr.is_empty());
+    }
+
+    #[test]
+    fn help_wraps_with_commander_at_the_live_terminal_width() {
+        assert_eq!(
+            render_help_text_at_width(60),
+            concat!(
+                "Usage: seekdeep --profile headless [options] [task...]\n\n",
+                "Answer one task, print the final assistant message, and\n",
+                "exit.\n\n",
+                "Arguments:\n",
+                "  task        the task text; multiple words are joined by\n",
+                "              spaces\n\n",
+                "Options:\n",
+                "  -h, --help  show this help\n\n",
+                "Examples:\n",
+                "  seekdeep --profile headless \"run the tests\"     answer one task and exit\n\n",
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn cordis_provider_publishes_only_a_valid_task_and_unwinds_with_its_fiber() {
+        let context = Context::new();
+        let exits = Arc::new(Mutex::new(Vec::new()));
+        provide_cmdline(
+            &context,
+            CmdlineHost::new(["run", "the", "tests"], {
+                let exits = exits.clone();
+                move |code| {
+                    exits.lock().push(code);
+                    Ok(())
+                }
+            }),
+        )
+        .unwrap();
+        let startup = install(&context).unwrap();
+        startup.await_settled().await.unwrap();
+        assert_eq!(startup.fiber().state(), FiberState::Active);
+        assert_eq!(
+            context.get(HEADLESS_STARTUP).as_deref(),
+            Some(&HeadlessStartupValues {
+                task: "run the tests".to_owned(),
+            })
+        );
+        assert!(exits.lock().is_empty());
+
+        startup.dispose().await.unwrap();
+        assert!(context.get(HEADLESS_STARTUP).is_none());
+    }
+
+    #[tokio::test]
+    async fn cordis_provider_requests_help_exit_without_publishing_a_task() {
+        let context = Context::new();
+        let exits = Arc::new(Mutex::new(Vec::new()));
+        provide_cmdline(
+            &context,
+            CmdlineHost::new(["--help"], {
+                let exits = exits.clone();
+                move |code| {
+                    exits.lock().push(code);
+                    Ok(())
+                }
+            }),
+        )
+        .unwrap();
+        let output = Arc::new(RecordingOutput::default());
+        let startup = context
+            .plugin(build_plugin(Some(output.clone())), serde_json::Value::Null)
+            .unwrap();
+        startup.await_settled().await.unwrap();
+        assert_eq!(&*exits.lock(), &[0]);
+        assert!(context.get(HEADLESS_STARTUP).is_none());
+        assert_eq!(&*output.stdout.lock(), &help_text());
+        assert!(output.stderr.lock().is_empty());
+        startup.dispose().await.unwrap();
     }
 
     #[test]

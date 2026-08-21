@@ -8,6 +8,8 @@ pub mod dispatch;
 pub mod factory;
 /// Durable pending-message projection.
 pub mod inbox;
+/// Package-owned live Agent invariants.
+pub mod invariant;
 /// Coupled prompt-variable and request-route model selection.
 pub mod model_selection;
 /// Two-phase live-agent registry and paired lifecycle events.
@@ -22,6 +24,7 @@ pub use factory::{
     ResumeAgentOptions,
 };
 pub use inbox::{Inbox, InboxError, InboxNotifications, InboxTarget, NoopInboxNotifications};
+pub use invariant::{INVARIANT_INJECT, INVARIANT_NAME, register_invariant};
 pub use model_selection::{
     ModelSelection, ModelSelectionInstallation, ModelSelectionRef, install_model_selection,
 };
@@ -30,7 +33,8 @@ pub use registry::{
     AgentRegistryError,
 };
 pub use runtime_types::{
-    AGENT, Agent, AgentControlError, AgentController, AgentOptions, AgentStatus, CancelOptions,
-    MaintenanceReservation, PreStepDecision, RequestErrorAction, SessionStartSource,
+    AGENT, Agent, AgentControlError, AgentController, AgentOptions, AgentStatus,
+    AgentStatusChanged, CancelOptions, MaintenanceReservation, PreStepDecision, RequestErrorAction,
+    SessionStartSource,
 };
 pub use seekdeep_core::session::AgentCancelCause;

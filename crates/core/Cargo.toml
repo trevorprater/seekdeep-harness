@@ -14,11 +14,15 @@ serde.workspace = true
 serde_json.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
 seekdeep-util = { path = "../util" }
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+seekdeep-invariants = { path = "../invariants" }
 
 [lints]
 workspace = true

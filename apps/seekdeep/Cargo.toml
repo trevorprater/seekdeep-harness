@@ -15,6 +15,7 @@ seekdeep-agent = { path = "../../crates/agent" }
 seekdeep-agent-default-model = { path = "../../crates/agent-default-model" }
 seekdeep-agent-loop = { path = "../../crates/agent-loop" }
 seekdeep-code-runtime-worker-thread = { path = "../../crates/code-runtime-worker-thread" }
+seekdeep-cmdline = { path = "../../crates/cmdline" }
 seekdeep-cordis = { path = "../../crates/cordis" }
 seekdeep-core = { path = "../../crates/core" }
 seekdeep-credentials-local = { path = "../../crates/credentials-local" }
@@ -31,10 +32,12 @@ seekdeep-system-prompt = { path = "../../crates/system-prompt" }
 seekdeep-tool-todo = { path = "../../crates/tool-todo" }
 seekdeep-tools = { path = "../../crates/tools" }
 seekdeep-util = { path = "../../crates/util" }
+terminal_size.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
 parking_lot.workspace = true
+portable-pty.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 

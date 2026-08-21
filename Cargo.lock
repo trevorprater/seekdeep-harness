@@ -4163,9 +4163,11 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "parking_lot",
+ "portable-pty",
  "seekdeep-agent",
  "seekdeep-agent-default-model",
  "seekdeep-agent-loop",
+ "seekdeep-cmdline",
  "seekdeep-code-runtime-worker-thread",
  "seekdeep-cordis",
  "seekdeep-core",
@@ -4185,6 +4187,7 @@ dependencies = [
  "seekdeep-util",
  "serde_json",
  "tempfile",
+ "terminal_size",
  "tokio",
 ]
 
@@ -4199,6 +4202,7 @@ dependencies = [
  "parking_lot",
  "seekdeep-cordis",
  "seekdeep-core",
+ "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-scope",
  "seekdeep-system-prompt",
@@ -4414,6 +4418,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-cmdline"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-code-runtime"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -4614,7 +4629,9 @@ dependencies = [
  "indexmap 2.14.0",
  "parking_lot",
  "seekdeep-cordis",
+ "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-scope",
  "seekdeep-util",
  "serde",
  "serde_json",
@@ -4777,6 +4794,7 @@ dependencies = [
  "parking_lot",
  "seekdeep-agent",
  "seekdeep-agent-loop",
+ "seekdeep-cmdline",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
@@ -4787,8 +4805,10 @@ dependencies = [
  "seekdeep-system-prompt",
  "seekdeep-tool-todo",
  "seekdeep-tools",
+ "serde",
  "serde_json",
  "tempfile",
+ "terminal_size",
  "tokio",
  "uuid",
 ]
@@ -5360,6 +5380,7 @@ dependencies = [
  "indexmap 2.14.0",
  "parking_lot",
  "seekdeep-cordis",
+ "seekdeep-invariants",
  "serde",
  "serde_json",
  "tokio",
@@ -6968,6 +6989,16 @@ dependencies = [
  "fastrand",
  "getrandom 0.4.3",
  "once_cell",
+ "rustix",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "terminal_size"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
+dependencies = [
  "rustix",
  "windows-sys 0.61.2",
 ]

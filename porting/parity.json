@@ -23597,7 +23597,17 @@
     {
       "source": "apps/cli/src/args.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/args.rs",
+        "apps/seekdeep/tests/source_launch_compat.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run apps/cli/tests/args.spec.ts (pinned source: 6 passed)",
+        "cargo test -p seekdeep --lib args::tests --all-features (23 passed)",
+        "cargo test -p seekdeep --test source_launch_compat --all-features (5 passed, including a live 60-column PTY)",
+        "cargo clippy -p seekdeep --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "apps/cli/src/bin.ts",
@@ -23617,7 +23627,15 @@
     {
       "source": "apps/cli/src/process-shutdown.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/process_shutdown.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run apps/cli/tests/process-shutdown.spec.ts (pinned source: 9 passed)",
+        "cargo test -p seekdeep --all-features",
+        "cargo clippy -p seekdeep --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "apps/cli/src/profile-boot.ts",
@@ -23627,7 +23645,17 @@
     {
       "source": "apps/cli/tests/args.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/args.rs",
+        "apps/seekdeep/tests/source_launch_compat.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run apps/cli/tests/args.spec.ts (pinned source: 6 passed)",
+        "cargo test -p seekdeep --lib args::tests --all-features (23 passed)",
+        "cargo test -p seekdeep --test source_launch_compat --all-features (5 passed, including a live 60-column PTY)",
+        "cargo clippy -p seekdeep --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "apps/cli/tests/built-bin.e2e.ts",
@@ -23711,7 +23739,15 @@
     {
       "source": "apps/cli/tests/process-shutdown.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/process_shutdown.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run apps/cli/tests/process-shutdown.spec.ts (pinned source: 9 passed)",
+        "cargo test -p seekdeep --lib process_shutdown::tests",
+        "cargo clippy -p seekdeep --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "apps/cli/tests/source-launch.compat.spec.ts",
@@ -36232,7 +36268,16 @@
     {
       "source": "packages/acp/acp/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/acp/acp/tests/approval.spec.ts",
@@ -37020,7 +37065,16 @@
     {
       "source": "packages/boot/app-boot/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/boot/app-boot/src/profile.ts",
@@ -37125,7 +37179,15 @@
     {
       "source": "packages/boot/cmdline/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cmdline/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/boot/cmdline/tests/cmdline.spec.ts (pinned source: 13 passed)",
+        "cargo test -p seekdeep-cmdline --all-features (4 passed, including exact invariant ownership)",
+        "cargo clippy -p seekdeep-cmdline --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/boot/cmdline/tests/cmdline.spec.ts",
@@ -37240,7 +37302,16 @@
     {
       "source": "packages/bundle/base/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/bundle/base/tests/base.spec.ts",
@@ -37332,12 +37403,30 @@
     {
       "source": "packages/bundle/headless/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-headless --all-features (12 unit plus 1 round-trip passed, including exact invariant ownership)",
+        "cargo clippy -p seekdeep-headless --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/bundle/headless/src/startup.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/src/startup.rs",
+        "apps/seekdeep/src/lib.rs",
+        "apps/seekdeep/src/main.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/bundle/headless/tests/startup.spec.ts (pinned source: 4 passed)",
+        "cargo test -p seekdeep-headless --all-features (11 startup/unit plus 1 round-trip passed)",
+        "cargo test -p seekdeep --all-features",
+        "cargo clippy -p seekdeep-headless -p seekdeep --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/bundle/headless/tests/headless.spec.ts",
@@ -37347,7 +37436,18 @@
     {
       "source": "packages/bundle/headless/tests/startup.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/src/startup.rs",
+        "apps/seekdeep/tests/source_launch_compat.rs",
+        "apps/seekdeep/tests/headless_application.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/bundle/headless/tests/startup.spec.ts (pinned source: 4 passed)",
+        "cargo test -p seekdeep-headless --all-features",
+        "cargo test -p seekdeep --test source_launch_compat --test headless_application --all-features",
+        "cargo clippy -p seekdeep-headless -p seekdeep --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/bundle/headless/tsconfig.json",
@@ -37423,7 +37523,16 @@
     {
       "source": "packages/bundle/web-app/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/bundle/web-app/src/startup.ts",
@@ -38076,7 +38185,16 @@
     {
       "source": "packages/client/locale/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/locale/src/locale-settings.ts",
@@ -38701,7 +38819,16 @@
     {
       "source": "packages/client/schema-form/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/schema-form/src/model.ts",
@@ -38890,7 +39017,16 @@
     {
       "source": "packages/client/ui-agent-preset/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/tests/apply.client.spec.ts",
@@ -39064,7 +39200,16 @@
     {
       "source": "packages/client/ui-attachment/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/tests/attachment-rail.client.spec.tsx",
@@ -39210,7 +39355,16 @@
     {
       "source": "packages/client/ui-commands/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-commands/tests/browser-plugin.client.spec.ts",
@@ -39871,7 +40025,16 @@
     {
       "source": "packages/client/ui-conversation/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/submission-settings.ts",
@@ -40122,7 +40285,16 @@
     {
       "source": "packages/client/ui-deliverables/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/tests/produced-files.client.spec.tsx",
@@ -40233,7 +40405,16 @@
     {
       "source": "packages/client/ui-directory-picker-browse/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/tests/client-flow.client.spec.tsx",
@@ -40323,7 +40504,16 @@
     {
       "source": "packages/client/ui-directory-picker-native/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-native/tests/client-flow.client.spec.tsx",
@@ -40455,7 +40645,16 @@
     {
       "source": "packages/client/ui-goal/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-goal/tests/browser-plugin.client.spec.tsx",
@@ -40606,7 +40805,16 @@
     {
       "source": "packages/client/ui-input-trigger/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/types.ts",
@@ -40737,7 +40945,16 @@
     {
       "source": "packages/client/ui-jobs/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-jobs/tests/browser-plugin.client.spec.ts",
@@ -40863,7 +41080,16 @@
     {
       "source": "packages/client/ui-layout/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-layout/tests/app-frame.client.spec.tsx",
@@ -41004,7 +41230,16 @@
     {
       "source": "packages/client/ui-message-feedback/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/tests/browser-plugin.client.spec.tsx",
@@ -41135,7 +41370,16 @@
     {
       "source": "packages/client/ui-model-selection/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/tests/browser-plugin.client.spec.ts",
@@ -41256,7 +41500,16 @@
     {
       "source": "packages/client/ui-permission-presets/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/tests/browser-plugin.client.spec.ts",
@@ -41372,7 +41625,16 @@
     {
       "source": "packages/client/ui-plan/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-plan/tests/browser-plugin.client.spec.ts",
@@ -41796,7 +42058,16 @@
     {
       "source": "packages/client/ui-primitives/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/CodeBlock.module.css",
@@ -42685,7 +42956,16 @@
     {
       "source": "packages/client/ui-settings-general/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/tests/apply.client.spec.ts",
@@ -42909,7 +43189,16 @@
     {
       "source": "packages/client/ui-settings-models/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/onboarding-copy.ts",
@@ -43065,7 +43354,16 @@
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/tests/browser-plugin.client.spec.tsx",
@@ -43258,7 +43556,16 @@
     {
       "source": "packages/client/ui-settings-plugins/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/tests/apply.client.spec.ts",
@@ -43373,7 +43680,16 @@
     {
       "source": "packages/client/ui-settings/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-settings/tests/invariant.client.spec.ts",
@@ -43494,7 +43810,16 @@
     {
       "source": "packages/client/ui-sidebar/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/tests/__snapshots__/sidebar-snapshot.client.spec.tsx.snap",
@@ -43641,7 +43966,16 @@
     {
       "source": "packages/client/ui-skill/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-skill/tests/browser-plugin.client.spec.ts",
@@ -43721,7 +44055,16 @@
     {
       "source": "packages/client/ui-slots/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-slots/src/renderer.ts",
@@ -43868,7 +44211,16 @@
     {
       "source": "packages/client/ui-subagent/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-subagent/tests/browser-plugin.client.spec.ts",
@@ -43989,7 +44341,16 @@
     {
       "source": "packages/client/ui-theme/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-theme/src/styles/base.css",
@@ -44318,7 +44679,16 @@
     {
       "source": "packages/client/ui-tool/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/ask-question-row.client.spec.tsx",
@@ -44686,7 +45056,16 @@
     {
       "source": "packages/client/ui-trajectory/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tests/cell.client.spec.tsx",
@@ -44848,7 +45227,16 @@
     {
       "source": "packages/client/ui-user-questions/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/tests/browser-plugin.client.spec.ts",
@@ -44974,7 +45362,16 @@
     {
       "source": "packages/client/ui-workflow-run/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-workflow-run/tests/workflow-run.client.spec.tsx",
@@ -45127,7 +45524,16 @@
     {
       "source": "packages/client/ui-workspace/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tests/apply.client.spec.ts",
@@ -45242,7 +45648,16 @@
     {
       "source": "packages/client/web-react/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/web-react/src/scoped-slots.tsx",
@@ -45419,7 +45834,16 @@
     {
       "source": "packages/client/web/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/web/src/loader-status.ts",
@@ -47484,7 +47908,17 @@
     {
       "source": "packages/core/agent/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent/src/invariant.rs",
+        "crates/agent/src/runtime_types.rs",
+        "crates/agent-loop/src/controller.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/agent/tests/invariant.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-agent --all-features (22 passed)",
+        "cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/agent/src/model-selection.ts",
@@ -47563,7 +47997,15 @@
     {
       "source": "packages/core/agent/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent/src/invariant.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/agent/tests/invariant.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-agent invariant::tests --all-features",
+        "cargo clippy -p seekdeep-agent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/agent/tests/model-selection.spec.ts",
@@ -47668,12 +48110,31 @@
     {
       "source": "packages/core/scope/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/scope/src/invariant.rs",
+        "crates/scope/src/lib.rs",
+        "crates/cordis/src/events.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/scope/tests/invariant.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-scope --all-features (8 passed)",
+        "cargo clippy -p seekdeep-scope -p seekdeep-agent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/scope/src/scoped-events.generated.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/scope/src/scoped_events.rs",
+        "crates/cordis/src/events.rs"
+      ],
+      "evidence": [
+        "pinned-source differential: 26 exact subject/presence requirements",
+        "cargo test -p seekdeep-scope scoped_events::tests --all-features",
+        "cargo clippy -p seekdeep-scope --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/scope/src/store.ts",
@@ -47690,7 +48151,16 @@
     {
       "source": "packages/core/scope/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/scope/src/invariant.rs",
+        "crates/scope/src/scoped_events.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/scope/tests/invariant.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-scope invariant::tests --all-features",
+        "cargo clippy -p seekdeep-scope --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/scope/tests/scope.spec.ts",
@@ -48879,7 +49349,16 @@
     {
       "source": "packages/e2b/e2b/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/e2b/e2b/tests/composition.e2e.ts",
@@ -48954,7 +49433,16 @@
     {
       "source": "packages/e2b/fs-e2b/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/e2b/fs-e2b/tests/filesystem.spec.ts",
@@ -49029,7 +49517,16 @@
     {
       "source": "packages/e2b/subprocess-e2b/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/e2b/subprocess-e2b/src/output.ts",
@@ -49162,7 +49659,16 @@
     {
       "source": "packages/examples/acp-demo/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/examples/acp-demo/tests/acp-agent.spec.ts",
@@ -49247,7 +49753,16 @@
     {
       "source": "packages/examples/agent-spine-demo/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/examples/agent-spine-demo/tests/agent-core.spec.ts",
@@ -49332,7 +49847,16 @@
     {
       "source": "packages/examples/jsonrpc-demo/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/examples/jsonrpc-demo/src/packaged-bin.ts",
@@ -49495,7 +50019,16 @@
     {
       "source": "packages/extensions/cordis-client-runner/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/cordis-client-runner/tests/evaluator.client.spec.ts",
@@ -49600,7 +50133,16 @@
     {
       "source": "packages/extensions/cordis-host-runner/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/cordis-host-runner/src/lifecycle.ts",
@@ -49730,7 +50272,16 @@
     {
       "source": "packages/extensions/tool-cordis/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/src/present.ts",
@@ -49918,7 +50469,16 @@
     {
       "source": "packages/extensions/ui-cordis/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/ui-cordis/tests/card-model.client.spec.ts",
@@ -50520,7 +51080,16 @@
     {
       "source": "packages/fs/fs-sandbox/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/fs-sandbox/tests/containment.spec.ts",
@@ -50721,7 +51290,16 @@
     {
       "source": "packages/fs/tool-fs-search/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/tool-fs-search/src/presentation.ts",
@@ -51064,7 +51642,16 @@
     {
       "source": "packages/fs/tool-str-replace-editor/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/tool-str-replace-editor/tests/tools.spec.ts",
@@ -52121,7 +52708,16 @@
     {
       "source": "packages/hooks/hooks-claude-code/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/tests/bridge.spec.ts",
@@ -52226,7 +52822,16 @@
     {
       "source": "packages/hooks/hooks-codex/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/tests/bridge.spec.ts",
@@ -53035,7 +53640,16 @@
     {
       "source": "packages/host/directory-picker-auto/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/host/directory-picker-auto/src/probe.ts",
@@ -53120,7 +53734,16 @@
     {
       "source": "packages/host/directory-picker-browse/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/host/directory-picker-browse/tests/service.spec.ts",
@@ -53195,7 +53818,16 @@
     {
       "source": "packages/host/directory-picker-native/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/host/directory-picker-native/src/native-picker.ts",
@@ -53513,7 +54145,16 @@
     {
       "source": "packages/host/plugin-inventory/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/host/plugin-inventory/src/types.ts",
@@ -56440,7 +57081,16 @@
     {
       "source": "packages/lsp/lsp-stdio/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp-stdio/src/protocol.ts",
@@ -56570,7 +57220,16 @@
     {
       "source": "packages/lsp/lsp/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/lsp/src/types.ts",
@@ -56645,7 +57304,16 @@
     {
       "source": "packages/lsp/tool-lsp/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/lsp/tool-lsp/src/render.ts",
@@ -56655,7 +57323,15 @@
     {
       "source": "packages/lsp/tool-lsp/src/session-cwd.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/runtime.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tools session_cwd_reads_only_the_live_calling_agent_workspace --all-features",
+        "cargo clippy -p seekdeep-tools --all-targets --all-features -- -D warnings"
+      ],
+      "note": "ToolExecution::session_cwd reads only the exact live Agent session header; synthetic session fallbacks remain excluded"
     },
     {
       "source": "packages/lsp/tool-lsp/tests/integration.spec.ts",
@@ -56778,7 +57454,16 @@
     {
       "source": "packages/mcp/mcp-client/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/src/tools.ts",
@@ -58668,7 +59353,16 @@
     {
       "source": "packages/sdk/client/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/sdk/client/src/types.ts",
@@ -58753,7 +59447,16 @@
     {
       "source": "packages/sdk/protocol/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/sdk/protocol/src/transport.ts",
@@ -58833,7 +59536,16 @@
     {
       "source": "packages/sdk/server/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/sdk/server/src/server.ts",
@@ -58997,7 +59709,16 @@
     {
       "source": "packages/session-query/session-log-export/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/tests/client-apply.client.spec.tsx",
@@ -59102,7 +59823,16 @@
     {
       "source": "packages/session-query/session-query-sqlite/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/src/query.ts",
@@ -59403,7 +60133,16 @@
     {
       "source": "packages/session-query/tool-session-query/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/src/operations.ts",
@@ -60469,7 +61208,16 @@
     {
       "source": "packages/session/session-telemetry-otel/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session/session-telemetry-otel/tests/loader-composition.e2e.ts",
@@ -61552,7 +62300,16 @@
     {
       "source": "packages/shell/bash-local/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/bash-local/tests/executor.spec.ts",
@@ -61632,7 +62389,16 @@
     {
       "source": "packages/shell/bash-sandbox/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/bash-sandbox/tests/bwrap.e2e.ts",
@@ -61722,7 +62488,16 @@
     {
       "source": "packages/shell/pwsh-local/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/pwsh-local/src/resolve.ts",
@@ -61807,7 +62582,16 @@
     {
       "source": "packages/shell/pwsh-sandbox/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/pwsh-sandbox/tests/acl.e2e.ts",
@@ -62099,7 +62883,16 @@
     {
       "source": "packages/shell/tool-bash-persistent/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-bash-persistent/tests/loader-composition.spec.ts",
@@ -62179,7 +62972,16 @@
     {
       "source": "packages/shell/tool-bash/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-bash/src/render.ts",
@@ -62264,7 +63066,16 @@
     {
       "source": "packages/shell/tool-pwsh/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-pwsh/src/render.ts",
@@ -62404,7 +63215,16 @@
     {
       "source": "packages/skill/skill-badge/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/skill/skill-badge/tests/skill-badge.spec.ts",
@@ -62474,7 +63294,16 @@
     {
       "source": "packages/skill/skill-filesystem/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/skill/skill-filesystem/tests/skill-filesystem-watcher.spec.ts",
@@ -63720,7 +64549,16 @@
     {
       "source": "packages/subagent/subagent-acp/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-acp/src/run.ts",
@@ -63810,7 +64648,16 @@
     {
       "source": "packages/subagent/subagent-claude-code/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/src/process.ts",
@@ -63910,7 +64757,16 @@
     {
       "source": "packages/subagent/subagent-codex/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-codex/src/run.ts",
@@ -64015,7 +64871,16 @@
     {
       "source": "packages/subagent/subagent-dsh-sdk/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-dsh-sdk/src/run.ts",
@@ -64095,7 +64960,16 @@
     {
       "source": "packages/subagent/subagent-fork-in-process/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-fork-in-process/tests/multi-subagent.spec.ts",
@@ -64170,7 +65044,16 @@
     {
       "source": "packages/subagent/subagent-in-process-driver/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-in-process-driver/src/structured.ts",
@@ -64287,7 +65170,16 @@
     {
       "source": "packages/subagent/subagent-spawn-in-process/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-spawn-in-process/tests/harness.ts",
@@ -64688,7 +65580,16 @@
     {
       "source": "packages/subagent/tool-subagent-control/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent-control/src/list-agents.ts",
@@ -64773,7 +65674,16 @@
     {
       "source": "packages/subagent/tool-subagent-report/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent-report/tests/tool-subagent-report.spec.ts",
@@ -64843,7 +65753,16 @@
     {
       "source": "packages/subagent/tool-subagent/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent/tests/scripted-provider.spec.ts",
@@ -65608,7 +66527,16 @@
     {
       "source": "packages/terminal/tool-terminal/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/terminal/tool-terminal/src/render.ts",
@@ -66359,7 +67287,16 @@
     {
       "source": "packages/test-support/agent-loop-testkit/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/agent-loop-testkit/tests/agent-loop-testkit.spec.ts",
@@ -66434,7 +67371,16 @@
     {
       "source": "packages/test-support/client-runtime/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/client-runtime/src/locale-env.ts",
@@ -66575,7 +67521,16 @@
     {
       "source": "packages/test-support/llm-mock-server/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/llm-mock-server/tests/cli.spec.ts",
@@ -66660,7 +67615,16 @@
     {
       "source": "packages/test-support/llm-replay/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/llm-replay/tests/llm-replay.spec.ts",
@@ -66735,7 +67699,16 @@
     {
       "source": "packages/test-support/loader-smoke/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/tests/agent-turn.spec.ts",
@@ -67054,7 +68027,16 @@
     {
       "source": "packages/typert/generator/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/typert/generator/src/model.ts",
@@ -67460,7 +68442,16 @@
     {
       "source": "packages/typert/loader/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/typert/loader/tests/loader.spec.ts",
@@ -68536,7 +69527,16 @@
     {
       "source": "packages/web/tool-web/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/tool-web/src/search.ts",

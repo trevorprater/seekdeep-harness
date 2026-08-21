@@ -18,7 +18,7 @@ use seekdeep_core::session::Session;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{AbortSignal, ContextSnapshotSection, ToolSchema};
 use seekdeep_scope::{
-    ScopeKey, scope_target,
+    ScopeKey, scope_target, scoped_event_args,
     store::{AnonymousEntries, LayerEffectOptions, NamedEntries, ScopeLayer, ScopedLayers},
 };
 use serde::{Deserialize, Serialize};
@@ -543,6 +543,10 @@ impl SystemPrompt {
             Arc::new(assembly.clone()),
             Arc::new(assemble_context.clone()),
         ]);
+        let args = match scope {
+            Some(scope) => scoped_event_args(scope, args),
+            None => args,
+        };
         let reply = self
             .context
             .events()

@@ -4,7 +4,7 @@ use std::{any::Any, future::Future, sync::Arc};
 
 use seekdeep_cordis::{Context, EventArgs, EventReply, events::ListenerFuture};
 use seekdeep_llm::AbortSignal;
-use seekdeep_scope::scope_target;
+use seekdeep_scope::{scope_target, scoped_event_args};
 use seekdeep_system_prompt::AssembleContext;
 
 use crate::Agent;
@@ -37,10 +37,13 @@ impl AgentEvents {
     where
         T: Any + Send + Sync,
     {
-        let args = EventArgs::one(AgentEvent {
-            agent: self.agent.clone(),
-            payload,
-        });
+        let args = scoped_event_args(
+            self.agent.scope_key(),
+            EventArgs::one(AgentEvent {
+                agent: self.agent.clone(),
+                payload,
+            }),
+        );
         let dispatch = scope_target(&self.context, Some(self.agent.scope_key()));
         match self.context.events().prepare_emit(&dispatch, name, &args) {
             Ok(emission) => emission.emit_contained(|error| {
@@ -61,10 +64,13 @@ impl AgentEvents {
     where
         T: Any + Send + Sync,
     {
-        let args = EventArgs::one(AgentEvent {
-            agent: self.agent.clone(),
-            payload,
-        });
+        let args = scoped_event_args(
+            self.agent.scope_key(),
+            EventArgs::one(AgentEvent {
+                agent: self.agent.clone(),
+                payload,
+            }),
+        );
         self.context
             .events()
             .serial(
@@ -92,10 +98,13 @@ impl AgentEvents {
         F: FnOnce() -> Fut + Send + 'static,
         Fut: Future<Output = anyhow::Result<R>> + Send + 'static,
     {
-        let args = EventArgs::one(AgentEvent {
-            agent: self.agent.clone(),
-            payload,
-        });
+        let args = scoped_event_args(
+            self.agent.scope_key(),
+            EventArgs::one(AgentEvent {
+                agent: self.agent.clone(),
+                payload,
+            }),
+        );
         let reply = self
             .context
             .events()

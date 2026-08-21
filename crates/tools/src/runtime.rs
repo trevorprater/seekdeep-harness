@@ -26,7 +26,7 @@ use seekdeep_cordis::{
 use seekdeep_core::session::{AppendOptions, Session};
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, HarnessError, ToolSchema, UserMessage};
 use seekdeep_scope::{
-    ScopeKey, scope_of, scope_target,
+    ScopeKey, scope_of, scope_target, scoped_event_args,
     store::{
         AnonymousEntries, EntryUndo, LayerEffectOptions, NamedEntries, ScopeLayer, ScopedLayers,
     },
@@ -52,6 +52,13 @@ use crate::{
 pub const TOOL_ABORTED: &str = "ABORTED";
 /// Canonical error code for cancellation before a body was invoked.
 pub const TOOL_ABORTED_BEFORE_DISPATCH: &str = "ABORTED_BEFORE_DISPATCH";
+
+fn scoped_args(scope: Option<ScopeKey>, args: EventArgs) -> EventArgs {
+    match scope {
+        Some(scope) => scoped_event_args(scope, args),
+        None => args,
+    }
+}
 /// Reserved Code Mode transport name.
 pub const RUN_CODE_NAME: &str = "run_code";
 /// Prompt order of the direct-call collapse statement.
@@ -659,6 +666,14 @@ impl ToolExecution {
             .as_ref()
             .map(|agent| agent.session().clone())
             .or_else(|| self.agent_session.clone())
+    }
+
+    /// Calling Agent's immutable session workspace, without synthetic fallback.
+    #[must_use]
+    pub fn session_cwd(&self) -> Option<&str> {
+        self.agent
+            .as_ref()
+            .and_then(|agent| agent.session().header().cwd.as_deref())
     }
 
     /// Current dispatch signal. Around middleware may replace it temporarily.
@@ -1645,7 +1660,7 @@ impl ToolRuntime {
     /// log event.
     pub async fn shape_code_dispatch_log(&self, dispatch: &CodeDispatchLog) -> Vec<ContentBlock> {
         let original = dispatch.content.clone();
-        let args = EventArgs::one(dispatch.clone());
+        let args = scoped_args(dispatch.agent, EventArgs::one(dispatch.clone()));
         let reply = self
             .context
             .events()
@@ -2222,7 +2237,7 @@ impl ToolRuntime {
     }
 
     async fn pre_execute(&self, execution: &ToolExecution) -> anyhow::Result<PreToolDecision> {
-        let args = EventArgs::one(execution.clone());
+        let args = scoped_args(execution.scope_key(), EventArgs::one(execution.clone()));
         let reply = self
             .context
             .events()
@@ -2243,7 +2258,7 @@ impl ToolRuntime {
         self: &Arc<Self>,
         execution: &ToolExecution,
     ) -> anyhow::Result<ToolExecutionResult> {
-        let args = EventArgs::one(execution.clone());
+        let args = scoped_args(execution.scope_key(), EventArgs::one(execution.clone()));
         let runtime = self.clone();
         let inner_execution = execution.clone();
         let reply = self
@@ -2273,8 +2288,10 @@ impl ToolRuntime {
         execution: &ToolExecution,
         result: &ToolExecutionResult,
     ) -> anyhow::Result<ToolExecutionResult> {
-        let args =
-            EventArgs::from_values(vec![Arc::new(execution.clone()), Arc::new(result.clone())]);
+        let args = scoped_args(
+            execution.scope_key(),
+            EventArgs::from_values(vec![Arc::new(execution.clone()), Arc::new(result.clone())]),
+        );
         let reply = self
             .context
             .events()
@@ -2510,8 +2527,10 @@ impl ToolRuntime {
     }
 
     fn notify_result(&self, execution: &ToolExecution, result: &ToolExecutionResult) {
-        let arguments =
-            EventArgs::from_values(vec![Arc::new(execution.clone()), Arc::new(result.clone())]);
+        let arguments = scoped_args(
+            execution.scope_key(),
+            EventArgs::from_values(vec![Arc::new(execution.clone()), Arc::new(result.clone())]),
+        );
         match self.context.events().prepare_emit(
             &scope_target(&self.context, execution.scope_key()),
             "tools/result",
@@ -3476,7 +3495,7 @@ mod tests {
     use seekdeep_code_runtime_worker_thread::{
         WorkerThreadCodeRuntimeConfig, install as install_worker_runtime,
     };
-    use seekdeep_core::session::SessionId;
+    use seekdeep_core::session::{SessionHeader, SessionId};
     use serde_json::json;
 
     use super::*;
@@ -3518,6 +3537,66 @@ mod tests {
             parent: None,
             signal: AbortSignal::default(),
         }
+    }
+
+    fn agent_with_cwd(context: &Context, id: &str, cwd: Option<&str>) -> Arc<Agent> {
+        let id = SessionId::new(id);
+        let mut header = SessionHeader::new(id.clone());
+        header.cwd = cwd.map(str::to_owned);
+        let session = Session::create(&id, None, Some(header)).unwrap();
+        let inbox = Arc::new(
+            seekdeep_agent::Inbox::new(
+                session.clone(),
+                Arc::new(seekdeep_agent::NoopInboxNotifications),
+            )
+            .unwrap(),
+        );
+        Arc::new(Agent::new(
+            id,
+            seekdeep_agent::AgentOptions::default(),
+            session,
+            inbox,
+            context.clone(),
+            ScopeKey::new(),
+        ))
+    }
+
+    #[test]
+    fn session_cwd_reads_only_the_live_calling_agent_workspace() {
+        let context = Context::new();
+        let agent = agent_with_cwd(&context, "workspace", Some("/work/project"));
+        let fallback = agent_with_cwd(&context, "fallback", Some("/wrong/fallback"));
+        let execution = ToolRuntime::create_execution(
+            ToolExecutionInput::new(CallId::new("cwd"), "lsp", json!({}), AbortSignal::default())
+                .with_agent(agent)
+                .with_agent_session(fallback.session().clone()),
+            None,
+        );
+        assert_eq!(execution.session_cwd(), Some("/work/project"));
+
+        let synthetic = ToolRuntime::create_execution(
+            ToolExecutionInput::new(
+                CallId::new("synthetic"),
+                "lsp",
+                json!({}),
+                AbortSignal::default(),
+            )
+            .with_agent_session(fallback.session().clone()),
+            None,
+        );
+        assert_eq!(synthetic.session_cwd(), None);
+        let missing = agent_with_cwd(&context, "missing", None);
+        let missing = ToolRuntime::create_execution(
+            ToolExecutionInput::new(
+                CallId::new("missing"),
+                "lsp",
+                json!({}),
+                AbortSignal::default(),
+            )
+            .with_agent(missing),
+            None,
+        );
+        assert_eq!(missing.session_cwd(), None);
     }
 
     #[test]

@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 use seekdeep_cordis::{
     Context, CordisError, EventArgs, Plugin, PreparedEmission, ServiceKey, fiber::EffectHandle,
 };
+use seekdeep_scope::{ScopeKey, scope_target};
 use serde_json::Value;
 use thiserror::Error;
 
@@ -320,11 +321,24 @@ impl SessionStore {
     ///
     /// Returns when its id is occupied or the object is already attached.
     pub fn enter(&self, session: &Arc<Session>) -> Result<EffectHandle, SessionStoreError> {
+        self.enter_scoped(session, ScopeKey::new())
+    }
+
+    /// Enters an unpublished session under one explicit routing scope.
+    ///
+    /// # Errors
+    ///
+    /// Returns when its id is occupied or the object is already attached.
+    pub fn enter_scoped(
+        &self,
+        session: &Arc<Session>,
+        scope: ScopeKey,
+    ) -> Result<EffectHandle, SessionStoreError> {
         let id = session.id().clone();
         let entry = Arc::new(SessionEntry {
             id: id.clone(),
             session: session.clone(),
-            context: self.inner.context.clone(),
+            context: scope_target(&self.inner.context, Some(scope)),
             store: Arc::downgrade(&self.inner),
             state: Mutex::new(EntryState::default()),
         });
@@ -641,6 +655,32 @@ mod tests {
         assert_eq!(events.load(Ordering::SeqCst), 1);
         context.fiber().restart().await.expect("owner restart");
         assert_eq!(disposed.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn lifecycle_edges_use_a_scope_carrier_for_the_generated_invariant() {
+        let context = Context::new();
+        let invariants = seekdeep_invariants::InvariantRegistry::install(
+            &context,
+            &seekdeep_invariants::InvariantConfig::default(),
+        )
+        .expect("invariants");
+        let scope =
+            seekdeep_scope::invariant::register_invariant(&invariants).expect("scope invariant");
+        scope.await_ready().await.expect("scope invariant ready");
+        let store = SessionStore::install(&context).expect("sessions");
+        let session = store
+            .create(
+                &context,
+                Some(SessionId::new("scope-carrier")),
+                CreateSessionOptions::default(),
+            )
+            .expect("scoped create");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("scoped append");
+        assert!(!store.flush(&session).await.expect("scoped flush"));
+        context.fiber().restart().await.expect("scoped disposal");
     }
 
     #[tokio::test]

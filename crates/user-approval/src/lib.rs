@@ -13,7 +13,7 @@ use seekdeep_cordis::{
 };
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, MessageSource, UserMessage};
-use seekdeep_scope::scope_target;
+use seekdeep_scope::{scope_target, scoped_event_args};
 use seekdeep_system_prompt::{PromptContext, PromptText, SYSTEM_PROMPT};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -335,7 +335,7 @@ impl ApprovalService {
         if self.effective_policy(request.agent.session()) == ApprovalPolicy::Never {
             return ApprovalOutcome::Rejected;
         }
-        let args = EventArgs::one(request.clone());
+        let args = scoped_event_args(request.agent.scope_key(), EventArgs::one(request.clone()));
         let dispatch = scope_target(&self.context, Some(request.agent.scope_key()));
         let context = self.context.clone();
         let answer = Box::pin(async move {

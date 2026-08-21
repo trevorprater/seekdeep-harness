@@ -500,15 +500,46 @@ pub fn apply_entry_patches(
     base: &[ProfileEntry],
     patches: &[ProfilePatch],
 ) -> Result<ProfileComposition, ProfilePatchError> {
+    let mut warnings = Vec::new();
+    let entries = apply_entry_patches_with_warning_sink(base, patches, |warning| {
+        warnings.push(warning);
+    })?;
+    Ok(ProfileComposition { entries, warnings })
+}
+
+/// Applies ordered patches while delivering skipped-patch diagnostics at the
+/// point each patch is evaluated.
+///
+/// This is the source-compatible warning boundary for callers that must retain
+/// diagnostics emitted before a later patch fails. [`apply_entry_patches`]
+/// remains a convenience wrapper for callers that want warnings bundled with a
+/// successful composition.
+///
+/// # Errors
+///
+/// Returns a malformed truthy insertion or nested entry-list failure. Warnings
+/// emitted before the failure have already been delivered to `warn`.
+pub fn apply_entry_patches_with_warning_sink<Warn>(
+    base: &[ProfileEntry],
+    patches: &[ProfilePatch],
+    mut warn: Warn,
+) -> Result<Vec<ProfileEntry>, ProfilePatchError>
+where
+    Warn: FnMut(ProfilePatchWarning),
+{
     let mut composer = Composer::default();
     for entry in base {
         let handle = composer.allocate_entry(entry, "base entry")?;
         composer.roots.push(handle);
     }
     for (patch_index, patch) in patches.iter().enumerate() {
-        composer.apply_patch(patch, patch_index)?;
+        let result = composer.apply_patch(patch, patch_index);
+        for warning in composer.warnings.drain(..) {
+            warn(warning);
+        }
+        result?;
     }
-    Ok(composer.finish())
+    Ok(composer.finish_entries())
 }
 
 /// Flattens profile patch layers in declaration order and composes an empty root.
@@ -546,7 +577,7 @@ where
     }
     loop {
         let candidate = generate();
-        if is_occupied(&candidate) {
+        if !candidate.is_truthy() || is_occupied(&candidate) {
             continue;
         }
         entry.set_id(&candidate);
@@ -1013,7 +1044,16 @@ fn emit_profile_node(
             &value.to_string(),
             YamlEmitScalarStyle::Plain,
         ),
-        ProfileNode::String(value) => emit_scalar(emitter, None, value, YamlEmitScalarStyle::Any),
+        ProfileNode::String(value) => emit_scalar(
+            emitter,
+            None,
+            value,
+            if plain_scalar_preserves_string(value) {
+                YamlEmitScalarStyle::Any
+            } else {
+                YamlEmitScalarStyle::SingleQuoted
+            },
+        ),
         ProfileNode::JavaScript(expression) => {
             let style = if expression.0.is_empty() {
                 YamlEmitScalarStyle::SingleQuoted
@@ -1046,6 +1086,13 @@ fn emit_profile_node(
             emit_yaml_event(emitter, YamlEmitEvent::MappingEnd)
         }
     }
+}
+
+fn plain_scalar_preserves_string(value: &str) -> bool {
+    matches!(
+        resolve_scalar(None, value, ScalarStyle::Plain),
+        Ok(ProfileNode::String(parsed)) if parsed == value
+    )
 }
 
 fn emit_scalar(
@@ -1305,7 +1352,10 @@ impl Composer {
         patch: &ProfilePatch,
         patch_index: usize,
     ) -> Result<(), ProfilePatchError> {
-        if let Some(insertions) = insertion_entries(patch, patch_index)? {
+        if let Some(insert) = patch
+            .insert()
+            .filter(|insert| insert.is_javascript_truthy())
+        {
             let target = patch.id().filter(ProfileEntryId::is_truthy);
             if let Some(id) = target {
                 let Some(&handle) = self.entry_map.get(&id) else {
@@ -1318,6 +1368,7 @@ impl Composer {
                         .push(ProfilePatchWarning::InsertTargetNotGroup { id });
                     return Ok(());
                 }
+                let insertions = insertion_entries(insert, patch_index)?;
                 let inserted = self.allocate_insertions(&insertions, patch_index)?;
                 let config = self.entries[handle]
                     .fields
@@ -1331,6 +1382,7 @@ impl Composer {
                 };
                 config.extend(inserted.into_iter().map(WorkingNode::Entry));
             } else {
+                let insertions = insertion_entries(insert, patch_index)?;
                 let inserted = self.allocate_insertions(&insertions, patch_index)?;
                 self.roots.extend(inserted);
             }
@@ -1385,16 +1437,11 @@ impl Composer {
             .collect()
     }
 
-    fn finish(self) -> ProfileComposition {
-        let entries = self
-            .roots
+    fn finish_entries(self) -> Vec<ProfileEntry> {
+        self.roots
             .iter()
             .map(|handle| self.export_entry(*handle))
-            .collect();
-        ProfileComposition {
-            entries,
-            warnings: self.warnings,
-        }
+            .collect()
     }
 
     fn export_entry(&self, handle: usize) -> ProfileEntry {
@@ -1429,15 +1476,9 @@ impl Composer {
 }
 
 fn insertion_entries(
-    patch: &ProfilePatch,
+    insert: &ProfileNode,
     patch_index: usize,
-) -> Result<Option<Vec<ProfileEntry>>, ProfilePatchError> {
-    let Some(insert) = patch.insert() else {
-        return Ok(None);
-    };
-    if !insert.is_javascript_truthy() {
-        return Ok(None);
-    }
+) -> Result<Vec<ProfileEntry>, ProfilePatchError> {
     let ProfileNode::Sequence(entries) = insert else {
         return Err(ProfilePatchError::InsertArrayRequired { patch_index });
     };
@@ -1455,6 +1496,5 @@ fn insertion_entries(
                 context: format!("insert entry {index} in patch {patch_index}"),
             }),
         })
-        .collect::<Result<Vec<_>, _>>()
-        .map(Some)
+        .collect()
 }

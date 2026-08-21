@@ -22,15 +22,40 @@ use crate::{
 /// Type-erased event argument.
 pub type EventValue = Arc<dyn Any + Send + Sync>;
 
+/// Opaque identity derived from a scoped event's payload subject.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct EventSubjectToken(Uuid);
+
+impl EventSubjectToken {
+    /// Wraps one process-local subject identity.
+    #[must_use]
+    pub const fn new(value: Uuid) -> Self {
+        Self(value)
+    }
+
+    /// Returns the underlying opaque identity.
+    #[must_use]
+    pub const fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+#[derive(Default)]
+struct EventArgsInner {
+    values: Vec<EventValue>,
+    scope_subject: Option<EventSubjectToken>,
+}
+
 /// Ordered event argument tuple.
 #[derive(Clone, Default)]
-pub struct EventArgs(Arc<Vec<EventValue>>);
+pub struct EventArgs(Arc<EventArgsInner>);
 
 impl std::fmt::Debug for EventArgs {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_tuple("EventArgs")
-            .field(&self.0.len())
+            .field(&self.0.values.len())
+            .field(&self.0.scope_subject)
             .finish()
     }
 }
@@ -45,7 +70,10 @@ impl EventArgs {
     /// Creates an argument list from erased values.
     #[must_use]
     pub fn from_values(values: Vec<EventValue>) -> Self {
-        Self(Arc::new(values))
+        Self(Arc::new(EventArgsInner {
+            values,
+            scope_subject: None,
+        }))
     }
 
     /// Creates a single-value argument list.
@@ -57,19 +85,34 @@ impl EventArgs {
     /// Returns a cloned typed argument.
     #[must_use]
     pub fn get<T: Any + Send + Sync>(&self, index: usize) -> Option<Arc<T>> {
-        Arc::downcast::<T>(self.0.get(index)?.clone()).ok()
+        Arc::downcast::<T>(self.0.values.get(index)?.clone()).ok()
+    }
+
+    /// Attaches the payload-derived subject used by scoped dispatch invariants.
+    #[must_use]
+    pub fn with_scope_subject(self, subject: EventSubjectToken) -> Self {
+        Self(Arc::new(EventArgsInner {
+            values: self.0.values.clone(),
+            scope_subject: Some(subject),
+        }))
+    }
+
+    /// Returns the payload-derived subject for a scope-filtered event.
+    #[must_use]
+    pub fn scope_subject(&self) -> Option<EventSubjectToken> {
+        self.0.scope_subject
     }
 
     /// Number of arguments.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.0.values.len()
     }
 
     /// Whether no arguments are present.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.0.values.is_empty()
     }
 }
 

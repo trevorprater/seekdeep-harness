@@ -1,4 +1,4 @@
-//! One-shot direct Agent driver for the headless SeekDeep profile.
+//! One-shot direct Agent driver for the headless `SeekDeep` profile.
 //!
 //! The runner creates one fresh persisted Agent, waits for the creation
 //! lifecycle to settle idle, submits one ordinary user message, waits for
@@ -19,6 +19,7 @@ use seekdeep_core::{
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
 use seekdeep_system_prompt::SystemPrompt;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -28,8 +29,19 @@ pub mod startup;
 pub const NAME: &str = "headless-runner";
 /// Services the source runner requires before activation.
 pub const INJECT: &[&str] = &["agentDefaultModel", "agents", "sessions"];
-/// Stable package invariant companion name.
+/// Package identity reserved in the invariant registry.
 pub const INVARIANT_NAME: &str = "seekdeep-headless";
+/// Cordis invariant companion plugin name.
+pub const INVARIANT_PLUGIN_NAME: &str = "headless-invariant";
+/// Service required before the invariant companion can register.
+pub const INVARIANT_INJECT: &[&str] = &["invariants"];
+
+/// Loader-facing one-shot runner configuration.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Config {
+    /// Prompt text for the single run.
+    pub task: String,
+}
 
 /// Process-facing result of one headless invocation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -252,6 +264,8 @@ pub fn register_invariant(
 
 #[cfg(test)]
 mod tests {
+    use seekdeep_cordis::Context;
+    use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
     use serde_json::json;
 
     use super::*;
@@ -268,7 +282,7 @@ mod tests {
         }
     }
 
-    fn assistant(seq: u64, blocks: Value) -> SessionEvent {
+    fn assistant(seq: u64, blocks: &Value) -> SessionEvent {
         event(
             "assistant/message",
             seq,
@@ -280,7 +294,7 @@ mod tests {
     fn aggregates_only_the_owned_interval_and_keeps_last_nonempty_text() {
         let events = vec![
             event("turn/start", 0, json!({"turn": 0})),
-            assistant(1, json!([{"type": "text", "text": "pre-task noise"}])),
+            assistant(1, &json!([{"type": "text", "text": "pre-task noise"}])),
             event(
                 "turn/end",
                 2,
@@ -288,7 +302,7 @@ mod tests {
             ),
             event("agent/inbox/spliced", 3, json!({})),
             event("turn/start", 4, json!({"turn": 1})),
-            assistant(5, json!([{"type": "text", "text": ""}])),
+            assistant(5, &json!([{"type": "text", "text": ""}])),
             event(
                 "turn/end",
                 6,
@@ -297,7 +311,7 @@ mod tests {
             event("turn/start", 7, json!({"turn": 2})),
             assistant(
                 8,
-                json!([
+                &json!([
                     {"type": "text", "text": "final "},
                     {"type": "toolCall", "name": "ignored"},
                     {"type": "text", "text": "answer"}
@@ -354,5 +368,18 @@ mod tests {
         assert_eq!(result.exit_code, 1);
         assert_eq!(result.stdout, "\n");
         assert_eq!(result.stderr, "seekdeep: SERVER: provider unavailable\n");
+    }
+
+    #[tokio::test]
+    async fn invariant_companion_reserves_the_exact_package_and_unwinds() {
+        assert_eq!(INVARIANT_PLUGIN_NAME, "headless-invariant");
+        assert_eq!(INVARIANT_INJECT, ["invariants"]);
+        let context = Context::new();
+        let registry = InvariantRegistry::install(&context, &InvariantConfig::default()).unwrap();
+        let registration = register_invariant(&registry).unwrap();
+        registration.await_ready().await.unwrap();
+        assert!(registry.is_registered(INVARIANT_NAME));
+        registration.dispose().await.unwrap();
+        assert!(!registry.is_registered(INVARIANT_NAME));
     }
 }

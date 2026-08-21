@@ -33,11 +33,12 @@ Examples:
 
 "#;
 
-/// Complete launcher help with the source Commander's 80-column wrapping.
+/// Complete non-terminal launcher help with the source Commander's 80-column
+/// fallback wrapping.
 ///
-/// This is deliberately fixed text rather than terminal-width-dependent
-/// rendering: every non-interactive process surface sees the same help,
-/// including its two trailing newlines.
+/// Interactive output is rendered by [`launcher_help`] using the live stdout
+/// width. Non-interactive output retains this fixed snapshot, including its two
+/// trailing newlines.
 pub const LAUNCHER_HELP: &str = r#"Usage: seekdeep [options] [command] [args...]
 
 seekdeep: boot a SeekDeep Harness profile — an ordered stack of plugin-bundle
@@ -73,10 +74,164 @@ Examples:
 
 "#;
 
-/// Render the terminal-independent launcher help.
+const HELP_MINIMUM_WRAP_WIDTH: usize = 40;
+const HELP_ITEM_INDENT: usize = 2;
+const HELP_ITEM_SPACER: usize = 2;
+
+const HELP_ARGUMENTS: &[(&str, &str)] = &[(
+    "args",
+    "arguments for the booted profile's app (see: seekdeep --profile <name> --help)",
+)];
+
+const HELP_OPTIONS: &[(&str, &str)] = &[
+    ("-V, --version", "output the version number"),
+    (
+        "--profile <name>",
+        "the profile under $SEEKDEEP_HOME/profiles to boot",
+    ),
+    (
+        "--patch <path>",
+        "extra patch-list overlay applied after the profile layer (repeatable)",
+    ),
+    ("--dump-config", "print the composed profile tree and exit"),
+    (
+        "--dump-default-config",
+        "print the profile tree without its user layer or --patch overlays and exit",
+    ),
+];
+
+const HELP_COMMANDS: &[(&str, &str)] = &[
+    (
+        "web [options] [args...]",
+        "boot the web profile (alias of --profile web); the web app's own flags follow",
+    ),
+    (
+        "plugin [options] [args...]",
+        "manage a profile's plugins by forwarding the remaining arguments to pnpm in the profile directory",
+    ),
+];
+
+/// Render launcher help using stdout's terminal width or Commander's
+/// 80-column fallback for non-terminal output.
 #[must_use]
 pub fn launcher_help() -> String {
-    LAUNCHER_HELP.to_owned()
+    stdout_help_width().map_or_else(|| LAUNCHER_HELP.to_owned(), render_launcher_help_at_width)
+}
+
+#[cfg(any(unix, windows))]
+fn stdout_help_width() -> Option<usize> {
+    terminal_size::terminal_size_of(std::io::stdout())
+        .map(|(terminal_size::Width(width), _)| usize::from(width))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn stdout_help_width() -> Option<usize> {
+    None
+}
+
+fn render_launcher_help_at_width(width: usize) -> String {
+    let term_width = HELP_ARGUMENTS
+        .iter()
+        .chain(HELP_OPTIONS)
+        .chain(HELP_COMMANDS)
+        .map(|(term, _)| display_width(term))
+        .max()
+        .unwrap_or(0);
+    let mut lines = vec![
+        "Usage: seekdeep [options] [command] [args...]".to_owned(),
+        String::new(),
+        box_wrap(LAUNCHER_DESCRIPTION, width),
+        String::new(),
+    ];
+    append_help_items(&mut lines, "Arguments:", HELP_ARGUMENTS, term_width, width);
+    append_help_items(&mut lines, "Options:", HELP_OPTIONS, term_width, width);
+    append_help_items(&mut lines, "Commands:", HELP_COMMANDS, term_width, width);
+    let mut rendered = lines.join("\n");
+    rendered.push_str(HELP_EXAMPLES);
+    rendered
+}
+
+fn append_help_items(
+    output: &mut Vec<String>,
+    heading: &str,
+    items: &[(&str, &str)],
+    term_width: usize,
+    help_width: usize,
+) {
+    output.push(heading.to_owned());
+    output.extend(
+        items
+            .iter()
+            .map(|(term, description)| format_help_item(term, term_width, description, help_width)),
+    );
+    output.push(String::new());
+}
+
+fn format_help_item(term: &str, term_width: usize, description: &str, help_width: usize) -> String {
+    let remaining_width = help_width.saturating_sub(
+        term_width
+            .saturating_add(HELP_ITEM_SPACER)
+            .saturating_add(HELP_ITEM_INDENT),
+    );
+    let description = if remaining_width < HELP_MINIMUM_WRAP_WIDTH
+        || description
+            .split('\n')
+            .skip(1)
+            .any(|line| line.starts_with(char::is_whitespace))
+    {
+        description.to_owned()
+    } else {
+        box_wrap(description, remaining_width)
+    };
+    let first_indent = " ".repeat(HELP_ITEM_INDENT);
+    let continuation_indent = " ".repeat(
+        HELP_ITEM_INDENT
+            .saturating_add(term_width)
+            .saturating_add(HELP_ITEM_SPACER),
+    );
+    format!(
+        "{first_indent}{term:<term_width$}{spacer}{description}",
+        spacer = " ".repeat(HELP_ITEM_SPACER),
+    )
+    .replace('\n', &format!("\n{continuation_indent}"))
+}
+
+fn box_wrap(value: &str, width: usize) -> String {
+    if width < HELP_MINIMUM_WRAP_WIDTH {
+        return value.to_owned();
+    }
+    value
+        .split(['\r', '\n'])
+        .filter(|line| !line.is_empty() || value.contains('\n'))
+        .map(|line| wrap_help_line(line, width))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn wrap_help_line(line: &str, width: usize) -> String {
+    let mut words = line.split_whitespace();
+    let Some(first) = words.next() else {
+        return String::new();
+    };
+    let mut output = first.to_owned();
+    let mut line_width = display_width(first);
+    for word in words {
+        let word_width = display_width(word);
+        if line_width.saturating_add(1).saturating_add(word_width) <= width {
+            output.push(' ');
+            output.push_str(word);
+            line_width = line_width.saturating_add(1).saturating_add(word_width);
+        } else {
+            output.push('\n');
+            output.push_str(word);
+            line_width = word_width;
+        }
+    }
+    output
+}
+
+fn display_width(value: &str) -> usize {
+    value.encode_utf16().count()
 }
 
 /// A profile identifier exactly as supplied on the command line.
@@ -658,8 +813,8 @@ mod tests {
         parse_seekdeep_args(&strings(values), VERSION)
     }
 
-    fn named_profile(value: &str) -> ProfileName {
-        ProfileName::new(value).expect("test profile must be nonempty")
+    fn named_profile(value: &str) -> Result<ProfileName, SeekDeepArgError> {
+        ProfileName::new(value)
     }
 
     fn profile(
@@ -669,7 +824,7 @@ mod tests {
     ) -> Result<ParseOutcome, SeekDeepArgError> {
         Ok(ParseOutcome::Invocation(SeekDeepInvocation::Profile(
             ProfileInvocation {
-                profile: named_profile(name),
+                profile: named_profile(name)?,
                 patches: strings(patches),
                 args: strings(args),
             },
@@ -683,7 +838,7 @@ mod tests {
     ) -> Result<ParseOutcome, SeekDeepArgError> {
         Ok(ParseOutcome::Invocation(SeekDeepInvocation::DumpConfig(
             DumpConfigInvocation {
-                profile: named_profile(name),
+                profile: named_profile(name)?,
                 default_only,
                 patches: strings(patches),
             },
@@ -693,7 +848,7 @@ mod tests {
     fn plugin(name: &str, args: &[&str]) -> Result<ParseOutcome, SeekDeepArgError> {
         Ok(ParseOutcome::Invocation(SeekDeepInvocation::Plugin(
             PluginInvocation {
-                profile: named_profile(name),
+                profile: named_profile(name)?,
                 args: strings(args),
             },
         )))
@@ -1223,6 +1378,70 @@ Examples:
 
         let actual = launcher_help();
         assert_eq!(actual, expected);
+        assert_eq!(render_launcher_help_at_width(80), expected);
         assert!(actual.ends_with("\n\n"));
+    }
+
+    #[test]
+    fn launcher_help_wraps_at_the_live_commander_terminal_width() {
+        let narrow = r#"Usage: seekdeep [options] [command] [args...]
+
+seekdeep: boot a SeekDeep Harness profile — an ordered stack
+of plugin-bundle patch layers under your own overrides.
+
+Arguments:
+  args                        arguments for the booted profile's app (see: seekdeep --profile <name> --help)
+
+Options:
+  -V, --version               output the version number
+  --profile <name>            the profile under $SEEKDEEP_HOME/profiles to boot
+  --patch <path>              extra patch-list overlay applied after the profile layer (repeatable)
+  --dump-config               print the composed profile tree and exit
+  --dump-default-config       print the profile tree without its user layer or --patch overlays and exit
+
+Commands:
+  web [options] [args...]     boot the web profile (alias of --profile web); the web app's own flags follow
+  plugin [options] [args...]  manage a profile's plugins by forwarding the remaining arguments to pnpm in the profile directory
+
+Examples:
+  seekdeep --profile web                          boot the web profile (same as: seekdeep web)
+  seekdeep --profile headless "run the tests"     answer one task, print the result, and exit
+  seekdeep --profile tui --patch ./extra.yml      boot a custom profile with one extra overlay
+  seekdeep --profile tui --resume <session>       arguments after the launcher flags reach the app
+  seekdeep --profile web --help                   the web app's own flags and help
+  seekdeep plugin --profile tui add <package>     install a plugin into the tui profile
+
+"#;
+        let wide = r#"Usage: seekdeep [options] [command] [args...]
+
+seekdeep: boot a SeekDeep Harness profile — an ordered stack of plugin-bundle patch layers under your own overrides.
+
+Arguments:
+  args                        arguments for the booted profile's app (see: seekdeep --profile <name> --help)
+
+Options:
+  -V, --version               output the version number
+  --profile <name>            the profile under $SEEKDEEP_HOME/profiles to boot
+  --patch <path>              extra patch-list overlay applied after the profile layer (repeatable)
+  --dump-config               print the composed profile tree and exit
+  --dump-default-config       print the profile tree without its user layer or --patch overlays and exit
+
+Commands:
+  web [options] [args...]     boot the web profile (alias of --profile web); the web app's own flags follow
+  plugin [options] [args...]  manage a profile's plugins by forwarding the remaining arguments to pnpm in the profile
+                              directory
+
+Examples:
+  seekdeep --profile web                          boot the web profile (same as: seekdeep web)
+  seekdeep --profile headless "run the tests"     answer one task, print the result, and exit
+  seekdeep --profile tui --patch ./extra.yml      boot a custom profile with one extra overlay
+  seekdeep --profile tui --resume <session>       arguments after the launcher flags reach the app
+  seekdeep --profile web --help                   the web app's own flags and help
+  seekdeep plugin --profile tui add <package>     install a plugin into the tui profile
+
+"#;
+
+        assert_eq!(render_launcher_help_at_width(60), narrow);
+        assert_eq!(render_launcher_help_at_width(120), wide);
     }
 }

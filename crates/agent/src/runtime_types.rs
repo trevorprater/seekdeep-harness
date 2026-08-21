@@ -159,6 +159,13 @@ pub enum AgentStatus {
     Running,
 }
 
+/// `agent/status` payload fields.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AgentStatusChanged {
+    /// Newly entered public status.
+    pub status: AgentStatus,
+}
+
 /// Whether and with which messages the loop enters a proposed step.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreStepDecision {

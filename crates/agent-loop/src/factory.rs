@@ -374,10 +374,10 @@ impl AgentLoop {
         source: SessionStartSource,
     ) -> anyhow::Result<()> {
         lifecycle.assert_live()?;
-        let session_detach = self
-            .inner
-            .sessions
-            .enter(lifecycle.loop_agent.agent.session())?;
+        let session_detach = self.inner.sessions.enter_scoped(
+            lifecycle.loop_agent.agent.session(),
+            lifecycle.loop_agent.agent.scope_key(),
+        )?;
         *lifecycle.session_detach.lock() = Some(session_detach);
         let agent_detach = self
             .inner

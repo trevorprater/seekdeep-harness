@@ -349,7 +349,7 @@ mod tests {
             ..base()
         };
         let result = catch_unwind(AssertUnwindSafe(|| {
-            listener(&mismatched_owner, Some(&actual))
+            listener(&mismatched_owner, Some(&actual));
         }));
         let message = panic_message(&result.expect_err("owner mismatch"));
         assert!(

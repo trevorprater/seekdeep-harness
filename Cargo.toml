@@ -12,6 +12,7 @@ members = [
   "crates/api-gateway",
   "crates/api-remotes",
   "crates/client-connection",
+  "crates/cmdline",
   "crates/host-apiproxy",
   "crates/host-directory-picker",
   "crates/host-frontend-static",
@@ -191,6 +192,7 @@ sha2 = "0.10.9"
 socket2 = "0.6.2"
 thiserror = "2.0.17"
 tempfile = "3.23.0"
+terminal_size = "0.4.4"
 tokio = { version = "1.49.0", features = ["full", "test-util"] }
 tokio-tungstenite = { version = "0.28.0", features = ["rustls-tls-webpki-roots"] }
 tracing = "0.1.44"

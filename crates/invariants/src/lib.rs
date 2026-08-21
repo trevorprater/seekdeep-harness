@@ -1,5 +1,9 @@
 //! Configurable registry for package-owned runtime invariant companions.
 
+/// Catalog and lifecycle adapter for packages with intentionally empty
+/// invariant companions.
+pub mod noop;
+
 use std::{collections::HashSet, future::Future, sync::Arc};
 
 use futures::future::BoxFuture;

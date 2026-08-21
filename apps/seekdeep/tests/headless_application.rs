@@ -1,10 +1,11 @@
 //! Real native application assembly against a credential-free loopback
 //! DeepSeek-compatible endpoint.
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 
 use parking_lot::Mutex;
 use seekdeep::{DEFAULT_MODEL, DEFAULT_PROVIDER, HeadlessApplication, HeadlessBootOptions};
+use seekdeep_cmdline::CmdlineHost;
 use seekdeep_cordis::Context;
 use seekdeep_core::session_store::SessionStore;
 use seekdeep_llm::{ModelId, ProviderId};
@@ -104,7 +105,8 @@ async fn loopback_server(
     let address = listener.local_addr()?;
     let task = tokio::spawn(async move {
         let (mut first, _) = listener.accept().await?;
-        requests.lock().push(read_request(&mut first).await?);
+        let first_request = read_request(&mut first).await?;
+        requests.lock().push(first_request);
         write_sse(
             &mut first,
             &[
@@ -146,7 +148,8 @@ async fn loopback_server(
         .await?;
 
         let (mut second, _) = listener.accept().await?;
-        requests.lock().push(read_request(&mut second).await?);
+        let second_request = read_request(&mut second).await?;
+        requests.lock().push(second_request);
         write_sse(
             &mut second,
             &[
@@ -184,18 +187,17 @@ async fn abort_server(mut server: JoinHandle<anyhow::Result<()>>) -> anyhow::Res
 }
 
 async fn finish_server(mut server: JoinHandle<anyhow::Result<()>>) -> anyhow::Result<()> {
-    match tokio::time::timeout(SERVER_JOIN_TIMEOUT, &mut server).await {
-        Ok(joined) => joined?,
-        Err(_) => {
-            server.abort();
-            match tokio::time::timeout(SERVER_ABORT_TIMEOUT, &mut server).await {
-                Ok(Err(error)) if error.is_cancelled() => {}
-                Ok(Err(error)) => return Err(error.into()),
-                Ok(Ok(result)) => result?,
-                Err(_) => anyhow::bail!("loopback server did not join after abort"),
-            }
-            anyhow::bail!("loopback server did not finish within its bound")
+    if let Ok(joined) = tokio::time::timeout(SERVER_JOIN_TIMEOUT, &mut server).await {
+        joined?
+    } else {
+        server.abort();
+        match tokio::time::timeout(SERVER_ABORT_TIMEOUT, &mut server).await {
+            Ok(Err(error)) if error.is_cancelled() => {}
+            Ok(Err(error)) => return Err(error.into()),
+            Ok(Ok(result)) => result?,
+            Err(_) => anyhow::bail!("loopback server did not join after abort"),
         }
+        anyhow::bail!("loopback server did not finish within its bound")
     }
 }
 
@@ -210,15 +212,8 @@ fn with_cleanup_error(
     }
 }
 
-#[tokio::test]
-async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Result<()> {
-    let temporary = tempfile::tempdir()?;
-    let workspace = temporary.path().join("workspace");
-    std::fs::create_dir(&workspace)?;
-    let home = temporary.path().join("home");
-    let requests = Arc::new(Mutex::new(Vec::new()));
-    let (base_url, server) = loopback_server(requests.clone()).await?;
-    let environment = create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
+fn launch_environment(home: &Path) -> seekdeep_util::launch_environment::LaunchEnvironmentSnapshot {
+    create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
         source: LaunchEnvironmentSource::Process,
         path: None,
         values: BTreeMap::from([
@@ -228,7 +223,45 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
             ),
             ("DEEPSEEK_API_KEY".to_owned(), "fake-test-key".to_owned()),
         ]),
-    }]);
+    }])
+}
+
+fn assert_run_and_requests(
+    result: &seekdeep_headless::HeadlessRunResult,
+    captured: &[CapturedRequest],
+) {
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    assert_eq!(result.stdout, "HEADLESS_APP_ROUND_TRIP\n");
+    assert!(result.stderr.is_empty());
+    assert_eq!(captured.len(), 2);
+    assert!(
+        captured
+            .iter()
+            .all(|request| request.path == "/chat/completions")
+    );
+    assert!(captured.iter().all(|request| {
+        request.headers.get("authorization").map(String::as_str) == Some("Bearer fake-test-key")
+    }));
+    assert_eq!(captured[0].body["model"], DEFAULT_MODEL);
+    assert!(
+        captured[0]
+            .body
+            .to_string()
+            .contains("prove the assembled path")
+    );
+    assert!(captured[0].body.to_string().contains("todo_write"));
+    assert!(captured[1].body.to_string().contains("headless-app-tool"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let workspace = temporary.path().join("workspace");
+    std::fs::create_dir(&workspace)?;
+    let home = temporary.path().join("home");
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let (base_url, server) = loopback_server(requests.clone()).await?;
+    let environment = launch_environment(&home);
     let application = match tokio::time::timeout(
         APPLICATION_TIMEOUT,
         HeadlessApplication::boot(HeadlessBootOptions {
@@ -239,6 +272,11 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
                 ..DeepSeekConfig::default()
             },
             launch_environment: environment,
+            cmdline: Some(CmdlineHost::new(
+                ["prove", "the", "assembled", "path"],
+                |_| Ok(()),
+            )),
+            watch_files: false,
             tools_mode: ToolPresentationMode::Native,
             provider: ProviderId::new(DEFAULT_PROVIDER),
             model: ModelId::new(DEFAULT_MODEL),
@@ -260,12 +298,9 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
         }
     };
 
-    let run_result = tokio::time::timeout(
-        APPLICATION_TIMEOUT,
-        application.run("prove the assembled path"),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("headless application run timed out"));
+    let run_result = tokio::time::timeout(APPLICATION_TIMEOUT, application.run_startup())
+        .await
+        .map_err(|_| anyhow::anyhow!("headless application run timed out"));
     let shutdown_result = tokio::time::timeout(APPLICATION_TIMEOUT, async {
         let (first, second) = tokio::join!(application.shutdown(), application.shutdown());
         first?;
@@ -298,27 +333,7 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
     let inspection = inspection?;
     cold_shutdown?;
 
-    assert_eq!(result.exit_code, 0, "{}", result.stderr);
-    assert_eq!(result.stdout, "HEADLESS_APP_ROUND_TRIP\n");
-    assert!(result.stderr.is_empty());
-    assert_eq!(captured.len(), 2);
-    assert!(
-        captured
-            .iter()
-            .all(|request| request.path == "/chat/completions")
-    );
-    assert!(captured.iter().all(|request| {
-        request.headers.get("authorization").map(String::as_str) == Some("Bearer fake-test-key")
-    }));
-    assert_eq!(captured[0].body["model"], DEFAULT_MODEL);
-    assert!(
-        captured[0]
-            .body
-            .to_string()
-            .contains("prove the assembled path")
-    );
-    assert!(captured[0].body.to_string().contains("todo_write"));
-    assert!(captured[1].body.to_string().contains("headless-app-tool"));
+    assert_run_and_requests(&result, &captured);
     assert!(
         inspection
             .events

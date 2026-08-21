@@ -9,7 +9,8 @@ use futures::{FutureExt, future::BoxFuture};
 use parking_lot::Mutex;
 use seekdeep_agent::{
     Agent, AgentCancelCause, AgentControlError, AgentController, AgentEvents, AgentOptions,
-    AgentStatus, CancelOptions, Inbox, InboxNotifications, InboxTarget, MaintenanceReservation,
+    AgentStatus, AgentStatusChanged, CancelOptions, Inbox, InboxNotifications, InboxTarget,
+    MaintenanceReservation,
 };
 use seekdeep_cordis::Context;
 use seekdeep_core::session::Session;
@@ -20,13 +21,6 @@ use tokio::sync::Notify;
 /// Driver callback invoked for each fresh running reservation.
 pub type DriverTask =
     Arc<dyn Fn(Arc<Agent>, Arc<LoopController>) -> BoxFuture<'static, ()> + Send + Sync + 'static>;
-
-/// `agent/status` payload fields.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AgentStatusChanged {
-    /// Newly entered public status.
-    pub status: AgentStatus,
-}
 
 /// `agent/inbox/inserted` and `agent/inbox/discarded` payload fields.
 #[derive(Clone, Debug, PartialEq)]
