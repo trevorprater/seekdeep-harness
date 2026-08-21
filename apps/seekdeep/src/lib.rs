@@ -6,6 +6,7 @@
 //! the shipped base-plus-headless profile composition.
 
 pub mod args;
+pub mod layered_env;
 pub mod process_shutdown;
 
 use std::{

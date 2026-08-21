@@ -3,11 +3,13 @@
 use std::{
     fmt,
     future::{Future, IntoFuture},
+    panic::{AssertUnwindSafe, catch_unwind},
     pin::Pin,
     sync::{
         Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicBool, Ordering},
     },
+    task::{Context, Poll},
     time::Duration,
 };
 
@@ -112,6 +114,43 @@ struct Pending {
     notify: Notify,
 }
 
+struct CaughtDisposal {
+    future: DisposeFuture,
+}
+
+enum DisposalOutcome {
+    Returned(Result<()>),
+    Panicked,
+}
+
+impl CaughtDisposal {
+    fn new(disposer: Disposer) -> Self {
+        Self {
+            future: Box::pin(run_disposer(disposer)),
+        }
+    }
+}
+
+impl Future for CaughtDisposal {
+    type Output = DisposalOutcome;
+
+    fn poll(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
+        match catch_unwind(AssertUnwindSafe(|| self.future.as_mut().poll(context))) {
+            Ok(Poll::Ready(result)) => Poll::Ready(DisposalOutcome::Returned(result)),
+            Ok(Poll::Pending) => Poll::Pending,
+            Err(_) => Poll::Ready(DisposalOutcome::Panicked),
+        }
+    }
+}
+
+struct FinishPending(Arc<Pending>);
+
+impl Drop for FinishPending {
+    fn drop(&mut self) {
+        self.0.finish();
+    }
+}
+
 impl Pending {
     fn new() -> Self {
         Self {
@@ -174,9 +213,7 @@ impl ProcessShutdown {
         ForceExit: Fn(i32) -> ForceExitOutput + Send + Sync + 'static,
         Complete: Fn(i32) + Send + Sync + 'static,
     {
-        Self::with_clock(dispose, force_exit, complete, timeout, |duration| {
-            tokio::time::sleep(duration)
-        })
+        Self::with_clock(dispose, force_exit, complete, timeout, tokio::time::sleep)
     }
 
     /// Create a controller with caller-supplied grace and clock seams.
@@ -215,6 +252,11 @@ impl ProcessShutdown {
     /// Start or join graceful disposal before allowing natural completion.
     ///
     /// The first normal code wins. Repeated normal calls do not escalate.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the first call is made without an active Tokio runtime and
+    /// time driver. Calls that merely join an existing operation do not spawn.
     pub fn shutdown(&self, code: i32) -> ShutdownWait {
         self.start(code, false).wait
     }
@@ -224,6 +266,11 @@ impl ProcessShutdown {
     /// A first interrupt drains for the configured grace period and then forces
     /// exit even when disposal succeeds. Any later interrupt forces immediately
     /// with that interrupt's code.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the first call is made without an active Tokio runtime and
+    /// time driver. Escalating an existing operation does not spawn.
     pub fn interrupt(&self, code: i32) {
         let start = self.start(code, true);
         if !start.started {
@@ -242,7 +289,7 @@ impl ProcessShutdown {
     }
 
     fn start(&self, code: i32, force_after_dispose: bool) -> Start {
-        let (wait, timer_cancel, disposer) = {
+        let (wait, mut cancel_receiver, disposer) = {
             let mut state = lock(&self.inner.state);
             if let Some(pending) = &state.pending {
                 return Start {
@@ -264,25 +311,32 @@ impl ProcessShutdown {
             (ShutdownWait { pending }, cancel_receiver, disposer)
         };
 
-        let timer_inner = Arc::clone(&self.inner);
-        let sleep = (timer_inner.sleep)(timer_inner.timeout);
-        drop(tokio::spawn(async move {
-            tokio::select! {
-                () = sleep => timer_inner.force_exit_once(code),
-                _ = timer_cancel => {}
-            }
-        }));
-
-        let disposal = tokio::spawn(run_disposer(disposer));
         let completion_inner = Arc::clone(&self.inner);
+        let sleep = (completion_inner.sleep)(completion_inner.timeout);
+        let disposal = CaughtDisposal::new(disposer);
         let pending = Arc::clone(&wait.pending);
         drop(tokio::spawn(async move {
-            match disposal.await {
-                Ok(Ok(())) if force_after_dispose => completion_inner.force_exit_once(code),
-                Ok(Ok(())) => completion_inner.complete_once(code),
-                Ok(Err(_)) | Err(_) => completion_inner.force_exit_once(code),
+            let _finish_pending = FinishPending(pending);
+            tokio::pin!(disposal);
+            let result = tokio::select! {
+                biased;
+                result = &mut disposal => result,
+                _ = &mut cancel_receiver => disposal.await,
+                () = sleep => {
+                    completion_inner.timeout_exit_once(code);
+                    disposal.await
+                }
+            };
+
+            match result {
+                DisposalOutcome::Returned(Ok(())) if force_after_dispose => {
+                    completion_inner.force_exit_once(code);
+                }
+                DisposalOutcome::Returned(Ok(())) => completion_inner.complete_once(code),
+                DisposalOutcome::Returned(Err(_)) | DisposalOutcome::Panicked => {
+                    completion_inner.force_exit_once(code);
+                }
             }
-            pending.finish();
         }));
 
         Start {
@@ -298,6 +352,23 @@ struct Start {
 }
 
 impl Inner {
+    fn timeout_exit_once(&self, code: i32) {
+        let _transition = lock(&self.transition);
+        let timer_cancel = {
+            let mut state = lock(&self.state);
+            if state.force_exited || state.completed {
+                return;
+            }
+            state.force_exited = true;
+            state.timer_cancel.take()
+        };
+
+        if let Some(timer_cancel) = timer_cancel {
+            let _cancelled = timer_cancel.send(());
+        }
+        (self.force_exit)(code);
+    }
+
     fn force_exit_once(&self, code: i32) {
         let _transition = lock(&self.transition);
         let timer_cancel = {
@@ -310,7 +381,7 @@ impl Inner {
         };
 
         if let Some(timer_cancel) = timer_cancel {
-            drop(timer_cancel.send(()));
+            let _cancelled = timer_cancel.send(());
         }
         (self.force_exit)(code);
     }
@@ -327,7 +398,7 @@ impl Inner {
         };
 
         if let Some(timer_cancel) = timer_cancel {
-            drop(timer_cancel.send(()));
+            let _cancelled = timer_cancel.send(());
         }
         (self.complete)(code);
     }
@@ -620,6 +691,46 @@ mod tests {
 
         assert_eq!(recorder.completed(), vec![0]);
         assert_eq!(recorder.forced(), vec![SIGINT_EXIT_CODE]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stale_timeout_cannot_force_after_completion_but_interrupt_can() {
+        let recorder = ExitRecorder::default();
+        let shutdown = recorder.controller(|| async { Ok(()) });
+
+        shutdown.shutdown(5).await;
+        shutdown.inner.timeout_exit_once(5);
+
+        assert_eq!(recorder.completed(), vec![5]);
+        assert!(recorder.forced().is_empty());
+
+        shutdown.interrupt(SIGINT_EXIT_CODE);
+        assert_eq!(recorder.completed(), vec![5]);
+        assert_eq!(recorder.forced(), vec![SIGINT_EXIT_CODE]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn immediate_disposal_beats_a_zero_length_timeout() {
+        let recorder = ExitRecorder::default();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_disposal = Arc::clone(&calls);
+        let forced = recorder.clone();
+        let completed = recorder.clone();
+        let shutdown = ProcessShutdown::with_timeout(
+            move || async move {
+                calls_for_disposal.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+            move |code| forced.record_force(code),
+            move |code| completed.record_complete(code),
+            Duration::ZERO,
+        );
+
+        shutdown.shutdown(6).await;
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(recorder.completed(), vec![6]);
+        assert!(recorder.forced().is_empty());
     }
 
     #[tokio::test(start_paused = true)]

@@ -502,7 +502,7 @@ pub fn apply_entry_patches(
 ) -> Result<ProfileComposition, ProfilePatchError> {
     let mut composer = Composer::default();
     for entry in base {
-        let handle = composer.allocate_entry(entry.clone(), "base entry")?;
+        let handle = composer.allocate_entry(entry, "base entry")?;
         composer.roots.push(handle);
     }
     for (patch_index, patch) in patches.iter().enumerate() {
@@ -600,7 +600,7 @@ impl<'input> ProfileDocumentParser<'input> {
         match document.next_event()? {
             YamlEvent::StreamEnd => return Ok(ProfileNode::Null),
             YamlEvent::DocumentStart => {}
-            event => return Err(document.unexpected_event("start of document", &event)),
+            event => return Err(Self::unexpected_event("start of document", &event)),
         }
         let value = document.parse_next_node()?;
         document.expect_document_end()?;
@@ -609,7 +609,7 @@ impl<'input> ProfileDocumentParser<'input> {
             YamlEvent::DocumentStart => Err(ProfilePatchError::InvalidDocument(
                 "multiple YAML documents are not supported".to_owned(),
             )),
-            event => Err(document.unexpected_event("end of stream", &event)),
+            event => Err(Self::unexpected_event("end of stream", &event)),
         }
     }
 
@@ -623,14 +623,14 @@ impl<'input> ProfileDocumentParser<'input> {
     fn expect_stream_start(&mut self) -> Result<(), ProfilePatchError> {
         match self.next_event()? {
             YamlEvent::StreamStart => Ok(()),
-            event => Err(self.unexpected_event("start of stream", &event)),
+            event => Err(Self::unexpected_event("start of stream", &event)),
         }
     }
 
     fn expect_document_end(&mut self) -> Result<(), ProfilePatchError> {
         match self.next_event()? {
             YamlEvent::DocumentEnd => Ok(()),
-            event => Err(self.unexpected_event("end of document", &event)),
+            event => Err(Self::unexpected_event("end of document", &event)),
         }
     }
 
@@ -654,7 +654,7 @@ impl<'input> ProfileDocumentParser<'input> {
             | YamlEvent::DocumentStart
             | YamlEvent::DocumentEnd
             | YamlEvent::SequenceEnd
-            | YamlEvent::MappingEnd => Err(self.unexpected_event("profile value", &event)),
+            | YamlEvent::MappingEnd => Err(Self::unexpected_event("profile value", &event)),
         }
     }
 
@@ -664,12 +664,12 @@ impl<'input> ProfileDocumentParser<'input> {
             tag,
             value,
             style,
-            repr,
+            repr: _,
         } = scalar;
         let source = str::from_utf8(&value).map_err(|error| {
             ProfilePatchError::InvalidDocument(format!("YAML scalar is not UTF-8: {error}"))
         })?;
-        let node = resolve_scalar(tag.as_ref(), source, style, repr)?;
+        let node = resolve_scalar(tag.as_ref(), source, style)?;
         self.register_anchor(anchor, &node);
         Ok(node)
     }
@@ -717,7 +717,7 @@ impl<'input> ProfileDocumentParser<'input> {
         }
     }
 
-    fn unexpected_event(&self, expected: &str, actual: &YamlEvent<'_>) -> ProfilePatchError {
+    fn unexpected_event(expected: &str, actual: &YamlEvent<'_>) -> ProfilePatchError {
         ProfilePatchError::InvalidDocument(format!("expected {expected}, found {actual:?}"))
     }
 }
@@ -742,14 +742,10 @@ fn resolve_scalar(
     tag: Option<&serde_yml::libyml::tag::Tag>,
     value: &str,
     style: ScalarStyle,
-    repr: Option<&[u8]>,
 ) -> Result<ProfileNode, ProfilePatchError> {
     if let Some(tag) = tag {
         if tag == JAVASCRIPT_TAG {
-            if value.is_empty()
-                && style == ScalarStyle::Plain
-                && repr.is_some_and(bare_tag_representation)
-            {
+            if value.is_empty() && style == ScalarStyle::Plain {
                 return Err(ProfilePatchError::JavaScriptScalarRequired);
             }
             return Ok(ProfileNode::JavaScript(JavaScriptExpression::new(value)));
@@ -758,9 +754,14 @@ fn resolve_scalar(
             return Ok(ProfileNode::String(value.to_owned()));
         }
         if tag == "tag:yaml.org,2002:null" {
-            return resolve_yaml_null(Some(value))
+            let value = if value.is_empty() && style == ScalarStyle::Plain {
+                None
+            } else {
+                Some(value)
+            };
+            return resolve_yaml_null(value)
                 .then_some(ProfileNode::Null)
-                .ok_or_else(|| invalid_explicit_scalar("null", value));
+                .ok_or_else(|| invalid_explicit_scalar("null", value.unwrap_or_default()));
         }
         if tag == "tag:yaml.org,2002:bool" {
             return resolve_yaml_bool(value)
@@ -796,12 +797,6 @@ fn resolve_scalar(
         return Ok(ProfileNode::Number(value));
     }
     Ok(ProfileNode::String(value.to_owned()))
-}
-
-fn bare_tag_representation(repr: &[u8]) -> bool {
-    let repr = String::from_utf8_lossy(repr);
-    let trimmed = repr.trim();
-    trimmed == "!!js" || trimmed == "!<tag:yaml.org,2002:js>"
 }
 
 fn invalid_explicit_scalar(kind: &str, value: &str) -> ProfilePatchError {
@@ -863,7 +858,7 @@ fn parse_radix_number(digits: &str, radix: u32) -> Option<f64> {
     }
     let mut value = 0.0_f64;
     for byte in digits.bytes() {
-        let digit = (byte as char).to_digit(radix)?;
+        let digit = char::from(byte).to_digit(radix)?;
         value = value.mul_add(f64::from(radix), f64::from(digit));
         if !value.is_finite() {
             return None;
@@ -893,17 +888,17 @@ fn resolve_yaml_float(value: &str) -> Option<serde_yml::Number> {
 
 fn is_yaml_finite_float(value: &str) -> bool {
     let unsigned = value.strip_prefix(['+', '-']).unwrap_or(value);
-    let (mantissa, exponent) = match unsigned.find(['e', 'E']) {
+    let mantissa = match unsigned.find(['e', 'E']) {
         Some(index) => {
             let (mantissa, exponent) = unsigned.split_at(index);
             if exponent[1..].contains(['e', 'E']) || !valid_yaml_exponent(&exponent[1..]) {
                 return false;
             }
-            (mantissa, true)
+            mantissa
         }
-        None => (unsigned, false),
+        None => unsigned,
     };
-    let mantissa_valid = if let Some(fraction) = mantissa.strip_prefix('.') {
+    if let Some(fraction) = mantissa.strip_prefix('.') {
         !fraction.is_empty() && fraction.bytes().all(|byte| byte.is_ascii_digit())
     } else if let Some((integer, fraction)) = mantissa.split_once('.') {
         !integer.is_empty()
@@ -911,8 +906,7 @@ fn is_yaml_finite_float(value: &str) -> bool {
             && fraction.bytes().all(|byte| byte.is_ascii_digit())
     } else {
         !mantissa.is_empty() && mantissa.bytes().all(|byte| byte.is_ascii_digit())
-    };
-    mantissa_valid && (mantissa.contains('.') || exponent)
+    }
 }
 
 fn valid_yaml_exponent(value: &str) -> bool {
@@ -925,11 +919,9 @@ fn number_from_javascript(value: f64) -> serde_yml::Number {
         return serde_yml::Number::from(value);
     }
     if value.is_finite() && value.fract() == 0.0 {
-        if value < 0.0 && value >= i64::MIN as f64 {
-            return serde_yml::Number::from(value as i64);
-        }
-        if value >= 0.0 && value < u64::MAX as f64 {
-            return serde_yml::Number::from(value as u64);
+        let integer = format!("{value:.0}");
+        if let Ok(number) = integer.parse() {
+            return number;
         }
     }
     serde_yml::Number::from(value)
@@ -994,7 +986,9 @@ fn render_object_list<'a>(
         emit_profile_node(&mut emitter, &value)?;
         emit_yaml_event(&mut emitter, YamlEmitEvent::DocumentEnd)?;
         emit_yaml_event(&mut emitter, YamlEmitEvent::StreamEnd)?;
-        emitter.flush().map_err(yaml_emitter_error)?;
+        emitter
+            .flush()
+            .map_err(|error| yaml_emitter_error(&error))?;
     }
     String::from_utf8(output).map_err(|error| {
         ProfilePatchError::InvalidDocument(format!("rendered YAML is not UTF-8: {error}"))
@@ -1074,10 +1068,12 @@ fn emit_yaml_event(
     emitter: &mut YamlEmitter<'_>,
     event: YamlEmitEvent<'_>,
 ) -> Result<(), ProfilePatchError> {
-    emitter.emit(event).map_err(yaml_emitter_error)
+    emitter
+        .emit(event)
+        .map_err(|error| yaml_emitter_error(&error))
 }
 
-fn yaml_emitter_error(error: serde_yml::libyml::emitter::Error) -> ProfilePatchError {
+fn yaml_emitter_error(error: &serde_yml::libyml::emitter::Error) -> ProfilePatchError {
     ProfilePatchError::InvalidDocument(format!("YAML emitter failed: {error:?}"))
 }
 
@@ -1125,7 +1121,7 @@ fn profile_node_to_yaml(value: &ProfileNode) -> YamlValue {
     match value {
         ProfileNode::Null => YamlValue::Null,
         ProfileNode::Bool(value) => YamlValue::Bool(*value),
-        ProfileNode::Number(value) => YamlValue::Number(value.clone()),
+        ProfileNode::Number(value) => YamlValue::Number(*value),
         ProfileNode::String(value) => YamlValue::String(value.clone()),
         ProfileNode::Sequence(values) => {
             YamlValue::Sequence(values.iter().map(profile_node_to_yaml).collect())
@@ -1174,7 +1170,7 @@ impl WorkingNode {
         match value {
             ProfileNode::Null => Self::Null,
             ProfileNode::Bool(value) => Self::Bool(*value),
-            ProfileNode::Number(value) => Self::Number(value.clone()),
+            ProfileNode::Number(value) => Self::Number(*value),
             ProfileNode::String(value) => Self::String(value.clone()),
             ProfileNode::Sequence(values) => {
                 Self::Sequence(values.iter().map(Self::from_profile).collect())
@@ -1258,7 +1254,7 @@ struct Composer {
 impl Composer {
     fn allocate_entry(
         &mut self,
-        entry: ProfileEntry,
+        entry: &ProfileEntry,
         context: &str,
     ) -> Result<usize, ProfilePatchError> {
         let nested = if entry.group().is_some_and(ProfileNode::is_javascript_truthy) {
@@ -1293,8 +1289,8 @@ impl Composer {
                     });
                 };
                 let child_context = format!("{context} child at index {index}");
-                let child =
-                    self.allocate_entry(ProfileEntry::from_fields(fields), &child_context)?;
+                let entry = ProfileEntry::from_fields(fields);
+                let child = self.allocate_entry(&entry, &child_context)?;
                 children.push(WorkingNode::Entry(child));
             }
             self.entries[handle]
@@ -1322,7 +1318,7 @@ impl Composer {
                         .push(ProfilePatchWarning::InsertTargetNotGroup { id });
                     return Ok(());
                 }
-                let inserted = self.allocate_insertions(insertions, patch_index)?;
+                let inserted = self.allocate_insertions(&insertions, patch_index)?;
                 let config = self.entries[handle]
                     .fields
                     .entry("config".to_owned())
@@ -1335,7 +1331,7 @@ impl Composer {
                 };
                 config.extend(inserted.into_iter().map(WorkingNode::Entry));
             } else {
-                let inserted = self.allocate_insertions(insertions, patch_index)?;
+                let inserted = self.allocate_insertions(&insertions, patch_index)?;
                 self.roots.extend(inserted);
             }
             return Ok(());
@@ -1374,11 +1370,11 @@ impl Composer {
 
     fn allocate_insertions(
         &mut self,
-        insertions: Vec<ProfileEntry>,
+        insertions: &[ProfileEntry],
         patch_index: usize,
     ) -> Result<Vec<usize>, ProfilePatchError> {
         insertions
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(index, entry)| {
                 self.allocate_entry(
@@ -1415,7 +1411,7 @@ impl Composer {
         match value {
             WorkingNode::Null => ProfileNode::Null,
             WorkingNode::Bool(value) => ProfileNode::Bool(*value),
-            WorkingNode::Number(value) => ProfileNode::Number(value.clone()),
+            WorkingNode::Number(value) => ProfileNode::Number(*value),
             WorkingNode::String(value) => ProfileNode::String(value.clone()),
             WorkingNode::Sequence(values) => {
                 ProfileNode::Sequence(values.iter().map(|value| self.export_node(value)).collect())

@@ -36,8 +36,8 @@ Examples:
 /// Complete launcher help with the source Commander's 80-column wrapping.
 ///
 /// This is deliberately fixed text rather than terminal-width-dependent
-/// rendering: every process surface sees the same help, including its single
-/// trailing newline.
+/// rendering: every non-interactive process surface sees the same help,
+/// including its two trailing newlines.
 pub const LAUNCHER_HELP: &str = r#"Usage: seekdeep [options] [command] [args...]
 
 seekdeep: boot a SeekDeep Harness profile — an ordered stack of plugin-bundle
@@ -74,6 +74,7 @@ Examples:
 "#;
 
 /// Render the terminal-independent launcher help.
+#[must_use]
 pub fn launcher_help() -> String {
     LAUNCHER_HELP.to_owned()
 }
@@ -87,6 +88,10 @@ pub struct ProfileName(String);
 
 impl ProfileName {
     /// Validate and retain a profile name without normalization.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SeekDeepArgError::EmptyProfile`] for an empty value.
     pub fn new(value: impl Into<String>) -> Result<Self, SeekDeepArgError> {
         let value = value.into();
         if value.is_empty() {
@@ -96,11 +101,13 @@ impl ProfileName {
     }
 
     /// Borrow the original profile name.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Recover the original profile name.
+    #[must_use]
     pub fn into_inner(self) -> String {
         self.0
     }
@@ -173,6 +180,7 @@ pub enum SeekDeepInvocation {
 
 impl SeekDeepInvocation {
     /// Return the closed dispatch mode for exhaustive callers.
+    #[must_use]
     pub const fn mode(&self) -> InvocationMode {
         match self {
             Self::Profile(_) => InvocationMode::Profile,
@@ -193,6 +201,7 @@ pub enum LauncherExit {
 
 impl LauncherExit {
     /// Help and version are both successful terminal actions.
+    #[must_use]
     pub const fn exit_code(&self) -> i32 {
         0
     }
@@ -261,6 +270,7 @@ pub enum SeekDeepArgError {
 
 impl SeekDeepArgError {
     /// Source parse failures are usage errors.
+    #[must_use]
     pub const fn exit_code(&self) -> i32 {
         1
     }
@@ -335,6 +345,11 @@ struct BootOptions {
 /// `version` is retained only when the root launcher owns `-V` or
 /// `--version`. Help/version tokens past an application boundary remain in
 /// the invocation's `args` unchanged.
+///
+/// # Errors
+///
+/// Returns a source-compatible usage error for an invalid launcher-owned
+/// option combination or a missing required value.
 pub fn parse_seekdeep_args(
     argv: &[String],
     version: &str,
@@ -439,7 +454,7 @@ fn parse_web(
     options_enabled: bool,
 ) -> Result<ParseOutcome, SeekDeepArgError> {
     let mut boot = BootOptions::default();
-    let mut args = Vec::new();
+    let mut forwarded_args = Vec::new();
 
     if options_enabled {
         let mut index = 0;
@@ -447,7 +462,7 @@ fn parse_web(
             let argument = &argv[index];
             match argument.as_str() {
                 "--" => {
-                    args.extend_from_slice(&argv[index + 1..]);
+                    forwarded_args.extend_from_slice(&argv[index + 1..]);
                     break;
                 }
                 "--patch" => {
@@ -460,7 +475,7 @@ fn parse_web(
                     if let Some(value) = argument.strip_prefix("--patch=") {
                         boot.patches.push(value.to_owned());
                     } else {
-                        args.extend_from_slice(&argv[index..]);
+                        forwarded_args.extend_from_slice(&argv[index..]);
                         break;
                     }
                 }
@@ -468,7 +483,7 @@ fn parse_web(
             index += 1;
         }
     } else {
-        args.extend_from_slice(argv);
+        forwarded_args.extend_from_slice(argv);
     }
 
     if has_parent_options {
@@ -476,7 +491,7 @@ fn parse_web(
             LauncherSubcommand::Web,
         ));
     }
-    resolve_boot(ProfileName("web".to_owned()), boot, args)
+    resolve_boot(ProfileName("web".to_owned()), boot, forwarded_args)
 }
 
 fn parse_plugin(
@@ -485,7 +500,8 @@ fn parse_plugin(
     options_enabled: bool,
 ) -> Result<ParseOutcome, SeekDeepArgError> {
     let mut profile = None;
-    let mut args = Vec::new();
+    let mut forwarded_args = Vec::new();
+    let mut saw_unknown_option = false;
 
     if options_enabled {
         let mut index = 0;
@@ -493,7 +509,10 @@ fn parse_plugin(
             let argument = &argv[index];
             match argument.as_str() {
                 "--" => {
-                    args.extend_from_slice(&argv[index + 1..]);
+                    if saw_unknown_option {
+                        forwarded_args.push(argument.clone());
+                    }
+                    forwarded_args.extend_from_slice(&argv[index + 1..]);
                     break;
                 }
                 "--profile" => {
@@ -503,14 +522,15 @@ fn parse_plugin(
                     if let Some(value) = argument.strip_prefix("--profile=") {
                         profile = Some(value.to_owned());
                     } else {
-                        args.push(argument.clone());
+                        saw_unknown_option |= is_plugin_unknown_option(argument);
+                        forwarded_args.push(argument.clone());
                     }
                 }
             }
             index += 1;
         }
     } else {
-        args.extend_from_slice(argv);
+        forwarded_args.extend_from_slice(argv);
     }
 
     let profile = profile.ok_or(SeekDeepArgError::MissingPluginProfile)?;
@@ -520,12 +540,49 @@ fn parse_plugin(
         ));
     }
     let profile = ProfileName::new(profile)?;
-    if args.is_empty() {
+    if forwarded_args.is_empty() {
         return Err(SeekDeepArgError::PluginNeedsArguments);
     }
     Ok(ParseOutcome::Invocation(SeekDeepInvocation::Plugin(
-        PluginInvocation { profile, args },
+        PluginInvocation {
+            profile,
+            args: forwarded_args,
+        },
     )))
+}
+
+fn is_plugin_unknown_option(argument: &str) -> bool {
+    argument.len() > 1 && argument.starts_with('-') && !is_commander_negative_number(argument)
+}
+
+fn is_commander_negative_number(argument: &str) -> bool {
+    let Some(number) = argument.strip_prefix('-') else {
+        return false;
+    };
+    let (mantissa, exponent) = number
+        .split_once('e')
+        .map_or((number, None), |(mantissa, exponent)| {
+            (mantissa, Some(exponent))
+        });
+    if exponent.is_some_and(|_| mantissa.contains('e')) {
+        return false;
+    }
+
+    let mantissa_is_number = if let Some((integer, fraction)) = mantissa.split_once('.') {
+        integer.bytes().all(|byte| byte.is_ascii_digit())
+            && !fraction.is_empty()
+            && fraction.bytes().all(|byte| byte.is_ascii_digit())
+    } else {
+        !mantissa.is_empty() && mantissa.bytes().all(|byte| byte.is_ascii_digit())
+    };
+    if !mantissa_is_number {
+        return false;
+    }
+
+    exponent.is_none_or(|exponent| {
+        let digits = exponent.strip_prefix(['+', '-']).unwrap_or(exponent);
+        !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit())
+    })
 }
 
 fn resolve_boot(
@@ -750,6 +807,18 @@ mod tests {
         assert_eq!(
             parse(&["plugin", "--profile", "tui", "--version"]),
             plugin("tui", &["--version"])
+        );
+        assert_eq!(
+            parse(&["plugin", "--profile", "tui", "--save-dev", "--", "--foo",]),
+            plugin("tui", &["--save-dev", "--", "--foo"])
+        );
+        assert_eq!(
+            parse(&["plugin", "--profile", "tui", "add", "--", "--foo"]),
+            plugin("tui", &["add", "--foo"])
+        );
+        assert_eq!(
+            parse(&["plugin", "--profile", "tui", "-1", "--", "--foo"]),
+            plugin("tui", &["-1", "--foo"])
         );
     }
 
@@ -1149,6 +1218,7 @@ Examples:
   seekdeep --profile tui --resume <session>       arguments after the launcher flags reach the app
   seekdeep --profile web --help                   the web app's own flags and help
   seekdeep plugin --profile tui add <package>     install a plugin into the tui profile
+
 "#;
 
         let actual = launcher_help();

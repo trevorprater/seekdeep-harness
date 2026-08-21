@@ -360,6 +360,18 @@ fn parser_rejects_invalid_document_shapes_but_accepts_empty_layers() {
         parse_patch_list_yaml("- value: !future data\n"),
         Err(ProfilePatchError::UnsupportedTag(_))
     ));
+    assert!(matches!(
+        parse_patch_list_yaml("- value: !!js\n"),
+        Err(ProfilePatchError::JavaScriptScalarRequired)
+    ));
+    assert!(matches!(
+        parse_patch_list_yaml("- value: one\n---\n- value: two\n"),
+        Err(ProfilePatchError::InvalidDocument(_))
+    ));
+    assert!(matches!(
+        parse_patch_list_yaml("- value: one\n  value: two\n"),
+        Err(ProfilePatchError::InvalidDocument(_))
+    ));
 
     let quoted_empty = parse_patch_list_yaml("- value: !!js ''\n").unwrap();
     assert_eq!(

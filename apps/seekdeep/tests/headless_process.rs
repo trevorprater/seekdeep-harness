@@ -1,6 +1,14 @@
 //! Credential-free acceptance of the shipped `seekdeep` process boundary.
 
-use std::{collections::BTreeMap, process::Stdio, time::Duration};
+use std::{
+    collections::BTreeMap,
+    process::Stdio,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use seekdeep::{DEFAULT_MODEL, DEFAULT_PROVIDER};
 use seekdeep_cordis::Context;
@@ -90,7 +98,9 @@ async fn write_sse(stream: &mut TcpStream, events: &[Value]) -> anyhow::Result<(
     Ok(())
 }
 
-async fn loopback_server() -> anyhow::Result<(
+async fn loopback_server(
+    request_count: Arc<AtomicUsize>,
+) -> anyhow::Result<(
     String,
     tokio::task::JoinHandle<anyhow::Result<Vec<CapturedRequest>>>,
 )> {
@@ -101,6 +111,7 @@ async fn loopback_server() -> anyhow::Result<(
 
         let (mut first, _) = listener.accept().await?;
         captured.push(read_request(&mut first).await?);
+        request_count.fetch_add(1, Ordering::Release);
         write_sse(
             &mut first,
             &[
@@ -143,6 +154,7 @@ async fn loopback_server() -> anyhow::Result<(
 
         let (mut second, _) = listener.accept().await?;
         captured.push(read_request(&mut second).await?);
+        request_count.fetch_add(1, Ordering::Release);
         write_sse(
             &mut second,
             &[
@@ -190,7 +202,8 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
     let workspace = temporary.path().join("workspace");
     std::fs::create_dir(&workspace)?;
     let home = temporary.path().join("home");
-    let (base_url, server) = loopback_server().await?;
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let (base_url, server) = loopback_server(request_count.clone()).await?;
 
     let mut command = Command::new(env!("CARGO_BIN_EXE_seekdeep"));
     command
@@ -213,9 +226,53 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    let output = tokio::time::timeout(PROCESS_TIMEOUT, command.output())
-        .await
-        .map_err(|_| anyhow::anyhow!("seekdeep process timed out"))??;
+    let mut child = command.spawn()?;
+    let mut child_stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("seekdeep stdout pipe missing"))?;
+    let mut child_stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("seekdeep stderr pipe missing"))?;
+    let stdout_reader = tokio::spawn(async move {
+        let mut output = Vec::new();
+        child_stdout.read_to_end(&mut output).await?;
+        std::io::Result::Ok(output)
+    });
+    let stderr_reader = tokio::spawn(async move {
+        let mut output = Vec::new();
+        child_stderr.read_to_end(&mut output).await?;
+        std::io::Result::Ok(output)
+    });
+    let status = match tokio::time::timeout(PROCESS_TIMEOUT, child.wait()).await {
+        Ok(status) => status?,
+        Err(_) => {
+            child.kill().await?;
+            let stdout = tokio::time::timeout(IO_TIMEOUT, stdout_reader)
+                .await
+                .map_err(|_| anyhow::anyhow!("timed-out seekdeep stdout did not close"))???;
+            let stderr = tokio::time::timeout(IO_TIMEOUT, stderr_reader)
+                .await
+                .map_err(|_| anyhow::anyhow!("timed-out seekdeep stderr did not close"))???;
+            server.abort();
+            anyhow::bail!(
+                "seekdeep process timed out after receiving {} requests; stdout: {:?}; stderr: {:?}",
+                request_count.load(Ordering::Acquire),
+                String::from_utf8_lossy(&stdout),
+                String::from_utf8_lossy(&stderr)
+            );
+        }
+    };
+    let output = std::process::Output {
+        status,
+        stdout: tokio::time::timeout(IO_TIMEOUT, stdout_reader)
+            .await
+            .map_err(|_| anyhow::anyhow!("seekdeep stdout did not close"))???,
+        stderr: tokio::time::timeout(IO_TIMEOUT, stderr_reader)
+            .await
+            .map_err(|_| anyhow::anyhow!("seekdeep stderr did not close"))???,
+    };
     if output.status.code() != Some(0) {
         server.abort();
     }

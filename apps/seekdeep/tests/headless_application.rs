@@ -19,7 +19,12 @@ use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt as _, AsyncWriteExt as _},
     net::{TcpListener, TcpStream},
+    task::JoinHandle,
 };
+
+const APPLICATION_TIMEOUT: Duration = Duration::from_secs(10);
+const SERVER_JOIN_TIMEOUT: Duration = Duration::from_secs(2);
+const SERVER_ABORT_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Debug)]
 struct CapturedRequest {
@@ -94,7 +99,7 @@ async fn write_sse(stream: &mut TcpStream, events: &[Value]) -> anyhow::Result<(
 
 async fn loopback_server(
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
-) -> anyhow::Result<(String, tokio::task::JoinHandle<anyhow::Result<()>>)> {
+) -> anyhow::Result<(String, JoinHandle<anyhow::Result<()>>)> {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
     let address = listener.local_addr()?;
     let task = tokio::spawn(async move {
@@ -168,6 +173,43 @@ async fn loopback_server(
     Ok((format!("http://{address}"), task))
 }
 
+async fn abort_server(mut server: JoinHandle<anyhow::Result<()>>) -> anyhow::Result<()> {
+    server.abort();
+    match tokio::time::timeout(SERVER_ABORT_TIMEOUT, &mut server).await {
+        Ok(Err(error)) if error.is_cancelled() => Ok(()),
+        Ok(Err(error)) => Err(error.into()),
+        Ok(Ok(result)) => result,
+        Err(_) => anyhow::bail!("loopback server did not join after abort"),
+    }
+}
+
+async fn finish_server(mut server: JoinHandle<anyhow::Result<()>>) -> anyhow::Result<()> {
+    match tokio::time::timeout(SERVER_JOIN_TIMEOUT, &mut server).await {
+        Ok(joined) => joined?,
+        Err(_) => {
+            server.abort();
+            match tokio::time::timeout(SERVER_ABORT_TIMEOUT, &mut server).await {
+                Ok(Err(error)) if error.is_cancelled() => {}
+                Ok(Err(error)) => return Err(error.into()),
+                Ok(Ok(result)) => result?,
+                Err(_) => anyhow::bail!("loopback server did not join after abort"),
+            }
+            anyhow::bail!("loopback server did not finish within its bound")
+        }
+    }
+}
+
+fn with_cleanup_error(
+    primary: anyhow::Error,
+    label: &str,
+    cleanup: anyhow::Result<()>,
+) -> anyhow::Error {
+    match cleanup {
+        Ok(()) => primary,
+        Err(cleanup) => anyhow::anyhow!("{primary:#}\n{label}: {cleanup:#}"),
+    }
+}
+
 #[tokio::test]
 async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Result<()> {
     let temporary = tempfile::tempdir()?;
@@ -187,8 +229,8 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
             ("DEEPSEEK_API_KEY".to_owned(), "fake-test-key".to_owned()),
         ]),
     }]);
-    let application = tokio::time::timeout(
-        Duration::from_secs(10),
+    let application = match tokio::time::timeout(
+        APPLICATION_TIMEOUT,
         HeadlessApplication::boot(HeadlessBootOptions {
             seekdeep_home: home.clone(),
             cwd: workspace.clone(),
@@ -203,23 +245,62 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
         }),
     )
     .await
-    .map_err(|_| anyhow::anyhow!("headless application boot timed out"))??;
+    {
+        Ok(result) => result,
+        Err(_) => Err(anyhow::anyhow!("headless application boot timed out")),
+    };
+    let application = match application {
+        Ok(application) => application,
+        Err(error) => {
+            return Err(with_cleanup_error(
+                error,
+                "loopback cleanup failed",
+                abort_server(server).await,
+            ));
+        }
+    };
 
-    let result = tokio::time::timeout(
-        Duration::from_secs(10),
+    let run_result = tokio::time::timeout(
+        APPLICATION_TIMEOUT,
         application.run("prove the assembled path"),
     )
     .await
-    .map_err(|_| anyhow::anyhow!("headless application run timed out"))?;
+    .map_err(|_| anyhow::anyhow!("headless application run timed out"));
+    let shutdown_result = tokio::time::timeout(APPLICATION_TIMEOUT, async {
+        let (first, second) = tokio::join!(application.shutdown(), application.shutdown());
+        first?;
+        second?;
+        Ok::<(), anyhow::Error>(())
+    })
+    .await
+    .unwrap_or_else(|_| Err(anyhow::anyhow!("headless application shutdown timed out")));
+    let server_result = finish_server(server).await;
+
+    let result = run_result?;
+    shutdown_result?;
+    server_result?;
+    let session_id = result
+        .session_id
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("headless result omitted its session id"))?;
+    let captured = requests.lock().clone();
+
+    let cold_root = Context::new();
+    let cold_sessions = SessionStore::install(&cold_root)?;
+    let cold =
+        JsonlSessionPersistence::new(cold_sessions, JsonlConfig::new(home.join("sessions")))?;
+    let inspection =
+        match tokio::time::timeout(APPLICATION_TIMEOUT, cold.inspect(&session_id, None)).await {
+            Ok(result) => result,
+            Err(_) => Err(anyhow::anyhow!("cold session inspection timed out")),
+        };
+    let cold_shutdown = cold_root.fiber().dispose().await;
+    let inspection = inspection?;
+    cold_shutdown?;
+
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert_eq!(result.stdout, "HEADLESS_APP_ROUND_TRIP\n");
     assert!(result.stderr.is_empty());
-    let session_id = result
-        .session_id
-        .ok_or_else(|| anyhow::anyhow!("headless result omitted its session id"))?;
-
-    server.await??;
-    let captured = requests.lock().clone();
     assert_eq!(captured.len(), 2);
     assert!(
         captured
@@ -238,18 +319,6 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
     );
     assert!(captured[0].body.to_string().contains("todo_write"));
     assert!(captured[1].body.to_string().contains("headless-app-tool"));
-
-    tokio::time::timeout(Duration::from_secs(10), application.shutdown())
-        .await
-        .map_err(|_| anyhow::anyhow!("headless application shutdown timed out"))??;
-
-    let cold_root = Context::new();
-    let cold_sessions = SessionStore::install(&cold_root)?;
-    let cold =
-        JsonlSessionPersistence::new(cold_sessions, JsonlConfig::new(home.join("sessions")))?;
-    let inspection = tokio::time::timeout(Duration::from_secs(10), cold.inspect(&session_id, None))
-        .await
-        .map_err(|_| anyhow::anyhow!("cold session inspection timed out"))??;
     assert!(
         inspection
             .events
@@ -266,6 +335,5 @@ async fn boots_real_provider_runs_tool_persists_and_shuts_down() -> anyhow::Resu
             .and_then(Value::as_str),
         Some("completed")
     );
-    cold_root.fiber().dispose().await?;
     Ok(())
 }

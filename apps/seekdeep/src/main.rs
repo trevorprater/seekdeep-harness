@@ -5,8 +5,8 @@ use std::{
     io::{self, Write},
     process::ExitCode,
     sync::{
-        Arc,
-        atomic::{AtomicI32, Ordering},
+        Arc, OnceLock,
+        atomic::{AtomicBool, AtomicI32, Ordering},
     },
 };
 
@@ -21,6 +21,7 @@ use seekdeep::{
 use seekdeep_headless::startup::{
     HeadlessStartupAction, HeadlessStartupValues, parse_headless_args,
 };
+use seekdeep_util::abort::AbortSignal;
 
 const EXIT_CODE_UNSET: i32 = i32::MIN;
 
@@ -140,23 +141,43 @@ fn run_headless(task: String) -> i32 {
 async fn run_headless_async(task: String) -> anyhow::Result<i32> {
     let signals = SignalSources::prepare()?;
     let options = HeadlessBootOptions::from_process()?;
-    let application = Arc::new(HeadlessApplication::boot(options).await?);
+    let application_slot = Arc::new(ApplicationSlot::default());
+    let startup_abort = AbortSignal::default();
     let completed_code = Arc::new(AtomicI32::new(EXIT_CODE_UNSET));
-    let application_for_shutdown = Arc::clone(&application);
+    let application_for_shutdown = Arc::clone(&application_slot);
     let completion_for_shutdown = Arc::clone(&completed_code);
     let shutdown = ProcessShutdown::new(
         move || async move { application_for_shutdown.shutdown().await },
         std::process::exit,
         move |code| completion_for_shutdown.store(code, Ordering::Release),
     );
-    let signal_tasks = signals.spawn(shutdown.clone());
+    let signal_tasks = signals.spawn(shutdown.clone(), startup_abort.clone());
+
+    let application =
+        match HeadlessApplication::boot_with_abort(options, startup_abort.clone()).await {
+            Ok(application) => {
+                let application = Arc::new(application);
+                application_slot.publish(Arc::clone(&application))?;
+                application
+            }
+            Err(error) => {
+                application_slot.finish_without_application();
+                if startup_abort.is_aborted() {
+                    shutdown.shutdown(1).await;
+                }
+                abort_tasks(signal_tasks);
+                return Err(error);
+            }
+        };
+
+    if startup_abort.is_aborted() {
+        shutdown.shutdown(1).await;
+    }
 
     let result = application.run(&task).await;
     let output_result = write_run_output(&result.stdout, &result.stderr);
     shutdown.shutdown(result.exit_code).await;
-    for task in signal_tasks {
-        task.abort();
-    }
+    abort_tasks(signal_tasks);
     output_result?;
 
     let completed_code = completed_code.load(Ordering::Acquire);
@@ -165,6 +186,48 @@ async fn run_headless_async(task: String) -> anyhow::Result<i32> {
         "application disposal ended without selecting an exit code"
     );
     Ok(completed_code)
+}
+
+#[derive(Debug, Default)]
+struct ApplicationSlot {
+    application: OnceLock<Arc<HeadlessApplication>>,
+    boot_finished: AtomicBool,
+    changed: tokio::sync::Notify,
+}
+
+impl ApplicationSlot {
+    fn publish(&self, application: Arc<HeadlessApplication>) -> anyhow::Result<()> {
+        self.application
+            .set(application)
+            .map_err(|_| anyhow::anyhow!("headless application was published more than once"))?;
+        self.boot_finished.store(true, Ordering::Release);
+        self.changed.notify_waiters();
+        Ok(())
+    }
+
+    fn finish_without_application(&self) {
+        self.boot_finished.store(true, Ordering::Release);
+        self.changed.notify_waiters();
+    }
+
+    async fn shutdown(&self) -> anyhow::Result<()> {
+        loop {
+            let changed = self.changed.notified();
+            if let Some(application) = self.application.get() {
+                return application.shutdown().await;
+            }
+            if self.boot_finished.load(Ordering::Acquire) {
+                return Ok(());
+            }
+            changed.await;
+        }
+    }
+}
+
+fn abort_tasks(tasks: Vec<tokio::task::JoinHandle<()>>) {
+    for task in tasks {
+        task.abort();
+    }
 }
 
 fn write_run_output(stdout: &str, stderr: &str) -> io::Result<()> {
@@ -201,20 +264,27 @@ impl SignalSources {
         })
     }
 
-    fn spawn(self, shutdown: ProcessShutdown) -> Vec<tokio::task::JoinHandle<()>> {
+    fn spawn(
+        self,
+        shutdown: ProcessShutdown,
+        startup_abort: AbortSignal,
+    ) -> Vec<tokio::task::JoinHandle<()>> {
         let Self {
             mut sigterm,
             mut sigint,
         } = self;
         let shutdown_for_sigterm = shutdown.clone();
+        let abort_for_sigterm = startup_abort.clone();
         vec![
             tokio::spawn(async move {
                 while sigterm.recv().await.is_some() {
+                    abort_for_sigterm.abort();
                     shutdown_for_sigterm.interrupt_sigterm();
                 }
             }),
             tokio::spawn(async move {
                 while sigint.recv().await.is_some() {
+                    startup_abort.abort();
                     shutdown.interrupt_sigint();
                 }
             }),
@@ -231,9 +301,14 @@ impl SignalSources {
         Ok(Self)
     }
 
-    fn spawn(self, shutdown: ProcessShutdown) -> Vec<tokio::task::JoinHandle<()>> {
+    fn spawn(
+        self,
+        shutdown: ProcessShutdown,
+        startup_abort: AbortSignal,
+    ) -> Vec<tokio::task::JoinHandle<()>> {
         vec![tokio::spawn(async move {
             while tokio::signal::ctrl_c().await.is_ok() {
+                startup_abort.abort();
                 shutdown.interrupt_sigint();
             }
         })]
