@@ -17,6 +17,9 @@ use seekdeep_util::{
     },
 };
 
+#[cfg(windows)]
+use std::ffi::OsStr;
+
 const BOOTSTRAP_NAMES: &[&str] = &[
     // Process launch and module resolution.
     "PATH",
@@ -189,7 +192,8 @@ where
 {
     // Home selection is a bootstrap decision: no discovered file may redirect
     // which user layer is read.
-    let seekdeep_home = resolve_seekdeep_home(None, inherited)?;
+    let home_environment = home_resolution_environment(inherited);
+    let seekdeep_home = resolve_seekdeep_home(None, &home_environment)?;
     let project_directory = absolute_lexical(cwd)?;
     let inherited_values = inherited
         .iter()
@@ -233,6 +237,42 @@ where
         seekdeep_home,
         launch_environment: create_launch_environment_snapshot(&layers),
     })
+}
+
+fn home_resolution_environment<S>(
+    inherited: &HashMap<OsString, OsString, S>,
+) -> HashMap<OsString, OsString>
+where
+    S: std::hash::BuildHasher,
+{
+    let environment = inherited
+        .iter()
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect::<HashMap<_, _>>();
+    normalize_windows_environment(environment)
+}
+
+#[cfg(not(windows))]
+fn normalize_windows_environment(
+    environment: HashMap<OsString, OsString>,
+) -> HashMap<OsString, OsString> {
+    environment
+}
+
+#[cfg(windows)]
+fn normalize_windows_environment(
+    mut environment: HashMap<OsString, OsString>,
+) -> HashMap<OsString, OsString> {
+    if !environment.contains_key(OsStr::new("SEEKDEEP_HOME"))
+        && let Some(value) = environment.iter().find_map(|(name, value)| {
+            name.to_string_lossy()
+                .eq_ignore_ascii_case("SEEKDEEP_HOME")
+                .then(|| value.clone())
+        })
+    {
+        environment.insert(OsString::from("SEEKDEEP_HOME"), value);
+    }
+    environment
 }
 
 fn read_env_layer<F>(

@@ -48,7 +48,7 @@ fn yaml_ast_preserves_javascript_and_loader_context_fields() {
         "              ctx.alpha.value\n",
     );
     let patches = parse_patch_list_yaml(source).unwrap();
-    let composition = compose_profile_layers(&[patches.clone()]).unwrap();
+    let composition = compose_profile_layers(std::slice::from_ref(&patches)).unwrap();
     let group = entry(composition.entries(), "group");
     assert_eq!(group.group(), Some(&ProfileNode::Bool(true)));
     assert!(matches!(group.inject(), Some(ProfileNode::Sequence(_))));
@@ -283,7 +283,7 @@ fn layer_composition_is_flattened_and_recomposition_reverts_removed_overrides() 
         }]
     );
 
-    let reverted = compose_profile_layers(&[bundle.clone()]).unwrap();
+    let reverted = compose_profile_layers(std::slice::from_ref(&bundle)).unwrap();
     assert_eq!(
         entry(reverted.entries(), "row").config(),
         Some(&ProfileNode::Mapping(indexmap::indexmap! {

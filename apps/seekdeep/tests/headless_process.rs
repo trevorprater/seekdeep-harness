@@ -329,10 +329,11 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
         .map_err(|_| anyhow::anyhow!("cold session listing timed out"))??;
     assert_eq!(headers.len(), 1);
     let header = &headers[0];
+    let canonical_workspace = std::fs::canonicalize(&workspace)?;
     assert!(header.id.as_str().starts_with("session-"));
     assert_eq!(
         header.cwd.as_deref(),
-        Some(workspace.to_string_lossy().as_ref())
+        Some(canonical_workspace.to_string_lossy().as_ref())
     );
     let inspection = tokio::time::timeout(IO_TIMEOUT, cold.inspect(&header.id, None))
         .await
