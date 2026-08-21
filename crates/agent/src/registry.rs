@@ -1,7 +1,7 @@
 //! Two-phase live-agent registry with exactly paired lifecycle notifications.
 
 use std::sync::{
-    Arc,
+    Arc, Weak,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -42,12 +42,17 @@ struct AgentEntry {
     state: Mutex<EntryState>,
 }
 
+struct FactoryGeneration {
+    id: Uuid,
+    factory: Arc<dyn AgentFactory>,
+}
+
 struct RegistryInner {
     id: Uuid,
     context: Context,
     store: Mutex<IndexMap<SessionId, Arc<AgentEntry>>>,
     initiators: Arc<InitiatorTracker>,
-    factory: Mutex<Option<Arc<dyn AgentFactory>>>,
+    factory: Mutex<Option<FactoryGeneration>>,
 }
 
 impl std::fmt::Debug for RegistryInner {
@@ -160,6 +165,46 @@ pub struct AgentDetach {
     entered: Arc<AtomicBool>,
 }
 
+/// Exact-generation lifecycle lease for the active agent factory.
+///
+/// Withdrawal is synchronous so a replacement may register immediately. The
+/// owned Cordis effect remains single-shot and removes only this generation if
+/// its owner later disposes it.
+#[derive(Clone)]
+pub struct AgentFactoryRegistration {
+    effect: EffectHandle,
+    registry: Weak<RegistryInner>,
+    generation: Uuid,
+}
+
+impl std::fmt::Debug for AgentFactoryRegistration {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AgentFactoryRegistration")
+            .field("generation", &self.generation)
+            .finish_non_exhaustive()
+    }
+}
+
+impl AgentFactoryRegistration {
+    /// Immediately withdraws this exact factory without touching a replacement.
+    pub fn withdraw(&self) {
+        if let Some(registry) = self.registry.upgrade() {
+            registry.withdraw_factory(self.generation);
+        }
+    }
+
+    /// Withdraws the exact factory generation and joins its owned disposer.
+    ///
+    /// # Errors
+    ///
+    /// Returns any lifecycle-effect disposal failure.
+    pub async fn dispose(&self) -> anyhow::Result<()> {
+        self.withdraw();
+        self.effect.dispose().await
+    }
+}
+
 impl AgentDetach {
     /// Removes this exact lifecycle at most once.
     ///
@@ -173,6 +218,16 @@ impl AgentDetach {
 }
 
 impl RegistryInner {
+    fn withdraw_factory(&self, generation: Uuid) {
+        let mut slot = self.factory.lock();
+        if slot
+            .as_ref()
+            .is_some_and(|current| current.id == generation)
+        {
+            *slot = None;
+        }
+    }
+
     fn request_detach(self: &Arc<Self>, entry: &Arc<AgentEntry>) {
         {
             let mut state = entry.state.lock();
@@ -569,24 +624,79 @@ impl AgentRegistry {
             .collect()
     }
 
-    /// Registers the agent-creation factory the loop implementation provides.
+    /// Registers and lifecycle-owns the agent-creation factory.
+    ///
+    /// The owner context is explicit because Rust service values are not
+    /// context-tracing proxies. Disposing that context clears only this exact
+    /// generation, so a withdrawn registration cannot erase a later HMR
+    /// replacement.
     ///
     /// # Errors
     ///
-    /// Rejects a duplicate factory registration.
-    pub fn set_factory(&self, factory: Arc<dyn AgentFactory>) -> anyhow::Result<()> {
-        let mut slot = self.inner.factory.lock();
-        if slot.is_some() {
-            anyhow::bail!("an agent factory is already registered");
+    /// Rejects a duplicate factory or inactive lifecycle owner. Failed
+    /// ownership rolls the provisional generation back.
+    pub fn register_factory(
+        &self,
+        owner_context: &Context,
+        factory: Arc<dyn AgentFactory>,
+    ) -> anyhow::Result<AgentFactoryRegistration> {
+        let generation = Uuid::now_v7();
+        {
+            let mut slot = self.inner.factory.lock();
+            if slot.is_some() {
+                anyhow::bail!("an agent factory is already registered");
+            }
+            *slot = Some(FactoryGeneration {
+                id: generation,
+                factory,
+            });
         }
-        *slot = Some(factory);
-        Ok(())
+
+        let registry = Arc::downgrade(&self.inner);
+        let effect_registry = registry.clone();
+        let effect = EffectHandle::synchronous("agents.setFactory()", move || {
+            if let Some(registry) = effect_registry.upgrade() {
+                registry.withdraw_factory(generation);
+            }
+            Ok(())
+        });
+        let registration = AgentFactoryRegistration {
+            effect: effect.clone(),
+            registry,
+            generation,
+        };
+        if let Err(error) = owner_context.own(effect) {
+            registration.withdraw();
+            return Err(error.into());
+        }
+        Ok(registration)
+    }
+
+    /// Registers a factory under the registry's construction lifecycle.
+    ///
+    /// This preserves the original one-argument Rust API. Plugins with a
+    /// narrower lifecycle should use [`Self::register_factory`] and pass their
+    /// mounting context explicitly.
+    ///
+    /// # Errors
+    ///
+    /// Returns duplicate-factory or inactive-owner failures.
+    pub fn set_factory(
+        &self,
+        factory: Arc<dyn AgentFactory>,
+    ) -> anyhow::Result<AgentFactoryRegistration> {
+        self.register_factory(&self.inner.context, factory)
     }
 
     fn require_factory(&self) -> anyhow::Result<Arc<dyn AgentFactory>> {
-        self.inner.factory.lock().clone().ok_or_else(|| {
-            anyhow::anyhow!("no agent factory registered (load an agent-loop plugin)")
-        })
+        self.inner
+            .factory
+            .lock()
+            .as_ref()
+            .map(|generation| generation.factory.clone())
+            .ok_or_else(|| {
+                anyhow::anyhow!("no agent factory registered (load an agent-loop plugin)")
+            })
     }
 
     /// Creates and publishes a new agent through the registered factory.
@@ -615,7 +725,7 @@ mod tests {
     use std::{sync::Arc, time::Duration};
 
     use parking_lot::Mutex;
-    use seekdeep_cordis::{EventOptions, EventReply};
+    use seekdeep_cordis::{EventOptions, EventReply, Fiber};
     use seekdeep_core::session::{Session, SessionId};
     use seekdeep_scope::ScopeKey;
 
@@ -636,6 +746,147 @@ mod tests {
             context.clone(),
             ScopeKey::new(),
         ))
+    }
+
+    struct StubFactory {
+        tag: &'static str,
+        calls: Arc<Mutex<Vec<&'static str>>>,
+    }
+
+    #[async_trait::async_trait]
+    impl AgentFactory for StubFactory {
+        async fn create_agent(
+            &self,
+            owner_context: &Context,
+            options: CreateAgentOptions,
+        ) -> anyhow::Result<AgentHandle> {
+            self.calls.lock().push(self.tag);
+            Ok(AgentHandle::new(
+                agent(owner_context, options.session_id.as_str()),
+                Box::new(|| Box::pin(async { Ok(()) })),
+            ))
+        }
+
+        async fn resume(
+            &self,
+            owner_context: &Context,
+            options: ResumeAgentOptions,
+        ) -> anyhow::Result<AgentHandle> {
+            self.calls.lock().push(self.tag);
+            Ok(AgentHandle::new(
+                agent(owner_context, options.resume_session_id.as_str()),
+                Box::new(|| Box::pin(async { Ok(()) })),
+            ))
+        }
+    }
+
+    fn factory(tag: &'static str) -> (Arc<dyn AgentFactory>, Arc<Mutex<Vec<&'static str>>>) {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        (
+            Arc::new(StubFactory {
+                tag,
+                calls: calls.clone(),
+            }),
+            calls,
+        )
+    }
+
+    #[tokio::test]
+    async fn factory_registration_follows_owner_lifecycle_and_allows_replacement() {
+        let context = Context::new();
+        let registry = AgentRegistry::new(context.clone());
+        let first_fiber = Fiber::active_child("first factory owner");
+        let first_owner = context.with_fiber(first_fiber.clone());
+        let (first_factory, first_calls) = factory("first");
+        registry
+            .register_factory(&first_owner, first_factory)
+            .expect("first registration");
+
+        let duplicate = registry
+            .register_factory(&first_owner, factory("duplicate").0)
+            .expect_err("duplicate factory");
+        assert!(duplicate.to_string().contains("already registered"));
+        registry
+            .create(CreateAgentOptions::new(SessionId::new("first-created")))
+            .await
+            .expect("first factory create");
+        assert_eq!(*first_calls.lock(), ["first"]);
+
+        first_fiber.dispose().await.expect("dispose first owner");
+        let missing = registry
+            .create(CreateAgentOptions::new(SessionId::new("after-dispose")))
+            .await
+            .expect_err("owner disposal clears factory");
+        assert!(missing.to_string().contains("no agent factory registered"));
+
+        let second_fiber = Fiber::active_child("second factory owner");
+        let second_owner = context.with_fiber(second_fiber.clone());
+        let (second_factory, second_calls) = factory("second");
+        registry
+            .register_factory(&second_owner, second_factory)
+            .expect("replacement registration");
+        registry
+            .resume(ResumeAgentOptions::new(SessionId::new("second-resumed")))
+            .await
+            .expect("replacement factory resume");
+        assert_eq!(*second_calls.lock(), ["second"]);
+        second_fiber.dispose().await.expect("dispose second owner");
+    }
+
+    #[tokio::test]
+    async fn stale_factory_registration_cannot_clear_replacement_generation() {
+        let context = Context::new();
+        let registry = AgentRegistry::new(context.clone());
+        let first_fiber = Fiber::active_child("stale factory owner");
+        let first_owner = context.with_fiber(first_fiber.clone());
+        let first = registry
+            .register_factory(&first_owner, factory("stale").0)
+            .expect("first registration");
+
+        first.withdraw();
+        let second_fiber = Fiber::active_child("replacement factory owner");
+        let second_owner = context.with_fiber(second_fiber.clone());
+        let (second_factory, second_calls) = factory("replacement");
+        let second = registry
+            .register_factory(&second_owner, second_factory)
+            .expect("replacement registration");
+
+        first.dispose().await.expect("dispose stale registration");
+        first_fiber.dispose().await.expect("dispose stale owner");
+        registry
+            .create(CreateAgentOptions::new(SessionId::new(
+                "replacement-created",
+            )))
+            .await
+            .expect("replacement remains registered");
+        assert_eq!(*second_calls.lock(), ["replacement"]);
+
+        second.dispose().await.expect("dispose replacement");
+        second_fiber
+            .dispose()
+            .await
+            .expect("dispose replacement owner");
+    }
+
+    #[tokio::test]
+    async fn inactive_factory_owner_rolls_registration_back() {
+        let context = Context::new();
+        let registry = AgentRegistry::new(context.clone());
+        let inactive_fiber = Fiber::active_child("inactive factory owner");
+        let inactive_owner = context.with_fiber(inactive_fiber.clone());
+        inactive_fiber.dispose().await.expect("dispose owner");
+
+        let error = registry
+            .register_factory(&inactive_owner, factory("inactive").0)
+            .expect_err("inactive ownership");
+        assert!(error.to_string().contains("inactive context"));
+
+        let live_fiber = Fiber::active_child("live factory owner");
+        let live_owner = context.with_fiber(live_fiber.clone());
+        registry
+            .register_factory(&live_owner, factory("live").0)
+            .expect("failed ownership left no factory behind");
+        live_fiber.dispose().await.expect("dispose live owner");
     }
 
     #[tokio::test]

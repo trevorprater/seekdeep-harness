@@ -1,5 +1,8 @@
 //! Declarative plugin-tree parsing, patch layering, and executable loading.
 
+/// Source-compatible profile patch parsing and ordered composition.
+pub mod profile_patch;
+
 use std::{collections::HashMap, fmt, future::Future, path::Path, pin::Pin, sync::Arc};
 
 use indexmap::IndexMap;

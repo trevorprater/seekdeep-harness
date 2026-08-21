@@ -1,0 +1,35 @@
+[package]
+name = "seekdeep-headless"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "One-shot direct Agent runner for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+serde_json.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-tool-todo = { path = "../tool-todo" }
+seekdeep-tools = { path = "../tools" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

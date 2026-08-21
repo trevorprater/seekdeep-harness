@@ -25,7 +25,10 @@ pub use inbox::{Inbox, InboxError, InboxNotifications, InboxTarget, NoopInboxNot
 pub use model_selection::{
     ModelSelection, ModelSelectionInstallation, ModelSelectionRef, install_model_selection,
 };
-pub use registry::{AGENTS, AgentDetach, AgentLifecycleEvent, AgentRegistry, AgentRegistryError};
+pub use registry::{
+    AGENTS, AgentDetach, AgentFactoryRegistration, AgentLifecycleEvent, AgentRegistry,
+    AgentRegistryError,
+};
 pub use runtime_types::{
     AGENT, Agent, AgentControlError, AgentController, AgentOptions, AgentStatus, CancelOptions,
     MaintenanceReservation, PreStepDecision, RequestErrorAction, SessionStartSource,

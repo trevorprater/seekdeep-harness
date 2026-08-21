@@ -11,12 +11,32 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
-clap.workspace = true
-seekdeep-loader = { path = "../../crates/loader" }
+seekdeep-agent = { path = "../../crates/agent" }
+seekdeep-agent-default-model = { path = "../../crates/agent-default-model" }
+seekdeep-agent-loop = { path = "../../crates/agent-loop" }
+seekdeep-code-runtime-worker-thread = { path = "../../crates/code-runtime-worker-thread" }
+seekdeep-cordis = { path = "../../crates/cordis" }
+seekdeep-core = { path = "../../crates/core" }
+seekdeep-credentials-local = { path = "../../crates/credentials-local" }
+seekdeep-headless = { path = "../../crates/headless" }
+seekdeep-llm = { path = "../../crates/llm" }
+seekdeep-llm-deepseek = { path = "../../crates/llm-deepseek" }
+seekdeep-llm-retry = { path = "../../crates/llm-retry" }
+seekdeep-session-checkpoint-policy = { path = "../../crates/session-checkpoint-policy" }
+seekdeep-session-persistence = { path = "../../crates/session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../../crates/session-persistence-jsonl" }
+seekdeep-session-projection = { path = "../../crates/session-projection" }
+seekdeep-settings-file = { path = "../../crates/settings-file" }
+seekdeep-system-prompt = { path = "../../crates/system-prompt" }
+seekdeep-tool-todo = { path = "../../crates/tool-todo" }
+seekdeep-tools = { path = "../../crates/tools" }
+seekdeep-util = { path = "../../crates/util" }
 tokio.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
+
+[dev-dependencies]
+parking_lot.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
-
