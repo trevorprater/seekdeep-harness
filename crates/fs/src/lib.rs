@@ -111,7 +111,7 @@ pub trait FileSystem: Send + Sync + 'static {
         &self,
         target: &FsTarget,
         signal: Option<&AbortSignal>,
-    ) -> anyhow::Result<BoxStream<'static, String>>;
+    ) -> anyhow::Result<BoxStream<'static, anyhow::Result<String>>>;
 
     /// Reads the whole regular file as raw bytes.
     async fn read_bytes(

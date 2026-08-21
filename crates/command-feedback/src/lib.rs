@@ -6,12 +6,16 @@ use seekdeep_anonymous_user_id::{AnonymousUserIdOptions, get_or_create_anonymous
 use seekdeep_commands::{
     COMMANDS, CommandDefinition, CommandHandler, CommandInvocation, CommandResult, CommandRuntime,
 };
-use seekdeep_cordis::{Context, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, Session};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use serde_json::json;
 
 const USAGE: &str = "Usage: /feedback <text>";
+/// Loader-facing Cordis plugin name.
+pub const NAME: &str = "command-feedback";
+/// Runtime services required by the feedback command.
+pub const INJECT: &[&str] = &["commands"];
 
 /// Records feedback independently of any UI trigger.
 ///
@@ -62,6 +66,17 @@ pub fn apply(context: &Context) -> anyhow::Result<EffectHandle> {
             .with_input("<text>")
             .record_input(false);
     commands.register(context, definition)
+}
+
+/// Builds the loader-compatible command plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            apply(&context)?;
+            Ok(())
+        })
+    })
 }
 
 /// Registers the package's explained empty invariant companion.

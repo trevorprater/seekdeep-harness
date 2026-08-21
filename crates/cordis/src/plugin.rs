@@ -264,6 +264,7 @@ impl PluginFiber {
         if self.disposed.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
+        self.fiber.request_disposal();
         let _transition = self.transition.lock().await;
         let result = self.fiber.dispose().await;
         self.notify_registry();

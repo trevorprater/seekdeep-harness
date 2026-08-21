@@ -513,6 +513,7 @@ async fn read_bounded(
             (Some(file_system), Some(target)) => {
                 let mut stream = file_system.stream_text(target, signal).await?;
                 while let Some(chunk) = stream.next().await {
+                    let chunk = chunk?;
                     ensure_not_aborted(signal)?;
                     bytes += chunk.len() as u64;
                     if bytes > max_source_bytes {

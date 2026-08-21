@@ -21,14 +21,54 @@ pub enum LspOperation {
     Hover,
 }
 
+impl LspOperation {
+    /// Exact source-compatible operation spelling.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::GoToDefinition => "goToDefinition",
+            Self::FindReferences => "findReferences",
+            Self::GoToImplementation => "goToImplementation",
+            Self::Hover => "hover",
+        }
+    }
+}
+
 /// Zero-based UTF-16 cursor coordinate.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LspPosition {
     /// Zero-based line.
+    #[serde(serialize_with = "serialize_js_number")]
     pub line: f64,
     /// Zero-based UTF-16 code-unit offset.
+    #[serde(serialize_with = "serialize_js_number")]
     pub character: f64,
+}
+
+/// Serializes a JavaScript number with integral values using JSON's integer spelling.
+///
+/// # Errors
+///
+/// Returns the selected serializer's numeric failure.
+pub fn serialize_js_number<S>(value: &f64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    if *value == 0.0 {
+        return serializer.serialize_i64(0);
+    }
+    if value.is_finite() && value.fract() == 0.0 {
+        if *value >= -9_223_372_036_854_775_808.0 && *value < 9_223_372_036_854_775_808.0 {
+            #[allow(clippy::cast_possible_truncation)]
+            return serializer.serialize_i64(*value as i64);
+        }
+        if *value > 0.0 && *value < 18_446_744_073_709_551_616.0 {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            return serializer.serialize_u64(*value as u64);
+        }
+    }
+    serializer.serialize_f64(*value)
 }
 
 /// Zero-based UTF-16 half-open range.
@@ -113,6 +153,7 @@ pub enum LspQueryResult {
         /// Ordered normalized locations.
         locations: Vec<LspLocation>,
         /// Canonical provider-side workspace URI.
+        #[serde(rename = "resolvedWorkspaceUri")]
         resolved_workspace_uri: String,
     },
     /// Hover content, or no hover at the position.

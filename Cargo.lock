@@ -4282,6 +4282,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-agent-loop-testkit"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-agent-tool-presentation"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -4387,6 +4402,15 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-bundle-base"
+version = "0.1.0-rc.5"
+dependencies = [
+ "indexmap 2.14.0",
+ "seekdeep-loader",
+ "serde_json",
 ]
 
 [[package]]
@@ -4501,8 +4525,10 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-loader",
  "seekdeep-scope",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 
@@ -5146,6 +5172,7 @@ dependencies = [
  "serde_yml",
  "thiserror 2.0.20",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -5169,13 +5196,26 @@ name = "seekdeep-lsp-stdio"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-fs",
+ "seekdeep-fs-local",
  "seekdeep-llm",
  "seekdeep-lsp",
+ "seekdeep-sandbox",
+ "seekdeep-schemastery",
+ "seekdeep-subprocess",
+ "seekdeep-subprocess-local",
  "seekdeep-util",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -5824,6 +5864,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-skill-badge"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "seekdeep-cordis",
+ "seekdeep-skill",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-spill"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -6258,6 +6311,36 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "seekdeep-tool-lsp"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "percent-encoding",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-fs-local",
+ "seekdeep-llm",
+ "seekdeep-lsp",
+ "seekdeep-lsp-stdio",
+ "seekdeep-schemastery",
+ "seekdeep-scope",
+ "seekdeep-subprocess-local",
+ "seekdeep-system-prompt",
+ "seekdeep-tool-timeout-policy",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "url",
 ]
 
 [[package]]

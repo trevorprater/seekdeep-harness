@@ -17,8 +17,10 @@ serde_json.workspace = true
 [dev-dependencies]
 seekdeep-agent = { path = "../agent" }
 seekdeep-core = { path = "../core" }
+seekdeep-loader = { path = "../loader" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
+tempfile.workspace = true
 tokio.workspace = true
 
 [lints]

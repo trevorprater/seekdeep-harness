@@ -205,6 +205,22 @@ async fn query_selection_language_signal_and_owner_lifecycle_are_exact() {
 
 #[test]
 fn result_union_is_closed_and_nullable_hover_is_lossless() {
+    assert_eq!(
+        serde_json::to_string(&LspPosition {
+            line: 0.0,
+            character: 3.0,
+        })
+        .unwrap(),
+        r#"{"line":0,"character":3}"#
+    );
+    assert_eq!(
+        serde_json::to_string(&LspPosition {
+            line: 1.5,
+            character: -0.0,
+        })
+        .unwrap(),
+        r#"{"line":1.5,"character":0}"#
+    );
     let hover = LspQueryResult::Hover {
         hover: Some(LspHover {
             contents: "details".to_owned(),

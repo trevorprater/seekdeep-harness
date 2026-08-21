@@ -1,6 +1,13 @@
 //! Plugin lifecycle ownership and reversible effects.
 
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use parking_lot::Mutex;
 use thiserror::Error;
@@ -185,6 +192,8 @@ pub struct Fiber {
     name: String,
     root: bool,
     inner: Mutex<FiberInner>,
+    disposal_requested: AtomicBool,
+    disposal_notify: Notify,
 }
 
 impl Fiber {
@@ -201,6 +210,8 @@ impl Fiber {
                 transition: None,
                 disposed_outcome: None,
             }),
+            disposal_requested: AtomicBool::new(false),
+            disposal_notify: Notify::new(),
         })
     }
 
@@ -217,6 +228,8 @@ impl Fiber {
                 transition: None,
                 disposed_outcome: None,
             }),
+            disposal_requested: AtomicBool::new(false),
+            disposal_notify: Notify::new(),
         })
     }
 
@@ -233,6 +246,8 @@ impl Fiber {
                 transition: None,
                 disposed_outcome: None,
             }),
+            disposal_requested: AtomicBool::new(false),
+            disposal_notify: Notify::new(),
         })
     }
 
@@ -252,6 +267,29 @@ impl Fiber {
     #[must_use]
     pub fn state(&self) -> FiberState {
         self.inner.lock().state
+    }
+
+    /// Whether the structural plugin owner has requested permanent disposal.
+    #[must_use]
+    pub fn is_disposal_requested(&self) -> bool {
+        self.disposal_requested.load(Ordering::Acquire)
+    }
+
+    /// Waits until the structural plugin owner requests permanent disposal.
+    pub async fn when_disposing(&self) {
+        loop {
+            let notified = self.disposal_notify.notified();
+            if self.is_disposal_requested() {
+                return;
+            }
+            notified.await;
+        }
+    }
+
+    pub(crate) fn request_disposal(&self) {
+        if !self.disposal_requested.swap(true, Ordering::AcqRel) {
+            self.disposal_notify.notify_waiters();
+        }
     }
 
     pub(crate) fn set_state(&self, state: FiberState) {

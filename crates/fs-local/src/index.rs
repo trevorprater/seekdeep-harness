@@ -237,7 +237,7 @@ impl FileSystem for LocalFileSystem {
         &self,
         target: &FsTarget,
         signal: Option<&AbortSignal>,
-    ) -> anyhow::Result<futures::stream::BoxStream<'static, String>> {
+    ) -> anyhow::Result<futures::stream::BoxStream<'static, anyhow::Result<String>>> {
         let text = read_whole_text(
             &crate::fsio::LocalTarget {
                 display_path: target.display_path.clone(),
@@ -246,7 +246,7 @@ impl FileSystem for LocalFileSystem {
             signal,
         )
         .await?;
-        Ok(futures::stream::once(async move { text }).boxed())
+        Ok(futures::stream::once(async move { Ok(text) }).boxed())
     }
 
     async fn read_bytes(

@@ -28,14 +28,39 @@ pub enum ToolCallKind {
 }
 
 /// A model-facing file path and optional one-based focus line.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FileLocation {
     /// Path the tool operated on.
     pub path: String,
     /// Optional one-based line.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub line: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_optional_js_number"
+    )]
+    pub line: Option<f64>,
+}
+
+#[allow(clippy::ref_option)]
+fn serialize_optional_js_number<S>(value: &Option<f64>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match value {
+        Some(value) if *value == 0.0 => serializer.serialize_some(&0_i64),
+        Some(value)
+            if value.is_finite()
+                && value.fract() == 0.0
+                && *value >= -9_223_372_036_854_775_808.0
+                && *value < 9_223_372_036_854_775_808.0 =>
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            serializer.serialize_some(&(*value as i64))
+        }
+        Some(value) => serializer.serialize_some(value),
+        None => serializer.serialize_none(),
+    }
 }
 
 /// One file change for inline-diff presentation.
@@ -85,7 +110,7 @@ pub struct TerminalCallView {
 }
 
 /// Diff pending-call card.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DiffCallView {
     /// Card header.
@@ -347,7 +372,7 @@ mod tests {
             content: None,
             locations: Some(vec![FileLocation {
                 path: "/a".to_owned(),
-                line: Some(3),
+                line: Some(3.0),
             }]),
         });
         assert_eq!(

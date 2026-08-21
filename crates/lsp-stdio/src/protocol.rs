@@ -8,8 +8,10 @@ use serde_json::{Map, Value};
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WirePosition {
     /// Zero-based line.
+    #[serde(serialize_with = "seekdeep_lsp::serialize_js_number")]
     pub line: f64,
     /// Zero-based UTF-16 character offset.
+    #[serde(serialize_with = "seekdeep_lsp::serialize_js_number")]
     pub character: f64,
 }
 
@@ -207,7 +209,7 @@ pub struct WireServerCapabilities {
 
 /// `initialize` result envelope.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct WireInitializeResult {
     /// Server capabilities.
     pub capabilities: WireServerCapabilities,

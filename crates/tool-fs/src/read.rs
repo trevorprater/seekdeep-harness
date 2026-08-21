@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use futures::StreamExt as _;
+use futures::TryStreamExt as _;
 use seekdeep_cordis::Context;
 use seekdeep_fs::{FS, FsObservation};
 use seekdeep_llm::ContentBlock;
@@ -112,11 +112,6 @@ pub struct ReadOutcome {
     pub lines: Vec<FileTextLine>,
     /// Exact total line count.
     pub total_lines: u64,
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn number_to_u64(value: f64) -> u64 {
-    value as u64
 }
 
 /// Extracts the body between the read envelope's `<content>` fences.
@@ -243,7 +238,7 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                         || info.size.is_some_and(|size| size >= caps.stream_min_size)
                     {
                         let stream = filesystem.stream_text(&target, Some(&signal)).await?;
-                        stream.collect::<Vec<String>>().await
+                        stream.try_collect::<Vec<String>>().await?
                     } else {
                         vec![filesystem.read_text(&target, Some(&signal)).await?]
                     };
@@ -296,7 +291,7 @@ pub fn apply_read_tool(ctx: &Context, caps: &ReadToolCaps) -> anyhow::Result<()>
                 content: None,
                 locations: Some(vec![FileLocation {
                     path: args.file_path.clone(),
-                    line: Some(number_to_u64(offset)),
+                    line: Some(offset),
                 }]),
             }))
         }))

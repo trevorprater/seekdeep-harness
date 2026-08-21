@@ -4,7 +4,7 @@ mod types;
 
 pub use types::{
     LspHover, LspLocation, LspOperation, LspPosition, LspProvider, LspProviderQuery,
-    LspQueryRequest, LspQueryResult, LspRange,
+    LspQueryRequest, LspQueryResult, LspRange, serialize_js_number,
 };
 
 use std::{
@@ -15,7 +15,7 @@ use std::{
 use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, Plugin, PluginFiber, ServiceKey, fiber::EffectHandle};
-use seekdeep_llm::AbortSignal;
+use seekdeep_llm::{AbortSignal, HarnessError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -34,6 +34,10 @@ pub const LSP_CONFLICT: &str = "LSP_CONFLICT";
 pub const LSP_UNAVAILABLE: &str = "LSP_UNAVAILABLE";
 /// A server returned a structurally invalid semantic result.
 pub const LSP_MALFORMED_RESPONSE: &str = "LSP_MALFORMED_RESPONSE";
+/// A query targeted an instance whose teardown has begun.
+pub const LSP_DISPOSED: &str = "LSP_DISPOSED";
+/// The selected server cannot support the requested document lifecycle or operation.
+pub const LSP_UNSUPPORTED_OPERATION: &str = "LSP_UNSUPPORTED_OPERATION";
 
 /// Opaque provider identity reserved atomically with extension mappings.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -66,14 +70,18 @@ impl std::fmt::Display for LspProviderId {
 pub struct LspError {
     message: String,
     code: &'static str,
+    #[source]
+    harness: HarnessError,
 }
 
 impl LspError {
     /// Creates one structured LSP failure.
     #[must_use]
     pub fn new(message: impl Into<String>, code: &'static str) -> Self {
+        let message = message.into();
         Self {
-            message: message.into(),
+            harness: HarnessError::named("LspError", message.clone(), code),
+            message,
             code,
         }
     }
@@ -139,6 +147,33 @@ impl Lsp {
         caller: &Context,
         provider: Arc<dyn LspProvider>,
     ) -> anyhow::Result<EffectHandle> {
+        let (effect, id, extensions) = self.prepare_registration(provider)?;
+        if let Err(error) = caller.own(effect.clone()) {
+            unregister(&self.registry, &id, &extensions);
+            return Err(error.into());
+        }
+        Ok(effect)
+    }
+
+    /// Registers one provider and returns its reversible lease without assigning an owner.
+    ///
+    /// This is the atomic-composition primitive for plugins that must unregister a
+    /// provider table before tearing down the table's shared runtime resources.
+    ///
+    /// # Errors
+    ///
+    /// Returns structured invalid-provider or conflict failures.
+    pub fn register_provider_unowned(
+        &self,
+        provider: Arc<dyn LspProvider>,
+    ) -> anyhow::Result<EffectHandle> {
+        Ok(self.prepare_registration(provider)?.0)
+    }
+
+    fn prepare_registration(
+        &self,
+        provider: Arc<dyn LspProvider>,
+    ) -> anyhow::Result<(EffectHandle, LspProviderId, Vec<String>)> {
         let id = provider.id().clone();
         if id.as_str().trim().is_empty() {
             return Err(LspError::new(
@@ -226,11 +261,7 @@ impl Lsp {
             unregister(&registry, &cleanup_id, &cleanup_extensions);
             Ok(())
         });
-        if let Err(error) = caller.own(effect.clone()) {
-            unregister(&self.registry, &id, &extensions);
-            return Err(error.into());
-        }
-        Ok(effect)
+        Ok((effect, id, extensions))
     }
 
     /// Selects by final extension and forwards one semantic query.

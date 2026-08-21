@@ -104,6 +104,7 @@ fn empty_config() -> Value {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Entry {
     /// Stable row identifier used by overlay patches.
+    #[serde(default = "generated_entry_id")]
     pub id: EntryId,
     /// Rust plugin registry key. Source `cordis.yml` calls this field `name`.
     #[serde(rename = "name", alias = "plugin")]
@@ -117,6 +118,10 @@ pub struct Entry {
     /// Nested rows mounted in the plugin's lifecycle scope.
     #[serde(default)]
     pub children: Vec<Entry>,
+}
+
+fn generated_entry_id() -> EntryId {
+    EntryId(uuid::Uuid::new_v4().simple().to_string()[..8].to_owned())
 }
 
 /// A full ordered configuration tree.

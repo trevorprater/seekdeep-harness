@@ -9,15 +9,35 @@ description = "Content-Length framed stdio LSP provider for SeekDeep Harness"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-fs = { path = "../fs" }
 seekdeep-lsp = { path = "../lsp" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-subprocess = { path = "../subprocess" }
 seekdeep-util = { path = "../util" }
 tokio.workspace = true
 
 [dev-dependencies]
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+tempfile.workspace = true
 thiserror.workspace = true
+url.workspace = true
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "seekdeep-lsp-stdio-fixture"
+path = "tests/fixtures/fixture_server.rs"
+test = false
+bench = false
+doc = false
