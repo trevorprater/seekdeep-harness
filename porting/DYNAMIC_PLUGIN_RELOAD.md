@@ -6,6 +6,8 @@ This document describes how SeekDeep Harness can preserve the pinned source harn
 
 The source oracle remains authoritative wherever this proposal is incomplete. A stronger or more atomic implementation is still a behavioral deviation when users can observe a different intermediate state, rollback result, diagnostic, or recovery path.
 
+Additive-modes principle: an optional, explicitly enabled mode (a recorder, a deterministic simulation harness, an alternative deployment strategy) is permitted when it does not alter what the parity path does, logs, or reports, and when disabling it restores byte-identical parity behavior. This principle authorizes design headroom — interfaces may be shaped so such modes remain possible — not construction; additive modes themselves are post-parity work and are built only on instruction.
+
 ## Decision summary
 
 - Built-in host plugins run as native Rust.
@@ -107,6 +109,8 @@ Stop quiesces and disposes the active Host run, broadcasts retraction, and leave
 
 Dynamic definitions are not restored automatically after host restart, matching the source. Browser Client halves are not restored automatically after page refresh. General state migration rules elsewhere in this document must not override these source-specific semantics.
 
+These semantics forbid automatic reconstruction, not the existence of a path back. A future additive, explicitly invoked flow that re-submits the durably retained tool-call definition source through the normal define/syntax-check/approval pipeline is not the forbidden automatic persistence. No such flow exists or should be built now; this note only prevents invariant tests from being written so broadly that they foreclose it.
+
 ## Runtime placement
 
 ~~~text
@@ -157,7 +161,9 @@ The conformance suite must pin:
 - error aggregation and settlement;
 - service loss and later reactivation.
 
-Source Cordis starts disposers in reverse registration order while async disposers may overlap. The port must not replace that with sequential reverse completion unless the source oracle proves equivalence.
+Source Cordis starts disposers in reverse registration order while async disposers may overlap. The port must not replace that with sequential reverse completion unless the source oracle proves equivalence. When overlapped disposal is implemented, its interleaving must be drivable by an injectable scheduling policy so a seeded scheduler can reproduce a given interleaving in tests and simulation; production keeps the normal executor. If deterministic whole-system replay is later abandoned as a goal, plain unseeded overlap satisfies this section.
+
+Teardown observability is a deliberate two-layer contract. The internal substrate (`EffectHandle`, fiber-level disposal) collects, labels, and aggregates disposer failures and remembers the disposed outcome; this is intentional and must not be "corrected" back to the source's swallowing (`vendor/cordis/src/fiber.ts` `_unload` catches every disposer failure into a logger). Each source-visible mechanism (config remount, Host HMR, browser HMR, dynamic packages) then swallows or reports at its own boundary exactly where the source does, so users observe source behavior while the substrate observes complete teardown outcomes. Mechanism ports must test both halves: the substrate saw the failure, and the parity surface did not change.
 
 Current arbitrary Any plus Send plus Sync services cannot cross a WebAssembly ABI. Cross-boundary services require explicit versioned interfaces and generated proxies.
 
@@ -490,13 +496,13 @@ Each ported mechanism runs its source tests where possible and adds differential
 
 This ADR remains proposed until these decisions are resolved:
 
-1. Confirm the single-owner, non-Send portable Cordis core or choose an alternative executor-generic design.
-2. Select the Rust-owned source-compatible JavaScript execution or translation strategy.
+1. Confirm the single-owner, non-Send portable Cordis core or choose an alternative executor-generic design. Whatever design is chosen, its task and event scheduling must be injectable so a seeded deterministic scheduler can drive the core in tests and simulation while production uses the normal executor.
+2. Select the Rust-owned source-compatible JavaScript execution or translation strategy. Rationale to weigh, recorded here without pre-deciding: `boa_engine` is already in-tree and its JITless execution is trivially deterministic (no GC/JIT timing leakage), which serves record/replay goals; a translation-to-WASM path is also deterministic and may win on latency. The chosen evaluator must support a deterministic mode (seeded, no wall-clock leakage into guest-visible behavior). The decision itself belongs to the planned evaluator bake-off against the source dynamic-Cordis corpus, not to this note.
 3. Define the native WebAssembly interface world and proxy-generation system.
-4. Define the browser UI and callback ABI.
-5. Choose the graph transaction and generation-lease implementation.
+4. Define the browser UI and callback ABI. The typed gateway between host and browser contexts must not assume a network transport: a deployment may place both sides in one process or one browser tab, so the ABI's reentrancy, backpressure, and failure-atomicity semantics must hold across an in-memory seam as well.
+5. Choose the graph transaction and generation-lease implementation. Every cross-generation completion and cutover step must be observable as ordered data (an internal event sequence), not only as logger output, so transactions can be audited and replayed.
 6. Choose migration consistency algorithms for each state class.
-7. Define blue/green health policy and exclusive-resource metadata.
+7. Define blue/green health policy and exclusive-resource metadata. Health-window evaluation must read time through an injected clock so window outcomes are reproducible in tests.
 8. Identify any intentional behavioral deviations and record explicit authorization.
 
 ## Current implementation status
