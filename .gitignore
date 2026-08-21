@@ -3,3 +3,5 @@
 *.profraw
 *.profdata
 
+
+libargs.rlib
