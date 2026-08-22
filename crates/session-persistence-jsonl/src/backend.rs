@@ -1338,8 +1338,20 @@ impl JsonlSessionPersistence {
                 }
             }
             file.sync_all().await?;
-            fs::hard_link(&temporary, &final_path).await?;
-            sync_directory(&directory).await?;
+            #[cfg(windows)]
+            {
+                let temporary = temporary.clone();
+                let final_path = final_path.clone();
+                tokio::task::spawn_blocking(move || {
+                    crate::win32::publish_new_file_win32(&temporary, &final_path)
+                })
+                .await??;
+            }
+            #[cfg(not(windows))]
+            {
+                fs::hard_link(&temporary, &final_path).await?;
+                sync_directory(&directory).await?;
+            }
             anyhow::Ok(())
         }
         .await;
@@ -1351,13 +1363,26 @@ impl JsonlSessionPersistence {
         directory: &Path,
         parent: Option<&Path>,
     ) -> anyhow::Result<()> {
-        fs::create_dir_all(directory).await?;
-        if let Some(parent) = parent
-            && parent.exists()
+        #[cfg(windows)]
         {
-            sync_directory(parent).await?;
+            let directory = directory.to_path_buf();
+            tokio::task::spawn_blocking(move || {
+                crate::win32::ensure_durable_directory_win32(&directory)
+            })
+            .await??;
+            let _ = parent;
+            return Ok(());
         }
-        Ok(())
+        #[cfg(not(windows))]
+        {
+            fs::create_dir_all(directory).await?;
+            if let Some(parent) = parent
+                && parent.exists()
+            {
+                sync_directory(parent).await?;
+            }
+            Ok(())
+        }
     }
 
     async fn list_artifacts(&self) -> anyhow::Result<Vec<(SessionHeader, PathBuf, Metadata)>> {

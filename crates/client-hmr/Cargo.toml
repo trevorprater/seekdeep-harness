@@ -35,15 +35,20 @@ serde-wasm-bindgen.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 web-sys = { workspace = true, features = [
+  "console",
   "Document",
   "Element",
   "EventSource",
+  "HtmlHeadElement",
   "MessageEvent",
   "Node",
+  "NodeList",
+  "Window",
 ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tempfile.workspace = true
+tokio.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3.77"

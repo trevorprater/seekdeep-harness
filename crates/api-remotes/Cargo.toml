@@ -14,9 +14,18 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-typert-protocol = { path = "../typert-protocol" }
+seekdeep-typert-registry = { path = "../typert-registry" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-scope = { path = "../scope" }
+seekdeep-llm = { path = "../llm" }
+tokio.workspace = true
 
 [lints]
 workspace = true

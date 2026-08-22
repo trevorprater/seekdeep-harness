@@ -1,12 +1,21 @@
 //! Host BFF policy for resolving Remote Agent and Session identities.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use futures::future::BoxFuture;
-use seekdeep_cordis::Context;
+use futures::{
+    FutureExt,
+    future::{BoxFuture, Shared},
+};
+use parking_lot::Mutex;
+use seekdeep_cordis::{Context, Plugin};
 use seekdeep_core::session::{SessionEvent, SessionHeader, SessionId, SessionOrigin};
 use seekdeep_core::session_store::SESSIONS;
 use seekdeep_session_persistence::{SESSION_PERSISTENCE, SessionInspection};
+use seekdeep_typert_protocol::{
+    TypertBoundaryValue, TypertContextRegistry as _, TypertHostObject, TypertLookupFailure,
+    TypertLookupRegistry as _, TypertLookupResolver,
+};
+use seekdeep_typert_registry::TYPERT;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -158,81 +167,145 @@ pub async fn inspect_api_remote_session(
     Ok((inspected.meta, inspected.events))
 }
 
+type SharedResume =
+    Shared<BoxFuture<'static, Result<Arc<seekdeep_agent::Agent>, Arc<anyhow::Error>>>>;
+type SharedResumes = Arc<Mutex<HashMap<SessionId, SharedResume>>>;
+
+async fn resume_agent(
+    ctx: &Context,
+    session_id: &SessionId,
+    agent_options: Option<&ApiRemoteAgentOptionsFn>,
+    setup: Option<&ApiRemoteSetup>,
+) -> anyhow::Result<Arc<seekdeep_agent::Agent>> {
+    let (meta, events) = inspect_api_remote_session(ctx, session_id).await?;
+    if has_api_remote_subagent_owner(ctx, &meta, None) {
+        return Err(ApiRemoteSubagentSessionOwnership {
+            session_id: session_id.clone(),
+        }
+        .into());
+    }
+    let setup_value = match setup {
+        None => None,
+        Some(setup) => {
+            setup(SessionInspection {
+                meta: meta.clone(),
+                events,
+            })
+            .await?
+        }
+    };
+    let published_session = ctx.get(SESSIONS).and_then(|store| store.get(session_id));
+    let published_agent = ctx
+        .get(seekdeep_agent::AGENTS)
+        .and_then(|registry| registry.get(session_id));
+    if published_session.as_ref().is_some_and(|session| {
+        has_api_remote_subagent_owner(ctx, session.header(), published_agent.as_ref())
+    }) {
+        return Err(ApiRemoteSubagentSessionOwnership {
+            session_id: session_id.clone(),
+        }
+        .into());
+    }
+    let mut resume = seekdeep_agent::ResumeAgentOptions::new(session_id.clone());
+    if let Some(agent_options) = agent_options {
+        resume.agent_options = agent_options();
+    }
+    resume.setup = setup_value;
+    let registry = ctx
+        .get(seekdeep_agent::AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("agents registry is not mounted"))?;
+    Ok(registry.resume(resume).await?.agent)
+}
+
+fn fenced_live_agent(ctx: &Context, session_id: &SessionId) -> Option<ApiRemoteAgentResult> {
+    let registry = ctx.get(seekdeep_agent::AGENTS)?;
+    let live = registry.get(session_id)?;
+    Some(
+        if has_api_remote_subagent_owner(ctx, live.session().header(), Some(&live)) {
+            ApiRemoteAgentResult::Error(api_remote_subagent_ownership_error(session_id))
+        } else {
+            ApiRemoteAgentResult::Agent(live)
+        },
+    )
+}
+
+fn classify_resume_error(
+    ctx: &Context,
+    session_id: &SessionId,
+    error: &anyhow::Error,
+) -> ApiRemoteAgentResult {
+    if error.downcast_ref::<ApiRemoteSessionNotFound>().is_some() {
+        ApiRemoteAgentResult::Error(ApiRemoteLookupError::SessionNotFound {
+            message: error.to_string(),
+            details: SessionNotFoundDetails {
+                session_id: session_id.clone(),
+            },
+        })
+    } else if error
+        .downcast_ref::<ApiRemoteSubagentSessionOwnership>()
+        .is_some()
+    {
+        ApiRemoteAgentResult::Error(api_remote_subagent_ownership_error(session_id))
+    } else {
+        if let Some(fenced) = fenced_live_agent(ctx, session_id) {
+            return fenced;
+        }
+        if let Some(attached) = ctx.get(SESSIONS).and_then(|store| store.get(session_id))
+            && has_api_remote_subagent_owner(ctx, attached.header(), None)
+        {
+            return ApiRemoteAgentResult::Error(api_remote_subagent_ownership_error(session_id));
+        }
+        ApiRemoteAgentResult::Error(ApiRemoteLookupError::Internal {
+            message: format!("resume failed for session {session_id:?}: {error}"),
+            details: serde_json::Value::Object(serde_json::Map::new()),
+        })
+    }
+}
+
 async fn resolve_agent(
     ctx: &Context,
     session_id: &SessionId,
     agent_options: Option<&ApiRemoteAgentOptionsFn>,
     setup: Option<&ApiRemoteSetup>,
+    resumes: &SharedResumes,
 ) -> ApiRemoteAgentResult {
-    // Live agent reuse.
-    if let Some(registry) = ctx.get(seekdeep_agent::AGENTS)
-        && let Some(live) = registry.get(session_id)
-    {
-        if has_api_remote_subagent_owner(ctx, live.session().header(), Some(&live)) {
-            return ApiRemoteAgentResult::Error(api_remote_subagent_ownership_error(session_id));
-        }
-        return ApiRemoteAgentResult::Agent(live);
+    if let Some(fenced) = fenced_live_agent(ctx, session_id) {
+        return fenced;
     }
-    // Attached subagent-owner fence.
-    if let Some(store) = ctx.get(SESSIONS)
-        && let Some(attached) = store.get(session_id)
+    if let Some(attached) = ctx.get(SESSIONS).and_then(|store| store.get(session_id))
         && has_api_remote_subagent_owner(ctx, attached.header(), None)
     {
         return ApiRemoteAgentResult::Error(api_remote_subagent_ownership_error(session_id));
     }
-    // Cold resume.
-    let resumed: anyhow::Result<ApiRemoteAgentResult> = async {
-        let (meta, _events) = inspect_api_remote_session(ctx, session_id).await?;
-        if has_api_remote_subagent_owner(ctx, &meta, None) {
-            return Err(ApiRemoteSubagentSessionOwnership {
-                session_id: session_id.clone(),
+    let resume = {
+        let mut in_flight = resumes.lock();
+        if let Some(resume) = in_flight.get(session_id) {
+            resume.clone()
+        } else {
+            let ctx = ctx.clone();
+            let session_id = session_id.clone();
+            let insert_id = session_id.clone();
+            let cleanup_id = session_id.clone();
+            let agent_options = agent_options.cloned();
+            let setup = setup.cloned();
+            let resumes = resumes.clone();
+            let resume = async move {
+                let result =
+                    resume_agent(&ctx, &session_id, agent_options.as_ref(), setup.as_ref())
+                        .await
+                        .map_err(Arc::new);
+                resumes.lock().remove(&cleanup_id);
+                result
             }
-            .into());
+            .boxed()
+            .shared();
+            in_flight.insert(insert_id, resume.clone());
+            resume
         }
-        let inspection = ctx
-            .get(SESSION_PERSISTENCE)
-            .ok_or_else(|| anyhow::anyhow!("session persistence is not configured"))?
-            .persistence()
-            .inspect(session_id, None)
-            .await?;
-        let setup_value = match setup {
-            None => None,
-            Some(setup) => setup(inspection).await?,
-        };
-        let mut resume = seekdeep_agent::ResumeAgentOptions::new(session_id.clone());
-        if let Some(agent_options) = agent_options {
-            resume.agent_options = agent_options();
-        }
-        resume.setup = setup_value;
-        let registry = ctx
-            .get(seekdeep_agent::AGENTS)
-            .ok_or_else(|| anyhow::anyhow!("agents registry is not mounted"))?;
-        let handle = registry.resume(resume).await?;
-        Ok(ApiRemoteAgentResult::Agent(handle.agent))
-    }
-    .await;
-    match resumed {
-        Ok(result) => result,
-        Err(error) => {
-            if error.downcast_ref::<ApiRemoteSessionNotFound>().is_some() {
-                ApiRemoteAgentResult::Error(ApiRemoteLookupError::SessionNotFound {
-                    message: error.to_string(),
-                    details: SessionNotFoundDetails {
-                        session_id: session_id.clone(),
-                    },
-                })
-            } else if error
-                .downcast_ref::<ApiRemoteSubagentSessionOwnership>()
-                .is_some()
-            {
-                ApiRemoteAgentResult::Error(api_remote_subagent_ownership_error(session_id))
-            } else {
-                ApiRemoteAgentResult::Error(ApiRemoteLookupError::Internal {
-                    message: format!("resume failed for session {session_id:?}: {error}"),
-                    details: serde_json::Value::Object(serde_json::Map::new()),
-                })
-            }
-        }
+    };
+    match resume.await {
+        Ok(agent) => ApiRemoteAgentResult::Agent(agent),
+        Err(error) => classify_resume_error(ctx, session_id, &error),
     }
 }
 
@@ -242,17 +315,119 @@ pub fn create_api_remote_agent_resolver(
     ctx: &Context,
     options: ApiRemoteAgentOptions,
 ) -> Arc<dyn Fn(SessionId) -> BoxFuture<'static, ApiRemoteAgentResult> + Send + Sync> {
-    let ctx = ctx.clone();
+    let owner_ctx = ctx.clone();
+    let resolver_ctx = owner_ctx.clone();
     let agent_options = options.agent_options;
     let setup = options.setup;
-    Arc::new(move |session_id: SessionId| {
-        let ctx = ctx.clone();
-        let agent_options = agent_options.clone();
-        let setup = setup.clone();
-        Box::pin(async move {
-            resolve_agent(&ctx, &session_id, agent_options.as_ref(), setup.as_ref()).await
-        })
-    })
+    let resumes = Arc::new(Mutex::new(HashMap::new()));
+    let resolver: Arc<dyn Fn(SessionId) -> BoxFuture<'static, ApiRemoteAgentResult> + Send + Sync> =
+        Arc::new(move |session_id: SessionId| {
+            let ctx = resolver_ctx.clone();
+            let agent_options = agent_options.clone();
+            let setup = setup.clone();
+            let resumes = resumes.clone();
+            Box::pin(async move {
+                resolve_agent(
+                    &ctx,
+                    &session_id,
+                    agent_options.as_ref(),
+                    setup.as_ref(),
+                    &resumes,
+                )
+                .await
+            })
+        });
+    install_typert_resolvers(&owner_ctx, &resolver);
+    resolver
+}
+
+fn install_typert_resolvers(
+    ctx: &Context,
+    resolver: &Arc<dyn Fn(SessionId) -> BoxFuture<'static, ApiRemoteAgentResult> + Send + Sync>,
+) {
+    let agent_resolver = resolver.clone();
+    let plugin = Plugin::new(
+        "api-remote-agent-resolvers",
+        ["typert"],
+        move |context, _| {
+            let agent_resolver = agent_resolver.clone();
+            Box::pin(async move {
+                let typert = context
+                    .get(TYPERT)
+                    .ok_or_else(|| anyhow::anyhow!("api-remotes requires typert"))?;
+                let resolve_agent = {
+                    let agent_resolver = agent_resolver.clone();
+                    Arc::new(move |value: TypertBoundaryValue| {
+                        let agent_resolver = agent_resolver.clone();
+                        Box::pin(async move {
+                            let session_id = boundary_session_id(value)?;
+                            match agent_resolver(session_id).await {
+                                ApiRemoteAgentResult::Agent(agent) => {
+                                    Ok(Some(agent as TypertHostObject))
+                                }
+                                ApiRemoteAgentResult::Error(error) => {
+                                    Err(TypertLookupFailure::new(serde_json::to_value(error)?)
+                                        .into())
+                                }
+                            }
+                        }) as seekdeep_typert_protocol::TypertLookupFuture
+                    }) as TypertLookupResolver
+                };
+                typert
+                    .lookups()
+                    .configure(&context, "agent", resolve_agent.clone())?;
+                let session_resolver = Arc::new(move |value: TypertBoundaryValue| {
+                    let resolve_agent = resolve_agent.clone();
+                    Box::pin(async move {
+                        let agent = resolve_agent(value).await?;
+                        Ok(agent.and_then(|object| {
+                            Arc::downcast::<seekdeep_agent::Agent>(object)
+                                .ok()
+                                .map(|agent| agent.session().clone() as TypertHostObject)
+                        }))
+                    }) as seekdeep_typert_protocol::TypertLookupFuture
+                });
+                typert
+                    .lookups()
+                    .configure(&context, "session", session_resolver)?;
+                let context_resolver = {
+                    let agent_resolver = agent_resolver.clone();
+                    Arc::new(move |value: TypertBoundaryValue| {
+                        let agent_resolver = agent_resolver.clone();
+                        Box::pin(async move {
+                            let session_id = boundary_session_id(value)?;
+                            match agent_resolver(session_id).await {
+                                ApiRemoteAgentResult::Agent(agent) => {
+                                    Ok(Some(agent.context().clone()))
+                                }
+                                ApiRemoteAgentResult::Error(error) => {
+                                    Err(TypertLookupFailure::new(serde_json::to_value(error)?)
+                                        .into())
+                                }
+                            }
+                        })
+                            as seekdeep_typert_protocol::TypertHostContextFuture
+                    })
+                };
+                typert
+                    .contexts()
+                    .configure_host(&context, "agent", context_resolver)?;
+                Ok(())
+            })
+        },
+    );
+    if let Err(error) = ctx.plugin(plugin, serde_json::Value::Null) {
+        tracing::warn!(%error, "API Remote Typert resolver mount failed");
+    }
+}
+
+fn boundary_session_id(value: TypertBoundaryValue) -> anyhow::Result<SessionId> {
+    serde_json::from_value(
+        value
+            .into_optional_json()
+            .ok_or_else(|| anyhow::anyhow!("session identity is undefined"))?,
+    )
+    .map_err(Into::into)
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 
 pub mod boot;
 pub mod config_dump;
+pub mod environment;
 pub mod fail_loud;
 pub mod profile;
 pub mod reload;
@@ -11,7 +12,7 @@ pub mod watch;
 
 pub use boot::{
     ActivationEntry, BootOptions, BootPrepare, BootedApplication, activation_entries,
-    assert_entries_activated, boot,
+    assert_entries_activated, assert_entries_loaded, boot, mount_root_include,
 };
 
 pub use config_dump::{
@@ -19,9 +20,12 @@ pub use config_dump::{
     resolve_config_path,
 };
 
+pub use environment::{EnvironmentMap, EnvironmentWarning, load_env, load_layered_env, parse_env};
+
 pub use fail_loud::{
-    FAIL_LOUD_RELEASE_TIMEOUT, FailLoudController, FailLoudProcess, FailLoudRelease, FailLoudTimer,
-    TokioFailLoudTimer,
+    FAIL_LOUD_RELEASE_TIMEOUT, FailLoudController, FailLoudInstallation, FailLoudProcess,
+    FailLoudRelease, FailLoudTimer, LateFailure, LateFailureHandler, TokioFailLoudTimer,
+    UnhandledFailureSource, install_fail_loud,
 };
 
 pub use profile::{

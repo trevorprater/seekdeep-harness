@@ -8,7 +8,9 @@ use seekdeep_loader::profile_patch::{
     ProfilePatch, apply_entry_patches_with_warning_sink, parse_entry_list_yaml,
     render_entry_list_yaml,
 };
-use seekdeep_loader::{Entry, EntryId, EntryParent, LoadedComposition, PluginCatalog};
+use seekdeep_loader::{
+    Entry, EntryId, EntryParent, LOADER, LoadedComposition, LoaderEntrySnapshot, PluginCatalog,
+};
 
 /// Host preparation callback run before any configuration row mounts.
 pub type BootPrepare = Arc<dyn Fn(Context) -> BoxFuture<'static, anyhow::Result<()>> + Send + Sync>;
@@ -100,7 +102,9 @@ pub fn activation_entries(composition: &LoadedComposition) -> Vec<ActivationEntr
         .fibers()
         .iter()
         .map(|fiber| ActivationEntry {
-            name: fiber.plugin_name().to_owned(),
+            name: fiber
+                .entry_name()
+                .unwrap_or_else(|| fiber.plugin_name().to_owned()),
             state: fiber.fiber().state(),
             missing_services: fiber
                 .inject()
@@ -113,6 +117,34 @@ pub fn activation_entries(composition: &LoadedComposition) -> Vec<ActivationEntr
         .collect()
 }
 
+/// Rejects every enabled, non-group row that has no mounted fiber.
+///
+/// Rust Loader import and activation transactions normally fail before such a
+/// row can commit. Keeping this explicit audit preserves the source boundary
+/// for snapshots, compatibility loaders, and future external catalogs.
+///
+/// # Errors
+///
+/// Names every enabled row without a lifecycle state.
+pub fn assert_entries_loaded(
+    entries: &[LoaderEntrySnapshot],
+    bin_name: &str,
+) -> anyhow::Result<()> {
+    let failed = entries
+        .iter()
+        .filter(|entry| !entry.disabled && !entry.group && entry.state.is_none())
+        .map(|entry| entry.plugin.as_str())
+        .collect::<Vec<_>>();
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "{bin_name}: plugin(s) failed to load: {}; Cordis startup failed because these plugin(s) could not be resolved (see the error(s) logged above)",
+            failed.join(", ")
+        )
+    }
+}
+
 /// Rejects every enabled entry that did not reach active state.
 ///
 /// # Errors
@@ -122,6 +154,7 @@ pub fn assert_entries_activated(
     composition: &LoadedComposition,
     bin_name: &str,
 ) -> anyhow::Result<()> {
+    assert_entries_loaded(&composition.entries(), bin_name)?;
     let mut failures = Vec::new();
     for entry in activation_entries(composition) {
         match entry.state {
@@ -147,7 +180,11 @@ pub fn assert_entries_activated(
                     entry.name
                 ));
             }
-            state => failures.push(format!("{}: fiber state {state:?}", entry.name)),
+            state => failures.push(format!(
+                "{}: fiber state {}",
+                entry.name,
+                source_fiber_state(state)
+            )),
         }
     }
     if failures.is_empty() {
@@ -164,6 +201,43 @@ pub fn assert_entries_activated(
             failures.join("\n")
         )
     }
+}
+
+const fn source_fiber_state(state: FiberState) -> u8 {
+    match state {
+        FiberState::Pending => 0,
+        FiberState::Loading => 1,
+        FiberState::Active => 2,
+        FiberState::Failed => 3,
+        FiberState::Disposed => 4,
+        FiberState::Unloading => 5,
+    }
+}
+
+/// Mounts the fixed-id root file Include on an initialized Loader.
+///
+/// # Errors
+///
+/// Returns missing Loader, include construction, import, activation, or
+/// transactional reconciliation failures.
+pub async fn mount_root_include(
+    context: &Context,
+    absolute_config_path: &std::path::Path,
+    patches: Vec<ProfilePatch>,
+) -> anyhow::Result<Option<EntryId>> {
+    let loader = context.get(LOADER).ok_or_else(|| {
+        anyhow::anyhow!("root Include mounting requires the Cordis Loader service")
+    })?;
+    let include_id = EntryId::new("include")?;
+    let include = Entry::file_include(
+        include_id.clone(),
+        absolute_config_path.to_string_lossy(),
+        patches,
+    )?;
+    loader
+        .create_entry(include, EntryParent::Root, None)
+        .await?;
+    Ok(context.get(LOADER).map(|_| include_id))
 }
 
 fn render_boot_config(
@@ -233,27 +307,8 @@ pub async fn boot(
         let primary = anyhow::anyhow!("{bin_name}: plugin tree failed to load: {error:#}");
         return Err(dispose_preserving(&context, primary).await);
     }
-    let include_id = match EntryId::new("include") {
-        Ok(include_id) => include_id,
-        Err(error) => {
-            let primary = anyhow::anyhow!("{bin_name}: plugin tree failed to load: {error:#}");
-            return Err(dispose_preserving(&context, primary).await);
-        }
-    };
-    let include = match Entry::file_include(
-        include_id,
-        absolute_config_path.to_string_lossy(),
-        options.patches.clone(),
-    ) {
-        Ok(include) => include,
-        Err(error) => {
-            let primary = anyhow::anyhow!("{bin_name}: plugin tree failed to load: {error:#}");
-            return Err(dispose_preserving(&context, primary).await);
-        }
-    };
-    if let Err(error) = composition
-        .create_entry(include, EntryParent::Root, None)
-        .await
+    if let Err(error) =
+        mount_root_include(&context, absolute_config_path, options.patches.clone()).await
     {
         if owner.state() == FiberState::Disposed {
             return Ok(BootedApplication {

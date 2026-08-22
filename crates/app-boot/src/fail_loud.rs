@@ -10,6 +10,7 @@ use std::{
 };
 
 use futures::{FutureExt as _, future::BoxFuture};
+use parking_lot::Mutex;
 
 /// Maximum wait for terminal/resource release before a fatal process exit.
 pub const FAIL_LOUD_RELEASE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -40,6 +41,53 @@ impl FailLoudTimer for TokioFailLoudTimer {
 
 /// Optional teardown invoked before fatal exit.
 pub type FailLoudRelease = Arc<dyn Fn() -> BoxFuture<'static, anyhow::Result<()>> + Send + Sync>;
+
+/// One late rejection delivered by a Host runtime boundary.
+#[derive(Debug)]
+pub enum LateFailure {
+    /// Structured Rust failure retaining its causal chain.
+    Error(anyhow::Error),
+    /// Source-compatible non-Error rejection after string coercion.
+    Message(String),
+}
+
+/// Callback installed on an unhandled-failure source.
+pub type LateFailureHandler = Arc<dyn Fn(LateFailure) + Send + Sync>;
+
+/// Runtime seam that publishes unhandled asynchronous failures.
+pub trait UnhandledFailureSource: Send + Sync + 'static {
+    /// Installs one handler and returns its exact uninstaller.
+    fn install(&self, handler: LateFailureHandler) -> Box<dyn FnOnce() + Send + 'static>;
+}
+
+/// Owned fail-loud handler registration.
+pub struct FailLoudInstallation {
+    uninstall: Mutex<Option<Box<dyn FnOnce() + Send + 'static>>>,
+}
+
+impl std::fmt::Debug for FailLoudInstallation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("FailLoudInstallation")
+            .field("installed", &self.uninstall.lock().is_some())
+            .finish()
+    }
+}
+
+impl FailLoudInstallation {
+    /// Removes the rejection handler exactly once.
+    pub fn uninstall(&self) {
+        if let Some(uninstall) = self.uninstall.lock().take() {
+            uninstall();
+        }
+    }
+}
+
+impl Drop for FailLoudInstallation {
+    fn drop(&mut self) {
+        self.uninstall();
+    }
+}
 
 /// Latches the first late failure, reports it, releases resources, then exits.
 pub struct FailLoudController {
@@ -128,5 +176,24 @@ impl FailLoudController {
     #[must_use]
     pub fn is_exiting(&self) -> bool {
         self.exiting.load(Ordering::Acquire)
+    }
+}
+
+/// Installs a fail-loud controller on one runtime rejection source.
+#[must_use]
+pub fn install_fail_loud(
+    source: &dyn UnhandledFailureSource,
+    controller: Arc<FailLoudController>,
+) -> FailLoudInstallation {
+    let handler: LateFailureHandler = Arc::new(move |failure| match failure {
+        LateFailure::Error(error) => {
+            controller.report_error(&error);
+        }
+        LateFailure::Message(message) => {
+            controller.report_message(&message);
+        }
+    });
+    FailLoudInstallation {
+        uninstall: Mutex::new(Some(source.install(handler))),
     }
 }

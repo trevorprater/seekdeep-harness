@@ -5,7 +5,7 @@
 //! serialize as a `{ uid, refs }` graph.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt::Write as _,
     sync::{
         Arc,
@@ -357,6 +357,57 @@ impl Schema {
     #[must_use]
     pub fn uid(&self) -> u64 {
         self.0.uid
+    }
+
+    /// Rehydrates one canonical `{ uid, refs }` wire envelope.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed envelopes, missing relations, unknown node kinds,
+    /// and recursive wire cycles unsupported by the immutable Rust graph.
+    pub fn from_json(value: &Value) -> anyhow::Result<Self> {
+        let root = value
+            .get("uid")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| anyhow::anyhow!("schemastery wire uid must be an integer"))?;
+        let refs = value
+            .get("refs")
+            .and_then(Value::as_object)
+            .ok_or_else(|| anyhow::anyhow!("schemastery wire refs must be an object"))?;
+        rehydrate_node(root, refs, &mut HashMap::new(), &mut HashSet::new())
+    }
+
+    /// Structural node kind used by schema-driven editors.
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        self.type_name()
+    }
+
+    /// Declared object property relation.
+    #[must_use]
+    pub fn field(&self, name: &str) -> Option<Self> {
+        let SchemaKind::Object(fields) = &self.0.kind else {
+            return None;
+        };
+        fields.get(name).cloned()
+    }
+
+    /// Shared element relation of an array or dictionary.
+    #[must_use]
+    pub fn inner(&self) -> Option<Self> {
+        match &self.0.kind {
+            SchemaKind::Array(inner) | SchemaKind::Dict { inner, .. } => Some(inner.clone()),
+            SchemaKind::Any
+            | SchemaKind::Never
+            | SchemaKind::Const(_)
+            | SchemaKind::String
+            | SchemaKind::Number
+            | SchemaKind::Boolean
+            | SchemaKind::Tuple(_)
+            | SchemaKind::Object(_)
+            | SchemaKind::Union(_)
+            | SchemaKind::Intersect(_) => None,
+        }
     }
 
     /// Structural kind.
@@ -758,6 +809,96 @@ impl Schema {
             SchemaKind::Intersect(_) => "intersect",
         }
     }
+}
+
+fn rehydrate_node(
+    uid: u64,
+    refs: &Map<String, Value>,
+    cache: &mut HashMap<u64, Schema>,
+    visiting: &mut HashSet<u64>,
+) -> anyhow::Result<Schema> {
+    if let Some(schema) = cache.get(&uid) {
+        return Ok(schema.clone());
+    }
+    anyhow::ensure!(
+        visiting.insert(uid),
+        "schemastery wire contains a recursive cycle through {uid}"
+    );
+    let node = refs
+        .get(&uid.to_string())
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow::anyhow!("schemastery wire ref {uid} is missing"))?;
+    let type_name = node
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("schemastery wire ref {uid} type must be a string"))?;
+    let meta = node.get("meta").map_or_else(
+        || Ok(SchemaMeta::default()),
+        |meta| serde_json::from_value(meta.clone()).map_err(anyhow::Error::from),
+    )?;
+    let relation = |name: &str| -> anyhow::Result<u64> {
+        node.get(name).and_then(Value::as_u64).ok_or_else(|| {
+            anyhow::anyhow!("schemastery wire ref {uid} relation {name:?} must be an integer")
+        })
+    };
+    let list = || -> anyhow::Result<Vec<u64>> {
+        node.get("list")
+            .and_then(Value::as_array)
+            .and_then(|items| items.iter().map(Value::as_u64).collect::<Option<Vec<_>>>())
+            .ok_or_else(|| anyhow::anyhow!("schemastery wire ref {uid} list must contain integers"))
+    };
+    let kind = match type_name {
+        "any" => SchemaKind::Any,
+        "never" => SchemaKind::Never,
+        "const" => SchemaKind::Const(node.get("value").cloned().unwrap_or(Value::Null)),
+        "string" => SchemaKind::String,
+        "number" => SchemaKind::Number,
+        "boolean" => SchemaKind::Boolean,
+        "array" => SchemaKind::Array(rehydrate_node(relation("inner")?, refs, cache, visiting)?),
+        "dict" => SchemaKind::Dict {
+            inner: rehydrate_node(relation("inner")?, refs, cache, visiting)?,
+            key: rehydrate_node(relation("sKey")?, refs, cache, visiting)?,
+        },
+        "tuple" | "union" | "intersect" => {
+            let schemas = list()?
+                .into_iter()
+                .map(|uid| rehydrate_node(uid, refs, cache, visiting))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            match type_name {
+                "tuple" => SchemaKind::Tuple(schemas),
+                "union" => SchemaKind::Union(schemas),
+                "intersect" => SchemaKind::Intersect(schemas),
+                _ => unreachable!(),
+            }
+        }
+        "object" => {
+            let fields = node
+                .get("dict")
+                .and_then(Value::as_object)
+                .ok_or_else(|| {
+                    anyhow::anyhow!("schemastery wire ref {uid} dict must be an object")
+                })?
+                .iter()
+                .map(|(name, relation)| {
+                    let relation = relation.as_u64().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "schemastery wire ref {uid} field {name:?} must be an integer"
+                        )
+                    })?;
+                    Ok((
+                        name.clone(),
+                        rehydrate_node(relation, refs, cache, visiting)?,
+                    ))
+                })
+                .collect::<anyhow::Result<IndexMap<_, _>>>()?;
+            SchemaKind::Object(fields)
+        }
+        other => anyhow::bail!("schemastery wire ref {uid} has unknown type {other:?}"),
+    };
+    visiting.remove(&uid);
+    let schema = Schema::new(kind, meta);
+    cache.insert(uid, schema.clone());
+    Ok(schema)
 }
 
 fn check_range(

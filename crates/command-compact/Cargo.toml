@@ -16,5 +16,15 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 tokio.workspace = true
 
+[dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-scope = { path = "../scope" }
+serde_json.workspace = true
+
 [lints]
 workspace = true

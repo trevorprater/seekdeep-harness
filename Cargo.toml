@@ -17,9 +17,15 @@ members = [
   "crates/client-connection",
   "crates/client-modules",
   "crates/client-hmr",
+  "crates/client-schema-form",
+  "crates/win32-durable-namespace",
+  "crates/win32-directory-dialog",
   "crates/cmdline",
   "crates/host-apiproxy",
   "crates/host-directory-picker",
+  "crates/host-directory-picker-auto",
+  "crates/host-directory-picker-browse",
+  "crates/host-directory-picker-native",
   "crates/host-frontend-static",
   "crates/hmr",
   "crates/host-plugin-inventory",
@@ -115,6 +121,7 @@ members = [
   "crates/tool-ask-user",
   "crates/tool-bash",
   "crates/tool-fs",
+  "crates/tool-str-replace-editor",
   "crates/tool-goal",
   "crates/tool-jobs",
   "crates/tool-lsp",
@@ -179,6 +186,8 @@ hyper = { version = "1.8.1", features = ["http1", "server"] }
 hyper-util = { version = "0.1.19", features = ["tokio"] }
 image = { version = "0.25.9", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 iana-time-zone = "0.1.64"
+icu_collator = "=2.0.0"
+icu_locale = "=2.0.0"
 icu_timezone = "1.5.0"
 indexmap = { version = "2.12.1", features = ["serde"] }
 js-sys = "0.3.104"
@@ -210,6 +219,7 @@ serde_yml = "0.0.12"
 sha1 = "0.10"
 sha2 = "0.10.9"
 socket2 = "0.6.2"
+sys-locale = "0.3.2"
 thiserror = "2.0.17"
 tempfile = "3.23.0"
 terminal_size = "0.4.4"

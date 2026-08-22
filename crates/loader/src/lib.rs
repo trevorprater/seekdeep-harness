@@ -21,7 +21,7 @@ use std::{
     pin::Pin,
     sync::{
         Arc,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -157,7 +157,35 @@ impl LoaderSettlement {
     ///
     /// Returns an unavailable error before initial attachment or after disposal.
     pub fn entries(&self) -> Result<Vec<LoaderEntrySnapshot>, LoaderError> {
-        Ok(self.attached()?.entry_snapshot.read().clone())
+        Ok(self.attached()?.all_entry_snapshots())
+    }
+
+    /// Mounts one in-memory root entry owned by a running plugin effect.
+    ///
+    /// Unlike declarative tree mutation, this operation may run while the
+    /// caller's own declarative generation is activating. The entry remains
+    /// visible in ordinary Loader inventory and is disposed with the Loader.
+    ///
+    /// # Errors
+    ///
+    /// Returns duplicate id, import, activation, or disposal failures.
+    pub async fn create_programmatic_entry(&self, entry: Entry) -> Result<(), LoaderError> {
+        self.attached()?.create_programmatic_entry(entry).await
+    }
+
+    /// Removes one exact programmatic entry when it still exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns lifecycle teardown failures. Absence is a successful `false`,
+    /// closing the source store-check race without string matching.
+    pub async fn remove_programmatic_entry_if_present(
+        &self,
+        id: &EntryId,
+    ) -> Result<bool, LoaderError> {
+        self.attached()?
+            .remove_programmatic_entry_if_present(id)
+            .await
     }
 
     /// Creates one live Loader entry.
@@ -978,11 +1006,26 @@ impl PluginCatalog {
         settlement_effect: EffectHandle,
         completion: LoaderSettlementCompletion,
     ) -> Result<LoadedComposition, LoaderError> {
+        let runtime = Arc::new(CompositionRuntime::new(
+            context.clone(),
+            self.clone(),
+            settlement.clone(),
+            Vec::new(),
+        ));
+        settlement.attach(&runtime);
         let mut mounted = Vec::new();
         if let Err(error) = mount_entries(self, context, entries, &mut mounted).await {
-            let error = match dispose_entries(&mut mounted).await {
-                Ok(()) => error,
-                Err(cleanup) => LoaderError::Disposal(format!("{error}; {cleanup}")),
+            let mut failures = vec![error.to_string()];
+            if let Err(cleanup) = runtime.dispose_programmatic().await {
+                failures.push(cleanup.to_string());
+            }
+            if let Err(cleanup) = dispose_entries(&mut mounted).await {
+                failures.push(cleanup.to_string());
+            }
+            let error = if failures.len() == 1 {
+                error
+            } else {
+                LoaderError::Disposal(failures.join("; "))
             };
             completion.finish(Err(Arc::from(error.to_string())));
             let _ = settlement_effect.dispose().await;
@@ -1010,22 +1053,24 @@ impl PluginCatalog {
                     plugin,
                     message: format!("{error:#}"),
                 };
-                let error = match dispose_entries(&mut mounted).await {
-                    Ok(()) => error,
-                    Err(cleanup) => LoaderError::Disposal(format!("{error}; {cleanup}")),
+                let mut failures = vec![error.to_string()];
+                if let Err(cleanup) = runtime.dispose_programmatic().await {
+                    failures.push(cleanup.to_string());
+                }
+                if let Err(cleanup) = dispose_entries(&mut mounted).await {
+                    failures.push(cleanup.to_string());
+                }
+                let error = if failures.len() == 1 {
+                    error
+                } else {
+                    LoaderError::Disposal(failures.join("; "))
                 };
                 completion.finish(Err(Arc::from(error.to_string())));
                 let _ = settlement_effect.dispose().await;
                 return Err(error);
             }
         }
-        let runtime = Arc::new(CompositionRuntime::new(
-            context.clone(),
-            self.clone(),
-            settlement.clone(),
-            mounted,
-        ));
-        settlement.attach(&runtime);
+        runtime.finish_initial_mount(mounted);
         completion.finish(Ok(()));
         Ok(LoadedComposition {
             runtime,
@@ -2141,6 +2186,9 @@ struct CompositionRuntime {
     entries: parking_lot::Mutex<Option<Vec<MountedEntry>>>,
     fibers: RwLock<Vec<Arc<PluginFiber>>>,
     entry_snapshot: RwLock<Vec<LoaderEntrySnapshot>>,
+    programmatic: parking_lot::Mutex<Vec<MountedEntry>>,
+    initializing: AtomicBool,
+    disposed: AtomicBool,
 }
 
 impl std::fmt::Debug for CompositionRuntime {
@@ -2170,11 +2218,22 @@ impl CompositionRuntime {
             entries: parking_lot::Mutex::new(Some(entries)),
             fibers: RwLock::new(fibers),
             entry_snapshot: RwLock::new(entry_snapshot),
+            programmatic: parking_lot::Mutex::new(Vec::new()),
+            initializing: AtomicBool::new(true),
+            disposed: AtomicBool::new(false),
         }
     }
 
     fn fibers(&self) -> Vec<Arc<PluginFiber>> {
-        self.fibers.read().clone()
+        let mut fibers = self.fibers.read().clone();
+        fibers.extend(collect_fibers(&self.programmatic.lock()));
+        fibers
+    }
+
+    fn all_entry_snapshots(&self) -> Vec<LoaderEntrySnapshot> {
+        let mut entries = self.entry_snapshot.read().clone();
+        entries.extend(collect_entry_snapshot(&self.programmatic.lock()));
+        entries
     }
 
     async fn take_entries(
@@ -2192,6 +2251,11 @@ impl CompositionRuntime {
         *self.fibers.write() = collect_fibers(&entries);
         *self.entry_snapshot.write() = collect_entry_snapshot(&entries);
         *self.entries.lock() = Some(entries);
+    }
+
+    fn finish_initial_mount(&self, entries: Vec<MountedEntry>) {
+        self.restore_entries(entries);
+        self.initializing.store(false, Ordering::Release);
     }
 
     async fn reconcile_specs(&self, candidate: &[Entry]) -> Result<(), LoaderError> {
@@ -2232,6 +2296,14 @@ impl CompositionRuntime {
         parent: EntryParent,
         position: Option<usize>,
     ) -> Result<(), LoaderError> {
+        if self.disposed.load(Ordering::Acquire) {
+            return Err(LoaderError::Unavailable);
+        }
+        if parent == EntryParent::Root
+            && (self.initializing.load(Ordering::Acquire) || self.entries.lock().is_none())
+        {
+            return self.create_programmatic_entry(entry).await;
+        }
         let mut candidate = {
             let current = self.entries.lock();
             entry_specs(current.as_ref().ok_or(LoaderError::Unavailable)?)
@@ -2245,6 +2317,67 @@ impl CompositionRuntime {
         insert_entry(&mut candidate, entry, &parent, position)?;
         materialize_includes(&self.context, &mut candidate)?;
         self.reconcile_specs(&candidate).await
+    }
+
+    async fn create_programmatic_entry(&self, mut entry: Entry) -> Result<(), LoaderError> {
+        if self.disposed.load(Ordering::Acquire) {
+            return Err(LoaderError::Unavailable);
+        }
+        ensure_unique_runtime_id(self, &entry.id)?;
+        materialize_includes(&self.context, std::slice::from_mut(&mut entry))?;
+        let mut mounted = Some(mount_entry(&self.catalog, &self.context, &entry).await?);
+        let inserted = {
+            let declarative_duplicate = self
+                .entry_snapshot
+                .read()
+                .iter()
+                .any(|candidate| candidate.id == entry.id);
+            let mut programmatic = self.programmatic.lock();
+            let programmatic_duplicate = programmatic
+                .iter()
+                .any(|candidate| candidate.options.id == entry.id);
+            if self.disposed.load(Ordering::Acquire)
+                || declarative_duplicate
+                || programmatic_duplicate
+            {
+                false
+            } else {
+                programmatic.push(mounted.take().expect("mounted entry is available"));
+                true
+            }
+        };
+        if !inserted {
+            let error = if self.disposed.load(Ordering::Acquire) {
+                LoaderError::Unavailable
+            } else {
+                LoaderError::InvalidDocument(format!("duplicate loader entry id: {}", entry.id))
+            };
+            let cleanup = mounted
+                .take()
+                .expect("colliding mounted entry is available")
+                .dispose_runtime()
+                .await;
+            return Err(match cleanup {
+                Ok(()) => error,
+                Err(cleanup) => LoaderError::Disposal(format!("{error}; {cleanup}")),
+            });
+        }
+        Ok(())
+    }
+
+    async fn remove_programmatic_entry_if_present(
+        &self,
+        id: &EntryId,
+    ) -> Result<bool, LoaderError> {
+        let mut entry = {
+            let mut entries = self.programmatic.lock();
+            let Some(index) = entries.iter().position(|entry| entry.options.id == *id) else {
+                return Ok(false);
+            };
+            entries.remove(index)
+        };
+        entry.dispose_runtime().await?;
+        Ok(true)
     }
 
     async fn update_entry(
@@ -2275,6 +2408,9 @@ impl CompositionRuntime {
     }
 
     async fn remove_entry(&self, id: &EntryId) -> Result<(), LoaderError> {
+        if self.remove_programmatic_entry_if_present(id).await? {
+            return Ok(());
+        }
         let mut candidate = {
             let current = self.entries.lock();
             entry_specs(current.as_ref().ok_or(LoaderError::Unavailable)?)
@@ -2395,11 +2531,44 @@ impl CompositionRuntime {
     }
 
     async fn dispose(&self) -> Result<(), LoaderError> {
+        self.disposed.store(true, Ordering::Release);
+        let programmatic_result = self.dispose_programmatic().await;
         let (_operation, mut entries) = self.take_entries().await?;
-        let result = dispose_entries(&mut entries).await;
+        let declarative_result = dispose_entries(&mut entries).await;
         self.fibers.write().clear();
         self.entry_snapshot.write().clear();
-        result
+        match (programmatic_result, declarative_result) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+            (Err(programmatic), Err(declarative)) => Err(LoaderError::Disposal(format!(
+                "{programmatic}; {declarative}"
+            ))),
+        }
+    }
+
+    async fn dispose_programmatic(&self) -> Result<(), LoaderError> {
+        let mut programmatic = std::mem::take(&mut *self.programmatic.lock());
+        dispose_entries(&mut programmatic).await
+    }
+}
+
+fn ensure_unique_runtime_id(runtime: &CompositionRuntime, id: &EntryId) -> Result<(), LoaderError> {
+    let declarative_duplicate = runtime
+        .entry_snapshot
+        .read()
+        .iter()
+        .any(|entry| entry.id == *id);
+    let programmatic_duplicate = runtime
+        .programmatic
+        .lock()
+        .iter()
+        .any(|entry| entry.options.id == *id);
+    if declarative_duplicate || programmatic_duplicate {
+        Err(LoaderError::InvalidDocument(format!(
+            "duplicate loader entry id: {id}"
+        )))
+    } else {
+        Ok(())
     }
 }
 
@@ -2468,6 +2637,12 @@ pub struct LoadedComposition {
 }
 
 impl LoadedComposition {
+    /// Snapshots every configured row in declaration preorder.
+    #[must_use]
+    pub fn entries(&self) -> Vec<LoaderEntrySnapshot> {
+        self.runtime.all_entry_snapshots()
+    }
+
     /// Active mounts in declaration/preorder.
     #[must_use]
     pub fn fibers(&self) -> Vec<Arc<PluginFiber>> {

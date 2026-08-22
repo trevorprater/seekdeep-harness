@@ -15,6 +15,7 @@ pub mod backend;
 pub mod format;
 /// Package-owned invariant companion.
 pub mod invariant;
+pub mod win32;
 /// Concatenated checksummed Zstandard frame primitives.
 pub mod zstd;
 

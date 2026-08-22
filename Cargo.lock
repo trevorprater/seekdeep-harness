@@ -2123,6 +2123,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "icu_collator"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42ad4c6a556938dfd31f75a8c54141079e8821dc697ffb799cfe0f0fa11f2edc"
+dependencies = [
+ "displaydoc",
+ "icu_collator_data",
+ "icu_collections",
+ "icu_locale",
+ "icu_locale_core",
+ "icu_normalizer",
+ "icu_properties",
+ "icu_provider 2.3.0",
+ "smallvec",
+ "utf16_iter",
+ "utf8_iter",
+ "zerovec 0.11.7",
+]
+
+[[package]]
+name = "icu_collator_data"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d880b8e680799eabd90c054e1b95526cd48db16c95269f3c89fb3117e1ac92c5"
+
+[[package]]
 name = "icu_collections"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2132,6 +2158,22 @@ dependencies = [
  "potential_utf",
  "yoke 0.8.3",
  "zerofrom",
+ "zerovec 0.11.7",
+]
+
+[[package]]
+name = "icu_locale"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ae5921528335e91da1b6c695dbf1ec37df5ac13faa3f91e5640be93aa2fbefd"
+dependencies = [
+ "displaydoc",
+ "icu_collections",
+ "icu_locale_core",
+ "icu_locale_data",
+ "icu_provider 2.3.0",
+ "potential_utf",
+ "tinystr 0.8.4",
  "zerovec 0.11.7",
 ]
 
@@ -2148,6 +2190,12 @@ dependencies = [
  "writeable 0.6.4",
  "zerovec 0.11.7",
 ]
+
+[[package]]
+name = "icu_locale_data"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fdef0c124749d06a743c69e938350816554eb63ac979166590e2b4ee4252765"
 
 [[package]]
 name = "icu_locid"
@@ -3452,6 +3500,8 @@ version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d83eb9bc6d8e5cf568e7a1101d60ee05e81ed50ea106026f3d18deeb046d7661"
 dependencies = [
+ "serde_core",
+ "writeable 0.6.4",
  "zerovec 0.11.7",
 ]
 
@@ -4387,16 +4437,23 @@ name = "seekdeep-api-remotes"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "parking_lot",
  "seekdeep-agent",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-scope",
  "seekdeep-session-persistence",
+ "seekdeep-typert-protocol",
+ "seekdeep-typert-registry",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4412,6 +4469,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-loader",
  "seekdeep-system-prompt",
+ "seekdeep-util",
  "serde",
  "serde_json",
  "serde_yml",
@@ -4556,6 +4614,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-schema-form"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "js-sys",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "seekdeep-schemastery",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-cmdline"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -4621,11 +4695,19 @@ name = "seekdeep-command-compact"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
  "seekdeep-agent",
  "seekdeep-commands",
  "seekdeep-compaction",
  "seekdeep-cordis",
+ "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-loader",
+ "seekdeep-scope",
+ "serde_json",
  "tokio",
 ]
 
@@ -5129,6 +5211,64 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-host-directory-picker-auto"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-cordis",
+ "seekdeep-host-directory-picker",
+ "seekdeep-host-directory-picker-browse",
+ "seekdeep-host-directory-picker-native",
+ "seekdeep-host-webserver",
+ "seekdeep-invariants",
+ "seekdeep-loader",
+ "seekdeep-util",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-host-directory-picker-browse"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "futures",
+ "icu_collator",
+ "icu_locale",
+ "ryu-js",
+ "seekdeep-cordis",
+ "seekdeep-host-directory-picker",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "serde",
+ "serde_json",
+ "sys-locale",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-host-directory-picker-native"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-host-directory-picker",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-util",
+ "seekdeep-win32-directory-dialog",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-host-frontend-static"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5200,6 +5340,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -5684,6 +5825,7 @@ dependencies = [
 name = "seekdeep-schemastery"
 version = "0.1.0-rc.5"
 dependencies = [
+ "anyhow",
  "indexmap 2.14.0",
  "regex",
  "serde",
@@ -5764,6 +5906,7 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-session-persistence",
+ "seekdeep-win32-durable-namespace",
  "serde",
  "serde_json",
  "tempfile",
@@ -5862,8 +6005,10 @@ name = "seekdeep-session-reference"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
  "futures",
+ "parking_lot",
  "regress 0.11.1",
  "seekdeep-agent",
  "seekdeep-compaction",
@@ -5872,7 +6017,9 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-schemastery",
+ "seekdeep-scope",
  "seekdeep-session-query",
+ "seekdeep-session-title",
  "seekdeep-util",
  "serde",
  "serde_json",
@@ -6638,6 +6785,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-str-replace-editor"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "ryu-js",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-fs",
+ "seekdeep-fs-local",
+ "seekdeep-fs-observation-policy",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-sandbox",
+ "seekdeep-sandbox-policy",
+ "seekdeep-scope",
+ "seekdeep-tools",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-tool-timeout-policy"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -6713,6 +6885,7 @@ dependencies = [
  "seekdeep-code-runtime-worker-thread",
  "seekdeep-cordis",
  "seekdeep-core",
+ "seekdeep-fs",
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-scope",
@@ -6925,6 +7098,21 @@ dependencies = [
  "serde_json",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "seekdeep-win32-directory-dialog"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "seekdeep-win32-durable-namespace"
+version = "0.1.0-rc.5"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7374,6 +7562,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "sys-locale"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

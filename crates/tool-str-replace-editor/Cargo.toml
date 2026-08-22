@@ -1,0 +1,34 @@
+[package]
+name = "seekdeep-tool-str-replace-editor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Model-facing persistent string replacement file editor"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+ryu-js.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-fs = { path = "../fs" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-tools = { path = "../tools" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+seekdeep-agent = { path = "../agent" }
+seekdeep-core = { path = "../core" }
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-fs-observation-policy = { path = "../fs-observation-policy" }
+seekdeep-scope = { path = "../scope" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

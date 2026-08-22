@@ -17,6 +17,7 @@ path-clean.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-loader = { path = "../loader" }
 seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

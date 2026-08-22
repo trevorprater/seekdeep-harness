@@ -24,6 +24,9 @@ tracing.workspace = true
 uuid.workspace = true
 zstd.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+seekdeep-win32-durable-namespace = { path = "../win32-durable-namespace" }
+
 [dev-dependencies]
 tempfile.workspace = true
 

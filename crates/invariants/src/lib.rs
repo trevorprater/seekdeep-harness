@@ -397,11 +397,21 @@ fn monitor_startup(startup: Arc<StartupState>, effect: EffectHandle) {
             let _ = effect.dispose().await;
         }
     };
+    spawn_monitor(monitor);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_monitor(future: impl Future<Output = ()> + Send + 'static) {
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-        runtime.spawn(monitor);
+        runtime.spawn(future);
     } else {
-        std::thread::spawn(move || futures::executor::block_on(monitor));
+        std::thread::spawn(move || futures::executor::block_on(future));
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn spawn_monitor(future: impl Future<Output = ()> + Send + 'static) {
+    wasm_bindgen_futures::spawn_local(future);
 }
 
 fn compile_patterns(field: &str, values: &[String]) -> anyhow::Result<Vec<Regex>> {

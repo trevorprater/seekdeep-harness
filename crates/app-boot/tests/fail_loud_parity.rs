@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Duration};
 use parking_lot::Mutex;
 use seekdeep_app_boot::{
     FAIL_LOUD_RELEASE_TIMEOUT, FailLoudController, FailLoudProcess, FailLoudRelease, FailLoudTimer,
+    LateFailure, LateFailureHandler, UnhandledFailureSource, install_fail_loud,
 };
 
 #[derive(Debug, Default)]
@@ -20,6 +21,31 @@ impl FailLoudProcess for RecordingProcess {
 
     fn exit(&self, code: i32) {
         self.exits.lock().push(code);
+    }
+}
+
+#[derive(Default)]
+struct RecordingFailures {
+    handler: Arc<Mutex<Option<LateFailureHandler>>>,
+}
+
+impl RecordingFailures {
+    fn emit(&self, failure: LateFailure) {
+        if let Some(handler) = self.handler.lock().clone() {
+            handler(failure);
+        }
+    }
+
+    fn is_installed(&self) -> bool {
+        self.handler.lock().is_some()
+    }
+}
+
+impl UnhandledFailureSource for RecordingFailures {
+    fn install(&self, handler: LateFailureHandler) -> Box<dyn FnOnce() + Send + 'static> {
+        *self.handler.lock() = Some(handler);
+        let slot = self.handler.clone();
+        Box::new(move || *slot.lock() = None)
     }
 }
 
@@ -61,6 +87,27 @@ fn immediate_failure_writes_one_labelled_line_and_exits_one() {
         "seekdeep-test-bin: fatal load failure: plain failure\n"
     );
     assert!(controller.is_exiting());
+}
+
+#[test]
+fn installation_routes_rejections_and_its_uninstaller_removes_the_handler() {
+    let process = Arc::new(RecordingProcess::default());
+    let controller = FailLoudController::new(
+        "seekdeep-test-bin",
+        process.clone(),
+        Arc::new(ManualTimer::default()),
+        None,
+    );
+    let source = RecordingFailures::default();
+    let installed = install_fail_loud(&source, controller);
+    assert!(source.is_installed());
+    source.emit(LateFailure::Message("plain rejection".to_owned()));
+    source.emit(LateFailure::Error(anyhow::anyhow!("later error")));
+    assert_eq!(process.written.lock().len(), 1);
+    assert!(process.written.lock()[0].contains("plain rejection"));
+    assert_eq!(process.exits.lock().as_slice(), &[1]);
+    installed.uninstall();
+    assert!(!source.is_installed());
 }
 
 #[tokio::test]

@@ -14,7 +14,13 @@ serde.workspace = true
 serde_json.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 thiserror.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.53.1", default-features = false, features = ["rt", "sync"] }
+wasm-bindgen-futures.workspace = true
 
 [lints]
 workspace = true

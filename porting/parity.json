@@ -36575,12 +36575,15 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/api-remotes/src/agent_lookup.rs"
+        "crates/api-remotes/src/agent_lookup.rs",
+        "crates/api-remotes/tests/agent_lookup_parity.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-api-remotes --all-features && cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"
+        "pnpm exec vitest run packages/api/remotes/tests/agent-lookup.spec.ts --reporter=dot (pinned source: 6 passed)",
+        "cargo test -p seekdeep-api-remotes --test agent_lookup_parity --all-features",
+        "cargo clippy -p seekdeep-api-remotes --all-targets --all-features -- -D warnings"
       ],
-      "note": "ApiRemoteLookupError/ApiRemoteAgentResult/ApiRemoteAgentOptions, ApiRemoteSessionNotFound/ApiRemoteSubagentSessionOwnership, and apiRemoteSubagentOwnershipError are ported; hasApiRemoteSubagentOwner, inspectApiRemoteSession, and createApiRemoteAgentResolver remain"
+      "note": "Rust owns all lookup result/error shapes, live and attached subagent fences, non-repairing durable inspection, exact single-inspection setup input, shared per-Session cold resumes, post-setup publication rechecks, failed-resume reclassification, Agent/Session Typert lookup overrides, and the Agent Host Context provider"
     },
     {
       "source": "packages/api/remotes/src/client/index.ts",
@@ -36638,7 +36641,15 @@
     {
       "source": "packages/api/remotes/tests/agent-lookup.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/api-remotes/tests/agent_lookup_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/api/remotes/tests/agent-lookup.spec.ts --reporter=dot (pinned source: 6 passed)",
+        "cargo test -p seekdeep-api-remotes --test agent_lookup_parity --all-features"
+      ],
+      "note": "all six source race and Typert context cases are represented, plus explicit concurrent-resume sharing"
     },
     {
       "source": "packages/api/remotes/tests/built-lib.e2e.ts",
@@ -37060,7 +37071,26 @@
     {
       "source": "packages/boot/app-boot/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/app-boot/src/lib.rs",
+        "crates/app-boot/src/environment.rs",
+        "crates/app-boot/src/boot.rs",
+        "crates/app-boot/src/fail_loud.rs",
+        "crates/app-boot/src/config_dump.rs",
+        "crates/app-boot/src/profile.rs",
+        "crates/app-boot/src/source_section.rs",
+        "crates/app-boot/src/user_patches.rs",
+        "crates/app-boot/src/watch.rs",
+        "crates/loader/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/boot/app-boot/tests/app-boot.spec.ts --reporter=dot (pinned source: 51 passed)",
+        "cargo test -p seekdeep-app-boot --all-features (Rust: 50 passed)",
+        "cargo clippy -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-app-boot --all-features --target x86_64-pc-windows-msvc"
+      ],
+      "note": "the Rust app boot owns the complete config/profile/patch/root-Include transaction, source-compatible Loader expressions and dynamic JavaScript plugins, activation/load audits, source prompt section, fail-loud registration and bounded release, exact-path patch HMR, and Node-compatible dotenv parsing; inherited/project/home values commit as one immutable launch snapshot consumed by Cordis and Loader instead of unsafe process-global mutation"
     },
     {
       "source": "packages/boot/app-boot/src/invariant.ts",
@@ -37094,7 +37124,20 @@
     {
       "source": "packages/boot/app-boot/tests/app-boot.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/app-boot/tests/environment_parity.rs",
+        "crates/app-boot/tests/fail_loud_parity.rs",
+        "crates/app-boot/tests/boot_parity.rs",
+        "crates/app-boot/tests/config_dump_parity.rs",
+        "crates/app-boot/tests/source_section_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/boot/app-boot/tests/app-boot.spec.ts --reporter=dot (pinned source: 51 passed)",
+        "cargo test -p seekdeep-app-boot --all-features (Rust: 50 passed)",
+        "Node util.parseEnv differential corpus matches crates/app-boot/tests/environment_parity.rs"
+      ],
+      "note": "grouped Rust cases cover every source assertion: config paths, dotenv defaults/warnings/layer precedence/provenance/bootstrap fences, exact-once late failures and uninstall, loaded/active/pending/failed/disposed audits, overlay failures, transactional boot and host preparation, resolution anchors, source-compatible JavaScript configuration/plugins, mid-startup disposal, and reversible source prompt placement"
     },
     {
       "source": "packages/boot/app-boot/tests/config-dump.spec.ts",
@@ -37193,7 +37236,16 @@
     {
       "source": "packages/boot/app-boot/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/app-boot/Cargo.toml",
+        "crates/app-boot/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo clippy -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-app-boot --all-features --target x86_64-pc-windows-msvc"
+      ],
+      "note": "one native Rust library statically binds app-boot and Include behavior to the workspace's single Loader crate without a JavaScript bundle boundary"
     },
     {
       "source": "packages/boot/cmdline/README.i18n.yaml",
@@ -38189,27 +38241,73 @@
     {
       "source": "packages/client/hmr/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-hmr/src/runtime.rs",
+        "crates/client-hmr/src/wasm.rs",
+        "crates/client-hmr/tests/runtime_parity.rs",
+        "crates/client-hmr/tests/wasm_client_hmr_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-hmr --all-features",
+        "cargo clippy -p seekdeep-client-hmr --target wasm32-unknown-unknown --lib -- -D warnings",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_hmr_parity-*.wasm (headless Chrome: 2 passed)"
+      ],
+      "note": "Rust/WASM owns merge-extensible frame parsing, serialized reload tails, unknown-entry teaching, invalidate-before-prefetch, prefetch failure preservation of the old Fiber, registry-first teardown, inertia draining, exact Fiber clearing, verbatim style ownership removal, entry refresh/settlement, and fiber-owned EventSource closure"
     },
     {
       "source": "packages/client/hmr/src/events.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-hmr/src/protocol.rs",
+        "crates/client-hmr/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-hmr --test runtime_parity --all-features"
+      ],
+      "note": "the exact /plugins/events endpoint, graph/rebuilt frames, SSE data formatting, known-frame validation, and lossless unknown-frame preservation are Rust-owned"
     },
     {
       "source": "packages/client/hmr/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-hmr/src/host.rs",
+        "crates/client-hmr/tests/host_hmr_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/hmr/tests/node-half.client.spec.ts --reporter=dot (pinned source: 5 passed)",
+        "cargo test -p seekdeep-client-hmr --test host_hmr_parity --all-features",
+        "cargo clippy -p seekdeep-client-hmr --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the native Rust Host plugin validates pollIntervalMs, owns one joined stat-poll task, follows atomic graph changes, rehashes after baseline capture, retains dirty vanished/rename baselines, serves a real streaming SSE route with graph/rebuilt frames, prunes dead connections, and tears down watches/subscriptions/route/streams with its Fiber"
     },
     {
       "source": "packages/client/hmr/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-hmr/src/host.rs",
+        "crates/client-hmr/tests/host_hmr_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-hmr --test host_hmr_parity --all-features"
+      ],
+      "note": "the source StatWatcher delta is strengthened to one Rust poll task held by the service and synchronously cancelled then joined before disposal completes; the invariant companion reserves that construction-owned relation"
     },
     {
       "source": "packages/client/hmr/tests/node-half.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-hmr/tests/host_hmr_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/hmr/tests/node-half.client.spec.ts --reporter=dot (pinned source: 5 passed)",
+        "cargo test -p seekdeep-client-hmr --test host_hmr_parity --all-features"
+      ],
+      "note": "all five source watch and race cases are represented, with deterministic poll_now coverage plus real SSE and teardown"
     },
     {
       "source": "packages/client/hmr/tsconfig.json",
@@ -38225,7 +38323,16 @@
     {
       "source": "packages/client/hmr/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-hmr/Cargo.toml",
+        "crates/client-hmr/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-client-hmr --all-targets --all-features",
+        "cargo check -p seekdeep-client-hmr --target wasm32-unknown-unknown --lib"
+      ],
+      "note": "one Rust crate emits native Host and browser WASM faces without a JavaScript bundler"
     },
     {
       "source": "packages/client/locale/README.i18n.yaml",
@@ -39042,7 +39149,16 @@
     {
       "source": "packages/client/schema-form/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-schema-form/src/lib.rs",
+        "crates/client-schema-form/src/wasm.rs"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-client-schema-form --target wasm32-unknown-unknown --lib",
+        "cargo clippy -p seekdeep-client-schema-form --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust/WASM crate exports the complete schema and immutable draft helper face"
     },
     {
       "source": "packages/client/schema-form/src/invariant.ts",
@@ -39061,17 +39177,47 @@
     {
       "source": "packages/client/schema-form/src/model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schemastery/src/lib.rs",
+        "crates/client-schema-form/src/lib.rs",
+        "crates/client-schema-form/src/wasm.rs",
+        "crates/client-schema-form/tests/model_parity.rs",
+        "crates/client-schema-form/tests/wasm_model_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/schema-form/tests/model.client.spec.ts --reporter=dot (pinned source: 9 passed)",
+        "cargo test -p seekdeep-client-schema-form --test model_parity --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_model_parity-*.wasm (headless Chrome: 2 passed)"
+      ],
+      "note": "Rust rehydrates canonical Schemastery uid/ref graphs, validates drafts, traverses object/dict/array node relations, reads and tests explicit object/array presence, and clones/materializes/deletes immutable spines; the WASM facade preserves undefined leaves, hostile non-Error validator throws, original-root identity on delete misses, and array splice semantics"
     },
     {
       "source": "packages/client/schema-form/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-schema-form/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/schema-form/tests/invariant.client.spec.ts --reporter=dot (pinned source: 1 passed)",
+        "cargo test -p seekdeep-client-schema-form --test model_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/schema-form/tests/model.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-schema-form/tests/model_parity.rs",
+        "crates/client-schema-form/tests/wasm_model_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/schema-form/tests/model.client.spec.ts --reporter=dot (pinned source: 9 passed)",
+        "cargo test -p seekdeep-client-schema-form --test model_parity --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_model_parity-*.wasm (headless Chrome: 2 passed)"
+      ],
+      "note": "all nine source cases are represented across native structural tests and live JavaScript-observable WASM cases"
     },
     {
       "source": "packages/client/schema-form/tsconfig.json",
@@ -39087,7 +39233,16 @@
     {
       "source": "packages/client/schema-form/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-schema-form/Cargo.toml",
+        "crates/client-schema-form/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-client-schema-form --all-targets --all-features",
+        "cargo check -p seekdeep-client-schema-form --target wasm32-unknown-unknown --lib"
+      ],
+      "note": "the Rust crate emits rlib and browser cdylib artifacts without a JavaScript library build"
     },
     {
       "source": "packages/client/tsdown.client.ts",
@@ -46550,7 +46705,17 @@
     {
       "source": "packages/compaction/command-compact/tests/command-compact.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/command-compact/tests/command_compact_parity.rs",
+        "crates/command-compact/src/index.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/compaction/command-compact/tests/command-compact.spec.ts packages/compaction/command-compact/tests/loader-composition.spec.ts --reporter=dot (pinned source: 12 passed)",
+        "cargo test -p seekdeep-command-compact --all-features (Rust: 9 passed)",
+        "cargo clippy -p seekdeep-command-compact --all-targets --all-features -- -D warnings"
+      ],
+      "note": "grouped Rust cases cover Loader-safe registration and disposal; exact Agent, AbortSignal, and sourceCommandId forwarding; success accounting/source-event linkage; no-history and raw-argument rejection; all six classified manual failures; caller cancellation and unexpected error propagation with paired command/done records; no model-surface leakage; and joined in-flight close/flush drain during plugin teardown"
     },
     {
       "source": "packages/compaction/command-compact/tests/invariant.spec.ts",
@@ -46567,7 +46732,15 @@
     {
       "source": "packages/compaction/command-compact/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/command-compact/tests/command_compact_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/compaction/command-compact/tests/loader-composition.spec.ts --reporter=dot (pinned source suite included in 12 passed)",
+        "cargo test -p seekdeep-command-compact declarative_loader_discovers_and_executes_compact_through_command_plane --all-features"
+      ],
+      "note": "a real Rust Loader composition installs CommandRuntime, the compaction backend seat, and command-compact, discovers /compact, executes it, and observes command/run, compaction start/summary/end, and command/done in exact durable order"
     },
     {
       "source": "packages/compaction/command-compact/tsconfig.json",
@@ -47324,7 +47497,17 @@
     {
       "source": "packages/context/session-reference/tests/session-reference.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-reference/tests/uri_parity.rs",
+        "crates/session-reference/tests/resolver_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/context/session-reference/tests/session-reference.spec.ts --reporter=dot (pinned source: 13 passed)",
+        "cargo test -p seekdeep-session-reference --all-features (Rust: 13 passed)",
+        "cargo clippy -p seekdeep-session-reference --all-targets --all-features -- -D warnings"
+      ],
+      "note": "all source cases are represented across canonical URI and malformed mention handling; metadata/title discovery and cwd ranking; isolated title failures; abortable stalled list, title, and surface reads; current-surface text-only projection; injected-context and tool/reasoning exclusion; frozen retention metadata; tag-safe hostile framing; dedup and classified admission/read failures; exact independent UTF-8 budgets; checkpoint/latest retention; no-partial budget rejection; replay independence; and configuration failure before service publication"
     },
     {
       "source": "packages/context/session-reference/tsconfig.json",
@@ -54307,7 +54490,19 @@
     {
       "source": "packages/host/directory-picker-auto/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-auto/src/lib.rs",
+        "crates/loader/src/lib.rs",
+        "crates/host-directory-picker-auto/tests/loader_composition_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-auto/tests/resolve.spec.ts packages/host/directory-picker-auto/tests/loader-composition.spec.ts --reporter=dot (pinned source: 15 passed)",
+        "cargo test -p seekdeep-loader -p seekdeep-host-directory-picker-auto --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-host-directory-picker-auto --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-host-directory-picker-auto --all-targets --all-features --target x86_64-pc-windows-msvc -- -D warnings"
+      ],
+      "note": "the Rust chooser samples the frozen launch environment and effective WebServer host once, selects a stable interaction, mounts backend then browser surface as Loader-owned programmatic root entries during its own activation, rolls back partial setup, and owns reverse-order exact-id teardown; programmatic rows share ordinary inventory, generic removal, Loader disposal, and Fiber visibility without re-entering the declarative generation transaction"
     },
     {
       "source": "packages/host/directory-picker-auto/src/invariant.ts",
@@ -54326,22 +54521,56 @@
     {
       "source": "packages/host/directory-picker-auto/src/probe.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-auto/src/lib.rs",
+        "crates/host-directory-picker-auto/tests/resolve_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-auto/tests/resolve.spec.ts --reporter=dot (pinned source suite included in 15 passed)",
+        "cargo test -p seekdeep-host-directory-picker-auto --test resolve_parity --all-features"
+      ],
+      "note": "platform-delimited PATH scanning skips empty components, tests Zenity before KDialog, short-circuits on the first executable, and the production probe requires an executable file"
     },
     {
       "source": "packages/host/directory-picker-auto/src/resolve.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-auto/src/lib.rs",
+        "crates/host-directory-picker-auto/tests/resolve_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-auto/tests/resolve.spec.ts --reporter=dot (pinned source suite included in 15 passed)",
+        "cargo test -p seekdeep-host-directory-picker-auto --test resolve_parity --all-features"
+      ],
+      "note": "loopback, SSH markers, macOS/Windows display assumption, Linux display plus chooser availability, unsupported platforms, and empty-versus-whitespace environment presence exactly determine native or browse"
     },
     {
       "source": "packages/host/directory-picker-auto/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-auto/tests/loader_composition_parity.rs",
+        "crates/loader/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-auto/tests/loader-composition.spec.ts --reporter=dot (pinned source suite included in 15 passed)",
+        "cargo test -p seekdeep-loader -p seekdeep-host-directory-picker-auto --all-features"
+      ],
+      "note": "real Rust Loader compositions cover attended native, SSH and all-interface browse, backend-plus-surface inventory, capability publication, partial surface failure rollback, generic pre-removal, reverse teardown, and immediate service disappearance after auto Fiber disposal"
     },
     {
       "source": "packages/host/directory-picker-auto/tests/resolve.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-auto/tests/resolve_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-auto/tests/resolve.spec.ts --reporter=dot (pinned source suite included in 15 passed)",
+        "cargo test -p seekdeep-host-directory-picker-auto --test resolve_parity --all-features"
+      ]
     },
     {
       "source": "packages/host/directory-picker-auto/tsconfig.json",
@@ -54401,7 +54630,18 @@
     {
       "source": "packages/host/directory-picker-browse/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-browse/src/lib.rs",
+        "crates/host-directory-picker-browse/tests/service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-browse/tests/service.spec.ts --reporter=dot (pinned source: 13 passed)",
+        "cargo test -p seekdeep-host-directory-picker-browse --all-features",
+        "cargo clippy -p seekdeep-host-directory-picker-browse --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-host-directory-picker-browse --all-features --target x86_64-pc-windows-msvc"
+      ],
+      "note": "the native Rust Cordis backend preserves stable capability ownership, Schemastery defaults and loose object keys, bounded locale-aware streamed ordering, fully-qualified POSIX/Windows path fences, lexical resolve semantics, directory-only and symlink filtering, breadcrumbs, exact truncation, typed failures, child creation, and caller-first cancellation around every filesystem await"
     },
     {
       "source": "packages/host/directory-picker-browse/src/invariant.ts",
@@ -54420,7 +54660,15 @@
     {
       "source": "packages/host/directory-picker-browse/tests/service.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-browse/tests/service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-browse/tests/service.spec.ts --reporter=dot (pinned source: 13 passed)",
+        "cargo test -p seekdeep-host-directory-picker-browse --all-features"
+      ],
+      "note": "the grouped Rust cases cover every pinned source assertion plus nullable/defaulted config, invalid zero bounds, lexical path normalization, non-Error abort coercion, and Windows cross-target compilation"
     },
     {
       "source": "packages/host/directory-picker-browse/tsconfig.json",
@@ -54436,7 +54684,16 @@
     {
       "source": "packages/host/directory-picker-browse/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-browse/Cargo.toml",
+        "crates/host-directory-picker-browse/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo clippy -p seekdeep-host-directory-picker-browse --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-host-directory-picker-browse --all-features --target x86_64-pc-windows-msvc"
+      ],
+      "note": "the Rust library builds the native Host implementation directly for Unix and Windows without a JavaScript distribution artifact"
     },
     {
       "source": "packages/host/directory-picker-native/README.i18n.yaml",
@@ -54485,7 +54742,16 @@
     {
       "source": "packages/host/directory-picker-native/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/src/lib.rs",
+        "crates/host-directory-picker-native/tests/native_picker_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-directory-picker-native --all-features",
+        "cargo clippy -p seekdeep-host-directory-picker-native --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the native Rust Cordis plugin owns one stable native capability and removes it with its Fiber"
     },
     {
       "source": "packages/host/directory-picker-native/src/invariant.ts",
@@ -54504,62 +54770,167 @@
     {
       "source": "packages/host/directory-picker-native/src/native-picker.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/src/lib.rs",
+        "crates/host-directory-picker-native/tests/native_picker_parity.rs",
+        "crates/util/src/native_command.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-native/tests/native-picker.spec.ts packages/host/directory-picker-native/tests/service.spec.ts --reporter=dot (pinned source suite included in 46 passed)",
+        "cargo test -p seekdeep-host-directory-picker-native --all-features",
+        "cargo test -p seekdeep-util native_command --all-features"
+      ],
+      "note": "macOS osascript, Windows modern dialog, Linux Zenity-to-KDialog fallback, exact cancellation classification, output trimming, unsupported hosts, no-shell execution, captured stdio, and caller abort propagation are ported"
     },
     {
       "source": "packages/host/directory-picker-native/src/win32-dialog-bindings.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/win32-directory-dialog/src/lib.rs",
+        "crates/win32-directory-dialog/src/windows.rs",
+        "crates/host-directory-picker-native/tests/win32_dialog_parity.rs"
+      ],
+      "evidence": [
+        "cargo clippy -p seekdeep-win32-directory-dialog -p seekdeep-host-directory-picker-native --all-targets --all-features --target x86_64-pc-windows-msvc -- -D warnings",
+        "cargo clippy -p seekdeep-win32-directory-dialog -p seekdeep-host-directory-picker-native --all-targets --all-features --target i686-pc-windows-msvc -- -D warnings",
+        "cargo test -p seekdeep-host-directory-picker-native --all-features"
+      ],
+      "note": "the documented narrow unsafe crate uses pointer-width COM vtable indexing, Vista-stable IFileDialog and IShellItem slots, per-monitor-v2 to system-aware DPI fallback, STA balance, COM reference RAII, task-memory freeing, UTF-16 path ownership, and best-effort WM_CLOSE enumeration; no pointer escapes its safe API"
     },
     {
       "source": "packages/host/directory-picker-native/src/win32-dialog-host.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/src/win32_dialog.rs",
+        "crates/host-directory-picker-native/src/bin/seekdeep-directory-picker-worker.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-directory-picker-native --test win32_dialog_parity --all-features",
+        "cargo clippy -p seekdeep-host-directory-picker-native --all-targets --all-features --target x86_64-pc-windows-msvc -- -D warnings"
+      ],
+      "note": "the Host locates and spawns the sibling Rust helper directly with inherited environment, hidden console, piped JSON protocol, and parent-process Win32 close calls; no shell or JavaScript bootstrap is involved"
     },
     {
       "source": "packages/host/directory-picker-native/src/win32-dialog-logic.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/src/win32_dialog.rs",
+        "crates/host-directory-picker-native/tests/win32_dialog_parity.rs",
+        "crates/win32-directory-dialog/src/windows.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-directory-picker-native --test win32_dialog_parity --all-features",
+        "cargo clippy -p seekdeep-win32-directory-dialog -p seekdeep-host-directory-picker-native --all-targets --all-features -- -D warnings"
+      ],
+      "note": "DPI, STA, creation, flags, title, showing notice, modal result, cancellation HRESULT, extraction, dialog release, and apartment teardown preserve the source order and every failure boundary"
     },
     {
       "source": "packages/host/directory-picker-native/src/win32-dialog-worker.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/src/bin/seekdeep-directory-picker-worker.rs",
+        "crates/host-directory-picker-native/src/win32_dialog.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-directory-picker-native --test win32_dialog_parity --all-features",
+        "cargo check -p seekdeep-host-directory-picker-native --all-targets --all-features --target x86_64-pc-windows-msvc"
+      ],
+      "note": "the dedicated Rust child validates its title, emits flushed showing then exactly one done/error JSON message, blocks only its own main thread in COM Show, and exits after the terminal message"
     },
     {
       "source": "packages/host/directory-picker-native/src/win32-dialog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/src/win32_dialog.rs",
+        "crates/host-directory-picker-native/tests/win32_dialog_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-native/tests/win32-dialog.spec.ts --reporter=dot (pinned source suite included in 46 passed)",
+        "cargo test -p seekdeep-host-directory-picker-native --test win32_dialog_parity --all-features"
+      ],
+      "note": "the Rust driver has caller-first pre-abort, closed message handling, exact-once settlement, immediate and retrying WM_CLOSE, swallowed close failures, showing-race recovery, unconditional pre-show budget, worker kill after 20 attempts, and terminal unref"
     },
     {
       "source": "packages/host/directory-picker-native/tests/built-worker.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/src/bin/seekdeep-directory-picker-worker.rs",
+        "crates/host-directory-picker-native/tests/win32_dialog_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-host-directory-picker-native --test win32_dialog_parity built_worker_reports_the_real_non_windows_native_surface_failure --all-features"
+      ],
+      "note": "Cargo always builds the real helper binary; the POSIX test spawns it and observes the deterministic native-surface error through the production protocol"
     },
     {
       "source": "packages/host/directory-picker-native/tests/native-picker.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/tests/native_picker_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-native/tests/native-picker.spec.ts --reporter=dot (pinned source suite included in 46 passed)",
+        "cargo test -p seekdeep-host-directory-picker-native --test native_picker_parity --all-features"
+      ]
     },
     {
       "source": "packages/host/directory-picker-native/tests/service.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/tests/native_picker_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-native/tests/service.spec.ts --reporter=dot (pinned source suite included in 46 passed)",
+        "cargo test -p seekdeep-host-directory-picker-native --test native_picker_parity --all-features"
+      ]
     },
     {
       "source": "packages/host/directory-picker-native/tests/win32-dialog-bindings.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/win32-directory-dialog/src/windows.rs",
+        "crates/host-directory-picker-native/tests/win32_dialog_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-native/tests/win32-dialog-bindings.spec.ts --reporter=dot (pinned source suite included in 46 passed)",
+        "cargo test -p seekdeep-host-directory-picker-native --test win32_dialog_parity --all-features",
+        "cargo clippy -p seekdeep-win32-directory-dialog --all-targets --all-features --target i686-pc-windows-msvc -- -D warnings"
+      ],
+      "note": "safe fake-binding tests pin conversation and cleanup; the raw crate uses native pointer arithmetic and is compiled strictly for both 32-bit and 64-bit MSVC targets"
     },
     {
       "source": "packages/host/directory-picker-native/tests/win32-dialog-logic.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/tests/win32_dialog_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-native/tests/win32-dialog-logic.spec.ts --reporter=dot (pinned source suite included in 46 passed)",
+        "cargo test -p seekdeep-host-directory-picker-native --test win32_dialog_parity --all-features"
+      ]
     },
     {
       "source": "packages/host/directory-picker-native/tests/win32-dialog.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/tests/win32_dialog_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/directory-picker-native/tests/win32-dialog.spec.ts --reporter=dot (pinned source suite included in 46 passed; real Win32 smoke is platform-skipped)",
+        "cargo test -p seekdeep-host-directory-picker-native --test win32_dialog_parity --all-features"
+      ]
     },
     {
       "source": "packages/host/directory-picker-native/tsconfig.json",
@@ -54575,7 +54946,17 @@
     {
       "source": "packages/host/directory-picker-native/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-directory-picker-native/Cargo.toml",
+        "crates/host-directory-picker-native/src/lib.rs",
+        "crates/host-directory-picker-native/src/bin/seekdeep-directory-picker-worker.rs"
+      ],
+      "evidence": [
+        "cargo clippy -p seekdeep-host-directory-picker-native --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-host-directory-picker-native --all-targets --all-features --target x86_64-pc-windows-msvc -- -D warnings"
+      ],
+      "note": "Cargo builds the native library and standalone worker binary directly; the worker is a sibling executable rather than a bundled CommonJS artifact"
     },
     {
       "source": "packages/host/directory-picker/README.i18n.yaml",
@@ -59273,12 +59654,33 @@
     {
       "source": "packages/sandbox/sandbox-local/tests/bwrap.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sandbox-local/tests/bwrap_e2e.rs",
+        "crates/sandbox-local/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts packages/sandbox/sandbox-local/tests/bwrap.e2e.ts --reporter=dot (pinned source: 5 platform-skipped on macOS)",
+        "cargo clippy -p seekdeep-sandbox-local --all-targets --all-features --target x86_64-unknown-linux-gnu -- -D warnings",
+        "cargo test -p seekdeep-sandbox-local --all-features (Rust bwrap E2E is Linux-gated; real Seatbelt E2E passed on macOS)"
+      ],
+      "note": "the Linux-gated Rust world test naturally selects bwrap after a functional user-namespace probe and proves full enforcement/dialect, read-only write denial, readable root and writable /dev/null, workspace-only writes, outside denial, and an ephemeral /tmp that leaves no host artifact"
     },
     {
       "source": "packages/sandbox/sandbox-local/tests/landlock.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-run/tests/launcher_parity.rs",
+        "crates/sandbox-local/tests/local_parity.rs",
+        "crates/sandbox-local/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts packages/sandbox/sandbox-local/tests/landlock.e2e.ts --reporter=dot (pinned source: 5 platform-skipped on macOS)",
+        "cargo clippy -p seekdeep-sandbox-local --all-targets --all-features --target x86_64-unknown-linux-gnu -- -D warnings",
+        "cargo test -p seekdeep-landlock-run -p seekdeep-sandbox-local --all-features"
+      ],
+      "note": "the Linux-gated Rust launcher world test probes full/partial/unusable enforcement, preserves child exits, denies ungranted and nested-process writes, grants exact writable roots, and fails closed before command execution for unusable rules; sandbox-local profile tests pin /dev/null and host-temp grants and the exact reported enforcement/dialect"
     },
     {
       "source": "packages/sandbox/sandbox-local/tests/local.spec.ts",
@@ -61382,7 +61784,20 @@
     {
       "source": "packages/session/session-persistence-jsonl/src/win32.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-persistence-jsonl/src/win32.rs",
+        "crates/session-persistence-jsonl/src/backend.rs",
+        "crates/win32-durable-namespace/src/lib.rs",
+        "crates/session-persistence-jsonl/tests/win32_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/session/session-persistence-jsonl/tests/win32.spec.ts --reporter=dot (pinned source: 7 passed)",
+        "cargo test -p seekdeep-session-persistence-jsonl --test win32_parity --all-features",
+        "cargo clippy -p seekdeep-win32-durable-namespace -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-win32-durable-namespace --target x86_64-pc-windows-msvc"
+      ],
+      "note": "safe Rust owns Node-style last-error mapping, short staging siblings, ancestor creation, max-length targets, non-directory refusal, and exact already-created race acceptance; one documented narrow native crate calls MoveFileExW with only MOVEFILE_WRITE_THROUGH, and the JSONL backend selects that move plus durable staged-directory publication on Windows"
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/zstd-private-decoder.ts",
@@ -61442,7 +61857,15 @@
     {
       "source": "packages/session/session-persistence-jsonl/tests/win32.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-persistence-jsonl/tests/win32_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/session/session-persistence-jsonl/tests/win32.spec.ts --reporter=dot (pinned source: 7 passed)",
+        "cargo test -p seekdeep-session-persistence-jsonl --test win32_parity --all-features"
+      ],
+      "note": "all seven source error, publication, staging, race, long-component, access, and non-directory behaviors are represented by the injected native seam"
     },
     {
       "source": "packages/session/session-persistence-jsonl/tests/zstd.compat.spec.ts",
@@ -62506,7 +62929,17 @@
     {
       "source": "packages/session/session-title-first-prompt-llm/tests/provider.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title-first-prompt-llm/tests/loader_composition.rs",
+        "crates/session-title-first-prompt-llm/tests/provider_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts packages/session/session-title-first-prompt-llm/tests/provider.e2e.ts --reporter=dot (pinned source: 1 skipped without DEEPSEEK_API_KEY)",
+        "cargo test -p seekdeep-session-title-first-prompt-llm --all-features (Rust: 2 passed)",
+        "cargo clippy -p seekdeep-session-title-first-prompt-llm --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the source's external DeepSeek call remains environment-gated and was not executed; the Rust Loader integration deterministically drives the same configured provider/model request through the real title service, asserts a nonempty bounded provider title and exact message seq/model provenance, and the provider test pins first-eligible-human selection"
     },
     {
       "source": "packages/session/session-title-first-prompt-llm/tests/provider.spec.ts",
@@ -73558,7 +73991,17 @@
     {
       "source": "vendor/group/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/loader/tests/profile_patch_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-loader --all-features",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the source package is only the Group re-export; Rust Loader group carriers own nested entries, inherited disable/isolation, ordered create/move/remove, transactional reconciliation, and rollback directly"
     },
     {
       "source": "vendor/group/tsconfig.json",

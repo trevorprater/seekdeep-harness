@@ -5,11 +5,12 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use seekdeep_app_boot::{BootOptions, boot};
+use seekdeep_app_boot::{BootOptions, assert_entries_activated, assert_entries_loaded, boot};
 use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_loader::profile_patch::parse_patch_list_yaml;
 use seekdeep_loader::{
-    Entry, EntryId, EntryParent, ExpressionEnvironment, LOADER, PluginCatalog, PluginSpecifier,
+    Entry, EntryId, EntryParent, ExpressionEnvironment, LOADER, LoaderEntrySnapshot, PluginCatalog,
+    PluginSpecifier,
 };
 
 const PREPARED: ServiceKey<String> = ServiceKey::new("prepared");
@@ -24,6 +25,76 @@ fn config(source: &str) -> (tempfile::TempDir, std::path::PathBuf) {
     let path = temporary.path().join("cordis.yml");
     std::fs::write(&path, source).unwrap();
     (temporary, path)
+}
+
+#[test]
+fn loaded_entry_audit_names_every_enabled_fiberless_plugin() -> anyhow::Result<()> {
+    let row = |id: &str,
+               plugin: &str,
+               disabled: bool,
+               group: bool,
+               state: Option<seekdeep_cordis::FiberState>|
+     -> anyhow::Result<LoaderEntrySnapshot> {
+        Ok(LoaderEntrySnapshot {
+            id: EntryId::new(id)?,
+            plugin: PluginSpecifier::new(plugin)?,
+            config: serde_json::Value::Null,
+            group,
+            disabled,
+            state,
+        })
+    };
+    let entries = vec![
+        row(
+            "active",
+            "active",
+            false,
+            false,
+            Some(seekdeep_cordis::FiberState::Active),
+        )?,
+        row("disabled", "off", true, false, None)?,
+        row("group", "cordis:group", false, true, None)?,
+    ];
+    assert_entries_loaded(&entries, "seekdeep-test-bin")?;
+
+    let failed = vec![
+        row("a", "broken-a", false, false, None)?,
+        row("b", "broken-b", false, false, None)?,
+    ];
+    assert_eq!(
+        assert_entries_loaded(&failed, "seekdeep-test-bin")
+            .unwrap_err()
+            .to_string(),
+        "seekdeep-test-bin: plugin(s) failed to load: broken-a, broken-b; Cordis startup failed because these plugin(s) could not be resolved (see the error(s) logged above)"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn activation_audit_retains_source_numeric_diagnostic_for_unexpected_state()
+-> anyhow::Result<()> {
+    let catalog = PluginCatalog::new();
+    catalog.register_named(
+        "noop",
+        Plugin::new("runtime-name", std::iter::empty::<&str>(), |_, _| {
+            Box::pin(async { Ok(()) })
+        }),
+    )?;
+    let (_temporary, path) = config("- id: configured\n  name: noop\n");
+    let app = boot("seekdeep-test-bin", &path, &catalog, BootOptions::default()).await?;
+    let composition = app.composition().unwrap();
+    let fiber = composition
+        .fibers()
+        .into_iter()
+        .find(|fiber| fiber.entry_id().as_deref() == Some("configured"))
+        .unwrap();
+    fiber.dispose().await?;
+    let error = assert_entries_activated(composition, "seekdeep-test-bin").unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "seekdeep-test-bin: 1 entry did not activate\nnoop: fiber state 4"
+    );
+    app.dispose().await
 }
 
 #[tokio::test]

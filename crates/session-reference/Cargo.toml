@@ -26,5 +26,11 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 
+[dev-dependencies]
+async-trait.workspace = true
+parking_lot.workspace = true
+seekdeep-scope = { path = "../scope" }
+seekdeep-session-title = { path = "../session-title" }
+
 [lints]
 workspace = true

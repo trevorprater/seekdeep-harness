@@ -3346,14 +3346,24 @@ fn tool_error_result(error: anyhow::Error) -> ToolExecutionResult {
     let harness_error = error
         .chain()
         .find_map(|cause| cause.downcast_ref::<HarnessError>());
+    let fs_error = error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<seekdeep_fs::FsError>());
     let info = error.downcast_ref::<ToolRuntimeError>().map_or_else(
         || {
             error.downcast_ref::<ToolArgsError>().map_or_else(
                 || {
-                    harness_error.map(|error| ToolErrorInfo {
-                        name: error.name().to_owned(),
-                        code: error.code().to_owned(),
-                    })
+                    harness_error
+                        .map(|error| ToolErrorInfo {
+                            name: error.name().to_owned(),
+                            code: error.code().to_owned(),
+                        })
+                        .or_else(|| {
+                            fs_error.map(|error| ToolErrorInfo {
+                                name: error.name().to_owned(),
+                                code: error.code.as_str().to_owned(),
+                            })
+                        })
                 },
                 |error| {
                     Some(ToolErrorInfo {
@@ -3365,8 +3375,10 @@ fn tool_error_result(error: anyhow::Error) -> ToolExecutionResult {
         },
         |error| Some(error.info()),
     );
-    let message =
-        harness_error.map_or_else(|| format!("{error:#}"), |error| error.message().to_owned());
+    let message = harness_error.map_or_else(
+        || fs_error.map_or_else(|| format!("{error:#}"), |error| error.message.clone()),
+        |error| error.message().to_owned(),
+    );
     drop(error);
     ToolExecutionResult::Failure(ToolExecutionFailure {
         content: error_content(&message),
