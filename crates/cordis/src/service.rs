@@ -120,6 +120,27 @@ impl ServiceStore {
         true
     }
 
+    pub(crate) fn replace<T: Service>(
+        &self,
+        slot: &ServiceSlot,
+        owner: &Arc<Fiber>,
+        value: Arc<T>,
+    ) -> Result<(), crate::CordisError> {
+        let mut providers = self.providers.write();
+        let provider = providers
+            .get_mut(slot)
+            .and_then(|entries| entries.first_mut())
+            .ok_or_else(|| crate::CordisError::MissingService(slot.name.clone()))?;
+        let Some(provider_owner) = provider.owner.upgrade() else {
+            return Err(crate::CordisError::MissingService(slot.name.clone()));
+        };
+        if !Arc::ptr_eq(&provider_owner, owner) {
+            return Err(crate::CordisError::ServiceOwner(slot.name.clone()));
+        }
+        provider.value = value;
+        Ok(())
+    }
+
     pub(crate) fn get<T: Service>(&self, slot: &ServiceSlot, strict: bool) -> Option<Arc<T>> {
         let providers = self.providers.read();
         let provider = providers.get(slot)?.iter().rev().find(|provider| {

@@ -59,7 +59,7 @@ pub struct Context {
     fiber: Arc<Fiber>,
     tree_owner: Arc<Fiber>,
     isolation: Arc<HashMap<String, Arc<IsolationRealm>>>,
-    intercepts: Arc<HashMap<String, Value>>,
+    intercepts: Arc<HashMap<String, Vec<Value>>>,
     metadata: Arc<HashMap<String, Value>>,
     filter: Option<EventFilter>,
 }
@@ -207,10 +207,7 @@ impl Context {
     #[must_use]
     pub fn intercept(&self, name: &str, config: Value) -> Self {
         let mut intercepts = (*self.intercepts).clone();
-        let merged = intercepts
-            .remove(name)
-            .map_or(config.clone(), |parent| merge_json(parent, config));
-        intercepts.insert(name.to_owned(), merged);
+        intercepts.entry(name.to_owned()).or_default().push(config);
         Self {
             root: self.root.clone(),
             fiber: self.fiber.clone(),
@@ -222,10 +219,50 @@ impl Context {
         }
     }
 
-    /// Returns accumulated intercept configuration for a service.
+    /// Returns accumulated intercept configuration for a service using the
+    /// source runtime's shallow `Object.assign` semantics.
     #[must_use]
-    pub fn intercepted(&self, name: &str) -> Option<&Value> {
-        self.intercepts.get(name)
+    pub fn intercepted(&self, name: &str) -> Option<Value> {
+        self.intercepts
+            .get(name)
+            .map(|configs| shallow_merge(configs.iter()))
+    }
+
+    /// Resolves optional base and head values around inherited intercepts.
+    ///
+    /// The order is base, root-to-leaf intercepts, then head. Nested objects
+    /// replace each other wholesale, matching Cordis `Object.assign` rather
+    /// than recursively merging.
+    #[must_use]
+    pub fn resolve_intercepted(
+        &self,
+        name: &str,
+        base: Option<&Value>,
+        head: Option<&Value>,
+    ) -> Value {
+        shallow_merge(
+            base.into_iter()
+                .chain(self.intercepts.get(name).into_iter().flatten())
+                .chain(head),
+        )
+    }
+
+    /// Resolves the same ordered layers with a service-owned merge function.
+    #[must_use]
+    pub fn resolve_intercepted_with(
+        &self,
+        name: &str,
+        base: Option<&Value>,
+        head: Option<&Value>,
+        merge: impl FnOnce(&[Value]) -> Value,
+    ) -> Value {
+        let layers = base
+            .into_iter()
+            .chain(self.intercepts.get(name).into_iter().flatten())
+            .chain(head)
+            .cloned()
+            .collect::<Vec<_>>();
+        merge(&layers)
     }
 
     /// Adds a dispatch filter consulted for non-global listeners.
@@ -424,6 +461,18 @@ impl Context {
         self.root.services.get(&self.slot(key.name()), false)
     }
 
+    /// Replaces a service value from the exact fiber that provided it.
+    ///
+    /// # Errors
+    ///
+    /// Returns source-compatible missing-provider or cross-fiber ownership
+    /// failures. Replacement does not create a new dependency generation.
+    pub fn set<T: Service>(&self, key: ServiceKey<T>, value: Arc<T>) -> Result<(), CordisError> {
+        self.root
+            .services
+            .replace(&self.slot(key.name()), &self.fiber, value)
+    }
+
     /// Returns whether a dynamically named service has a provider in this scope.
     #[must_use]
     pub fn has_named(&self, name: &str) -> bool {
@@ -484,17 +533,12 @@ impl Context {
     }
 }
 
-fn merge_json(parent: Value, child: Value) -> Value {
-    match (parent, child) {
-        (Value::Object(mut parent), Value::Object(child)) => {
-            for (key, value) in child {
-                let value = parent
-                    .remove(&key)
-                    .map_or(value.clone(), |previous| merge_json(previous, value));
-                parent.insert(key, value);
-            }
-            Value::Object(parent)
+fn shallow_merge<'a>(values: impl IntoIterator<Item = &'a Value>) -> Value {
+    let mut merged = serde_json::Map::new();
+    for value in values {
+        if let Value::Object(object) = value {
+            merged.extend(object.clone());
         }
-        (_, child) => child,
     }
+    Value::Object(merged)
 }

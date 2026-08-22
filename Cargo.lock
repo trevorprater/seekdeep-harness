@@ -4516,6 +4516,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-bash-local"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-llm",
+ "seekdeep-schemastery",
+ "seekdeep-settings",
+ "seekdeep-shell",
+ "seekdeep-subprocess",
+ "seekdeep-subprocess-local",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-bundle-base"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -6636,10 +6657,36 @@ dependencies = [
 name = "seekdeep-tool-bash"
 version = "0.1.0-rc.5"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "futures",
+ "parking_lot",
+ "path-clean",
+ "ryu-js",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-agent-loop-testkit",
+ "seekdeep-bash-local",
+ "seekdeep-cordis",
+ "seekdeep-core",
  "seekdeep-jobs",
+ "seekdeep-jobs-local",
+ "seekdeep-llm",
  "seekdeep-sandbox",
+ "seekdeep-sandbox-policy",
+ "seekdeep-scope",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
  "seekdeep-shell",
+ "seekdeep-shell-env",
+ "seekdeep-subprocess-local",
+ "seekdeep-system-prompt",
+ "seekdeep-tool-jobs",
+ "seekdeep-tools",
+ "seekdeep-user-approval",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
 ]
 
@@ -6789,7 +6836,9 @@ name = "seekdeep-tool-str-replace-editor"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
+ "parking_lot",
  "ryu-js",
  "seekdeep-agent",
  "seekdeep-cordis",
@@ -6802,6 +6851,7 @@ dependencies = [
  "seekdeep-sandbox",
  "seekdeep-sandbox-policy",
  "seekdeep-scope",
+ "seekdeep-system-prompt",
  "seekdeep-tools",
  "serde",
  "serde_json",

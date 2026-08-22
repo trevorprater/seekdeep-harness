@@ -22,11 +22,14 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }
 seekdeep-core = { path = "../core" }
 seekdeep-fs-local = { path = "../fs-local" }
 seekdeep-fs-observation-policy = { path = "../fs-observation-policy" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-system-prompt = { path = "../system-prompt" }
 tempfile.workspace = true
 tokio.workspace = true
 

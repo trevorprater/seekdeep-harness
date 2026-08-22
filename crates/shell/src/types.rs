@@ -32,9 +32,9 @@ pub struct ShellExecRequest {
     /// Working directory override.
     pub workdir: Option<PathBuf>,
     /// Timeout override in milliseconds.
-    pub timeout_ms: Option<u64>,
+    pub timeout_ms: Option<f64>,
     /// Foreground stdout capture budget.
-    pub stdout_max_bytes: Option<usize>,
+    pub stdout_max_bytes: Option<f64>,
     /// Caller cancellation.
     pub signal: Option<AbortSignal>,
     /// Bytes written once to stdin before close.
@@ -73,9 +73,9 @@ pub struct ShellExecSpec {
     /// Resolved working directory.
     pub workdir: PathBuf,
     /// Effective foreground timeout in milliseconds.
-    pub timeout_ms: u64,
+    pub timeout_ms: f64,
     /// Effective stdout capture budget.
-    pub stdout_max_bytes: usize,
+    pub stdout_max_bytes: f64,
     /// Caller cancellation.
     pub signal: Option<AbortSignal>,
     /// Bytes written once to stdin before close.
@@ -89,7 +89,7 @@ pub struct ShellExecSpec {
 }
 
 /// Completed or killed foreground execution outcome.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ShellRunResult {
     /// Exit code, absent when terminated by signal.
     pub exit_code: Option<i32>,
@@ -100,7 +100,7 @@ pub struct ShellRunResult {
     /// Whether caller cancellation was the first abort cause.
     pub aborted: bool,
     /// Effective timeout after defaulting and caps.
-    pub timeout_ms: u64,
+    pub timeout_ms: f64,
     /// Captured stdout.
     pub stdout: CollectedOutput,
     /// Captured stderr.

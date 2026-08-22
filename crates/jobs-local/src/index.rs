@@ -768,7 +768,7 @@ fn expect_mut<'a>(inner: &'a mut Inner, id: &JobId) -> anyhow::Result<&'a mut Tr
 /// session id matches.
 fn assert_access(job: &TrackedTask, caller: Option<&Arc<Agent>>) -> anyhow::Result<()> {
     if let Some(owner) = &job.owner
-        && !caller.is_some_and(|caller| owner.id() == caller.id())
+        && caller.is_none_or(|caller| owner.id() != caller.id())
     {
         anyhow::bail!("job {} belongs to another session", job.id);
     }

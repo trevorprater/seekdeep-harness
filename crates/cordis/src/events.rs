@@ -168,6 +168,47 @@ impl EventReply {
 pub type ListenerFuture =
     Pin<Box<dyn Future<Output = anyhow::Result<EventReply>> + Send + 'static>>;
 
+/// Immediate value or promise-like result returned by synchronous bail dispatch.
+pub enum BailReply {
+    /// A listener returned an immediate value, or none bailed.
+    Settled(EventReply),
+    /// A listener returned pending asynchronous work; the promise object is
+    /// itself a JavaScript bail value.
+    Pending(ListenerFuture),
+}
+
+impl std::fmt::Debug for BailReply {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Settled(reply) => formatter.debug_tuple("Settled").field(reply).finish(),
+            Self::Pending(_) => formatter.write_str("Pending(..)"),
+        }
+    }
+}
+
+impl BailReply {
+    /// Every pending promise is a bail value; settled null/false/undefined are not.
+    #[must_use]
+    pub fn is_bailed(&self) -> bool {
+        match self {
+            Self::Settled(reply) => reply.is_bailed(),
+            Self::Pending(_) => true,
+        }
+    }
+
+    /// Awaits a pending listener or returns the immediate reply.
+    ///
+    /// # Errors
+    ///
+    /// Returns the listener failure.
+    pub async fn resolve(self) -> anyhow::Result<EventReply> {
+        match self {
+            Self::Settled(reply) => Ok(reply),
+            Self::Pending(future) => future.await,
+        }
+    }
+}
+
 type Listener = Arc<dyn Fn(Context, EventArgs) -> ListenerFuture + Send + Sync>;
 type WaterfallListener = Arc<dyn Fn(Context, EventArgs, Next) -> ListenerFuture + Send + Sync>;
 
@@ -314,13 +355,49 @@ impl EventBus {
         listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
         options: EventOptions,
     ) -> Result<EffectHandle, CordisError> {
-        let name = name.into();
+        self.register_hook(context, name.into(), Arc::new(listener), options, false)
+    }
+
+    /// Registers an asynchronous listener removed immediately before its first invocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CordisError::InactiveEffect`] if the owning context is inactive.
+    pub fn once(
+        &self,
+        context: &Context,
+        name: impl Into<String>,
+        listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
+        options: EventOptions,
+    ) -> Result<EffectHandle, CordisError> {
+        self.register_hook(context, name.into(), Arc::new(listener), options, true)
+    }
+
+    fn register_hook(
+        &self,
+        context: &Context,
+        name: String,
+        listener: Listener,
+        options: EventOptions,
+        once: bool,
+    ) -> Result<EffectHandle, CordisError> {
         let id = Uuid::now_v7();
+        let listener = if once {
+            let registry = self.hooks.clone();
+            let event_name = name.clone();
+            let listener = listener.clone();
+            Arc::new(move |context, args| {
+                remove_hook(&registry, &event_name, id);
+                listener(context, args)
+            }) as Listener
+        } else {
+            listener
+        };
         let hook = Hook {
             id,
             owner: context.clone(),
             options,
-            listener: Arc::new(listener),
+            listener,
         };
         let mut hooks = self.hooks.write();
         let entries = hooks.entry(name.clone()).or_default();
@@ -361,6 +438,31 @@ impl EventBus {
     ) -> Result<EffectHandle, CordisError> {
         let listener = Arc::new(listener);
         self.on(
+            context,
+            name,
+            move |context, args| {
+                let listener = listener.clone();
+                let result = listener(context, args);
+                Box::pin(async move { result })
+            },
+            options,
+        )
+    }
+
+    /// Registers a synchronous listener removed before its first invocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CordisError::InactiveEffect`] if the owning context is inactive.
+    pub fn once_sync(
+        &self,
+        context: &Context,
+        name: impl Into<String>,
+        listener: impl Fn(Context, EventArgs) -> anyhow::Result<EventReply> + Send + Sync + 'static,
+        options: EventOptions,
+    ) -> Result<EffectHandle, CordisError> {
+        let listener = Arc::new(listener);
+        self.once(
             context,
             name,
             move |context, args| {
@@ -507,6 +609,42 @@ impl EventBus {
             }
         }
         Ok(EventReply::Undefined)
+    }
+
+    /// Invokes listeners synchronously until one returns a bail value.
+    ///
+    /// A pending listener future is returned without detaching it because the
+    /// corresponding JavaScript promise is itself the bail value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an immediate listener failure or panic.
+    pub fn bail(
+        &self,
+        dispatch_context: &Context,
+        name: &str,
+        args: &EventArgs,
+    ) -> anyhow::Result<BailReply> {
+        self.notify_internal_dispatch(dispatch_context, DispatchMode::Bail, name, args)?;
+        for hook in self.selected(dispatch_context, name) {
+            let mut future = catch_unwind(AssertUnwindSafe(|| {
+                (hook.listener)(dispatch_context.clone(), args.clone())
+            }))
+            .map_err(|payload| panic_error(&payload))?;
+            let mut task_context = TaskContext::from_waker(noop_waker_ref());
+            match catch_unwind(AssertUnwindSafe(|| future.as_mut().poll(&mut task_context)))
+                .map_err(|payload| panic_error(&payload))?
+            {
+                Poll::Ready(result) => {
+                    let reply = result?;
+                    if reply.is_bailed() {
+                        return Ok(BailReply::Settled(reply));
+                    }
+                }
+                Poll::Pending => return Ok(BailReply::Pending(future)),
+            }
+        }
+        Ok(BailReply::Settled(EventReply::Undefined))
     }
 
     /// Composes waterfall listeners around `inner`.

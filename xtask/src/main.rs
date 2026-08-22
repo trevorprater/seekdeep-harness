@@ -17,6 +17,8 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Verify every exported Rust API has documentation and all prose-adjacent lints pass.
+    Docs,
     /// Synchronize the tracked source-file inventory while preserving evidence.
     Inventory {
         /// Source checkout recorded in `SOURCE_SNAPSHOT`.
@@ -47,9 +49,30 @@ enum Scope {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
+        Command::Docs => docs(),
         Command::Inventory { source } => inventory(&source),
         Command::Parity { source, scope } => parity(&source, scope),
     }
+}
+
+fn docs() -> anyhow::Result<()> {
+    let status = ProcessCommand::new("cargo")
+        .args([
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--all-features",
+            "--",
+            "-D",
+            "warnings",
+        ])
+        .status()?;
+    anyhow::ensure!(
+        status.success(),
+        "workspace exported-API documentation gate failed"
+    );
+    println!("verified exported Rust API documentation and strict prose-adjacent lints");
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]

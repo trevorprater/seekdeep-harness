@@ -13,8 +13,8 @@ pub mod service;
 
 pub use context::Context;
 pub use events::{
-    DispatchMode, EventArgs, EventBus, EventOptions, EventReply, EventSubjectToken, EventValue,
-    PreparedEmission,
+    BailReply, DispatchMode, EventArgs, EventBus, EventOptions, EventReply, EventSubjectToken,
+    EventValue, PreparedEmission,
 };
 pub use fiber::{CordisError, Fiber, FiberState};
 pub use plugin::{Plugin, PluginFiber, PluginRegistry};

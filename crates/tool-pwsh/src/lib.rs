@@ -34,7 +34,7 @@ mod tests {
             signal: None,
             timed_out: false,
             aborted: false,
-            timeout_ms: 1_000,
+            timeout_ms: 1_000.0,
             stdout: CollectedOutput {
                 text: "pwsh".to_owned(),
                 ..CollectedOutput::default()

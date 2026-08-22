@@ -8,12 +8,38 @@ repository.workspace = true
 description = "Bash tool adapters for SeekDeep Harness"
 
 [dependencies]
+anyhow.workspace = true
+futures.workspace = true
+path-clean.workspace = true
+ryu-js.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
 seekdeep-jobs = { path = "../jobs" }
+seekdeep-llm = { path = "../llm" }
 seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-shell = { path = "../shell" }
+seekdeep-shell-env = { path = "../shell-env" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-user-approval = { path = "../user-approval" }
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+parking_lot.workspace = true
+seekdeep-bash-local = { path = "../bash-local" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-core = { path = "../core" }
+seekdeep-jobs-local = { path = "../jobs-local" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-tool-jobs = { path = "../tool-jobs" }
+tempfile.workspace = true
 tokio.workspace = true
 
 [lints]

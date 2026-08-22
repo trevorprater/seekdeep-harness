@@ -28,6 +28,12 @@ pub enum CordisError {
     /// Another provider already owns the service slot.
     #[error("service {0:?} is already provided in this scope")]
     DuplicateService(String),
+    /// A service value was assigned before any provider registered it.
+    #[error("cannot set property {0:?} without provide")]
+    MissingService(String),
+    /// A service value was assigned from a fiber other than its provider.
+    #[error("cannot set property {0:?} in multiple fibers")]
+    ServiceOwner(String),
     /// A synchronous `internal/plugin` creation observer rejected publication.
     #[error("plugin publication failed: {0}")]
     PluginPublication(String),

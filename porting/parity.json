@@ -48467,7 +48467,17 @@
     {
       "source": "packages/core/agent/tests/verify-export-jsdoc.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/tests/export_docs_parity.rs",
+        "Cargo.toml"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/agent/tests/verify-export-jsdoc.spec.ts --reporter=dot (pinned source: 41 passed)",
+        "cargo test -p xtask --all-features (Rust exported-doc negative fixtures: 5 passed)",
+        "cargo xtask docs"
+      ],
+      "note": "Rust signatures make parameter and return types part of the checked API rather than duplicating them in @param/@returns tags; negative rustc fixtures preserve the source gate's fail-closed intent across public functions, constants, aliases, enums and variants, traits and methods, structs and fields, modules and nested exports, plus private and trait-implementation exemptions"
     },
     {
       "source": "packages/core/agent/tsconfig.json",
@@ -52482,7 +52492,20 @@
     {
       "source": "packages/fs/tool-str-replace-editor/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-str-replace-editor/src/lib.rs",
+        "crates/tools/src/runtime.rs",
+        "crates/tool-str-replace-editor/tests/editor_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/fs/tool-str-replace-editor/tests/tools.spec.ts --reporter=dot (pinned source: 14 passed)",
+        "cargo test -p seekdeep-tool-str-replace-editor --all-features",
+        "cargo test -p seekdeep-tools --all-features",
+        "cargo clippy -p seekdeep-tool-str-replace-editor -p seekdeep-tools --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-tool-str-replace-editor --lib --all-features --target x86_64-pc-windows-msvc -- -D warnings"
+      ],
+      "note": "the Rust tool preserves the canonical schema, configurable description, replay-safe call views, UTF-16 clipping, numbered file ranges, two-level filtered code-unit-sorted directory listings, create-if-absent, unique literal replacement/deletion, line insertion, exact FS observation waterfalls, freshness guards, session sandbox policy, denial markers, structured FsError metadata, and reversible registration"
     },
     {
       "source": "packages/fs/tool-str-replace-editor/src/invariant.ts",
@@ -52501,7 +52524,16 @@
     {
       "source": "packages/fs/tool-str-replace-editor/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-str-replace-editor/tests/editor_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/fs/tool-str-replace-editor/tests/tools.spec.ts --reporter=dot (pinned source: 14 passed)",
+        "cargo test -p seekdeep-tool-str-replace-editor --all-features (Rust: 9 grouped cases)",
+        "cargo clippy -p seekdeep-tool-str-replace-editor --all-targets --all-features -- -D warnings"
+      ],
+      "note": "grouped cases cover every source assertion including registration/presentation/config disposal, canonical create/view/replace/insert output, absence recovery, literal replacement metacharacters, directory filters/depth/clipping, empty/newline/range/end insertion, mixed EOL, ownerless calls, ambiguity line numbers, invalid non-mutating inputs, observation policy, sandbox policy and denial mapping, tab preservation, missing policy startup, and unexpected backend failures"
     },
     {
       "source": "packages/fs/tool-str-replace-editor/tsconfig.json",
@@ -63711,7 +63743,18 @@
     {
       "source": "packages/shell/bash-local/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-local/src/lib.rs",
+        "crates/shell/src/types.rs",
+        "crates/subprocess-local/src/spawn.rs"
+      ],
+      "evidence": [
+        "pinned source bash-local and tool-bash suites: 125 passed",
+        "cargo test -p seekdeep-bash-local -p seekdeep-tool-bash -p seekdeep-tool-jobs -p seekdeep-subprocess-local -p seekdeep-shell -p seekdeep-hook-protocol -p seekdeep-tmux-context --all-features",
+        "cargo check --workspace --all-targets --all-features",
+        "cargo xtask docs"
+      ]
     },
     {
       "source": "packages/shell/bash-local/src/invariant.ts",
@@ -63730,12 +63773,28 @@
     {
       "source": "packages/shell/bash-local/tests/executor.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-local/tests/executor_parity.rs"
+      ],
+      "evidence": [
+        "pinned source bash-local and tool-bash suites: 125 passed",
+        "cargo test -p seekdeep-bash-local --all-features (8 passed)",
+        "cargo clippy -p seekdeep-bash-local -p seekdeep-subprocess-local -p seekdeep-shell --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/bash-local/tests/settings.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-local/tests/settings_parity.rs"
+      ],
+      "evidence": [
+        "pinned source bash-local and tool-bash suites: 125 passed",
+        "cargo test -p seekdeep-bash-local --all-features (8 passed)",
+        "cargo clippy -p seekdeep-bash-local --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/bash-local/tsconfig.json",
@@ -64390,7 +64449,18 @@
     {
       "source": "packages/shell/tool-bash/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-bash/src/lib.rs",
+        "crates/bash-local/src/lib.rs",
+        "crates/tool-jobs/src/index.rs"
+      ],
+      "evidence": [
+        "pinned source bash-local and tool-bash suites: 125 passed",
+        "cargo test -p seekdeep-tool-bash --all-features (19 passed)",
+        "cargo clippy -p seekdeep-tool-bash --all-targets --all-features -- -D warnings",
+        "cargo check --workspace --all-targets --all-features"
+      ]
     },
     {
       "source": "packages/shell/tool-bash/src/invariant.ts",
@@ -64423,12 +64493,31 @@
     {
       "source": "packages/shell/tool-bash/tests/integration.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-bash/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "pinned source bash-local and tool-bash suites: 125 passed",
+        "cargo test -p seekdeep-tool-bash --all-features (19 passed)",
+        "Rust agent-loop integration covers first-turn JSONL env, foreground history, nonzero exit, and idle background completion wake"
+      ]
     },
     {
       "source": "packages/shell/tool-bash/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-bash/src/lib.rs",
+        "crates/tool-bash/tests/tool_bash_parity.rs",
+        "crates/tool-bash/tests/sandbox_parity.rs",
+        "crates/tool-bash/tests/plugin_lifecycle.rs"
+      ],
+      "evidence": [
+        "pinned source bash-local and tool-bash suites: 125 passed",
+        "cargo test -p seekdeep-tool-bash --all-features (19 passed)",
+        "cargo clippy -p seekdeep-tool-bash --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-bash/tsconfig.json",
@@ -73586,7 +73675,18 @@
     {
       "source": "scripts/verify-export-jsdoc.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/main.rs",
+        "xtask/tests/export_docs_parity.rs",
+        "Cargo.toml"
+      ],
+      "evidence": [
+        "pnpm run verify-export-jsdoc (pinned source gate passed)",
+        "cargo xtask docs (strict workspace all-target/all-feature documentation-aware Clippy passed)",
+        "cargo clippy -p xtask --all-targets --all-features -- -D warnings"
+      ],
+      "note": "cargo xtask docs is the Rust-native exported-API documentation gate: workspace missing_docs plus strict Clippy checks every compiled public surface, so reachability and language-specific export-form parsing are delegated to rustc rather than retained as a TypeScript AST tool"
     },
     {
       "source": "scripts/verify-md-links.spec.ts",
@@ -73828,22 +73928,59 @@
     {
       "source": "vendor/cordis/src/context.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/context.rs",
+        "crates/cordis/tests/source_semantic_oracle.rs"
+      ],
+      "evidence": [
+        "pinned-source direct Node/tsx semantic oracle: exact context extension, isolation, shallow intercept, and root lifecycle outcomes",
+        "cargo test -p seekdeep-cordis --all-features (23 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
+        "cargo check --workspace --all-targets --all-features"
+      ]
     },
     {
       "source": "vendor/cordis/src/events.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/events.rs",
+        "crates/cordis/tests/source_semantic_oracle.rs"
+      ],
+      "evidence": [
+        "pinned-source direct Node/tsx semantic oracle: exact emit, parallel, serial, bail, waterfall, once, prepend, filter, and global-listener outcomes",
+        "cargo test -p seekdeep-cordis --all-features (23 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "vendor/cordis/src/fiber.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/fiber.rs",
+        "crates/cordis/src/plugin.rs",
+        "crates/cordis/tests/plugin_lifecycle_events.rs",
+        "crates/cordis/tests/source_semantic_oracle.rs"
+      ],
+      "evidence": [
+        "pinned-source direct Node/tsx semantic oracle: pending, active, withdrawn, and disposed dependency epochs matched exactly",
+        "cargo test -p seekdeep-cordis --all-features (23 passed)",
+        "Rust additive guarantees: joined deterministic disposal errors and transactional update rollback remain covered"
+      ]
     },
     {
       "source": "vendor/cordis/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis --all-features (23 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "vendor/cordis/src/logger.ts",
@@ -73863,7 +74000,18 @@
     {
       "source": "vendor/cordis/src/service.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/service.rs",
+        "crates/cordis/src/context.rs",
+        "crates/cordis/src/plugin.rs",
+        "crates/cordis/tests/source_semantic_oracle.rs"
+      ],
+      "evidence": [
+        "pinned-source direct Node/tsx semantic oracle: duplicate ownership, provider-owned set, isolation filtering, shallow config resolution, and inject intercepts",
+        "cargo test -p seekdeep-cordis --all-features (23 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "vendor/cordis/src/utils.ts",

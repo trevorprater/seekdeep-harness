@@ -24,8 +24,8 @@ impl ShellExecutor for StubExecutor {
         Ok(ShellExecSpec {
             command: request.command,
             workdir: request.workdir.unwrap_or_else(|| PathBuf::from("/stub")),
-            timeout_ms: request.timeout_ms.unwrap_or(1_000),
-            stdout_max_bytes: request.stdout_max_bytes.unwrap_or(64_000),
+            timeout_ms: request.timeout_ms.unwrap_or(1_000.0),
+            stdout_max_bytes: request.stdout_max_bytes.unwrap_or(64_000.0),
             signal: request.signal,
             stdin: request.stdin,
             env: request.env,
@@ -107,8 +107,8 @@ async fn concrete_provider_serves_the_complete_task_free_seam() {
         .expect("resolve");
     assert_eq!(spec.command, "echo hi");
     assert_eq!(spec.workdir, PathBuf::from("/stub"));
-    assert_eq!(spec.timeout_ms, 1_000);
-    assert_eq!(spec.stdout_max_bytes, 64_000);
+    assert!((spec.timeout_ms - 1_000.0).abs() < f64::EPSILON);
+    assert!((spec.stdout_max_bytes - 64_000.0).abs() < f64::EPSILON);
     assert!(spec.sandbox_policy.is_none());
 
     let result = shell.run(spec.clone()).await.expect("run");

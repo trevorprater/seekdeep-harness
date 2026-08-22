@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "apps/seekdeep",
+  "crates/bash-local",
   "crates/attachment",
   "crates/attachment-local",
   "crates/app-boot",

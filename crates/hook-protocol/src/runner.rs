@@ -57,7 +57,7 @@ pub async fn run_hook(
     let stdin = options.payload.to_string() + if options.trailing_newline { "\n" } else { "" };
 
     let mut request = ShellExecRequest::new(hook.command.clone());
-    request.timeout_ms = Some(timeout_ms);
+    request.timeout_ms = Some(js_number(timeout_ms));
     request.stdin = Some(stdin);
     request.signal = Some(options.signal.clone());
     if let Some(cwd) = &options.cwd {
@@ -87,6 +87,13 @@ pub async fn run_hook(
             duration_ms,
         },
     }
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn js_number(value: u64) -> f64 {
+    // The source boundary is a JavaScript number, including its rounding for
+    // integers above the exact-safe range.
+    value as f64
 }
 
 #[cfg(test)]
@@ -137,8 +144,8 @@ mod tests {
             Ok(ShellExecSpec {
                 command: request.command,
                 workdir: request.workdir.unwrap_or_else(|| PathBuf::from("/stub")),
-                timeout_ms: request.timeout_ms.unwrap_or(0),
-                stdout_max_bytes: request.stdout_max_bytes.unwrap_or(64_000),
+                timeout_ms: request.timeout_ms.unwrap_or(0.0),
+                stdout_max_bytes: request.stdout_max_bytes.unwrap_or(64_000.0),
                 signal: request.signal,
                 stdin: request.stdin,
                 env: request.env,
@@ -176,7 +183,7 @@ mod tests {
             signal: None,
             timed_out: false,
             aborted: false,
-            timeout_ms: 1000,
+            timeout_ms: 1000.0,
             stdout: collected(""),
             stderr: collected(""),
             sandbox: None,
@@ -261,14 +268,14 @@ mod tests {
         let mut hook = hook("h");
         hook.timeout_sec = Some(3);
         run_hook(&bash, &hook, &options(), clock()).await;
-        assert_eq!(bash.specs()[0].timeout_ms, 3000);
+        assert!((bash.specs()[0].timeout_ms - 3000.0).abs() < f64::EPSILON);
     }
 
     #[tokio::test]
     async fn falls_back_to_default_timeout_and_constant_matches_source() {
         let bash = RecordingBash::ok(default_result());
         run_hook(&bash, &hook("h"), &options(), clock()).await;
-        assert_eq!(bash.specs()[0].timeout_ms, 60_000);
+        assert!((bash.specs()[0].timeout_ms - 60_000.0).abs() < f64::EPSILON);
         assert_eq!(DEFAULT_HOOK_TIMEOUT_MS, 600_000);
     }
 

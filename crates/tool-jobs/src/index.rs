@@ -380,6 +380,7 @@ fn finalize_task_content(
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct JobOutputArgs {
+    #[serde(rename = "job_id")]
     job_id: String,
     #[serde(default)]
     wait: Option<bool>,
@@ -403,6 +404,7 @@ struct NoArgs {}
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct JobKillArgs {
+    #[serde(rename = "job_id")]
     job_id: String,
     #[serde(default)]
     reason: Option<String>,

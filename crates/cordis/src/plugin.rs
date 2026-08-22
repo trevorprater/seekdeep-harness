@@ -35,6 +35,7 @@ pub struct Plugin {
     id: Uuid,
     name: String,
     inject: Vec<String>,
+    inject_intercepts: Vec<(String, Value)>,
     callback: PluginCallback,
     config_resolver: Option<ConfigResolver>,
     validator: Option<ConfigValidator>,
@@ -63,6 +64,7 @@ impl Plugin {
             id: Uuid::now_v7(),
             name: name.into(),
             inject: inject.into_iter().map(Into::into).collect(),
+            inject_intercepts: Vec::new(),
             callback: Arc::new(callback),
             config_resolver: None,
             validator: None,
@@ -96,6 +98,18 @@ impl Plugin {
                 self.inject.push(name);
             }
         }
+        self
+    }
+
+    /// Adds a required service together with the intercept config visible to
+    /// the plugin context while that dependency generation is active.
+    #[must_use]
+    pub fn with_inject_config(mut self, name: impl Into<String>, config: Value) -> Self {
+        let name = name.into();
+        if !self.inject.contains(&name) {
+            self.inject.push(name.clone());
+        }
+        self.inject_intercepts.push((name, config));
         self
     }
 
@@ -158,9 +172,16 @@ impl PluginRegistry {
         config: Value,
     ) -> Result<Arc<PluginFiber>, CordisError> {
         let fiber = Fiber::child(plugin.name.clone());
+        let plugin_context = plugin
+            .inject_intercepts
+            .iter()
+            .fold(parent.clone(), |context, (name, config)| {
+                context.intercept(name, config.clone())
+            })
+            .with_fiber(fiber.clone());
         let mounted = Arc::new(PluginFiber {
             fiber: fiber.clone(),
-            context: parent.with_fiber(fiber),
+            context: plugin_context,
             plugin,
             additional_inject: Mutex::new(Vec::new()),
             config: Mutex::new(config),

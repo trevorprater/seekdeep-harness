@@ -1,6 +1,6 @@
 //! Model-facing persistent view/create/literal-replace/line-insert editor.
 
-use std::{cmp::Ordering, path::Path, sync::Arc};
+use std::{cmp::Ordering, fmt::Write as _, path::Path, sync::Arc};
 
 use seekdeep_cordis::{Context, EventArgs, EventReply, Plugin};
 use seekdeep_fs::{
@@ -27,7 +27,7 @@ const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
 const TRUNCATED_MESSAGE: &str = "<response clipped><NOTE>To save on context only part of this file has been shown to you. You should retry this tool after you have searched inside the file with `grep -n` in order to find the line numbers of what you are looking for.</NOTE>";
 
-const DEFAULT_DESCRIPTION: &str = r#"Custom editing tool for viewing, creating and editing files
+const DEFAULT_DESCRIPTION: &str = r"Custom editing tool for viewing, creating and editing files
 * State is persistent across command calls and discussions with the user
 * If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep
 * The `create` command cannot be used if the specified `path` already exists as a file
@@ -36,7 +36,7 @@ const DEFAULT_DESCRIPTION: &str = r#"Custom editing tool for viewing, creating a
 Notes for using the `str_replace` command:
 * The `old_str` parameter should match EXACTLY one or more consecutive lines from the original file. Be mindful of whitespaces!
 * If the `old_str` parameter is not unique in the file, the replacement will not be performed. Make sure to include enough context in `old_str` to make it unique
-* The `new_str` parameter should contain the edited lines that should replace the `old_str`"#;
+* The `new_str` parameter should contain the edited lines that should replace the `old_str`";
 
 /// Raw plugin configuration.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -132,11 +132,7 @@ impl MutationPolicy {
             .transpose()
     }
 
-    fn map_error(
-        &self,
-        error: anyhow::Error,
-        policy: Option<&SandboxExecutionPolicy>,
-    ) -> anyhow::Error {
+    fn map_error(error: anyhow::Error, policy: Option<&SandboxExecutionPolicy>) -> anyhow::Error {
         let Some(fs_error) = error.downcast_ref::<FsError>() else {
             return error;
         };
@@ -203,7 +199,9 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                 })
             }),
         )
-        .present_call(Arc::new(|args: &EditorArgs| present_editor_call(args))),
+        .present_call(Arc::new(|args: &EditorArgs| {
+            Some(present_editor_call(args))
+        })),
     )?;
     tools.register(context, definition)?;
     Ok(())
@@ -427,7 +425,7 @@ async fn view_path(
             list_directory(filesystem, &target, max_output_chars, &signal).await
         }
         FsKind::File => {
-            let content = filesystem.read_text(&target, Some(&signal)).await?;
+            let file_content = filesystem.read_text(&target, Some(&signal)).await?;
             emit_observed(
                 context,
                 &target,
@@ -436,7 +434,12 @@ async fn view_path(
                 },
                 execution,
             )?;
-            format_file_view(&target.display_path, &content, max_output_chars, view_range)
+            format_file_view(
+                &target.display_path,
+                &file_content,
+                max_output_chars,
+                view_range,
+            )
         }
         FsKind::Other => Err(anyhow::Error::new(FsError::new(
             format!(
@@ -456,7 +459,7 @@ async fn create_file(
     file_text: Option<&str>,
     execution: &ToolRunContext,
 ) -> anyhow::Result<String> {
-    let content = required(file_text, "file_text", "create", true)?;
+    let create_content = required(file_text, "file_text", "create", true)?;
     let sandbox_policy = policy.resolve(execution)?;
     let signal = execution.signal();
     let target = resolve_target(filesystem, path, &signal).await?;
@@ -470,13 +473,13 @@ async fn create_file(
     let outcome = filesystem
         .write_text(
             &target,
-            content,
+            create_content,
             Some(&intent),
             Some(&signal),
             sandbox_policy.as_ref(),
         )
         .await
-        .map_err(|error| policy.map_error(error, sandbox_policy.as_ref()))?;
+        .map_err(|error| MutationPolicy::map_error(error, sandbox_policy.as_ref()))?;
     emit_observed(
         context,
         &target,
@@ -563,7 +566,7 @@ async fn replace_in_file(
             sandbox_policy.as_ref(),
         )
         .await
-        .map_err(|error| policy.map_error(error, sandbox_policy.as_ref()))?;
+        .map_err(|error| MutationPolicy::map_error(error, sandbox_policy.as_ref()))?;
     emit_observed(
         context,
         &target,
@@ -614,16 +617,14 @@ async fn insert_in_file(
     }
     let before = filesystem.read_text(&target, Some(&signal)).await?;
     let lines = before.split('\n').collect::<Vec<_>>();
+    let index = nonnegative_index(insert_line).filter(|index| *index <= lines.len());
     anyhow::ensure!(
-        insert_line.is_finite()
-            && insert_line.fract() == 0.0
-            && insert_line >= 0.0
-            && insert_line <= lines.len() as f64,
+        index.is_some(),
         "Invalid `insert_line` parameter: {}. It should be within the range of lines of the file: [0, {}]",
         js_number(insert_line),
         lines.len()
     );
-    let index = js_number(insert_line).parse::<usize>()?;
+    let index = index.expect("validated insertion index");
     let mut after_lines = Vec::with_capacity(lines.len() + value.matches('\n').count() + 1);
     after_lines.extend_from_slice(&lines[..index]);
     after_lines.extend(value.split('\n'));
@@ -641,7 +642,7 @@ async fn insert_in_file(
             sandbox_policy.as_ref(),
         )
         .await
-        .map_err(|error| policy.map_error(error, sandbox_policy.as_ref()))?;
+        .map_err(|error| MutationPolicy::map_error(error, sandbox_policy.as_ref()))?;
     emit_observed(
         context,
         &target,
@@ -738,8 +739,15 @@ fn format_file_view(
         );
         let requested_initial = view_range[0];
         let requested_final = view_range[1];
+        let initial_index = nonnegative_index(requested_initial)
+            .filter(|line| *line >= 1 && *line <= all_lines.len());
+        let final_index = if js_number(requested_final) == "-1" {
+            Some(None)
+        } else {
+            nonnegative_index(requested_final).map(Some)
+        };
         anyhow::ensure!(
-            requested_initial >= 1.0 && requested_initial <= all_lines.len() as f64,
+            initial_index.is_some(),
             "Invalid `view_range`: [{}, {}]. Its first element `{}` should be within the range of lines of the file: [1, {}]",
             js_number(requested_initial),
             js_number(requested_final),
@@ -747,30 +755,31 @@ fn format_file_view(
             all_lines.len()
         );
         anyhow::ensure!(
-            requested_final <= all_lines.len() as f64,
+            final_index
+                .as_ref()
+                .is_some_and(|line| line.is_none_or(|line| line <= all_lines.len())),
             "Invalid `view_range`: [{}, {}]. Its second element `{}` should be smaller than the number of lines in the file: `{}`",
             js_number(requested_initial),
             js_number(requested_final),
             js_number(requested_final),
             all_lines.len()
         );
+        initial_line = initial_index.expect("validated first line");
+        final_line = final_index.expect("validated final line");
         anyhow::ensure!(
-            requested_final == -1.0 || requested_final >= requested_initial,
+            final_line.is_none_or(|line| line >= initial_line),
             "Invalid `view_range`: [{}, {}]. Its second element `{}` should be larger or equal than its first `{}`",
             js_number(requested_initial),
             js_number(requested_final),
             js_number(requested_final),
             js_number(requested_initial)
         );
-        initial_line = js_number(requested_initial).parse()?;
-        final_line = (requested_final != -1.0)
-            .then(|| js_number(requested_final).parse::<usize>())
-            .transpose()?;
-        prompt.push_str(&format!(
+        write!(
+            prompt,
             " with view_range=[{}, {}]",
             js_number(requested_initial),
             js_number(requested_final)
-        ));
+        )?;
     }
     let end = final_line.unwrap_or(all_lines.len());
     let numbered = all_lines[initial_line - 1..end]
@@ -881,12 +890,19 @@ fn js_number(value: f64) -> String {
     ryu_js::Buffer::new().format(value).to_owned()
 }
 
-fn present_editor_call(args: &EditorArgs) -> Option<ToolCallView> {
+fn nonnegative_index(value: f64) -> Option<usize> {
+    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 {
+        return None;
+    }
+    js_number(value).parse().ok()
+}
+
+fn present_editor_call(args: &EditorArgs) -> ToolCallView {
     let location = |line| FileLocation {
         path: args.path.clone(),
         line,
     };
-    Some(match args.command {
+    match args.command {
         EditorCommand::View => ToolCallView::Generic(GenericCallView {
             title: format!("view {}", args.path),
             kind: Some(ToolCallKind::Read),
@@ -921,5 +937,5 @@ fn present_editor_call(args: &EditorArgs) -> Option<ToolCallView> {
                 args.insert_line.map(|line| (line + 1.0).max(1.0)),
             )]),
         }),
-    })
+    }
 }

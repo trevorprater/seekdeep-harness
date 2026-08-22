@@ -228,7 +228,12 @@ impl std::fmt::Debug for LocalSubprocessHandle {
 }
 
 impl LocalSubprocessHandle {
-    fn failed(message: String, grace: Duration, operations: TreeOperations) -> Arc<Self> {
+    fn failed(
+        message: String,
+        grace: Duration,
+        operations: TreeOperations,
+        collected: SubprocessCollectedOutputs,
+    ) -> Arc<Self> {
         let done = Arc::new(DoneSlot::default());
         done.complete(StoredDone::Failure(Arc::from(message)));
         Arc::new(Self {
@@ -236,7 +241,7 @@ impl LocalSubprocessHandle {
             stdin: None,
             stdout: None,
             stderr: None,
-            collected: SubprocessCollectedOutputs::default(),
+            collected,
             done,
             direct_exited: Arc::new(AtomicBool::new(true)),
             outcome_settled: Arc::new(AtomicBool::new(true)),
@@ -434,6 +439,7 @@ pub fn spawn_subprocess_with(
                 error.to_string(),
                 grace,
                 operations,
+                collected_outputs(stdout_collector.as_ref(), stderr_collector.as_ref()),
             ));
         }
     };
@@ -465,14 +471,7 @@ pub fn spawn_subprocess_with(
         stdin: exposed_stdin,
         stdout: exposed_stdout,
         stderr: exposed_stderr,
-        collected: SubprocessCollectedOutputs {
-            stdout: stdout_collector.as_ref().map(|collector| {
-                collector.clone() as Arc<dyn seekdeep_subprocess::SubprocessOutputReader>
-            }),
-            stderr: stderr_collector.as_ref().map(|collector| {
-                collector.clone() as Arc<dyn seekdeep_subprocess::SubprocessOutputReader>
-            }),
-        },
+        collected: collected_outputs(stdout_collector.as_ref(), stderr_collector.as_ref()),
         done: done.clone(),
         direct_exited: direct_exited.clone(),
         outcome_settled: outcome_settled.clone(),
@@ -513,6 +512,19 @@ pub fn spawn_subprocess_with(
         });
     }
     Ok(handle)
+}
+
+fn collected_outputs(
+    stdout: Option<&Arc<OutputCollector>>,
+    stderr: Option<&Arc<OutputCollector>>,
+) -> SubprocessCollectedOutputs {
+    let erase = |collector: &Arc<OutputCollector>| {
+        collector.clone() as Arc<dyn seekdeep_subprocess::SubprocessOutputReader>
+    };
+    SubprocessCollectedOutputs {
+        stdout: stdout.map(erase),
+        stderr: stderr.map(erase),
+    }
 }
 
 pub(crate) fn validate_grace(value: f64) -> anyhow::Result<Duration> {

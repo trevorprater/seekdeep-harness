@@ -39,7 +39,7 @@ fn result(stdout: impl Into<String>, exit_code: i32) -> ShellRunResult {
         signal: None,
         timed_out: false,
         aborted: false,
-        timeout_ms: 60_000,
+        timeout_ms: 60_000.0,
         stdout: CollectedOutput {
             text: stdout.into(),
             truncated: false,
@@ -78,8 +78,8 @@ impl ShellExecutor for FakeShell {
         Ok(ShellExecSpec {
             command: request.command,
             workdir: request.workdir.unwrap_or_else(|| PathBuf::from("/work")),
-            timeout_ms: request.timeout_ms.unwrap_or(60_000),
-            stdout_max_bytes: request.stdout_max_bytes.unwrap_or(64_000),
+            timeout_ms: request.timeout_ms.unwrap_or(60_000.0),
+            stdout_max_bytes: request.stdout_max_bytes.unwrap_or(64_000.0),
             signal: request.signal,
             stdin: request.stdin,
             env: request.env,
