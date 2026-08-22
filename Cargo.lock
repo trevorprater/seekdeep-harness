@@ -874,6 +874,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cast"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
+
+[[package]]
 name = "castaway"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2673,6 +2679,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "minicov"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3aa3aa12b448ac225b3102217d1ac5cc717908f02722926524b0599c933c7a0"
+dependencies = [
+ "cc",
+ "walkdir",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2771,6 +2787,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nu-ansi-term"
+version = "0.50.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
+dependencies = [
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2803,6 +2828,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+ "libm",
 ]
 
 [[package]]
@@ -2847,6 +2873,12 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "oorandom"
+version = "11.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
 name = "openssl-probe"
@@ -4368,6 +4400,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-app-boot"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "indexmap 2.14.0",
+ "notify",
+ "parking_lot",
+ "path-clean",
+ "seekdeep-cordis",
+ "seekdeep-loader",
+ "seekdeep-system-prompt",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-attachment"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -4439,6 +4492,67 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-client-hmr"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures",
+ "http-body-util",
+ "hyper 1.11.0",
+ "js-sys",
+ "parking_lot",
+ "seekdeep-client-modules",
+ "seekdeep-cordis",
+ "seekdeep-host-webserver",
+ "seekdeep-invariants",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+]
+
+[[package]]
+name = "seekdeep-client-modules"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures",
+ "hex",
+ "http-body-util",
+ "hyper 1.11.0",
+ "indexmap 2.14.0",
+ "js-sys",
+ "parking_lot",
+ "percent-encoding",
+ "seekdeep-cordis",
+ "seekdeep-host-webserver",
+ "seekdeep-invariants",
+ "seekdeep-loader",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sha1",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]
@@ -4654,6 +4768,77 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "seekdeep-cordis-client-runner"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "indexmap 2.14.0",
+ "js-sys",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-cordis-dynamic-types",
+ "seekdeep-cordis-timer",
+ "seekdeep-identity",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+]
+
+[[package]]
+name = "seekdeep-cordis-dynamic-types"
+version = "0.1.0-rc.5"
+dependencies = [
+ "seekdeep-identity",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "seekdeep-cordis-host-runner"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "boa_engine",
+ "futures",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-cordis-dynamic-types",
+ "seekdeep-cordis-timer",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-loader",
+ "seekdeep-scope",
+ "seekdeep-tools",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-cordis-timer"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "parking_lot",
+ "seekdeep-cordis",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
@@ -4854,6 +5039,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-hmr"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "notify",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-loader",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "seekdeep-hook-protocol"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -4946,8 +5149,15 @@ dependencies = [
 name = "seekdeep-host-plugin-inventory"
 version = "0.1.0-rc.5"
 dependencies = [
+ "anyhow",
+ "seekdeep-api-gateway",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "seekdeep-loader",
+ "seekdeep-typert-protocol",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -4968,6 +5178,13 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-identity"
+version = "0.1.0-rc.5"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -5049,6 +5266,7 @@ dependencies = [
  "regex",
  "seekdeep-attachment",
  "seekdeep-cordis",
+ "seekdeep-identity",
  "seekdeep-invariants",
  "seekdeep-schemastery",
  "seekdeep-util",
@@ -5178,15 +5396,25 @@ name = "seekdeep-loader"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
+ "boa_engine",
+ "futures",
  "indexmap 2.14.0",
+ "num-traits",
  "parking_lot",
  "seekdeep-cordis",
+ "seekdeep-cordis-timer",
+ "seekdeep-llm",
+ "seekdeep-tools",
+ "seekdeep-util",
  "serde",
  "serde_json",
  "serde_yml",
+ "tempfile",
  "thiserror 2.0.20",
  "tokio",
- "uuid",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -6800,6 +7028,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-wasm-bindgen"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "serde_core"
 version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7744,6 +7983,45 @@ checksum = "7ef64dbcc55df09c7e5a46182d181c2cfa3e925f3da937ea764728b4bbb9dcbf"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "wasm-bindgen-test"
+version = "0.3.77"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "895a2607575412a4eda1df892084a375ea10dfeadc4d7d2ab87b854e4ddc7ba1"
+dependencies = [
+ "async-trait",
+ "cast",
+ "js-sys",
+ "libm",
+ "minicov",
+ "nu-ansi-term",
+ "num-traits",
+ "oorandom",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test-macro",
+ "wasm-bindgen-test-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-test-macro"
+version = "0.3.77"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4288cb0ebe215033bf949ae1fd046726daa4c32a157f24b9dc6ac387a52aa759"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "wasm-bindgen-test-shared"
+version = "0.2.127"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33ff1c1b360982e93b6d8ea9c04836f71dba0817a16f91e229cf3a51bdd9d987"
 
 [[package]]
 name = "wasm-streams"

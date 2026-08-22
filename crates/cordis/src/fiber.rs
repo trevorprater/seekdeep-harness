@@ -28,6 +28,9 @@ pub enum CordisError {
     /// Another provider already owns the service slot.
     #[error("service {0:?} is already provided in this scope")]
     DuplicateService(String),
+    /// A synchronous `internal/plugin` creation observer rejected publication.
+    #[error("plugin publication failed: {0}")]
+    PluginPublication(String),
 }
 
 /// Lifecycle state for one mounted plugin.

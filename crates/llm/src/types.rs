@@ -132,45 +132,44 @@ impl<'de> Deserialize<'de> for ContentBlock {
             return Err(D::Error::custom("content block must be an object"));
         };
         let block_type = take_string::<D::Error>(&mut object, "type")?;
-        match block_type.as_str() {
-            "text" => Ok(Self::Text {
-                text: take_string::<D::Error>(&mut object, "text")?,
-            }),
-            "reasoning" => Ok(Self::Reasoning {
-                text: take_string::<D::Error>(&mut object, "text")?,
-            }),
-            "image" => Ok(Self::Image {
-                attachment: serde_json::from_value(
-                    object
-                        .remove("attachment")
-                        .ok_or_else(|| D::Error::missing_field("attachment"))?,
-                )
-                .map_err(D::Error::custom)?,
-            }),
-            "tool-call" => Ok(Self::ToolCall {
-                id: CallId::new(take_string::<D::Error>(&mut object, "id")?),
-                name: take_string::<D::Error>(&mut object, "name")?,
-                arguments: take_string::<D::Error>(&mut object, "arguments")?,
-            }),
-            "tool-result" => Ok(Self::ToolResult {
-                tool_call_id: CallId::new(take_string::<D::Error>(&mut object, "toolCallId")?),
-                content: serde_json::from_value(
-                    object
-                        .remove("content")
-                        .ok_or_else(|| D::Error::missing_field("content"))?,
-                )
-                .map_err(D::Error::custom)?,
-                is_error: object
-                    .remove("isError")
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .map_err(D::Error::custom)?,
-            }),
-            _ => Ok(Self::Unknown {
+        Ok(
+            decode_known_content_block(&block_type, &object).unwrap_or(Self::Unknown {
                 block_type,
                 fields: object,
             }),
-        }
+        )
+    }
+}
+
+fn decode_known_content_block(
+    block_type: &str,
+    object: &Map<String, Value>,
+) -> Option<ContentBlock> {
+    match block_type {
+        "text" => Some(ContentBlock::Text {
+            text: object.get("text")?.as_str()?.to_owned(),
+        }),
+        "reasoning" => Some(ContentBlock::Reasoning {
+            text: object.get("text")?.as_str()?.to_owned(),
+        }),
+        "image" => Some(ContentBlock::Image {
+            attachment: serde_json::from_value(object.get("attachment")?.clone()).ok()?,
+        }),
+        "tool-call" => Some(ContentBlock::ToolCall {
+            id: CallId::new(object.get("id")?.as_str()?),
+            name: object.get("name")?.as_str()?.to_owned(),
+            arguments: object.get("arguments")?.as_str()?.to_owned(),
+        }),
+        "tool-result" => Some(ContentBlock::ToolResult {
+            tool_call_id: CallId::new(object.get("toolCallId")?.as_str()?),
+            content: serde_json::from_value(object.get("content")?.clone()).ok()?,
+            is_error: object
+                .get("isError")
+                .map(|value| serde_json::from_value(value.clone()))
+                .transpose()
+                .ok()?,
+        }),
+        _ => None,
     }
 }
 

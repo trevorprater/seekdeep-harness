@@ -37079,7 +37079,17 @@
     {
       "source": "packages/boot/app-boot/src/profile.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/app-boot/src/profile.rs",
+        "crates/app-boot/src/lib.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-app-boot --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/boot/app-boot/tests/profile.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ],
+      "note": "profile identity, templates, initialization, lossless manifests, two-anchor bundle resolution, ordered patch loading/composition, shipped tuple normalization, and installation fallback healing are ported"
     },
     {
       "source": "packages/boot/app-boot/tests/app-boot.spec.ts",
@@ -37089,27 +37099,85 @@
     {
       "source": "packages/boot/app-boot/tests/config-dump.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/app-boot/src/config_dump.rs",
+        "crates/app-boot/tests/config_dump_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-app-boot --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/boot/app-boot/tests/config-dump.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/boot/app-boot/tests/config-reload.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/plugin.rs",
+        "crates/loader/src/lib.rs",
+        "crates/loader/src/expression.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/app-boot/src/reload.rs",
+        "crates/app-boot/tests/reload_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo test -p seekdeep-cordis -p seekdeep-loader -p seekdeep-app-boot --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo clippy -p seekdeep-cordis -p seekdeep-loader -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/boot/app-boot/tests/config-reload.spec.ts packages/boot/app-boot/tests/user-patches.spec.ts (28 source tests at commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ],
+      "note": "fine-grained add, remove, reorder, disable, group, config, name, inject, and move transactions retain unaffected fibers; import preflight, candidate failure, earlier-update rollback, raw expression preservation, injected-context interpolation, provider-generation re-evaluation, patch recomposition, and isolated group realms are pinned"
     },
     {
       "source": "packages/boot/app-boot/tests/hmr-config.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/app-boot/src/watch.rs",
+        "crates/app-boot/tests/watch_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-app-boot --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/boot/app-boot/tests/hmr-config.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/boot/app-boot/tests/profile.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/app-boot/tests/profile_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-app-boot --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/boot/app-boot/tests/profile.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/boot/app-boot/tests/user-patches.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/expression.rs",
+        "crates/loader/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/app-boot/src/boot.rs",
+        "crates/app-boot/src/profile.rs",
+        "crates/app-boot/src/user_patches.rs",
+        "crates/app-boot/src/watch.rs",
+        "crates/app-boot/tests/boot_parity.rs",
+        "crates/app-boot/tests/profile_parity.rs",
+        "crates/app-boot/tests/user_patch_watch_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo test -p seekdeep-cordis -p seekdeep-util -p seekdeep-loader -p seekdeep-app-boot -p seekdeep-headless --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo clippy -p seekdeep-cordis -p seekdeep-util -p seekdeep-loader -p seekdeep-app-boot -p seekdeep-headless --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/boot/app-boot/tests/config-reload.spec.ts packages/boot/app-boot/tests/user-patches.spec.ts (28 source tests at commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ],
+      "note": "optional patch parsing, raw expression preservation, injection-ready interpolation, disabled expressions, root Include patch layering, exact-path add/change/remove, failed-candidate retention, parse recovery, default and custom composition, required Loader/Include checks, duplicate registration, ownership-race no-op, and joined disposal are pinned"
     },
     {
       "source": "packages/boot/app-boot/tsconfig.json",
@@ -38371,37 +38439,115 @@
     {
       "source": "packages/client/modules/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-modules/src/lib.rs",
+        "crates/client-modules/src/wasm.rs",
+        "crates/client-modules/tests/wasm_client_modules_parity.rs"
+      ],
+      "evidence": [
+        "cargo clippy -p seekdeep-client-modules --target wasm32-unknown-unknown --lib -- -D warnings",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_modules_parity-*.wasm (headless Chrome: enrollment cases passed)"
+      ],
+      "note": "the Rust/WASM browser export exposes the module system and boot parser, and its inject-free enrollment plugin reads window.__SEEKDEEP_MODULES__ and provides the kernel-built instance through ctx.reflect"
     },
     {
       "source": "packages/client/modules/src/client/manifest.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-modules/src/manifest.rs",
+        "crates/client-modules/src/wasm.rs",
+        "crates/client-modules/tests/client_modules_parity.rs",
+        "crates/client-modules/tests/wasm_client_modules_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-modules --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_modules_parity-*.wasm (headless Chrome: boot parser passed)"
+      ],
+      "note": "public graph identities are Rust newtypes; the parser preserves source order, normalizes inject/immediately only in the plugin view, rejects each malformed boundary with field-specific teaching, and applies the SeekDeep kernel-slot rename"
     },
     {
       "source": "packages/client/modules/src/client/system.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-modules/src/system.rs",
+        "crates/client-modules/src/wasm.rs",
+        "crates/client-modules/tests/client_modules_parity.rs",
+        "crates/client-modules/tests/wasm_client_modules_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/modules/tests/loader.client.spec.ts --reporter=dot (pinned source: 23 passed)",
+        "cargo test -p seekdeep-client-modules --all-features",
+        "cargo clippy -p seekdeep-client-modules --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-modules --target wasm32-unknown-unknown --lib -- -D warnings",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_modules_parity-*.wasm (headless Chrome: module table and DOM transport passed)"
+      ],
+      "note": "Rust owns seed/static/cache/factory/graph resolution order, lazy shared arrival, recursive synchronous require and edge capture, cycle detection, memoized record identity, HMR invalidation, loud misses/duplicates, and style inventory; the WASM adapter installs the one-page registration sink and external classic-script transport"
     },
     {
       "source": "packages/client/modules/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-modules/src/host.rs",
+        "crates/client-modules/src/invariant.rs",
+        "crates/client-modules/tests/client_module_host_parity.rs",
+        "crates/cordis/src/plugin.rs",
+        "crates/cordis/tests/plugin_lifecycle_events.rs",
+        "crates/loader/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/modules/tests/node-half.client.spec.ts --reporter=dot (pinned source: 4 passed)",
+        "cargo test -p seekdeep-client-modules --all-features",
+        "cargo test -p seekdeep-cordis --test plugin_lifecycle_events --all-features",
+        "cargo clippy -p seekdeep-cordis -p seekdeep-loader -p seekdeep-client-modules --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust Host plugin resolves seekdeep.client package metadata from the Loader base URL, caches positive/negative declarations, groups activation failures, hashes and incrementally reconciles one atomic graph/path table from exact internal/plugin creation/disposal publications, serves bundles/maps through the real WebServer, injects window.__SEEKDEEP_BOOT__, contains rebuild/graph subscribers, and exposes HMR rehashing"
     },
     {
       "source": "packages/client/modules/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-modules/src/invariant.rs",
+        "crates/client-modules/src/host.rs",
+        "crates/client-modules/tests/client_module_host_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-modules --test client_module_host_parity --all-features",
+        "cargo clippy -p seekdeep-client-modules --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust host inserts and removes graph rows and client paths in one WebPluginRecord transaction, making the source event-time graph/path scan true by construction; the invariant companion reserves that package-owned relation explicitly"
     },
     {
       "source": "packages/client/modules/tests/loader.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-modules/tests/client_modules_parity.rs",
+        "crates/client-modules/tests/wasm_client_modules_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/modules/tests/loader.client.spec.ts --reporter=dot (pinned source: 23 passed)",
+        "cargo test -p seekdeep-client-modules --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_modules_parity-*.wasm (headless Chrome: 4 grouped browser cases passed)"
+      ],
+      "note": "all 23 source cases are represented across target-neutral Rust tests and browser-executed WASM tests"
     },
     {
       "source": "packages/client/modules/tests/node-half.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-modules/tests/client_module_host_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/modules/tests/node-half.client.spec.ts --reporter=dot (pinned source: 4 passed)",
+        "cargo test -p seekdeep-client-modules --test client_module_host_parity --all-features"
+      ],
+      "note": "all four source cases are represented with SeekDeep metadata: sibling roles, grouped missing builds, non-missing read failures, and source-map serving"
     },
     {
       "source": "packages/client/modules/tsconfig.json",
@@ -38417,7 +38563,16 @@
     {
       "source": "packages/client/modules/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-modules/Cargo.toml",
+        "crates/client-modules/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-client-modules --all-targets --all-features",
+        "cargo check -p seekdeep-client-modules --target wasm32-unknown-unknown --lib"
+      ],
+      "note": "one Rust crate emits the native Host rlib and browser cdylib/rlib faces without a JavaScript bundler"
     },
     {
       "source": "packages/client/runtime/README.i18n.yaml",
@@ -50080,57 +50235,204 @@
     {
       "source": "packages/extensions/cordis-client-runner/src/client/api-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/bin/port-cordis-client-catalogs.rs",
+        "crates/cordis-client-runner/data/api-catalog.json",
+        "crates/cordis-client-runner/data/api-query-fixtures.json",
+        "crates/cordis-client-runner/src/api_catalog.rs",
+        "crates/cordis-client-runner/tests/api_catalog_parity.rs"
+      ],
+      "evidence": [
+        "pinned SOURCE_SNAPSHOT generator extracts Service/Event/Type/inherited tables and every compact/exact query fixture",
+        "cargo test -p seekdeep-cordis-client-runner --test api_catalog_parity --all-features (every generated Service/Event query compared)",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "all Client Service, Event, Type, and inherited Context entries are generated from the pinned source; Rust owns compact and exact query projection, access expressions, errors, order, and the pinned source's observable empty referencedTypes behavior"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/evaluator.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/evaluator.rs",
+        "crates/cordis-client-runner/src/wasm_evaluator.rs",
+        "crates/cordis-client-runner/src/wasm_runtime.rs",
+        "crates/cordis-client-runner/tests/evaluator_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/evaluator.client.spec.ts --reporter=dot (pinned source: 16 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-cordis-client-runner --target wasm32-unknown-unknown --lib"
+      ],
+      "note": "Rust/WASM constructs and catches the async browser closure, injects the page's exact React object, shadows timers/fetch/require/process/Buffer, traps harness access, routes null-default Host calls, preserves non-SyntaxError construction failures, classifies plugin forms, mirrors UTF-16-bounded tagged console errors, and provides DOM-backed package-owned styles with early/all disposal"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/guard.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/guard.rs",
+        "crates/cordis-client-runner/src/wasm_guard.rs",
+        "crates/cordis-client-runner/tests/guard_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/guard.client.spec.ts --reporter=dot (pinned source: 17 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-cordis-client-runner --target wasm32-unknown-unknown --lib",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: live Guard Proxy cases passed)"
+      ],
+      "note": "the Rust/WASM Proxy delegates declared-Service and verb policy to Rust, preserves traced Service receivers and async Context-return denial, forwards optional get/has/writes, assigns descending Slot priority, preserves chain priority, validates and binds tool.view.cordis self, claims components only after accepted registration, appends ledger rows, pins Theme sources, teaches two-argument Theme calls, and attaches Theme cleanup to the calling Fiber"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/face.rs",
+        "crates/cordis-client-runner/src/runtime.rs",
+        "crates/cordis-client-runner/src/orchestrator.rs",
+        "crates/cordis-client-runner/src/inspect_registry.rs",
+        "crates/cordis-client-runner/src/wasm_plugin.rs",
+        "crates/cordis-client-runner/src/wasm_remote.rs",
+        "crates/cordis-client-runner/src/wasm_providers.rs",
+        "crates/cordis-client-runner/src/wasm_timer_service.rs",
+        "crates/cordis-client-runner/tests/face_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/plugin.client.spec.ts --reporter=dot (pinned source: 15 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-cordis-client-runner --target wasm32-unknown-unknown --lib -- -D warnings",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: final plugin composition passed)"
+      ],
+      "note": "the final Rust/WASM Cordis plugin installs Timer and Inspect, registers first-party providers, folds every generated Remote verb, preserves Host-call routing and JSON teaching, reports guard/render failures fire-and-forget, publishes stable-reference JS Map/array observables without ABA, provides the public runner face, subscribes to all forwarded events, and owns exact teardown through the calling Fiber"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/inspect-registry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/inspect_registry.rs",
+        "crates/cordis-client-runner/tests/inspect_registry_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "typed cordisInspect Client Service, insertion-ordered validated providers, idempotent disposal, microtask-coalesced complete manifests, serialized reconnect publication, exact request/Session routing, duplicate-query suppression, structured missing/method/provider failures, cancellation without late answer, and injected Host/microtask/spawn policies are ported"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/orchestrator.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/orchestrator.rs",
+        "crates/cordis-client-runner/src/wasm_plugin.rs",
+        "crates/cordis-client-runner/src/wasm_remote.rs",
+        "crates/cordis-client-runner/tests/orchestrator_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/orchestrator.client.spec.ts --reporter=dot (pinned source: 30 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Plugin-keyed approval/activity/failure state, stable snapshots and subscriptions, open/close/reconcile, explicit approve/decline, direct and approval-free detached runs, Host-before-source-before-Client ordering, waiting-Service settlement, complete Host/source/load/settle failure folding, retry failure clearing, refused-answer diagnostics, host-only short circuit, and exact same-Plugin in-flight joining are Rust-owned with injected Host/loader/spawner/logger policies"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/providers.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/providers.rs",
+        "crates/cordis-client-runner/src/evaluator.rs",
+        "crates/cordis-client-runner/src/slot_catalog.rs",
+        "crates/cordis-client-runner/src/wasm_providers.rs",
+        "crates/cordis-client-runner/tests/providers_parity.rs",
+        "crates/cordis-client-runner/tests/api_catalog_parity.rs",
+        "crates/cordis-client-runner/tests/slot_catalog_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Service/Event/Builtin/Slots/Theme provider order, IDs, methods, schemas, exact-input parsing, unknown-method failures, generated Service/Event queries, exact Client Builtins, compact Slot trees, selected contracts and occupants, guarded key domains, and injected live Slot/Theme owner seams are Rust-owned"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/runtime.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/runtime.rs",
+        "crates/cordis-client-runner/src/wasm_mount_engine.rs",
+        "crates/cordis-client-runner/src/wasm_guard.rs",
+        "crates/cordis-client-runner/src/wasm_runtime.rs",
+        "crates/cordis-client-runner/tests/runtime_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/runner.client.spec.ts --reporter=dot (pinned source: 30 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-cordis-client-runner --target wasm32-unknown-unknown --lib",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: 5 passed)"
+      ],
+      "note": "Rust owns exact-run convergence, failure-surviving per-Plugin queues, replacement/retract/disposal ordering, stable live and crash snapshots, evaluation-to-module-table-to-Loader-Fiber mounting, parked-Service projection, global Slot priority and component-identity ownership, DOM styles, exact-run crash watching, and the classified-versus-rejected failure boundary; the compatibility adapter and model-authored JavaScript execute from the Rust/WASM artifact and the browser suite drives the real adapter"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/slot-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/bin/port-cordis-client-catalogs.rs",
+        "crates/cordis-client-runner/data/slot-catalog.json",
+        "crates/cordis-client-runner/src/slot_catalog.rs",
+        "crates/cordis-client-runner/tests/slot_catalog_parity.rs"
+      ],
+      "evidence": [
+        "pinned SOURCE_SNAPSHOT generator extracts CLIENT_NOTES and every CLIENT_SLOT_API entry",
+        "cargo test -p seekdeep-cordis-client-runner --test slot_catalog_parity --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "all Client Slot notes and contracts are generated in source order; Rust owns compact recursive navigation, registration summaries, key domains, guarded self-only keys, selected full contracts, declaredBy, live occupants, and exact optional requested-root fields"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/timer.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-timer/src/lib.rs",
+        "crates/cordis-timer/tests/timer_parity.rs",
+        "crates/cordis-client-runner/src/wasm_timer.rs",
+        "crates/cordis-client-runner/src/wasm_timer_service.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-timer --all-features",
+        "cargo clippy -p seekdeep-cordis-timer --all-targets --all-features -- -D warnings",
+        "cargo check -p seekdeep-cordis-timer -p seekdeep-cordis-client-runner --target wasm32-unknown-unknown --lib",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: Timer Service cases passed)"
+      ],
+      "note": "the shared Rust Timer Service covers callback and Promise-equivalent timeouts, callback and async-iterator intervals, return/throw values, aliases, throttle, debounce, disposers, and Context teardown; the WASM TimerDriver delegates prepared timers to browser setTimeout/setInterval through deterministic thread-local handle ownership"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/lib.rs",
+        "crates/cordis-client-runner/tests/face_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Host-side package row is an inject-free Rust Cordis plugin whose apply contributes nothing; all capability remains Client-owned"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/invariant.ts",
@@ -50149,27 +50451,77 @@
     {
       "source": "packages/extensions/cordis-client-runner/tests/evaluator.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/tests/evaluator_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/evaluator.client.spec.ts --reporter=dot (pinned source: 16 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --test evaluator_parity --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: evaluator cases passed)"
+      ],
+      "note": "all 16 source cases are represented across deterministic Rust policy tests and browser-executed WASM tests, including live closure construction, exact React identity, every withheld symbol, Host calls and null omission, construction/parse/shape failures, console mirroring, and DOM style ownership"
     },
     {
       "source": "packages/extensions/cordis-client-runner/tests/guard.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/tests/guard_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/guard.client.spec.ts --reporter=dot (pinned source: 17 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --test guard_parity --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: live Guard Proxy cases passed)"
+      ],
+      "note": "all 17 source behaviors are represented across Rust policy tests and live browser Proxy tests, including lazy timer denial, traced receivers, optional get/has/writes, synchronous and promised Context denial, Slot ledger/priority/claim semantics, Theme pinning, and Fiber-owned cleanup"
     },
     {
       "source": "packages/extensions/cordis-client-runner/tests/orchestrator.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/tests/orchestrator_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/orchestrator.client.spec.ts --reporter=dot (pinned source: 30 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --test orchestrator_parity --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: final plugin orchestration passed)"
+      ],
+      "note": "all 30 source cases are represented by deterministic Rust orchestration tests plus the live Remote/plugin path"
     },
     {
       "source": "packages/extensions/cordis-client-runner/tests/plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/tests/face_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/plugin.client.spec.ts --reporter=dot (pinned source: 15 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: final plugin composition passed)"
+      ],
+      "note": "the Rust/WASM descriptor, face, Remote wiring, forwarded events, direct and approved runs, Host calls, stable observables, provider sync, and Fiber teardown cover the Client half; the inject-free native half and no-op invariant remain separately verified"
     },
     {
       "source": "packages/extensions/cordis-client-runner/tests/runner.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/tests/runtime_parity.rs",
+        "crates/cordis-client-runner/tests/wasm_mount_engine_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-client-runner/tests/runner.client.spec.ts --reporter=dot (pinned source: 30 passed)",
+        "cargo test -p seekdeep-cordis-client-runner --test runtime_parity --all-features",
+        "wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_mount_engine_parity-*.wasm (headless Chrome: engine cases passed)"
+      ],
+      "note": "all 30 source behaviors are represented across serialized Rust runtime tests and the real browser adapter: mount/replay/replace/park, all failure stages and raw rejections, queue recovery, retract/dispose, Host calls, observable snapshots, exact component crash attribution, retirement, redirects, and failure clearing/retention"
     },
     {
       "source": "packages/extensions/cordis-client-runner/tsconfig.json",
@@ -50185,7 +50537,16 @@
     {
       "source": "packages/extensions/cordis-client-runner/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/Cargo.toml",
+        "crates/cordis-client-runner/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-cordis-client-runner --target wasm32-unknown-unknown --lib",
+        "cargo check -p seekdeep-cordis-client-runner --all-features"
+      ],
+      "note": "Cargo emits rlib and cdylib artifacts from one crate with an inject-free Host entrypoint and exported Rust/WASM Client entrypoints; the Client build no longer needs a JavaScript bundler or generated declaration exclusion list"
     },
     {
       "source": "packages/extensions/cordis-host-runner/README.i18n.yaml",
@@ -50234,17 +50595,56 @@
     {
       "source": "packages/extensions/cordis-host-runner/src/guard.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/loader/src/javascript_plugin.rs",
+        "crates/loader/src/sandbox_service.rs",
+        "crates/cordis-host-runner/tests/sandbox_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/native_service_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/tool_runtime_parity.rs"
+      ],
+      "evidence": [
+        "pinned cordis-host-runner sandbox and sandbox-context specs: 48 passed",
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo test -p seekdeep-loader --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "lossless cross-realm cloning, shared schema compilation, dynamic Tool marking/registration, execute/render/presentation projection, merge-extensible content shapes, exact-run handlers, read-only Context policy, optional/declared dynamic and explicitly adapted native Services, Slot-free Host lifecycle verbs, events, callback timers, and post-activation Guard reports are ported; late early-disposer commands, promise/async-iterator timer bindings, throttle/debounce wrapper calls, and stack-safe JavaScript-side deep cloning remain"
     },
     {
       "source": "packages/extensions/cordis-host-runner/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/src/runner.rs",
+        "crates/cordis-host-runner/tests/runner_parity.rs",
+        "crates/cordis-host-runner/tests/activation_lifecycle_parity.rs",
+        "crates/cordis-host-runner/tests/approval_state_machine_parity.rs",
+        "crates/cordis-host-runner/tests/invoke_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/model_feedback_parity.rs",
+        "crates/cordis-host-runner/tests/render_failure_parity.rs",
+        "crates/cordis-host-runner/tests/runner_disposal_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-host-runner/tests/runner.spec.ts --reporter=dot (pinned source: 30 passed)",
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "typed Runner and Inspect Services, tools-injected production plugin, exact config validation, definitions, version pointers, Session ownership, inventory/snapshot/reference/inspection, run/update validation, shared in-flight Host activation, approval and Client settlement, exact-run source and invocation, render and Guard reports, stop/undefine and panel variants, cordis-dynamic group teardown, request cancellation, and deduplicated Agent steer/inject feedback are ported"
     },
     {
       "source": "packages/extensions/cordis-host-runner/src/inspect-registry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/src/inspect_registry.rs",
+        "crates/cordis-host-runner/tests/inspect_registry_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "ordered Host registrations and mirrored Client manifests, reversible exact-registration disposal, supported-schema validation, lossless input/output validation, Session-owned first-valid-answer query settlement, cancellation, and request/resolved events are ported"
     },
     {
       "source": "packages/extensions/cordis-host-runner/src/invariant.ts",
@@ -50263,52 +50663,179 @@
     {
       "source": "packages/extensions/cordis-host-runner/src/lifecycle.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/src/runner.rs",
+        "crates/cordis-host-runner/tests/composition_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/event_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/model_feedback_parity.rs",
+        "crates/cordis-host-runner/tests/runner_disposal_parity.rs"
+      ],
+      "evidence": [
+        "pinned cordis-host-runner runner/composition/sandbox-context specs: 64 passed",
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the cordis-dynamic group settles before child start; guarded Host children dispose before startup failure returns; legal missing-Service Fibers remain pending in declaration order; duplicate registrations teach stop-then-run; post-activation event/timer Guard failures report to the exact run; stop and root disposal await reversible-effect teardown"
     },
     {
       "source": "packages/extensions/cordis-host-runner/src/registry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/src/registry.rs",
+        "crates/cordis-host-runner/tests/registry_parity.rs",
+        "crates/cordis-host-runner/tests/approval_state_machine_parity.rs",
+        "crates/cordis-host-runner/tests/invoke_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/render_failure_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "ordered plugin/version storage, monotonic identities, Session filtering, first-answer-wins pending requests, immutable definitions, exact physical runs, Host handler ownership, render failures, approval provenance, diagnostics, and attempt pointers are ported"
     },
     {
       "source": "packages/extensions/cordis-host-runner/src/sandbox.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/src/sandbox.rs",
+        "crates/cordis-host-runner/tests/sandbox_parity.rs",
+        "crates/cordis-host-runner/tests/sandbox_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/sandbox_contract_parity.rs",
+        "crates/loader/src/javascript_plugin.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-host-runner/tests/sandbox.spec.ts --reporter=dot (pinned source: 24 passed)",
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo test -p seekdeep-loader --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "fresh Rust-owned interpreter workers, tagged console routing, UTF-8 base64 and text codecs, Node API redirects, isolated globals, Host Builtin inspection, checked synchronous limits, plugin-shape validation, thrown-value and runtime SyntaxError handling, side-effect-free Host/Client prechecks, offending-line context, TypeScript-specific guidance, and generic bracket guidance are ported; host JSON inputs are rehomed into the worker realm so Array/Object instanceof remains true without modifying host constructors"
     },
     {
       "source": "packages/extensions/cordis-host-runner/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-dynamic-types/src/lib.rs",
+        "crates/cordis-host-runner/tests/types_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-dynamic-types -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "complete branded identity, inspect, approval, Host/Client request, lifecycle, inventory, receipt, render, resolution, stale invocation, error, and boolean-discriminated response vocabulary is ported with closed enums and exact optional wire fields in a Client-safe protocol crate independent of native Host runtime code"
     },
     {
       "source": "packages/extensions/cordis-host-runner/tests/composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/tests/composition_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/dynamic_service_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/event_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/tool_runtime_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-host-runner/tests/composition.spec.ts --reporter=dot (pinned source: 10 passed)",
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo clippy -p seekdeep-cordis-timer -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "provider-first and consumer-first function Services, parking/reactivation, provider and consumer stop behavior, primitive/null reads, listener quiescence, dynamic Tool teardown/restart, duplicate Service/Tool failure rollback, and the stop-then-run collision recipe are ported"
     },
     {
       "source": "packages/extensions/cordis-host-runner/tests/helpers.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/tests/runner_parity.rs",
+        "crates/cordis-host-runner/tests/approval_state_machine_parity.rs",
+        "crates/cordis-host-runner/tests/composition_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/dynamic_service_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/event_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/tool_runtime_parity.rs"
+      ],
+      "evidence": [
+        "pinned cordis-host-runner runner/composition/sandbox-context/sandbox/versioning specs: 91 passed",
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the real Context/Runner/Tool/Timer fixture, approval gateway, inventory projection, define-and-run helper, Tool execution renderer, and shared Host/Client code fixtures are represented by Rust integration harnesses that drive the same public paths"
     },
     {
       "source": "packages/extensions/cordis-host-runner/tests/runner.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/tests/runner_parity.rs",
+        "crates/cordis-host-runner/tests/activation_lifecycle_parity.rs",
+        "crates/cordis-host-runner/tests/approval_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/approval_state_machine_parity.rs",
+        "crates/cordis-host-runner/tests/invoke_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/render_failure_parity.rs",
+        "crates/cordis-host-runner/tests/runner_disposal_parity.rs",
+        "crates/cordis-host-runner/tests/tool_runtime_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-host-runner/tests/runner.spec.ts --reporter=dot (pinned source: 30 passed)",
+        "cargo test -p seekdeep-cordis-host-runner --all-features (50 passed)",
+        "cargo clippy -p seekdeep-cordis-timer -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "global inventory, definitions, ownership, Host-only and Host/Client dispatch, approvals, asynchronous settlement, exact-generation attachment and concurrency, source handoff, cancellation, load failure rollback, invocation, stop/restart/undefine, whole-tree disposal, and render reports are ported"
     },
     {
       "source": "packages/extensions/cordis-host-runner/tests/sandbox-context.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/tests/sandbox_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/native_service_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/dynamic_service_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/tool_runtime_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-host-runner/tests/sandbox-context.spec.ts --reporter=dot (pinned source: 24 passed)",
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo test -p seekdeep-loader --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "framework members and writes are denied, symbol and reachability queries are safe, property access requires inject, optional get works, dynamic and explicitly adapted native Services return JSON through guarded bridges, Context escape is structurally excluded, cross-package dependencies park correctly, and Tool get returns metadata without execute"
     },
     {
       "source": "packages/extensions/cordis-host-runner/tests/sandbox.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/tests/sandbox_parity.rs",
+        "crates/cordis-host-runner/tests/sandbox_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/sandbox_contract_parity.rs",
+        "crates/cordis-host-runner/tests/timer_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/tool_runtime_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/cordis-host-runner/tests/sandbox.spec.ts --reporter=dot (pinned source: 24 passed)",
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo test -p seekdeep-loader --all-features",
+        "cargo clippy -p seekdeep-cordis-timer -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Tool declaration validation and bounded render previews, isolated globals, Node API redirects, callback timers, tagged console routing, UTF-8 codecs, Array/Object realm semantics, synchronous limits, plugin-shape and thrown-value failures, TypeScript-specific parsing, generic bracket teaching, and stackless SyntaxError fallback are ported"
     },
     {
       "source": "packages/extensions/cordis-host-runner/tests/versioning.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-host-runner/tests/versioning_parity.rs",
+        "crates/cordis-host-runner/tests/versioning_request_parity.rs",
+        "crates/cordis-host-runner/tests/approval_runtime_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-host-runner --all-features",
+        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+      ],
+      "note": "failed updates retain current and select next without restoring the old physical run; post-publication caller abort does not own a provisional activation; stop cancels and retracts it; an attaching page failure leaves the existing run active"
     },
     {
       "source": "packages/extensions/cordis-host-runner/tsconfig.json",
@@ -54285,7 +54812,17 @@
     {
       "source": "packages/host/plugin-inventory/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-plugin-inventory/src/lib.rs",
+        "crates/loader/src/lib.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo test -p seekdeep-host-plugin-inventory --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo clippy -p seekdeep-host-plugin-inventory --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/host/plugin-inventory/tests/inventory.spec.ts packages/host/plugin-inventory/tests/invariant.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ],
+      "note": "live read-through Loader projection, exhaustive Fiber phase mapping, group filtering, direct list Remote metadata/invocation, and reversible Typert directory registration are ported"
     },
     {
       "source": "packages/host/plugin-inventory/src/invariant.ts",
@@ -54316,12 +54853,28 @@
     {
       "source": "packages/host/plugin-inventory/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-plugin-inventory/src/lib.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo test -p seekdeep-host-plugin-inventory --all-features",
+        "pnpm exec vitest run packages/host/plugin-inventory/tests/invariant.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/host/plugin-inventory/tests/inventory.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-plugin-inventory/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo test -p seekdeep-host-plugin-inventory --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo clippy -p seekdeep-host-plugin-inventory --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/host/plugin-inventory/tests/inventory.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/host/plugin-inventory/tsconfig.json",
@@ -73054,12 +73607,25 @@
     {
       "source": "vendor/hmr/src/error.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "note": "generic JavaScript import/apply failures are preserved, but esbuild-style source-location code-frame rendering is not ported"
     },
     {
       "source": "vendor/hmr/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/hmr/src/lib.rs",
+        "crates/hmr/tests/host_hmr_parity.rs",
+        "crates/loader/src/javascript_plugin.rs",
+        "crates/loader/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo test -p seekdeep-loader -p seekdeep-hmr --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo clippy -p seekdeep-loader -p seekdeep-hmr --all-targets --all-features -- -D warnings"
+      ],
+      "note": "recursive watching, config precedence, serialized debounce, ESM/CJS dependency invalidation, declaration-order graph replacement, import/apply rollback, contained disposer failures, events, full-restart classification, and joined teardown are ported; exact picomatch semantics, general CommonJS require, and build-error code frames remain"
     },
     {
       "source": "vendor/hmr/tsconfig.json",
@@ -73359,7 +73925,16 @@
     {
       "source": "vendor/timer/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-timer/src/lib.rs",
+        "crates/cordis-timer/tests/timer_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-cordis-timer --all-features",
+        "cargo clippy -p seekdeep-cordis-timer --all-targets --all-features -- -D warnings"
+      ],
+      "note": "timeout and interval callback forms, delay and tick forms, setTimeout/setInterval aliases, throttle, debounce, disposer methods, Context-disposal rejection, async-iterator return/throw values, and exact-Fiber cancellation use an injected TimerDriver and pass deterministic tests"
     },
     {
       "source": "vendor/timer/tsconfig.json",

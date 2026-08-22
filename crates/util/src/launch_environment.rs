@@ -84,6 +84,21 @@ impl LaunchEnvironmentSnapshot {
             })
         })
     }
+
+    /// Materializes the winning value for every name in deterministic order.
+    #[must_use]
+    pub fn materialized(&self) -> BTreeMap<String, String> {
+        let mut values = BTreeMap::new();
+        for source in SOURCE_ORDER {
+            let Some(layer) = self.layers.get(&source) else {
+                continue;
+            };
+            for (name, value) in &layer.values {
+                values.entry(name.clone()).or_insert_with(|| value.clone());
+            }
+        }
+        values
+    }
 }
 
 /// Builds a frozen snapshot. Input order does not influence lookup trust;
@@ -241,6 +256,19 @@ mod tests {
             LaunchEnvironmentSource::Process
         );
         assert_eq!(snapshot.get_from("SHARED", &[]), None);
+    }
+
+    #[test]
+    fn materialization_uses_canonical_precedence_and_sorted_names() {
+        assert_eq!(
+            layered().materialized(),
+            BTreeMap::from([
+                ("ONLY_PROCESS".to_owned(), "p".to_owned()),
+                ("ONLY_PROJECT".to_owned(), "j".to_owned()),
+                ("ONLY_USER".to_owned(), "u".to_owned()),
+                ("SHARED".to_owned(), "from-process".to_owned()),
+            ])
+        );
     }
 
     #[test]

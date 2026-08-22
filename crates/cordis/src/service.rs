@@ -2,7 +2,7 @@
 
 use std::{
     any::Any,
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     marker::PhantomData,
     sync::{
         Arc, Weak,
@@ -62,6 +62,7 @@ struct Provider {
     id: Uuid,
     owner: Weak<Fiber>,
     value: Arc<dyn Any + Send + Sync>,
+    expression_projection: Option<serde_json::Value>,
 }
 
 /// Root-owned stack of service providers.
@@ -85,6 +86,7 @@ impl ServiceStore {
         slot: ServiceSlot,
         owner: &Arc<Fiber>,
         value: Arc<T>,
+        expression_projection: Option<serde_json::Value>,
     ) -> Option<Uuid> {
         let id = Uuid::now_v7();
         let mut providers = self.providers.write();
@@ -96,6 +98,7 @@ impl ServiceStore {
             id,
             owner: Arc::downgrade(owner),
             value,
+            expression_projection,
         });
         self.revision.fetch_add(1, Ordering::AcqRel);
         Some(id)
@@ -146,7 +149,72 @@ impl ServiceStore {
             .map(|provider| provider.id)
     }
 
+    pub(crate) fn names(&self) -> Vec<String> {
+        self.providers
+            .read()
+            .keys()
+            .map(|slot| slot.name.clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
+    pub(crate) fn projected_json(
+        &self,
+        slot: &ServiceSlot,
+        strict: bool,
+    ) -> Option<serde_json::Value> {
+        let providers = self.providers.read();
+        let provider = providers.get(slot)?.iter().rev().find(|provider| {
+            !strict
+                || provider
+                    .owner
+                    .upgrade()
+                    .is_some_and(|fiber| fiber.state() == FiberState::Active)
+        })?;
+        provider
+            .expression_projection
+            .clone()
+            .or_else(|| project_json(provider.value.as_ref()))
+    }
+
     pub(crate) fn revision(&self) -> u64 {
         self.revision.load(Ordering::Acquire)
     }
+}
+
+fn project_json(value: &(dyn Any + Send + Sync)) -> Option<serde_json::Value> {
+    use serde_json::{Number, Value};
+
+    if let Some(value) = value.downcast_ref::<Value>() {
+        return Some(value.clone());
+    }
+    if let Some(value) = value.downcast_ref::<String>() {
+        return Some(Value::String(value.clone()));
+    }
+    if let Some(value) = value.downcast_ref::<bool>() {
+        return Some(Value::Bool(*value));
+    }
+    macro_rules! integer {
+        ($type:ty) => {
+            if let Some(value) = value.downcast_ref::<$type>() {
+                return Some(Value::Number(Number::from(*value)));
+            }
+        };
+    }
+    integer!(i8);
+    integer!(i16);
+    integer!(i32);
+    integer!(i64);
+    integer!(u8);
+    integer!(u16);
+    integer!(u32);
+    integer!(u64);
+    if let Some(value) = value.downcast_ref::<f32>() {
+        return Number::from_f64(f64::from(*value)).map(Value::Number);
+    }
+    if let Some(value) = value.downcast_ref::<f64>() {
+        return Number::from_f64(*value).map(Value::Number);
+    }
+    None
 }

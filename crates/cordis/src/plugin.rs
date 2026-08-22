@@ -1,7 +1,9 @@
 //! Plugin registration and dependency-epoch lifecycle management.
 
 use std::{
+    any::Any,
     future::Future,
+    panic::{AssertUnwindSafe, catch_unwind},
     pin::Pin,
     sync::{
         Arc, Weak,
@@ -9,13 +11,14 @@ use std::{
     },
 };
 
+use futures::FutureExt as _;
 use parking_lot::Mutex;
 use serde_json::Value;
 use tokio::sync::Notify;
 use uuid::Uuid;
 
 use crate::{
-    Context, CordisError, Fiber, FiberState,
+    Context, CordisError, EventArgs, Fiber, FiberState,
     fiber::{DisposeFuture, EffectHandle},
 };
 
@@ -24,6 +27,7 @@ pub type PluginFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send +
 
 type PluginCallback = Arc<dyn Fn(Context, Value) -> PluginFuture + Send + Sync>;
 type ConfigValidator = Arc<dyn Fn(&Value) -> anyhow::Result<Value> + Send + Sync>;
+type ConfigResolver = Arc<dyn Fn(&Context, &Value) -> anyhow::Result<Value> + Send + Sync>;
 
 /// Shared plugin entrypoint metadata and executable body.
 #[derive(Clone)]
@@ -32,6 +36,7 @@ pub struct Plugin {
     name: String,
     inject: Vec<String>,
     callback: PluginCallback,
+    config_resolver: Option<ConfigResolver>,
     validator: Option<ConfigValidator>,
 }
 
@@ -59,8 +64,39 @@ impl Plugin {
             name: name.into(),
             inject: inject.into_iter().map(Into::into).collect(),
             callback: Arc::new(callback),
+            config_resolver: None,
             validator: None,
         }
+    }
+
+    /// Adds entry-local configuration resolution that runs after every
+    /// declared dependency is active and before schema validation.
+    ///
+    /// Loader expression interpolation uses this seam so a provider
+    /// replacement resolves the same raw configuration against the new
+    /// dependency generation without teaching Cordis about a source language.
+    #[must_use]
+    pub fn with_config_resolver(
+        mut self,
+        resolver: impl Fn(&Context, &Value) -> anyhow::Result<Value> + Send + Sync + 'static,
+    ) -> Self {
+        self.config_resolver = Some(Arc::new(resolver));
+        self
+    }
+
+    /// Merges loader-entry dependency declarations into plugin metadata.
+    /// Existing declarations retain their order and duplicates are ignored.
+    #[must_use]
+    pub fn with_additional_inject(
+        mut self,
+        inject: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        for name in inject.into_iter().map(Into::into) {
+            if !self.inject.contains(&name) {
+                self.inject.push(name);
+            }
+        }
+        self
     }
 
     /// Adds synchronous configuration validation and normalization.
@@ -126,10 +162,12 @@ impl PluginRegistry {
             fiber: fiber.clone(),
             context: parent.with_fiber(fiber),
             plugin,
+            additional_inject: Mutex::new(Vec::new()),
             config: Mutex::new(config),
             epoch: Mutex::new(None),
             error: Mutex::new(None),
             transition: tokio::sync::Mutex::new(()),
+            updates: tokio::sync::Mutex::new(()),
             scheduled: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
             disposed: AtomicBool::new(false),
@@ -142,6 +180,19 @@ impl PluginRegistry {
         });
         parent.own(structural)?;
         self.inner.fibers.lock().push(Arc::downgrade(&mounted));
+        if let Err(error) = parent.events().emit(
+            parent,
+            "internal/plugin",
+            &EventArgs::one_shared(mounted.clone()),
+        ) {
+            let cleanup = mounted.clone();
+            spawn_background(async move {
+                if let Err(cleanup_error) = cleanup.dispose().await {
+                    tracing::error!(%cleanup_error, "failed plugin publication rollback failed");
+                }
+            });
+            return Err(CordisError::PluginPublication(format!("{error:#}")));
+        }
         mounted.schedule();
         Ok(mounted)
     }
@@ -182,10 +233,12 @@ pub struct PluginFiber {
     fiber: Arc<Fiber>,
     context: Context,
     plugin: Plugin,
+    additional_inject: Mutex<Vec<String>>,
     config: Mutex<Value>,
     epoch: Mutex<Option<Vec<Uuid>>>,
     error: Mutex<Option<String>>,
     transition: tokio::sync::Mutex<()>,
+    updates: tokio::sync::Mutex<()>,
     scheduled: AtomicBool,
     dirty: AtomicBool,
     disposed: AtomicBool,
@@ -206,6 +259,57 @@ impl std::fmt::Debug for PluginFiber {
 }
 
 impl PluginFiber {
+    /// Loader-facing plugin name for activation diagnostics.
+    #[must_use]
+    pub fn plugin_name(&self) -> &str {
+        self.plugin.name()
+    }
+
+    /// Configured Loader package name when this Fiber belongs to an entry.
+    #[must_use]
+    pub fn entry_name(&self) -> Option<String> {
+        self.context
+            .meta("loader.entry_name")
+            .and_then(|value| value.as_str().map(str::to_owned))
+    }
+
+    /// Stable Loader entry identity when present.
+    #[must_use]
+    pub fn entry_id(&self) -> Option<String> {
+        self.context
+            .meta("loader.entry_id")
+            .and_then(|value| value.as_str().map(str::to_owned))
+    }
+
+    /// Required service names for pending-fiber diagnostics.
+    #[must_use]
+    pub fn inject(&self) -> Vec<String> {
+        self.required_services()
+    }
+
+    /// Adds a dependency during synchronous `internal/plugin` publication.
+    ///
+    /// # Errors
+    ///
+    /// Rejects mutation after lifecycle scheduling or disposal begins.
+    pub fn add_inject(&self, name: impl Into<String>) -> Result<(), CordisError> {
+        if self.scheduled.load(Ordering::Acquire) || self.disposed.load(Ordering::Acquire) {
+            return Err(CordisError::InactiveEffect);
+        }
+        let name = name.into();
+        let mut additional = self.additional_inject.lock();
+        if !self.plugin.inject.contains(&name) && !additional.contains(&name) {
+            additional.push(name);
+        }
+        Ok(())
+    }
+
+    /// Whether permanent disposal has been admitted.
+    #[must_use]
+    pub fn is_disposed(&self) -> bool {
+        self.disposed.load(Ordering::Acquire)
+    }
+
     /// Underlying lifecycle owner.
     #[must_use]
     pub fn fiber(&self) -> &Arc<Fiber> {
@@ -248,11 +352,66 @@ impl PluginFiber {
         }
     }
 
-    /// Replaces raw configuration and restarts when dependencies are available.
-    pub fn update(self: &Arc<Self>, config: Value) {
+    fn request_update(self: &Arc<Self>, config: Value) {
         *self.config.lock() = config;
         *self.epoch.lock() = None;
         self.schedule();
+    }
+
+    /// Replaces configuration transactionally, restoring the exact previous
+    /// active generation and raw configuration when candidate activation fails.
+    ///
+    /// Concurrent callers serialize in admission order.
+    ///
+    /// # Errors
+    ///
+    /// Returns candidate activation, rollback activation, or disposal failures.
+    pub async fn update(self: &Arc<Self>, config: Value) -> anyhow::Result<()> {
+        let _update = self.updates.lock().await;
+        anyhow::ensure!(
+            !self.disposed.load(Ordering::Acquire),
+            "plugin {:?} is disposed",
+            self.plugin.name
+        );
+        let previous = self.config.lock().clone();
+        self.request_update(config);
+        match self.await_settled().await {
+            Ok(()) if self.fiber.state() != FiberState::Failed => Ok(()),
+            Ok(()) => Err(anyhow::anyhow!(
+                "plugin {:?} failed without a retained error",
+                self.plugin.name
+            )),
+            Err(candidate) => {
+                self.request_update(previous);
+                match self.await_settled().await {
+                    Ok(()) if self.fiber.state() == FiberState::Active => Err(candidate),
+                    Ok(()) => Err(anyhow::anyhow!(
+                        "{candidate:#}\nplugin {:?} rollback did not reactivate (state {:?})",
+                        self.plugin.name,
+                        self.fiber.state()
+                    )),
+                    Err(rollback) => Err(anyhow::anyhow!(
+                        "{candidate:#}\nplugin {:?} rollback failed: {rollback:#}",
+                        self.plugin.name
+                    )),
+                }
+            }
+        }
+    }
+
+    /// Explicit name for [`Self::update`] at transaction-oriented call sites.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same candidate or rollback failure as [`Self::update`].
+    pub async fn update_transactional(self: &Arc<Self>, config: Value) -> anyhow::Result<()> {
+        self.update(config).await
+    }
+
+    /// Exact raw configuration currently committed to this fiber.
+    #[must_use]
+    pub fn config(&self) -> Value {
+        self.config.lock().clone()
     }
 
     /// Permanently disposes this mount and all plugin-owned effects.
@@ -260,9 +419,25 @@ impl PluginFiber {
     /// # Errors
     ///
     /// Returns aggregated plugin cleanup failures.
-    pub async fn dispose(&self) -> anyhow::Result<()> {
+    pub async fn dispose(self: &Arc<Self>) -> anyhow::Result<()> {
         if self.disposed.swap(true, Ordering::AcqRel) {
             return Ok(());
+        }
+        let on_async_error: Arc<dyn Fn(anyhow::Error) + Send + Sync> = Arc::new(|error| {
+            tracing::error!(%error, "internal/plugin disposal observer failed");
+        });
+        match self.context.events().prepare_emit(
+            &self.context,
+            "internal/plugin",
+            &EventArgs::one_shared(self.clone()),
+        ) {
+            Ok(emission) => emission.emit_contained_with_async_errors(
+                |error| tracing::error!(%error, "internal/plugin disposal observer failed"),
+                &on_async_error,
+            ),
+            Err(error) => {
+                tracing::error!(%error, "internal/plugin disposal publication failed");
+            }
         }
         self.fiber.request_disposal();
         let _transition = self.transition.lock().await;
@@ -298,14 +473,60 @@ impl PluginFiber {
         });
     }
 
+    fn resolve_config(&self, raw_config: &Value) -> anyhow::Result<Value> {
+        let config = self.plugin.config_resolver.as_ref().map_or_else(
+            || Ok(raw_config.clone()),
+            |resolver| {
+                catch_unwind(AssertUnwindSafe(|| resolver(&self.context, raw_config)))
+                    .unwrap_or_else(|panic| {
+                        Err(anyhow::anyhow!(
+                            "plugin config resolution panicked: {}",
+                            panic_detail(panic.as_ref())
+                        ))
+                    })
+            },
+        )?;
+        self.plugin
+            .validator
+            .as_ref()
+            .map_or(Ok(config.clone()), |validator| {
+                catch_unwind(AssertUnwindSafe(|| validator(&config))).unwrap_or_else(|panic| {
+                    Err(anyhow::anyhow!(
+                        "plugin config validation panicked: {}",
+                        panic_detail(panic.as_ref())
+                    ))
+                })
+            })
+    }
+
+    async fn run_startup(&self, config: Value) -> anyhow::Result<()> {
+        let startup = catch_unwind(AssertUnwindSafe(|| {
+            (self.plugin.callback)(self.context.clone(), config)
+        }));
+        match startup {
+            Ok(startup) => AssertUnwindSafe(startup)
+                .catch_unwind()
+                .await
+                .unwrap_or_else(|panic| {
+                    Err(anyhow::anyhow!(
+                        "plugin startup panicked: {}",
+                        panic_detail(panic.as_ref())
+                    ))
+                }),
+            Err(panic) => Err(anyhow::anyhow!(
+                "plugin startup panicked: {}",
+                panic_detail(panic.as_ref())
+            )),
+        }
+    }
+
     async fn reconcile(&self) {
         let _transition = self.transition.lock().await;
         if self.disposed.load(Ordering::Acquire) {
             return;
         }
-        let next_epoch = self
-            .plugin
-            .inject
+        let required = self.required_services();
+        let next_epoch = required
             .iter()
             .map(|name| self.context.provider_id(name))
             .collect::<Option<Vec<_>>>();
@@ -336,12 +557,8 @@ impl PluginFiber {
         }
         self.fiber.set_state(FiberState::Loading);
         let raw_config = self.config.lock().clone();
-        let config = self.plugin.validator.as_ref().map_or_else(
-            || Ok(raw_config.clone()),
-            |validator| validator(&raw_config),
-        );
-        let result = match config {
-            Ok(config) => (self.plugin.callback)(self.context.clone(), config).await,
+        let result = match self.resolve_config(&raw_config) {
+            Ok(config) => self.run_startup(config).await,
             Err(error) => Err(error),
         };
         match result {
@@ -373,14 +590,38 @@ impl PluginFiber {
             PluginRegistry { inner: registry }.notify_service_change();
         }
     }
+
+    fn required_services(&self) -> Vec<String> {
+        let mut required = self.plugin.inject.clone();
+        for name in self.additional_inject.lock().iter() {
+            if !required.contains(name) {
+                required.push(name.clone());
+            }
+        }
+        required
+    }
 }
 
+fn panic_detail(panic: &(dyn Any + Send)) -> &str {
+    panic
+        .downcast_ref::<&'static str>()
+        .copied()
+        .or_else(|| panic.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("non-string panic payload")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn spawn_background(future: impl Future<Output = ()> + Send + 'static) {
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {
         runtime.spawn(future);
     } else {
         std::thread::spawn(move || futures::executor::block_on(future));
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn spawn_background(future: impl Future<Output = ()> + Send + 'static) {
+    wasm_bindgen_futures::spawn_local(future);
 }
 
 #[cfg(test)]
@@ -412,8 +653,7 @@ mod tests {
         tokio::task::yield_now().await;
         assert_eq!(attempts.load(Ordering::SeqCst), 1);
 
-        fiber.update(json!(true));
-        fiber.await_settled().await.unwrap();
+        fiber.update(json!(true)).await.unwrap();
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
         assert_eq!(fiber.fiber().state(), FiberState::Active);
     }
@@ -482,5 +722,73 @@ mod tests {
         let mounted = context.plugin(plugin, Value::Null).expect("mount");
         mounted.await_settled().await.expect("provider loads");
         assert!(context.get(PROVIDED).is_some());
+    }
+
+    #[tokio::test]
+    async fn transactional_update_restores_previous_config_and_effects_after_failure() {
+        const CURRENT: ServiceKey<Value> = ServiceKey::new("current");
+        let context = Context::new();
+        let plugin = Plugin::new(
+            "reloadable",
+            std::iter::empty::<String>(),
+            move |context, config| {
+                Box::pin(async move {
+                    anyhow::ensure!(config["fail"] != true, "candidate config failed");
+                    context.provide(CURRENT, Arc::new(config))?;
+                    Ok(())
+                })
+            },
+        );
+        let original = json!({"value": "old"});
+        let fiber = context.plugin(plugin, original.clone()).unwrap();
+        fiber.await_settled().await.unwrap();
+        assert_eq!(context.get(CURRENT).as_deref(), Some(&original));
+
+        let error = fiber
+            .update(json!({"fail": true, "value": "bad"}))
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("candidate config failed"));
+        assert_eq!(fiber.fiber().state(), FiberState::Active);
+        assert_eq!(fiber.config(), original);
+        assert_eq!(context.get(CURRENT).as_deref(), Some(&original));
+
+        let next = json!({"value": "new"});
+        fiber.update_transactional(next.clone()).await.unwrap();
+        assert_eq!(fiber.config(), next);
+        assert_eq!(context.get(CURRENT).as_deref(), Some(&next));
+    }
+
+    #[tokio::test]
+    async fn panicking_config_resolver_settles_as_a_lifecycle_failure() {
+        let context = Context::new();
+        let plugin = Plugin::new("panic", std::iter::empty::<String>(), |_, _| {
+            Box::pin(async { Ok(()) })
+        })
+        .with_config_resolver(|_, _| panic!("resolver exploded"));
+        let fiber = context.plugin(plugin, Value::Null).unwrap();
+        let error =
+            tokio::time::timeout(std::time::Duration::from_millis(100), fiber.await_settled())
+                .await
+                .expect("panicking resolver must settle")
+                .unwrap_err();
+        assert!(error.to_string().contains("resolver exploded"));
+        assert_eq!(fiber.fiber().state(), FiberState::Failed);
+    }
+
+    #[tokio::test]
+    async fn panicking_plugin_future_settles_as_a_lifecycle_failure() {
+        let context = Context::new();
+        let plugin = Plugin::new("panic", std::iter::empty::<String>(), |_, _| {
+            Box::pin(async { panic!("plugin future exploded") })
+        });
+        let fiber = context.plugin(plugin, Value::Null).unwrap();
+        let error =
+            tokio::time::timeout(std::time::Duration::from_millis(100), fiber.await_settled())
+                .await
+                .expect("panicking plugin future must settle")
+                .unwrap_err();
+        assert!(error.to_string().contains("plugin future exploded"));
+        assert_eq!(fiber.fiber().state(), FiberState::Failed);
     }
 }

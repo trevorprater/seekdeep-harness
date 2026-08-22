@@ -20,6 +20,8 @@ Include 读取并校验尚未提交的候选内容，把补丁应用到其副本
 
 HMR 收容实时刷新 rejection。其 `registerConfig(filename, refresh)` 方法从最近的现有祖先目录开始监听一个确切路径，串行化并合并刷新，并返回一个异步 disposer；该 disposer 会关闭 watcher 并排空活跃工作。确切路径和普通配置文件的刷新都使用此队列。失败会被规范化为 `Error`、记入日志，并通过并行事件 `hmr/config-update-failed(filename, error)` 广播；发生 rejection 的观察者会被记录，但不会阻止后续刷新。创建、变更和移除均会被观察。
 
+Rust 实现通过 `seekdeep-loader`、`seekdeep-cordis` 与 `seekdeep-app-boot` 保留同一补偿事务。活动的 `loader` 服务会列出已配置条目，并串行执行创建、更新、移动、移除与文件代际对账。它会在修改活动条目前解析每个已启用的替换项，保留未受影响的 fiber，在后续条目失败时恢复先前的更新与新增项，并只在补偿完成后发布结算结果。原始 `!!js` 节点保留在条目配置中；Rust 自有求值器会在已声明服务激活后解析它们，服务替换则会针对新的依赖代际重新求值。文件支持的 JavaScript 插件在 Rust 自有的专用解释器 worker 中运行；其模块 realm 会跨配置重启保留，effect disposer 则会加入 fiber 拆卸并等待完成。Host HMR 会记录 ESM 与 CJS 依赖文件，在活动代际继续服务时准备所有受影响的 worker，按 Loader 顺序替换条目，在应用失败后恢复先前 worker，在源码可见的 HMR 边界收容旧代际 disposer 失败，并为启动器依赖返回完整重启决策。确切路径 watcher 会收容失败的刷新、保留上一份完好代际，并在 dispose 完成前排空已接纳的工作。
+
 ## Alternatives considered
 
 **在 `Include.refresh()` 内收容失败。** 已否决，因为这会使 HMR 宿主无法广播失败，却仍允许 Loader 对账掩盖部分应用。Include 负责候选内容的解析与提交；HMR 负责收容和观察。
@@ -39,3 +41,5 @@ HMR 收容实时刷新 rejection。其 `registerConfig(filename, refresh)` 方�
 ## Testing
 
 `packages/boot/app-boot/tests/config-reload.spec.ts` 启动真实的临时 Loader/Include 树，并覆盖对解析和形状错误的拒绝、先导入再 dispose、插件/配置恢复、多配置项回滚、祖先禁用、overlay 收敛、option 对象身份、失败的直接更新不持久化以及失败的程序化移动。`packages/boot/app-boot/tests/hmr-config.spec.ts` 覆盖现有和缺失的确切路径、添加/变更/移除、串行化合并、dispose 排空、非 `Error` 值的规范化、失败广播以及对发生 rejection 的观察者的收容。`packages/host/webserver/tests/webserver.spec.ts` 证明受服务门控的启动失败会让 Loader 组合以其 bind 诊断 reject；`packages/typert/loader/tests/loader.spec.ts` 则通过真实 Loader 消费方演练可等待的程序化移除；ACP（Agent Client Protocol）的 `pty-tools` 快照会防止并发组合改变同优先级提示词段的顺序。
+
+`crates/loader/tests/runtime_parity.rs` 与 `crates/app-boot/tests/reload_parity.rs` 中的 Rust 测试固定原始表达式保留、注入就绪后的求值、具名与局部隔离、精确代际结算、活动 Loader 操作、导入预检、fiber 保留、补偿、组禁用以及失败移动的恢复。`crates/hmr/tests/host_hmr_parity.rs` 固定递归监听、配置优先、完整重启请求与等待式 dispose；Loader 运行时测试固定 ESM/CJS 失效、共享依赖顺序、导入／应用回滚以及 disposer 失败收容。`crates/app-boot/tests/watch_parity.rs` 固定确切路径身份、串行化、失败收容与 dispose 排空。

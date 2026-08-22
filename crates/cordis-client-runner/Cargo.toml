@@ -1,0 +1,49 @@
+[package]
+name = "seekdeep-cordis-client-runner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM dynamic Cordis Client evaluator and runtime"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis-dynamic-types = { path = "../cordis-dynamic-types" }
+seekdeep-cordis-timer = { path = "../cordis-timer" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-identity = { path = "../identity" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+serde-wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = [
+  "console",
+  "Document",
+  "Element",
+  "HtmlElement",
+  "HtmlHeadElement",
+  "HtmlStyleElement",
+  "Node",
+  "Window",
+] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[lints]
+workspace = true

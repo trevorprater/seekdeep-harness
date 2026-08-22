@@ -24,7 +24,4 @@ seekdeep_util::string_brand!(
     /// Provider-owned model identity.
     pub struct ModelId;
 );
-seekdeep_util::string_brand!(
-    /// Session identity stamped onto routed model requests.
-    pub struct SessionId;
-);
+pub use seekdeep_identity::SessionId;

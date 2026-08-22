@@ -7,15 +7,27 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+base64.workspace = true
+boa_engine.workspace = true
+futures.workspace = true
 indexmap.workspace = true
+num-traits.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yml.workspace = true
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-cordis-timer = { path = "../cordis-timer" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
 thiserror.workspace = true
 tokio.workspace = true
-uuid.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

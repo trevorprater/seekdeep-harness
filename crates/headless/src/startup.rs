@@ -6,6 +6,7 @@ use seekdeep_cmdline::{
     CmdlineOutput, CmdlineProgram, CmdlineProgramOutcome, parse_cmdline, parse_cmdline_with_output,
 };
 use seekdeep_cordis::{Context, Plugin, PluginFiber, ServiceKey};
+use serde::{Deserialize, Serialize};
 
 /// Stable source-compatible plugin name.
 pub const NAME: &str = "headless-startup";
@@ -19,7 +20,8 @@ pub const HEADLESS_STARTUP: ServiceKey<HeadlessStartupValues> =
     ServiceKey::new(HEADLESS_STARTUP_SERVICE);
 
 /// Parsed task published by the headless startup provider.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HeadlessStartupValues {
     /// Exact task text after joining positional words with one ASCII space.
     pub task: String,
@@ -55,7 +57,8 @@ impl CmdlineProgram for HeadlessProgram {
     }
 
     fn run_action(&mut self, context: &Context, action: Self::Action) -> anyhow::Result<()> {
-        context.provide(HEADLESS_STARTUP, Arc::new(action))?;
+        let projection = serde_json::to_value(&action)?;
+        context.provide_projected(HEADLESS_STARTUP, Arc::new(action), projection)?;
         Ok(())
     }
 }
@@ -309,7 +312,9 @@ fn optimal_string_alignment_distance(a: &[u16], b: &[u16], max_distance: usize) 
 mod tests {
     use parking_lot::Mutex;
     use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
-    use seekdeep_cordis::FiberState;
+    use seekdeep_cordis::{FiberState, ServiceKey};
+    use seekdeep_loader::PluginCatalog;
+    use serde_json::Value;
 
     use super::*;
 
@@ -442,6 +447,50 @@ mod tests {
 
         startup.dispose().await.unwrap();
         assert!(context.get(HEADLESS_STARTUP).is_none());
+    }
+
+    #[tokio::test]
+    async fn projected_startup_values_feed_injection_ready_loader_expressions() {
+        const OBSERVED: ServiceKey<Value> = ServiceKey::new("observed");
+        let context = Context::new();
+        provide_cmdline(
+            &context,
+            CmdlineHost::new(["project", "the", "task"], |_| Ok(())),
+        )
+        .unwrap();
+        let catalog = PluginCatalog::new();
+        catalog.register_named("startup", plugin()).unwrap();
+        catalog
+            .register_named(
+                "reader",
+                Plugin::new("reader", std::iter::empty::<&str>(), |context, config| {
+                    Box::pin(async move {
+                        context.provide(OBSERVED, Arc::new(config))?;
+                        Ok(())
+                    })
+                }),
+            )
+            .unwrap();
+        let composition = catalog
+            .load_yaml(
+                &context,
+                concat!(
+                    "- id: reader\n",
+                    "  name: reader\n",
+                    "  inject: [headlessStartup]\n",
+                    "  config:\n",
+                    "    task: !!js ctx.headlessStartup.task\n",
+                    "- id: startup\n",
+                    "  name: startup\n",
+                ),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            context.get(OBSERVED).expect("reader")["task"],
+            "project the task"
+        );
+        composition.dispose().await.unwrap();
     }
 
     #[tokio::test]

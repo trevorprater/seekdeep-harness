@@ -21,6 +21,7 @@ serde_json.workspace = true
 seekdeep-attachment = { path = "../attachment" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
+seekdeep-identity = { path = "../identity" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-util = { path = "../util" }
 thiserror.workspace = true

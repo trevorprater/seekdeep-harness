@@ -8,10 +8,17 @@ repository.workspace = true
 description = "Trusted Loader plugin inventory types for SeekDeep Harness"
 
 [dependencies]
+anyhow.workspace = true
 serde.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-api-gateway = { path = "../api-gateway" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-typert-protocol = { path = "../typert-protocol" }
+serde_json.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

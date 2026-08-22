@@ -38,6 +38,8 @@ Status: proposed
 
 `tool-cordis` 只依赖 Host Runner 的进程内服务，不导入 Client 实现。`ui-cordis` 只消费 Client Runner face 和 Client-safe wire 类型，不导入 Host 实现。Host 与 Client 的运行控制通过已有生成 Remote 面和转发事件连接，网关不拥有动态 Plugin 的领域逻辑。
 
+Rust 端以原生 Rust 实现 Host Runner 与生命周期权威。由 Rust 所有的 Boa worker 把模型编写的 Host JavaScript 函数保留在解释器线程内；跨越该边界的类型化消息只携带无损 JSON 与生命周期命令。Host/Client wire 类型位于可面向目标平台构建的 `seekdeep-cordis-dynamic-types` crate，因此 Rust/WASM Client 不依赖 Boa、Host Tool 或 Agent 运行时代码。浏览器 Runner 由 Rust 编译为 WebAssembly，控制 Client 求值，而不把注册、审批、代际所有权、teardown 或协议状态移入手写浏览器 JavaScript。自定义 Cordis 核心提供类型化 Service、精确代际 Fiber、可逆 effect ledger、确定性取消以及可注入的计时与调度策略。这些正确性机制可以强化原实现，但不得改变其可观察协议。
+
 ### 领域对象
 
 #### Plugin
@@ -143,7 +145,7 @@ Client 装载状态是页面局部事实。Host active 不代表当前页面已�
 
 ### 动态代码、Guard 与生命周期
 
-Host 和 Client 都只执行 plain JavaScript 函数体，不经过 TypeScript、JSX 或 bundler 转译。Host 运行在 `node:vm`，Client 在受限闭包中求值。两端上下文用于减少误用并提供教学错误，不是恶意代码安全边界。
+Host 和 Client 都只执行 plain JavaScript 函数体，不经过 TypeScript、JSX 或 bundler 转译。Host 在由 Rust 所有的嵌入式解释器 worker 中执行；Rust/WASM Client Runner 通过浏览器引擎在受限闭包中请求求值。两端上下文用于减少误用并提供教学错误，不是恶意代码安全边界。
 
 模型默认通过 `ctx.get('serviceName')` 读取可选 Service 并判断 `undefined`。只有 Service 是硬依赖、缺失时 Package 必须 waiting 并在 Service 出现后重新激活时，才在插件对象声明 `inject`。直接访问 `ctx.serviceName` 只在同一插件声明对应 inject 时允许。
 

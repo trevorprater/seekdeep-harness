@@ -82,6 +82,12 @@ impl EventArgs {
         Self::from_values(vec![Arc::new(value)])
     }
 
+    /// Creates a single-value list without adding another [`Arc`] layer.
+    #[must_use]
+    pub fn one_shared<T: Any + Send + Sync>(value: Arc<T>) -> Self {
+        Self::from_values(vec![value])
+    }
+
     /// Returns a cloned typed argument.
     #[must_use]
     pub fn get<T: Any + Send + Sync>(&self, index: usize) -> Option<Arc<T>> {
@@ -672,11 +678,7 @@ fn detach_listener(future: ListenerFuture) {
             tracing::error!(%error, "detached event listener failed");
         }
     };
-    if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-        runtime.spawn(run);
-    } else {
-        std::thread::spawn(move || futures::executor::block_on(run));
-    }
+    spawn_detached(run);
 }
 
 fn detach_listener_with_error_handler(
@@ -690,11 +692,21 @@ fn detach_listener_with_error_handler(
             Err(payload) => on_error(panic_error(&payload)),
         }
     };
+    spawn_detached(run);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_detached(future: impl Future<Output = ()> + Send + 'static) {
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-        runtime.spawn(run);
+        runtime.spawn(future);
     } else {
-        std::thread::spawn(move || futures::executor::block_on(run));
+        std::thread::spawn(move || futures::executor::block_on(future));
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn spawn_detached(future: impl Future<Output = ()> + Send + 'static) {
+    wasm_bindgen_futures::spawn_local(future);
 }
 
 fn panic_error(payload: &Box<dyn Any + Send>) -> anyhow::Error {

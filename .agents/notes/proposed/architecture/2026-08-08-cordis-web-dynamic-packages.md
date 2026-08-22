@@ -38,6 +38,8 @@ Four packages under `packages/self-modification/` implement the dynamic runtime:
 
 `tool-cordis` depends only on the Host Runner's in-process service and does not import the Client implementation. `ui-cordis` consumes only the Client Runner face and Client-safe wire types and does not import the Host implementation. Existing generated Remote APIs and forwarded events connect Host and Client runtime control; the gateway owns no dynamic Plugin domain logic.
 
+The Rust port implements the Host Runner and lifecycle authority in native Rust. A Rust-owned Boa worker retains model-authored Host JavaScript functions inside the interpreter thread; typed messages carry only lossless JSON and lifecycle commands across that boundary. Host/Client wire types live in the target-portable `seekdeep-cordis-dynamic-types` crate, so the Rust/WASM Client never depends on Boa, Host Tools, or Agent runtime code. The browser Runner is Rust compiled to WebAssembly and controls Client evaluation without moving registration, approval, generation ownership, teardown, or protocol state into handwritten browser JavaScript. The custom Cordis core provides typed Services, exact-generation Fibers, a reversible effect ledger, deterministic cancellation, and injectable timing and scheduling policies. These correctness mechanisms may strengthen the source implementation but must not change its observable protocol.
+
 ### Domain objects
 
 #### Plugin
@@ -143,7 +145,7 @@ This channel serves only Client-to-Host calls within the same Package. It does n
 
 ### Dynamic code, Guard, and lifecycle
 
-Host and Client both execute only plain JavaScript function bodies, without TypeScript, JSX, or bundler transformation. The Host executes in `node:vm`; the Client evaluates in a restricted closure. These contexts reduce misuse and provide instructional errors, but they are not security boundaries against malicious code.
+Host and Client both execute only plain JavaScript function bodies, without TypeScript, JSX, or bundler transformation. The Host executes in a Rust-owned embedded interpreter worker; the Rust/WASM Client Runner requests evaluation through the browser engine inside a restricted closure. These contexts reduce misuse and provide instructional errors, but they are not security boundaries against malicious code.
 
 By default, the model reads an optional Service through `ctx.get('serviceName')` and checks for `undefined`. A plugin object declares `inject` only when the Service is a hard dependency whose absence must park the Package and whose later arrival must reactivate it. Direct `ctx.serviceName` access is allowed only when the same plugin declares the corresponding inject.
 

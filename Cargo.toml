@@ -3,6 +3,7 @@ members = [
   "apps/seekdeep",
   "crates/attachment",
   "crates/attachment-local",
+  "crates/app-boot",
   "crates/bundle-base",
   "crates/agent",
   "crates/agent-default-model",
@@ -14,15 +15,22 @@ members = [
   "crates/api-gateway",
   "crates/api-remotes",
   "crates/client-connection",
+  "crates/client-modules",
+  "crates/client-hmr",
   "crates/cmdline",
   "crates/host-apiproxy",
   "crates/host-directory-picker",
   "crates/host-frontend-static",
+  "crates/hmr",
   "crates/host-plugin-inventory",
   "crates/host-webserver",
   "crates/hook-protocol",
   "crates/headless",
   "crates/cordis",
+  "crates/cordis-client-runner",
+  "crates/cordis-dynamic-types",
+  "crates/cordis-timer",
+  "crates/cordis-host-runner",
   "crates/cosmokit",
   "crates/code-runtime",
   "crates/code-runtime-worker-thread",
@@ -56,6 +64,7 @@ members = [
   "crates/token-meter",
   "crates/core",
   "crates/invariants",
+  "crates/identity",
   "crates/jobs",
   "crates/jobs-local",
   "crates/landlock-run",
@@ -172,6 +181,8 @@ image = { version = "0.25.9", default-features = false, features = ["gif", "jpeg
 iana-time-zone = "0.1.64"
 icu_timezone = "1.5.0"
 indexmap = { version = "2.12.1", features = ["serde"] }
+js-sys = "0.3.104"
+num-traits = "0.2.19"
 oxc_allocator = "=0.122.0"
 oxc_ast = "=0.122.0"
 oxc_ast_visit = "=0.122.0"
@@ -209,6 +220,10 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
 unicode-ident = "1.0.22"
 unicode-normalization = "0.1.25"
 uuid = { version = "1.19.0", features = ["serde", "v4", "v7"] }
+wasm-bindgen = "0.2.127"
+wasm-bindgen-futures = "0.4.77"
+serde-wasm-bindgen = "0.6.5"
+web-sys = "0.3.104"
 url = "2.5.7"
 walkdir = "2.5.0"
 yaml-edit = "0.2.3"

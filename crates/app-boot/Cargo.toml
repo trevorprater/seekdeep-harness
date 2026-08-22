@@ -1,0 +1,30 @@
+[package]
+name = "seekdeep-app-boot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Profile discovery, initialization, and composition for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+notify = "8.2.0"
+parking_lot.workspace = true
+path-clean.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+serde_yml.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
