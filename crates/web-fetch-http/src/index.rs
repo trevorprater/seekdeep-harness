@@ -128,7 +128,7 @@ fn install_into_context(context: &Context, config: &Value) -> anyhow::Result<()>
     let runtime = context
         .get(WEB)
         .ok_or_else(|| anyhow::anyhow!("web-fetch-http requires the web service"))?;
-    runtime.register_fetch_provider(context, Arc::new(HttpFetchProvider::new(limits)))?;
+    let _ = runtime.register_fetch_provider(context, Arc::new(HttpFetchProvider::new(limits)))?;
     Ok(())
 }
 

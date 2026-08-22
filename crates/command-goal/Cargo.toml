@@ -14,5 +14,13 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-goal = { path = "../goal" }
 seekdeep-invariants = { path = "../invariants" }
 
+[dev-dependencies]
+seekdeep-agent = { path = "../agent" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
+serde_json.workspace = true
+tokio.workspace = true
+
 [lints]
 workspace = true

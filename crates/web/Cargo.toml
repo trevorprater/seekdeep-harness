@@ -10,6 +10,7 @@ description = "Service definition for the web access capability seam"
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+indexmap.workspace = true
 parking_lot.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
@@ -17,6 +18,9 @@ seekdeep-llm = { path = "../llm" }
 seekdeep-schemastery = { path = "../schemastery" }
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
 
 [lints]
 workspace = true

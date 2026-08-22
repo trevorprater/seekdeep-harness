@@ -5,13 +5,17 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use indexmap::IndexMap;
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply};
+use seekdeep_cordis::{
+    Context, EventArgs, EventOptions, EventReply, Plugin, ServiceKey,
+    fiber::{DisposeFuture, EffectHandle},
+};
 use seekdeep_core::{
     session::{Session, SessionEvent, SessionHeader, SessionId},
     session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::AbortSignal;
+use seekdeep_schemastery::Schema;
 use seekdeep_session_persistence::{SESSION_PERSISTENCE, SessionPersistence};
 use seekdeep_session_projection::{
     ProjectionCheckpoint, ProjectionSnapshot, SESSION_PROJECTIONS, SessionProjectionRegistry,
@@ -20,6 +24,19 @@ use seekdeep_storage_domain::{
     DomainFacility, DomainSpec, KvTable, STORAGE_DOMAIN, ValueSchema, define_domain, domain_table,
 };
 use serde::{Deserialize, Serialize};
+
+/// Cordis plugin name retained by Loader diagnostics.
+pub const NAME: &str = "session-projection-cache";
+/// Services required before the cache opens its durable domain.
+pub const INJECT: &[&str] = &[
+    "storageDomain",
+    "sessionProjections",
+    "sessionPersistence",
+    "sessions",
+];
+/// Typed Cordis seat corresponding to `ctx.sessionProjectionCache`.
+pub const SESSION_PROJECTION_CACHE: ServiceKey<SessionProjectionCache> =
+    ServiceKey::new("sessionProjectionCache");
 
 /// The stored-log identity a record is bound to.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,8 +79,8 @@ pub fn projection_cache_domain_spec() -> DomainSpec {
 }
 
 /// Plugin config: the two write-behind throttle triggers.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Config {
     /// Committed events per session forcing a durable checkpoint write.
     pub write_every_events: usize,
@@ -71,10 +88,43 @@ pub struct Config {
     pub write_interval_ms: u64,
 }
 
+/// Source-compatible Loader schema for both positive integer throttle choices.
+#[must_use]
+pub fn config_schema() -> Schema {
+    Schema::object([
+        (
+            "writeEveryEvents",
+            Schema::number().step(1.0).min(1.0).required(),
+        ),
+        (
+            "writeIntervalMs",
+            Schema::number().step(1.0).min(1.0).required(),
+        ),
+    ])
+}
+
+fn validate_config(config: Config) -> anyhow::Result<Config> {
+    anyhow::ensure!(
+        config.write_every_events > 0,
+        "writeEveryEvents must be a positive integer"
+    );
+    anyhow::ensure!(
+        config.write_interval_ms > 0,
+        "writeIntervalMs must be a positive integer"
+    );
+    Ok(config)
+}
+
 /// Per-session write-behind bookkeeping.
 struct DirtyState {
     pending: usize,
     timer: Option<tokio::task::JoinHandle<()>>,
+}
+
+struct PreparedWrite {
+    identity: CheckpointIdentity,
+    rows: ProjectionCheckpoint,
+    flush_live_log: bool,
 }
 
 /// Projects a header onto the identity fields a record is bound to.
@@ -116,11 +166,20 @@ impl SessionProjectionCache {
     ///
     /// Returns missing-service, domain-open, or listener-registration failures.
     pub async fn install(context: &Context, config: Config) -> anyhow::Result<Arc<Self>> {
+        let config = validate_config(config)?;
         let facility: Arc<DomainFacility> = context
             .get(STORAGE_DOMAIN)
             .ok_or_else(|| anyhow::anyhow!("session-projection-cache requires storageDomain"))?;
         let domain = facility.open(projection_cache_domain_spec()).await?;
         let table = domain.table("sessions")?;
+        let domain_for_close = domain.clone();
+        context.own(EffectHandle::new(
+            "sessionProjectionCache.domainClose",
+            move || -> DisposeFuture {
+                let domain = domain_for_close.clone();
+                Box::pin(async move { domain.close().await })
+            },
+        ))?;
         let projections: Arc<SessionProjectionRegistry> =
             context.get(SESSION_PROJECTIONS).ok_or_else(|| {
                 anyhow::anyhow!("session-projection-cache requires sessionProjections")
@@ -142,7 +201,24 @@ impl SessionProjectionCache {
             dirty: Mutex::new(HashMap::new()),
         });
         service.install_write_path(context)?;
+        let weak = Arc::downgrade(&service);
+        context.own(EffectHandle::synchronous(
+            "sessionProjectionCache.timers",
+            move || {
+                if let Some(service) = weak.upgrade() {
+                    service.clear_dirty();
+                }
+                Ok(())
+            },
+        ))?;
+        context.provide(SESSION_PROJECTION_CACHE, service.clone())?;
         Ok(service)
+    }
+
+    /// Returns the validated throttle policy active for this service.
+    #[must_use]
+    pub const fn config(&self) -> Config {
+        self.config
     }
 
     /// The zero-I/O listing read: whole values viewed straight from the stored
@@ -163,16 +239,32 @@ impl SessionProjectionCache {
     ///
     /// Returns checkpoint, flush, or durable-write failures.
     pub async fn write(&self, session: &Arc<Session>) -> anyhow::Result<()> {
+        let prepared = self.prepare_write(session)?;
+        self.commit_write(session, prepared).await
+    }
+
+    fn prepare_write(&self, session: &Arc<Session>) -> anyhow::Result<PreparedWrite> {
         let rows = self.projections.checkpoint(session)?;
         self.mark_clean(session);
-        if self
-            .sessions
-            .get(session.id())
-            .is_some_and(|live| Arc::ptr_eq(&live, session))
-        {
+        Ok(PreparedWrite {
+            identity: identity_of(session.header()),
+            rows,
+            flush_live_log: self
+                .sessions
+                .get(session.id())
+                .is_some_and(|live| Arc::ptr_eq(&live, session)),
+        })
+    }
+
+    async fn commit_write(
+        &self,
+        session: &Arc<Session>,
+        prepared: PreparedWrite,
+    ) -> anyhow::Result<()> {
+        if prepared.flush_live_log {
             self.sessions.flush(session).await?;
         }
-        self.put(session.id(), identity_of(session.header()), rows)
+        self.put(session.id(), prepared.identity, prepared.rows)
             .await
     }
 
@@ -276,13 +368,7 @@ impl SessionProjectionCache {
 
     fn on_event(self: &Arc<Self>, session: &Arc<Session>, event: &SessionEvent) {
         if event.event_type == "turn/end" {
-            let weak = Arc::downgrade(self);
-            let session = session.clone();
-            tokio::spawn(async move {
-                if let Some(cache) = weak.upgrade() {
-                    cache.flush_soft(&session, "turn/end").await;
-                }
-            });
+            self.start_soft_write(session, "turn/end");
             return;
         }
         let key = session_key(session);
@@ -296,42 +382,52 @@ impl SessionProjectionCache {
         state.pending += 1;
         if state.pending >= every {
             drop(dirty);
-            let weak = Arc::downgrade(self);
-            let session = session.clone();
-            tokio::spawn(async move {
-                if let Some(cache) = weak.upgrade() {
-                    cache.flush_soft(&session, "count threshold").await;
-                }
-            });
+            self.start_soft_write(session, "count threshold");
             return;
         }
         if state.timer.is_none() {
             let weak = Arc::downgrade(self);
             let session = session.clone();
+            let timer = tokio::time::sleep(Duration::from_millis(interval));
             state.timer = Some(tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(interval)).await;
+                timer.await;
                 if let Some(cache) = weak.upgrade() {
-                    cache.flush_soft(&session, "interval").await;
+                    cache.timer_fired(&session);
                 }
             }));
         }
     }
 
     fn on_disposed(self: &Arc<Self>, session: &Arc<Session>) {
-        let weak = Arc::downgrade(self);
+        self.start_soft_write(session, "detach");
+        self.dirty.lock().remove(&session_key(session));
+    }
+
+    fn start_soft_write(self: &Arc<Self>, session: &Arc<Session>, trigger: &'static str) {
+        let prepared = match self.prepare_write(session) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                tracing::warn!(session = %session.id(), %error, %trigger, "session projection cache write failed (cache stays stale)");
+                return;
+            }
+        };
+        let cache = self.clone();
         let session = session.clone();
         tokio::spawn(async move {
-            if let Some(cache) = weak.upgrade() {
-                cache.flush_soft(&session, "detach").await;
-                cache.mark_clean(&session);
-                cache.dirty.lock().remove(&session_key(&session));
+            if let Err(error) = cache.commit_write(&session, prepared).await {
+                tracing::warn!(session = %session.id(), %error, %trigger, "session projection cache write failed (cache stays stale)");
             }
         });
     }
 
-    async fn flush_soft(&self, session: &Arc<Session>, trigger: &str) {
-        if let Err(error) = self.write(session).await {
-            tracing::warn!(session = %session.id(), %error, %trigger, "session projection cache write failed (cache stays stale)");
+    fn timer_fired(self: &Arc<Self>, session: &Arc<Session>) {
+        let should_flush = self
+            .dirty
+            .lock()
+            .get_mut(&session_key(session))
+            .is_some_and(|state| state.timer.take().is_some());
+        if should_flush {
+            self.start_soft_write(session, "interval");
         }
     }
 
@@ -340,6 +436,15 @@ impl SessionProjectionCache {
         if let Some(state) = dirty.get_mut(&session_key(session)) {
             state.pending = 0;
             if let Some(timer) = state.timer.take() {
+                timer.abort();
+            }
+        }
+    }
+
+    fn clear_dirty(&self) {
+        let dirty = std::mem::take(&mut *self.dirty.lock());
+        for state in dirty.into_values() {
+            if let Some(timer) = state.timer {
                 timer.abort();
             }
         }
@@ -382,6 +487,23 @@ impl SessionProjectionCache {
             .and_then(|value| serde_json::from_value(value).ok())?;
         identity_matches(&record.identity, expected).then_some(record)
     }
+}
+
+/// Builds the Loader-compatible persisted projection-cache plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, value| {
+        Box::pin(async move {
+            let config: Config = serde_json::from_value(value)?;
+            SessionProjectionCache::install(&context, config).await?;
+            Ok(())
+        })
+    })
+    .with_config_validator(|value| {
+        config_schema()
+            .resolve(value)
+            .map_err(|error| anyhow::anyhow!("{error}"))
+    })
 }
 
 fn required_session(args: &EventArgs) -> anyhow::Result<Arc<Session>> {

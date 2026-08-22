@@ -11,15 +11,19 @@ description = "One-shot direct Agent runner for SeekDeep Harness"
 anyhow.workspace = true
 parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-agent-default-model = { path = "../agent-default-model" }
 seekdeep-cmdline = { path = "../cmdline" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 serde.workspace = true
 serde_json.workspace = true
 terminal_size.workspace = true
+tokio.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
@@ -32,7 +36,6 @@ seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-tool-todo = { path = "../tool-todo" }
 seekdeep-tools = { path = "../tools" }
 tempfile.workspace = true
-tokio.workspace = true
 
 [lints]
 workspace = true

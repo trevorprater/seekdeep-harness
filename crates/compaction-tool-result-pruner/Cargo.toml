@@ -18,5 +18,9 @@ seekdeep-token-meter = { path = "../token-meter" }
 serde.workspace = true
 serde_json.workspace = true
 
+[dev-dependencies]
+seekdeep-loader = { path = "../loader" }
+tokio.workspace = true
+
 [lints]
 workspace = true

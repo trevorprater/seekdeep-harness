@@ -226,13 +226,15 @@ impl FsErrorCode {
 }
 
 /// Typed filesystem error carrying a stable `FsErrorCode`.
-#[derive(Clone, Debug, PartialEq, Eq, Error)]
+#[derive(Debug, Error)]
 #[error("{message}")]
 pub struct FsError {
     /// Stable routing code.
     pub code: FsErrorCode,
     /// Human-readable diagnostic.
     pub message: String,
+    #[source]
+    cause: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
 impl FsError {
@@ -242,7 +244,15 @@ impl FsError {
         Self {
             code,
             message: message.into(),
+            cause: None,
         }
+    }
+
+    /// Chains the provider or platform failure that caused this filesystem error.
+    #[must_use]
+    pub fn with_cause(mut self, cause: impl std::error::Error + Send + Sync + 'static) -> Self {
+        self.cause = Some(Box::new(cause));
+        self
     }
 
     /// JavaScript error-class name.

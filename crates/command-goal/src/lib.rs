@@ -3,5 +3,5 @@
 pub mod index;
 pub mod invariant;
 
-pub use index::{NAME, apply};
+pub use index::{INJECT, NAME, apply, plugin};
 pub use invariant::register_invariant;

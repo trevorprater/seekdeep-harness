@@ -7,10 +7,62 @@ use std::{collections::HashMap, fmt, future::Future, path::Path, pin::Pin, sync:
 
 use indexmap::IndexMap;
 use parking_lot::RwLock;
-use seekdeep_cordis::{Context, Plugin, PluginFiber};
+use seekdeep_cordis::{Context, Plugin, PluginFiber, ServiceKey, fiber::EffectHandle};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use thiserror::Error;
+
+/// Loader-generation service inherited by every entry mounted in one composition.
+pub const LOADER: ServiceKey<LoaderSettlement> = ServiceKey::new("loader");
+
+type SettlementOutcome = Option<Result<(), Arc<str>>>;
+
+/// Exact-generation whole-composition settlement barrier.
+#[derive(Clone, Debug)]
+pub struct LoaderSettlement {
+    result: tokio::sync::watch::Receiver<SettlementOutcome>,
+}
+
+impl LoaderSettlement {
+    fn pending() -> (Arc<Self>, LoaderSettlementCompletion) {
+        let (sender, result) = tokio::sync::watch::channel(None);
+        (
+            Arc::new(Self { result }),
+            LoaderSettlementCompletion {
+                sender: Some(sender),
+            },
+        )
+    }
+
+    /// Waits for every entry in this exact composition generation to settle.
+    ///
+    /// # Errors
+    ///
+    /// Returns the generation's startup/rollback failure or an abandoned-barrier error.
+    pub async fn wait(&self) -> anyhow::Result<()> {
+        let mut result = self.result.clone();
+        loop {
+            if let Some(outcome) = result.borrow().clone() {
+                return outcome.map_err(|message| anyhow::anyhow!(message.to_string()));
+            }
+            result.changed().await.map_err(|_| {
+                anyhow::anyhow!("loader composition ended without publishing settlement")
+            })?;
+        }
+    }
+}
+
+struct LoaderSettlementCompletion {
+    sender: Option<tokio::sync::watch::Sender<SettlementOutcome>>,
+}
+
+impl LoaderSettlementCompletion {
+    fn finish(mut self, outcome: Result<(), Arc<str>>) {
+        if let Some(sender) = self.sender.take() {
+            sender.send_replace(Some(outcome));
+        }
+    }
+}
 
 /// Stable declarative entry identifier used by overlay patches.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
@@ -183,6 +235,9 @@ pub enum LoaderError {
     /// A document could not be parsed.
     #[error("loader: invalid composition document: {0}")]
     InvalidDocument(String),
+    /// The isolated settlement service could not be published.
+    #[error("loader: settlement service failed: {0}")]
+    SettlementService(String),
     /// A mounted plugin failed to settle.
     #[error("loader: entry {entry:?} ({plugin:?}) failed: {message}")]
     PluginStartup {
@@ -263,7 +318,13 @@ impl PluginCatalog {
         source: &str,
     ) -> Result<LoadedComposition, LoaderError> {
         let entries = parse_entries(source)?;
-        self.mount(context, &entries).await
+        let generation = context.isolate(LOADER);
+        let (settlement, completion) = LoaderSettlement::pending();
+        let settlement_effect = generation
+            .provide(LOADER, settlement)
+            .map_err(|error| LoaderError::SettlementService(error.to_string()))?;
+        self.mount(&generation, &entries, settlement_effect, completion)
+            .await
     }
 
     /// Reads and mounts a YAML composition file.
@@ -284,13 +345,24 @@ impl PluginCatalog {
         &self,
         context: &Context,
         entries: &[Entry],
+        settlement_effect: EffectHandle,
+        completion: LoaderSettlementCompletion,
     ) -> Result<LoadedComposition, LoaderError> {
         let mut fibers = Vec::new();
         if let Err(error) = mount_entries(self, context, entries, &mut fibers).await {
-            dispose_fibers(&mut fibers).await?;
+            let error = match dispose_fibers(&mut fibers).await {
+                Ok(()) => error,
+                Err(cleanup) => LoaderError::Disposal(format!("{error}; {cleanup}")),
+            };
+            completion.finish(Err(Arc::from(error.to_string())));
+            let _ = settlement_effect.dispose().await;
             return Err(error);
         }
-        Ok(LoadedComposition { fibers })
+        completion.finish(Ok(()));
+        Ok(LoadedComposition {
+            fibers,
+            settlement_effect: Some(settlement_effect),
+        })
     }
 }
 
@@ -348,6 +420,7 @@ fn parse_entries(source: &str) -> Result<Vec<Entry>, LoaderError> {
 #[derive(Debug)]
 pub struct LoadedComposition {
     fibers: Vec<Arc<PluginFiber>>,
+    settlement_effect: Option<EffectHandle>,
 }
 
 impl LoadedComposition {
@@ -363,7 +436,20 @@ impl LoadedComposition {
     ///
     /// Returns all cleanup failures as one causal diagnostic.
     pub async fn dispose(mut self) -> Result<(), LoaderError> {
-        dispose_fibers(&mut self.fibers).await
+        let mut errors = Vec::new();
+        if let Err(error) = dispose_fibers(&mut self.fibers).await {
+            errors.push(error.to_string());
+        }
+        if let Some(effect) = self.settlement_effect.take()
+            && let Err(error) = effect.dispose().await
+        {
+            errors.push(format!("loader settlement cleanup failed: {error:#}"));
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(LoaderError::Disposal(errors.join("; ")))
+        }
     }
 }
 

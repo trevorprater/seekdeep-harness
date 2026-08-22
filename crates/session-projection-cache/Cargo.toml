@@ -13,6 +13,7 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-storage-domain = { path = "../storage-domain" }
@@ -22,6 +23,9 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+seekdeep-storage = { path = "../storage" }
 tokio.workspace = true
 
 [lints]

@@ -216,7 +216,7 @@ async fn install_into_context(context: &Context, config: &Value) -> anyhow::Resu
     let runtime = context
         .get(WEB)
         .ok_or_else(|| anyhow::anyhow!("web-search-deepseek requires the web service"))?;
-    runtime.register_search_provider(context, Arc::new(provider))?;
+    let _ = runtime.register_search_provider(context, Arc::new(provider))?;
     // Await the settings-section helper so the namespace is registered before this plugin's
     // startup reports success; its teardown later unregisters the provider through the web seam's
     // reverse effect when the plugin fiber unloads.

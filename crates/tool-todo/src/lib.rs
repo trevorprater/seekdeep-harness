@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use seekdeep_cordis::{
-    Context, DispatchMode, EventArgs, EventOptions, EventReply, fiber::EffectHandle,
+    Context, DispatchMode, EventArgs, EventOptions, EventReply, Plugin, fiber::EffectHandle,
 };
 use seekdeep_core::{
     session::{AppendOptions, SessionEvent},
@@ -13,6 +13,7 @@ use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
 use seekdeep_llm::ContentBlock;
+use seekdeep_schemastery::Schema;
 use seekdeep_session_projection::{
     ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS, SessionProjectionRegistry,
 };
@@ -25,18 +26,45 @@ use serde_json::{Value, json};
 
 /// Stable public tool name.
 pub const TOOL_NAME: &str = "todo_write";
+/// Cordis plugin name used by Loader diagnostics.
+pub const NAME: &str = "tool-todo";
+/// Required runtime services for the plugin body.
+pub const INJECT: &[&str] = &["tools"];
 
-const DESCRIPTION_HEAD: &str = "Record and update a structured task list for the current work. Send the ENTIRE list every call ` it REPLACES the previous list (there are no partial updates, no per-item edits). Use it to plan multi-step work and show progress: add one todo per concrete step before you start. ";
-const DESCRIPTION_PARALLEL: &str = "Mark every todo being actively worked on `in_progress` ` several at once when work genuinely runs in parallel (e.g. concurrent subagents or background commands), one for sequential work; while work remains, at least one task should be `in_progress`. ";
+const DESCRIPTION_HEAD: &str = "Record and update a structured task list for the current work. Send the ENTIRE list every call — it REPLACES the previous list (there are no partial updates, no per-item edits). Use it to plan multi-step work and show progress: add one todo per concrete step before you start. ";
+const DESCRIPTION_PARALLEL: &str = "Mark every todo being actively worked on `in_progress` — several at once when work genuinely runs in parallel (e.g. concurrent subagents or background commands), one for sequential work; while work remains, at least one task should be `in_progress`. ";
 const DESCRIPTION_SINGLE: &str = "Keep AT MOST ONE todo `in_progress` at a time; while work remains, exactly one active task should be `in_progress`. ";
 const DESCRIPTION_TAIL: &str = "Mark a todo `completed` the moment it is done (do not batch completions), and allow no `in_progress` item only once all work is complete. Skip the list for trivial single-step tasks. Statuses: `pending` (not started), `in_progress` (being worked on now), `completed` (finished).";
 
 /// Model-facing todo tool configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct Config {
     /// Whether several todos may be `in_progress` at once.
     pub allow_parallel_in_progress: bool,
+}
+
+/// Source-compatible Loader schema for the required deployment policy.
+#[must_use]
+pub fn config_schema() -> Schema {
+    Schema::object([("allowParallelInProgress", Schema::boolean().required())])
+}
+
+/// Loader-facing namespace-style Cordis plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, value| {
+        Box::pin(async move {
+            let config: Config = serde_json::from_value(value)?;
+            let _ = apply(&context, config)?;
+            Ok(())
+        })
+    })
+    .with_config_validator(|value| {
+        config_schema()
+            .resolve(value)
+            .map_err(|error| anyhow::anyhow!("{error}"))
+    })
 }
 
 /// The valid todo statuses.
@@ -154,7 +182,7 @@ fn parameter_schema() -> Value {
                 "properties": {
                     "content": {
                         "type": "string", "required": true,
-                        "description": "What the task is ` a short imperative line."
+                        "description": "What the task is — a short imperative line."
                     },
                     "status": {
                         "type": "string", "required": true,

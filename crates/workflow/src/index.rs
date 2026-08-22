@@ -1,7 +1,10 @@
 //! Workflow capability seam: the engine contract, error taxonomy, and
 //! lifecycle event vocabulary.
 
-use std::sync::Arc;
+use std::{
+    panic::{AssertUnwindSafe, catch_unwind},
+    sync::Arc,
+};
 
 use seekdeep_cordis::{Context, EventArgs, Service, ServiceKey};
 use serde::{Deserialize, Serialize};
@@ -75,7 +78,7 @@ pub enum WorkflowErrorCode {
 }
 
 /// Typed error for workflow-seam failures.
-#[derive(Clone, Debug, PartialEq, Eq, Error)]
+#[derive(Debug, Error)]
 #[error("{message}")]
 pub struct WorkflowError {
     /// Machine-routable taxonomy.
@@ -84,6 +87,8 @@ pub struct WorkflowError {
     pub message: String,
     /// Whether combinators must propagate instead of nulling the item.
     pub fatal: bool,
+    #[source]
+    cause: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 
 impl WorkflowError {
@@ -94,6 +99,7 @@ impl WorkflowError {
             code,
             message: message.into(),
             fatal: true,
+            cause: None,
         }
     }
 
@@ -104,7 +110,15 @@ impl WorkflowError {
             code,
             message: message.into(),
             fatal,
+            cause: None,
         }
+    }
+
+    /// Chains the host failure that caused this workflow error.
+    #[must_use]
+    pub fn with_cause(mut self, cause: impl std::error::Error + Send + Sync + 'static) -> Self {
+        self.cause = Some(Box::new(cause));
+        self
     }
 
     /// JavaScript error-class name.
@@ -183,8 +197,22 @@ pub fn emit_workflow_event(
     let emission = context
         .events()
         .prepare_emit(context, name.as_str(), args)?;
-    emission.emit_contained(|error| {
-        tracing::warn!(event = name.as_str(), %error, "workflow listener failed");
+    let event = name.as_str();
+    let async_error: Arc<dyn Fn(anyhow::Error) + Send + Sync> = Arc::new(move |error| {
+        let error = render_listener_error(&error);
+        tracing::warn!(event, %error, "workflow listener rejected");
     });
+    emission.emit_contained_with_async_errors(
+        |error| {
+            let error = render_listener_error(&error);
+            tracing::warn!(event, %error, "workflow listener threw");
+        },
+        &async_error,
+    );
     Ok(())
+}
+
+fn render_listener_error(error: &anyhow::Error) -> String {
+    catch_unwind(AssertUnwindSafe(|| error.to_string()))
+        .unwrap_or_else(|_| "[unrenderable listener error]".to_owned())
 }

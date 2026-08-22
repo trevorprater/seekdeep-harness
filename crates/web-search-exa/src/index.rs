@@ -93,7 +93,7 @@ fn install_into_context(context: &Context, config: &Value) -> anyhow::Result<()>
     let runtime = context
         .get(WEB)
         .ok_or_else(|| anyhow::anyhow!("web-search-exa requires the web service"))?;
-    runtime.register_search_provider(context, Arc::new(ExaSearchProvider::new(options)))?;
+    let _ = runtime.register_search_provider(context, Arc::new(ExaSearchProvider::new(options)))?;
     Ok(())
 }
 

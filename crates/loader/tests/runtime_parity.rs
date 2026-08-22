@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
-use seekdeep_loader::{ConfigTree, LoaderError, Patch, PluginCatalog};
+use seekdeep_loader::{ConfigTree, LOADER, LoaderError, Patch, PluginCatalog};
 use serde_json::json;
 
 fn recording_plugin(name: &'static str, events: Arc<Mutex<Vec<String>>>) -> Plugin {
@@ -146,4 +146,135 @@ fn catalog_rejects_duplicate_and_empty_names() {
         ),
         Err(LoaderError::InvalidPluginSpecifier)
     ));
+}
+
+#[tokio::test]
+async fn exact_generation_settlement_waits_for_later_siblings() {
+    let catalog = PluginCatalog::new();
+    let (settled_sender, settled_receiver) = tokio::sync::oneshot::channel();
+    let settled_sender = Arc::new(Mutex::new(Some(settled_sender)));
+    catalog
+        .register_named(
+            "waiter",
+            Plugin::new("waiter", ["loader"], move |context, _| {
+                let settlement = context.get(LOADER).expect("loader settlement");
+                let sender = settled_sender.clone();
+                Box::pin(async move {
+                    tokio::spawn(async move {
+                        let result = settlement.wait().await.map_err(|error| error.to_string());
+                        if let Some(sender) = sender.lock().take() {
+                            let _ = sender.send(result);
+                        }
+                    });
+                    Ok(())
+                })
+            }),
+        )
+        .unwrap();
+    let blocker_started = Arc::new(tokio::sync::Notify::new());
+    let blocker_release = Arc::new(tokio::sync::Notify::new());
+    let started = blocker_started.clone();
+    let release = blocker_release.clone();
+    catalog
+        .register_named(
+            "blocker",
+            Plugin::new("blocker", std::iter::empty::<&str>(), move |_, _| {
+                let started = started.clone();
+                let release = release.clone();
+                Box::pin(async move {
+                    started.notify_one();
+                    release.notified().await;
+                    Ok(())
+                })
+            }),
+        )
+        .unwrap();
+    let context = Context::new();
+    let loading = tokio::spawn({
+        let catalog = catalog.clone();
+        let context = context.clone();
+        async move {
+            catalog
+                .load_yaml(
+                    &context,
+                    "- id: waiter\n  name: waiter\n- id: blocker\n  name: blocker\n",
+                )
+                .await
+        }
+    });
+    blocker_started.notified().await;
+    let mut settled_receiver = settled_receiver;
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(10), &mut settled_receiver)
+            .await
+            .is_err(),
+        "waiter settled before its later sibling"
+    );
+    blocker_release.notify_one();
+    let composition = loading.await.unwrap().unwrap();
+    assert_eq!(settled_receiver.await.unwrap(), Ok(()));
+    composition.dispose().await.unwrap();
+    context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn failed_generation_wakes_waiters_only_after_rollback() {
+    let catalog = PluginCatalog::new();
+    let rolled_back = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let rollback_flag = rolled_back.clone();
+    let (settled_sender, settled_receiver) = tokio::sync::oneshot::channel();
+    let settled_sender = Arc::new(Mutex::new(Some(settled_sender)));
+    catalog
+        .register_named(
+            "waiter",
+            Plugin::new("waiter", ["loader"], move |context, _| {
+                let settlement = context.get(LOADER).expect("loader settlement");
+                let sender = settled_sender.clone();
+                let observed_rollback = rollback_flag.clone();
+                context
+                    .own(EffectHandle::synchronous("waiter rollback", {
+                        let rollback_flag = rollback_flag.clone();
+                        move || {
+                            rollback_flag.store(true, std::sync::atomic::Ordering::Release);
+                            Ok(())
+                        }
+                    }))
+                    .expect("rollback effect");
+                Box::pin(async move {
+                    tokio::spawn(async move {
+                        let result = settlement.wait().await.map_err(|error| error.to_string());
+                        if let Some(sender) = sender.lock().take() {
+                            let _ = sender.send((
+                                result,
+                                observed_rollback.load(std::sync::atomic::Ordering::Acquire),
+                            ));
+                        }
+                    });
+                    Ok(())
+                })
+            }),
+        )
+        .unwrap();
+    catalog
+        .register_named(
+            "failure",
+            Plugin::new("failure", std::iter::empty::<&str>(), |_, _| {
+                Box::pin(async { anyhow::bail!("later sibling failed") })
+            }),
+        )
+        .unwrap();
+    let context = Context::new();
+    let error = catalog
+        .load_yaml(
+            &context,
+            "- id: waiter\n  name: waiter\n- id: failure\n  name: failure\n",
+        )
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("later sibling failed"));
+    assert!(rolled_back.load(std::sync::atomic::Ordering::Acquire));
+    let (settlement, rollback_was_visible) = settled_receiver.await.unwrap();
+    assert!(settlement.is_err());
+    assert!(rollback_was_visible);
+    context.fiber().dispose().await.unwrap();
 }

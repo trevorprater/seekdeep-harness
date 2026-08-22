@@ -1,8 +1,8 @@
 //! Service definition for the web access capability seam (ctx.web).
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
+use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_llm::AbortSignal;
@@ -25,7 +25,7 @@ pub const INJECT: &[&str] = &[];
 
 /// Config for the web seam.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+#[serde(default, rename_all = "camelCase")]
 pub struct WebRuntimeConfig {
     /// Explicit search provider id.
     pub search_provider: Option<String>,
@@ -44,8 +44,8 @@ pub fn config_schema() -> Schema {
 
 /// The web access service: registries and provider-selecting execution.
 pub struct WebRuntime {
-    search_providers: Arc<Mutex<HashMap<String, Arc<dyn WebSearchProvider>>>>,
-    fetch_providers: Arc<Mutex<HashMap<String, Arc<dyn WebFetchProvider>>>>,
+    search_providers: Arc<Mutex<IndexMap<String, Arc<dyn WebSearchProvider>>>>,
+    fetch_providers: Arc<Mutex<IndexMap<String, Arc<dyn WebFetchProvider>>>>,
     search_provider_id: Option<String>,
     fetch_provider_id: Option<String>,
 }
@@ -58,18 +58,16 @@ impl WebRuntime {
     /// Returns duplicate-service or inactive-owner failures.
     pub fn new(context: &Context, config: &WebRuntimeConfig) -> anyhow::Result<Arc<Self>> {
         let runtime = Arc::new(Self {
-            search_providers: Arc::new(Mutex::new(HashMap::new())),
-            fetch_providers: Arc::new(Mutex::new(HashMap::new())),
-            search_provider_id: config.search_provider.clone().or_else(|| {
-                std::env::var("DSH_WEB_SEARCH_PROVIDER")
-                    .ok()
-                    .filter(|value| !value.trim().is_empty())
-            }),
-            fetch_provider_id: config.fetch_provider.clone().or_else(|| {
-                std::env::var("DSH_WEB_FETCH_PROVIDER")
-                    .ok()
-                    .filter(|value| !value.trim().is_empty())
-            }),
+            search_providers: Arc::new(Mutex::new(IndexMap::new())),
+            fetch_providers: Arc::new(Mutex::new(IndexMap::new())),
+            search_provider_id: config
+                .search_provider
+                .clone()
+                .or_else(|| std::env::var("SEEKDEEP_WEB_SEARCH_PROVIDER").ok()),
+            fetch_provider_id: config
+                .fetch_provider
+                .clone()
+                .or_else(|| std::env::var("SEEKDEEP_WEB_FETCH_PROVIDER").ok()),
         });
         context.provide(WEB, runtime.clone())?;
         Ok(runtime)
@@ -84,7 +82,7 @@ impl WebRuntime {
         &self,
         caller: &Context,
         provider: Arc<dyn WebSearchProvider>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<EffectHandle> {
         let id = provider.id().to_owned();
         {
             let mut map = self.search_providers.lock();
@@ -97,8 +95,7 @@ impl WebRuntime {
             );
             map.insert(id.clone(), provider);
         }
-        own_unregister(caller, self.search_providers.clone(), id);
-        Ok(())
+        own_unregister(caller, &self.search_providers, &id)
     }
 
     /// Registers a fetch provider.
@@ -110,7 +107,7 @@ impl WebRuntime {
         &self,
         caller: &Context,
         provider: Arc<dyn WebFetchProvider>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<EffectHandle> {
         let id = provider.id().to_owned();
         {
             let mut map = self.fetch_providers.lock();
@@ -123,8 +120,7 @@ impl WebRuntime {
             );
             map.insert(id.clone(), provider);
         }
-        own_unregister(caller, self.fetch_providers.clone(), id);
-        Ok(())
+        own_unregister(caller, &self.fetch_providers, &id)
     }
 
     /// Runs one search through the selected provider.
@@ -161,15 +157,22 @@ impl WebRuntime {
 /// Registers a reverse effect on the caller's context that removes a provider on teardown.
 fn own_unregister<T: Send + Sync + ?Sized + 'static>(
     caller: &Context,
-    store: Arc<Mutex<HashMap<String, Arc<T>>>>,
-    id: String,
-) {
-    let _ = caller.own(EffectHandle::new("web.registerProvider()", move || {
-        Box::pin(async move {
-            store.lock().remove(&id);
-            Ok(())
-        })
-    }));
+    store: &Arc<Mutex<IndexMap<String, Arc<T>>>>,
+    id: &str,
+) -> anyhow::Result<EffectHandle> {
+    let effect_store = store.clone();
+    let effect_id = id.to_owned();
+    let effect = EffectHandle::synchronous("web.registerProvider()", move || {
+        effect_store.lock().shift_remove(&effect_id);
+        Ok(())
+    });
+    match caller.own(effect.clone()) {
+        Ok(effect) => Ok(effect),
+        Err(error) => {
+            store.lock().shift_remove(id);
+            Err(error.into())
+        }
+    }
 }
 
 trait Resolvable {
@@ -199,7 +202,7 @@ impl Resolvable for dyn WebFetchProvider {
 
 fn resolve_provider<P: Resolvable + ?Sized>(
     configured_id: Option<&str>,
-    providers: &Mutex<HashMap<String, Arc<P>>>,
+    providers: &Mutex<IndexMap<String, Arc<P>>>,
 ) -> anyhow::Result<Arc<P>> {
     let providers = providers.lock();
     if let Some(configured_id) = configured_id {

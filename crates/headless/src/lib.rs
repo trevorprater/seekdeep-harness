@@ -5,20 +5,28 @@
 //! quiescence, flushes the session, folds only the owned durable interval, and
 //! maps its final `turn/end` reason to process output.
 
-use std::{path::Path, sync::Arc};
+use std::{io::Write as _, path::Path, sync::Arc};
 
 use parking_lot::RwLock;
 use seekdeep_agent::{
-    AgentOptions, AgentRegistry, CreateAgentOptions, ModelSelection, ModelSelectionRef,
+    AGENTS, AgentOptions, AgentRegistry, CreateAgentOptions, ModelSelection, ModelSelectionRef,
     install_model_selection,
+};
+use seekdeep_agent_default_model::AGENT_DEFAULT_MODEL;
+use seekdeep_cmdline::APP_EXIT;
+use seekdeep_cordis::{
+    FiberState, Plugin,
+    fiber::{DisposeFuture, EffectHandle},
 };
 use seekdeep_core::{
     session::{SessionEvent, SessionId},
-    session_store::SessionStore,
+    session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
-use seekdeep_system_prompt::SystemPrompt;
+use seekdeep_loader::LOADER;
+use seekdeep_schemastery::Schema;
+use seekdeep_system_prompt::{SYSTEM_PROMPT, SystemPrompt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -41,6 +49,44 @@ pub const INVARIANT_INJECT: &[&str] = &["invariants"];
 pub struct Config {
     /// Prompt text for the single run.
     pub task: String,
+}
+
+/// Source-compatible Loader schema for the required one-shot task.
+#[must_use]
+pub fn config_schema() -> Schema {
+    Schema::object([("task", Schema::string().required())])
+}
+
+/// Process output boundary used by the Loader-facing runner plugin.
+pub trait HeadlessOutput: Send + Sync + 'static {
+    /// Writes the complete standard-output payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns the backing stream failure.
+    fn write_stdout(&self, text: &str) -> anyhow::Result<()>;
+
+    /// Writes the complete standard-error payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns the backing stream failure.
+    fn write_stderr(&self, text: &str) -> anyhow::Result<()>;
+}
+
+#[derive(Debug)]
+struct ProcessOutput;
+
+impl HeadlessOutput for ProcessOutput {
+    fn write_stdout(&self, text: &str) -> anyhow::Result<()> {
+        std::io::stdout().lock().write_all(text.as_bytes())?;
+        Ok(())
+    }
+
+    fn write_stderr(&self, text: &str) -> anyhow::Result<()> {
+        std::io::stderr().lock().write_all(text.as_bytes())?;
+        Ok(())
+    }
 }
 
 /// Process-facing result of one headless invocation.
@@ -176,6 +222,111 @@ impl HeadlessRunner {
         let outcome = summarize(&handle.agent.session().events(), first_seq);
         Ok((session_id, outcome))
     }
+}
+
+async fn wait_until_active(owner: &Arc<seekdeep_cordis::Fiber>) -> bool {
+    loop {
+        match owner.state() {
+            FiberState::Active => return true,
+            FiberState::Pending | FiberState::Loading => tokio::task::yield_now().await,
+            FiberState::Failed | FiberState::Unloading | FiberState::Disposed => return false,
+        }
+    }
+}
+
+async fn run_plugin_task(
+    settlement: Option<Arc<seekdeep_loader::LoaderSettlement>>,
+    owner: Arc<seekdeep_cordis::Fiber>,
+    runner: HeadlessRunner,
+    task: String,
+    output: Arc<dyn HeadlessOutput>,
+    exit: Arc<seekdeep_cmdline::AppExit>,
+) {
+    if let Some(settlement) = settlement
+        && settlement.wait().await.is_err()
+    {
+        return;
+    }
+    if !wait_until_active(&owner).await {
+        return;
+    }
+    let result = runner.run(&task).await;
+    let operation = (|| -> anyhow::Result<()> {
+        output.write_stdout(&result.stdout)?;
+        output.write_stderr(&result.stderr)?;
+        exit.request(result.exit_code)
+    })();
+    if let Err(error) = operation {
+        let _ = output.write_stderr(&format!("seekdeep: {error}\n"));
+        let _ = exit.request(1);
+    }
+}
+
+/// Builds the Loader-compatible one-shot runner using process output streams.
+#[must_use]
+pub fn plugin() -> Plugin {
+    plugin_with_output(Arc::new(ProcessOutput))
+}
+
+/// Builds the Loader-compatible runner with an injected output boundary.
+#[must_use]
+pub fn plugin_with_output(output: Arc<dyn HeadlessOutput>) -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), move |context, value| {
+        let output = output.clone();
+        Box::pin(async move {
+            let config: Config = serde_json::from_value(value)?;
+            let exit = context.get(APP_EXIT).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "headless-runner: the launcher must provide ctx.appExit before the tree mounts"
+                )
+            })?;
+            let agents = context
+                .get(AGENTS)
+                .ok_or_else(|| anyhow::anyhow!("headless-runner requires agents"))?;
+            let sessions = context
+                .get(SESSIONS)
+                .ok_or_else(|| anyhow::anyhow!("headless-runner requires sessions"))?;
+            let selection = context
+                .get(AGENT_DEFAULT_MODEL)
+                .ok_or_else(|| anyhow::anyhow!("headless-runner requires agentDefaultModel"))?
+                .current_selection();
+            let prompt = context
+                .get(SYSTEM_PROMPT)
+                .ok_or_else(|| anyhow::anyhow!("headless-runner requires systemPrompt"))?;
+            let cwd = std::env::current_dir()?;
+            let runner =
+                HeadlessRunner::new(agents, sessions, prompt, selection, cwd.to_string_lossy())?;
+            let settlement = context.get(LOADER);
+            let owner = context.fiber().clone();
+            let (start, started) = tokio::sync::oneshot::channel();
+            let task = tokio::spawn(async move {
+                if started.await.is_ok() {
+                    run_plugin_task(settlement, owner, runner, config.task, output, exit).await;
+                }
+            });
+            let effect = EffectHandle::new("headless-runner task", move || -> DisposeFuture {
+                Box::pin(async move {
+                    task.abort();
+                    match task.await {
+                        Ok(()) => Ok(()),
+                        Err(error) if error.is_cancelled() => Ok(()),
+                        Err(error) => Err(error.into()),
+                    }
+                })
+            });
+            if let Err(error) = context.own(effect.clone()) {
+                let _ = effect.dispose().await;
+                return Err(error.into());
+            }
+            let _ = start.send(());
+            Ok(())
+        })
+    })
+    .with_config_validator(|value| {
+        config_schema()
+            .resolve(value)
+            .map_err(|error| anyhow::anyhow!("{error}"))
+    })
 }
 
 /// Folds the final assistant text and turn reason from one owned event interval.

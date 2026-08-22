@@ -11,14 +11,20 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-tools = { path = "../tools" }
 serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
 seekdeep-core = { path = "../core" }
+seekdeep-loader = { path = "../loader" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 tokio.workspace = true

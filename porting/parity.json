@@ -37174,7 +37174,16 @@
     {
       "source": "packages/boot/cmdline/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cmdline/src/lib.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-cmdline --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-cmdline --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/boot/cmdline/tests/cmdline.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ],
+      "note": "immutable launcher args, bounded app-exit callback, app-owned typed parsing, terminal output/exit routing, action precondition, and fatal failure propagation are ported"
     },
     {
       "source": "packages/boot/cmdline/src/invariant.ts",
@@ -37192,7 +37201,16 @@
     {
       "source": "packages/boot/cmdline/tests/cmdline.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cmdline/src/lib.rs",
+        "crates/cmdline/tests/cmdline_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-cmdline --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-cmdline --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/boot/cmdline/tests/cmdline.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/boot/cmdline/tsconfig.json",
@@ -37416,7 +37434,17 @@
     {
       "source": "packages/bundle/headless/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/src/lib.rs",
+        "crates/loader/src/lib.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-loader -p seekdeep-headless --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-loader -p seekdeep-headless --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/bundle/headless/tests/headless.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ],
+      "note": "Loader-facing runner metadata/config, exact-generation whole-tree settlement, owned task cancellation, fresh Agent drive, durable flush, final-text fold, output, error, and exit mapping are ported"
     },
     {
       "source": "packages/bundle/headless/src/invariant.ts",
@@ -37449,7 +37477,18 @@
     {
       "source": "packages/bundle/headless/tests/headless.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/src/lib.rs",
+        "crates/headless/tests/headless_round_trip.rs",
+        "crates/headless/tests/loader_settlement.rs",
+        "crates/loader/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-loader -p seekdeep-headless --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-loader -p seekdeep-headless --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/bundle/headless/tests/headless.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/bundle/headless/tests/startup.spec.ts",
@@ -46594,11 +46633,13 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/compaction-tool-result-pruner/src/index.rs"
+        "crates/compaction-tool-result-pruner/src/index.rs",
+        "crates/compaction-tool-result-pruner/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-compaction-tool-result-pruner --all-features",
-        "cargo clippy -p seekdeep-compaction-tool-result-pruner --all-targets --all-features -- -D warnings"
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-compaction-tool-result-pruner --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-compaction-tool-result-pruner --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/compaction/compaction-tool-result-pruner/tests/loader-composition.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
       ]
     },
     {
@@ -46628,12 +46669,28 @@
     {
       "source": "packages/compaction/compaction-tool-result-pruner/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-tool-result-pruner/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-compaction-tool-result-pruner --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-compaction-tool-result-pruner --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/compaction/compaction-tool-result-pruner/tests/loader-composition.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/compaction/compaction-tool-result-pruner/tests/tool-result-pruner.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-tool-result-pruner/tests/pruner_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-compaction-tool-result-pruner --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-compaction-tool-result-pruner --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/compaction/compaction-tool-result-pruner/tests/tool-result-pruner.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/compaction/compaction-tool-result-pruner/tsconfig.json",
@@ -51259,10 +51316,11 @@
         "crates/fs/src/types.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-fs --all-features",
-        "cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings"
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-fs --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/fs/fs/tests/service.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
       ],
-      "note": "FsTargetKey/FsVersion brands, FsObservation/FsTarget/FsInfo/FsPathInfo/FsDirEntry, FsWriteIntent/FsWriteOutcome, FsEditRequest/FsEditOutcome, and FsErrorCode/FsError are ported"
+      "note": "FsTargetKey/FsVersion brands, filesystem wire types, and FsError stable name/code plus chained cause are ported"
     },
     {
       "source": "packages/fs/fs/tests/invariant.spec.ts",
@@ -51279,7 +51337,15 @@
     {
       "source": "packages/fs/fs/tests/service.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs/tests/service_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-fs --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-fs --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/fs/fs/tests/service.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/fs/fs/tsconfig.json",
@@ -51820,11 +51886,13 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/command-goal/src/index.rs"
+        "crates/command-goal/src/index.rs",
+        "crates/command-goal/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-command-goal --all-features",
-        "cargo clippy -p seekdeep-command-goal --all-targets --all-features -- -D warnings"
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-command-goal --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-command-goal --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/goal/command-goal/tests/command-goal.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
       ]
     },
     {
@@ -51842,7 +51910,15 @@
     {
       "source": "packages/goal/command-goal/tests/command-goal.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/command-goal/tests/command_goal_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-command-goal --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-command-goal --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/goal/command-goal/tests/command-goal.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/goal/command-goal/tsconfig.json",
@@ -61211,9 +61287,11 @@
         "crates/session-projection-cache/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-projection-cache --all-features"
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-session-projection-cache --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-session-projection-cache --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/session/session-projection-cache/tests/cache.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
       ],
-      "note": "cachedSnapshot, write (checkpoint + flush + durable put), coldSnapshot cold-read ladder, and the count/interval/turn-end/detach write-behind are ported; the source cache.spec.ts end-to-end cases await a full harness"
+      "note": "Loader plugin/service publication, positive-integer config validation, mandatory/count/interval/detach writes, unload timer cleanup, cachedSnapshot, and the coldSnapshot restore ladder are ported"
     },
     {
       "source": "packages/session/session-projection-cache/src/invariant.ts",
@@ -61242,7 +61320,15 @@
     {
       "source": "packages/session/session-projection-cache/tests/cache.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-projection-cache/tests/cache_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-session-projection-cache --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-session-projection-cache --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/session/session-projection-cache/tests/cache.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/session/session-projection-cache/tsconfig.json",
@@ -61854,7 +61940,15 @@
     {
       "source": "packages/session/session-title-first-prompt-llm/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-title-first-prompt-llm/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-session-title-first-prompt-llm --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-session-title-first-prompt-llm --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/session/session-title-first-prompt-llm/tests/loader-composition.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/session/session-title-first-prompt-llm/tests/provider.e2e.ts",
@@ -68252,9 +68346,11 @@
         "crates/tool-todo/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-todo --all-features"
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-tool-todo --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/todo/tool-todo/tests/integration.spec.ts packages/todo/tool-todo/tests/loader-composition.spec.ts packages/todo/tool-todo/tests/projection.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
       ],
-      "note": "todo_write tool definition, describe(), toTodoList validation, apply() tool+projection registration, and presentCall are ported; the source integration/projection/tool-todo tests remain to be ported for full verification"
+      "note": "todo_write, exact model-facing guidance, required Loader config, namespace-style plugin metadata, whole-list validation, optional projection registration, and reversible tool/projection effects are ported"
     },
     {
       "source": "packages/todo/tool-todo/src/invariant.ts",
@@ -68283,7 +68379,15 @@
     {
       "source": "packages/todo/tool-todo/tests/integration.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-todo/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-tool-todo --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/todo/tool-todo/tests/integration.spec.ts packages/todo/tool-todo/tests/loader-composition.spec.ts packages/todo/tool-todo/tests/projection.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/todo/tool-todo/tests/invariant.spec.ts",
@@ -68300,12 +68404,28 @@
     {
       "source": "packages/todo/tool-todo/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-todo/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-tool-todo --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/todo/tool-todo/tests/integration.spec.ts packages/todo/tool-todo/tests/loader-composition.spec.ts packages/todo/tool-todo/tests/projection.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/todo/tool-todo/tests/projection.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-todo/tests/projection_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-tool-todo --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-tool-todo --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/todo/tool-todo/tests/integration.spec.ts packages/todo/tool-todo/tests/loader-composition.spec.ts packages/todo/tool-todo/tests/projection.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/todo/tool-todo/tests/tool-todo.spec.ts",
@@ -70552,12 +70672,15 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/web/src/index.rs"
+        "crates/web/src/index.rs",
+        "crates/web/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-web --all-features",
-        "cargo clippy -p seekdeep-web --all-targets --all-features -- -D warnings"
-      ]
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-web --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-web --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/web/web/tests/web.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ],
+      "note": "service/plugin publication, renamed operational env fields, insertion-ordered provider selection, rollback-safe disposable registration, capability-specific resolution, signal forwarding, and source capping are ported"
     },
     {
       "source": "packages/web/web/src/invariant.ts",
@@ -70586,7 +70709,15 @@
     {
       "source": "packages/web/web/tests/web.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web/tests/web_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-web --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-web --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/web/web/tests/web.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/web/web/tsconfig.json",
@@ -71113,10 +71244,13 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/workflow/src/index.rs"
+        "crates/workflow/src/index.rs",
+        "crates/workflow/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-workflow --all-features && cargo clippy -p seekdeep-workflow --all-targets --all-features -- -D warnings"
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-workflow --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-workflow --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/workflow/workflow/tests/workflow.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
       ]
     },
     {
@@ -71167,7 +71301,15 @@
     {
       "source": "packages/workflow/workflow/tests/workflow.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow/tests/workflow_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-workflow --all-features",
+        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-workflow --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/workflow/workflow/tests/workflow.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+      ]
     },
     {
       "source": "packages/workflow/workflow/tsconfig.json",
