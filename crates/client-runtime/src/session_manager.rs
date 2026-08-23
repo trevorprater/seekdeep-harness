@@ -83,7 +83,9 @@ pub enum SubagentCatalogEntry {
 }
 
 impl SubagentCatalogEntry {
-    fn id(&self) -> &SessionId {
+    /// Child or diagnostic Session identity.
+    #[must_use]
+    pub fn session_id(&self) -> &SessionId {
         match self {
             Self::Child { id, .. } | Self::Diagnostic { id, .. } => id,
         }
@@ -198,6 +200,8 @@ pub struct SessionManagerOptions {
     pub scheduler: Rc<dyn NotifierScheduler>,
     /// Detached task owner shared with Sessions.
     pub spawner: Rc<dyn SessionTaskSpawner>,
+    /// Debounce timer owner for catalog membership refresh.
+    pub timer: Rc<dyn SessionManagerTimer>,
     /// Browser time-zone resolver.
     pub resolve_time_zone: Rc<dyn Fn() -> Result<String, String>>,
     /// Creates one fresh Session-owned assembler.
@@ -206,6 +210,12 @@ pub struct SessionManagerOptions {
     pub clock: Rc<dyn Fn() -> i64>,
     /// Contained diagnostic sink.
     pub report: Rc<dyn Fn(String)>,
+}
+
+/// Injected catalog debounce timer.
+pub trait SessionManagerTimer {
+    /// Schedules one callback and returns its cancellation handle.
+    fn schedule(&self, delay_ms: u64, callback: Box<dyn FnOnce()>) -> RuntimeDisposer;
 }
 
 #[derive(Clone)]
@@ -250,6 +260,7 @@ struct ManagerState {
     catalog_inflight: IndexMap<SessionId, CatalogInflight>,
     catalog_stale: IndexSet<SessionId>,
     open_catalogs: IndexSet<SessionId>,
+    catalog_debounce: IndexMap<SessionId, RuntimeDisposer>,
     selected: Option<SessionId>,
     entry_cache: IndexMap<SessionId, Rc<SessionListEntry>>,
     items_cache: Rc<Vec<Rc<SessionListEntry>>>,
@@ -316,6 +327,7 @@ impl SessionManager {
                     catalog_inflight: IndexMap::new(),
                     catalog_stale: IndexSet::new(),
                     open_catalogs: IndexSet::new(),
+                    catalog_debounce: IndexMap::new(),
                     selected: restored_selection,
                     entry_cache: IndexMap::new(),
                     items_cache: Rc::new(Vec::new()),
@@ -519,7 +531,7 @@ impl SessionManager {
                     catalog
                         .entries
                         .iter()
-                        .find(|entry| entry.id() == session_id)
+                        .find(|entry| entry.session_id() == session_id)
                 })
                 .cloned();
             if let Some(SubagentCatalogEntry::Child { running, .. }) = child {
@@ -733,10 +745,14 @@ impl SessionManager {
             let refresh = self.refresh_subagents(parent_session_id);
             self.options.spawner.spawn(refresh.boxed_local());
         } else {
-            self.state
-                .borrow_mut()
-                .open_catalogs
-                .shift_remove(parent_session_id);
+            let debounce = {
+                let mut state = self.state.borrow_mut();
+                state.open_catalogs.shift_remove(parent_session_id);
+                state.catalog_debounce.shift_remove(parent_session_id)
+            };
+            if let Some(debounce) = debounce {
+                debounce.dispose();
+            }
         }
     }
 
@@ -1069,7 +1085,8 @@ impl SessionManager {
                     self.mark_catalog_parent_expandable(parent);
                 }
                 if let Some(parent) = parent
-                    && self.state.borrow().open_catalogs.contains(&parent)
+                    && (self.state.borrow().selected.as_ref() == Some(&parent)
+                        || self.state.borrow().open_catalogs.contains(&parent))
                 {
                     self.schedule_catalog_refresh(&parent);
                 }
@@ -1207,17 +1224,41 @@ impl SessionManager {
         if self
             .state
             .borrow()
-            .catalog_inflight
+            .catalog_debounce
             .contains_key(parent_session_id)
         {
-            self.state
-                .borrow_mut()
-                .catalog_stale
-                .insert(parent_session_id.clone());
             return;
         }
-        let refresh = self.refresh_subagents(parent_session_id);
-        self.options.spawner.spawn(refresh.boxed_local());
+        let weak = Rc::downgrade(self);
+        let parent = parent_session_id.clone();
+        let disposer = self.options.timer.schedule(
+            50,
+            Box::new(move || {
+                let Some(manager) = weak.upgrade() else {
+                    return;
+                };
+                manager
+                    .state
+                    .borrow_mut()
+                    .catalog_debounce
+                    .shift_remove(&parent);
+                if manager
+                    .state
+                    .borrow()
+                    .catalog_inflight
+                    .contains_key(&parent)
+                {
+                    manager.state.borrow_mut().catalog_stale.insert(parent);
+                    return;
+                }
+                let refresh = manager.refresh_subagents(&parent);
+                manager.options.spawner.spawn(refresh.boxed_local());
+            }),
+        );
+        self.state
+            .borrow_mut()
+            .catalog_debounce
+            .insert(parent_session_id.clone(), disposer);
     }
 
     fn update_catalog_activity(&self, child_session_id: &SessionId, running: bool) {

@@ -6,11 +6,11 @@ use futures::{FutureExt, channel::oneshot, executor::LocalPool, task::LocalSpawn
 use seekdeep_client_runtime::{
     AssemblerEventDefinitions, AssemblerViewDefinitions, ClientRpcError, ClientRpcResult,
     ConversationNodeAssembler, ManagerHostFrame, ManagerMuxEnvelope, ManagerMuxFrame,
-    ManagerSessionSummary, NotifierScheduler, QueueItemInput, QueuePlacement, SessionHistoryEntry,
-    SessionHistoryPage, SessionHistoryRequest, SessionListPhase, SessionListState, SessionManager,
-    SessionManagerOptions, SessionMuxFrame, SessionTaskSpawner, SessionTransport,
-    SessionTransportRequest, SubagentAddress, SubagentCatalogEntry, SubagentCatalogState,
-    SubagentMode,
+    ManagerSessionSummary, NotifierScheduler, QueueItemInput, QueuePlacement, RuntimeDisposer,
+    SessionHistoryEntry, SessionHistoryPage, SessionHistoryRequest, SessionListPhase,
+    SessionListState, SessionManager, SessionManagerOptions, SessionManagerTimer, SessionMuxFrame,
+    SessionTaskSpawner, SessionTransport, SessionTransportRequest, SubagentAddress,
+    SubagentCatalogEntry, SubagentCatalogState, SubagentMode,
 };
 use seekdeep_identity::{MessageId, RpcId, SessionId};
 use serde_json::{Map, Value, json};
@@ -47,6 +47,33 @@ struct PoolSpawner(futures::executor::LocalSpawner);
 impl SessionTaskSpawner for PoolSpawner {
     fn spawn(&self, task: futures::future::LocalBoxFuture<'static, ()>) {
         self.0.spawn_local(task).unwrap();
+    }
+}
+
+type TimerCallbacks = Rc<RefCell<Vec<Option<Box<dyn FnOnce()>>>>>;
+
+#[derive(Clone, Default)]
+struct ManualTimer {
+    callbacks: TimerCallbacks,
+}
+
+impl SessionManagerTimer for ManualTimer {
+    fn schedule(&self, _delay_ms: u64, callback: Box<dyn FnOnce()>) -> RuntimeDisposer {
+        let index = self.callbacks.borrow().len();
+        self.callbacks.borrow_mut().push(Some(callback));
+        let callbacks = self.callbacks.clone();
+        RuntimeDisposer::new(move || {
+            callbacks.borrow_mut()[index] = None;
+        })
+    }
+}
+
+impl ManualTimer {
+    fn fire_all(&self) {
+        let callbacks = std::mem::take(&mut *self.callbacks.borrow_mut());
+        for callback in callbacks.into_iter().flatten() {
+            callback();
+        }
     }
 }
 
@@ -119,12 +146,22 @@ fn manager(
     scheduler: Rc<ManualScheduler>,
     pool: &LocalPool,
 ) -> Rc<SessionManager> {
+    manager_with_timer(transport, scheduler, pool, Rc::new(ManualTimer::default()))
+}
+
+fn manager_with_timer(
+    transport: Rc<Transport>,
+    scheduler: Rc<ManualScheduler>,
+    pool: &LocalPool,
+    timer: Rc<dyn SessionManagerTimer>,
+) -> Rc<SessionManager> {
     SessionManager::new(
         transport,
         None,
         SessionManagerOptions {
             scheduler,
             spawner: Rc::new(PoolSpawner(pool.spawner())),
+            timer,
             resolve_time_zone: Rc::new(|| Ok("UTC".to_owned())),
             create_conversation: Rc::new(|| {
                 ConversationNodeAssembler::new(Rc::new(EmptyEvents), Rc::new(EmptyViews))
@@ -841,4 +878,65 @@ fn removing_catalog_owner_invalidates_parent_availability_and_child_session_hint
     });
     assert!(!manager.snapshot().subagents_by_parent[&SessionId::new("parent")].parent_available);
     assert!(!child.snapshot().subagent.as_ref().unwrap().parent_available);
+}
+
+#[test]
+fn catalog_membership_debounce_runs_only_while_open_and_queues_one_trailing_pull() {
+    let mut pool = LocalPool::new();
+    let timer = Rc::new(ManualTimer::default());
+    let transport = Rc::new(Transport::default());
+    let (sender, receiver) = oneshot::channel();
+    transport.plans.borrow_mut().extend([
+        CallPlan::Deferred(receiver),
+        CallPlan::Ready(Ok(ClientRpcResult::Success(Some(catalog_value(
+            json!([{
+                "kind":"child","id":"new","mode":"continuable","label":"new",
+                "activity":"inactive","hasChildren":false
+            }]),
+            true,
+        ))))),
+    ]);
+    let manager = manager_with_timer(
+        transport.clone(),
+        Rc::new(ManualScheduler::default()),
+        &pool,
+        timer.clone(),
+    );
+    manager.set_subagent_catalog_open(&SessionId::new("root"), true);
+    pool.run_until_stalled();
+    manager.handle_host_frame(ManagerHostFrame::Added(ManagerSessionSummary {
+        parent_session_id: Some(SessionId::new("root")),
+        ..summary("new", false, false)
+    }));
+    manager.handle_host_frame(ManagerHostFrame::Added(ManagerSessionSummary {
+        parent_session_id: Some(SessionId::new("root")),
+        ..summary("newer", false, false)
+    }));
+    timer.fire_all();
+    assert_eq!(transport.calls.borrow().len(), 1);
+    assert!(
+        sender
+            .send(Ok(ClientRpcResult::Success(Some(catalog_value(
+                json!([]),
+                true,
+            )))))
+            .is_ok()
+    );
+    pool.run_until_stalled();
+    assert_eq!(transport.calls.borrow().len(), 2);
+    assert!(
+        manager.snapshot().subagents_by_parent[&SessionId::new("root")]
+            .entries
+            .iter()
+            .any(|entry| entry.session_id().as_str() == "new")
+    );
+
+    manager.set_subagent_catalog_open(&SessionId::new("root"), false);
+    manager.handle_host_frame(ManagerHostFrame::Added(ManagerSessionSummary {
+        parent_session_id: Some(SessionId::new("root")),
+        ..summary("closed", false, false)
+    }));
+    timer.fire_all();
+    pool.run_until_stalled();
+    assert_eq!(transport.calls.borrow().len(), 2);
 }
