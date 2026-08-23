@@ -130,6 +130,7 @@ members = [
   "crates/tool-timeout-policy",
   "crates/tool-ask-user",
   "crates/tool-bash",
+  "crates/tool-bash-persistent",
   "crates/tool-cordis",
   "crates/tool-fs",
   "crates/tool-str-replace-editor",

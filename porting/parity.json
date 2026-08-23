@@ -36524,7 +36524,18 @@
     {
       "source": "packages/api/gateway/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/api-gateway/Cargo.toml",
+        "crates/api-gateway/src/lib.rs",
+        "crates/api-gateway/src/client.rs",
+        "crates/api-gateway/src/types.rs"
+      ],
+      "evidence": [
+        "Cargo builds native Host and client gateway faces directly without a TypeScript bundle wrapper",
+        "cargo test -p seekdeep-api-gateway --all-features: 40/40",
+        "cargo clippy -p seekdeep-api-gateway --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/api/remotes/README.i18n.yaml",
@@ -65938,7 +65949,15 @@
     {
       "source": "packages/shell/tool-bash-persistent/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-bash-persistent/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: persistent Bash 18/18",
+        "cargo test -p seekdeep-tool-bash-persistent --all-features",
+        "cargo clippy -p seekdeep-tool-bash-persistent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-bash-persistent/src/invariant.ts",
@@ -65957,12 +65976,29 @@
     {
       "source": "packages/shell/tool-bash-persistent/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-bash-persistent/tests/persistent_parity.rs",
+        "crates/terminal-bash/tests/local_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: persistent Bash 18/18 including real Loader/PTTY composition",
+        "cargo test -p seekdeep-tool-bash-persistent --all-features",
+        "cargo test -p seekdeep-terminal-bash --all-features"
+      ]
     },
     {
       "source": "packages/shell/tool-bash-persistent/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-bash-persistent/tests/persistent_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: persistent Bash 18/18",
+        "Rust tests pin per-owner state reuse, marker extraction, nonzero status, timeout partial output, reset/recovery, config, agent authority, cancellation admission, UI presentation, and lifecycle cleanup",
+        "cargo test -p seekdeep-tool-bash-persistent --all-features"
+      ]
     },
     {
       "source": "packages/shell/tool-bash-persistent/tsconfig.json",

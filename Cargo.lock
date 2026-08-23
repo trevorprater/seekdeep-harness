@@ -6897,6 +6897,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-bash-persistent"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-agent-loop-testkit",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-subprocess",
+ "seekdeep-terminal",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "seekdeep-tool-cordis"
 version = "0.1.0-rc.5"
 dependencies = [
