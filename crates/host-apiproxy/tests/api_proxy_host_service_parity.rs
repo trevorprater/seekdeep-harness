@@ -9,6 +9,7 @@ use std::{
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use seekdeep_agent::AgentRegistry;
 use seekdeep_cordis::Context;
+use seekdeep_core::session_store::SessionStore;
 use seekdeep_host_apiproxy::{
     ApiDownlinkStream, ApiProxyDefaults, ApiProxyRuntime, ApiProxyService, ClientResponse,
     ModelSelection, PathOpenerInternals, RpcError, RpcId, RpcMethod, RpcReceipt, RpcRequest,
@@ -100,6 +101,7 @@ fn defaults() -> ApiProxyDefaults {
         open_text_file: None,
         can_open_path: Some(Arc::new(|| false)),
         native_path_opener: PathOpenerInternals::default(),
+        cold_blank_probe_max_bytes: None,
     }
 }
 
@@ -215,6 +217,10 @@ async fn context_constructor_requires_and_composes_the_configuration_runtime() {
     native_picker(|_| async { Ok(None) }.boxed())
         .provide(&context)
         .unwrap();
+    SessionStore::install(&context).unwrap();
+    install_user_questions(&context).unwrap();
+    let agents = Arc::new(AgentRegistry::new(context.clone()));
+    agents.provide(&context).unwrap();
     let domains = Arc::new(RemainingDomains::default());
     let missing =
         ApiProxyService::from_context(&context, defaults(), Arc::new(|| 0), domains.clone())
@@ -222,9 +228,6 @@ async fn context_constructor_requires_and_composes_the_configuration_runtime() {
     assert!(missing.to_string().contains("llm service is required"));
 
     LlmRuntime::install(&context).unwrap();
-    install_user_questions(&context).unwrap();
-    let agents = Arc::new(AgentRegistry::new(context.clone()));
-    agents.provide(&context).unwrap();
     let service =
         ApiProxyService::from_context(&context, defaults(), Arc::new(|| 0), domains.clone())
             .unwrap();

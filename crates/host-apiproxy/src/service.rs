@@ -19,7 +19,7 @@ use uuid::Uuid;
 use crate::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, ConfigurationApiProxyOptions,
     ConfigurationApiProxyRuntime, InteractionApiProxyRuntime, RpcId, RpcMethod, RpcReceipt,
-    RpcRequest, RpcResponse,
+    RpcRequest, RpcResponse, SessionApiProxyOptions, SessionApiProxyRuntime,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -163,6 +163,8 @@ pub struct ApiProxyDefaults {
     pub can_open_path: Option<PathCapabilityProbe>,
     /// Platform facts and command runner used by the default native opener.
     pub native_path_opener: PathOpenerInternals,
+    /// Maximum cold artifact size eligible for a blankness probe.
+    pub cold_blank_probe_max_bytes: Option<u64>,
 }
 
 impl std::fmt::Debug for ApiProxyDefaults {
@@ -174,6 +176,10 @@ impl std::fmt::Debug for ApiProxyDefaults {
             .field("has_open_text_file", &self.open_text_file.is_some())
             .field("has_can_open_path", &self.can_open_path.is_some())
             .field("native_path_opener", &self.native_path_opener)
+            .field(
+                "cold_blank_probe_max_bytes",
+                &self.cold_blank_probe_max_bytes,
+            )
             .finish_non_exhaustive()
     }
 }
@@ -238,32 +244,68 @@ impl ApiProxyService {
     ///
     /// # Errors
     ///
-    /// Returns an error when the composition does not mount its required
-    /// directory-picker or LLM service.
+    /// Returns an error when the composition omits a required directory-picker,
+    /// Session, Agent, user-question, or LLM service, or when a layer cannot
+    /// register its lifecycle effects.
     pub fn from_context(
         context: &seekdeep_cordis::Context,
         defaults: ApiProxyDefaults,
         attached_session_count: AttachedSessionCount,
         domains: Arc<dyn ApiProxyRuntime>,
     ) -> anyhow::Result<Arc<Self>> {
-        let picker = context
-            .get(DIRECTORY_PICKER)
-            .ok_or_else(|| anyhow::anyhow!("directoryPicker service is required"))?;
-        let configuration = ConfigurationApiProxyRuntime::from_context(
-            context,
-            ConfigurationApiProxyOptions {
-                open_text_file: defaults.open_text_file.clone(),
-                native_path_opener: defaults.native_path_opener.clone(),
-            },
-            domains,
-        )?;
-        let interactions = InteractionApiProxyRuntime::from_context(context, configuration)?;
-        Ok(Self::new(
-            defaults,
-            picker,
-            attached_session_count,
-            interactions,
-        ))
+        let fiber = seekdeep_cordis::Fiber::active_child("host-apiproxy");
+        let child = context.with_fiber(fiber.clone());
+        let build = (|| {
+            let picker = child
+                .get(DIRECTORY_PICKER)
+                .ok_or_else(|| anyhow::anyhow!("directoryPicker service is required"))?;
+            let sessions = SessionApiProxyRuntime::from_context(
+                &child,
+                SessionApiProxyOptions {
+                    cold_blank_probe_max_bytes: defaults.cold_blank_probe_max_bytes,
+                },
+                domains,
+            )?;
+            let configuration = ConfigurationApiProxyRuntime::from_context(
+                &child,
+                ConfigurationApiProxyOptions {
+                    open_text_file: defaults.open_text_file.clone(),
+                    native_path_opener: defaults.native_path_opener.clone(),
+                },
+                sessions,
+            )?;
+            let interactions = InteractionApiProxyRuntime::from_context(&child, configuration)?;
+            Ok::<_, anyhow::Error>(Self::new(
+                defaults,
+                picker,
+                attached_session_count,
+                interactions,
+            ))
+        })();
+        let service = match build {
+            Ok(service) => service,
+            Err(error) => {
+                return match futures::executor::block_on(fiber.dispose()) {
+                    Ok(()) => Err(error),
+                    Err(cleanup) => Err(anyhow::anyhow!(
+                        "{error:#}: API Proxy construction cleanup failed: {cleanup:#}"
+                    )),
+                };
+            }
+        };
+        let cleanup_fiber = fiber.clone();
+        let cleanup = seekdeep_cordis::fiber::EffectHandle::new("host-apiproxy", move || {
+            Box::pin(async move { cleanup_fiber.dispose().await })
+        });
+        if let Err(error) = context.own(cleanup) {
+            return match futures::executor::block_on(fiber.dispose()) {
+                Ok(()) => Err(error.into()),
+                Err(cleanup) => Err(anyhow::anyhow!(
+                    "{error}: API Proxy ownership cleanup failed: {cleanup:#}"
+                )),
+            };
+        }
+        Ok(service)
     }
 
     async fn host_unary(

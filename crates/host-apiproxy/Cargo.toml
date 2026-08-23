@@ -25,6 +25,8 @@ seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-settings = { path = "../settings" }
 seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-session-projection-cache = { path = "../session-projection-cache" }
 seekdeep-storage-domain = { path = "../storage-domain" }
 seekdeep-user-approval = { path = "../user-approval" }
 seekdeep-user-questions = { path = "../user-questions" }

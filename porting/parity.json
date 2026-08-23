@@ -55528,7 +55528,17 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-blank.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_list_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-blank.spec.ts --reporter=dot (2 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_list_service_parity --all-features (4 consolidated listing cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The production Session listing fold keeps standalone plugin events blank, clears blankness only at turn/start, derives recency only from human user/message events, reports live Agent status, and owns the checkpointable sessionListMetadata projection for the gateway lifecycle."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-cold.spec.ts",

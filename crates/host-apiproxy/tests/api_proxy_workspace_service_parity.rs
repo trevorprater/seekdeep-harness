@@ -409,6 +409,7 @@ fn service(workspace: Arc<dyn WorkspaceRuntime>) -> Arc<ApiProxyService> {
             open_text_file: None,
             can_open_path: Some(Arc::new(|| false)),
             native_path_opener: PathOpenerInternals::default(),
+            cold_blank_probe_max_bytes: None,
         },
         DirectoryPickerService::new(DirectoryPickerCapability::Native {
             pick: Arc::new(|_| async { Ok(None) }.boxed()),

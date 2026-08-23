@@ -14,6 +14,7 @@ pub mod native_path_opener;
 pub mod registry_workspace;
 pub mod service;
 pub mod session_export;
+pub mod session_runtime;
 
 pub use api::method::{
     ALL_RPC_METHODS, RpcMethod, UnknownRpcMethod, parse_unary_request, parse_unary_result,
@@ -55,4 +56,8 @@ pub use session_export::{
     SessionLogLiveSessions, SessionLogPersistence, SessionLogZipEntry,
     SessionPersistenceExportAdapter, SessionStoreExportAdapter, flush_live_session_log,
     prepare_session_log_response, session_log_zip_filename,
+};
+pub use session_runtime::{
+    DEFAULT_COLD_BLANK_PROBE_MAX_BYTES, SessionApiProxyOptions, SessionApiProxyRuntime,
+    SessionProjectionReads,
 };
