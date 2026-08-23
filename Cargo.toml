@@ -136,6 +136,7 @@ members = [
   "crates/tool-pwsh",
   "crates/tool-ralph",
   "crates/tool-subagent-report",
+  "crates/tool-subagent-control",
   "crates/tool-skill",
   "crates/tool-workflow",
   "crates/tool-todo",

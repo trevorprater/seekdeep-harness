@@ -7024,6 +7024,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-subagent-control"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-session-projection",
+ "seekdeep-subagent",
+ "seekdeep-tools",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-tool-subagent-report"
 version = "0.1.0-rc.5"
 dependencies = [

@@ -68710,7 +68710,15 @@
     {
       "source": "packages/subagent/tool-subagent-control/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent-control/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-subagent-control and list-agents 26/26",
+        "cargo test -p seekdeep-tool-subagent-control --all-features",
+        "cargo clippy -p seekdeep-tool-subagent-control --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent-control/src/invariant.ts",
@@ -68729,22 +68737,52 @@
     {
       "source": "packages/subagent/tool-subagent-control/src/list-agents.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent-control/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-subagent-control and list-agents 26/26",
+        "cargo test -p seekdeep-tool-subagent-control --all-features",
+        "cargo clippy -p seekdeep-tool-subagent-control --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent-control/tests/list-agents.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent-control/tests/control_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-subagent-control and list-agents 26/26",
+        "cargo test -p seekdeep-tool-subagent-control --all-features"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent-control/tests/park-parent.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent-control/tests/control_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-subagent-control and list-agents 26/26",
+        "Rust fixture keeps the parent driver absent while exercising child catalog and control behavior"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent-control/tests/tool-subagent-control.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent-control/src/lib.rs",
+        "crates/tool-subagent-control/tests/control_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-subagent-control and list-agents 26/26",
+        "cargo test -p seekdeep-tool-subagent-control --all-features"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent-control/tsconfig.json",
