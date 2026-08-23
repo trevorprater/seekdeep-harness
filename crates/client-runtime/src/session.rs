@@ -232,6 +232,7 @@ pub struct SessionSnapshot {
 }
 
 /// Mux frame routed to one Session.
+#[derive(Clone)]
 pub enum SessionMuxFrame {
     /// Durable event append.
     Event(SessionHistoryEntry),

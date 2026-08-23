@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use crate::{Notifier, NotifierScheduler, RuntimeDisposer};
 
 /// One history-tail consistent cut over all carried projection values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ProjectionsBaseline<T> {
     /// Sequence reflected by every carried value.
     pub as_of_seq: i64,
