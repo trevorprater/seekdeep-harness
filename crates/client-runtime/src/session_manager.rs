@@ -468,6 +468,17 @@ impl SessionManager {
             .insert(address.child_session_id.clone(), address);
     }
 
+    /// Restores one persisted selection candidate and optional child address.
+    pub fn restore_selection(&self, selection: &crate::SessionSelection) {
+        let mut state = self.state.borrow_mut();
+        state.selected.clone_from(&selection.session_id);
+        if let Some(address) = &selection.subagent_address {
+            state
+                .addresses
+                .insert(address.child_session_id.clone(), address.clone());
+        }
+    }
+
     /// Drops one materialized Session; durable history rebuilds it later.
     pub fn drop_session(&self, session_id: &SessionId) {
         self.state.borrow_mut().sessions.shift_remove(session_id);

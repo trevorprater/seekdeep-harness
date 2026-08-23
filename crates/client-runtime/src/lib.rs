@@ -17,6 +17,7 @@ mod queue_mirror;
 mod request_inspection;
 mod session;
 mod session_manager;
+mod session_service;
 mod slots;
 mod steering_history;
 mod store;
@@ -34,9 +35,13 @@ mod wasm_projection_store;
 #[cfg(target_arch = "wasm32")]
 mod wasm_provide;
 #[cfg(target_arch = "wasm32")]
+mod wasm_scope;
+#[cfg(target_arch = "wasm32")]
 mod wasm_session;
 #[cfg(target_arch = "wasm32")]
 mod wasm_session_manager;
+#[cfg(target_arch = "wasm32")]
+mod wasm_session_service;
 #[cfg(target_arch = "wasm32")]
 mod wasm_slots;
 #[cfg(target_arch = "wasm32")]
@@ -59,6 +64,7 @@ pub use queue_mirror::*;
 pub use request_inspection::*;
 pub use session::*;
 pub use session_manager::*;
+pub use session_service::*;
 pub use slots::*;
 pub use steering_history::*;
 pub use store::*;
@@ -74,9 +80,13 @@ pub use wasm_projection_store::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_provide::*;
 #[cfg(target_arch = "wasm32")]
+pub use wasm_scope::*;
+#[cfg(target_arch = "wasm32")]
 pub use wasm_session::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_session_manager::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_session_service::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_slots::*;
 #[cfg(target_arch = "wasm32")]

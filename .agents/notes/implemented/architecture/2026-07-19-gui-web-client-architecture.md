@@ -48,6 +48,8 @@ There is no component registration model besides slots — the former view and t
 
 **Scope addressing** mirrors the host's agent-scope idiom: services are root singletons whose methods take no sessionId — they read the caller's scope mark (`scopeOf(ctx)`). Inside a session scope, `ctx.conversation.send('hi', 'queue')` targets that session; cross-session calls re-target by switching ctx (`ctx.sessions.scope(id)!.conversation.send(...)`); calling a scoped method from root ctx throws. Client session scopes are minted like host agent scopes (a no-op plugin fiber + a scope-key extend), built lazily on first viewing and torn down only when the session is removed and unwatched — host-session death alone does not tear a scope (it freezes into a read-only viewport).
 
+The Rust/WASM `SessionRuntime` owns this axis end to end: the manager projects one list/current snapshot; selection persists with its retained child address; binding and scope resolution are pure and identity-stable; only staging starts `Session.open()`; a masked current gap keeps the watched scope frozen; off-stage removal disposes the Cordis fiber, Session binding, and session-keyed Slot Stores immediately, while staged removal defers until the stage moves. The browser scope primitive writes one private Symbol and an actx-local `Context.filter`, and the JavaScript provide channel rebuilds every live binding before atomically republishing the stable current selection.
+
 ## The data object layer (`packages/client/runtime/src/client/sessions/`)
 
 Frames enter, snapshots exit, the Conversation assembler sits between — React-free (zero React imports, grep-assertable):

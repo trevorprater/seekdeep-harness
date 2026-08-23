@@ -23,7 +23,7 @@ use crate::{
     },
 };
 
-struct BrowserSpawner;
+pub(crate) struct BrowserSpawner;
 
 impl SessionTaskSpawner for BrowserSpawner {
     fn spawn(&self, task: LocalBoxFuture<'static, ()>) {
@@ -31,7 +31,7 @@ impl SessionTaskSpawner for BrowserSpawner {
     }
 }
 
-struct BrowserManagerTimer;
+pub(crate) struct BrowserManagerTimer;
 
 impl SessionManagerTimer for BrowserManagerTimer {
     fn schedule(&self, delay_ms: u64, callback: Box<dyn FnOnce()>) -> RuntimeDisposer {
@@ -95,6 +95,17 @@ pub struct WasmSessionManager {
     api: JsValue,
     snapshot_cache: RefCell<Option<(Rc<ManagerListSnapshot>, JsValue)>>,
     session_cache: RefCell<HashMap<SessionId, JsValue>>,
+}
+
+impl WasmSessionManager {
+    pub(crate) fn from_manager(manager: Rc<SessionManager>, api: JsValue) -> Self {
+        Self {
+            manager,
+            api,
+            snapshot_cache: RefCell::new(None),
+            session_cache: RefCell::new(HashMap::new()),
+        }
+    }
 }
 
 #[wasm_bindgen(js_class = SessionManager)]
@@ -574,7 +585,7 @@ fn catalog_to_js(catalog: &crate::SubagentCatalogSnapshot) -> Result<JsValue, Js
     Ok(value.into())
 }
 
-fn parse_host_frame(value: &JsValue) -> Result<ManagerHostFrame, JsValue> {
+pub(crate) fn parse_host_frame(value: &JsValue) -> Result<ManagerHostFrame, JsValue> {
     let frame_type = required_string(value, "type", "Host frame")?;
     match frame_type.as_str() {
         "host/session-added" => Ok(ManagerHostFrame::Added(ManagerSessionSummary {

@@ -48,6 +48,8 @@ slot 之外不存在第二种组件注册模型——原视图环与工具环都
 
 **scope 寻址**与 host 侧 agent（智能体）scope 惯例同构：服务是 root 单例，方法不收 sessionId——它们读调用方 ctx 上的 scope 标（`scopeOf(ctx)`）。在会话 scope 内，`ctx.conversation.send('hi', 'queue')` 自动打到该会话；跨会话调用换 ctx 定向（`ctx.sessions.scope(id)!.conversation.send(...)`）；从 root ctx 直接调 scoped 方法即 throw。client 会话 scope 的铸造方式与 host agent scope 相同（no-op 插件 fiber + scope 键 extend），首次观看时惰性建，只有会话被移除且无人观看才拆——仅 host 会话死亡不拆 scope（冻结为只读视窗）。
 
+Rust/WASM `SessionRuntime` 端到端拥有这条 axis：manager 投影单一 list/current snapshot；selection 连同 retained child address 一起持久化；binding 与 scope resolution 保持纯粹且 identity-stable；只有 staging 才启动 `Session.open()`；masked current gap 保留 watched scope 的冻结态；off-stage removal 立即 dispose Cordis fiber、Session binding 与 session-keyed Slot Store，而 staged removal 延迟到 stage 移动。浏览器 scope primitive 写入一个私有 Symbol 与 actx-local `Context.filter`，JavaScript provide channel 则先 rebuild 全部 live binding，再原子 republish 稳定 current selection。
+
 ## 数据对象层（`packages/client/runtime/src/client/sessions/`）
 
 帧从这里进、快照从这里出、Conversation assembler 坐在中间——React-free（零 React import，grep 可断言）：

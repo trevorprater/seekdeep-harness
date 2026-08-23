@@ -38728,7 +38728,20 @@
     {
       "source": "packages/client/runtime/src/client/agents/scope.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/wasm_scope.rs",
+        "crates/client-runtime/src/session_service.rs",
+        "crates/client-runtime/tests/session_service_parity.rs",
+        "crates/client-runtime/tests/wasm_scope_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/sessions-service.client.spec.ts packages/client/runtime/tests/scope.client.spec.ts --reporter=dot (pinned source: 48 passed total, 5 scope cases)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_scope_parity-*.wasm (tag and filter identities passed)",
+        "cargo test -p seekdeep-client-runtime --test session_service_parity --all-features (10 cases including scope mint, rollback, binding identity, staged and off-stage teardown)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust/WASM mints one no-op Cordis fiber, writes one private Symbol identity, installs the actx-local Context.filter predicate, admits untagged and same-Session listeners while rejecting foreign tags, reads inherited tags, and disposes every scope-owned registration with the service's exact scope axis"
     },
     {
       "source": "packages/client/runtime/src/client/contract/conversation.ts",
@@ -39142,7 +39155,22 @@
     {
       "source": "packages/client/runtime/src/client/sessions/service.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/session_service.rs",
+        "crates/client-runtime/src/wasm_session_service.rs",
+        "crates/client-runtime/tests/session_service_parity.rs",
+        "crates/client-runtime/tests/wasm_session_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/sessions-service.client.spec.ts packages/client/runtime/tests/scope.client.spec.ts --reporter=dot (pinned source: 48 passed total, 43 service cases)",
+        "cargo test -p seekdeep-client-runtime --test session_service_parity --all-features (10 consolidated service cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_service_parity-*.wasm (4 live JavaScript cases passed)",
+        "cargo test -p seekdeep-client-runtime --test session_manager_parity --all-features (14 manager integration cases passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust service and WASM facade preserve manager-to-list projection, exact optional-row property presence, title/cwd/id and catalog-label display rules, synchronous current/provide arbitration, change-only localStorage selection writes, pure stable binding resolution with failed-materialization rollback, staging-only open, masked-gap watched scope retention, immediate off-stage and deferred staged teardown, Cordis and dynamically resolved Slot Store cleanup, cache eviction on scope death, the complete source method/options-object surface, stable Session and context faces, atomic provider rebuilds, request-local search, synchronous create/fork addressability, fractional fork flooring with invalid-anchor failure, source-class structured failures, optional title increment, blank authority, and raw connection sinks"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/session.ts",
@@ -39468,7 +39496,17 @@
     {
       "source": "packages/client/runtime/tests/scope.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/wasm_scope_parity.rs",
+        "crates/client-runtime/tests/session_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/sessions-service.client.spec.ts packages/client/runtime/tests/scope.client.spec.ts --reporter=dot (pinned source: 48 passed total, 5 scope cases)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_scope_parity-*.wasm (live Symbol/filter case passed)",
+        "cargo test -p seekdeep-client-runtime --test session_service_parity --all-features (scope creation and teardown cases passed)"
+      ],
+      "note": "The live WASM primitive and service lifecycle cover tag reads, same/foreign/untagged filter truth, subject-oriented routing prerequisites, stable scope binding, and fiber disposal; the pinned Cordis suite remains the executable dispatch oracle"
     },
     {
       "source": "packages/client/runtime/tests/session.client.spec.ts",
@@ -39490,7 +39528,21 @@
     {
       "source": "packages/client/runtime/tests/sessions-service.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/session_service_parity.rs",
+        "crates/client-runtime/tests/wasm_session_service_parity.rs",
+        "crates/client-runtime/tests/session_manager_parity.rs",
+        "crates/client-runtime/tests/provide_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/sessions-service.client.spec.ts packages/client/runtime/tests/scope.client.spec.ts --reporter=dot (pinned source: 48 passed total, 43 service cases)",
+        "cargo test -p seekdeep-client-runtime --test session_service_parity --all-features (10 consolidated service cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_service_parity-*.wasm (4 live JavaScript cases passed)",
+        "cargo test -p seekdeep-client-runtime --test provide_parity --all-features (4 provider-channel cases passed)",
+        "cargo test -p seekdeep-client-runtime --test session_manager_parity --all-features (14 manager cases passed)"
+      ],
+      "note": "Consolidated native and live-WASM cases retain every source partition across projection, search, scopes, current persistence and masking, provider bundles, staging, prune hooks, catalog navigation, create/fork, entity birth, blank monotonicity, display fallbacks, and defensive lifecycle tails"
     },
     {
       "source": "packages/client/runtime/tests/slots-service.client.spec.ts",
