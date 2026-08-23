@@ -2,6 +2,8 @@
 
 mod expression;
 mod javascript_plugin;
+/// Generic Cordis file-launcher lifecycle.
+pub mod launcher;
 /// Source-compatible profile patch parsing and ordered composition.
 pub mod profile_patch;
 mod sandbox_service;

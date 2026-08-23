@@ -51088,22 +51088,67 @@
     {
       "source": "packages/extensions/tool-cordis/src/api-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/bin/port-cordis-client-catalogs.rs",
+        "crates/tool-cordis/data/api-catalog.json",
+        "crates/tool-cordis/data/api-query-fixtures.json",
+        "crates/tool-cordis/src/api_catalog.rs",
+        "crates/tool-cordis/tests/catalog_present_prompt.rs"
+      ],
+      "evidence": [
+        "pinned-source generator extracted all 55 Services, 56 Events, 510 types, 10 inherited Context entries, and every exact query result",
+        "cargo test -p seekdeep-tool-cordis --all-features (5 passed)",
+        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/src/fiber-state.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/fiber.rs",
+        "crates/tool-cordis/src/inspect.rs",
+        "crates/tool-cordis/tests/inspect_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-cordis --all-features (7 passed; all six exact state labels)",
+        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/bin/port-cordis-client-catalogs.rs",
+        "crates/tool-cordis/data/tool-definitions.json",
+        "crates/tool-cordis/src/index.rs",
+        "crates/tool-cordis/tests/tools_parity.rs",
+        "crates/cordis-host-runner/src/runner.rs"
+      ],
+      "evidence": [
+        "pinned-source generator preserves all seven exact tool names, descriptions, parameter schemas, and output schemas",
+        "cargo test -p seekdeep-tool-cordis --all-features (11 passed; inspect, define, run, stop, undefine, Agent ownership, and @pluginId injection)",
+        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings",
+        "existing cordis-host-runner source-differential lifecycle, approval, versioning, Host/Client, and failure suites"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/src/inspect.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/fiber.rs",
+        "crates/cordis/src/context.rs",
+        "crates/cordis/src/service.rs",
+        "crates/tool-cordis/src/inspect.rs",
+        "crates/tool-cordis/tests/inspect_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-cordis --all-features (7 passed; linked fiber subtree, provided/missing Services, plugins, tools, dynamic rows, and Events)",
+        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/src/invariant.ts",
@@ -51122,22 +51167,60 @@
     {
       "source": "packages/extensions/tool-cordis/src/present.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-cordis/src/present.rs",
+        "crates/tool-cordis/tests/catalog_present_prompt.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-cordis --all-features (5 passed; every call-card wire shape)",
+        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/src/prompt.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-client-runner/src/bin/port-cordis-client-catalogs.rs",
+        "crates/tool-cordis/data/system-prompt.txt",
+        "crates/tool-cordis/src/prompt.rs",
+        "crates/tool-cordis/tests/catalog_present_prompt.rs"
+      ],
+      "evidence": [
+        "pinned-source generator preserves the complete prompt and applies only required SeekDeep product identity substitutions",
+        "cargo test -p seekdeep-tool-cordis --all-features (5 passed)",
+        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/src/providers.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-cordis/src/providers.rs",
+        "crates/tool-cordis/tests/providers_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-tool-cordis --all-features (5 passed; ordered Service/Event/Builtin/Tool manifests and queries)",
+        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/tests/cordis-lifecycle.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/fiber.rs",
+        "crates/cordis/src/plugin.rs",
+        "crates/cordis/tests/plugin_lifecycle_events.rs",
+        "crates/cordis/tests/source_semantic_oracle.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/tool-cordis/tests/cordis-lifecycle.spec.ts (pinned source: 11 passed)",
+        "cargo test -p seekdeep-cordis --all-features (31 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/extensions/tool-cordis/tsconfig.json",
@@ -73912,7 +73995,18 @@
     {
       "source": "vendor/cordis/bin.js",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/launcher.rs",
+        "crates/loader/src/bin/cordis.rs",
+        "crates/loader/tests/cordis_launcher.rs"
+      ],
+      "evidence": [
+        "Rust launcher creates the Cordis root, resolves cwd as file base URL, mounts fixed root Include from cordis.yml, and preserves relative plugin resolution",
+        "cargo test -p seekdeep-loader --all-features --test cordis_launcher (2 passed)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings",
+        "Rust launcher explicitly joins signal-driven composition disposal instead of relying on Node active-handle exit"
+      ]
     },
     {
       "source": "vendor/cordis/package.json",
@@ -73985,17 +74079,49 @@
     {
       "source": "vendor/cordis/src/logger.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/logger.rs",
+        "crates/cordis/src/context.rs",
+        "crates/cordis/tests/logger_oracle.rs"
+      ],
+      "evidence": [
+        "pinned-source direct Node/tsx logger oracle: injected timestamp, sequence numbers, names, intercept levels, exporter thresholds, buffering, formatting, colors, and disposal matched",
+        "cargo test -p seekdeep-cordis --all-features (29 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "vendor/cordis/src/reflect.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/context.rs",
+        "crates/cordis/src/service.rs",
+        "crates/cordis/tests/reflect_oracle.rs",
+        "crates/cordis/tests/source_semantic_oracle.rs"
+      ],
+      "evidence": [
+        "pinned-source direct Node/tsx reflection oracle: provide/get/set, computed accessors, read-only refusal, declaration conflicts, bound mixins, and disposal matched",
+        "cargo test -p seekdeep-cordis --all-features (27 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "vendor/cordis/src/registry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/plugin.rs",
+        "crates/cordis/src/context.rs",
+        "crates/cordis/tests/registry_oracle.rs",
+        "crates/cordis/tests/source_semantic_oracle.rs"
+      ],
+      "evidence": [
+        "pinned-source direct Node/tsx registry oracle: runtime size, shared sibling fibers, monotonic uids, map iteration, single-fiber disposal, delete, and missing delete matched",
+        "cargo test -p seekdeep-cordis --all-features (24 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "vendor/cordis/src/service.ts",
@@ -74016,7 +74142,19 @@
     {
       "source": "vendor/cordis/src/utils.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis/src/utils.rs",
+        "crates/cordis/src/context.rs",
+        "crates/cordis/src/fiber.rs",
+        "crates/cordis/tests/utils_oracle.rs"
+      ],
+      "evidence": [
+        "pinned-source direct Node/tsx utility oracle: duplicate identity registrations, latest delete, exact disposer handles, reverse clear, and object classification matched",
+        "cargo test -p seekdeep-cordis --all-features (31 passed)",
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
+        "Rust error chains preserve outer operation context without JavaScript stack-splicing"
+      ]
     },
     {
       "source": "vendor/cordis/tsconfig.json",

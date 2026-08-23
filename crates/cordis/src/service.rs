@@ -2,7 +2,7 @@
 
 use std::{
     any::Any,
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     marker::PhantomData,
     sync::{
         Arc, Weak,
@@ -65,9 +65,19 @@ struct Provider {
     expression_projection: Option<serde_json::Value>,
 }
 
+/// One currently registered service implementation and its lifecycle owner.
+#[derive(Clone, Debug)]
+pub struct ServiceProviderSnapshot {
+    /// Reflected service name.
+    pub name: String,
+    /// Providing fiber.
+    pub owner: Arc<Fiber>,
+}
+
 /// Root-owned stack of service providers.
 pub(crate) struct ServiceStore {
     providers: RwLock<HashMap<ServiceSlot, Vec<Provider>>>,
+    declarations: RwLock<HashSet<String>>,
     revision: AtomicU64,
 }
 
@@ -75,6 +85,7 @@ impl Default for ServiceStore {
     fn default() -> Self {
         Self {
             providers: RwLock::new(HashMap::new()),
+            declarations: RwLock::new(HashSet::new()),
             revision: AtomicU64::new(0),
         }
     }
@@ -89,6 +100,7 @@ impl ServiceStore {
         expression_projection: Option<serde_json::Value>,
     ) -> Option<Uuid> {
         let id = Uuid::now_v7();
+        self.declarations.write().insert(slot.name.clone());
         let mut providers = self.providers.write();
         let entries = providers.entry(slot).or_default();
         if !entries.is_empty() {
@@ -201,6 +213,28 @@ impl ServiceStore {
 
     pub(crate) fn revision(&self) -> u64 {
         self.revision.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn is_declared(&self, name: &str) -> bool {
+        self.declarations.read().contains(name)
+    }
+
+    pub(crate) fn snapshots(&self) -> Vec<ServiceProviderSnapshot> {
+        self.providers
+            .read()
+            .iter()
+            .flat_map(|(slot, providers)| {
+                providers.iter().filter_map(|provider| {
+                    provider
+                        .owner
+                        .upgrade()
+                        .map(|owner| ServiceProviderSnapshot {
+                            name: slot.name.clone(),
+                            owner,
+                        })
+                })
+            })
+            .collect()
     }
 }
 

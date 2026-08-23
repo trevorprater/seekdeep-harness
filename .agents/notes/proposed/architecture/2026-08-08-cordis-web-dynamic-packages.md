@@ -40,6 +40,8 @@ Four packages under `packages/self-modification/` implement the dynamic runtime:
 
 The Rust port implements the Host Runner and lifecycle authority in native Rust. A Rust-owned Boa worker retains model-authored Host JavaScript functions inside the interpreter thread; typed messages carry only lossless JSON and lifecycle commands across that boundary. Host/Client wire types live in the target-portable `seekdeep-cordis-dynamic-types` crate, so the Rust/WASM Client never depends on Boa, Host Tools, or Agent runtime code. The browser Runner is Rust compiled to WebAssembly and controls Client evaluation without moving registration, approval, generation ownership, teardown, or protocol state into handwritten browser JavaScript. The custom Cordis core provides typed Services, exact-generation Fibers, a reversible effect ledger, deterministic cancellation, and injectable timing and scheduling policies. These correctness mechanisms may strengthen the source implementation but must not change its observable protocol.
 
+The custom core also owns source-compatible plugin-runtime grouping and monotonic Fiber IDs, reflected Service/accessor/mixin registration, exporter-driven logging with an injected clock, and generated Host Catalog and Tool definitions. `tool-cordis` consumes those facilities directly instead of reimplementing lifecycle, reflection, logging, or model-facing schemas inside the Host Runner.
+
 ### Domain objects
 
 #### Plugin

@@ -6691,6 +6691,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-cordis"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-cordis",
+ "seekdeep-cordis-host-runner",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-tool-fs"
 version = "0.1.0-rc.5"
 dependencies = [

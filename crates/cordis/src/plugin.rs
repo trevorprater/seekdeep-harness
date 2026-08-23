@@ -7,7 +7,7 @@ use std::{
     pin::Pin,
     sync::{
         Arc, Weak,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -145,6 +145,20 @@ impl Plugin {
 #[derive(Default)]
 struct RegistryInner {
     fibers: Mutex<Vec<Weak<PluginFiber>>>,
+    next_uid: AtomicU64,
+}
+
+/// Source-compatible runtime record for one plugin identity.
+#[derive(Clone, Debug)]
+pub struct PluginRuntimeSnapshot {
+    /// Stable plugin value identity.
+    pub plugin_id: Uuid,
+    /// Diagnostic plugin name.
+    pub name: String,
+    /// Live mounts in insertion order.
+    pub fibers: Vec<Arc<PluginFiber>>,
+    /// Whether the runtime validates configuration.
+    pub has_config_validator: bool,
 }
 
 /// Root-owned registry of every mounted plugin fiber.
@@ -171,7 +185,8 @@ impl PluginRegistry {
         plugin: Plugin,
         config: Value,
     ) -> Result<Arc<PluginFiber>, CordisError> {
-        let fiber = Fiber::child(plugin.name.clone());
+        let fiber = Fiber::child_of(plugin.name.clone(), parent.fiber());
+        let uid = self.inner.next_uid.fetch_add(1, Ordering::AcqRel) + 1;
         let plugin_context = plugin
             .inject_intercepts
             .iter()
@@ -181,6 +196,7 @@ impl PluginRegistry {
             .with_fiber(fiber.clone());
         let mounted = Arc::new(PluginFiber {
             fiber: fiber.clone(),
+            uid: AtomicU64::new(uid),
             context: plugin_context,
             plugin,
             additional_inject: Mutex::new(Vec::new()),
@@ -231,15 +247,115 @@ impl PluginRegistry {
         }
     }
 
-    /// Number of currently reachable plugin mounts.
+    /// Returns the runtime record for one plugin identity.
+    #[must_use]
+    pub fn get(&self, plugin: &Plugin) -> Option<PluginRuntimeSnapshot> {
+        let fibers = self.fibers_for(plugin.id());
+        (!fibers.is_empty()).then(|| PluginRuntimeSnapshot {
+            plugin_id: plugin.id(),
+            name: plugin.name().to_owned(),
+            has_config_validator: plugin.validator.is_some(),
+            fibers,
+        })
+    }
+
+    /// Whether at least one undisposed mount exists for this plugin identity.
+    #[must_use]
+    pub fn has(&self, plugin: &Plugin) -> bool {
+        !self.fibers_for(plugin.id()).is_empty()
+    }
+
+    /// Snapshots all runtime records in first-mount order.
+    #[must_use]
+    pub fn values(&self) -> Vec<PluginRuntimeSnapshot> {
+        let live = self.live_fibers();
+        let mut ids = Vec::new();
+        for fiber in &live {
+            let id = fiber.plugin.id();
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        ids.into_iter()
+            .filter_map(|id| {
+                let first = live.iter().find(|fiber| fiber.plugin.id() == id)?;
+                Some(PluginRuntimeSnapshot {
+                    plugin_id: id,
+                    name: first.plugin.name().to_owned(),
+                    has_config_validator: first.plugin.validator.is_some(),
+                    fibers: live
+                        .iter()
+                        .filter(|fiber| fiber.plugin.id() == id)
+                        .cloned()
+                        .collect(),
+                })
+            })
+            .collect()
+    }
+
+    /// Stable plugin identities in first-mount order.
+    #[must_use]
+    pub fn keys(&self) -> Vec<Uuid> {
+        self.values()
+            .into_iter()
+            .map(|runtime| runtime.plugin_id)
+            .collect()
+    }
+
+    /// Runtime entries in first-mount order.
+    #[must_use]
+    pub fn entries(&self) -> Vec<(Uuid, PluginRuntimeSnapshot)> {
+        self.values()
+            .into_iter()
+            .map(|runtime| (runtime.plugin_id, runtime))
+            .collect()
+    }
+
+    /// Visits every runtime in first-mount order.
+    pub fn for_each(&self, mut callback: impl FnMut(&PluginRuntimeSnapshot, Uuid)) {
+        for runtime in self.values() {
+            let id = runtime.plugin_id;
+            callback(&runtime, id);
+        }
+    }
+
+    /// Removes one runtime and starts disposal of all mounts without waiting.
+    pub fn delete(&self, plugin: &Plugin) -> Option<PluginRuntimeSnapshot> {
+        let runtime = self.get(plugin)?;
+        self.inner.fibers.lock().retain(|fiber| {
+            fiber
+                .upgrade()
+                .is_some_and(|fiber| fiber.plugin.id() != plugin.id())
+        });
+        for fiber in &runtime.fibers {
+            fiber.uid.store(0, Ordering::Release);
+            fiber.fiber.request_disposal();
+            let fiber = fiber.clone();
+            spawn_background(async move {
+                let _ = fiber.dispose().await;
+            });
+        }
+        Some(runtime)
+    }
+
+    /// Removes one runtime and joins deterministic disposal of every mount.
+    pub async fn delete_joined(&self, plugin: &Plugin) -> Option<PluginRuntimeSnapshot> {
+        let runtime = self.get(plugin)?;
+        self.inner.fibers.lock().retain(|fiber| {
+            fiber
+                .upgrade()
+                .is_some_and(|fiber| fiber.plugin.id() != plugin.id())
+        });
+        for fiber in &runtime.fibers {
+            let _ = fiber.dispose().await;
+        }
+        Some(runtime)
+    }
+
+    /// Number of registered plugin runtimes, not mount count.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.inner
-            .fibers
-            .lock()
-            .iter()
-            .filter(|fiber| fiber.strong_count() > 0)
-            .count()
+        self.keys().len()
     }
 
     /// Whether the registry contains no reachable plugin mounts.
@@ -247,11 +363,40 @@ impl PluginRegistry {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Number of live mounts across all runtimes.
+    #[must_use]
+    pub fn fiber_count(&self) -> usize {
+        self.live_fibers().len()
+    }
+
+    fn fibers_for(&self, plugin_id: Uuid) -> Vec<Arc<PluginFiber>> {
+        self.live_fibers()
+            .into_iter()
+            .filter(|fiber| fiber.plugin.id() == plugin_id)
+            .collect()
+    }
+
+    fn live_fibers(&self) -> Vec<Arc<PluginFiber>> {
+        let mut registry = self.inner.fibers.lock();
+        let live = registry
+            .iter()
+            .filter_map(Weak::upgrade)
+            .filter(|fiber| !fiber.disposed.load(Ordering::Acquire))
+            .collect::<Vec<_>>();
+        registry.retain(|fiber| {
+            fiber
+                .upgrade()
+                .is_some_and(|fiber| !fiber.disposed.load(Ordering::Acquire))
+        });
+        live
+    }
 }
 
 /// One mounted plugin and its current dependency epoch.
 pub struct PluginFiber {
     fiber: Arc<Fiber>,
+    uid: AtomicU64,
     context: Context,
     plugin: Plugin,
     additional_inject: Mutex<Vec<String>>,
@@ -280,6 +425,21 @@ impl std::fmt::Debug for PluginFiber {
 }
 
 impl PluginFiber {
+    /// Monotonic runtime uid, absent after disposal.
+    #[must_use]
+    pub fn uid(&self) -> Option<u64> {
+        match self.uid.load(Ordering::Acquire) {
+            0 => None,
+            uid => Some(uid),
+        }
+    }
+
+    /// Stable plugin identity shared by sibling mounts.
+    #[must_use]
+    pub fn plugin_id(&self) -> Uuid {
+        self.plugin.id()
+    }
+
     /// Loader-facing plugin name for activation diagnostics.
     #[must_use]
     pub fn plugin_name(&self) -> &str {
@@ -463,6 +623,7 @@ impl PluginFiber {
         self.fiber.request_disposal();
         let _transition = self.transition.lock().await;
         let result = self.fiber.dispose().await;
+        self.uid.store(0, Ordering::Release);
         self.notify_registry();
         self.settled.notify_waiters();
         result

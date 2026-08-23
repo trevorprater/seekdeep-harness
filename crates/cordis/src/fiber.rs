@@ -4,7 +4,7 @@ use std::{
     future::Future,
     pin::Pin,
     sync::{
-        Arc,
+        Arc, Weak,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -34,6 +34,14 @@ pub enum CordisError {
     /// A service value was assigned from a fiber other than its provider.
     #[error("cannot set property {0:?} in multiple fibers")]
     ServiceOwner(String),
+    /// A service or accessor already declared the same reflected property.
+    #[error("property {name:?} is already declared as {kind}")]
+    PropertyDeclared {
+        /// Reflected property name.
+        name: String,
+        /// Existing declaration kind.
+        kind: &'static str,
+    },
     /// A synchronous `internal/plugin` creation observer rejected publication.
     #[error("plugin publication failed: {0}")]
     PluginPublication(String),
@@ -200,6 +208,7 @@ pub struct Fiber {
     id: Uuid,
     name: String,
     root: bool,
+    parent: Option<Weak<Fiber>>,
     inner: Mutex<FiberInner>,
     disposal_requested: AtomicBool,
     disposal_notify: Notify,
@@ -213,6 +222,7 @@ impl Fiber {
             id: Uuid::nil(),
             name: "root".to_owned(),
             root: true,
+            parent: None,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Active,
                 effects: Vec::new(),
@@ -231,6 +241,26 @@ impl Fiber {
             id: Uuid::now_v7(),
             name: name.into(),
             root: false,
+            parent: None,
+            inner: Mutex::new(FiberInner {
+                state: FiberState::Pending,
+                effects: Vec::new(),
+                transition: None,
+                disposed_outcome: None,
+            }),
+            disposal_requested: AtomicBool::new(false),
+            disposal_notify: Notify::new(),
+        })
+    }
+
+    /// Creates a pending child linked to its owning parent fiber.
+    #[must_use]
+    pub fn child_of(name: impl Into<String>, parent: &Arc<Fiber>) -> Arc<Self> {
+        Arc::new(Self {
+            id: Uuid::now_v7(),
+            name: name.into(),
+            root: false,
+            parent: Some(Arc::downgrade(parent)),
             inner: Mutex::new(FiberInner {
                 state: FiberState::Pending,
                 effects: Vec::new(),
@@ -249,6 +279,7 @@ impl Fiber {
             id: Uuid::now_v7(),
             name: name.into(),
             root: false,
+            parent: None,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Active,
                 effects: Vec::new(),
@@ -270,6 +301,19 @@ impl Fiber {
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Whether this fiber is `root` or belongs to its linked descendant tree.
+    #[must_use]
+    pub fn is_within(self: &Arc<Self>, root: &Arc<Self>) -> bool {
+        let mut current = Some(self.clone());
+        while let Some(fiber) = current {
+            if Arc::ptr_eq(&fiber, root) {
+                return true;
+            }
+            current = fiber.parent.as_ref().and_then(Weak::upgrade);
+        }
+        false
     }
 
     /// Current lifecycle state.

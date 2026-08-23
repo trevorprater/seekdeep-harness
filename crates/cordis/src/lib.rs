@@ -6,16 +6,25 @@ pub mod context;
 pub mod events;
 /// Plugin lifecycle ownership.
 pub mod fiber;
+/// Structured, exporter-driven logging with injectable time.
+pub mod logger;
 /// Plugin registration and dependency-driven activation.
 pub mod plugin;
 /// Typed and type-erased services.
 pub mod service;
+/// Identity-disposable and error-composition utility substrate.
+pub mod utils;
 
-pub use context::Context;
+pub use context::{Context, DynamicValue, MixinHandle, MixinMember};
 pub use events::{
     BailReply, DispatchMode, EventArgs, EventBus, EventOptions, EventReply, EventSubjectToken,
     EventValue, PreparedEmission,
 };
 pub use fiber::{CordisError, Fiber, FiberState};
-pub use plugin::{Plugin, PluginFiber, PluginRegistry};
-pub use service::{Service, ServiceKey};
+pub use logger::{
+    CordisClock, LogExporter, LogFormatter, LogMessage, Logger, LoggerLevel, LoggerOptions,
+    LoggerService, LoggerType, SystemCordisClock,
+};
+pub use plugin::{Plugin, PluginFiber, PluginRegistry, PluginRuntimeSnapshot};
+pub use service::{Service, ServiceKey, ServiceProviderSnapshot};
+pub use utils::{DisposableList, DisposableListHandle, compose_error, is_json_object_like};

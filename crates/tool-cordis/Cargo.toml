@@ -1,0 +1,30 @@
+[package]
+name = "seekdeep-tool-cordis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Model-facing dynamic Cordis inspection and lifecycle tools"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-cordis-host-runner = { path = "../cordis-host-runner" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+seekdeep-core = { path = "../core" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+tokio.workspace = true
+
+[lints]
+workspace = true

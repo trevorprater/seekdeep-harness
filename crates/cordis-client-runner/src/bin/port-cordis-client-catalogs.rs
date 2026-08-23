@@ -46,6 +46,64 @@ fn main() -> anyhow::Result<()> {
         ),
     )?;
     write_json(&output.join("slot-catalog.json"), &slots)?;
+
+    let host_output = target.join("crates/tool-cordis/data");
+    std::fs::create_dir_all(&host_output)?;
+    let host_catalog = run_tsx(
+        &source,
+        concat!(
+            "import {SERVICE_API,EVENT_API,TYPE_API,INHERITED_CTX_API} from ",
+            "'./packages/extensions/tool-cordis/src/api-catalog.ts';",
+            "console.log(JSON.stringify({services:SERVICE_API,events:EVENT_API,",
+            "types:TYPE_API,inheritedContext:INHERITED_CTX_API}))",
+        ),
+    )?;
+    write_json(&host_output.join("api-catalog.json"), &host_catalog)?;
+    let host_fixtures = run_tsx(
+        &source,
+        concat!(
+            "import {SERVICE_API,EVENT_API,queryServiceApi,queryEventApi} from ",
+            "'./packages/extensions/tool-cordis/src/api-catalog.ts';",
+            "console.log(JSON.stringify({serviceCatalog:queryServiceApi(),",
+            "services:Object.fromEntries(SERVICE_API.map(x=>[x.key,queryServiceApi(x.key)])),",
+            "eventCatalog:queryEventApi(),events:Object.fromEntries(",
+            "EVENT_API.map(x=>[x.name,queryEventApi(x.name)])),",
+            "hostEventCatalog:queryEventApi(undefined,EVENT_API.filter(x=>!x.name.startsWith('cordis/'))),",
+            "hostEvents:Object.fromEntries(EVENT_API.filter(x=>!x.name.startsWith('cordis/')).map(",
+            "x=>[x.name,queryEventApi(x.name,EVENT_API.filter(y=>!y.name.startsWith('cordis/')))]))}))",
+        ),
+    )?;
+    write_json(&host_output.join("api-query-fixtures.json"), &host_fixtures)?;
+    let prompt = run_tsx(
+        &source,
+        concat!(
+            "import {CORDIS_SYSTEM_PROMPT} from ",
+            "'./packages/extensions/tool-cordis/src/prompt.ts';",
+            "process.stdout.write(CORDIS_SYSTEM_PROMPT",
+            ".replaceAll('DSH process','SeekDeep Harness process')",
+            ".replaceAll('DSH objects','SeekDeep Harness objects')",
+            ".replaceAll('DSH Node.js process','SeekDeep Harness Host process'))",
+        ),
+    )?;
+    write_text(&host_output.join("system-prompt.txt"), &prompt)?;
+    let tool_definitions = run_tsx(
+        &source,
+        concat!(
+            "import {apply} from './packages/extensions/tool-cordis/src/index.ts';",
+            "const definitions=[];const sections=[];",
+            "const ctx={systemPrompt:{section:x=>sections.push(x)},",
+            "cordisInspect:{register:()=>()=>{}},",
+            "tools:{register:x=>{definitions.push(x);return ()=>{}},schemas:()=>[]},",
+            "dynamicCordisRunner:{},effect:f=>f(),on:()=>()=>{}};",
+            "apply(ctx);console.log(JSON.stringify({sections,definitions:definitions.map(x=>({",
+            "name:x.name,description:x.description,parameters:x.parameters,",
+            "outputSchema:x.output.schema}))}))",
+        ),
+    )?;
+    write_json(
+        &host_output.join("tool-definitions.json"),
+        &tool_definitions,
+    )?;
     Ok(())
 }
 
@@ -86,5 +144,15 @@ fn write_json(path: &Path, raw: &[u8]) -> anyhow::Result<()> {
     let mut rendered = serde_json::to_string_pretty(&value)?;
     rendered.push('\n');
     std::fs::write(path, rendered)?;
+    Ok(())
+}
+
+fn write_text(path: &Path, raw: &[u8]) -> anyhow::Result<()> {
+    let mut text = String::from_utf8(raw.to_vec())?;
+    while text.ends_with('\n') {
+        text.pop();
+    }
+    text.push('\n');
+    std::fs::write(path, text)?;
     Ok(())
 }

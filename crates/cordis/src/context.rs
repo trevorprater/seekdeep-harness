@@ -1,6 +1,7 @@
 //! Scoped dependency container.
 
 use std::{
+    any::Any,
     collections::{BTreeMap, HashMap},
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{
@@ -9,7 +10,7 @@ use std::{
     },
 };
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 use serde_json::Value;
 use uuid::Uuid;
@@ -17,12 +18,83 @@ use uuid::Uuid;
 use crate::{
     events::EventBus,
     fiber::{CordisError, EffectHandle, Fiber},
+    logger::{CordisClock, Logger, LoggerService, SystemCordisClock},
     plugin::{Plugin, PluginFiber, PluginRegistry},
-    service::{Service, ServiceKey, ServiceSlot, ServiceStore},
+    service::{Service, ServiceKey, ServiceProviderSnapshot, ServiceSlot, ServiceStore},
 };
 
 type EventFilter = Arc<dyn Fn(&Context) -> bool + Send + Sync>;
 type ServiceChangeListener = Arc<dyn Fn() + Send + Sync>;
+/// Type-erased value crossing the reflected property boundary.
+pub type DynamicValue = Arc<dyn Any + Send + Sync>;
+type AccessorGetter = Arc<dyn Fn(&Context) -> anyhow::Result<Option<DynamicValue>> + Send + Sync>;
+type AccessorSetter = Arc<dyn Fn(&Context, DynamicValue) -> anyhow::Result<bool> + Send + Sync>;
+type MixinGetter<T> = Arc<dyn Fn(&T) -> DynamicValue + Send + Sync>;
+type MixinSetter<T> = Arc<dyn Fn(&T, DynamicValue) -> anyhow::Result<bool> + Send + Sync>;
+
+struct AccessorEntry {
+    id: Uuid,
+    getter: AccessorGetter,
+    setter: Option<AccessorSetter>,
+}
+
+/// One typed member exposed from a service through a reflected property.
+pub struct MixinMember<T: Service> {
+    target: String,
+    getter: MixinGetter<T>,
+    setter: Option<MixinSetter<T>>,
+}
+
+/// Reversible group of reflected members installed by [`Context::mixin`].
+pub struct MixinHandle {
+    effects: Vec<EffectHandle>,
+}
+
+impl MixinHandle {
+    /// Disposes every member and aggregates failures.
+    ///
+    /// # Errors
+    ///
+    /// Returns all member cleanup failures as one error.
+    pub async fn dispose(&self) -> anyhow::Result<()> {
+        let failures = futures::future::join_all(self.effects.iter().map(EffectHandle::dispose))
+            .await
+            .into_iter()
+            .filter_map(Result::err)
+            .map(|error| format!("{error:#}"))
+            .collect::<Vec<_>>();
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(failures.join("\n")))
+        }
+    }
+}
+
+impl<T: Service> MixinMember<T> {
+    /// Creates a read-only reflected member.
+    #[must_use]
+    pub fn read_only<R: Any + Send + Sync>(
+        target: impl Into<String>,
+        getter: impl Fn(&T) -> Arc<R> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            target: target.into(),
+            getter: Arc::new(move |service| getter(service)),
+            setter: None,
+        }
+    }
+
+    /// Adds a type-erased setter for the reflected member.
+    #[must_use]
+    pub fn with_setter(
+        mut self,
+        setter: impl Fn(&T, DynamicValue) -> anyhow::Result<bool> + Send + Sync + 'static,
+    ) -> Self {
+        self.setter = Some(Arc::new(setter));
+        self
+    }
+}
 
 #[derive(Default)]
 struct ServiceChangeBus {
@@ -42,7 +114,9 @@ struct Root {
     events: EventBus,
     services: Arc<ServiceStore>,
     service_changes: Arc<ServiceChangeBus>,
+    accessors: Arc<RwLock<HashMap<String, AccessorEntry>>>,
     plugins: PluginRegistry,
+    logger: Arc<LoggerService>,
     next_isolation: AtomicU64,
     named_isolations: Mutex<HashMap<(String, String), Weak<IsolationRealm>>>,
 }
@@ -85,12 +159,20 @@ impl Context {
     /// Creates a root context with built-in event and service registries.
     #[must_use]
     pub fn new() -> Self {
+        Self::new_with_clock(Arc::new(SystemCordisClock))
+    }
+
+    /// Creates a root context with an injected wall-clock boundary.
+    #[must_use]
+    pub fn new_with_clock(clock: Arc<dyn CordisClock>) -> Self {
         let fiber = Fiber::root();
         let root = Arc::new(Root {
             events: EventBus::new(),
             services: Arc::new(ServiceStore::default()),
             service_changes: Arc::new(ServiceChangeBus::default()),
+            accessors: Arc::new(RwLock::new(HashMap::new())),
             plugins: PluginRegistry::new(),
+            logger: LoggerService::new(clock),
             next_isolation: AtomicU64::new(1),
             named_isolations: Mutex::new(HashMap::new()),
         });
@@ -109,6 +191,24 @@ impl Context {
     #[must_use]
     pub fn events(&self) -> &EventBus {
         &self.root.events
+    }
+
+    /// Root-owned plugin registry shared by every child context.
+    #[must_use]
+    pub fn registry(&self) -> &PluginRegistry {
+        &self.root.plugins
+    }
+
+    /// Built-in structured logging service.
+    #[must_use]
+    pub fn logger_service(&self) -> &Arc<LoggerService> {
+        &self.root.logger
+    }
+
+    /// Creates a logger using explicit name or fiber/intercept defaults.
+    #[must_use]
+    pub fn logger(&self, name: Option<&str>) -> Logger {
+        self.root.logger.logger(self, name)
     }
 
     /// Fiber that owns effects registered through this context.
@@ -310,6 +410,202 @@ impl Context {
         self.fiber.own(effect)
     }
 
+    /// Declares a computed reflected property owned by this context's fiber.
+    ///
+    /// # Errors
+    ///
+    /// Rejects conflicts with existing service/accessor declarations or an
+    /// inactive owner.
+    pub fn accessor<T, G, S>(
+        &self,
+        name: impl Into<String>,
+        getter: G,
+        setter: Option<S>,
+    ) -> Result<EffectHandle, CordisError>
+    where
+        T: Any + Send + Sync,
+        G: Fn(&Context) -> anyhow::Result<Option<Arc<T>>> + Send + Sync + 'static,
+        S: Fn(&Context, Arc<T>) -> anyhow::Result<bool> + Send + Sync + 'static,
+    {
+        let getter = Arc::new(getter);
+        let setter = setter.map(Arc::new);
+        self.accessor_erased(
+            name.into(),
+            Arc::new(move |context| {
+                getter(context).map(|value| value.map(|value| value as DynamicValue))
+            }),
+            setter.map(|setter| {
+                Arc::new(move |context: &Context, value: DynamicValue| {
+                    let value = Arc::downcast::<T>(value)
+                        .map_err(|_| anyhow::anyhow!("reflected setter received the wrong type"))?;
+                    setter(context, value)
+                }) as AccessorSetter
+            }),
+        )
+    }
+
+    /// Declares a read-only computed reflected property.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same declaration and ownership failures as [`Self::accessor`].
+    pub fn accessor_read_only<T, G>(
+        &self,
+        name: impl Into<String>,
+        getter: G,
+    ) -> Result<EffectHandle, CordisError>
+    where
+        T: Any + Send + Sync,
+        G: Fn(&Context) -> anyhow::Result<Option<Arc<T>>> + Send + Sync + 'static,
+    {
+        let getter = Arc::new(getter);
+        self.accessor_erased(
+            name.into(),
+            Arc::new(move |context| {
+                getter(context).map(|value| value.map(|value| value as DynamicValue))
+            }),
+            None,
+        )
+    }
+
+    fn accessor_erased(
+        &self,
+        name: String,
+        getter: AccessorGetter,
+        setter: Option<AccessorSetter>,
+    ) -> Result<EffectHandle, CordisError> {
+        if self.root.services.is_declared(&name) {
+            return Err(CordisError::PropertyDeclared {
+                name,
+                kind: "service",
+            });
+        }
+        let id = Uuid::now_v7();
+        {
+            let mut accessors = self.root.accessors.write();
+            if accessors.contains_key(&name) {
+                return Err(CordisError::PropertyDeclared {
+                    name,
+                    kind: "accessor",
+                });
+            }
+            accessors.insert(name.clone(), AccessorEntry { id, getter, setter });
+        }
+        let accessors = self.root.accessors.clone();
+        let disposal_name = name.clone();
+        let effect = EffectHandle::synchronous(format!("ctx.accessor({name:?})"), move || {
+            let mut accessors = accessors.write();
+            if accessors
+                .get(&disposal_name)
+                .is_some_and(|entry| entry.id == id)
+            {
+                accessors.remove(&disposal_name);
+            }
+            Ok(())
+        });
+        match self.own(effect.clone()) {
+            Ok(effect) => Ok(effect),
+            Err(error) => {
+                self.root.accessors.write().remove(&name);
+                Err(error)
+            }
+        }
+    }
+
+    /// Reads a reflected accessor, falling back to a dynamic service value.
+    ///
+    /// # Errors
+    ///
+    /// Returns getter failures or a type mismatch.
+    pub fn property<T: Service>(&self, name: &str) -> anyhow::Result<Option<Arc<T>>> {
+        let getter = self
+            .root
+            .accessors
+            .read()
+            .get(name)
+            .map(|entry| entry.getter.clone());
+        let Some(getter) = getter else {
+            return Ok(self.get_named(name));
+        };
+        getter(self)?.map_or(Ok(None), |value| {
+            Arc::downcast::<T>(value)
+                .map(Some)
+                .map_err(|_| anyhow::anyhow!("reflected property {name:?} has the wrong type"))
+        })
+    }
+
+    /// Writes a reflected accessor or a provider-owned dynamic service.
+    ///
+    /// # Errors
+    ///
+    /// Returns setter, type, missing-provider, or owner failures.
+    pub fn set_property<T: Service>(&self, name: &str, value: Arc<T>) -> anyhow::Result<bool> {
+        let setter = self
+            .root
+            .accessors
+            .read()
+            .get(name)
+            .and_then(|entry| entry.setter.clone());
+        if self.root.accessors.read().contains_key(name) {
+            return setter.map_or(Ok(false), |setter| setter(self, value));
+        }
+        self.root
+            .services
+            .replace(&self.slot(name), &self.fiber, value)?;
+        Ok(true)
+    }
+
+    /// Whether a service or accessor property has ever been declared.
+    #[must_use]
+    pub fn has_property(&self, name: &str) -> bool {
+        self.root.services.is_declared(name) || self.root.accessors.read().contains_key(name)
+    }
+
+    /// Exposes typed service members as fiber-owned reflected accessors.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first declaration or ownership failure.
+    pub fn mixin<T: Service>(
+        &self,
+        source: ServiceKey<T>,
+        members: impl IntoIterator<Item = MixinMember<T>>,
+    ) -> Result<MixinHandle, CordisError> {
+        let mut effects = Vec::new();
+        for member in members {
+            let getter_context = self.clone();
+            let getter = member.getter.clone();
+            let setter_context = self.clone();
+            let setter = member.setter.clone();
+            let result = self.accessor_erased(
+                member.target,
+                Arc::new(move |_| {
+                    Ok(getter_context
+                        .get(source)
+                        .map(|service| getter(service.as_ref())))
+                }),
+                setter.map(|setter| {
+                    Arc::new(move |_context: &Context, value: DynamicValue| {
+                        let Some(service) = setter_context.get(source) else {
+                            return Ok(false);
+                        };
+                        setter(service.as_ref(), value)
+                    }) as AccessorSetter
+                }),
+            );
+            match result {
+                Ok(effect) => effects.push(effect),
+                Err(error) => {
+                    for effect in &effects {
+                        let _ = futures::executor::block_on(effect.dispose());
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        Ok(MixinHandle { effects })
+    }
+
     /// Observes every successful service provision and withdrawal.
     ///
     /// Listener failures are contained so one integration cannot prevent
@@ -411,6 +707,12 @@ impl Context {
         value: Arc<T>,
         expression_projection: Option<Value>,
     ) -> Result<EffectHandle, CordisError> {
+        if self.root.accessors.read().contains_key(name) {
+            return Err(CordisError::PropertyDeclared {
+                name: name.to_owned(),
+                kind: "accessor",
+            });
+        }
         let slot = self.slot(name);
         let Some(id) =
             self.root
@@ -489,6 +791,12 @@ impl Context {
     #[must_use]
     pub fn service_revision(&self) -> u64 {
         self.root.services.revision()
+    }
+
+    /// Snapshots all registered service implementations across isolation scopes.
+    #[must_use]
+    pub fn service_providers(&self) -> Vec<ServiceProviderSnapshot> {
+        self.root.services.snapshots()
     }
 
     /// Snapshots JSON-compatible services visible in this exact isolation
