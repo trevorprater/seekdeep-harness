@@ -54,7 +54,7 @@ fn queue_item(
     content: Vec<Value>,
 ) -> QueueItemInput {
     QueueItemInput {
-        id: id.to_owned(),
+        id: MessageId::new(id),
         message_id: MessageId::new(message_id),
         placement,
         content,
@@ -91,7 +91,7 @@ fn queue_replacement_projects_preview_editable_text_order_and_membership() {
         QueuePlacement::Queued,
         vec![text("edited")],
     )]);
-    assert_eq!(queue.snapshot()[0].id, "q-2");
+    assert_eq!(queue.snapshot()[0].id.as_str(), "q-2");
     assert_eq!(queue.snapshot().len(), 1);
     queue.replace(&[]);
     assert!(queue.snapshot().is_empty());
@@ -116,7 +116,7 @@ fn queue_preview_caps_unicode_and_durable_handoff_retires_one_current_steering_o
         queue_item("second", "same", QueuePlacement::Steering, vec![text("x")]),
     ]);
     assert!(queue.accept_durable_user_message(&MessageId::new("same")));
-    assert_eq!(queue.snapshot()[0].id, "second");
+    assert_eq!(queue.snapshot()[0].id.as_str(), "second");
     assert!(queue.reset());
     assert!(!queue.reset());
 }

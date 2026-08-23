@@ -5,6 +5,79 @@ use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 
 use crate::{ContextRole, KnownContextForm, context_form, context_provenance};
 
+/// Classifies one provider-neutral content block into the Client render shape.
+///
+/// # Errors
+///
+/// Returns JavaScript property access or result construction failures.
+#[wasm_bindgen(js_name = toAssistantBlock)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn to_assistant_block_js(block: JsValue) -> Result<JsValue, JsValue> {
+    let block_type = Reflect::get(&block, &JsValue::from_str("type"))?.as_string();
+    let result = Object::new();
+    match block_type.as_deref() {
+        Some("text" | "reasoning") => {
+            set(
+                &result,
+                "kind",
+                &JsValue::from_str(block_type.as_deref().unwrap_or_default()),
+            )?;
+            set(
+                &result,
+                "text",
+                &Reflect::get(&block, &JsValue::from_str("text"))?,
+            )?;
+        }
+        Some("image") => {
+            set(&result, "kind", &JsValue::from_str("image"))?;
+            set(
+                &result,
+                "attachment",
+                &Reflect::get(&block, &JsValue::from_str("attachment"))?,
+            )?;
+        }
+        Some("tool-call") => {
+            set(&result, "kind", &JsValue::from_str("tool-call"))?;
+            let id = Reflect::get(&block, &JsValue::from_str("id"))?;
+            set(
+                &result,
+                "callId",
+                &id.as_string().map_or(id, |id| JsValue::from_str(&id)),
+            )?;
+            set(
+                &result,
+                "name",
+                &Reflect::get(&block, &JsValue::from_str("name"))?,
+            )?;
+            set(
+                &result,
+                "argsRaw",
+                &Reflect::get(&block, &JsValue::from_str("arguments"))?,
+            )?;
+        }
+        Some(_) | None => {
+            set(&result, "kind", &JsValue::from_str("other"))?;
+            set(&result, "block", &block)?;
+        }
+    }
+    Ok(result.into())
+}
+
+/// Classifies complete content blocks in source order.
+///
+/// # Errors
+///
+/// Returns the first block classification failure.
+#[wasm_bindgen(js_name = toAssistantBlocks)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn to_assistant_blocks_js(content: Array) -> Result<Array, JsValue> {
+    let result = Array::new();
+    for block in content.iter() {
+        result.push(&to_assistant_block_js(block)?);
+    }
+    Ok(result)
+}
+
 /// Resolves the browser's current IANA time zone.
 ///
 /// # Errors

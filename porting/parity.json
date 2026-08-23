@@ -39279,7 +39279,20 @@
     {
       "source": "packages/client/runtime/tests/conversation.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/partial.rs",
+        "crates/client-runtime/src/wasm_misc.rs",
+        "crates/client-runtime/tests/conversation_classifier_parity.rs",
+        "crates/client-runtime/tests/wasm_conversation_classifier_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/conversation.client.spec.ts --reporter=dot (pinned source: 1 passed)",
+        "cargo test -p seekdeep-client-runtime --test conversation_classifier_parity --all-features (2 passed, including merge-extensible fallback)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_classifier_parity-*.wasm (1 passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Native Rust and the live WASM compatibility functions classify text, reasoning, Tool call, and image blocks in source order with exact field mapping; future block kinds retain the complete raw Rust value and exact JavaScript object identity"
     },
     {
       "source": "packages/client/runtime/tests/event-script.client.ts",

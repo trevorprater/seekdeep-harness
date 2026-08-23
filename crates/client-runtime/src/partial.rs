@@ -244,7 +244,9 @@ pub fn empty_assistant_block(block_type: &str) -> AssistantBlock {
     }
 }
 
-fn to_assistant_block(block: &Value) -> AssistantBlock {
+/// Classifies one complete provider-neutral content block for Client rendering.
+#[must_use]
+pub fn to_assistant_block(block: &Value) -> AssistantBlock {
     match block.get("type").and_then(Value::as_str) {
         Some("text") => AssistantBlock::Text {
             text: block
@@ -284,4 +286,10 @@ fn to_assistant_block(block: &Value) -> AssistantBlock {
             block: block.clone(),
         },
     }
+}
+
+/// Classifies complete content blocks in source order.
+#[must_use]
+pub fn to_assistant_blocks(content: &[Value]) -> Vec<AssistantBlock> {
+    content.iter().map(to_assistant_block).collect()
 }

@@ -20,7 +20,7 @@ pub enum QueuePlacement {
 #[derive(Clone, Debug, PartialEq)]
 pub struct QueueItemInput {
     /// Queue item identity.
-    pub id: String,
+    pub id: MessageId,
     /// Durable message identity.
     pub message_id: MessageId,
     /// Placement.
@@ -33,7 +33,7 @@ pub struct QueueItemInput {
 #[derive(Clone, Debug, PartialEq)]
 pub struct QueuedMessage {
     /// Queue item identity.
-    pub id: String,
+    pub id: MessageId,
     /// Durable message identity.
     pub message_id: MessageId,
     /// Host-selected placement.
