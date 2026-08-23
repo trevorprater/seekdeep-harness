@@ -44448,7 +44448,19 @@
     {
       "source": "packages/client/ui-slots/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-slots/src/core.rs",
+        "crates/client-ui-slots/src/typed.rs",
+        "crates/client-ui-slots/src/wasm.rs"
+      ],
+      "evidence": [
+        "pinned source ui-slots suites: 34 passed",
+        "cargo test -p seekdeep-client-ui-slots --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_core_parity-*.wasm (4 passed)",
+        "cargo clippy -p seekdeep-client-ui-slots --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the portable single-owner Rust core preserves the a-priori root, one-call entry and child declaration, exact kind validation, stable snapshots, priority and list ordering, cell shadowing and abdication, recursive lifecycle collapse, Store scope pins, synchronous mutation and declaration observers, injected microtask batching, and JSON-safe topology inspection; the WASM class retains the source SlotCore method shape and JavaScript entry identity"
     },
     {
       "source": "packages/client/ui-slots/src/invariant.ts",
@@ -44467,32 +44479,93 @@
     {
       "source": "packages/client/ui-slots/src/renderer.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-slots/src/renderer.rs",
+        "crates/client-ui-slots/src/store.rs",
+        "crates/client-ui-slots/src/wasm.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-slots --all-features",
+        "cargo clippy -p seekdeep-client-ui-slots --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust defines the renderer Host ledger and root-render installation contracts, framework-neutral observable and Store faces, and stale-authorization and child-ownership errors; the complete session/workspace/locale host assembly remains owned by the separate Client runtime Service surface"
     },
     {
       "source": "packages/client/ui-slots/src/store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-slots/src/store.rs",
+        "crates/client-ui-slots/src/typed.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-slots --all-features",
+        "cargo clippy -p seekdeep-client-ui-slots --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust boundary exposes reference-stable observables, scoped Store instance/factory contracts, and typed shared-versus-exclusive Store declarations without placing framework Hooks on runtime products"
     },
     {
       "source": "packages/client/ui-slots/tests/core.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-slots/tests/core_parity.rs",
+        "crates/client-ui-slots/tests/wasm_core_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/ui-slots/tests/core.client.spec.ts packages/client/ui-slots/tests/dynamic-keys.client.spec.ts packages/client/ui-slots/tests/invariant.client.spec.ts packages/client/ui-slots/tests/type-chain.client.spec.tsx --reporter=dot (pinned source: 34 passed)",
+        "cargo test -p seekdeep-client-ui-slots --all-features (22 native cases)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_core_parity-*.wasm (4 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-slots/tests/dynamic-keys.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-slots/tests/core_parity.rs",
+        "crates/client-ui-slots/tests/wasm_core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-slots suites: 34 passed",
+        "cargo test -p seekdeep-client-ui-slots --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_core_parity-*.wasm (4 passed)"
+      ],
+      "note": "wide string-key spec lookup, untouched-key stable empties and zero version, parent inject identity, and unknown-entry liveness are covered natively and through live JavaScript bindings"
     },
     {
       "source": "packages/client/ui-slots/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs",
+        "crates/client-ui-slots/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned source ui-slots invariant suite: 1 passed",
+        "cargo test -p seekdeep-invariants --all-features",
+        "cargo test -p seekdeep-client-ui-slots --all-features"
+      ],
+      "note": "the generated no-op invariant companion remains registered under the package identity while the Rust host row stays behaviorless"
     },
     {
       "source": "packages/client/ui-slots/tests/type-chain.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-slots/src/typed.rs",
+        "crates/client-ui-slots/src/renderer.rs",
+        "crates/client-ui-slots/src/store.rs",
+        "crates/client-ui-slots/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-slots type-chain suite: 1 passed",
+        "cargo test -p seekdeep-client-ui-slots --all-features (includes compile-fail rustdoc and typed builder case)",
+        "cargo clippy -p seekdeep-client-ui-slots --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust typestate fixes each Slot kind and scope and makes keyed/list registration fields constructor arguments while chain builders carry the selector requirement; typed child declarations, renderer Host traits, scoped Store declarations, and branded Slot names replace TypeScript declaration merging without weakening runtime validation"
     },
     {
       "source": "packages/client/ui-slots/tsconfig.json",
@@ -44508,7 +44581,17 @@
     {
       "source": "packages/client/ui-slots/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-slots/Cargo.toml",
+        "crates/client-ui-slots/src/lib.rs",
+        "crates/client-ui-slots/src/wasm.rs"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-client-ui-slots --all-targets --all-features",
+        "cargo check -p seekdeep-client-ui-slots --target wasm32-unknown-unknown --lib"
+      ],
+      "note": "the Rust crate emits native rlib and browser cdylib artifacts without a JavaScript library build"
     },
     {
       "source": "packages/client/ui-subagent/README.i18n.yaml",

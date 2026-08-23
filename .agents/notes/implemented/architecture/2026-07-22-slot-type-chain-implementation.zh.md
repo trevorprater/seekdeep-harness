@@ -14,6 +14,8 @@ Status: implemented
 
 一句话：**壳只渲染 `'root'`；插件用单独一次 `register` 调用组合 UI——这一次调用同时占用 slot、声明并授权子 slot、声明 store、注入业务面；组件是纯函数，props 分四份额到达，每一份额都从各自唯一的真源自动推导。**
 
+Rust 实现把这套所有权划分保留在 `seekdeep-client-ui-slots` 中：单 owner、可面向不同目标平台的核心负责声明 epoch、稳定 entry snapshot、priority shadowing、abdication、Store scope pin、递归 collapse，以及可注入的 microtask 调度；其 Rust/WASM 绑定暴露与源码一致的 `SlotCore` 对象形态，不把 registry 决策移入手写 JavaScript。Rust typestate builder 让 kind、scope 以及 keyed/list/chain 注册的必填字段归编译器强制。Client runtime Service 仍负责声明注入、Store instance 与 renderer 安装，renderer 仍是唯一 React binding 层。
+
 ### 'root' 是唯一的先验 slot
 
 `SlotRegistry`（client 运行时）在构造时声明 `'root'`——single/root、`owner: {}`——其 `SlotMap` 合并声明位于运行时包。壳的全部装配就是 `ctx.slots.renderSlot('root', {})`：唯一的 ctx 级渲染入口；传任何其他键、渲染器未安装、root 无人注册，一律大声失败（无 fallback）。

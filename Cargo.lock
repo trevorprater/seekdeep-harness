@@ -4672,6 +4672,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-ui-slots"
+version = "0.1.0-rc.5"
+dependencies = [
+ "indexmap 2.14.0",
+ "js-sys",
+ "seekdeep-cordis",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "thiserror 2.0.20",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-cmdline"
 version = "0.1.0-rc.5"
 dependencies = [

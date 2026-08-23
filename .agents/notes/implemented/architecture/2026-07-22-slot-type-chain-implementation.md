@@ -14,6 +14,8 @@ The page is composed at runtime from independently loaded plugins, so the UI nee
 
 One sentence: **the shell renders only `'root'`; a plugin composes UI through a single `register` call that simultaneously occupies a slot, declares+authorizes its child slots, declares its store, and injects its business face; components are pure functions whose props arrive in four shares, each auto-derived from its single source of truth.**
 
+The Rust implementation keeps this ownership split in `seekdeep-client-ui-slots`: a single-owner target-portable core owns declaration epochs, stable entry snapshots, priority shadowing, abdication, Store-scope pins, recursive collapse, and injected microtask scheduling; its Rust/WASM binding exposes the source `SlotCore` object shape without moving registry decisions into handwritten JavaScript. Rust typestate builders make kind, scope, and mandatory keyed/list/chain registration fields compiler-owned. The Client runtime Service still owns declaration injection, Store instances, and renderer installation, while the renderer remains the only React binding layer.
+
 ### 'root' is the only a-priori slot
 
 `SlotRegistry` (client runtime) declares `'root'` at construction — single/root, `owner: {}` — and its `SlotMap` merge lives in the runtime package. The shell's entire assembly is `ctx.slots.renderSlot('root', {})`: the only ctx-level render entry; any other key, a missing renderer, or an unregistered root fails loud (no fallback).
