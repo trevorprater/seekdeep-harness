@@ -55605,7 +55605,17 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-search.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_search_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-search.spec.ts --reporter=dot (24 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_search_service_parity --test api_proxy_session_list_service_parity --all-features (15 consolidated Session list/search cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Eleven consolidated production search cases cover all 24 source cases: visibility reauthorization, current-message filters, duplicate suppression, Unicode snippet bounds, 20-plus-lookahead paging, adaptive and learned limits, stale restarts, the 100-call budget, overproduction and repeated-cursor failures, missing and failed providers, signal propagation, and drain-before-cancel cold metadata batches."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-subagents.spec.ts",

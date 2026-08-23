@@ -58,6 +58,6 @@ pub use session_export::{
     prepare_session_log_response, session_log_zip_filename,
 };
 pub use session_runtime::{
-    DEFAULT_COLD_BLANK_PROBE_MAX_BYTES, SessionApiProxyOptions, SessionApiProxyRuntime,
-    SessionProjectionReads,
+    ColdArtifactMetadata, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES, SessionApiProxyOptions,
+    SessionApiProxyRuntime, SessionProjectionReads,
 };

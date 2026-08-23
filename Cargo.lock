@@ -5274,6 +5274,7 @@ dependencies = [
  "seekdeep-session-persistence",
  "seekdeep-session-projection",
  "seekdeep-session-projection-cache",
+ "seekdeep-session-query",
  "seekdeep-settings",
  "seekdeep-storage",
  "seekdeep-storage-domain",

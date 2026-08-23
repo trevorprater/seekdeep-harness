@@ -233,6 +233,7 @@ impl Harness {
             self.sessions.clone(),
             self.agents.clone(),
             persistence,
+            None,
             self.projections.clone(),
             options,
             Arc::new(TerminalDomains),
@@ -525,6 +526,7 @@ async fn disabled_probe_and_projection_failure_degrade_without_hiding_rows() {
         Some(persistence.clone()),
         SessionApiProxyOptions {
             cold_blank_probe_max_bytes: Some(0),
+            ..SessionApiProxyOptions::default()
         },
     );
     let items = list(&runtime).await;

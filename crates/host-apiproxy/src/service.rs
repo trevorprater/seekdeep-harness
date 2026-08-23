@@ -263,6 +263,7 @@ impl ApiProxyService {
                 &child,
                 SessionApiProxyOptions {
                     cold_blank_probe_max_bytes: defaults.cold_blank_probe_max_bytes,
+                    artifact_metadata: None,
                 },
                 domains,
             )?;
