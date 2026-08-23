@@ -1,0 +1,31 @@
+[package]
+name = "seekdeep-tool-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Model-facing web search and fetch tools"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+html2md-rs.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-web = { path = "../web" }
+url.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+tokio.workspace = true
+
+[lints]
+workspace = true

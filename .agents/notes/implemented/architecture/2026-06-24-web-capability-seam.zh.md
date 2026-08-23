@@ -24,6 +24,8 @@ Web 访问是一个一等能力 seam，遵循[能力 seam Agent Note](2026-06-13
 
 提供方不注册工具。提供方注册能力。`seekdeep-tool-web` 是面向模型的名称、描述、提示词引导、JSON Schema、展示的唯一所有者。
 
+`seekdeep-tool-web` Rust crate 通过可逆 Cordis effect 注册两个类型化工具，并且只把注册表拥有的取消信号转发给 `ctx.web`。Fetch 格式化使用安全且采用 MIT 许可证的 `html2md-rs` parser，移除 script 与 style 子树，把有界的原始 table 后处理为 GFM 而不展开 span 数量，在超过词法深度上限或 parser 失败时回退为原始 HTML，并按 ECMAScript UTF-16 单元执行完整输出上限。同一结果的 render 与 presentation-meta 投影通过每个定义自有的 memo 复用一次转换。
+
 搜索和 fetch 是两个独立工具，但属于同一个 web 访问 seam。`ctx.web` 为两个并行注册表统一拥有提供方选择、abort/错误词汇和部署配置。它们的请求 schema 和提供方逻辑保持独立；共享的服务是触达 web 的产品边界。
 
 `seekdeep-tool-web` 在产品启用了相应工具且 `ctx.web` seam 存在时注册面向模型的 web 工具。后端可用性是执行时关注点，而非 schema 注册时关注点：

@@ -1905,6 +1905,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "html2md-rs"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a418ad68787497f9ca9bb77df0e5c7713db5b43f82f32d951ba90601719d5b3a"
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7209,6 +7215,28 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "seekdeep-tool-web"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "html2md-rs",
+ "parking_lot",
+ "regex",
+ "seekdeep-agent-loop-testkit",
+ "seekdeep-cordis",
+ "seekdeep-llm",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-web",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
 ]
 
 [[package]]

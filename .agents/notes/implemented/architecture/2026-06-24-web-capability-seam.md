@@ -24,6 +24,8 @@ Web access is a first-class capability seam following [the capability-seam Agent
 
 Providers do not register tools. Providers register capabilities. `seekdeep-tool-web` is the only owner of model-facing names, descriptions, prompt guidance, JSON schemas, and presentation.
 
+The `seekdeep-tool-web` Rust crate registers both typed tools through reversible Cordis effects and forwards only the registry-owned cancellation signal to `ctx.web`. Fetch formatting uses the safe MIT-licensed `html2md-rs` parser, removes script and style subtrees, post-processes bounded raw tables into GFM without expanding span counts, falls back to raw HTML beyond the lexical depth ceiling or on parser failure, and enforces the complete output cap in ECMAScript UTF-16 units. One per-definition memo shares conversion between the render and presentation-meta projections of the same result.
+
 Search and fetch are separate tools but one web-access seam. `ctx.web` owns provider selection, abort/error vocabulary, and deployment configuration for both parallel registries. Their request schemas and provider logic remain separate; the shared service is the product boundary for reaching the web.
 
 `seekdeep-tool-web` registers model-facing web tools when the product has enabled those tools and the `ctx.web` seam is present. Backend availability is an execution-time concern, not a schema-registration concern:

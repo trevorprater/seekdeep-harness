@@ -73037,12 +73037,28 @@
     {
       "source": "packages/web/tool-web/src/fetch.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-web/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-web 76/76",
+        "cargo test -p seekdeep-tool-web --all-features",
+        "cargo clippy -p seekdeep-tool-web --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/tool-web/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-web/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-web 76/76",
+        "cargo test -p seekdeep-tool-web --all-features",
+        "cargo clippy -p seekdeep-tool-web --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/web/tool-web/src/invariant.ts",
@@ -73061,32 +73077,83 @@
     {
       "source": "packages/web/tool-web/src/search.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-web/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-web 76/76",
+        "cargo test -p seekdeep-tool-web --all-features"
+      ]
     },
     {
       "source": "packages/web/tool-web/src/turndown-plugin-gfm.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "Cargo.toml",
+        "crates/tool-web/Cargo.toml",
+        "crates/tool-web/src/lib.rs"
+      ],
+      "evidence": [
+        "Rust-native html2md-rs parser plus bounded no-span-expansion GFM table postprocessor replaces the TypeScript declaration-only dependency",
+        "cargo test -p seekdeep-tool-web --all-features"
+      ]
     },
     {
       "source": "packages/web/tool-web/tests/integration.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-web/tests/web_parity.rs",
+        "crates/web-fetch-http/tests/fetch_http_spec.rs",
+        "crates/web-search-exa/tests/exa_spec.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-web 76/76",
+        "cargo test -p seekdeep-web-fetch-http -p seekdeep-web-search-exa --all-features",
+        "cargo test -p seekdeep-tool-web --all-features"
+      ]
     },
     {
       "source": "packages/web/tool-web/tests/load-path.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-web/tests/web_parity.rs"
+      ],
+      "evidence": [
+        "Rust plugin metadata, injected-service loading, enablement, and reversible registration are compiled and runtime-tested",
+        "cargo test -p seekdeep-tool-web --all-features"
+      ]
     },
     {
       "source": "packages/web/tool-web/tests/spill.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-web/tests/web_parity.rs",
+        "crates/spill-policy/src/lib.rs",
+        "crates/spill-local/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-web 76/76 including spill integration",
+        "tool output remains ordinary single-text content consumed by the generic Rust spill policy",
+        "cargo test -p seekdeep-spill-policy -p seekdeep-spill-local --all-features"
+      ]
     },
     {
       "source": "packages/web/tool-web/tests/tool-web.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-web/tests/web_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-web 76/76",
+        "Rust tests pin formatters, UTF-16 caps, HTML conversion fallback, GFM tables, schemas, prompts, enablement, timeouts, parallel safety, provider signals, structured errors, metadata, and UI presenters",
+        "cargo test -p seekdeep-tool-web --all-features"
+      ]
     },
     {
       "source": "packages/web/tool-web/tsconfig.json",
