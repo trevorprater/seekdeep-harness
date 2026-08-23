@@ -95,6 +95,8 @@ members = [
   "crates/skill-badge",
   "crates/skill-filesystem",
   "crates/subagent",
+  "crates/subagent-in-process-driver",
+  "crates/subagent-spawn-in-process",
   "crates/session-persistence",
   "crates/session-persistence-jsonl",
   "crates/session-persistence-sqlite",

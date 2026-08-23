@@ -50,7 +50,7 @@ A provider exposes `start(request) → Promise<SubagentRun>`. Fulfillment publis
 
 ### Fork vs. fresh are separate backends, not a flag
 
-Fresh and forked children are separate providers, not a request flag. `seekdeep-subagent-spawn-in-process` starts an isolated child; `seekdeep-subagent-fork-in-process` seeds a balanced prefix containing only completed parent turns. The in-flight turn is excluded because its subagent call has no result yet and cannot form valid replay history.
+Fresh and forked children are separate providers, not a request flag. The Rust providers share `seekdeep-subagent-in-process-driver`, which owns unpublished setup, child metadata and delegated-policy composition, structured-output capture, one-turn settlement, cancellation handoff, and quiescent handle disposal. `seekdeep-subagent-spawn-in-process` supplies no seed and starts an isolated child; `seekdeep-subagent-fork-in-process` supplies a balanced prefix containing only completed parent turns. The in-flight turn is excluded because its subagent call has no result yet and cannot form valid replay history.
 
 ### Child isolation and the parent log
 

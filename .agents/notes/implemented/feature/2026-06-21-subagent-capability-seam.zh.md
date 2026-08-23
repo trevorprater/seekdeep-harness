@@ -50,7 +50,7 @@ bash seam（[能力 seam](../architecture/2026-06-13-capability-seams.md)）在�
 
 ### Fork 与 fresh 是独立后端，而非一个 flag
 
-全新子 agent 与 fork 子 agent 是独立的提供方，而非请求中的一个 flag。`seekdeep-subagent-spawn-in-process` 启动隔离的子 agent；`seekdeep-subagent-fork-in-process` 用一个平衡前缀初始化子 agent，该前缀仅包含已完成的父轮次。进行中的轮次被排除，因为其 subagent 调用尚无结果，无法构成有效的回放历史。
+全新子 agent 与 fork 子 agent 是独立的提供方，而非请求中的一个 flag。两个 Rust 提供方共享 `seekdeep-subagent-in-process-driver`，由它负责未发布 setup、child 元数据与委派策略组合、结构化输出捕获、单轮次结算、取消交接和完全停稳后的句柄 dispose。`seekdeep-subagent-spawn-in-process` 不提供 seed，并启动隔离的子 agent；`seekdeep-subagent-fork-in-process` 则提供一个仅包含已完成 parent 轮次的平衡前缀。进行中的轮次被排除，因为其 subagent 调用尚无结果，无法构成有效的回放历史。
 
 ### 子 agent 隔离与父日志
 

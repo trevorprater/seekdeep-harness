@@ -6600,6 +6600,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-subagent-in-process-driver"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-agent-loop-testkit",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-subagent",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "seekdeep-subagent-spawn-in-process"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "seekdeep-cordis",
+ "seekdeep-subagent",
+ "seekdeep-subagent-in-process-driver",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-subprocess"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -7032,6 +7068,7 @@ dependencies = [
  "futures",
  "parking_lot",
  "seekdeep-agent",
+ "seekdeep-agent-loop",
  "seekdeep-agent-loop-testkit",
  "seekdeep-cordis",
  "seekdeep-core",
@@ -7040,6 +7077,7 @@ dependencies = [
  "seekdeep-llm",
  "seekdeep-scope",
  "seekdeep-subagent",
+ "seekdeep-subagent-spawn-in-process",
  "seekdeep-system-prompt",
  "seekdeep-tools",
  "serde",

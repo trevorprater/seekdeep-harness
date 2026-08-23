@@ -82,15 +82,30 @@ pub fn child_session_meta(
     lineage_seed_length: u64,
 ) -> CreateAgentMeta {
     let parent_header = parent.session().header();
+    let agent_preset = parent
+        .session()
+        .events()
+        .iter()
+        .rev()
+        .find_map(|event| {
+            (event.event_type == "agent-preset/selected")
+                .then(|| {
+                    event
+                        .data
+                        .get("agentPreset")
+                        .and_then(serde_json::Value::as_str)
+                })
+                .flatten()
+                .map(str::to_owned)
+        })
+        .or_else(|| parent_header.agent_preset.clone());
     CreateAgentMeta {
         cwd: parent_header.cwd.clone(),
         parent_session: Some(parent_header.id.clone()),
         seed_length: (lineage_seed_length > 0).then_some(lineage_seed_length),
         origin: Some(SessionOrigin::Subagent),
         delegation_depth: Some(child_depth),
-        // The parent's live preset composition is read opportunistically;
-        // the agent-presets package is not yet ported.
-        agent_preset: None,
+        agent_preset,
     }
 }
 

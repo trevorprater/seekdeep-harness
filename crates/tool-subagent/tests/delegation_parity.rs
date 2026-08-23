@@ -6,23 +6,28 @@ use std::sync::{
 };
 
 use async_trait::async_trait;
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, stream};
 use parking_lot::Mutex;
-use seekdeep_agent::{Agent, AgentOptions, Inbox, NoopInboxNotifications};
+use seekdeep_agent::{Agent, AgentOptions, CreateAgentOptions, Inbox, NoopInboxNotifications};
+use seekdeep_agent_loop::{AgentLoop, AgentLoopServices, DEFAULT_MAX_PARALLEL_TOOL_CALLS};
 use seekdeep_agent_loop_testkit::{
     AgentLoopTestDependencies, AgentLoopTestDependenciesOptions, mount_agent_loop_test_dependencies,
 };
-use seekdeep_cordis::{Context, fiber::EffectHandle};
+use seekdeep_cordis::{Context, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::session::SessionId;
 use seekdeep_jobs::{JobRegistry, JobStatus};
 use seekdeep_jobs_local::{Config as JobsConfig, LocalJobRegistry};
-use seekdeep_llm::{AbortSignal, CallId, ContentBlock};
+use seekdeep_llm::{
+    AbortSignal, AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LlmAdapter,
+    StreamChunk,
+};
 use seekdeep_scope::{ScopeKey, create_scope, scope_of};
 use seekdeep_subagent::{
     ContinuableCreateRequest, ContinuableCreateSpec, ResolvedSubagentStartRequest,
     SubagentCapabilities, SubagentProvider, SubagentResult, SubagentRun, SubagentRuntime,
     SubagentStopReason,
 };
+use seekdeep_subagent_spawn_in_process::apply as apply_spawn;
 use seekdeep_system_prompt::AssembleContext;
 use seekdeep_tool_subagent::{
     BackgroundMode, Config, ConfigAgentOptions, MaxDepth, ProviderManaged, apply, plugin,
@@ -575,4 +580,100 @@ async fn loader_defaults_depth_to_three_and_plugin_disposal_prevents_zombie_moun
             .get("subagent_later", None)
             .is_none()
     );
+}
+
+struct AnswerAdapter;
+
+#[async_trait]
+impl LlmAdapter for AnswerAdapter {
+    fn stream(&self, _options: GenerateOptions) -> AdapterStream {
+        AdapterStream::new(stream::iter([
+            Ok(StreamChunk::TextDelta {
+                index: 0,
+                text: "real spawned child answer".to_owned(),
+            }),
+            Ok(StreamChunk::Finish {
+                reason: FinishReason::Stop,
+                replay_state: None,
+            }),
+        ]))
+    }
+}
+
+#[tokio::test]
+async fn assembled_tool_runtime_delegates_through_spawn_to_a_real_child_agent_loop() {
+    let context = Context::new();
+    let dependencies =
+        mount_agent_loop_test_dependencies(&context, AgentLoopTestDependenciesOptions::default())
+            .unwrap();
+    dependencies
+        .llm
+        .register_adapter(&["mock".to_owned()], Arc::new(AnswerAdapter))
+        .unwrap();
+    let factory = AgentLoop::new(
+        context.clone(),
+        dependencies.sessions.clone(),
+        dependencies.agents.as_ref().clone(),
+        AgentLoopServices {
+            llm: dependencies.llm.clone(),
+            system_prompt: dependencies.system_prompt.clone(),
+            tools: dependencies.tools.clone(),
+            max_parallel_tool_calls: DEFAULT_MAX_PARALLEL_TOOL_CALLS,
+        },
+    )
+    .unwrap();
+    dependencies.agents.set_factory(Arc::new(factory)).unwrap();
+    SubagentRuntime::install(&context).unwrap();
+    apply_spawn(
+        &context,
+        seekdeep_subagent_spawn_in_process::Config::default(),
+    )
+    .unwrap();
+    let mut parent_options = CreateAgentOptions::new(SessionId::new("assembled-parent"));
+    parent_options.agent_options = AgentOptions {
+        provider: Some(seekdeep_llm::ProviderId::new("mock")),
+        model: Some(seekdeep_llm::ModelId::new("mock")),
+        max_tokens: None,
+        subagent_depth: None,
+    };
+    let parent = dependencies.agents.create(parent_options).await.unwrap();
+    apply(&context, config("spawn")).unwrap();
+    let starts = Arc::new(Mutex::new(Vec::new()));
+    let observed = Arc::clone(&starts);
+    context
+        .events()
+        .on_sync(
+            &context,
+            "subagent/start",
+            move |_, args| {
+                let info = args
+                    .get::<seekdeep_subagent::SubagentRunInfo>(0)
+                    .ok_or_else(|| anyhow::anyhow!("missing start info"))?;
+                observed.lock().push((*info).clone());
+                Ok(EventReply::Undefined)
+            },
+            EventOptions::default(),
+        )
+        .unwrap();
+
+    let result = dependencies
+        .tools
+        .execute(
+            ToolExecutionInput::new(
+                CallId::new("assembled-call"),
+                "subagent",
+                json!({ "description": "real child", "prompt": "answer" }),
+                AbortSignal::default(),
+            )
+            .with_agent(parent.agent.clone()),
+        )
+        .await;
+    assert!(!result.is_error());
+    assert_eq!(text(&result), "real spawned child answer");
+    assert_eq!(starts.lock().len(), 1);
+    assert_eq!(starts.lock()[0].provider, "spawn");
+    assert!(starts.lock()[0].local);
+    assert_ne!(starts.lock()[0].id, *parent.agent.id());
+    assert_eq!(dependencies.agents.list().len(), 1);
+    parent.dispose().await.unwrap();
 }

@@ -68174,7 +68174,16 @@
     {
       "source": "packages/subagent/subagent-in-process-driver/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-in-process-driver/src/lib.rs",
+        "crates/subagent/src/child_agent.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: in-process driver and spawn provider 85/85",
+        "cargo test -p seekdeep-subagent-in-process-driver --all-features",
+        "cargo clippy -p seekdeep-subagent-in-process-driver --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-in-process-driver/src/invariant.ts",
@@ -68193,12 +68202,26 @@
     {
       "source": "packages/subagent/subagent-in-process-driver/src/structured.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-in-process-driver/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: in-process driver and spawn provider 85/85",
+        "real Rust agent-loop structured capture, terminal turn, and scoped tool test",
+        "cargo test -p seekdeep-subagent-in-process-driver --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-in-process-driver/tests/fixtures/plugins/preset-tool.js",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-in-process-driver/tests/driver_parity.rs"
+      ],
+      "evidence": [
+        "Rust real-loop fixture registers a parent-scoped preset tool and proves child request inheritance"
+      ]
     },
     {
       "source": "packages/subagent/subagent-in-process-driver/tests/fixtures/presets/coding/agent.cordis.yml",
@@ -68225,22 +68248,52 @@
     {
       "source": "packages/subagent/subagent-in-process-driver/tests/inheritance.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/child_agent.rs",
+        "crates/subagent-in-process-driver/tests/driver_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: in-process driver and spawn provider 85/85",
+        "real Rust child creation applies captured delegated policy before publication"
+      ]
     },
     {
       "source": "packages/subagent/subagent-in-process-driver/tests/preset-inheritance.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/child_agent.rs",
+        "crates/subagent-in-process-driver/tests/driver_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: in-process driver and spawn provider 85/85",
+        "Rust real-loop test pins latest parent preset metadata and scoped tool inheritance"
+      ]
     },
     {
       "source": "packages/subagent/subagent-in-process-driver/tests/structured.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-in-process-driver/tests/driver_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: in-process driver and spawn provider 85/85",
+        "cargo test -p seekdeep-subagent-in-process-driver --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-in-process-driver/tests/subagent-in-process-driver.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-in-process-driver/tests/driver_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: in-process driver and spawn provider 85/85",
+        "cargo test -p seekdeep-subagent-in-process-driver --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-in-process-driver/tsconfig.json",
@@ -68300,7 +68353,16 @@
     {
       "source": "packages/subagent/subagent-spawn-in-process/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-spawn-in-process/src/lib.rs",
+        "crates/subagent-in-process-driver/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: in-process driver and spawn provider 85/85",
+        "cargo test -p seekdeep-subagent-spawn-in-process --all-features",
+        "cargo clippy -p seekdeep-subagent-spawn-in-process --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-spawn-in-process/src/invariant.ts",
@@ -68319,17 +68381,39 @@
     {
       "source": "packages/subagent/subagent-spawn-in-process/tests/harness.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent/tests/delegation_parity.rs"
+      ],
+      "evidence": [
+        "keyless Rust assembled ToolRuntime to SubagentRuntime to spawn provider to real AgentLoop harness"
+      ]
     },
     {
       "source": "packages/subagent/subagent-spawn-in-process/tests/spawn-in-process.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent/tests/delegation_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source with-key e2e remains key-skipped; keyless Rust assembled vertical executes the real tool, provider, child factory, and model adapter path",
+        "cargo test -p seekdeep-tool-subagent --all-features assembled_tool_runtime_delegates_through_spawn_to_a_real_child_agent_loop"
+      ]
     },
     {
       "source": "packages/subagent/subagent-spawn-in-process/tests/subagent-spawn-in-process.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-spawn-in-process/tests/provider_parity.rs",
+        "crates/subagent-in-process-driver/tests/driver_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: in-process driver and spawn provider 85/85",
+        "cargo test -p seekdeep-subagent-spawn-in-process --all-features",
+        "cargo test -p seekdeep-subagent-in-process-driver --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-spawn-in-process/tsconfig.json",

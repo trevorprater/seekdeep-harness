@@ -1,36 +1,31 @@
 [package]
-name = "seekdeep-tool-subagent"
+name = "seekdeep-subagent-in-process-driver"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Provider-bound model-facing subagent delegation tool"
+description = "Shared one-shot in-process subagent lifecycle driver"
 
 [dependencies]
 anyhow.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
-seekdeep-jobs = { path = "../jobs" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-subagent = { path = "../subagent" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-tools = { path = "../tools" }
-tracing.workspace = true
+tokio.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
 seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
-seekdeep-agent-loop = { path = "../agent-loop" }
-seekdeep-jobs-local = { path = "../jobs-local" }
-seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
-seekdeep-scope = { path = "../scope" }
-tokio.workspace = true
 
 [lints]
 workspace = true
