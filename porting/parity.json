@@ -54231,7 +54231,16 @@
     {
       "source": "packages/goal/tool-goal/tests/tool-goal.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-goal/src/index.rs",
+        "crates/tool-goal/tests/tool_goal_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/goal/tool-goal/tests/tool-goal.spec.ts --reporter=dot (22 passed)",
+        "cargo test -p seekdeep-tool-goal --all-features (4 consolidated tool-goal cases passed)"
+      ],
+      "note": "Rust pins configuration defaulting and rejection, the create/update-goal, wait-for-goal, and goal-finished tool definitions, typed execution, and complete/blocked wrap-up envelopes."
     },
     {
       "source": "packages/goal/tool-goal/tsconfig.json",
@@ -63433,7 +63442,16 @@
     {
       "source": "packages/session/session-persistence-jsonl/tests/zstd.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-persistence-jsonl/src/zstd.rs",
+        "crates/session-persistence-jsonl/src/backend.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/session/session-persistence-jsonl/tests/zstd.spec.ts --reporter=dot (80 passed)",
+        "cargo test -p seekdeep-session-persistence-jsonl --all-features (42 unit and platform cases passed)"
+      ],
+      "note": "Rust pins Zstandard frame headers, dictionary and content-size variants, raw/RLE/compressed blocks, checksums, concatenated frames, torn-prefix recovery, reserved/invalid structures, complete corruption failures, per-batch checked frames, JSONL export, and load-time reframing."
     },
     {
       "source": "packages/session/session-persistence-jsonl/tsconfig.json",
@@ -66473,7 +66491,13 @@
     {
       "source": "packages/skill/skill/tests/skill.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/skill/src/lib.rs"],
+      "evidence": [
+        "pnpm exec vitest run packages/skill/skill/tests/skill.spec.ts packages/skill/tool-skill/tests/tool-skill.spec.ts --reporter=dot (68 passed across both owning suites)",
+        "cargo test -p seekdeep-skill --all-features (8 consolidated Skill registry cases passed)"
+      ],
+      "note": "Rust pins name grammar, config validation, service installation, layered runtime/provider discovery, cache invalidation, definition loading, invocation policy, escaping, rendering, source round-trips, and invariant ownership."
     },
     {
       "source": "packages/skill/skill/tsconfig.json",
@@ -66557,7 +66581,13 @@
     {
       "source": "packages/skill/tool-skill/tests/tool-skill.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-skill/src/lib.rs"],
+      "evidence": [
+        "pnpm exec vitest run packages/skill/skill/tests/skill.spec.ts packages/skill/tool-skill/tests/tool-skill.spec.ts --reporter=dot (68 passed across both owning suites)",
+        "cargo test -p seekdeep-tool-skill --all-features (6 consolidated tool-skill cases passed)"
+      ],
+      "note": "Rust pins service requirements, user-gesture parsing, catalog normalization and truncation, digest stability, escaped model-visible rendering, durable catalog message sources, and tool definition assembly."
     },
     {
       "source": "packages/skill/tool-skill/tsconfig.json",
@@ -73539,7 +73569,17 @@
     {
       "source": "packages/workflow/tool-workflow/tests/tool-workflow.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-workflow/src/index.rs",
+        "crates/tool-workflow/src/types.rs",
+        "crates/tool-workflow/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/workflow/tool-workflow/tests/tool-workflow.spec.ts --reporter=dot (24 passed)",
+        "cargo test -p seekdeep-tool-workflow --all-features (5 type and invariant cases passed)"
+      ],
+      "note": "Rust owns start_workflow tool registration, exact workflow and Agent resolution, phase-aware input, cancellation, result projection, optional preset composition, and the continuous event invariant; focused cases additionally pin wire optionality and all accepted/rejected workflow log shapes."
     },
     {
       "source": "packages/workflow/tool-workflow/tsconfig.json",
