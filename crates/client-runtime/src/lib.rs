@@ -4,11 +4,14 @@ mod assistant_timing;
 mod context_provenance;
 mod conversation_registry;
 mod lineage;
+mod notifier;
 mod ordered_baseline;
+mod partial;
 mod slots;
 mod store;
 mod subagent_lineage;
 mod time_zone;
+mod tool_call_tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm_conversation_registry;
 #[cfg(target_arch = "wasm32")]
@@ -22,11 +25,14 @@ pub use assistant_timing::*;
 pub use context_provenance::*;
 pub use conversation_registry::*;
 pub use lineage::*;
+pub use notifier::*;
 pub use ordered_baseline::*;
+pub use partial::*;
 pub use slots::*;
 pub use store::*;
 pub use subagent_lineage::*;
 pub use time_zone::*;
+pub use tool_call_tree::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_conversation_registry::*;
 #[cfg(target_arch = "wasm32")]

@@ -38936,12 +38936,32 @@
     {
       "source": "packages/client/runtime/src/client/sessions/notifier.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/notifier.rs",
+        "crates/client-runtime/tests/notifier_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/notifier.client.spec.ts packages/client/runtime/tests/partial.client.spec.ts --reporter=dot (pinned source: 18 passed)",
+        "cargo test -p seekdeep-client-runtime --test notifier_parity --all-features (5 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the single-owner Rust Notifier keeps freshness and pending-notification bits separate, rebuilds before listener delivery, coalesces structural microtasks and streaming frames, lets structural work supersede a stale frame by generation, falls back to microtasks, invalidates schedules for synchronous controlled-input echoes, and remains lazy without listeners through injected deterministic schedulers"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/partial.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/partial.rs",
+        "crates/client-runtime/tests/partial_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/notifier.client.spec.ts packages/client/runtime/tests/partial.client.spec.ts --reporter=dot (pinned source: 18 passed)",
+        "cargo test -p seekdeep-client-runtime --test partial_parity --all-features (6 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust folds block starts, text/reasoning lane changes, first Tool identity, late Tool name, raw argument concatenation, and final block replacement; sparse indexes compact in render order, invisible and future chunks retain the cached snapshot, and each visible mutation replaces only its exact Rc block and snapshot"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/pending.ts",
@@ -39006,7 +39026,17 @@
     {
       "source": "packages/client/runtime/src/client/sessions/tool-call-tree.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/tool_call_tree.rs",
+        "crates/client-runtime/tests/tool_call_tree_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/tool-call-tree.client.spec.ts --reporter=dot (pinned source: 4 passed)",
+        "cargo test -p seekdeep-client-runtime --test tool_call_tree_parity --all-features (5 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust pairs Code Dispatch start/settlement, retains in-window call time, recursively projects child calls with source/children/result identity caches, accepts shared-descendant DAGs, consumes and rejects self or multi-call cycles and over-depth edges without hiding the surrounding Session, enforces the exact 256-level ceiling, and invalidates all event-derived state on reset"
     },
     {
       "source": "packages/client/runtime/src/client/slots.ts",
@@ -39170,12 +39200,26 @@
     {
       "source": "packages/client/runtime/tests/notifier.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/notifier_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/notifier.client.spec.ts packages/client/runtime/tests/partial.client.spec.ts --reporter=dot (pinned source: 18 passed)",
+        "cargo test -p seekdeep-client-runtime --test notifier_parity --all-features (5 passed)"
+      ]
     },
     {
       "source": "packages/client/runtime/tests/partial.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/partial_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/notifier.client.spec.ts packages/client/runtime/tests/partial.client.spec.ts --reporter=dot (pinned source: 18 passed)",
+        "cargo test -p seekdeep-client-runtime --test partial_parity --all-features (6 passed)"
+      ]
     },
     {
       "source": "packages/client/runtime/tests/projection-store.client.spec.ts",
@@ -39261,7 +39305,15 @@
     {
       "source": "packages/client/runtime/tests/tool-call-tree.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/tool_call_tree_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/tool-call-tree.client.spec.ts --reporter=dot (pinned source: 4 passed)",
+        "cargo test -p seekdeep-client-runtime --test tool_call_tree_parity --all-features (5 passed)"
+      ],
+      "note": "the Rust suite covers all four source graph-safety cases plus start-to-settlement replacement, call-time pairing, cache stability, and reset identity"
     },
     {
       "source": "packages/client/runtime/tests/wire-events.client.spec.ts",
