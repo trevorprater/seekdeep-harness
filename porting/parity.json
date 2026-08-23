@@ -52980,11 +52980,15 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/fs-local/src/win32.rs"
+        "crates/fs-local/src/win32.rs",
+        "crates/fs-local-win32-native/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-fs-local --all-features",
-        "cargo clippy -p seekdeep-fs-local --all-targets --all-features -- -D warnings"
+        "pinned-source Vitest: fs-local Win32 bindings 4 passed",
+        "raw Win32 DACL and ReplaceFileW calls are isolated in the documented narrow native crate; fs-local exposes only safe re-exports",
+        "cargo check --target x86_64-pc-windows-msvc -p seekdeep-fs-local-win32-native -p seekdeep-fs-local --lib",
+        "cargo clippy --target x86_64-pc-windows-msvc -p seekdeep-fs-local-win32-native -p seekdeep-fs-local --lib -- -D warnings",
+        "cargo clippy -p seekdeep-fs-local-win32-native -p seekdeep-fs-local --all-targets --all-features -- -D warnings"
       ]
     },
     {
@@ -53162,12 +53166,31 @@
     {
       "source": "packages/fs/fs-sandbox/src/containment.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-sandbox/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: fs-sandbox 25 passed",
+        "Rust uses lexical canonical containment plus same-file identity fallback for alias-equivalent roots and missing descendants",
+        "cargo test -p seekdeep-fs-sandbox --all-features: 9 passed"
+      ]
     },
     {
       "source": "packages/fs/fs-sandbox/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-sandbox/src/lib.rs",
+        "crates/fs-local/src/index.rs"
+      ],
+      "evidence": [
+        "Rust provider delegates reads unchanged, fences write/edit from per-call policy, re-resolves fresh mutation identity, and reports typed FS_SANDBOX_DENIED",
+        "cargo test -p seekdeep-fs-sandbox --all-features: 9 passed",
+        "cargo check --target x86_64-pc-windows-msvc -p seekdeep-fs-local-win32-native -p seekdeep-fs-local -p seekdeep-fs-sandbox --lib",
+        "cargo clippy --target x86_64-pc-windows-msvc -p seekdeep-fs-local-win32-native -p seekdeep-fs-local -p seekdeep-fs-sandbox --lib -- -D warnings",
+        "cargo clippy -p seekdeep-fs-local -p seekdeep-fs-sandbox --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/fs-sandbox/src/invariant.ts",
@@ -53186,12 +53209,27 @@
     {
       "source": "packages/fs/fs-sandbox/tests/containment.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-sandbox/tests/containment_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin equal, descendant, filesystem-root, case-insensitive, alias-identity, unrelated, missing-root, and non-directory containment",
+        "cargo test -p seekdeep-fs-sandbox --all-features: 9 passed"
+      ]
     },
     {
       "source": "packages/fs/fs-sandbox/tests/fs-sandbox.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-sandbox/tests/fs_sandbox_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: fs-sandbox 25 passed",
+        "Rust real-filesystem tests pin default capability mode, read-only write/edit denial, allowed reads, workspace/temp writes, absolute/traversal/symlink escapes, edit fencing, fresh-target mutation, filesystem-root policy, per-call escalation, and reversible registration",
+        "cargo test -p seekdeep-fs-sandbox --all-features: 9 passed"
+      ]
     },
     {
       "source": "packages/fs/fs-sandbox/tsconfig.json",

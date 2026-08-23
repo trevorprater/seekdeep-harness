@@ -569,6 +569,10 @@ pub async fn write_file_atomic(
             .open(&temp_path)
             .await
             .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        if cfg!(windows) && mode.is_some() {
+            crate::win32::copy_file_dacl_win32(Path::new(absolute_path), &temp_path)
+                .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        }
         handle
             .write_all(content.as_bytes())
             .await
@@ -577,21 +581,33 @@ pub async fn write_file_atomic(
             .sync_all()
             .await
             .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        #[cfg(unix)]
         if let Some(mode) = mode {
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                handle
-                    .set_permissions(std::fs::Permissions::from_mode(mode))
-                    .await
-                    .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
-            }
+            use std::os::unix::fs::PermissionsExt;
+            handle
+                .set_permissions(std::fs::Permissions::from_mode(mode))
+                .await
+                .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
         }
         drop(handle);
         ensure_not_aborted(signal, "write")?;
-        tokio::fs::rename(&temp_path, absolute_path)
-            .await
-            .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        if cfg!(windows) && mode.is_some() {
+            match crate::win32::replace_file_win32(Path::new(absolute_path), &temp_path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    tokio::fs::rename(&temp_path, absolute_path)
+                        .await
+                        .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+                }
+                Err(error) => {
+                    return Err(FsError::new(error.to_string(), FsErrorCode::FsIoError));
+                }
+            }
+        } else {
+            tokio::fs::rename(&temp_path, absolute_path)
+                .await
+                .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        }
         Ok::<(), FsError>(())
     }
     .await;

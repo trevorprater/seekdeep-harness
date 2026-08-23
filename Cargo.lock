@@ -5173,6 +5173,7 @@ dependencies = [
  "futures",
  "seekdeep-cordis",
  "seekdeep-fs",
+ "seekdeep-fs-local-win32-native",
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-sandbox",
@@ -5182,6 +5183,13 @@ dependencies = [
  "tokio",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-fs-local-win32-native"
+version = "0.1.0-rc.5"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5195,6 +5203,25 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-tools",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-fs-sandbox"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "same-file",
+ "seekdeep-cordis",
+ "seekdeep-fs",
+ "seekdeep-fs-local",
+ "seekdeep-llm",
+ "seekdeep-sandbox",
+ "seekdeep-sandbox-policy",
+ "serde_json",
+ "tempfile",
  "tokio",
 ]
 

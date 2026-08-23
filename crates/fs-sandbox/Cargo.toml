@@ -1,28 +1,28 @@
 [package]
-name = "seekdeep-fs-local"
+name = "seekdeep-fs-sandbox"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Local filesystem backend for the seekdeep-fs seam"
+description = "Sandbox-enforcing local filesystem backend for SeekDeep Harness"
 
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+same-file.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-fs = { path = "../fs" }
-seekdeep-fs-local-win32-native = { path = "../fs-local-win32-native" }
-seekdeep-invariants = { path = "../invariants" }
+seekdeep-fs-local = { path = "../fs-local" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-sandbox = { path = "../sandbox" }
-seekdeep-schemastery = { path = "../schemastery" }
-serde.workspace = true
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 serde_json.workspace = true
 tokio.workspace = true
-url.workspace = true
-uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

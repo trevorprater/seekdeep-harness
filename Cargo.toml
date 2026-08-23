@@ -57,7 +57,9 @@ members = [
   "crates/credentials-local",
   "crates/fs",
   "crates/fs-local",
+  "crates/fs-local-win32-native",
   "crates/fs-observation-policy",
+  "crates/fs-sandbox",
   "crates/goal",
   "crates/goal-round-driver",
   "crates/schemastery",
@@ -234,6 +236,7 @@ reqwest = { version = "0.12.24", default-features = false, features = ["rustls-t
 rowan = "0.16.1"
 ryu-js = "1.0.3"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
+same-file = "1.0.6"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.148", features = ["preserve_order"] }
 serde_yml = "0.0.12"

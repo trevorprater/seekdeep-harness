@@ -29,7 +29,7 @@ Status: implemented
 
 ### `seekdeep-fs-sandbox`——在提供方内部强制执行
 
-`packages/fs/fs-sandbox/`（`@seekdeep-ai/seekdeep-fs-sandbox`）镜像 `bash-local`/`bash-sandbox` 的拆分：`SandboxedFileSystem extends LocalFileSystem`，注册为 `ctx.fs`，注入 `sandboxPolicy`。读取（`resolve`/`stat`/`readText`/`streamText`/`listDir`）原样透传——每种模式都允许读。两个变更操作在委托给继承来的原子写之前按模式强制执行：
+`packages/fs/fs-sandbox/`（`@seekdeep-ai/seekdeep-fs-sandbox`）镜像 `bash-local`/`bash-sandbox` 的拆分：`SandboxedFileSystem extends LocalFileSystem`，注册为 `ctx.fs`，注入 `sandboxPolicy`。读取（`resolve`/`stat`/`readText`/`streamText`/`listDir`）原样透传——每种模式都允许读。生产代码位于 [`crates/fs-sandbox`](../../../../crates/fs-sandbox/src/lib.rs)，并将获准操作委托给 [`crates/fs-local`](../../../../crates/fs-local/src/index.rs)。两个变更操作在委托给本地原子写之前按模式强制执行：
 
 - `read-only` 直接拒绝 `writeText`/`editText`。
 - `workspace-write` 把规范化后的目标围栏于可写根集合——`seekdeep-sandbox` 中的 `writableRoots(policy)`：工作区根加上平台临时目录（`/tmp`、`os.tmpdir()`），各自 realpath——与 Seatbelt profile 授予的是同一个集合，所以 fs 围栏是这一个模式含义在 bwrap/Landlock/Seatbelt profile 之外的第四种方言，因此不会出现「write 工具不能写 `/tmp` 而 bash 能」的不对称。规范化路径写法采用词法包含的快速路径；当 Windows 以大小写不同的路径、长文件名或 8.3 短文件名表示同一目录时，系统会逐级遍历祖先目录并比较文件系统身份，而不会把边界弱化为依据文本前缀猜测包含关系。目标在委托前被立即重新规范化（`resolve` 对最深的既有祖先做 realpath），因此自工具解析该目标以来被换出的祖先符号链接会被捕获。
