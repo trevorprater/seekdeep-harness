@@ -49755,7 +49755,14 @@
     {
       "source": "packages/core/session/tests/chunk-rows.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/core/src/chunk_rows.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: six Session parity suites 196/196",
+        "cargo test -p seekdeep-core --all-features"
+      ]
     },
     {
       "source": "packages/core/session/tests/derived-cache.spec.ts",
@@ -49803,12 +49810,28 @@
     {
       "source": "packages/core/session/tests/json.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/core/src/session.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: six Session parity suites 196/196",
+        "Rust serde_json boundary makes non-JSON ECMAScript values unrepresentable and Session validation rejects invalid durable envelopes",
+        "cargo test -p seekdeep-core --all-features"
+      ]
     },
     {
       "source": "packages/core/session/tests/properties.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/core/src/session.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: six Session parity suites 196/196",
+        "Rust derivation cache tests compare incremental growth, replacement rebuild, fresh snapshots, and per-event projection",
+        "cargo test -p seekdeep-core --all-features"
+      ]
     },
     {
       "source": "packages/core/session/tests/repair.spec.ts",
@@ -49842,17 +49865,42 @@
     {
       "source": "packages/core/session/tests/scoped.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/core/src/session_store.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: six Session parity suites 196/196",
+        "Rust SessionStore tests pin scoped lifecycle carrier, commit-before-observation, and plugin withdrawal",
+        "cargo test -p seekdeep-core --all-features"
+      ]
     },
     {
       "source": "packages/core/session/tests/session.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/core/src/session.rs",
+        "crates/core/src/session_store.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: six Session parity suites 196/196",
+        "cargo test -p seekdeep-core --all-features",
+        "cargo clippy -p seekdeep-core --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/core/session/tests/surface.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/core/src/session.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: six Session parity suites 196/196",
+        "Rust tests pin atomic replacement, complete provenance, seeded replay, cache rebuild, and derived-message projection",
+        "cargo test -p seekdeep-core --all-features"
+      ]
     },
     {
       "source": "packages/core/session/tests/typert.spec.ts",
