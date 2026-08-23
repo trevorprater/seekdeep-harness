@@ -52,6 +52,8 @@ The Rust/WASM `SessionRuntime` owns this axis end to end: the manager projects o
 
 The Rust/WASM `applyClientRuntime` assembly provides the Slot, Conversation-registry, Session, and Workspace faces; installs Slot standard feeds and the Typert Agent identity resolver; and owns one connection loop through a root Cordis effect. Mux frames enter Sessions; Host frames enter Sessions and Workspaces; only `host/remote-event` reaches `Remote.$dispatch`; each connected generation emits `connection/reset`; `reconnecting` drops generation-scoped interactions before later frames; and fiber disposal stops the loop exactly once. Model-authored JavaScript Conversation callbacks cross one WASM adapter into Rust-owned Definitions and per-target builders: the full extension-bearing SessionEvent object remains visible, `reader.previous` records only demanded kinds, and Rust retains replay, Context and Location ownership, publication scheduling, dependency repair, and snapshot identity.
 
+The public browser Slot face reads each key's version from the same Rust ledger that applies mutations. The Client Runtime invariant observes global `internal/dispatch`, ignores unrelated events and a slots-less boot, and rejects `slots/changed` unless it carries a non-empty string key whose version is already nonzero; notification ordering is therefore checked against the mutation authority rather than a second mirror.
+
 ## The data object layer (`packages/client/runtime/src/client/sessions/`)
 
 Frames enter, snapshots exit, the Conversation assembler sits between — React-free (zero React imports, grep-assertable):

@@ -38816,7 +38816,16 @@
     {
       "source": "packages/client/runtime/src/client/contract/settings-scope.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/settings_scope.rs",
+        "crates/client-runtime/tests/settings_scope_contract.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-runtime --test settings_scope_contract --all-features (1 contract case passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The target-portable Rust contract preserves loading/ready/unavailable status, optional accepted value, independent composition-base and raw-user presence layers, optional revision, writability, Host/memory mode, a domain decoder spec, reference-stable snapshot subscription, and ordered revision-fenced set/unset future signatures; implementation and Host transport remain owned by the Settings surface"
     },
     {
       "source": "packages/client/runtime/src/client/contract/store.ts",
@@ -39404,17 +39413,46 @@
     {
       "source": "packages/client/runtime/src/env.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/wasm_store.rs",
+        "crates/client-runtime/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-features --release",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_store_parity-*.wasm (debug deep-freeze cases passed)"
+      ],
+      "note": "Rust replaces bundler-substituted NODE_ENV with compile-time debug_assertions: debug WASM recursively freezes snapshots and optimized release WASM omits the development freeze without reading or requiring a browser-global process object"
     },
     {
       "source": "packages/client/runtime/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/lib.rs",
+        "crates/client-runtime/tests/node_half_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/node-half.client.spec.ts --reporter=dot (pinned source: 1 passed)",
+        "cargo test -p seekdeep-client-runtime --test node_half_parity --all-features (1 passed)"
+      ],
+      "note": "The Rust Host half exports one dependency-free client-runtime Cordis plugin whose startup body performs no registration or other Host-side effect, reaches ACTIVE, and disposes cleanly; all observable runtime behavior remains in the browser WASM entry"
     },
     {
       "source": "packages/client/runtime/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/wasm_invariant.rs",
+        "crates/client-runtime/src/wasm_slots.rs",
+        "crates/client-runtime/tests/wasm_invariant_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/invariant.client.spec.ts --reporter=dot (pinned source: 3 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_invariant_parity-*.wasm (1 consolidated live case passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust/WASM invariant companion registers under the renamed package identity, observes global internal/dispatch, ignores foreign events, rejects missing or non-string Slot keys, skips a slots-less boot, and fails a slots/changed emission whose Rust Slot ledger version is still zero; the public Slot face reads that version from the same mutation authority"
     },
     {
       "source": "packages/client/runtime/tests/client-apply.client.spec.ts",
@@ -39508,7 +39546,14 @@
     {
       "source": "packages/client/runtime/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/wasm_invariant_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/invariant.client.spec.ts --reporter=dot (pinned source: 3 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_invariant_parity-*.wasm (foreign, malformed, version-zero, committed, and slots-less branches passed)"
+      ]
     },
     {
       "source": "packages/client/runtime/tests/lineage.client.spec.ts",
@@ -39540,7 +39585,14 @@
     {
       "source": "packages/client/runtime/tests/node-half.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/node_half_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/node-half.client.spec.ts --reporter=dot (pinned source: 1 passed)",
+        "cargo test -p seekdeep-client-runtime --test node_half_parity --all-features (dependency-free no-op Host plugin reached ACTIVE and disposed)"
+      ]
     },
     {
       "source": "packages/client/runtime/tests/notifier.client.spec.ts",

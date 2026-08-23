@@ -411,13 +411,7 @@ fn deep_freeze(value: &JsValue) -> Result<(), JsValue> {
 }
 
 fn is_production() -> bool {
-    Reflect::get(&js_sys::global(), &JsValue::from_str("process"))
-        .ok()
-        .and_then(|process| Reflect::get(&process, &JsValue::from_str("env")).ok())
-        .and_then(|env| Reflect::get(&env, &JsValue::from_str("NODE_ENV")).ok())
-        .and_then(|value| value.as_string())
-        .as_deref()
-        == Some("production")
+    !cfg!(debug_assertions)
 }
 
 fn console_error(message: &str, error: &JsValue) {

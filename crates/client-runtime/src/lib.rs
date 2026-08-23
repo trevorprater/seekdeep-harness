@@ -18,6 +18,7 @@ mod request_inspection;
 mod session;
 mod session_manager;
 mod session_service;
+mod settings_scope;
 mod slots;
 mod steering_history;
 mod store;
@@ -30,6 +31,8 @@ mod wasm_client_runtime;
 mod wasm_conversation_adapter;
 #[cfg(target_arch = "wasm32")]
 mod wasm_conversation_registry;
+#[cfg(target_arch = "wasm32")]
+mod wasm_invariant;
 #[cfg(target_arch = "wasm32")]
 mod wasm_misc;
 #[cfg(target_arch = "wasm32")]
@@ -74,6 +77,7 @@ pub use request_inspection::*;
 pub use session::*;
 pub use session_manager::*;
 pub use session_service::*;
+pub use settings_scope::*;
 pub use slots::*;
 pub use steering_history::*;
 pub use store::*;
@@ -84,6 +88,8 @@ pub use tool_call_tree::*;
 pub use wasm_client_runtime::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_conversation_registry::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_invariant::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_misc::*;
 #[cfg(target_arch = "wasm32")]

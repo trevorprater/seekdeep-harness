@@ -512,6 +512,11 @@ fn service_face(state: &Rc<BrowserState>, caller: &JsValue) -> Result<JsValue, J
 }
 
 fn add_ledger_methods(face: &Object, state: &Rc<BrowserState>) -> Result<(), JsValue> {
+    let version_core = state.registry.core().clone();
+    let version = Closure::wrap(Box::new(move |key: String| {
+        u64_to_f64(version_core.version(&SlotName::new(key)))
+    }) as Box<dyn FnMut(String) -> f64>);
+    set(face, "getVersion", &version.into_js_value())?;
     let entries_state = state.clone();
     let entries =
         Closure::wrap(
