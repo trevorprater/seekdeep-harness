@@ -514,6 +514,11 @@ impl SessionRuntime {
         self.resolve(session_id).map(|record| record.binding)
     }
 
+    /// Rebuilds every resident Session against the current Conversation registries.
+    pub fn rebuild_conversation_registry(&self) {
+        self.manager.rebuild_conversation_registry();
+    }
+
     fn resolve(&self, session_id: &SessionId) -> Option<ScopeRecord> {
         if let Some(record) = self.state.borrow().scopes.get(session_id) {
             return Some(ScopeRecord {

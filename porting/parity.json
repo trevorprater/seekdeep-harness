@@ -39380,7 +39380,19 @@
     {
       "source": "packages/client/runtime/tests/client-apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/wasm_client_runtime.rs",
+        "crates/client-runtime/tests/wasm_client_apply_parity.rs",
+        "crates/client-runtime/tests/workspace_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/client-apply.client.spec.ts packages/client/runtime/tests/wire-events.client.spec.ts --reporter=dot (pinned source: 7 passed total, 4 apply cases)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_apply_parity-*.wasm (3 live assembly/wire cases passed)",
+        "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 cases including initial selection passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Live Rust/WASM assembly mounts and provides Slots, Conversation registries, Sessions, and Workspaces; installs Slot standard faces and Typert Agent identity; starts the one-shot initial selection and connection loop; fans mux and Host frames into the correct managers; rebuilds resident Sessions on registry changes; emits connection/reset; drops generation interaction state on reconnecting; and stops the loop exactly once through root Cordis effect cleanup"
     },
     {
       "source": "packages/client/runtime/tests/context-provenance.client.spec.ts",
@@ -39676,7 +39688,16 @@
     {
       "source": "packages/client/runtime/tests/wire-events.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/wasm_client_runtime.rs",
+        "crates/client-runtime/tests/wasm_client_apply_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/client-apply.client.spec.ts packages/client/runtime/tests/wire-events.client.spec.ts --reporter=dot (pinned source: 7 passed total, 3 wire cases)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_apply_parity-*.wasm (verbatim remote-event handoff and two generation resets passed)"
+      ],
+      "note": "The WASM-owned Host sink sends only host/remote-event frames to Remote.$dispatch with the exact event string and argument array, routes every other Host frame only to object managers, and emits one connection/reset per established generation without filtering or reshaping forwarded names and arguments"
     },
     {
       "source": "packages/client/runtime/tests/workspaces-service.client.spec.ts",

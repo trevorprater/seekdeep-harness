@@ -50,6 +50,8 @@ slot 之外不存在第二种组件注册模型——原视图环与工具环都
 
 Rust/WASM `SessionRuntime` 端到端拥有这条 axis：manager 投影单一 list/current snapshot；selection 连同 retained child address 一起持久化；binding 与 scope resolution 保持纯粹且 identity-stable；只有 staging 才启动 `Session.open()`；masked current gap 保留 watched scope 的冻结态；off-stage removal 立即 dispose Cordis fiber、Session binding 与 session-keyed Slot Store，而 staged removal 延迟到 stage 移动。浏览器 scope primitive 写入一个私有 Symbol 与 actx-local `Context.filter`，JavaScript provide channel 则先 rebuild 全部 live binding，再原子 republish 稳定 current selection。
 
+Rust/WASM `applyClientRuntime` assembly 提供 Slot、Conversation registry、Session 与 Workspace face，安装 Slot standard feed 与 Typert Agent identity resolver，并通过 root Cordis effect 拥有唯一 connection loop。Mux frame 进入 Sessions；Host frame 进入 Sessions 与 Workspaces；只有 `host/remote-event` 到达 `Remote.$dispatch`；每个 connected generation 发出 `connection/reset`；`reconnecting` 在后续 frame 之前丢弃 generation-scoped interaction；fiber disposal 精确停止 loop 一次。
+
 ## 数据对象层（`packages/client/runtime/src/client/sessions/`）
 
 帧从这里进、快照从这里出、Conversation assembler 坐在中间——React-free（零 React import，grep 可断言）：

@@ -25,6 +25,8 @@ mod subagent_lineage;
 mod time_zone;
 mod tool_call_tree;
 #[cfg(target_arch = "wasm32")]
+mod wasm_client_runtime;
+#[cfg(target_arch = "wasm32")]
 mod wasm_conversation_registry;
 #[cfg(target_arch = "wasm32")]
 mod wasm_misc;
@@ -76,6 +78,8 @@ pub use store::*;
 pub use subagent_lineage::*;
 pub use time_zone::*;
 pub use tool_call_tree::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_client_runtime::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_conversation_registry::*;
 #[cfg(target_arch = "wasm32")]

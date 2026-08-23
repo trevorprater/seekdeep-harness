@@ -50,6 +50,8 @@ There is no component registration model besides slots — the former view and t
 
 The Rust/WASM `SessionRuntime` owns this axis end to end: the manager projects one list/current snapshot; selection persists with its retained child address; binding and scope resolution are pure and identity-stable; only staging starts `Session.open()`; a masked current gap keeps the watched scope frozen; off-stage removal disposes the Cordis fiber, Session binding, and session-keyed Slot Stores immediately, while staged removal defers until the stage moves. The browser scope primitive writes one private Symbol and an actx-local `Context.filter`, and the JavaScript provide channel rebuilds every live binding before atomically republishing the stable current selection.
 
+The Rust/WASM `applyClientRuntime` assembly provides the Slot, Conversation-registry, Session, and Workspace faces; installs Slot standard feeds and the Typert Agent identity resolver; and owns one connection loop through a root Cordis effect. Mux frames enter Sessions; Host frames enter Sessions and Workspaces; only `host/remote-event` reaches `Remote.$dispatch`; each connected generation emits `connection/reset`; `reconnecting` drops generation-scoped interactions before later frames; and fiber disposal stops the loop exactly once.
+
 ## The data object layer (`packages/client/runtime/src/client/sessions/`)
 
 Frames enter, snapshots exit, the Conversation assembler sits between — React-free (zero React imports, grep-assertable):

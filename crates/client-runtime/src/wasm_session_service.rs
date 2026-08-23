@@ -479,6 +479,12 @@ impl WasmSessionRuntime {
     pub fn handle_disconnected(&self) {
         self.state.manager_face.handle_disconnected();
     }
+
+    /// Rebuilds resident Sessions after a Conversation registry change.
+    #[wasm_bindgen(js_name = rebuildConversationRegistry)]
+    pub fn rebuild_conversation_registry(&self) {
+        self.state.runtime.rebuild_conversation_registry();
+    }
 }
 
 fn provide_host(state: &Rc<RuntimeBrowserState>) -> Result<JsValue, JsValue> {
