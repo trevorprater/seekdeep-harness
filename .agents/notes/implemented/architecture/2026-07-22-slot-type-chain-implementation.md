@@ -14,7 +14,7 @@ The page is composed at runtime from independently loaded plugins, so the UI nee
 
 One sentence: **the shell renders only `'root'`; a plugin composes UI through a single `register` call that simultaneously occupies a slot, declares+authorizes its child slots, declares its store, and injects its business face; components are pure functions whose props arrive in four shares, each auto-derived from its single source of truth.**
 
-The Rust implementation keeps this ownership split in `seekdeep-client-ui-slots`: a single-owner target-portable core owns declaration epochs, stable entry snapshots, priority shadowing, abdication, Store-scope pins, recursive collapse, and injected microtask scheduling; its Rust/WASM binding exposes the source `SlotCore` object shape without moving registry decisions into handwritten JavaScript. Rust typestate builders make kind, scope, and mandatory keyed/list/chain registration fields compiler-owned. The Client runtime Service still owns declaration injection, Store instances, and renderer installation, while the renderer remains the only React binding layer.
+The Rust implementation keeps this ownership split in `seekdeep-client-ui-slots`: a single-owner target-portable core owns declaration epochs, stable entry snapshots, priority shadowing, abdication, Store-scope pins, recursive collapse, and injected microtask scheduling; its Rust/WASM binding exposes the source `SlotCore` object shape without moving registry decisions into handwritten JavaScript. Rust typestate builders make kind, scope, and mandatory keyed/list/chain registration fields compiler-owned. The Rust `seekdeep-client-runtime` Service owns caller-fiber registration, declaration injection, Store instances, and renderer installation; its WASM face routes each lifecycle mutation through the calling Client Cordis Context. The renderer remains the only React binding layer.
 
 ### 'root' is the only a-priori slot
 
@@ -63,7 +63,7 @@ In the type chain, a chain entry's SlotMap shape is `{ kind: 'chain'; scope; own
 
 ### The store seat: framework engine, registrant schema
 
-The framework owns exactly one subscription machine: the snapshot store engine (zustand vanilla + immer + optional localStorage persistence) lives in the **runtime package** (`./client` main entry — no subpath), producing bare observable sources; web-react binds them into hooks at the outlet (per-source cached uSES binding). What a store *contains* is the registrant's declaration, written as a factory so no module-level handle exists (a module-scoped handle would be a de-facto singleton surviving plugin reloads):
+The framework owns exactly one subscription machine: the portable Rust snapshot Store engine lives in the **runtime package** (`./client` main entry — no subpath), producing bare observable sources. Its Rust/WASM face delegates draft copy-on-write to the page's installed Immer `produce` function and owns synchronous/rAF delivery, whole-value localStorage persistence, and development freezing; web-react binds each source into a per-source cached uSES Hook at the outlet. What a Store *contains* is the registrant's declaration, written as a factory so no module-level handle exists (a module-scoped handle would be a de-facto singleton surviving plugin reloads):
 
 ```ts ignore-check
 export function createChatStore() {

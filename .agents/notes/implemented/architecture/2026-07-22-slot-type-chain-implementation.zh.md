@@ -14,7 +14,7 @@ Status: implemented
 
 一句话：**壳只渲染 `'root'`；插件用单独一次 `register` 调用组合 UI——这一次调用同时占用 slot、声明并授权子 slot、声明 store、注入业务面；组件是纯函数，props 分四份额到达，每一份额都从各自唯一的真源自动推导。**
 
-Rust 实现把这套所有权划分保留在 `seekdeep-client-ui-slots` 中：单 owner、可面向不同目标平台的核心负责声明 epoch、稳定 entry snapshot、priority shadowing、abdication、Store scope pin、递归 collapse，以及可注入的 microtask 调度；其 Rust/WASM 绑定暴露与源码一致的 `SlotCore` 对象形态，不把 registry 决策移入手写 JavaScript。Rust typestate builder 让 kind、scope 以及 keyed/list/chain 注册的必填字段归编译器强制。Client runtime Service 仍负责声明注入、Store instance 与 renderer 安装，renderer 仍是唯一 React binding 层。
+Rust 实现把这套所有权划分保留在 `seekdeep-client-ui-slots` 中：单 owner、可面向不同目标平台的核心负责声明 epoch、稳定 entry snapshot、priority shadowing、abdication、Store scope pin、递归 collapse，以及可注入的 microtask 调度；其 Rust/WASM 绑定暴露与源码一致的 `SlotCore` 对象形态，不把 registry 决策移入手写 JavaScript。Rust `seekdeep-client-runtime` Service 负责调用方 fiber 注册、声明注入、Store instance 与 renderer 安装；其 WASM face 让每个生命周期变更都经过发起调用的 Client Cordis Context。renderer 仍是唯一 React binding 层。
 
 ### 'root' 是唯一的先验 slot
 
@@ -63,7 +63,7 @@ ctx.slots.register({
 
 ### store 席位：引擎归框架，schema 归注册方
 
-框架只拥有一套订阅机制：快照 store 引擎（zustand vanilla + immer + 可选 localStorage 持久化）住 **运行时包**（`./client` 主出口——无子路径），产出裸的可观察源；web-react 在 outlet 处把它们绑定成钩子（按源缓存的 uSES 绑定）。store 里*装什么*是注册方的声明，且必须写成工厂函数，使模块级句柄根本无从存在（模块级句柄会成为跨插件重载存活的事实单例）：
+框架只拥有一套订阅机制：可面向不同目标平台的 Rust 快照 Store 引擎位于 **运行时包**（`./client` 主出口——无子路径），产出裸的可观察源。其 Rust/WASM face 把 draft copy-on-write 委托给页面已安装的 Immer `produce` 函数，并负责同步/rAF 通知、whole-value localStorage 持久化与开发环境冻结；web-react 在 outlet 处把每个源绑定成按源缓存的 uSES Hook。Store 里*装什么*是注册方的声明，且必须写成工厂函数，使模块级句柄根本无从存在（模块级句柄会成为跨插件重载存活的事实单例）：
 
 ```ts ignore-check
 export function createChatStore() {

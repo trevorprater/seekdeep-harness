@@ -21,6 +21,7 @@ members = [
   "crates/client-schema-form",
   "crates/client-ui-cordis",
   "crates/client-ui-slots",
+  "crates/client-runtime",
   "crates/win32-durable-namespace",
   "crates/win32-directory-dialog",
   "crates/cmdline",

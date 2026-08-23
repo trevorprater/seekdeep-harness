@@ -1,6 +1,6 @@
 //! Framework-neutral Store and observable contracts used at Slot boundaries.
 
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 /// Minimal observable API for framework-provided snapshot sources.
 pub trait HostObservable<T> {
@@ -11,7 +11,9 @@ pub trait HostObservable<T> {
 }
 
 /// Type-erased Store instance face at the render boundary.
-pub trait SlotStoreInstance {
+pub trait SlotStoreInstance: Any {
+    /// Type-erased downcast support for host adapters retaining native instance values.
+    fn as_any(&self) -> &dyn Any;
     /// Returns the current JSON-compatible snapshot.
     fn snapshot(&self) -> serde_json::Value;
     /// Subscribes to committed state changes.

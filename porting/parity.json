@@ -38758,7 +38758,20 @@
     {
       "source": "packages/client/runtime/src/client/contract/store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/store.rs",
+        "crates/client-runtime/src/wasm_store.rs",
+        "crates/client-runtime/tests/store_parity.rs",
+        "crates/client-runtime/tests/wasm_store_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/store.client.spec.ts --reporter=dot (pinned source: 16 passed)",
+        "cargo test -p seekdeep-client-runtime --test store_parity --all-features (6 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_store_parity-*.wasm (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust engine publishes reference-stable immutable snapshots, synchronous or injected frame/microtask notifications, draft-style updates with retained untouched Arc branches, whole-value persistence and non-fatal failure handling, scoped persistence keys, declarative action handles, independent instances, and exact cleanup; the WASM face delegates copy-on-write updates to the page's installed Immer produce, preserves JavaScript object identity and recursive development freeze, uses rAF with Promise fallback, persists primitive or structured whole values, bakes variadic draft-stripped actions, and implements JavaScript one-level shallow equality"
     },
     {
       "source": "packages/client/runtime/src/client/contract/workspaces.ts",
@@ -38911,7 +38924,20 @@
     {
       "source": "packages/client/runtime/src/client/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/slots.rs",
+        "crates/client-runtime/src/wasm_slots.rs",
+        "crates/client-runtime/tests/slots_service_parity.rs",
+        "crates/client-runtime/tests/wasm_slots_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/slots-service.client.spec.ts --reporter=dot (pinned source: 35 passed)",
+        "cargo test -p seekdeep-client-runtime --all-features (11 native Slot Service cases)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_slots_service_parity-*.wasm (3 passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the React-free Rust runtime wraps the portable ledger with caller-owned Cordis effects, registrant stamping, declaration-lifetime injection and transactional reverse rollback, delayed failure containment, boot-once renderer and locale installation, root-only boot guards, a live Host face, shared and exclusive Store handle axes, per-Session Store caching and persistence pruning, recursive collapse cleanup, and synchronous slots/changed publication; the WASM Service face passes each register/inject/install through the actual caller Context effect"
     },
     {
       "source": "packages/client/runtime/src/client/time-zone.ts",
@@ -39054,12 +39080,32 @@
     {
       "source": "packages/client/runtime/tests/slots-service.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/slots_service_parity.rs",
+        "crates/client-runtime/tests/wasm_slots_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/slots-service.client.spec.ts --reporter=dot (pinned source: 35 passed)",
+        "cargo test -p seekdeep-client-runtime --test slots_service_parity --all-features (11 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_slots_service_parity-*.wasm (3 passed)"
+      ],
+      "note": "native tests drive injection reentrancy, rollback, stopping, renderer/object-layer guards, locale replacement, Store sharing/factory/session/pruning/stale resolution, collapse, and event output; live WASM tests execute caller-effect ownership, declaration reinjection, Host rendering, Store resolution, and persistence pruning through JavaScript-observable faces"
     },
     {
       "source": "packages/client/runtime/tests/store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/store_parity.rs",
+        "crates/client-runtime/tests/wasm_store_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/store.client.spec.ts --reporter=dot (pinned source: 16 passed)",
+        "cargo test -p seekdeep-client-runtime --test store_parity --all-features (6 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_store_parity-*.wasm (4 passed)"
+      ],
+      "note": "native tests cover immutable branch identity, sync/frame delivery, unsubscribe, whole primitive rehydration, failure containment, declarative actions, independent instances, scoped keys, and exact cleanup; live WASM tests exercise JavaScript identity, deep freeze, rAF batching, localStorage, variadic actions, and shallow equality"
     },
     {
       "source": "packages/client/runtime/tests/subagent-lineage.client.spec.ts",
