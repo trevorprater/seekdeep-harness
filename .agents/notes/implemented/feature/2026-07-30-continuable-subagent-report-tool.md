@@ -12,7 +12,7 @@ Treating every final assistant message as an implicit result would conflate turn
 
 ## Decision
 
-Add the independently installed `@seekdeep-ai/seekdeep-tool-subagent-report` package. It contributes an ordinary model-facing `report` tool to each continuable in-process child Activation. The mechanism accepts zero or multiple calls in a turn; the child is separately instructed to call it once before finishing ([the report obligation](2026-08-06-continuable-child-report-obligation.md)). Success neither concludes the turn, settles the Activation, nor prevents later parent follow-ups, and finishing a turn never reports automatically.
+Add the independently installed `@seekdeep-ai/seekdeep-tool-subagent-report` package. Its Rust crate registers one continuation-setup contribution that installs the `report` tool and `tool:report` prompt section through child-scope `EffectHandle`s; installation failure rolls back the section, and contribution revocation synchronously attempts both removals. It contributes an ordinary model-facing `report` tool to each continuable in-process child Activation. The mechanism accepts zero or multiple calls in a turn; the child is separately instructed to call it once before finishing ([the report obligation](2026-08-06-continuable-child-report-obligation.md)). Success neither concludes the turn, settles the Activation, nor prevents later parent follow-ups, and finishing a turn never reports automatically.
 
 The feature is a collaboration control, not a result-bearing execution wrapper. It adds no Task, `SubagentRun`, result promise, Activation state, delivery queue, or replay path.
 

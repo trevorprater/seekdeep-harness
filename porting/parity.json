@@ -68804,7 +68804,18 @@
     {
       "source": "packages/subagent/tool-subagent-report/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent-report/src/lib.rs",
+        "crates/subagent/src/continuation.rs",
+        "crates/subagent/src/activation_setup_registry.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/subagent/tool-subagent-report/tests/tool-subagent-report.spec.ts --reporter=dot (22 passed)",
+        "cargo test -p seekdeep-tool-subagent-report --all-features (3 consolidated scoped-installation cases passed)",
+        "cargo clippy -p seekdeep-tool-subagent-report --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust registers one deployment-owned continuation setup, installs child-only report guidance and the typed report tool, delegates exact live-child authority and quiet/wakeup delivery to SubagentRuntime::report_from, renders the accepted stable message id, rolls back partial installation, and synchronously revokes both child effects."
     },
     {
       "source": "packages/subagent/tool-subagent-report/src/invariant.ts",
@@ -68823,7 +68834,18 @@
     {
       "source": "packages/subagent/tool-subagent-report/tests/tool-subagent-report.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent-report/tests/report_parity.rs",
+        "crates/tool-subagent-report/src/lib.rs",
+        "crates/subagent/src/continuation.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/subagent/tool-subagent-report/tests/tool-subagent-report.spec.ts --reporter=dot (22 passed)",
+        "cargo test -p seekdeep-tool-subagent-report --all-features (3 consolidated report-tool cases passed)",
+        "cargo test -p seekdeep-subagent --all-features"
+      ],
+      "note": "Consolidated Rust cases pin default validation, child-only tool and guidance visibility, sibling/root exclusion, immediate paired revocation, and prompt rollback on tool collision; SubagentRuntime owns stable identities, direct-parent delivery, cancellation/drain, nested routing, Activation revocation, and live-parent authorization."
     },
     {
       "source": "packages/subagent/tool-subagent-report/tsconfig.json",

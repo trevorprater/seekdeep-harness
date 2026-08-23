@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-新增可独立安装的 `@seekdeep-ai/seekdeep-tool-subagent-report` 包。它会向每个可继续进程内 child Activation 贡献一个普通的面向模型 `report` 工具。机制本身接受一个轮次中调用零次或多次；child 会另行被要求在结束前调用一次（见[报告义务](2026-08-06-continuable-child-report-obligation.md)）。调用成功既不会结束该轮次或结算 Activation，也不会阻止 parent 之后继续 follow-up；完成轮次也绝不会自动报告。
+新增可独立安装的 `@seekdeep-ai/seekdeep-tool-subagent-report` 包。其 Rust crate 注册一项 continuation setup 贡献，通过 child scope 的 `EffectHandle` 安装 `report` 工具与 `tool:report` 提示词 section；安装失败会回滚 section，贡献撤销则同步尝试移除两项注册。它会向每个可继续进程内 child Activation 贡献一个普通的面向模型 `report` 工具。机制本身接受一个轮次中调用零次或多次；child 会另行被要求在结束前调用一次（见[报告义务](2026-08-06-continuable-child-report-obligation.md)）。调用成功既不会结束该轮次或结算 Activation，也不会阻止 parent 之后继续 follow-up；完成轮次也绝不会自动报告。
 
 该功能是协作控制，不是承载结果的执行包装层。它不新增 Task、`SubagentRun`、结果 promise、Activation 状态、投递队列或回放路径。
 
