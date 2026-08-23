@@ -948,6 +948,22 @@ async fn composition_without_projection_registry_serves_history_and_emits_no_pro
         Arc::new(TerminalDomains),
     )
     .unwrap();
+    let unavailable_export = runtime
+        .session_log(
+            SessionLogQuery {
+                session_id: SessionId::new("no-projections"),
+                include_descendants: None,
+            },
+            AbortSignal::default(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unavailable_export.status, 500);
+    assert!(
+        String::from_utf8(unavailable_export.body)
+            .unwrap()
+            .contains("missing session-query, session-persistence, or attachments service")
+    );
     let session = sessions
         .create(
             &context,

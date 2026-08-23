@@ -247,6 +247,7 @@ impl Harness {
                 projection_registry: None,
                 tools: None,
                 jobs: None,
+                subagents: None,
             },
             options,
             Arc::new(TerminalDomains),

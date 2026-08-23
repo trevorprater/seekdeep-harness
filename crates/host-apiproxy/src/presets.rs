@@ -14,8 +14,8 @@ use base64::Engine as _;
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use parking_lot::{Mutex, RwLock};
 use seekdeep_agent::{
-    AGENT, AGENTS, Agent, AgentOptions, AgentSetup, CreateAgentMeta, CreateAgentOptions,
-    ModelSelection as AgentModelSelection,
+    AGENT, AGENTS, Agent, AgentCancelCause, AgentOptions, AgentSetup, AgentStatus, CancelOptions,
+    CreateAgentMeta, CreateAgentOptions, ModelSelection as AgentModelSelection,
 };
 use seekdeep_agent_presets::{
     AGENT_PRESETS, InvalidPresetIdError, PresetExistsError, PresetMountError,
@@ -23,16 +23,20 @@ use seekdeep_agent_presets::{
 };
 use seekdeep_api_remotes::{
     ApiRemoteAgentOptions, ApiRemoteAgentResult, ApiRemoteLookupError,
-    create_api_remote_agent_resolver, inspect_api_remote_session,
+    api_remote_subagent_ownership_error, create_api_remote_agent_resolver,
+    has_api_remote_subagent_owner, inspect_api_remote_session,
 };
 use seekdeep_attachment::{ATTACHMENTS, AttachmentError, ImageAttachmentRef, SaveImageAttachment};
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_llm::{
-    AbortSignal, ContentBlock, LLM, LlmCallConfig, MessageSource, ModelId, ProviderId,
+    AbortSignal, ContentBlock, LLM, LlmCallConfig, Message, MessageSource, ModelId, ProviderId,
     ReasoningEffortId, UserMessage, content_has_image,
 };
 use seekdeep_skill::{SKILLS, SkillLookupOptions, SkillViewOptions, is_user_invocable};
+use seekdeep_subagent::{
+    SUBAGENTS, SubagentError, SubagentFollowupOptions, SubagentInterruptAuthority,
+};
 use serde_json::{Map, Value, json};
 
 use crate::{
@@ -51,13 +55,17 @@ use crate::{
             GoalRefRequest, GoalRefValue,
         },
         sessions::{
-            ModelSelection as SessionModelSelection, PromptContentPart, PromptMode,
-            SessionAttachmentRequest, SessionAttachmentValue, SessionForkRequest, SessionForkValue,
-            SessionModelsRequest, SessionModelsValue, SessionPromptRequest, SessionPromptValue,
-            SessionRenameRequest, SessionRenameValue, SessionSelectModelRequest,
-            SessionSelectModelValue,
+            AcceptedValue, ModelSelection as SessionModelSelection, PromptContentPart, PromptMode,
+            QueueAction, SessionAttachmentRequest, SessionAttachmentValue, SessionCancelRequest,
+            SessionForkRequest, SessionForkValue, SessionModelsRequest, SessionModelsValue,
+            SessionPromptRequest, SessionPromptValue, SessionRenameRequest, SessionRenameValue,
+            SessionSelectModelRequest, SessionSelectModelValue, SessionUpdateQueueRequest,
         },
         skills::{SkillEntry, SkillListRequest, SkillListValue},
+        subagents::{
+            SubagentInterruptRequest, SubagentMode as WireSubagentMode, SubagentPromptRequest,
+            SubagentPromptValue,
+        },
     },
     configuration::build_model_catalog,
     native_path_opener::{can_open_native_path, open_native_path},
@@ -338,6 +346,10 @@ impl PresetApiProxyRuntime {
             RpcMethod::SessionAttachment => self.attachment(request, signal).await,
             RpcMethod::SessionFork => self.fork(request, signal).await,
             RpcMethod::SessionRename => self.rename_session(request).await,
+            RpcMethod::SessionUpdateQueue => self.update_queue(request),
+            RpcMethod::SessionCancel => self.cancel_session(request),
+            RpcMethod::SubagentPrompt => self.subagent_prompt(request, signal).await,
+            RpcMethod::SubagentInterrupt => self.subagent_interrupt(request),
             RpcMethod::SkillList => self.list_skills(request).await,
             RpcMethod::GoalCreate
             | RpcMethod::GoalEdit
@@ -604,6 +616,272 @@ impl PresetApiProxyRuntime {
         }
     }
 
+    #[allow(clippy::too_many_lines)] // One atomic queue mutation preserves lookup, status, and message identity.
+    fn update_queue(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionUpdateQueueRequest = serde_json::from_value(request.payload.clone())?;
+        if let QueueAction::Edit { content } = &payload.action
+            && content
+                .iter()
+                .any(|block| block.get("type").and_then(Value::as_str) != Some("text"))
+        {
+            return Ok(failure(
+                request,
+                "attachment-error",
+                "queue edits accept text content only",
+                Map::from_iter([(
+                    "reason".to_owned(),
+                    Value::String("QUEUE_EDIT_NON_TEXT".to_owned()),
+                )]),
+            ));
+        }
+        let Some(agent) = self
+            .context
+            .get(AGENTS)
+            .and_then(|agents| agents.get(&payload.session_id))
+        else {
+            return Ok(queue_item_not_found(request, &payload.item_id));
+        };
+        if has_api_remote_subagent_owner(&self.context, agent.session().header(), Some(&agent)) {
+            return remote_failure(
+                request,
+                api_remote_subagent_ownership_error(&payload.session_id),
+            );
+        }
+        let next_turn = agent.inbox().next_turn();
+        let next_step = agent.inbox().next_step();
+        let (target, message) = if let Some(message) = next_turn
+            .iter()
+            .find(|message| message.id() == &payload.item_id)
+        {
+            (seekdeep_agent::InboxTarget::NextTurn, message.clone())
+        } else if let Some(message) = next_step
+            .iter()
+            .find(|message| message.id() == &payload.item_id)
+        {
+            (seekdeep_agent::InboxTarget::NextStep, message.clone())
+        } else {
+            return Ok(queue_item_not_found(request, &payload.item_id));
+        };
+        if matches!(payload.action, QueueAction::Steer)
+            && (target != seekdeep_agent::InboxTarget::NextTurn
+                || agent.status() != AgentStatus::Running)
+        {
+            return Ok(failure(
+                request,
+                "steer-unavailable",
+                "current turn no longer accepts steering",
+                Map::from_iter([(
+                    "itemId".to_owned(),
+                    Value::String(payload.item_id.to_string()),
+                )]),
+            ));
+        }
+        let mutation = match payload.action {
+            QueueAction::Edit { content } => {
+                let content = content
+                    .into_iter()
+                    .map(|block| ContentBlock::Text {
+                        text: block
+                            .get("text")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned(),
+                    })
+                    .collect();
+                let replacement = UserMessage::try_from_message(Message::from_existing(
+                    message.id().clone(),
+                    message.role(),
+                    content,
+                    message.source().clone(),
+                    message.fields().clone(),
+                ))
+                .expect("queued messages have user role");
+                agent
+                    .inbox()
+                    .replace(&payload.item_id, replacement)
+                    .map(|_| ())
+                    .map_err(|error| error.to_string())
+            }
+            QueueAction::Remove => agent
+                .inbox()
+                .remove(&payload.item_id)
+                .map(|_| ())
+                .map_err(|error| error.to_string()),
+            QueueAction::Steer => agent
+                .inbox()
+                .remove(&payload.item_id)
+                .map_err(|error| error.to_string())
+                .and_then(|_| agent.steer(message).map_err(|error| error.to_string())),
+        };
+        match mutation {
+            Ok(()) => typed_success(request, &AcceptedValue { accepted: true }),
+            Err(error) => Ok(failure(request, "internal", error, Map::new())),
+        }
+    }
+
+    fn cancel_session(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionCancelRequest = serde_json::from_value(request.payload.clone())?;
+        let Some(agent) = self
+            .context
+            .get(AGENTS)
+            .and_then(|agents| agents.get(&payload.session_id))
+        else {
+            return Ok(failure(
+                request,
+                "session-not-found",
+                format!(
+                    "session \"{}\" not found (not attached)",
+                    payload.session_id
+                ),
+                Map::from_iter([(
+                    "sessionId".to_owned(),
+                    Value::String(payload.session_id.to_string()),
+                )]),
+            ));
+        };
+        if has_api_remote_subagent_owner(&self.context, agent.session().header(), Some(&agent)) {
+            return remote_failure(
+                request,
+                api_remote_subagent_ownership_error(&payload.session_id),
+            );
+        }
+        match agent.cancel(AgentCancelCause::User, CancelOptions { keep_inbox: true }) {
+            Ok(()) => typed_success(request, &AcceptedValue { accepted: true }),
+            Err(error) => Ok(failure(
+                request,
+                "agent-busy",
+                "session cancellation was rejected",
+                Map::from_iter([("reason".to_owned(), Value::String(error.to_string()))]),
+            )),
+        }
+    }
+
+    async fn subagent_prompt(
+        &self,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let mut payload: SubagentPromptRequest = serde_json::from_value(request.payload.clone())?;
+        if let Some(zone) = payload.client_time_zone.clone() {
+            let Some(canonical) = canonical_client_time_zone(&zone) else {
+                return Ok(failure(
+                    request,
+                    "invalid-time-zone",
+                    "clientTimeZone must be UTC or a valid IANA Area/Location name",
+                    Map::from_iter([("value".to_owned(), Value::String(zone))]),
+                ));
+            };
+            payload.client_time_zone = Some(canonical);
+        }
+        let Some(parent) = self
+            .context
+            .get(AGENTS)
+            .and_then(|agents| agents.get(&payload.parent_session_id))
+        else {
+            return Ok(failure(
+                request,
+                "subagent-parent-unavailable",
+                format!(
+                    "parent session \"{}\" is not live",
+                    payload.parent_session_id
+                ),
+                Map::from_iter([(
+                    "parentSessionId".to_owned(),
+                    Value::String(payload.parent_session_id.to_string()),
+                )]),
+            ));
+        };
+        let Some(subagents) = self.context.get(SUBAGENTS) else {
+            return Ok(failure(
+                request,
+                "internal",
+                "subagent prompt failed",
+                Map::new(),
+            ));
+        };
+        if let Err(error) = verify_subagent_address(
+            &subagents,
+            &payload.parent_session_id,
+            &payload.child_session_id,
+            payload.mode,
+            signal.clone(),
+        )
+        .await
+        {
+            return Ok(rpc_error_response(request, error));
+        }
+        let content = payload
+            .content
+            .into_iter()
+            .map(|block| serde_json::from_value::<ContentBlock>(Value::Object(block)))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut source = MessageSource::user();
+        source.fields.insert(
+            "rpcId".to_owned(),
+            Value::String(request.rpc_id.to_string()),
+        );
+        if let Some(zone) = payload.client_time_zone {
+            source
+                .fields
+                .insert("clientTimeZone".to_owned(), Value::String(zone));
+        }
+        match subagents
+            .followup(
+                &parent,
+                &payload.child_session_id,
+                content,
+                SubagentFollowupOptions {
+                    source,
+                    signal: signal.clone(),
+                },
+            )
+            .await
+        {
+            Ok(message_id) => typed_success(request, &SubagentPromptValue { message_id }),
+            Err(error) => Ok(subagent_prompt_failure(
+                request,
+                &payload.child_session_id,
+                &error,
+                &signal,
+            )),
+        }
+    }
+
+    fn subagent_interrupt(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SubagentInterruptRequest = serde_json::from_value(request.payload.clone())?;
+        let Some(subagents) = self.context.get(SUBAGENTS) else {
+            return Ok(failure(
+                request,
+                "internal",
+                "subagent interrupt failed",
+                Map::new(),
+            ));
+        };
+        match subagents.interrupt(
+            payload.child_session_id.clone(),
+            SubagentInterruptAuthority::User {
+                parent_session_id: payload.parent_session_id,
+            },
+        ) {
+            Ok(()) => typed_success(request, &AcceptedValue { accepted: true }),
+            Err(error) if subagent_error_code(&error) == Some("UNAUTHORIZED") => Ok(failure(
+                request,
+                "subagent-unauthorized",
+                "subagent does not belong to this parent",
+                Map::from_iter([(
+                    "childSessionId".to_owned(),
+                    Value::String(payload.child_session_id.to_string()),
+                )]),
+            )),
+            Err(_) => Ok(failure(
+                request,
+                "internal",
+                "subagent interrupt failed",
+                Map::new(),
+            )),
+        }
+    }
+
     async fn models(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
         let payload: SessionModelsRequest = serde_json::from_value(request.payload.clone())?;
         let agent = match (self.resolve_agent)(payload.session_id.clone()).await {
@@ -738,7 +1016,18 @@ impl PresetApiProxyRuntime {
         request: RpcRequest<Value>,
         signal: AbortSignal,
     ) -> anyhow::Result<RpcResponse<Value>> {
-        let payload: SessionPromptRequest = serde_json::from_value(request.payload.clone())?;
+        let mut payload: SessionPromptRequest = serde_json::from_value(request.payload.clone())?;
+        if let Some(zone) = payload.client_time_zone.clone() {
+            let Some(canonical) = canonical_client_time_zone(&zone) else {
+                return Ok(failure(
+                    request,
+                    "invalid-time-zone",
+                    "clientTimeZone must be UTC or a valid IANA Area/Location name",
+                    Map::from_iter([("value".to_owned(), Value::String(zone))]),
+                ));
+            };
+            payload.client_time_zone = Some(canonical);
+        }
         let agent = match (self.resolve_agent)(payload.session_id.clone()).await {
             ApiRemoteAgentResult::Agent(agent) => agent,
             ApiRemoteAgentResult::Error(error) => return remote_failure(request, error),
@@ -1688,6 +1977,48 @@ fn agent_has_visible_image(agent: &Agent) -> bool {
             .any(|message| content_has_image(message.content()))
 }
 
+fn canonical_client_time_zone(value: &str) -> Option<String> {
+    if value == "UTC" {
+        return Some(value.to_owned());
+    }
+    if value.is_empty() || value.trim() != value || !iana_area_location(value) {
+        return None;
+    }
+    let parsed = value.parse::<chrono_tz::Tz>().ok()?;
+    let canonical = match parsed.name() {
+        "US/Pacific" => "America/Los_Angeles",
+        "US/Eastern" => "America/New_York",
+        "US/Central" => "America/Chicago",
+        "US/Mountain" => "America/Denver",
+        "US/Arizona" => "America/Phoenix",
+        "US/Alaska" => "America/Anchorage",
+        "US/Hawaii" => "Pacific/Honolulu",
+        other => other,
+    };
+    Some(canonical.to_owned())
+}
+
+fn iana_area_location(value: &str) -> bool {
+    let mut segments = value.split('/');
+    let Some(area) = segments.next() else {
+        return false;
+    };
+    if !area.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+        || !area.bytes().all(iana_zone_byte)
+    {
+        return false;
+    }
+    let locations = segments.collect::<Vec<_>>();
+    !locations.is_empty()
+        && locations
+            .iter()
+            .all(|segment| !segment.is_empty() && segment.bytes().all(iana_zone_byte))
+}
+
+fn iana_zone_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'+' | b'-' | b'.')
+}
+
 fn model_unavailable(
     request: RpcRequest<Value>,
     provider: &str,
@@ -1703,6 +2034,178 @@ fn model_unavailable(
             ("model".to_owned(), Value::String(model.to_owned())),
         ]),
     )
+}
+
+fn queue_item_not_found(
+    request: RpcRequest<Value>,
+    item_id: &seekdeep_llm::MessageId,
+) -> RpcResponse<Value> {
+    failure(
+        request,
+        "queue-item-not-found",
+        "queued item is no longer pending",
+        Map::from_iter([("itemId".to_owned(), Value::String(item_id.to_string()))]),
+    )
+}
+
+async fn verify_subagent_address(
+    subagents: &seekdeep_subagent::SubagentRuntime,
+    parent_id: &seekdeep_core::session::SessionId,
+    child_id: &seekdeep_core::session::SessionId,
+    mode: WireSubagentMode,
+    signal: AbortSignal,
+) -> Result<(), RpcError> {
+    let entries = subagents
+        .list_children(parent_id, Some(signal.clone()))
+        .await
+        .map_err(|error| {
+            if signal.is_aborted() || subagent_error_code(&error) == Some("CANCELLED") {
+                RpcError {
+                    code: "cancelled".to_owned(),
+                    message: "subagent catalog read was cancelled".to_owned(),
+                    details: Map::new(),
+                }
+            } else if subagent_error_code(&error)
+                == Some("SUBAGENT_CONTROL_PROJECTIONS_UNAVAILABLE")
+            {
+                subagent_projections_error()
+            } else {
+                RpcError {
+                    code: "internal".to_owned(),
+                    message: "subagent catalog read failed".to_owned(),
+                    details: Map::new(),
+                }
+            }
+        })?;
+    let entry = entries.into_iter().find(|entry| match entry {
+        seekdeep_subagent::SubagentListEntry::Child { id, .. }
+        | seekdeep_subagent::SubagentListEntry::Diagnostic { id, .. } => id == child_id,
+    });
+    match entry {
+        Some(seekdeep_subagent::SubagentListEntry::Child { mode: actual, .. })
+            if core_subagent_mode(&actual) == mode =>
+        {
+            Ok(())
+        }
+        Some(seekdeep_subagent::SubagentListEntry::Diagnostic { reason, .. }) => Err(RpcError {
+            code: "subagent-catalog-diagnostic".to_owned(),
+            message: format!(
+                "subagent \"{child_id}\" is {}",
+                serde_json::to_value(reason)
+                    .ok()
+                    .and_then(|value| value.as_str().map(ToOwned::to_owned))
+                    .unwrap_or_else(|| "unavailable".to_owned())
+            ),
+            details: Map::from_iter([
+                (
+                    "parentSessionId".to_owned(),
+                    Value::String(parent_id.to_string()),
+                ),
+                (
+                    "childSessionId".to_owned(),
+                    Value::String(child_id.to_string()),
+                ),
+                (
+                    "reason".to_owned(),
+                    serde_json::to_value(reason).unwrap_or(Value::Null),
+                ),
+            ]),
+        }),
+        _ => Err(RpcError {
+            code: "subagent-not-found".to_owned(),
+            message: format!(
+                "session \"{child_id}\" is not a {} direct child of \"{parent_id}\"",
+                match mode {
+                    WireSubagentMode::OneShot => "one-shot",
+                    WireSubagentMode::Continuable => "continuable",
+                }
+            ),
+            details: Map::from_iter([
+                (
+                    "parentSessionId".to_owned(),
+                    Value::String(parent_id.to_string()),
+                ),
+                (
+                    "childSessionId".to_owned(),
+                    Value::String(child_id.to_string()),
+                ),
+            ]),
+        }),
+    }
+}
+
+fn core_subagent_mode(mode: &seekdeep_subagent::SubagentListMode) -> WireSubagentMode {
+    match mode {
+        seekdeep_subagent::SubagentListMode::OneShot { .. } => WireSubagentMode::OneShot,
+        seekdeep_subagent::SubagentListMode::Continuable { .. } => WireSubagentMode::Continuable,
+    }
+}
+
+fn subagent_error_code(error: &anyhow::Error) -> Option<&str> {
+    error
+        .downcast_ref::<SubagentError>()
+        .map(|error| error.code.as_str())
+}
+
+fn subagent_projections_error() -> RpcError {
+    RpcError {
+        code: "internal".to_owned(),
+        message: "subagent catalog is unavailable: this deployment does not mount the sessionProjections registry (load seekdeep-session-projection)".to_owned(),
+        details: Map::new(),
+    }
+}
+
+fn rpc_error_response(request: RpcRequest<Value>, error: RpcError) -> RpcResponse<Value> {
+    RpcResponse::new(request.rpc_id, RpcResult::Failure { error })
+}
+
+fn subagent_prompt_failure(
+    request: RpcRequest<Value>,
+    child_id: &seekdeep_core::session::SessionId,
+    error: &anyhow::Error,
+    signal: &AbortSignal,
+) -> RpcResponse<Value> {
+    if signal.is_aborted() {
+        return failure(
+            request,
+            "cancelled",
+            "subagent prompt was cancelled",
+            Map::new(),
+        );
+    }
+    let code = subagent_error_code(error);
+    let details = || {
+        Map::from_iter([(
+            "childSessionId".to_owned(),
+            Value::String(child_id.to_string()),
+        )])
+    };
+    match code {
+        Some("NOT_RESUMABLE") => failure(
+            request,
+            "subagent-not-resumable",
+            "subagent cannot be resumed",
+            details(),
+        ),
+        Some("UNAUTHORIZED") => failure(
+            request,
+            "subagent-unauthorized",
+            "subagent does not belong to this parent",
+            details(),
+        ),
+        Some(
+            "DRAINING"
+            | "ACTIVATION_CLOSING"
+            | "CONTINUATION_UNAVAILABLE"
+            | "PERSISTENCE_UNAVAILABLE",
+        ) => failure(
+            request,
+            "subagent-delivery-unavailable",
+            "subagent follow-up is temporarily unavailable",
+            details(),
+        ),
+        _ => failure(request, "internal", "subagent prompt failed", Map::new()),
+    }
 }
 
 fn prompt_failure(request: RpcRequest<Value>, error: &anyhow::Error) -> RpcResponse<Value> {

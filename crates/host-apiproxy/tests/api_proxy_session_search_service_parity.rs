@@ -356,6 +356,7 @@ impl Harness {
                 projection_registry: None,
                 tools: None,
                 jobs: None,
+                subagents: None,
             },
             SessionApiProxyOptions::default(),
             Arc::new(TerminalDomains),
@@ -861,6 +862,7 @@ async fn cancellation_awaits_every_started_cold_metadata_read_and_stops_next_bat
             projection_registry: None,
             tools: None,
             jobs: None,
+            subagents: None,
         },
         SessionApiProxyOptions {
             artifact_metadata: Some(metadata.clone()),

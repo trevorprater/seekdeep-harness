@@ -1,7 +1,8 @@
 //! Production `session.create` identity, composition, rollback, and adoption cases.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
+use async_trait::async_trait;
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use seekdeep_agent::{AgentEvents, AgentRegistry, AgentStatus, assemble_context_for};
 use seekdeep_agent_loop::{AgentLoop, AgentLoopServices};
@@ -12,7 +13,7 @@ use seekdeep_agent_presets::{
 use seekdeep_client_connection::{HttpResponse, RpcResult};
 use seekdeep_cordis::Context;
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionId, SurfaceOp},
+    session::{AppendOptions, Session, SessionEvent, SessionHeader, SessionId, SurfaceOp},
     session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_host_apiproxy::{
@@ -29,9 +30,69 @@ use seekdeep_llm::{
     UserMessage,
 };
 use seekdeep_loader::PluginCatalog;
+use seekdeep_session_persistence::{
+    SessionInspection, SessionLocation, SessionPersistence, SessionPersistenceSnapshot,
+};
+use seekdeep_storage::{Storage, StorageBackend};
+use seekdeep_storage_domain::{DomainConfig, DomainFacility};
+use seekdeep_storage_json::JsonStorageBackend;
 use seekdeep_system_prompt::{SystemPrompt, SystemPromptConfig};
 use seekdeep_tools::{ToolRuntime, ToolRuntimeConfig};
+use seekdeep_workspace::WorkspaceRegistry;
 use serde_json::{Value, json};
+
+struct EmptyPersistence;
+
+#[async_trait]
+impl SessionPersistence for EmptyPersistence {
+    fn locate(&self, _meta: &SessionHeader) -> Option<SessionLocation> {
+        None
+    }
+
+    fn supports_raw_artifacts(&self) -> bool {
+        false
+    }
+
+    async fn create(&self, _meta: &SessionHeader) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn append(&self, _id: &SessionId, _events: &[SessionEvent]) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn load(&self, _id: &SessionId) -> anyhow::Result<SessionInspection> {
+        anyhow::bail!("not used")
+    }
+
+    async fn inspect(
+        &self,
+        _id: &SessionId,
+        _signal: Option<AbortSignal>,
+    ) -> anyhow::Result<SessionInspection> {
+        anyhow::bail!("not used")
+    }
+
+    async fn read_from(
+        &self,
+        _id: &SessionId,
+        _from_seq: u64,
+        _signal: Option<AbortSignal>,
+    ) -> anyhow::Result<SessionInspection> {
+        anyhow::bail!("not used")
+    }
+
+    async fn list(&self, _signal: Option<AbortSignal>) -> anyhow::Result<Vec<SessionHeader>> {
+        Ok(Vec::new())
+    }
+
+    async fn list_snapshots(
+        &self,
+        _signal: Option<AbortSignal>,
+    ) -> anyhow::Result<Vec<SessionPersistenceSnapshot>> {
+        Ok(Vec::new())
+    }
+}
 
 #[derive(Debug)]
 struct TerminalDomains;
@@ -530,4 +591,92 @@ async fn fork_uses_last_completed_turn_only_for_omitted_or_past_end_anchors() {
             ["turn/start", "user/message", "turn/end", "session/end-seed"]
         );
     }
+}
+
+#[tokio::test]
+async fn workspace_session_creation_uses_the_registry_path_and_commits_membership_idempotently() {
+    let harness = Harness::new(false).await;
+    let storage_root = tempfile::tempdir().unwrap();
+    let storage = Storage::new();
+    let _storage_effect = storage.provide(&harness.context).unwrap();
+    let backend = JsonStorageBackend::new(storage_root.path());
+    let _backend_registration = storage
+        .backend
+        .register("json", backend.clone() as Arc<dyn StorageBackend>)
+        .unwrap();
+    let facility = DomainFacility::new(
+        harness.context.clone(),
+        storage,
+        DomainConfig {
+            backend: "json".to_owned(),
+            routes: HashMap::default(),
+        },
+    );
+    let (_facility_effect, _mount) = facility.mount(&harness.context).unwrap();
+    let registry = WorkspaceRegistry::open(
+        harness.context.clone(),
+        &facility,
+        Arc::new(EmptyPersistence),
+        Some(harness.sessions.clone()),
+    )
+    .await
+    .unwrap();
+    registry.provide(&harness.context).unwrap();
+    let directories = tempfile::tempdir().unwrap();
+    let workspace_path = directories.path().join("workspace");
+    tokio::fs::create_dir(&workspace_path).await.unwrap();
+    let workspace = registry
+        .create(workspace_path.to_string_lossy().into_owned(), None)
+        .await
+        .unwrap();
+
+    for _ in 0..2 {
+        let created = value(
+            create(
+                &harness.runtime,
+                json!({
+                    "sessionId": "workspace-session",
+                    "workspaceId": workspace.id().as_str()
+                }),
+            )
+            .await,
+        );
+        assert_eq!(created["sessionId"], "workspace-session");
+    }
+    assert_eq!(
+        harness
+            .sessions
+            .get(&SessionId::new("workspace-session"))
+            .unwrap()
+            .header()
+            .cwd
+            .as_deref(),
+        Some(workspace.path().as_str())
+    );
+    assert_eq!(
+        workspace.session_ids(),
+        [SessionId::new("workspace-session")]
+    );
+
+    value(
+        create(
+            &harness.runtime,
+            json!({ "sessionId": "cwd-only", "cwd": workspace.path() }),
+        )
+        .await,
+    );
+    assert!(
+        !workspace
+            .session_ids()
+            .contains(&SessionId::new("cwd-only"))
+    );
+    let (code, details) = error(
+        create(
+            &harness.runtime,
+            json!({ "sessionId": "unknown-workspace", "workspaceId": "missing" }),
+        )
+        .await,
+    );
+    assert_eq!(code, "workspace-not-found");
+    assert_eq!(details["workspaceId"], "missing");
 }

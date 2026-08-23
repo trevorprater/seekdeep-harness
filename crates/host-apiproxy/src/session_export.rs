@@ -72,6 +72,31 @@ pub trait SessionLogLineageQuery: Send + Sync + 'static {
     ) -> anyhow::Result<Vec<SessionLineageNode>>;
 }
 
+/// Adapter from the repository-wide Session query service to the export seam.
+pub struct SessionQueryExportAdapter(pub Arc<seekdeep_session_query::SessionQueryService>);
+
+#[async_trait]
+impl SessionLogLineageQuery for SessionQueryExportAdapter {
+    async fn descendants(
+        &self,
+        session_id: &SessionId,
+        signal: AbortSignal,
+    ) -> anyhow::Result<Vec<SessionLineageNode>> {
+        let trace = self
+            .0
+            .trace_session(session_id.clone(), Some(signal))
+            .await?;
+        Ok(trace.descendants.into_iter().map(lineage_node).collect())
+    }
+}
+
+fn lineage_node(node: seekdeep_session_query::types::SessionLineageNode) -> SessionLineageNode {
+    SessionLineageNode {
+        session_id: node.session.header.id,
+        descendants: node.descendants.into_iter().map(lineage_node).collect(),
+    }
+}
+
 /// Narrow raw-artifact seam consumed by the exporter.
 #[async_trait]
 pub trait SessionLogPersistence: Send + Sync + 'static {

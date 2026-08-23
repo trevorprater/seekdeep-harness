@@ -7,7 +7,7 @@ use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use parking_lot::Mutex;
 use seekdeep_agent::{
     Agent, AgentCancelCause, AgentControlError, AgentController, AgentEvents, AgentOptions,
-    AgentRegistry, CancelOptions, Inbox, InboxTarget, MaintenanceReservation,
+    AgentRegistry, AgentStatus, CancelOptions, Inbox, InboxTarget, MaintenanceReservation,
     NoopInboxNotifications, assemble_context_for,
 };
 use seekdeep_attachment::{
@@ -771,4 +771,91 @@ async fn prompt_validates_the_whole_image_batch_before_save_and_attachment_reads
             if error.code == "attachment-error" && error.details["reason"] == "TOO_MANY_IMAGES"
     ));
     assert_eq!(operations.lock().len(), 4);
+}
+
+#[tokio::test]
+async fn prompt_canonicalizes_browser_zones_and_queue_controls_preserve_message_identity() {
+    let harness = Harness::new(None, None);
+    value(
+        invoke(
+            &harness.runtime,
+            RpcMethod::SessionPrompt,
+            json!({
+                "sessionId": harness.agent.id(),
+                "mode": "queue",
+                "content": [{ "type": "text", "text": "zoned" }],
+                "clientTimeZone": "US/Pacific"
+            }),
+        )
+        .await,
+    );
+    let queued = harness.agent.inbox().next_turn();
+    assert_eq!(queued.len(), 1);
+    assert_eq!(
+        queued[0].source().fields["clientTimeZone"],
+        "America/Los_Angeles"
+    );
+    let item_id = queued[0].id().clone();
+    value(
+        invoke(
+            &harness.runtime,
+            RpcMethod::SessionUpdateQueue,
+            json!({
+                "sessionId": harness.agent.id(),
+                "itemId": item_id,
+                "action": { "kind": "edit", "content": [{ "type": "text", "text": "edited" }] }
+            }),
+        )
+        .await,
+    );
+    let edited = harness.agent.inbox().next_turn();
+    assert_eq!(edited[0].id(), &item_id);
+    assert_eq!(
+        edited[0].content()[0],
+        ContentBlock::Text {
+            text: "edited".to_owned()
+        }
+    );
+    harness.agent.set_status(AgentStatus::Running);
+    value(
+        invoke(
+            &harness.runtime,
+            RpcMethod::SessionUpdateQueue,
+            json!({
+                "sessionId": harness.agent.id(),
+                "itemId": item_id,
+                "action": { "kind": "steer" }
+            }),
+        )
+        .await,
+    );
+    assert!(harness.agent.inbox().next_turn().is_empty());
+    assert_eq!(harness.agent.inbox().next_step()[0].id(), &item_id);
+    value(
+        invoke(
+            &harness.runtime,
+            RpcMethod::SessionCancel,
+            json!({ "sessionId": harness.agent.id() }),
+        )
+        .await,
+    );
+
+    for zone in ["", " UTC", "CST", "Not/A_Real_Zone"] {
+        let invalid = invoke(
+            &harness.runtime,
+            RpcMethod::SessionPrompt,
+            json!({
+                "sessionId": harness.agent.id(),
+                "mode": "queue",
+                "content": [{ "type": "text", "text": "invalid" }],
+                "clientTimeZone": zone
+            }),
+        )
+        .await;
+        assert!(matches!(
+            invalid,
+            RpcResult::Failure { ref error } if error.code == "invalid-time-zone"
+        ));
+    }
+    assert_eq!(harness.agent.inbox().next_step().len(), 1);
 }

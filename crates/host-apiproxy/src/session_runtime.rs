@@ -47,6 +47,7 @@ use seekdeep_session_query::{
         SessionSearchExecContext as QueryExecContext, SessionSearchRequest as QueryRequest,
     },
 };
+use seekdeep_subagent::{SUBAGENTS, SubagentRuntime};
 use seekdeep_tools::{TOOLS, ToolResult, ToolRuntime};
 use seekdeep_workspace::WORKSPACE_REGISTRY;
 use serde_json::{Map, Value};
@@ -65,6 +66,17 @@ use crate::{
             SessionSearchRequest, SessionSearchValue, SessionSummary, SessionSummaryOrigin,
             ToolEventView, ToolEventViewTarget,
         },
+        subagents::{
+            SubagentActivity as WireSubagentActivity,
+            SubagentDiagnosticReason as WireSubagentDiagnosticReason, SubagentHistoryRequest,
+            SubagentListEntry as WireSubagentListEntry, SubagentListRequest, SubagentListValue,
+            SubagentMode as WireSubagentMode,
+        },
+    },
+    session_export::{
+        AttachmentStoreExportAdapter, SessionLogCompressionLevel, SessionLogExportDeps,
+        SessionPersistenceExportAdapter, SessionQueryExportAdapter, SessionStoreExportAdapter,
+        prepare_session_log_response,
     },
 };
 
@@ -203,6 +215,8 @@ pub struct SessionApiProxyServices {
     pub tools: Option<Arc<ToolRuntime>>,
     /// Optional non-consuming background-job snapshot source.
     pub jobs: Option<Arc<JobRegistryService>>,
+    /// Optional session-backed subagent catalog.
+    pub subagents: Option<Arc<SubagentRuntime>>,
 }
 
 impl std::fmt::Debug for SessionApiProxyServices {
@@ -214,6 +228,7 @@ impl std::fmt::Debug for SessionApiProxyServices {
             .field("has_query", &self.query.is_some())
             .field("has_tools", &self.tools.is_some())
             .field("has_jobs", &self.jobs.is_some())
+            .field("has_subagents", &self.subagents.is_some())
             .field(
                 "has_projection_registry",
                 &self.projection_registry.is_some(),
@@ -233,6 +248,7 @@ pub struct SessionApiProxyRuntime {
     projection_registry: Option<Arc<SessionProjectionRegistry>>,
     tools: Option<Arc<ToolRuntime>>,
     jobs: Option<Arc<JobRegistryService>>,
+    subagents: Option<Arc<SubagentRuntime>>,
     artifact_metadata: Arc<dyn ColdArtifactMetadata>,
     options: SessionApiProxyOptions,
     creation_locks: Arc<Mutex<HashMap<SessionId, Arc<tokio::sync::Mutex<()>>>>>,
@@ -304,6 +320,7 @@ impl SessionApiProxyRuntime {
                 projection_registry: projection_registry.clone(),
                 tools: context.get(TOOLS),
                 jobs: context.get(JOBS),
+                subagents: context.get(SUBAGENTS),
             },
             options,
             domains,
@@ -331,6 +348,7 @@ impl SessionApiProxyRuntime {
             projection_registry: services.projection_registry,
             tools: services.tools,
             jobs: services.jobs,
+            subagents: services.subagents,
             artifact_metadata,
             options,
             creation_locks: Arc::new(Mutex::new(HashMap::new())),
@@ -349,6 +367,8 @@ impl SessionApiProxyRuntime {
             RpcMethod::SessionList => self.list(request).await,
             RpcMethod::SessionSearch => self.search(request, signal).await,
             RpcMethod::SessionHistory => self.history(request).await,
+            RpcMethod::SubagentList => self.subagent_list(request, signal).await,
+            RpcMethod::SubagentHistory => self.subagent_history(request, signal).await,
             _ => self.domains.unary(method, request, signal).await,
         }
     }
@@ -848,6 +868,215 @@ impl SessionApiProxyRuntime {
         ))
     }
 
+    async fn subagent_list(
+        &self,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SubagentListRequest = serde_json::from_value(request.payload.clone())?;
+        let Some(subagents) = &self.subagents else {
+            return Ok(subagent_internal(request, "subagent catalog read failed"));
+        };
+        let entries = match subagents
+            .list_children(&payload.parent_session_id, Some(signal.clone()))
+            .await
+        {
+            Ok(entries) => entries,
+            Err(error)
+                if subagent_error_code(&error) == Some("CANCELLED") || signal.is_aborted() =>
+            {
+                return Ok(session_failure(
+                    request,
+                    "cancelled",
+                    "subagent catalog read was cancelled",
+                    Map::new(),
+                ));
+            }
+            Err(error)
+                if subagent_error_code(&error)
+                    == Some("SUBAGENT_CONTROL_PROJECTIONS_UNAVAILABLE") =>
+            {
+                return Ok(subagent_projections_unavailable(request));
+            }
+            Err(_) => return Ok(subagent_internal(request, "subagent catalog read failed")),
+        };
+        let entries = entries
+            .into_iter()
+            .map(|entry| wire_subagent_entry(entry, &self.agents))
+            .collect();
+        let parent_available = self.agents.get(&payload.parent_session_id).is_some();
+        let value = serde_json::to_value(SubagentListValue {
+            entries,
+            parent_available,
+        })?;
+        Ok(RpcResponse::new(
+            request.rpc_id,
+            RpcResult::Success { value: Some(value) },
+        ))
+    }
+
+    #[allow(clippy::too_many_lines)] // Catalog authorization and the exact history cut form one read transaction.
+    async fn subagent_history(
+        &self,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SubagentHistoryRequest = serde_json::from_value(request.payload.clone())?;
+        let Some(subagents) = &self.subagents else {
+            return Ok(subagent_internal(request, "subagent history read failed"));
+        };
+        let catalog = match subagents
+            .list_children(&payload.parent_session_id, Some(signal.clone()))
+            .await
+        {
+            Ok(entries) => entries,
+            Err(error)
+                if subagent_error_code(&error)
+                    == Some("SUBAGENT_CONTROL_PROJECTIONS_UNAVAILABLE") =>
+            {
+                return Ok(subagent_projections_unavailable(request));
+            }
+            Err(error)
+                if subagent_error_code(&error) == Some("CANCELLED") || signal.is_aborted() =>
+            {
+                return Ok(session_failure(
+                    request,
+                    "cancelled",
+                    "subagent history read was cancelled",
+                    Map::new(),
+                ));
+            }
+            Err(_) => return Ok(subagent_internal(request, "subagent history read failed")),
+        };
+        let addressed = catalog
+            .into_iter()
+            .find(|entry| subagent_entry_id(entry) == &payload.child_session_id);
+        match addressed {
+            Some(seekdeep_subagent::SubagentListEntry::Diagnostic { reason, .. }) => {
+                return Ok(session_failure(
+                    request,
+                    "subagent-catalog-diagnostic",
+                    "subagent catalog entry is diagnostic",
+                    Map::from_iter([
+                        (
+                            "parentSessionId".to_owned(),
+                            Value::String(payload.parent_session_id.to_string()),
+                        ),
+                        (
+                            "childSessionId".to_owned(),
+                            Value::String(payload.child_session_id.to_string()),
+                        ),
+                        (
+                            "reason".to_owned(),
+                            serde_json::to_value(reason).unwrap_or(Value::Null),
+                        ),
+                    ]),
+                ));
+            }
+            Some(seekdeep_subagent::SubagentListEntry::Child { mode, .. })
+                if wire_subagent_mode(&mode) == payload.mode => {}
+            _ => {
+                return Ok(session_failure(
+                    request,
+                    "subagent-not-found",
+                    "subagent address is absent from the parent's catalog",
+                    Map::from_iter([
+                        (
+                            "parentSessionId".to_owned(),
+                            Value::String(payload.parent_session_id.to_string()),
+                        ),
+                        (
+                            "childSessionId".to_owned(),
+                            Value::String(payload.child_session_id.to_string()),
+                        ),
+                    ]),
+                ));
+            }
+        }
+        let attached = self.sessions.get(&payload.child_session_id);
+        let source = match self.history_source(&payload.child_session_id).await {
+            Ok(source) => source,
+            Err(error) if error.downcast_ref::<HistoryNotFound>().is_some() => {
+                return Ok(session_failure(
+                    request,
+                    "subagent-not-found",
+                    "subagent disappeared during history read",
+                    Map::from_iter([
+                        (
+                            "parentSessionId".to_owned(),
+                            Value::String(payload.parent_session_id.to_string()),
+                        ),
+                        (
+                            "childSessionId".to_owned(),
+                            Value::String(payload.child_session_id.to_string()),
+                        ),
+                    ]),
+                ));
+            }
+            Err(_) => return Ok(subagent_internal(request, "subagent history read failed")),
+        };
+        if signal.is_aborted() {
+            return Ok(session_failure(
+                request,
+                "cancelled",
+                "subagent history read was cancelled",
+                Map::new(),
+            ));
+        }
+        if source.header.parent_session.as_ref() != Some(&payload.parent_session_id) {
+            return Ok(session_failure(
+                request,
+                "subagent-unauthorized",
+                "subagent parent changed during history read",
+                Map::from_iter([(
+                    "childSessionId".to_owned(),
+                    Value::String(payload.child_session_id.to_string()),
+                )]),
+            ));
+        }
+        let scope = self
+            .agents
+            .get(&payload.child_session_id)
+            .map(|agent| agent.scope_key());
+        let projections = if payload.before_seq.is_none() {
+            attached
+                .as_ref()
+                .and_then(|session| self.projections.live_snapshot(session).ok().flatten())
+                .or_else(|| {
+                    self.projections
+                        .snapshot_for_events(&source.events)
+                        .ok()
+                        .flatten()
+                })
+                .map(projection_block)
+        } else {
+            None
+        };
+        let (events, has_more) = paginate_history(
+            &source.events,
+            payload.before_seq,
+            payload.max_messages.unwrap_or(50),
+        );
+        let entries = events
+            .iter()
+            .map(|event| -> anyhow::Result<HistoryEntry> {
+                Ok(HistoryEntry {
+                    event: serde_json::from_value(serde_json::to_value(event)?)?,
+                    view: self.history_view(event, &events, scope),
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let value = serde_json::to_value(SessionHistoryValue {
+            events: entries,
+            has_more,
+            projections,
+        })?;
+        Ok(RpcResponse::new(
+            request.rpc_id,
+            RpcResult::Success { value: Some(value) },
+        ))
+    }
+
     async fn history_source(&self, session_id: &SessionId) -> anyhow::Result<HistorySource> {
         if let Some(session) = self.sessions.get(session_id) {
             return Ok(HistorySource {
@@ -1265,6 +1494,7 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
             projection_registry: self.projection_registry.clone(),
             tools: self.tools.clone(),
             jobs: self.jobs.clone(),
+            subagents: self.subagents.clone(),
             artifact_metadata: self.artifact_metadata.clone(),
             options: self.options.clone(),
             creation_locks: self.creation_locks.clone(),
@@ -1292,6 +1522,7 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
             projection_registry: self.projection_registry.clone(),
             tools: self.tools.clone(),
             jobs: self.jobs.clone(),
+            subagents: self.subagents.clone(),
             artifact_metadata: self.artifact_metadata.clone(),
             options: self.options.clone(),
             creation_locks: self.creation_locks.clone(),
@@ -1314,7 +1545,31 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
         query: SessionLogQuery,
         signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<HttpResponse>> {
-        self.domains.session_log(query, signal)
+        let deps = SessionLogExportDeps {
+            session_query: self.query.as_ref().map(|query| {
+                Arc::new(SessionQueryExportAdapter(query.clone()))
+                    as Arc<dyn crate::SessionLogLineageQuery>
+            }),
+            session_persistence: self.persistence.as_ref().map(|persistence| {
+                Arc::new(SessionPersistenceExportAdapter(persistence.clone()))
+                    as Arc<dyn crate::SessionLogPersistence>
+            }),
+            attachments: self.context.get(ATTACHMENTS).map(|attachments| {
+                Arc::new(AttachmentStoreExportAdapter(attachments))
+                    as Arc<dyn crate::SessionLogAttachments>
+            }),
+            sessions: Some(Arc::new(SessionStoreExportAdapter(self.sessions.clone()))),
+        };
+        async move {
+            prepare_session_log_response(
+                &deps,
+                query,
+                SessionLogCompressionLevel::default(),
+                signal,
+            )
+            .await
+        }
+        .boxed()
     }
 }
 
@@ -1807,6 +2062,98 @@ fn job_views(snapshots: Vec<seekdeep_jobs::JobSnapshot>) -> Vec<JobView> {
             finished_at: snapshot.finished_at,
         })
         .collect()
+}
+
+fn wire_subagent_entry(
+    entry: seekdeep_subagent::SubagentListEntry,
+    agents: &AgentRegistry,
+) -> WireSubagentListEntry {
+    match entry {
+        seekdeep_subagent::SubagentListEntry::Child {
+            id,
+            mode,
+            has_children,
+            ..
+        } => {
+            let activity = if agents
+                .get(&id)
+                .is_some_and(|agent| agent.status() == AgentStatus::Running)
+            {
+                WireSubagentActivity::Running
+            } else {
+                WireSubagentActivity::Inactive
+            };
+            match mode {
+                seekdeep_subagent::SubagentListMode::OneShot { label } => {
+                    WireSubagentListEntry::Child {
+                        id,
+                        mode: WireSubagentMode::OneShot,
+                        activity,
+                        has_children,
+                        label,
+                    }
+                }
+                seekdeep_subagent::SubagentListMode::Continuable { label } => {
+                    WireSubagentListEntry::Child {
+                        id,
+                        mode: WireSubagentMode::Continuable,
+                        activity,
+                        has_children,
+                        label: Some(label),
+                    }
+                }
+            }
+        }
+        seekdeep_subagent::SubagentListEntry::Diagnostic { id, reason } => {
+            WireSubagentListEntry::Diagnostic {
+                id,
+                reason: match reason {
+                    seekdeep_subagent::SubagentDiagnosticReason::Corrupt => {
+                        WireSubagentDiagnosticReason::Corrupt
+                    }
+                    seekdeep_subagent::SubagentDiagnosticReason::Unsupported => {
+                        WireSubagentDiagnosticReason::Unsupported
+                    }
+                    seekdeep_subagent::SubagentDiagnosticReason::Unavailable => {
+                        WireSubagentDiagnosticReason::Unavailable
+                    }
+                },
+            }
+        }
+    }
+}
+
+fn subagent_entry_id(entry: &seekdeep_subagent::SubagentListEntry) -> &SessionId {
+    match entry {
+        seekdeep_subagent::SubagentListEntry::Child { id, .. }
+        | seekdeep_subagent::SubagentListEntry::Diagnostic { id, .. } => id,
+    }
+}
+
+fn wire_subagent_mode(mode: &seekdeep_subagent::SubagentListMode) -> WireSubagentMode {
+    match mode {
+        seekdeep_subagent::SubagentListMode::OneShot { .. } => WireSubagentMode::OneShot,
+        seekdeep_subagent::SubagentListMode::Continuable { .. } => WireSubagentMode::Continuable,
+    }
+}
+
+fn subagent_error_code(error: &anyhow::Error) -> Option<&str> {
+    error
+        .downcast_ref::<seekdeep_subagent::SubagentError>()
+        .map(|error| error.code.as_str())
+}
+
+fn subagent_internal(request: RpcRequest<Value>, message: &str) -> RpcResponse<Value> {
+    session_failure(request, "internal", message, Map::new())
+}
+
+fn subagent_projections_unavailable(request: RpcRequest<Value>) -> RpcResponse<Value> {
+    session_failure(
+        request,
+        "internal",
+        "subagent catalog is unavailable: this deployment does not mount the sessionProjections registry (load seekdeep-session-projection)",
+        Map::new(),
+    )
 }
 
 fn send_subscribed_if_new(

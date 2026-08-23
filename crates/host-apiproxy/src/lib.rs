@@ -57,8 +57,8 @@ pub use session_export::{
     SESSION_LOG_PUSH_CHUNK_BYTES, SessionLineageNode, SessionLogAttachments,
     SessionLogCompressionLevel, SessionLogExportDeps, SessionLogLineageQuery,
     SessionLogLiveSessions, SessionLogPersistence, SessionLogZipEntry,
-    SessionPersistenceExportAdapter, SessionStoreExportAdapter, flush_live_session_log,
-    prepare_session_log_response, session_log_zip_filename,
+    SessionPersistenceExportAdapter, SessionQueryExportAdapter, SessionStoreExportAdapter,
+    flush_live_session_log, prepare_session_log_response, session_log_zip_filename,
 };
 pub use session_runtime::{
     ColdArtifactMetadata, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES, SessionApiProxyOptions,

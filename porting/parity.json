@@ -55029,7 +55029,23 @@
     {
       "source": "packages/host/apiproxy/src/api-proxy.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/service.rs",
+        "crates/host-apiproxy/src/configuration.rs",
+        "crates/host-apiproxy/src/interactions.rs",
+        "crates/host-apiproxy/src/presets.rs",
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/src/registry_workspace.rs",
+        "crates/host-apiproxy/src/session_export.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests --reporter=dot (20 files, 374 tests passed)",
+        "cargo test -p seekdeep-host-apiproxy --all-features",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings",
+        "cargo xtask docs"
+      ],
+      "note": "The composed Rust API Proxy owns every unary, response, mux, Host, and Session-export path from the pinned source: Host and workspace controls, configuration, interactions, live/cold Session lifecycle, model and attachment admission, presets, exact private capabilities, goals, skills, queue/cancel, background jobs, subagents, projections, and pull-driven ZIP export. Domain decorators preserve one shared Agent-resolution policy and deterministic lifecycle-owned listeners."
     },
     {
       "source": "packages/host/apiproxy/src/api/agent-presets.schema.ts",
@@ -55557,7 +55573,23 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-cold.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/api-remotes/src/agent_lookup.rs",
+        "crates/api-remotes/tests/agent_lookup_parity.rs",
+        "crates/host-apiproxy/src/presets.rs",
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_models_service_parity.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_list_service_parity.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_history_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-cold.spec.ts --reporter=dot (16 passed)",
+        "cargo test -p seekdeep-api-remotes --all-features (6 lookup policy cases passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_models_service_parity --test api_proxy_session_list_service_parity --test api_proxy_session_history_service_parity --all-features",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust cold reads remain Agent-free, bounded, visible, and repair-aware; live-preferred Agent and Session lookups share one resume, reclassify publication races, and preserve origin-based subagent ownership. Generic prompt/create/model/queue/cancel controls honor that fence, browser time zones are strict and canonical, synchronous delivery failures become agent-busy, and degenerate persistence compositions retain distinct internal versus not-found results."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-config.spec.ts",
@@ -55688,7 +55720,22 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-subagents.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/presets.rs",
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/tests/api_proxy_subagent_service_parity.rs",
+        "crates/subagent/src/index.rs",
+        "crates/subagent/src/list_children.rs",
+        "crates/subagent/src/continuation.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-subagents.spec.ts --reporter=dot (15 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_subagent_service_parity --all-features (3 consolidated gateway cases passed)",
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Production Rust lists the complete projection-backed direct-child catalog while deriving activity and parent availability from exact live Agents; history authorizes the id and mode before live/cold reads, soft-omits failed projections, rechecks parent lineage, and never activates a child. Prompt canonicalizes provenance and maps continuation failures without leaking provider details; interrupt uses only durable user authority and the core primitive, so an offline parent remains sufficient."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-view.spec.ts",
@@ -55708,7 +55755,22 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-workspace.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/service.rs",
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/src/registry_workspace.rs",
+        "crates/host-apiproxy/tests/api_proxy_host_service_parity.rs",
+        "crates/host-apiproxy/tests/api_proxy_workspace_service_parity.rs",
+        "crates/host-apiproxy/tests/registry_workspace_integration.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_create_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-workspace.spec.ts --reporter=dot (22 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_host_service_parity --test api_proxy_workspace_service_parity --test registry_workspace_integration --test api_proxy_session_create_service_parity --all-features",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust covers native and browse directory capabilities, path opening, atomic canonical workspace creation, durable rename/order/membership/archive mutations, committed Host frames, and exact business-error mapping. Real session.create integration resolves the registry-owned path, commits membership idempotently, leaves cwd-only sessions ungrouped, and rejects unknown workspace ids before Agent creation."
     },
     {
       "source": "packages/host/apiproxy/tests/client-handler.spec.ts",

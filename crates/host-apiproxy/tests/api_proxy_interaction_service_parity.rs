@@ -524,6 +524,7 @@ async fn session_mux_baseline_precedes_replayed_pending_interactions() {
             projection_registry: None,
             tools: None,
             jobs: None,
+            subagents: None,
         },
         SessionApiProxyOptions::default(),
         harness.runtime.clone(),

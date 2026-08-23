@@ -10,6 +10,7 @@ anyhow.workspace = true
 async-stream.workspace = true
 async-trait.workspace = true
 base64.workspace = true
+chrono-tz.workspace = true
 crc32fast.workspace = true
 flate2.workspace = true
 futures.workspace = true
@@ -30,6 +31,7 @@ seekdeep-jobs = { path = "../jobs" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-settings = { path = "../settings" }
 seekdeep-skill = { path = "../skill" }
+seekdeep-subagent = { path = "../subagent" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-session-projection-cache = { path = "../session-projection-cache" }
