@@ -16,6 +16,7 @@ fn event(seq: u64, event_type: &str, data: Value) -> Rc<ConversationLocationEven
 fn input(event: &Rc<ConversationLocationEvent>) -> ConversationEventInput {
     ConversationEventInput {
         event: event.clone(),
+        view: None,
     }
 }
 
@@ -296,4 +297,35 @@ fn step_scoped_data_without_a_step_fails_at_the_publication_edge() {
         error.to_string(),
         "conversation Step data \"usage\" requires a step"
     );
+}
+
+#[test]
+fn loaded_end_boundaries_close_missing_starts_and_turn_boundaries_stay_turn_scoped() {
+    let call = event(10, "tool/call", json!({"turn":2,"step":3}));
+    let step_end = event(11, "step/end", json!({"turn":2,"step":3}));
+    let turn_end = event(12, "turn/end", json!({"turn":2}));
+    let mut rebuilt = ConversationLocationIndex::default();
+    rebuilt
+        .rebuild(&[input(&call), input(&step_end), input(&turn_end)])
+        .unwrap();
+    let ConversationLocation::Step { turn, step } = rebuilt.location_of(&call) else {
+        panic!("explicit call coordinates did not resolve a Step");
+    };
+    assert_eq!(turn.status, ConversationBoundaryStatus::Closed);
+    assert_eq!(step.status, ConversationBoundaryStatus::Closed);
+    assert!(turn.start.is_none());
+    assert!(step.start.is_none());
+
+    let mut appended = ConversationLocationIndex::default();
+    let turn_start = event(1, "turn/start", json!({"turn":1}));
+    let step_start = event(2, "step/start", json!({"turn":1,"step":1}));
+    let turn_end = event(3, "turn/end", json!({"turn":1}));
+    appended.append_boundary(&turn_start).unwrap();
+    appended.append_boundary(&step_start).unwrap();
+    appended.append_boundary(&turn_end).unwrap();
+    let ConversationLocation::Turn { turn } = appended.location_of(&turn_end) else {
+        panic!("Turn end inherited an open Step");
+    };
+    assert_eq!(turn.status, ConversationBoundaryStatus::Closed);
+    assert_eq!(turn.steps[0].status, ConversationBoundaryStatus::Open);
 }

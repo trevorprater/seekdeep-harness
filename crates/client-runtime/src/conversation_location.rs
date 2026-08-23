@@ -35,6 +35,8 @@ impl ConversationLocationEvent {
 pub struct ConversationEventInput {
     /// Exact durable event reference.
     pub event: Rc<ConversationLocationEvent>,
+    /// Optional envelope-level presentation view.
+    pub view: Option<Rc<Value>>,
 }
 
 /// Open/closed knowledge for one Turn or Step.

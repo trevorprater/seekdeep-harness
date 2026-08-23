@@ -174,6 +174,8 @@ Append 普通 Event 只继承当前坐标；append 边界只重算所属 Turn。
 
 Rust/WASM 对象层在 `ConversationLocationIndex` 中实现这套约定：完整 rebuild 复用未变化的 timeline、Turn、Step 与 data-store identity；append 边界只替换所属 Turn，并报告 resolved Turn/Step 引用真正变化的每个 seq，使 replay 精确覆盖受影响 Match。Location-data replacement 保持 reader identity，先移除全部旧 publication 再安装下一组，允许原子 ownership transfer，并以源码诊断拒绝同时占用。
 
+Rust `ConversationNodeAssembler` 通过同样的三条窗口路径消费该索引。线性 append 保持同一个 Match collection，只更新精确 business ID；prepend 按 seq 合并，在 start 到达时初始化 pending Context，并修复 provisional Reader gap；修订过的 predecessor 按 start 顺序穿过 dependency closure 传播。Flush 以 Step→Turn 顺序发布 Location data，校验稳定的 Node key 与 target identity，禁止增量 withdrawal，并只把各 target 自有的完整 replacement 或 upsert 连同 reference-stable timeline 交给 builder。
+
 Assembler 还把 reference-stable timeline 交给 View Builder。业务不重复维护 turn order、step list、last step 或边界 Map。
 
 ## 三种事件窗口链路
