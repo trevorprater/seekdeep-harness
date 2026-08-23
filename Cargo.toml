@@ -96,6 +96,7 @@ members = [
   "crates/skill-filesystem",
   "crates/subagent",
   "crates/subagent-in-process-driver",
+  "crates/subagent-fork-in-process",
   "crates/subagent-spawn-in-process",
   "crates/session-persistence",
   "crates/session-persistence-jsonl",

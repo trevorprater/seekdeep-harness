@@ -6600,6 +6600,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-subagent-fork-in-process"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-subagent",
+ "seekdeep-subagent-in-process-driver",
+ "seekdeep-subagent-spawn-in-process",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-subagent-in-process-driver"
 version = "0.1.0-rc.5"
 dependencies = [

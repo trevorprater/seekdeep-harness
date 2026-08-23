@@ -68090,7 +68090,16 @@
     {
       "source": "packages/subagent/subagent-fork-in-process/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-fork-in-process/src/lib.rs",
+        "crates/subagent-in-process-driver/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: fork provider 13/13",
+        "cargo test -p seekdeep-subagent-fork-in-process --all-features",
+        "cargo clippy -p seekdeep-subagent-fork-in-process --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-fork-in-process/src/invariant.ts",
@@ -68109,12 +68118,29 @@
     {
       "source": "packages/subagent/subagent-fork-in-process/tests/multi-subagent.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-fork-in-process/tests/provider_parity.rs",
+        "crates/tool-subagent/tests/delegation_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: fork provider 13/13",
+        "Rust test proves fork and spawn provider coexistence; assembled spawn vertical proves shared runtime execution"
+      ]
     },
     {
       "source": "packages/subagent/subagent-fork-in-process/tests/subagent-fork-in-process.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-fork-in-process/tests/provider_parity.rs",
+        "crates/subagent-in-process-driver/tests/driver_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: fork provider 13/13",
+        "cargo test -p seekdeep-subagent-fork-in-process --all-features",
+        "cargo test -p seekdeep-subagent-in-process-driver --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-fork-in-process/tsconfig.json",
