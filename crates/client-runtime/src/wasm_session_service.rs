@@ -124,18 +124,25 @@ impl WasmSessionRuntime {
     pub(crate) fn core_runtime(&self) -> Rc<SessionRuntime> {
         self.state.runtime.clone()
     }
-}
 
-#[wasm_bindgen(js_class = SessionRuntime)]
-impl WasmSessionRuntime {
-    /// Creates the browser root Sessions service.
-    ///
-    /// # Errors
-    ///
-    /// Returns malformed restored selection or JavaScript face failures.
-    #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(root: JsValue, api: JsValue, remote: JsValue) -> Result<Self, JsValue> {
+    pub(crate) fn new_with_definitions(
+        root: JsValue,
+        api: JsValue,
+        remote: JsValue,
+        events: Rc<dyn crate::AssemblerEventDefinitions>,
+        views: Rc<dyn crate::AssemblerViewDefinitions>,
+    ) -> Result<Self, JsValue> {
+        Self::build(&root, api, remote, events, views)
+    }
+
+    fn build(
+        root: &JsValue,
+        api: JsValue,
+        remote: JsValue,
+        events: Rc<dyn crate::AssemblerEventDefinitions>,
+        views: Rc<dyn crate::AssemblerViewDefinitions>,
+    ) -> Result<Self, JsValue> {
         let storage = Rc::new(BrowserSelectionStorage::new());
         let restored = storage.load();
         let manager = SessionManager::new(
@@ -148,11 +155,8 @@ impl WasmSessionRuntime {
                 resolve_time_zone: Rc::new(|| {
                     crate::resolved_client_time_zone_js().map_err(|error| render_js(&error))
                 }),
-                create_conversation: Rc::new(|| {
-                    ConversationNodeAssembler::new(
-                        Rc::new(ServiceEmptyEvents),
-                        Rc::new(ServiceEmptyViews),
-                    )
+                create_conversation: Rc::new(move || {
+                    ConversationNodeAssembler::new(events.clone(), views.clone())
                 }),
                 clock: Rc::new(browser_now),
                 report: Rc::new(|message| console_error(&message)),
@@ -201,6 +205,26 @@ impl WasmSessionRuntime {
         }));
         let list_face = list_face(&state)?;
         Ok(Self { state, list_face })
+    }
+}
+
+#[wasm_bindgen(js_class = SessionRuntime)]
+impl WasmSessionRuntime {
+    /// Creates the browser root Sessions service.
+    ///
+    /// # Errors
+    ///
+    /// Returns malformed restored selection or JavaScript face failures.
+    #[wasm_bindgen(constructor)]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(root: JsValue, api: JsValue, remote: JsValue) -> Result<Self, JsValue> {
+        Self::build(
+            &root,
+            api,
+            remote,
+            Rc::new(ServiceEmptyEvents),
+            Rc::new(ServiceEmptyViews),
+        )
     }
 
     /// Root list observable.

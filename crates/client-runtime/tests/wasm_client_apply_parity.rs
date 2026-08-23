@@ -409,3 +409,326 @@ fn registry_changes_reach_resident_session_rebuild_and_cleanup_stops_loop_once()
     }
     assert_eq!(*bench.stopped.borrow(), 1);
 }
+
+#[wasm_bindgen_test(async)]
+#[allow(clippy::too_many_lines)]
+async fn registered_javascript_definition_executes_inside_rust_session_assembler() {
+    let bench = bench();
+    let runtime = apply_client_runtime(bench.root.clone()).unwrap();
+    let view_definition = Object::new();
+    set(&view_definition, "target", &JsValue::from_str("probe"));
+    set(
+        &view_definition,
+        "create",
+        &Function::new_no_args(
+            "return { empty: { count: 0 }, replace({ nodes, timeline }) { return { count: nodes[0]?.data.count ?? 0, surfaceOp: nodes[0]?.data.surfaceOp, location: timeline.turns.get(0)?.data.get('turn-probe') } }, apply({ upserts, timeline }) { return { count: upserts[0]?.data.count ?? 0, surfaceOp: upserts[0]?.data.surfaceOp, location: timeline.turns.get(0)?.data.get('turn-probe') } } }",
+        ),
+    );
+    let views = get(&runtime, "conversationViews");
+    get(&views, "register")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&views, &view_definition)
+        .unwrap();
+
+    let definition = Object::new();
+    set(&definition, "kind", &JsValue::from_str("probe"));
+    set(&definition, "target", &JsValue::from_str("probe"));
+    let match_calls = Rc::new(RefCell::new(0));
+    let observed_matches = match_calls.clone();
+    let match_event = Closure::wrap(Box::new(move |event: JsValue| {
+        *observed_matches.borrow_mut() += 1;
+        let event_type = get(&event, "type").as_string();
+        if !matches!(event_type.as_deref(), Some("probe/start" | "probe/update")) {
+            return JsValue::NULL;
+        }
+        let result = Object::new();
+        set(&result, "id", &get(&get(&event, "data"), "id"));
+        set(
+            &result,
+            "role",
+            &JsValue::from_str(if event_type.as_deref() == Some("probe/start") {
+                "start"
+            } else {
+                "update"
+            }),
+        );
+        result.into()
+    }) as Box<dyn FnMut(JsValue) -> JsValue>);
+    set(&definition, "match", &match_event.into_js_value());
+    let start_calls = Rc::new(RefCell::new(0));
+    let observed_starts = start_calls.clone();
+    let start_definition = Closure::wrap(Box::new(
+        move |_context: JsValue, accepted: JsValue, reader: JsValue| {
+            *observed_starts.borrow_mut() += 1;
+            let event = get(&accepted, "event");
+            let previous = get(&reader, "previous")
+                .dyn_into::<Function>()
+                .unwrap()
+                .call1(&reader, &JsValue::from_str("probe"))
+                .unwrap();
+            let base = if previous.is_undefined() {
+                0.0
+            } else {
+                get(&get(&previous, "state"), "count").as_f64().unwrap()
+            };
+            let state = Object::new();
+            set(
+                &state,
+                "count",
+                &JsValue::from_f64(base + get(&get(&event, "data"), "count").as_f64().unwrap()),
+            );
+            set(&state, "surfaceOp", &get(&event, "surfaceOp"));
+            state
+        },
+    )
+        as Box<dyn FnMut(JsValue, JsValue, JsValue) -> Object>);
+    set(&definition, "start", &start_definition.into_js_value());
+    set(
+        &definition,
+        "update",
+        &Function::new_with_args(
+            "context, match",
+            "return { count: context.state.count + match.event.data.delta, surfaceOp: context.state.surfaceOp }",
+        ),
+    );
+    set(
+        &definition,
+        "publication",
+        &Function::new_with_args("match", "return 'immediate'"),
+    );
+    set(
+        &definition,
+        "buildViewNode",
+        &Function::new_with_args(
+            "context",
+            "return { key: context.key, kind: context.kind, id: context.id, target: 'probe', data: context.state }",
+        ),
+    );
+    let events = get(&runtime, "conversationEvents");
+    get(&events, "register")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&events, &definition)
+        .unwrap();
+    let location_definition = Object::new();
+    set(
+        &location_definition,
+        "kind",
+        &JsValue::from_str("turn-probe"),
+    );
+    set(
+        &location_definition,
+        "match",
+        &Function::new_with_args(
+            "event",
+            "return event.type === 'turn/start' ? { id: 'turn', role: 'start' } : null",
+        ),
+    );
+    set(
+        &location_definition,
+        "start",
+        &Function::new_with_args("context, match, reader", "return { label: 'located' }"),
+    );
+    set(
+        &location_definition,
+        "update",
+        &Function::new_with_args("context, match", "return context.state"),
+    );
+    set(
+        &location_definition,
+        "buildLocationData",
+        &Function::new_with_args(
+            "context, scope",
+            "return scope === 'turn' ? { kind: 'turn', turn: 0, key: 'turn-probe', value: context.state } : null",
+        ),
+    );
+    get(&events, "register")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&events, &location_definition)
+        .unwrap();
+
+    let sinks = get(&runtime, "sinks");
+    let host = get(&sinks, "onHostEnvelope")
+        .dyn_into::<Function>()
+        .unwrap();
+    let (added, payload) = envelope("host/session-added");
+    set(&payload, "sessionId", &JsValue::from_str("s-probe"));
+    set(&payload, "blank", &JsValue::TRUE);
+    host.call1(&sinks, &added).unwrap();
+    flush().await;
+    let sessions = get(&runtime, "sessions");
+    get(&sessions, "open")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&sessions, &JsValue::from_str("s-probe"))
+        .unwrap();
+    let binding = get(&sessions, "binding")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&sessions, &JsValue::from_str("s-probe"))
+        .unwrap();
+    assert!(!binding.is_undefined(), "Session binding was absent");
+    let session = get(&binding, "session");
+    assert!(!session.is_undefined(), "Session face was absent");
+    let open = get(&session, "open")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&session)
+        .unwrap()
+        .dyn_into::<Promise>()
+        .unwrap();
+    JsFuture::from(open).await.unwrap();
+    let session_snapshot = get(&session, "getSnapshot")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&session)
+        .unwrap();
+    let views = get(&session_snapshot, "views");
+    assert!(!views.is_undefined(), "Session views face was absent");
+    let initial_view = get(&views, "get")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&views, &JsValue::from_str("probe"))
+        .unwrap();
+    assert!(
+        !initial_view.is_undefined(),
+        "registered view target was absent"
+    );
+    assert_eq!(get(&initial_view, "count").as_f64(), Some(0.0));
+
+    let mux = get(&sinks, "onMuxEnvelope").dyn_into::<Function>().unwrap();
+    let send = |seq: f64, event_type: &str, data: JsValue| {
+        let event = Object::new();
+        set(&event, "seq", &JsValue::from_f64(seq));
+        set(
+            &event,
+            "time",
+            &JsValue::from_f64(1_800_000_000_000.0 + seq),
+        );
+        set(&event, "type", &JsValue::from_str(event_type));
+        set(&event, "surfaceOp", &JsValue::from_str("append"));
+        set(&event, "data", &data);
+        let payload = Object::new();
+        set(&payload, "type", &JsValue::from_str("session/event"));
+        set(&payload, "sessionId", &JsValue::from_str("s-probe"));
+        set(&payload, "event", &event);
+        let envelope = Object::new();
+        set(
+            &envelope,
+            "rpcId",
+            &JsValue::from_str(&format!("event-{seq}")),
+        );
+        set(&envelope, "payload", &payload);
+        mux.call1(&sinks, &envelope).unwrap();
+    };
+    let start = Object::new();
+    set(&start, "id", &JsValue::from_str("one"));
+    set(&start, "count", &JsValue::from_f64(2.0));
+    let console = get(&js_sys::global(), "console");
+    let original_console_error = get(&console, "error");
+    let reported = Rc::new(RefCell::new(Vec::<String>::new()));
+    let observed = reported.clone();
+    let capture = Closure::wrap(Box::new(move |message: JsValue| {
+        observed.borrow_mut().push(
+            message
+                .as_string()
+                .unwrap_or_else(|| format!("{message:?}")),
+        );
+    }) as Box<dyn FnMut(JsValue)>);
+    assert!(
+        Reflect::set(
+            &console,
+            &JsValue::from_str("error"),
+            &capture.into_js_value()
+        )
+        .unwrap()
+    );
+    let turn = Object::new();
+    set(&turn, "turn", &JsValue::from_f64(0.0));
+    send(0.0, "turn/start", turn.into());
+    flush().await;
+    get(&session, "getSnapshot")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&session)
+        .unwrap();
+    send(1.0, "probe/start", start.into());
+    flush().await;
+    get(&session, "getSnapshot")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&session)
+        .unwrap();
+    let snapshot = get(&views, "get")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&views, &JsValue::from_str("probe"))
+        .unwrap();
+    assert!(
+        Reflect::set(
+            &console,
+            &JsValue::from_str("error"),
+            &original_console_error
+        )
+        .unwrap()
+    );
+    assert!(
+        !snapshot.is_undefined(),
+        "Conversation view disappeared after start: {:?}",
+        reported.borrow()
+    );
+    assert_eq!(*match_calls.borrow(), 2, "match callback count");
+    assert_eq!(*start_calls.borrow(), 1, "start callback count");
+    assert_eq!(
+        get(&snapshot, "count").as_f64(),
+        Some(2.0),
+        "Conversation adapter reports: {:?}",
+        reported.borrow()
+    );
+    assert_eq!(
+        get(&snapshot, "surfaceOp").as_string().as_deref(),
+        Some("append")
+    );
+    assert_eq!(
+        get(&get(&snapshot, "location"), "label")
+            .as_string()
+            .as_deref(),
+        Some("located")
+    );
+
+    let update = Object::new();
+    set(&update, "id", &JsValue::from_str("one"));
+    set(&update, "delta", &JsValue::from_f64(3.0));
+    send(2.0, "probe/update", update.into());
+    flush().await;
+    get(&session, "getSnapshot")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&session)
+        .unwrap();
+    let snapshot = get(&views, "get")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&views, &JsValue::from_str("probe"))
+        .unwrap();
+    assert_eq!(get(&snapshot, "count").as_f64(), Some(5.0));
+
+    let second = Object::new();
+    set(&second, "id", &JsValue::from_str("two"));
+    set(&second, "count", &JsValue::from_f64(1.0));
+    send(3.0, "probe/start", second.into());
+    flush().await;
+    get(&session, "getSnapshot")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&session)
+        .unwrap();
+    let snapshot = get(&views, "get")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&views, &JsValue::from_str("probe"))
+        .unwrap();
+    assert_eq!(get(&snapshot, "count").as_f64(), Some(6.0));
+}

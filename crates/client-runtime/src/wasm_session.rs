@@ -214,6 +214,7 @@ fn parse_history_entry(value: &JsValue) -> Result<SessionHistoryEntry, JsValue> 
 }
 
 fn parse_event(value: &JsValue) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
+    let wire = js_to_json(value)?;
     let seq = safe_u64(
         &required(value, "seq", "Session event")?,
         "Session event seq",
@@ -224,8 +225,8 @@ fn parse_event(value: &JsValue) -> Result<Rc<crate::ConversationLocationEvent>, 
     )?;
     let event_type = required_string(value, "type", "Session event")?;
     let data = js_to_json(&required(value, "data", "Session event")?)?;
-    Ok(crate::ConversationLocationEvent::with_time(
-        seq, time, event_type, data,
+    Ok(crate::ConversationLocationEvent::with_wire(
+        seq, time, event_type, data, wire,
     ))
 }
 

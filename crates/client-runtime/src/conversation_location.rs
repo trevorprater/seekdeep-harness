@@ -18,6 +18,8 @@ pub struct ConversationLocationEvent {
     pub event_type: String,
     /// Complete event data object.
     pub data: Value,
+    /// Exact wire event, retained when the browser transport supplied it.
+    pub wire: Option<Value>,
 }
 
 impl ConversationLocationEvent {
@@ -29,6 +31,7 @@ impl ConversationLocationEvent {
             time: 0,
             event_type: event_type.into(),
             data,
+            wire: None,
         })
     }
 
@@ -40,6 +43,38 @@ impl ConversationLocationEvent {
             time,
             event_type: event_type.into(),
             data,
+            wire: None,
+        })
+    }
+
+    /// Creates one event while retaining its complete extension-bearing wire object.
+    #[must_use]
+    pub fn with_wire(
+        seq: u64,
+        time: i64,
+        event_type: impl Into<String>,
+        data: Value,
+        wire: Value,
+    ) -> Rc<Self> {
+        Rc::new(Self {
+            seq,
+            time,
+            event_type: event_type.into(),
+            data,
+            wire: Some(wire),
+        })
+    }
+
+    /// Returns the exact wire event or the canonical minimal event shape.
+    #[must_use]
+    pub fn wire_value(&self) -> Value {
+        self.wire.clone().unwrap_or_else(|| {
+            serde_json::json!({
+                "seq":self.seq,
+                "time":self.time,
+                "type":self.event_type,
+                "data":self.data,
+            })
         })
     }
 }

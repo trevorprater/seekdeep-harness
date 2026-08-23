@@ -147,6 +147,12 @@ impl Default for WasmConversationEventRegistry {
     }
 }
 
+impl WasmConversationEventRegistry {
+    pub(crate) fn core_registry(&self) -> Rc<ConversationEventRegistry<JsValue>> {
+        self.registry.clone()
+    }
+}
+
 /// Browser Conversation View Definition registry.
 #[wasm_bindgen(js_name = ConversationViewRegistry)]
 pub struct WasmConversationViewRegistry {
@@ -235,6 +241,12 @@ impl WasmConversationViewRegistry {
 impl Default for WasmConversationViewRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl WasmConversationViewRegistry {
+    pub(crate) fn core_registry(&self) -> Rc<ConversationViewRegistry<JsValue>> {
+        self.registry.clone()
     }
 }
 

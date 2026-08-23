@@ -38746,12 +38746,39 @@
     {
       "source": "packages/client/runtime/src/client/contract/conversation.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/conversation_assembler.rs",
+        "crates/client-runtime/src/conversation_location.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs",
+        "crates/client-runtime/tests/conversation_assembler_parity.rs",
+        "crates/client-runtime/tests/conversation_location_parity.rs",
+        "crates/client-runtime/tests/wasm_client_apply_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/conversation-assembler.client.spec.ts packages/client/runtime/tests/conversation-registry.client.spec.ts packages/client/runtime/tests/conversation.client.spec.ts --reporter=dot (pinned source: 33 passed)",
+        "cargo test -p seekdeep-client-runtime --test conversation_assembler_parity --test conversation_location_parity --test conversation_registry_parity --all-features (25 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_apply_parity-*.wasm (live JavaScript match/start/update/publication/reader/location-data/node/view-builder flow passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust owns collision-free Context identity, exact Match roles, immutable Context/previous snapshots, demand-recorded backward reads, Step/Turn Location and data ownership, publication cadence, Node contracts, timeline Maps, and per-target builder inputs; the WASM adapter preserves the complete extension-bearing SessionEvent wire object and synchronously adapts model-authored JavaScript match/start/update/publication/buildLocationData/buildViewNode/create/replace/apply callbacks without moving replay or ownership into JavaScript"
     },
     {
       "source": "packages/client/runtime/src/client/contract/session.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/session.rs",
+        "crates/client-runtime/src/wasm_session.rs",
+        "crates/client-runtime/tests/session_parity.rs",
+        "crates/client-runtime/tests/wasm_session_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/session.client.spec.ts --reporter=dot (pinned source: 50 passed)",
+        "cargo test -p seekdeep-client-runtime --test session_parity --all-features (15 consolidated cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_parity-*.wasm (live Session face cases passed)"
+      ],
+      "note": "The outward Rust/WASM Session face carries the opaque Session identity, identity-stable projection faces and observable snapshot plus prompt, attachment, queue, cancel, rename, paging, and command behavior; generated RPC objects, attachment Uint8Array bytes, source-visible synchronous prefixes, and business failures cross the browser boundary without giving feature code ownership of wire dispatch or history staging"
     },
     {
       "source": "packages/client/runtime/src/client/contract/sessions-port.ts",
@@ -38772,7 +38799,19 @@
     {
       "source": "packages/client/runtime/src/client/contract/sessions.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/session_service.rs",
+        "crates/client-runtime/src/wasm_session_service.rs",
+        "crates/client-runtime/tests/session_service_parity.rs",
+        "crates/client-runtime/tests/wasm_session_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/sessions-service.client.spec.ts packages/client/runtime/tests/scope.client.spec.ts --reporter=dot (pinned source: 48 passed)",
+        "cargo test -p seekdeep-client-runtime --test session_service_parity --test session_manager_parity --all-features (24 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_service_parity-*.wasm (4 live JavaScript service cases passed)"
+      ],
+      "note": "The complete Sessions service face exposes list/current provide observables, the fixed search bound, ordinary and addressed navigation, catalog control, preset echo, clear/search/fork/provide, pure scope and binding resolution, and scoped Session lookup; all methods delegate to the Rust lifecycle core while the browser facade preserves options objects, exact AbortSignal routing, structured error classes, stable face identities, and dynamically registered standard-prop contributions"
     },
     {
       "source": "packages/client/runtime/src/client/contract/settings-scope.ts",
@@ -39388,11 +39427,11 @@
       ],
       "evidence": [
         "pnpm exec vitest run packages/client/runtime/tests/client-apply.client.spec.ts packages/client/runtime/tests/wire-events.client.spec.ts --reporter=dot (pinned source: 7 passed total, 4 apply cases)",
-        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_apply_parity-*.wasm (3 live assembly/wire cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_apply_parity-*.wasm (4 live assembly/wire/model-definition cases passed)",
         "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 cases including initial selection passed)",
         "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
       ],
-      "note": "Live Rust/WASM assembly mounts and provides Slots, Conversation registries, Sessions, and Workspaces; installs Slot standard faces and Typert Agent identity; starts the one-shot initial selection and connection loop; fans mux and Host frames into the correct managers; rebuilds resident Sessions on registry changes; emits connection/reset; drops generation interaction state on reconnecting; and stops the loop exactly once through root Cordis effect cleanup"
+      "note": "Live Rust/WASM assembly mounts and provides Slots, Conversation registries, Sessions, and Workspaces; installs Slot standard faces and Typert Agent identity; starts the one-shot initial selection and connection loop; fans mux and Host frames into the correct managers; adapts model-authored JavaScript Definitions into resident Rust assemblers and rebuilds them on registry changes; emits connection/reset; drops generation interaction state on reconnecting; and stops the loop exactly once through root Cordis effect cleanup"
     },
     {
       "source": "packages/client/runtime/tests/context-provenance.client.spec.ts",

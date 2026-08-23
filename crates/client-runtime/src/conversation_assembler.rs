@@ -119,6 +119,9 @@ pub struct ConversationPreviousContext {
 
 /// Strictly-backward Context lookup available only during start evaluation.
 pub trait ConversationContextReader {
+    /// Reads the nearest initialized predecessor without recording a dependency.
+    fn peek_previous(&mut self, kind: &str) -> Option<ConversationPreviousContext>;
+
     /// Returns the nearest initialized predecessor of `kind`.
     fn previous(&mut self, kind: &str) -> Option<ConversationPreviousContext>;
 }
@@ -1267,6 +1270,19 @@ struct AssemblerReader<'a> {
 }
 
 impl ConversationContextReader for AssemblerReader<'_> {
+    fn peek_previous(&mut self, kind: &str) -> Option<ConversationPreviousContext> {
+        let predecessor = self.assembler.previous_context(kind, self.before_seq);
+        let context = self.assembler.contexts.get(predecessor.as_ref()?)?.borrow();
+        Some(ConversationPreviousContext {
+            key: context.key.clone(),
+            kind: context.kind.clone(),
+            id: context.id.clone(),
+            start_seq: context.start_seq?,
+            state: context.state.clone()?,
+            matches: context.matches.clone(),
+        })
+    }
+
     fn previous(&mut self, kind: &str) -> Option<ConversationPreviousContext> {
         let predecessor = self.assembler.previous_context(kind, self.before_seq);
         let revision = predecessor.as_ref().and_then(|key| {
@@ -1284,15 +1300,7 @@ impl ConversationContextReader for AssemblerReader<'_> {
                 window_gap: predecessor.is_none() && self.assembler.has_more,
             },
         );
-        let context = self.assembler.contexts.get(predecessor.as_ref()?)?.borrow();
-        Some(ConversationPreviousContext {
-            key: context.key.clone(),
-            kind: context.kind.clone(),
-            id: context.id.clone(),
-            start_seq: context.start_seq?,
-            state: context.state.clone()?,
-            matches: context.matches.clone(),
-        })
+        self.peek_previous(kind)
     }
 }
 

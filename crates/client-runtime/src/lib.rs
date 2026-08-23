@@ -27,6 +27,8 @@ mod tool_call_tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm_client_runtime;
 #[cfg(target_arch = "wasm32")]
+mod wasm_conversation_adapter;
+#[cfg(target_arch = "wasm32")]
 mod wasm_conversation_registry;
 #[cfg(target_arch = "wasm32")]
 mod wasm_misc;

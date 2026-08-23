@@ -6,6 +6,7 @@ use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use crate::{
     WasmClientSlotRegistry, WasmConversationEventRegistry, WasmConversationViewRegistry,
     WasmSessionRuntime, WasmWorkspaceRuntime,
+    wasm_conversation_adapter::{browser_event_definitions, browser_view_definitions},
 };
 
 /// Mounts the complete browser runtime into one Client Cordis context.
@@ -42,7 +43,15 @@ pub fn apply_client_runtime(root: JsValue) -> Result<JsValue, JsValue> {
     provide(&root, "conversationEvents", &events_face)?;
     provide(&root, "conversationViews", &views_face)?;
 
-    let sessions = WasmSessionRuntime::new(root.clone(), api.clone(), remote.clone())?;
+    let event_definitions = browser_event_definitions(events.core_registry());
+    let view_definitions = browser_view_definitions(views.core_registry());
+    let sessions = WasmSessionRuntime::new_with_definitions(
+        root.clone(),
+        api.clone(),
+        remote.clone(),
+        event_definitions,
+        view_definitions,
+    )?;
     let workspaces = WasmWorkspaceRuntime::new(root.clone(), api, &sessions)?;
     let sessions: JsValue = sessions.into();
     let workspaces: JsValue = workspaces.into();
