@@ -19,6 +19,7 @@ reqwest.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-host-webserver = { path = "../host-webserver" }
+seekdeep-identity = { path = "../identity" }
 seekdeep-llm = { path = "../llm" }
 serde.workspace = true
 serde_json.workspace = true

@@ -22,9 +22,10 @@ pub use rpc::{
     ClientRequest, ConnectionRpcAuthority, ConnectionStopHandle, EndpointMatcher, HOST_CONNECTION,
     HostConnectionService, HostDescriptionSubscription, HttpMethod, HttpRequest, HttpResponse,
     HttpResponseStream, HttpTransport, HttpTransportFuture, RpcError, RpcHandler, RpcHandlerFuture,
-    RpcId, RpcResult, ServerResponse, SharedRpcRegistration, WebConnectionRpc, endpoint_from_path,
+    RpcResult, ServerResponse, SharedRpcRegistration, WebConnectionRpc, endpoint_from_path,
     result_of, transport_error, validate_rpc_target,
 };
+pub use seekdeep_identity::RpcId;
 pub use trust::{assert_trusted_authority, is_loopback_hostname, is_trusted_api_request};
 pub use web_api_client::{
     EnvelopeSubscription, UnaryTimeoutPolicy, WebApiClient, WebApiContract, WebApiDownlink,

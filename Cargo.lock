@@ -4562,6 +4562,7 @@ dependencies = [
  "reqwest 0.12.28",
  "seekdeep-cordis",
  "seekdeep-host-webserver",
+ "seekdeep-identity",
  "seekdeep-invariants",
  "seekdeep-llm",
  "serde",
@@ -4638,6 +4639,7 @@ dependencies = [
 name = "seekdeep-client-runtime"
 version = "0.1.0-rc.5"
 dependencies = [
+ "futures",
  "indexmap 2.14.0",
  "js-sys",
  "seekdeep-client-ui-slots",

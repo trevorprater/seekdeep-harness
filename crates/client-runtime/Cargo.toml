@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 indexmap.workspace = true
+futures.workspace = true
 seekdeep-client-ui-slots = { path = "../client-ui-slots" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-identity = { path = "../identity" }

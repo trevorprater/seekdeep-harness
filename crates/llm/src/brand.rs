@@ -1,9 +1,6 @@
 //! Stable cross-boundary identifiers.
 
-seekdeep_util::string_brand!(
-    /// Stable message identity.
-    pub struct MessageId;
-);
+pub use seekdeep_identity::MessageId;
 seekdeep_util::string_brand!(
     /// Model tool-call correlation identity.
     pub struct CallId;

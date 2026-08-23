@@ -12,6 +12,7 @@ use futures::{Stream, future::BoxFuture, stream::BoxStream};
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
 use seekdeep_host_webserver::{WebHandler, WebHandlerFuture, WebRoute, WebRouteKind, WebServer};
+use seekdeep_identity::RpcId;
 use seekdeep_llm::AbortSignal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value, json};
@@ -26,31 +27,6 @@ use crate::{
 pub const CLIENT_CONNECTION: ServiceKey<ClientConnectionHandle> = ServiceKey::new("connection");
 /// Typed Cordis slot corresponding to Host `ctx.connection`.
 pub const HOST_CONNECTION: ServiceKey<HostConnectionService> = ServiceKey::new("connection");
-
-/// Opaque correlation identifier minted by the request initiator.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct RpcId(String);
-
-impl RpcId {
-    /// Brands an arbitrary string without runtime validation, matching the source contract.
-    #[must_use]
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    /// Returns the opaque identifier string.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for RpcId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
 
 /// Structured RPC business error. Unknown codes and details remain lossless.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -38966,7 +38966,18 @@
     {
       "source": "packages/client/runtime/src/client/sessions/pending.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/pending.rs",
+        "crates/client-runtime/tests/pending_queue_steering_parity.rs"
+      ],
+      "evidence": [
+        "pinned source direct oracle: PendingWait key prefixes, private rpcId response backfill, carrier receipt, payload identity, and synchronous post-settlement failure",
+        "cargo test -p seekdeep-client-runtime --test pending_queue_steering_parity --all-features (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust preserves approval/question key identities, exposes only the immutable render face, restores the private correlation id solely in the client-response envelope, delegates domain result encoding to callers, and fails synchronously after authoritative settlement"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/projection-store.ts",
@@ -38981,7 +38992,18 @@
     {
       "source": "packages/client/runtime/src/client/sessions/queue-mirror.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/queue_mirror.rs",
+        "crates/client-runtime/tests/pending_queue_steering_parity.rs"
+      ],
+      "evidence": [
+        "pinned source direct oracle: authoritative replacement, reference-stable snapshots, text-only editing, Unicode preview cap, reset, and one-occurrence durable steering retirement",
+        "cargo test -p seekdeep-client-runtime --test pending_queue_steering_parity --all-features (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust replaces the complete transient queue projection, preserves immutable snapshot identity between mutations, flattens preview whitespace and caps at 200 Unicode scalar values plus an ellipsis, exposes editable text only for all-text content, and retires exactly the first matching steering row on durable handoff"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/remotes.ts",
@@ -39006,7 +39028,18 @@
     {
       "source": "packages/client/runtime/src/client/sessions/steering-history.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/steering_history.rs",
+        "crates/client-runtime/tests/pending_queue_steering_parity.rs"
+      ],
+      "evidence": [
+        "pinned source direct oracle: next-step claim, cancellation, single-use user-source recognition, inserted-id claim clearing, and reset",
+        "cargo test -p seekdeep-client-runtime --test pending_queue_steering_parity --all-features (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust replays host-validated next-turn and next-step splices, claims only non-canceled removals from next-step, clears stale claims for reinserted identities, consumes each claim once, and recognizes steering only when the durable message source is user"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/subagent-lineage.ts",
@@ -54702,7 +54735,8 @@
       "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/api/rpc.rs",
-        "crates/client-connection/src/rpc.rs"
+        "crates/client-connection/src/rpc.rs",
+        "crates/identity/src/lib.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-host-apiproxy --all-features"
@@ -58187,6 +58221,7 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
+        "crates/identity/src/lib.rs",
         "crates/llm/src/brand.rs",
         "crates/util/src/brand.rs",
         "crates/llm/tests/value_contract_parity.rs"
@@ -71124,6 +71159,7 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
+        "crates/identity/src/lib.rs",
         "crates/util/src/brand.rs",
         "crates/llm/src/brand.rs",
         "crates/core/src/session.rs"
