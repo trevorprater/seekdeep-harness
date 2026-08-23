@@ -45,6 +45,9 @@ pub enum CordisError {
     /// A synchronous `internal/plugin` creation observer rejected publication.
     #[error("plugin publication failed: {0}")]
     PluginPublication(String),
+    /// A synchronous service-publication guard rejected the new provider.
+    #[error("service publication failed: {0}")]
+    ServicePublication(String),
 }
 
 /// Lifecycle state for one mounted plugin.

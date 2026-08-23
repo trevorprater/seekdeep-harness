@@ -11,6 +11,7 @@ pub mod handler;
 pub mod interactions;
 pub mod invariant;
 pub mod native_path_opener;
+pub mod presets;
 pub mod registry_workspace;
 pub mod service;
 pub mod session_export;
@@ -41,6 +42,7 @@ pub use native_path_opener::{
     NativePlatform, PathOpenerInternals, PathOpenerRunner, can_open_native_path, open_native_path,
     open_native_text_file,
 };
+pub use presets::{PresetApiProxyOptions, PresetApiProxyRuntime};
 pub use registry_workspace::WorkspaceRegistryRuntime;
 pub use seekdeep_client_connection::{
     ClientRequest, RpcError, RpcId, RpcResult, ServerResponse, result_of, transport_error,

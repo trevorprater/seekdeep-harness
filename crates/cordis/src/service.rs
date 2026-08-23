@@ -72,6 +72,8 @@ pub struct ServiceProviderSnapshot {
     pub name: String,
     /// Providing fiber.
     pub owner: Arc<Fiber>,
+    /// Whether the implementation occupies a non-root isolation realm.
+    pub isolated: bool,
 }
 
 /// Root-owned stack of service providers.
@@ -231,10 +233,30 @@ impl ServiceStore {
                         .map(|owner| ServiceProviderSnapshot {
                             name: slot.name.clone(),
                             owner,
+                            isolated: slot.isolation.is_some(),
                         })
                 })
             })
             .collect()
+    }
+
+    pub(crate) fn value_from_fiber<T: Service>(
+        &self,
+        name: &str,
+        root: &Arc<Fiber>,
+    ) -> Option<Arc<T>> {
+        self.providers
+            .read()
+            .iter()
+            .filter(|(slot, _)| slot.name == name)
+            .flat_map(|(_, providers)| providers)
+            .find_map(|provider| {
+                let owner = provider.owner.upgrade()?;
+                if !owner.is_within(root) {
+                    return None;
+                }
+                Arc::downcast::<T>(provider.value.clone()).ok()
+            })
     }
 }
 

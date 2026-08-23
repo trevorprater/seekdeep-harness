@@ -53,3 +53,32 @@ async fn listener_failure_is_contained_and_listener_disposal_is_exact() {
     context.provide(VALUE, Arc::new(2)).unwrap();
     assert_eq!(later.load(Ordering::Acquire), 2);
 }
+
+#[test]
+fn checked_listener_rolls_back_a_rejected_service_before_observers_or_lookup() {
+    let context = Context::new();
+    let observations = Arc::new(AtomicUsize::new(0));
+    context
+        .on_service_change({
+            let observations = observations.clone();
+            move || {
+                observations.fetch_add(1, Ordering::AcqRel);
+            }
+        })
+        .unwrap();
+    context
+        .on_service_change_checked(|name| {
+            anyhow::ensure!(name != "value", "value is forbidden");
+            Ok(())
+        })
+        .unwrap();
+
+    let error = context.provide(VALUE, Arc::new(1)).unwrap_err();
+    assert!(matches!(
+        error,
+        seekdeep_cordis::CordisError::ServicePublication(ref message)
+            if message.contains("value is forbidden")
+    ));
+    assert!(context.get(VALUE).is_none());
+    assert_eq!(observations.load(Ordering::Acquire), 0);
+}

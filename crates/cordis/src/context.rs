@@ -25,6 +25,7 @@ use crate::{
 
 type EventFilter = Arc<dyn Fn(&Context) -> bool + Send + Sync>;
 type ServiceChangeListener = Arc<dyn Fn() + Send + Sync>;
+type ServiceChangeGuard = Arc<dyn Fn(&str) -> anyhow::Result<()> + Send + Sync>;
 /// Type-erased value crossing the reflected property boundary.
 pub type DynamicValue = Arc<dyn Any + Send + Sync>;
 type AccessorGetter = Arc<dyn Fn(&Context) -> anyhow::Result<Option<DynamicValue>> + Send + Sync>;
@@ -99,6 +100,7 @@ impl<T: Service> MixinMember<T> {
 #[derive(Default)]
 struct ServiceChangeBus {
     listeners: Mutex<HashMap<Uuid, ServiceChangeListener>>,
+    guards: Mutex<HashMap<Uuid, ServiceChangeGuard>>,
 }
 
 impl ServiceChangeBus {
@@ -107,6 +109,14 @@ impl ServiceChangeBus {
         for listener in listeners {
             let _ = catch_unwind(AssertUnwindSafe(|| listener()));
         }
+    }
+
+    fn check(&self, name: &str) -> anyhow::Result<()> {
+        let guards = self.guards.lock().values().cloned().collect::<Vec<_>>();
+        for guard in guards {
+            guard(name)?;
+        }
+        Ok(())
     }
 }
 
@@ -638,6 +648,40 @@ impl Context {
         }
     }
 
+    /// Guards every successful service provision and withdrawal synchronously.
+    ///
+    /// A provision rejected by a guard is removed before plugin dependency
+    /// reconciliation and returned to the provider as
+    /// [`CordisError::ServicePublication`]. Withdrawal has already committed;
+    /// a guard failure is returned by the disposing effect.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CordisError::InactiveEffect`] after the owning fiber begins disposal.
+    pub fn on_service_change_checked(
+        &self,
+        guard: impl Fn(&str) -> anyhow::Result<()> + Send + Sync + 'static,
+    ) -> Result<EffectHandle, CordisError> {
+        let id = Uuid::now_v7();
+        self.root
+            .service_changes
+            .guards
+            .lock()
+            .insert(id, Arc::new(guard));
+        let changes = self.root.service_changes.clone();
+        let effect = EffectHandle::synchronous("ctx.on_service_change_checked", move || {
+            changes.guards.lock().remove(&id);
+            Ok(())
+        });
+        match self.own(effect.clone()) {
+            Ok(effect) => Ok(effect),
+            Err(error) => {
+                self.root.service_changes.guards.lock().remove(&id);
+                Err(error)
+            }
+        }
+    }
+
     /// Provides a typed service until the returned effect is disposed.
     ///
     /// # Errors
@@ -721,6 +765,10 @@ impl Context {
         else {
             return Err(CordisError::DuplicateService(name.to_owned()));
         };
+        if let Err(error) = self.root.service_changes.check(name) {
+            self.root.services.remove(&slot, id);
+            return Err(CordisError::ServicePublication(format!("{error:#}")));
+        }
         self.root.plugins.notify_service_change();
         self.root.service_changes.notify();
         let services = self.root.services.clone();
@@ -731,6 +779,7 @@ impl Context {
             if services.remove(&disposal_slot, id) {
                 plugins.notify_service_change();
                 service_changes.notify();
+                service_changes.check(&disposal_slot.name)?;
             }
             Ok(())
         });
@@ -740,6 +789,7 @@ impl Context {
                 self.root.services.remove(&slot, id);
                 self.root.plugins.notify_service_change();
                 self.root.service_changes.notify();
+                let _ = self.root.service_changes.check(name);
                 Err(error)
             }
         }
@@ -797,6 +847,20 @@ impl Context {
     #[must_use]
     pub fn service_providers(&self) -> Vec<ServiceProviderSnapshot> {
         self.root.services.snapshots()
+    }
+
+    /// Resolves one typed service provided by an exact fiber subtree,
+    /// independently of its isolation realm.
+    ///
+    /// This is a privileged ownership lookup for Host code that already holds
+    /// the subject whose private composition is being addressed.
+    #[must_use]
+    pub fn service_from_fiber<T: Service>(
+        &self,
+        key: ServiceKey<T>,
+        fiber: &Arc<Fiber>,
+    ) -> Option<Arc<T>> {
+        self.root.services.value_from_fiber(key.name(), fiber)
     }
 
     /// Snapshots JSON-compatible services visible in this exact isolation

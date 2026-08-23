@@ -1,7 +1,7 @@
 //! Production Session-domain runtime, including live and cold listing semantics.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::PathBuf,
     pin::Pin,
     sync::Arc,
@@ -10,7 +10,18 @@ use std::{
 };
 
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
-use seekdeep_agent::{AGENTS, AgentRegistry, AgentStatus};
+use parking_lot::Mutex;
+use seekdeep_agent::{
+    AGENTS, Agent, AgentOptions, AgentRegistry, AgentSetup, AgentStatus, CreateAgentMeta,
+    CreateAgentOptions,
+};
+use seekdeep_agent_presets::{
+    AGENT_PRESETS, PresetMountError, UnknownPresetError, resolve_session_preset,
+};
+use seekdeep_api_remotes::{
+    ApiRemoteLookupError, ApiRemoteSubagentSessionOwnership, api_remote_subagent_ownership_error,
+    has_api_remote_subagent_owner,
+};
 use seekdeep_attachment::ATTACHMENTS;
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventOptions, EventReply, fiber::EffectHandle};
@@ -18,7 +29,7 @@ use seekdeep_core::{
     session::{Session, SessionEvent, SessionHeader, SessionId, SessionOrigin, SurfaceOp},
     session_store::{SESSIONS, SessionStore},
 };
-use seekdeep_llm::{AbortSignal, ContentBlock, Message};
+use seekdeep_llm::{AbortSignal, ContentBlock, Message, ModelId, ProviderId};
 use seekdeep_session_persistence::{
     SESSION_PERSISTENCE, SessionPersistence, ensure_persistence_not_aborted,
 };
@@ -36,19 +47,21 @@ use seekdeep_session_query::{
     },
 };
 use seekdeep_tools::{TOOLS, ToolResult, ToolRuntime};
+use seekdeep_workspace::WORKSPACE_REGISTRY;
 use serde_json::{Map, Value};
 
 use crate::{
-    ApiDownlinkStream, ApiProxyRuntime, ClientResponse, RpcMethod, RpcReceipt, RpcRequest,
-    RpcResponse,
+    ApiDownlinkStream, ApiProxyRuntime, ClientResponse, DefaultModelSelection, RpcMethod,
+    RpcReceipt, RpcRequest, RpcResponse,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
         sessions::{
             HistoryEntry, SESSION_SEARCH_RESULT_LIMIT, SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
-            SessionHistoryRequest, SessionHistoryValue, SessionListMetadata, SessionListValue,
-            SessionProjectionsBlock, SessionSearchItem, SessionSearchRequest, SessionSearchValue,
-            SessionSummary, SessionSummaryOrigin, ToolEventView, ToolEventViewTarget,
+            SessionCreateRequest, SessionCreateValue, SessionHistoryRequest, SessionHistoryValue,
+            SessionListMetadata, SessionListValue, SessionProjectionsBlock, SessionSearchItem,
+            SessionSearchRequest, SessionSearchValue, SessionSummary, SessionSummaryOrigin,
+            ToolEventView, ToolEventViewTarget,
         },
     },
 };
@@ -66,6 +79,10 @@ pub struct SessionApiProxyOptions {
     pub cold_blank_probe_max_bytes: Option<u64>,
     /// Optional artifact-size boundary for alternate hosts and deterministic tests.
     pub artifact_metadata: Option<Arc<dyn ColdArtifactMetadata>>,
+    /// Default project directory for a create request that names no source.
+    pub default_cwd: Option<String>,
+    /// Live model default used by newly created and resumed Agents.
+    pub default_model_selection: Option<DefaultModelSelection>,
 }
 
 impl std::fmt::Debug for SessionApiProxyOptions {
@@ -77,6 +94,11 @@ impl std::fmt::Debug for SessionApiProxyOptions {
                 &self.cold_blank_probe_max_bytes,
             )
             .field("has_artifact_metadata", &self.artifact_metadata.is_some())
+            .field("default_cwd", &self.default_cwd)
+            .field(
+                "has_default_model_selection",
+                &self.default_model_selection.is_some(),
+            )
             .finish()
     }
 }
@@ -207,6 +229,7 @@ pub struct SessionApiProxyRuntime {
     tools: Option<Arc<ToolRuntime>>,
     artifact_metadata: Arc<dyn ColdArtifactMetadata>,
     options: SessionApiProxyOptions,
+    creation_locks: Arc<Mutex<HashMap<SessionId, Arc<tokio::sync::Mutex<()>>>>>,
     domains: Arc<dyn ApiProxyRuntime>,
 }
 
@@ -302,6 +325,7 @@ impl SessionApiProxyRuntime {
             tools: services.tools,
             artifact_metadata,
             options,
+            creation_locks: Arc::new(Mutex::new(HashMap::new())),
             domains,
         })
     }
@@ -313,11 +337,291 @@ impl SessionApiProxyRuntime {
         signal: AbortSignal,
     ) -> anyhow::Result<RpcResponse<Value>> {
         match method {
+            RpcMethod::SessionCreate => self.create(request, signal).await,
             RpcMethod::SessionList => self.list(request).await,
             RpcMethod::SessionSearch => self.search(request, signal).await,
             RpcMethod::SessionHistory => self.history(request).await,
             _ => self.domains.unary(method, request, signal).await,
         }
+    }
+
+    async fn create(
+        &self,
+        request: RpcRequest<Value>,
+        _signal: AbortSignal,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionCreateRequest = serde_json::from_value(request.payload.clone())?;
+        let session_id = payload
+            .session_id
+            .clone()
+            .unwrap_or_else(|| SessionId::new(format!("session-{}", uuid::Uuid::new_v4())));
+        let workspace = if let Some(workspace_id) = &payload.workspace_id {
+            let Some(workspace) = self.context.get(WORKSPACE_REGISTRY).and_then(|registry| {
+                registry.get(&seekdeep_workspace::WorkspaceId::new(workspace_id.as_str()))
+            }) else {
+                return Ok(session_failure(
+                    request,
+                    "workspace-not-found",
+                    format!("workspace \"{workspace_id}\" not found"),
+                    Map::from_iter([(
+                        "workspaceId".to_owned(),
+                        Value::String(workspace_id.to_string()),
+                    )]),
+                ));
+            };
+            Some(workspace)
+        } else {
+            None
+        };
+        let cwd = workspace.as_ref().map_or_else(
+            || {
+                payload
+                    .cwd
+                    .clone()
+                    .or_else(|| self.options.default_cwd.clone())
+                    .unwrap_or_default()
+            },
+            |workspace| workspace.path(),
+        );
+        let agent = match self
+            .ensure_session(
+                session_id.clone(),
+                cwd,
+                payload.session_id.is_some(),
+                payload.agent_preset.as_deref(),
+            )
+            .await
+        {
+            Ok(agent) => agent,
+            Err(error) => return Ok(create_failure(request, &session_id, &error)),
+        };
+        if let Some(workspace) = workspace
+            && let Err(error) = workspace.attach_session(session_id.clone()).await
+        {
+            return Ok(session_failure(
+                request,
+                "workspace-attach-failed",
+                format!(
+                    "session \"{session_id}\" was created but could not attach to workspace \"{}\": {error}",
+                    workspace.id()
+                ),
+                Map::from_iter([
+                    (
+                        "sessionId".to_owned(),
+                        Value::String(session_id.to_string()),
+                    ),
+                    (
+                        "workspaceId".to_owned(),
+                        Value::String(workspace.id().to_string()),
+                    ),
+                ]),
+            ));
+        }
+        let agent_preset =
+            resolve_session_preset(agent.session().header(), &agent.session().events());
+        let value = serde_json::to_value(SessionCreateValue {
+            session_id,
+            agent_preset,
+        })?;
+        Ok(RpcResponse::new(
+            request.rpc_id,
+            RpcResult::Success { value: Some(value) },
+        ))
+    }
+
+    async fn ensure_session(
+        &self,
+        session_id: SessionId,
+        cwd: String,
+        check_persisted_identity: bool,
+        requested_preset: Option<&str>,
+    ) -> anyhow::Result<Arc<Agent>> {
+        let lock = {
+            let mut locks = self.creation_locks.lock();
+            locks
+                .entry(session_id.clone())
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                .clone()
+        };
+        let guard = lock.lock().await;
+        let result = self
+            .ensure_session_locked(
+                &session_id,
+                &cwd,
+                check_persisted_identity,
+                requested_preset,
+            )
+            .await;
+        drop(guard);
+        let mut locks = self.creation_locks.lock();
+        if Arc::strong_count(&lock) == 2
+            && locks
+                .get(&session_id)
+                .is_some_and(|current| Arc::ptr_eq(current, &lock))
+        {
+            locks.remove(&session_id);
+        }
+        result
+    }
+
+    async fn ensure_session_locked(
+        &self,
+        session_id: &SessionId,
+        cwd: &str,
+        check_persisted_identity: bool,
+        requested_preset: Option<&str>,
+    ) -> anyhow::Result<Arc<Agent>> {
+        let attached = self.sessions.get(session_id);
+        let live = self.agents.get(session_id);
+        if attached.as_ref().is_some_and(|session| {
+            has_api_remote_subagent_owner(&self.context, session.header(), live.as_ref())
+        }) {
+            return Err(ApiRemoteSubagentSessionOwnership {
+                session_id: session_id.clone(),
+            }
+            .into());
+        }
+        if let Some(agent) = live {
+            return self.validate_adoption(agent, cwd, requested_preset);
+        }
+
+        if check_persisted_identity
+            && let Some(persistence) = &self.persistence
+            && persistence
+                .list(None)
+                .await?
+                .iter()
+                .any(|meta| meta.id == *session_id)
+        {
+            let inspected = persistence.inspect(session_id, None).await?;
+            if has_api_remote_subagent_owner(&self.context, &inspected.meta, None) {
+                return Err(ApiRemoteSubagentSessionOwnership {
+                    session_id: session_id.clone(),
+                }
+                .into());
+            }
+            if inspected.meta.cwd.as_deref() != Some(cwd) {
+                return Err(
+                    SessionCwdConflict::new(session_id.clone(), cwd, inspected.meta.cwd).into(),
+                );
+            }
+            let stored_preset = resolve_session_preset(&inspected.meta, &inspected.events);
+            assert_preset_unchanged(session_id, requested_preset, stored_preset.as_deref())?;
+            let (_, setup) = self.compose_agent(stored_preset.as_deref()).await?;
+            let mut options = seekdeep_agent::ResumeAgentOptions::new(session_id.clone());
+            options.agent_options = self.default_agent_options()?;
+            options.setup = setup;
+            let resumed = self.agents.resume(options).await.map(|handle| handle.agent);
+            return match resumed {
+                Ok(agent) => self.validate_adoption(agent, cwd, requested_preset),
+                Err(error) => self.recover_creation_race(session_id, cwd, requested_preset, error),
+            };
+        }
+
+        tokio::fs::create_dir_all(cwd).await.map_err(|error| {
+            anyhow::anyhow!("failed to ensure project directory \"{cwd}\": {error}")
+        })?;
+        let (agent_preset, setup) = self.compose_agent(requested_preset).await?;
+        let options = CreateAgentOptions {
+            session_id: session_id.clone(),
+            meta: CreateAgentMeta {
+                cwd: Some(cwd.to_owned()),
+                agent_preset,
+                ..CreateAgentMeta::default()
+            },
+            seed: None,
+            agent_options: self.default_agent_options()?,
+            signal: None,
+            setup,
+            owner_agent: None,
+        };
+        match self.agents.create(options).await.map(|handle| handle.agent) {
+            Ok(agent) => self.validate_adoption(agent, cwd, requested_preset),
+            Err(error) => self.recover_creation_race(session_id, cwd, requested_preset, error),
+        }
+    }
+
+    async fn compose_agent(
+        &self,
+        requested_preset: Option<&str>,
+    ) -> anyhow::Result<(Option<String>, Option<AgentSetup>)> {
+        let Some(roster) = self.context.get(AGENT_PRESETS) else {
+            return Ok((None, None));
+        };
+        let preset = roster.resolve(requested_preset).await?;
+        let preset_id = preset.id;
+        let setup_roster = roster.clone();
+        let setup_id = preset_id.clone();
+        let setup: AgentSetup = Arc::new(move |agent_context| {
+            let roster = setup_roster.clone();
+            let preset_id = setup_id.clone();
+            Box::pin(async move {
+                roster.mount(&agent_context, Some(&preset_id)).await?;
+                Ok(None)
+            })
+        });
+        Ok((Some(preset_id), Some(setup)))
+    }
+
+    fn default_agent_options(&self) -> anyhow::Result<AgentOptions> {
+        let defaults = self
+            .options
+            .default_model_selection
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("session.create requires default model selection"))?;
+        let selection = defaults();
+        Ok(AgentOptions {
+            provider: Some(ProviderId::new(selection.provider)),
+            model: Some(ModelId::new(selection.model)),
+            ..AgentOptions::default()
+        })
+    }
+
+    fn recover_creation_race(
+        &self,
+        session_id: &SessionId,
+        cwd: &str,
+        requested_preset: Option<&str>,
+        error: anyhow::Error,
+    ) -> anyhow::Result<Arc<Agent>> {
+        if let Some(agent) = self.agents.get(session_id) {
+            return self.validate_adoption(agent, cwd, requested_preset);
+        }
+        if let Some(session) = self.sessions.get(session_id)
+            && has_api_remote_subagent_owner(&self.context, session.header(), None)
+        {
+            return Err(ApiRemoteSubagentSessionOwnership {
+                session_id: session_id.clone(),
+            }
+            .into());
+        }
+        Err(error)
+    }
+
+    fn validate_adoption(
+        &self,
+        agent: Arc<Agent>,
+        cwd: &str,
+        requested_preset: Option<&str>,
+    ) -> anyhow::Result<Arc<Agent>> {
+        if has_api_remote_subagent_owner(&self.context, agent.session().header(), Some(&agent)) {
+            return Err(ApiRemoteSubagentSessionOwnership {
+                session_id: agent.id().clone(),
+            }
+            .into());
+        }
+        let existing_preset =
+            resolve_session_preset(agent.session().header(), &agent.session().events());
+        assert_preset_unchanged(agent.id(), requested_preset, existing_preset.as_deref())?;
+        if agent.session().header().cwd.as_deref() != Some(cwd) {
+            return Err(SessionCwdConflict::new(
+                agent.id().clone(),
+                cwd,
+                agent.session().header().cwd.clone(),
+            )
+            .into());
+        }
+        Ok(agent)
     }
 
     async fn list(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
@@ -494,6 +798,14 @@ impl SessionApiProxyRuntime {
                 ));
             }
         };
+        let scope = if let Some(agent) = self.agents.get(&payload.session_id) {
+            Some(agent.scope_key())
+        } else if let Some(roster) = self.context.get(AGENT_PRESETS) {
+            let preset = resolve_session_preset(&source.header, &source.events);
+            roster.standing_key_for(preset.as_deref()).await.ok()
+        } else {
+            None
+        };
         let projections = if payload.before_seq.is_none() {
             self.projections
                 .snapshot_for_events(&source.events)
@@ -503,10 +815,6 @@ impl SessionApiProxyRuntime {
         } else {
             None
         };
-        let scope = self
-            .agents
-            .get(&payload.session_id)
-            .map(|agent| agent.scope_key());
         let (events, has_more) = paginate_history(
             &source.events,
             payload.before_seq,
@@ -535,6 +843,7 @@ impl SessionApiProxyRuntime {
     async fn history_source(&self, session_id: &SessionId) -> anyhow::Result<HistorySource> {
         if let Some(session) = self.sessions.get(session_id) {
             return Ok(HistorySource {
+                header: session.header().clone(),
                 events: session.events(),
             });
         }
@@ -555,6 +864,7 @@ impl SessionApiProxyRuntime {
             return Err(HistoryNotFound(session_id.clone()).into());
         }
         Ok(HistorySource {
+            header: inspected.meta,
             events: inspected.events,
         })
     }
@@ -912,6 +1222,7 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
             tools: self.tools.clone(),
             artifact_metadata: self.artifact_metadata.clone(),
             options: self.options.clone(),
+            creation_locks: self.creation_locks.clone(),
             domains: self.domains.clone(),
         });
         async move { runtime.session_unary(method, request, signal).await }.boxed()
@@ -937,6 +1248,7 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
             tools: self.tools.clone(),
             artifact_metadata: self.artifact_metadata.clone(),
             options: self.options.clone(),
+            creation_locks: self.creation_locks.clone(),
             domains: self.domains.clone(),
         });
         let domains = self.domains.mux(request, signal.clone());
@@ -1150,7 +1462,189 @@ fn finish_search(mut authorized: Vec<SessionSearchItem>) -> SessionSearchValue {
 }
 
 struct HistorySource {
+    header: SessionHeader,
     events: Vec<SessionEvent>,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+struct AgentPresetConflict {
+    session_id: SessionId,
+    requested_preset: String,
+    existing_preset: Option<String>,
+    message: String,
+}
+
+impl AgentPresetConflict {
+    fn new(session_id: SessionId, requested_preset: &str, existing_preset: Option<String>) -> Self {
+        let message = if let Some(existing) = &existing_preset {
+            format!(
+                "session \"{session_id}\" already runs agent preset {existing:?}; requested {requested_preset:?}. A session's preset is fixed at creation."
+            )
+        } else {
+            format!(
+                "session \"{session_id}\" records no agent preset, so it cannot be adopted under one; a deployment composing no roster records none on any session — requested {requested_preset:?}. A session's preset is fixed at creation."
+            )
+        };
+        Self {
+            session_id,
+            requested_preset: requested_preset.to_owned(),
+            existing_preset,
+            message,
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "session \"{session_id}\" already exists with cwd {existing_cwd:?}; requested {requested_cwd:?}"
+)]
+struct SessionCwdConflict {
+    session_id: SessionId,
+    requested_cwd: String,
+    existing_cwd: Option<String>,
+}
+
+impl SessionCwdConflict {
+    fn new(session_id: SessionId, requested_cwd: &str, existing_cwd: Option<String>) -> Self {
+        Self {
+            session_id,
+            requested_cwd: requested_cwd.to_owned(),
+            existing_cwd,
+        }
+    }
+}
+
+fn assert_preset_unchanged(
+    session_id: &SessionId,
+    requested: Option<&str>,
+    existing: Option<&str>,
+) -> anyhow::Result<()> {
+    if let Some(requested) = requested
+        && Some(requested) != existing
+    {
+        return Err(AgentPresetConflict::new(
+            session_id.clone(),
+            requested,
+            existing.map(ToOwned::to_owned),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn create_failure(
+    request: RpcRequest<Value>,
+    session_id: &SessionId,
+    error: &anyhow::Error,
+) -> RpcResponse<Value> {
+    if let Some(error) = error.downcast_ref::<AgentPresetConflict>() {
+        let mut details = Map::from_iter([
+            (
+                "sessionId".to_owned(),
+                Value::String(error.session_id.to_string()),
+            ),
+            (
+                "requestedPreset".to_owned(),
+                Value::String(error.requested_preset.clone()),
+            ),
+        ]);
+        if let Some(existing) = &error.existing_preset {
+            details.insert("existingPreset".to_owned(), Value::String(existing.clone()));
+        }
+        return session_failure(request, "agent-preset-conflict", error.to_string(), details);
+    }
+    if let Some(error) = error.downcast_ref::<UnknownPresetError>() {
+        return session_failure(
+            request,
+            "agent-preset-not-found",
+            error.to_string(),
+            Map::from_iter([
+                (
+                    "agentPreset".to_owned(),
+                    Value::String(error.preset_id.clone()),
+                ),
+                (
+                    "available".to_owned(),
+                    Value::Array(error.available.iter().cloned().map(Value::String).collect()),
+                ),
+            ]),
+        );
+    }
+    if let Some(error) = error.downcast_ref::<PresetMountError>() {
+        return session_failure(
+            request,
+            "agent-preset-invalid",
+            error.to_string(),
+            Map::from_iter([
+                (
+                    "agentPreset".to_owned(),
+                    Value::String(error.preset_id.clone()),
+                ),
+                ("reason".to_owned(), Value::String(error.reason.clone())),
+            ]),
+        );
+    }
+    if let Some(error) = error.downcast_ref::<SessionCwdConflict>() {
+        let mut details = Map::from_iter([
+            (
+                "sessionId".to_owned(),
+                Value::String(error.session_id.to_string()),
+            ),
+            (
+                "requestedCwd".to_owned(),
+                Value::String(error.requested_cwd.clone()),
+            ),
+        ]);
+        if let Some(existing) = &error.existing_cwd {
+            details.insert("existingCwd".to_owned(), Value::String(existing.clone()));
+        }
+        return session_failure(request, "session-conflict", error.to_string(), details);
+    }
+    if error
+        .downcast_ref::<ApiRemoteSubagentSessionOwnership>()
+        .is_some()
+    {
+        return api_lookup_failure(request, api_remote_subagent_ownership_error(session_id));
+    }
+    session_failure(
+        request,
+        "internal",
+        format!("failed to create session \"{session_id}\": {error}"),
+        Map::new(),
+    )
+}
+
+fn api_lookup_failure(
+    request: RpcRequest<Value>,
+    error: ApiRemoteLookupError,
+) -> RpcResponse<Value> {
+    match error {
+        ApiRemoteLookupError::AgentBusy { message, details } => session_failure(
+            request,
+            "agent-busy",
+            message,
+            serde_json::to_value(details)
+                .ok()
+                .and_then(|value| value.as_object().cloned())
+                .unwrap_or_default(),
+        ),
+        ApiRemoteLookupError::SessionNotFound { message, details } => session_failure(
+            request,
+            "session-not-found",
+            message,
+            serde_json::to_value(details)
+                .ok()
+                .and_then(|value| value.as_object().cloned())
+                .unwrap_or_default(),
+        ),
+        ApiRemoteLookupError::Internal { message, details } => session_failure(
+            request,
+            "internal",
+            message,
+            details.as_object().cloned().unwrap_or_default(),
+        ),
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

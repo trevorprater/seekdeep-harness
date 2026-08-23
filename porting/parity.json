@@ -55508,7 +55508,21 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-agent-preset.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/presets.rs",
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/tests/api_proxy_preset_service_parity.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_create_service_parity.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_history_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-agent-preset.spec.ts --reporter=dot (38 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_preset_service_parity --test api_proxy_session_create_service_parity --test api_proxy_session_history_service_parity --all-features (22 consolidated production cases passed)",
+        "cargo test -p seekdeep-agent-presets --all-features (30 preset ownership and invariant cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy -p seekdeep-agent-presets -p seekdeep-cordis -p seekdeep-scope --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Production Rust covers preset-aware session creation and adoption, exact log-resolved identity, real factory rollback, isolated goal and skill service addressing, roster listing, serialized blank switching, committed Host invalidation, authoring and native-open policy, live and cold layered skill views, and log-resolved cold history presenters without Agent activation."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-approval.spec.ts",
@@ -60407,7 +60421,14 @@
     {
       "source": "packages/preset/agent-presets/src/authoring.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/src/authoring.rs"],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/authoring.spec.ts --reporter=dot (19 passed)",
+        "cargo test -p seekdeep-agent-presets --all-features (30 consolidated preset cases passed)",
+        "cargo clippy -p seekdeep-agent-presets --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust authoring owns exact reads, first-user-root selection, non-overwriting recursive copies with symlink dereference and owner-only modes, metadata identity rewrite, invalid and occupied id refusals, rollback of partial targets, and user-root-confined deletion; the live registry applies those primitives under current roster policy."
     },
     {
       "source": "packages/preset/agent-presets/src/discovery.ts",
@@ -60423,12 +60444,34 @@
     {
       "source": "packages/preset/agent-presets/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/src/lib.rs",
+        "crates/agent-presets/src/mount.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-agent-presets --all-features (30 consolidated preset cases passed)",
+        "cargo clippy -p seekdeep-agent-presets -p seekdeep-cordis -p seekdeep-scope --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust registry owns live discovery, effective settings default, standing generations, reversible Agent joins, child inheritance, recompose, private-service addressing, authoring policy, user-root derivation, selected-event republication, and advisory bare-Agent detection."
     },
     {
       "source": "packages/preset/agent-presets/src/invariant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/src/invariant.rs",
+        "crates/agent-presets/src/mount.rs",
+        "crates/cordis/src/context.rs",
+        "crates/cordis/src/fiber.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/invariant.spec.ts --reporter=dot (7 passed)",
+        "cargo test -p seekdeep-agent-presets --test invariant_parity --all-features (2 consolidated invariant cases passed)",
+        "cargo test -p seekdeep-cordis --test service_change_watch --all-features (3 service notification cases passed)",
+        "cargo clippy -p seekdeep-agent-presets -p seekdeep-cordis --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust companion continuously rejects and rolls back a standing generation's late process-global service publication, attributes the violation through the invariant registry, and refuses model-addressing prompt assembly for an Agent that skipped a non-empty roster while admitting joined Agents and Agent-free reads."
     },
     {
       "source": "packages/preset/agent-presets/src/metadata.ts",
@@ -60444,7 +60487,19 @@
     {
       "source": "packages/preset/agent-presets/src/mount.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/src/mount.rs",
+        "crates/cordis/src/context.rs",
+        "crates/cordis/src/service.rs",
+        "crates/scope/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/mount.spec.ts packages/preset/agent-presets/tests/user-root.spec.ts --reporter=dot (53 passed)",
+        "cargo test -p seekdeep-agent-presets --test mount_parity --all-features (9 consolidated standing-mount cases passed)",
+        "cargo clippy -p seekdeep-agent-presets -p seekdeep-cordis -p seekdeep-scope --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust standing mounts share one exact Loader generation, scope tools and private services, reject unscoped and root-service leaks, bind and rebind Agent ancestry reversibly, preserve parent generation inheritance, refresh later Agents by composition stamp, keep joined generations alive, and expose Agent-free standing keys."
     },
     {
       "source": "packages/preset/agent-presets/src/preset.ts",
@@ -60485,7 +60540,16 @@
     {
       "source": "packages/preset/agent-presets/tests/authoring.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/authoring_parity.rs",
+        "crates/agent-presets/tests/mount_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/authoring.spec.ts --reporter=dot (19 passed)",
+        "cargo test -p seekdeep-agent-presets --all-features (30 consolidated preset cases passed)"
+      ],
+      "note": "Copy, mode tightening, metadata rewrite, invalid/occupied/unknown refusals, rollback, live listing, user-only deletion, unavailable authoring, first-copy root creation, ghost-slot recovery, and exact read behavior are pinned across the pure authoring and roster layers."
     },
     {
       "source": "packages/preset/agent-presets/tests/discovery.spec.ts",
@@ -60636,7 +60700,18 @@
     {
       "source": "packages/preset/agent-presets/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/invariant_parity.rs",
+        "crates/agent-presets/tests/mount_parity.rs",
+        "crates/cordis/tests/service_change_watch.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/invariant.spec.ts --reporter=dot (7 passed)",
+        "cargo test -p seekdeep-agent-presets --all-features (30 consolidated preset cases passed)",
+        "cargo test -p seekdeep-cordis --test service_change_watch --all-features (3 passed)"
+      ],
+      "note": "Standing reuse and lifetime remain pinned by mount cases; focused invariant cases cover late root-service rollback and joined-versus-Agent-free prompt assembly, while Cordis service-change cases prove rejection precedes lookup and ordinary observers."
     },
     {
       "source": "packages/preset/agent-presets/tests/metadata.spec.ts",
@@ -60652,7 +60727,18 @@
     {
       "source": "packages/preset/agent-presets/tests/mount.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/mount_parity.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/scope/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/mount.spec.ts packages/preset/agent-presets/tests/user-root.spec.ts --reporter=dot (53 passed)",
+        "cargo test -p seekdeep-agent-presets --test mount_parity --all-features (9 consolidated mount/roster cases passed)",
+        "cargo test -p seekdeep-loader -p seekdeep-scope --all-features"
+      ],
+      "note": "Consolidated mount cases plus Loader and Scope owners cover default/named scoping, standing reuse, child exact-generation joins, rollback, inactive and leaking compositions, isolation and private service reads, committed selection events, recompose, refresh races, cold standing keys, authoring, and derived user roots."
     },
     {
       "source": "packages/preset/agent-presets/tests/session.spec.ts",
@@ -60668,12 +60754,27 @@
     {
       "source": "packages/preset/agent-presets/tests/settings.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/tests/settings_parity.rs"],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/settings.spec.ts --reporter=dot (8 passed)",
+        "cargo test -p seekdeep-agent-presets --test settings_parity --all-features (3 consolidated settings lifecycle cases passed)"
+      ],
+      "note": "Composition fallback, user override, later-session adoption, running-generation stability, clearing, deletion cleanup, unknown future defaults, provider unload, and replacement-provider reattachment are pinned."
     },
     {
       "source": "packages/preset/agent-presets/tests/user-root.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/authoring_parity.rs",
+        "crates/agent-presets/tests/mount_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/mount.spec.ts packages/preset/agent-presets/tests/user-root.spec.ts --reporter=dot (53 passed)",
+        "cargo test -p seekdeep-agent-presets --test mount_parity --test authoring_parity --all-features"
+      ],
+      "note": "The derived user root is appended after configured roots, participates in live discovery and authoring, yields to an earlier configured user root, and disappears completely when includeUserRoot is false."
     },
     {
       "source": "packages/preset/agent-presets/tsconfig.json",

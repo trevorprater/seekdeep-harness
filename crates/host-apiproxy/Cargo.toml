@@ -17,14 +17,17 @@ parking_lot.workspace = true
 seekdeep-attachment = { path = "../attachment" }
 seekdeep-agent = { path = "../agent" }
 seekdeep-agent-presets = { path = "../agent-presets" }
+seekdeep-api-remotes = { path = "../api-remotes" }
 seekdeep-client-connection = { path = "../client-connection" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-credentials = { path = "../credentials" }
+seekdeep-goal = { path = "../goal" }
 seekdeep-host-directory-picker = { path = "../host-directory-picker" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-settings = { path = "../settings" }
+seekdeep-skill = { path = "../skill" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-session-projection-cache = { path = "../session-projection-cache" }
@@ -46,10 +49,13 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-host-webserver = { path = "../host-webserver" }
+seekdeep-loader = { path = "../loader" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-storage = { path = "../storage" }
 seekdeep-storage-json = { path = "../storage-json" }
+seekdeep-system-prompt = { path = "../system-prompt" }
 tempfile.workspace = true
 
 [lints]

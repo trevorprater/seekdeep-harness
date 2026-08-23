@@ -7,19 +7,31 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+futures.workspace = true
 indexmap.workspace = true
 path-clean.workspace = true
+parking_lot.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yml.workspace = true
 seekdeep-core = { path = "../core" }
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
 seekdeep-loader = { path = "../loader" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-settings = { path = "../settings" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-util = { path = "../util" }
 thiserror.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+seekdeep-tools = { path = "../tools" }
 tempfile.workspace = true
 
 [lints]

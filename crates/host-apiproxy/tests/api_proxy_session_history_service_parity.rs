@@ -6,12 +6,16 @@ use async_trait::async_trait;
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use parking_lot::Mutex;
 use seekdeep_agent::{Agent, AgentOptions, AgentRegistry, Inbox, NoopInboxNotifications};
+use seekdeep_agent_presets::{
+    AgentPresetConfig, AgentPresetRegistry, AgentPresetRegistryConfig, COMPOSITION_FILE,
+    PresetRoot, PresetTrust,
+};
 use seekdeep_attachment::{
     AttachmentBackend, AttachmentStore, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
     SaveImageAttachment, StoredImageAttachment,
 };
 use seekdeep_client_connection::{HttpResponse, RpcResult};
-use seekdeep_cordis::Context;
+use seekdeep_cordis::{Context, Plugin};
 use seekdeep_core::{
     session::{AppendOptions, Session, SessionEvent, SessionHeader, SessionId, SurfaceOp},
     session_store::{CreateSessionOptions, SessionStore},
@@ -25,6 +29,7 @@ use seekdeep_host_apiproxy::{
     },
 };
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, Message, MessageSource, UserMessage};
+use seekdeep_loader::PluginCatalog;
 use seekdeep_scope::ScopeKey;
 use seekdeep_session_persistence::{
     SessionInspection, SessionLocation, SessionPersistence, SessionPersistenceRevision,
@@ -676,6 +681,149 @@ async fn cold_history_inspects_without_attaching_and_distinguishes_missing_compo
         absent,
         RpcResult::Failure { ref error } if error.code == "session-not-found"
     ));
+}
+
+#[tokio::test]
+#[allow(clippy::too_many_lines)] // One cold transcript distinguishes two complete preset generations.
+async fn cold_history_uses_the_logged_preset_standing_presenter_without_resuming() {
+    let context = Context::new();
+    SessionStore::install(&context).unwrap();
+    let agents = Arc::new(AgentRegistry::new(context.clone()));
+    agents.provide(&context).unwrap();
+    SessionProjectionRegistry::install(&context).unwrap();
+    let tools = ToolRuntime::new(
+        context.clone(),
+        ToolRuntimeConfig {
+            mode: ToolPresentationMode::Native,
+            max_parallel_sub_calls: 4,
+        },
+    )
+    .unwrap();
+    tools.provide(&context).unwrap();
+
+    let catalog = PluginCatalog::new();
+    for (plugin_name, title) in [
+        ("preset:standard", "standard presenter"),
+        ("preset:minimal", "minimal presenter"),
+    ] {
+        let tools = tools.clone();
+        catalog
+            .register_named(
+                plugin_name,
+                Plugin::new(
+                    plugin_name,
+                    std::iter::empty::<&str>(),
+                    move |plugin_ctx, _| {
+                        let tools = tools.clone();
+                        Box::pin(async move {
+                            let definition = ContentToolFixtureOptions::new(
+                                "term",
+                                "terminal fixture",
+                                json!({ "cmd": { "type": "string", "required": true } }),
+                                Arc::new(|_: CommandArgs, _| {
+                                    Box::pin(async { Ok(Vec::<ContentBlock>::new()) })
+                                }),
+                            )
+                            .present_call(Arc::new(move |_| {
+                                Some(ToolCallView::Terminal(TerminalCallView {
+                                    title: title.to_owned(),
+                                    description: None,
+                                    cwd: None,
+                                }))
+                            }));
+                            tools
+                                .register(&plugin_ctx, define_content_tool_fixture(definition)?)?;
+                            Ok(())
+                        })
+                    },
+                ),
+            )
+            .unwrap();
+    }
+    let root = tempfile::tempdir().unwrap();
+    for (id, plugin) in [
+        ("standard", "preset:standard"),
+        ("minimal", "preset:minimal"),
+    ] {
+        let directory = root.path().join(id);
+        tokio::fs::create_dir_all(&directory).await.unwrap();
+        tokio::fs::write(
+            directory.join(COMPOSITION_FILE),
+            format!("- id: tool\n  name: {plugin}\n"),
+        )
+        .await
+        .unwrap();
+    }
+    let roster = AgentPresetRegistry::new(
+        &context,
+        catalog,
+        AgentPresetRegistryConfig {
+            roster: AgentPresetConfig {
+                default: "standard".to_owned(),
+                roots: vec![PresetRoot {
+                    path: root.path().to_string_lossy().into_owned(),
+                    trust: PresetTrust::System,
+                }],
+                include_user_root: false,
+            },
+            user_root: None,
+        },
+    )
+    .unwrap();
+    roster.provide(&context).unwrap();
+
+    let persistence = Arc::new(MemoryPersistence::default());
+    let mut meta = SessionHeader::new(SessionId::new("cold-preset"));
+    meta.cwd = Some("/project".to_owned());
+    meta.agent_preset = Some("standard".to_owned());
+    let events = vec![
+        SessionEvent {
+            event_type: "agent-preset/selected".to_owned(),
+            seq: 0,
+            time: 1,
+            data: json!({ "agentPreset": "minimal" }),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        },
+        SessionEvent {
+            event_type: "tool/call".to_owned(),
+            seq: 1,
+            time: 2,
+            data: json!({
+                "callId": "call-1",
+                "name": "term",
+                "arguments": "{\"cmd\":\"echo\"}"
+            }),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        },
+    ];
+    persistence.headers.lock().push(meta.clone());
+    persistence.inspections.lock().insert(
+        meta.id.clone(),
+        SessionInspection {
+            meta: meta.clone(),
+            events,
+        },
+    );
+    SessionPersistenceService::new(persistence)
+        .provide(&context)
+        .unwrap();
+    let runtime = SessionApiProxyRuntime::from_context(
+        &context,
+        SessionApiProxyOptions::default(),
+        Arc::new(TerminalDomains),
+    )
+    .unwrap();
+
+    let value = success(history(&runtime, json!({ "sessionId": meta.id })).await);
+    assert_eq!(
+        value["events"][1]["view"]["view"]["title"],
+        "minimal presenter"
+    );
+    assert!(agents.get(&meta.id).is_none());
 }
 
 #[tokio::test]

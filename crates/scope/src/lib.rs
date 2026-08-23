@@ -66,6 +66,13 @@ impl ScopeParentBinding {
     pub fn rebind(&self, parent: ScopeKey) -> anyhow::Result<()> {
         link_parent(self.key, parent)
     }
+
+    /// Removes the parent link owned by this binding.
+    ///
+    /// Returns whether the link was still present. Repeated calls are safe.
+    pub fn unbind(&self) -> bool {
+        parents().write().remove(&self.key).is_some()
+    }
 }
 
 /// Binds one key to a parent exactly once.
@@ -243,6 +250,17 @@ mod tests {
         let child = ScopeKey::new();
         bind_scope_parent(child, agent).expect("child");
         assert!(binding.rebind(child).is_err());
+    }
+
+    #[test]
+    fn binding_unbind_is_idempotent_and_removes_only_its_link() {
+        let parent = ScopeKey::new();
+        let child = ScopeKey::new();
+        let binding = bind_scope_parent(child, parent).unwrap();
+        assert_eq!(scope_parent_of(child), Some(parent));
+        assert!(binding.unbind());
+        assert_eq!(scope_parent_of(child), None);
+        assert!(!binding.unbind());
     }
 
     #[tokio::test]

@@ -18,8 +18,9 @@ use uuid::Uuid;
 
 use crate::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, ConfigurationApiProxyOptions,
-    ConfigurationApiProxyRuntime, InteractionApiProxyRuntime, RpcId, RpcMethod, RpcReceipt,
-    RpcRequest, RpcResponse, SessionApiProxyOptions, SessionApiProxyRuntime,
+    ConfigurationApiProxyRuntime, InteractionApiProxyRuntime, PresetApiProxyOptions,
+    PresetApiProxyRuntime, RpcId, RpcMethod, RpcReceipt, RpcRequest, RpcResponse,
+    SessionApiProxyOptions, SessionApiProxyRuntime,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -268,13 +269,25 @@ impl ApiProxyService {
                 domains,
             )?;
             let interactions = InteractionApiProxyRuntime::from_context(&child, configuration)?;
+            let presets = PresetApiProxyRuntime::from_context(
+                &child,
+                PresetApiProxyOptions {
+                    default_model_selection: defaults.default_model_selection.clone(),
+                    open_path: defaults.open_path.clone(),
+                    can_open_path: defaults.can_open_path.clone(),
+                    native_path_opener: defaults.native_path_opener.clone(),
+                },
+                interactions,
+            );
             let sessions = SessionApiProxyRuntime::from_context(
                 &child,
                 SessionApiProxyOptions {
                     cold_blank_probe_max_bytes: defaults.cold_blank_probe_max_bytes,
                     artifact_metadata: None,
+                    default_cwd: Some(defaults.cwd.clone()),
+                    default_model_selection: Some(defaults.default_model_selection.clone()),
                 },
-                interactions,
+                presets,
             )?;
             Ok::<_, anyhow::Error>(Self::new(
                 defaults,
