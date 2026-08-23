@@ -48889,102 +48889,162 @@
     {
       "source": "packages/core/agent-loop/tests/agent-initiator.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/factory.rs"],
+      "evidence": ["pnpm exec vitest run packages/core/agent-loop/tests --reporter=dot (pinned source aggregate: 18 files, 329 passed)", "cargo test -p seekdeep-agent-loop --all-features (31 passed)"],
+      "note": "factory tests preserve overlapping initiator identity plus paired started/veto/dispose announcements"
     },
     {
       "source": "packages/core/agent-loop/tests/agent.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/factory.rs", "crates/agent-loop/src/controller.rs", "crates/agent-loop/src/driver.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (31 passed)"],
+      "note": "Rust factory/controller/driver cases cover unpublished setup, announcement pairing, durable input driving, status, idle and teardown"
     },
     {
       "source": "packages/core/agent-loop/tests/cancel.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/controller.rs", "crates/agent-loop/src/driver.rs", "crates/agent-loop/src/tool_calls.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (31 passed)"],
+      "note": "first-reason cancellation, idle cancellation, wake-after-abort, mid-stream balancing, later prompt recovery, started-call drain and unstarted synthetic pairs are covered"
     },
     {
       "source": "packages/core/agent-loop/tests/config-session-id.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/factory.rs", "crates/agent-loop/src/controller.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (31 passed)"],
+      "note": "opaque Session identity is carried through create/resume/controller/factory boundaries and overlapping initiators without ambient fallback"
     },
     {
       "source": "packages/core/agent-loop/tests/contract-regressions.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/controller.rs", "crates/agent-loop/src/driver.rs", "crates/agent-loop/src/factory.rs", "crates/agent-loop/src/invariant.rs", "crates/agent-loop/src/tool_calls.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (31 consolidated contract cases passed)", "cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings"],
+      "note": "consolidated Rust tests pin lifecycle, request, abort, invariant, resume, interception, scheduler and durable pair regressions across the five owners"
     },
     {
       "source": "packages/core/agent-loop/tests/coverage-edges.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/controller.rs", "crates/agent-loop/src/driver.rs", "crates/agent-loop/src/factory.rs", "crates/agent-loop/src/tool_calls.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (31 consolidated branch cases passed)"],
+      "note": "failure-before-publication, abort-before-setup, idle maintenance, inbox parking, zero parallelism, pre-abort and barrier reclassification cover defensive branch duals"
     },
     {
       "source": "packages/core/agent-loop/tests/interception.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/driver.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop driver::tests::pre_step_can_rewrite_or_reject_before_opening_the_step --all-features"],
+      "note": "pre-step interception rewrites or rejects before any durable Step opens"
     },
     {
       "source": "packages/core/agent-loop/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/invariant.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop invariant::tests --all-features (5 passed)"],
+      "note": "exact request boundary, identity/header/live-session requirements, message divergence, middleware order and process-local marker serialization are pinned"
     },
     {
       "source": "packages/core/agent-loop/tests/loop.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/driver.rs", "crates/agent-loop/src/controller.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (driver/controller loop cases passed)"],
+      "note": "durable one-turn driving, multi-step Tool continuation, inbox parking, cancellation recovery and controller wake/idle replacement preserve the loop state machine"
     },
     {
       "source": "packages/core/agent-loop/tests/mock-adapter.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/driver.rs", "crates/agent-loop/src/factory.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed using mock-adapter.ts", "cargo test -p seekdeep-agent-loop --all-features (Rust scripted BlockingAdapter/MockAdapter fixtures drove 31 cases)"],
+      "note": "Rust test adapters script streams, record GenerateOptions, block or settle on demand and preserve exact request inspection without a foreign-language fixture"
     },
     {
       "source": "packages/core/agent-loop/tests/properties.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/controller.rs", "crates/agent-loop/src/factory.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (controller/factory property cases passed)"],
+      "note": "agent identity, Session handle, public status, driver ownership and factory lifecycle properties remain stable across activity"
     },
     {
       "source": "packages/core/agent-loop/tests/request-cache.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/driver.rs", "crates/llm-deepseek/src/translate.rs", "crates/llm-deepseek/tests/translate_parity.rs"],
+      "evidence": ["pinned source Agent Loop aggregate passed 329 keyless tests; request-cache.e2e.ts remained explicitly skipped without DEEPSEEK_API_KEY", "cargo test -p seekdeep-agent-loop driver::tests::drives_one_turn_from_durable_input_to_reconstructed_assistant driver::tests::executes_tool_and_reconstructs_result_into_next_step_request --all-features", "cargo test -p seekdeep-llm-deepseek --test translate_parity --all-features (prompt_cache_hit_tokens maps to cacheReadTokens)"],
+      "note": "keyless evidence proves append-only request reconstruction and multi-step prefix extension plus exact provider cache-hit usage translation; an actual provider cache hit remains credential-gated exactly like the source test and is not claimed from mocks"
     },
     {
       "source": "packages/core/agent-loop/tests/request-error.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/driver.rs", "crates/agent-loop/src/factory.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (setup/commit/stream/pre-step error cases passed)"],
+      "note": "request errors publish no phantom lifecycle, balance an opened Turn, retain diagnostics and permit later work"
     },
     {
       "source": "packages/core/agent-loop/tests/request-reconstruction.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/runtime_context.rs", "crates/agent-loop/src/driver.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop runtime_context::tests driver::tests::drives_one_turn_from_durable_input_to_reconstructed_assistant driver::tests::executes_tool_and_reconstructs_result_into_next_step_request --all-features"],
+      "note": "retained and replacement surfaces reconstruct exact requests from the durable log; Tool results extend the prior request into the next Step"
     },
     {
       "source": "packages/core/agent-loop/tests/resume.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/factory.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop factory::tests::resume_rehydrates_exact_history_and_anchors_the_next_request factory::tests::resume_load_is_cancelled_by_caller_and_owner_without_publication --all-features"],
+      "note": "resume rehydrates exact history, anchors the next request and cancels caller/owner races without publication"
     },
     {
       "source": "packages/core/agent-loop/tests/runtime-context.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/runtime_context.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop runtime_context::tests --all-features (2 passed)"],
+      "note": "retained snapshots, replacement notices, clear markers, live retention and ownership filtering match the source projection"
     },
     {
       "source": "packages/core/agent-loop/tests/scope-lifecycle.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/factory.rs", "crates/agent-loop/src/controller.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features (owner/factory disposal, maintenance and abort lifecycle cases passed)"],
+      "note": "caller, owner and factory disposal join one teardown; unpublished setup and maintenance reservations cannot escape their scope"
     },
     {
       "source": "packages/core/agent-loop/tests/settings.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/factory.rs", "crates/agent-loop/src/lib.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop --all-features", "cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings"],
+      "note": "Rust AgentOptions validation and factory defaults preserve bounded parallelism, initiator/session identity and configuration failure timing"
     },
     {
       "source": "packages/core/agent-loop/tests/tool-calls.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/tool_calls.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop tool_calls::tests --all-features (8 passed)"],
+      "note": "bounded parallel dispatch, exclusive barriers, abort drain, pre-abort synthesis, zero-cap rejection and durable call/result pairing are covered"
     },
     {
       "source": "packages/core/agent-loop/tests/tool-order.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-loop/src/tool_calls.rs"],
+      "evidence": ["pinned source Agent Loop aggregate: 329 passed", "cargo test -p seekdeep-agent-loop tool_calls::tests::overlaps_parallel_bodies_but_commits_results_in_model_order tool_calls::tests::accepted_contexts_follow_model_order_not_settlement_order tool_calls::tests::exclusive_calls_are_barriers_between_parallel_groups --all-features"],
+      "note": "execution may overlap, but accepted contexts and durable results commit in model order with exclusive calls as barriers"
     },
     {
       "source": "packages/core/agent-loop/tsconfig.json",
