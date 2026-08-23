@@ -15,6 +15,7 @@ futures.workspace = true
 indexmap.workspace = true
 parking_lot.workspace = true
 seekdeep-attachment = { path = "../attachment" }
+seekdeep-agent = { path = "../agent" }
 seekdeep-client-connection = { path = "../client-connection" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
@@ -41,6 +42,7 @@ uuid.workspace = true
 [dev-dependencies]
 seekdeep-host-webserver = { path = "../host-webserver" }
 seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-scope = { path = "../scope" }
 seekdeep-storage = { path = "../storage" }
 seekdeep-storage-json = { path = "../storage-json" }
 tempfile.workspace = true

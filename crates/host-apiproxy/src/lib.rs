@@ -8,6 +8,7 @@ pub mod api;
 pub mod client;
 pub mod configuration;
 pub mod handler;
+pub mod interactions;
 pub mod invariant;
 pub mod native_path_opener;
 pub mod registry_workspace;
@@ -34,6 +35,7 @@ pub use handler::{
     ApiDownlinkStream, ApiProxyHandler, ApiProxyRuntime, FetchBody, FetchBodyStream, FetchHandler,
     FetchResponse,
 };
+pub use interactions::InteractionApiProxyRuntime;
 pub use native_path_opener::{
     NativePlatform, PathOpenerInternals, PathOpenerRunner, can_open_native_path, open_native_path,
     open_native_text_file,

@@ -55513,7 +55513,17 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-approval.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/interactions.rs",
+        "crates/host-apiproxy/tests/api_proxy_interaction_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-question.spec.ts packages/host/apiproxy/tests/api-proxy-approval.spec.ts --reporter=dot (13 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_interaction_service_parity --all-features (12 consolidated interaction cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy -p seekdeep-user-questions --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The production approval answerer pins stable replay ids, exact audit pairing with and without call ids, response correlation, cancellation and teardown settlement, stale and foreign delegation, parallel claims, late-response receipts, and resolved broadcasts."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-blank.spec.ts",
@@ -55564,7 +55574,18 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-question.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/interactions.rs",
+        "crates/host-apiproxy/tests/api_proxy_interaction_service_parity.rs",
+        "crates/user-questions/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-question.spec.ts packages/host/apiproxy/tests/api-proxy-approval.spec.ts --reporter=dot (13 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_interaction_service_parity --all-features (12 consolidated interaction cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy -p seekdeep-user-questions --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The production question provider pins multi- and single-select validation, custom text, stable reconnect replay, browser cancellation, caller abort, exact response addressing, resolved broadcasts, and gateway teardown rejection."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-rename.spec.ts",

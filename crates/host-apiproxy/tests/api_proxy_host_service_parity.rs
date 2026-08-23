@@ -7,6 +7,7 @@ use std::{
 };
 
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
+use seekdeep_agent::AgentRegistry;
 use seekdeep_cordis::Context;
 use seekdeep_host_apiproxy::{
     ApiDownlinkStream, ApiProxyDefaults, ApiProxyRuntime, ApiProxyService, ClientResponse,
@@ -22,6 +23,7 @@ use seekdeep_host_directory_picker::{
     DirectoryPickerErrorCode, DirectoryPickerFailure, DirectoryPickerService,
 };
 use seekdeep_llm::{AbortSignal, LlmRuntime};
+use seekdeep_user_questions::install as install_user_questions;
 use serde_json::{Map, Value, json};
 
 #[derive(Debug, Default)]
@@ -220,6 +222,9 @@ async fn context_constructor_requires_and_composes_the_configuration_runtime() {
     assert!(missing.to_string().contains("llm service is required"));
 
     LlmRuntime::install(&context).unwrap();
+    install_user_questions(&context).unwrap();
+    let agents = Arc::new(AgentRegistry::new(context.clone()));
+    agents.provide(&context).unwrap();
     let service =
         ApiProxyService::from_context(&context, defaults(), Arc::new(|| 0), domains.clone())
             .unwrap();

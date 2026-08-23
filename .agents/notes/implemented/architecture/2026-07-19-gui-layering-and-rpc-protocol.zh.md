@@ -183,7 +183,7 @@ export type ResponseValue<K> =
 - **提示词关联**：提示词的 rpcId 经 MessageSource（`'user-rpc'`）透传进 `user/message` 事件，client 以此把乐观回显转正。
 - **重连 = 重建**：不做续传 cursor（`mux` 的 `since` 签名留座、传了忽略）；断线重开流 + 重拉 history；`subscribed.lastSeq` 与 history 尾 seq 比对，有缝再补拉一次。
 - **冷会话处理遵循所有权**：`session.history` 与 `session.fork` 的源端读取会在不获取 Agent 的情况下检查持久化存储，而绑定到 Agent 的普通会话方法（如 `prompt`）则通过在途表去重后恢复会话。由会话支撑的 subagent 会拒绝这条通用恢复路径，且附加状态不对客户端暴露（`running` 已经覆盖）。
-- **审批/问答**：requested 帧受理时 mint 稳定 rpcId；先到先赢，host 内存 pending 表（keyed by rpcId）是唯一裁判；mux 重开后在 subscribed 帧后回放仍 pending 的 requested 帧（rpcId 原样复用，刷新恢复）。审计事件 `approval/asked`/`decided` 照旧走 durable 日志——帧=live 控制面，事件=durable 审计。**现状**：约定与帧类型已 shipped，host 侧 pending 表/wire answerer 未实现（`api-proxy.ts` 的 `respond` 是 stub，恒回 `not-pending`）；PendingCard v1 只展示。
+- **审批/问答**：requested 帧受理时 mint 稳定 rpcId；先到先赢，`InteractionApiProxyRuntime` 的 host 内存 pending 表（keyed by rpcId）是唯一裁判。运行时会注册网页问题提供方与审批 waterfall 应答器，依据原始请求验证 `ClientResponse`，并在应答、调用方取消或网关资源释放时发出匹配的 resolved 帧。mux 重开后仍 pending 的 requested 帧会使用同一个 rpcId 回放。`approval/asked`/`decided` 审计事件继续写入持久日志：帧属于实时控制面，事件属于持久审计。
 - **不设协议版本**：client 与 host 绑定发布，`host.describe` 无 protocolVersion 字段；出现独立发布的 client 时再引入。
 - **预留方法纪律**：map 只含已实现方法，未知 method 在信封 parse 即 fail loud（`bad-request`），不设 not-implemented 兜底码。预留清单（实现时把签名抄进域接口+map 加行+schema 加对即升格）：`session.fork`、`prompt.mode` 加 `'inject'`、`task.list`、`host.listModels`、describe 加 `hostInstanceId`。（`session.rename` 已从本清单毕业：追加 user 来源的 `session/title` 事件。）
 

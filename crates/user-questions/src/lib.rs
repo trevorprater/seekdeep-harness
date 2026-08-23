@@ -112,7 +112,9 @@ pub struct UserQuestionError {
 }
 
 impl UserQuestionError {
-    fn new(message: impl Into<String>, code: impl Into<String>) -> Self {
+    /// Creates one provider- or service-owned stable failure.
+    #[must_use]
+    pub fn new(message: impl Into<String>, code: impl Into<String>) -> Self {
         Self {
             inner: HarnessError::named("UserQuestionError", message, code),
         }

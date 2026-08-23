@@ -18,7 +18,8 @@ use uuid::Uuid;
 
 use crate::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, ConfigurationApiProxyOptions,
-    ConfigurationApiProxyRuntime, RpcId, RpcMethod, RpcReceipt, RpcRequest, RpcResponse,
+    ConfigurationApiProxyRuntime, InteractionApiProxyRuntime, RpcId, RpcMethod, RpcReceipt,
+    RpcRequest, RpcResponse,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -256,11 +257,12 @@ impl ApiProxyService {
             },
             domains,
         )?;
+        let interactions = InteractionApiProxyRuntime::from_context(context, configuration)?;
         Ok(Self::new(
             defaults,
             picker,
             attached_session_count,
-            configuration,
+            interactions,
         ))
     }
 
