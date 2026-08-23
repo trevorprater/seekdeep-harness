@@ -66383,7 +66383,17 @@
     {
       "source": "packages/skill/skill-filesystem/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/skill-filesystem/src/lib.rs",
+        "crates/skill/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/skill/skill-filesystem/tests/skill-filesystem.spec.ts packages/skill/skill-filesystem/tests/skill-filesystem-watcher.spec.ts --reporter=dot (31 passed)",
+        "cargo test -p seekdeep-skill-filesystem --all-features (4 consolidated provider cases passed)",
+        "cargo clippy -p seekdeep-skill-filesystem -p seekdeep-skill --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust owns default/custom/bundled root resolution, git project discovery, seekdeep-fs versus trusted-host reads, flat and directory Skills, symlink following, YAML frontmatter and invocation policy, ranks and locators, progressive body loads, first-party fs/observed invalidation, native/poll watching, missing-root recreation, stability coalescing, bounded projects, cache invalidation, and teardown."
     },
     {
       "source": "packages/skill/skill-filesystem/src/invariant.ts",
@@ -66402,12 +66412,31 @@
     {
       "source": "packages/skill/skill-filesystem/tests/skill-filesystem-watcher.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/skill-filesystem/src/lib.rs",
+        "crates/skill-filesystem/tests/filesystem_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/skill/skill-filesystem/tests/skill-filesystem.spec.ts packages/skill/skill-filesystem/tests/skill-filesystem-watcher.spec.ts --reporter=dot (31 passed)",
+        "cargo test -p seekdeep-skill-filesystem --all-features",
+        "cargo clippy -p seekdeep-skill-filesystem --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Consolidated Rust cases exercise a missing root watched through a canonical ancestor, polling and stability controls, cache refresh after creation, bounded lifecycle ownership, repeated disposal, and contained late changes; production filtering additionally distinguishes direct Markdown/SKILL.md changes from nested resources."
     },
     {
       "source": "packages/skill/skill-filesystem/tests/skill-filesystem.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/skill-filesystem/src/lib.rs",
+        "crates/skill-filesystem/tests/filesystem_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/skill/skill-filesystem/tests/skill-filesystem.spec.ts packages/skill/skill-filesystem/tests/skill-filesystem-watcher.spec.ts --reporter=dot (31 passed)",
+        "cargo test -p seekdeep-skill-filesystem --all-features (4 consolidated provider cases passed)"
+      ],
+      "note": "Rust cases cover plugin/config rejection, project/custom/default precedence around runtime Skills, bundles and flat files, invalid siblings, documented boolean spellings, metadata and body loading, missing roots, watcher-backed additions, and idempotent disposal; the provider implementation also routes discovery/read/project lookup through seekdeep-fs when composed."
     },
     {
       "source": "packages/skill/skill-filesystem/tsconfig.json",

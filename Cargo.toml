@@ -93,6 +93,7 @@ members = [
   "crates/scope",
   "crates/skill",
   "crates/skill-badge",
+  "crates/skill-filesystem",
   "crates/subagent",
   "crates/session-persistence",
   "crates/session-persistence-jsonl",

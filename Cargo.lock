@@ -6414,6 +6414,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-skill-filesystem"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "notify",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-fs",
+ "seekdeep-llm",
+ "seekdeep-skill",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "seekdeep-spill"
 version = "0.1.0-rc.5"
 dependencies = [

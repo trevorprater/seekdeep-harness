@@ -486,6 +486,11 @@ impl SkillRegistry {
         Ok(registry)
     }
 
+    /// Invalidates every completed provider catalog after an external source changes.
+    pub fn invalidate(&self) {
+        self.invalidate_cache();
+    }
+
     /// Registers a borrowed same-process provider into the calling scope's layer.
     ///
     /// # Errors
