@@ -39013,7 +39013,22 @@
     {
       "source": "packages/client/runtime/src/client/sessions/provide.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/provide.rs",
+        "crates/client-runtime/src/wasm_provide.rs",
+        "crates/client-runtime/tests/provide_parity.rs",
+        "crates/client-runtime/tests/wasm_provide_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/sessions-service.client.spec.ts -t \"resolves an identity-stable|currentProvideInfo follows selection|a provider roster change|an unsubscribed currentProvideInfo\" --reporter=dot (pinned source: 4 passed, 39 skipped)",
+        "pinned source direct oracle: exact undeclared/missing/duplicate hook and prop diagnostics plus rollback to the built-in session roster",
+        "cargo test -p seekdeep-client-runtime --test provide_parity --all-features (4 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_provide_parity-*.wasm (2 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The portable Rust ledger and JavaScript-compatible WASM facade keep the built-in session hook first, enforce declared complete unique hook/prop bundles, roll back invalid live registrations, rebuild owner-held bundles, preserve definite and absent bundle identity, synchronously republish stable selections on roster changes, and contain failing subscribers without starving later listeners"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/queue-mirror.ts",

@@ -10,6 +10,7 @@ mod ordered_baseline;
 mod partial;
 mod pending;
 mod projection_store;
+mod provide;
 mod queue_mirror;
 mod request_inspection;
 mod slots;
@@ -27,6 +28,8 @@ mod wasm_notifier;
 #[cfg(target_arch = "wasm32")]
 mod wasm_projection_store;
 #[cfg(target_arch = "wasm32")]
+mod wasm_provide;
+#[cfg(target_arch = "wasm32")]
 mod wasm_slots;
 #[cfg(target_arch = "wasm32")]
 mod wasm_store;
@@ -41,6 +44,7 @@ pub use ordered_baseline::*;
 pub use partial::*;
 pub use pending::*;
 pub use projection_store::*;
+pub use provide::*;
 pub use queue_mirror::*;
 pub use request_inspection::*;
 pub use slots::*;
@@ -55,6 +59,8 @@ pub use wasm_conversation_registry::*;
 pub use wasm_misc::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_projection_store::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_provide::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_slots::*;
 #[cfg(target_arch = "wasm32")]
