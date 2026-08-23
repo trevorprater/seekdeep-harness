@@ -83,7 +83,7 @@ async fn report_tool_and_guidance_are_child_scoped_and_revoke_together() {
             .await
             .contains(&"tool:report".to_owned())
     );
-    dispose();
+    dispose.dispose().await.unwrap();
     assert!(
         !harness
             .tools

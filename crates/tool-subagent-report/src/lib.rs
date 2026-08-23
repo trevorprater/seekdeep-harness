@@ -63,16 +63,11 @@ struct ReportValue {
 ///
 /// Returns missing-service, duplicate-registration, or schema failures after
 /// rolling back any earlier registration.
-///
-/// # Panics
-///
-/// The returned synchronous revoker panics after attempting both removals when
-/// either scoped effect reports a cleanup failure.
 pub fn install_report_tool(
     child_context: &Context,
     service_context: &Context,
     delivery: SubagentReportDelivery,
-) -> anyhow::Result<Box<dyn Fn() + Send + Sync>> {
+) -> anyhow::Result<EffectHandle> {
     let prompt = child_context
         .get(SYSTEM_PROMPT)
         .ok_or_else(|| anyhow::anyhow!("tool-subagent-report requires systemPrompt"))?;
@@ -145,13 +140,23 @@ pub fn install_report_tool(
             return Err(error);
         }
     };
-    Ok(Box::new(move || {
-        let tool_result = futures::executor::block_on(tool.dispose());
-        let section_result = futures::executor::block_on(section.dispose());
-        if let Err(error) = tool_result.and(section_result) {
-            panic!("failed to revoke report tool and prompt registrations: {error:#}");
-        }
-    }))
+    Ok(EffectHandle::new(
+        "tool-subagent-report child setup",
+        move || {
+            Box::pin(async move {
+                let (tool_result, section_result) =
+                    futures::join!(tool.dispose(), section.dispose());
+                match (tool_result, section_result) {
+                    (Ok(()), Ok(())) => Ok(()),
+                    (Err(tool), Ok(())) => Err(tool),
+                    (Ok(()), Err(section)) => Err(section),
+                    (Err(tool), Err(section)) => Err(anyhow::anyhow!(
+                        "{tool:#}; prompt cleanup failed: {section:#}"
+                    )),
+                }
+            })
+        },
+    ))
 }
 
 /// Registers the contribution for every later continuable child Activation.
@@ -160,11 +165,6 @@ pub fn install_report_tool(
 ///
 /// Returns missing-service or lifecycle registration failures.
 ///
-/// # Panics
-///
-/// Panics inside child materialization when scoped tool or guidance
-/// installation fails; the unpublished Agent transaction catches that failure
-/// and rolls back the child.
 pub fn install(context: &Context, config: Config) -> anyhow::Result<EffectHandle> {
     let subagents = context
         .get(SUBAGENTS)
@@ -173,7 +173,6 @@ pub fn install(context: &Context, config: Config) -> anyhow::Result<EffectHandle
     let delivery = SubagentReportDelivery::from(config.report_delivery);
     subagents.register_continuable_setup(Arc::new(move |child_context| {
         install_report_tool(child_context, &service_context, delivery)
-            .unwrap_or_else(|error| panic!("failed to install report tool: {error:#}"))
     }))
 }
 

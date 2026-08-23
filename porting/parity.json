@@ -68763,7 +68763,18 @@
     {
       "source": "packages/subagent/subagent/tests/activation-setup-registry.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/activation_setup_registry.rs",
+        "crates/tool-subagent-report/src/lib.rs",
+        "crates/tool-subagent-report/tests/report_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: activation setup registry 11/11",
+        "Rust tests pin ordered install, idempotent ownership convergence, precommit invalidation, rollback, aggregate cleanup, and child isolation",
+        "cargo test -p seekdeep-subagent -p seekdeep-tool-subagent-report --all-features",
+        "cargo clippy -p seekdeep-subagent -p seekdeep-tool-subagent-report --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/tests/assistant-output.spec.ts",

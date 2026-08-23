@@ -286,11 +286,7 @@ impl SubagentRuntime {
         &self,
         contribution: ContinuableSetupContribution,
     ) -> anyhow::Result<EffectHandle> {
-        let undo = self.setup_registry.register(contribution);
-        let effect = EffectHandle::synchronous("subagents.registerContinuableSetup()", move || {
-            undo();
-            Ok(())
-        });
+        let effect = self.setup_registry.register(contribution);
         self.context.own(effect.clone())?;
         Ok(effect)
     }
