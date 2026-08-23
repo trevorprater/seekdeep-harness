@@ -28,6 +28,8 @@ The implementation supports interactive shells and line-oriented REPLs on Linux 
 
 Readiness remains PTY-backend behavior, not a second public contract. The terminal-process provider supplies only substrate facts such as the foreground process group and whether it can prove that group is waiting on input; `seekdeep-terminal-bash` combines those facts with prompt and silence evidence into the common send result.
 
+The `seekdeep-tool-terminal` Rust crate registers all six typed tools through reversible Cordis effects, uses `TerminalSessionService` for exact owner authority, and starts background sends inside `JobRegistry.start()` only after job preflight succeeds. Its last-mile finalizer bounds every single-text result after the complete tool pipeline, while structured multi-block policy output remains unchanged.
+
 ### Agent ownership and identity
 
 `TerminalSessionService` stores live sessions process-locally, but every session is owned by the exact `Agent` passed through the tool execution context. The service mints an opaque `TerminalSessionId`; an optional model-chosen `name` is display metadata and is unique only within that owner. Every operation targets `sessionId`, and `list`/`read`/`signal`/`kill` reject callers other than the owner.
@@ -55,7 +57,7 @@ The local subprocess terminal primitive uses only public `node-pty` capabilities
 | `terminal_send` | Send text, optionally submit Enter, and wait for readiness or register a background job | bounded viewport plus wait and session status; background also returns `jobId` |
 | `terminal_read` | Read a bounded page from retained scrollback | `{ text, totalLines, lineBegin, lineEnd, truncated }` |
 | `terminal_signal` | Send one allowed signal to the current foreground process group | `{ delivered, targetPgid }` |
-| `terminal_close` | Close one session and await process-tree quiescence | `{ killed }` |
+| `terminal_close` | Close one session and await process-tree quiescence | `{ sessionId, outcome: 'closed' | 'already-closing' }` |
 | `terminal_list` | List the caller's live sessions | owner-scoped session summaries |
 
 The UI render contract is exact and location-free. `terminal_send` uses terminal call/result cards only for foreground sends; its background form is generic `execute`. `terminal_open`, `terminal_read`, `terminal_signal`, `terminal_close`, and `terminal_list` use generic `execute`, `read`, `execute`, `delete`, and `read` cards respectively. No PTY tool emits `locations`.

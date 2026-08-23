@@ -139,6 +139,7 @@ members = [
   "crates/tool-pwsh",
   "crates/tool-ralph",
   "crates/tool-subagent-report",
+  "crates/tool-terminal",
   "crates/tool-subagent-control",
   "crates/tool-subagent",
   "crates/tool-skill",

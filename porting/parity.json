@@ -69959,7 +69959,15 @@
     {
       "source": "packages/terminal/tool-terminal/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-terminal/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-terminal 21/21",
+        "cargo test -p seekdeep-tool-terminal --all-features",
+        "cargo clippy -p seekdeep-tool-terminal --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/terminal/tool-terminal/src/invariant.ts",
@@ -69978,22 +69986,54 @@
     {
       "source": "packages/terminal/tool-terminal/src/render.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-terminal/src/render.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-terminal 21/21",
+        "Rust renderer tests pin UTF-8 bounds, truncation markers, status, pagination, and empty-list forms",
+        "cargo test -p seekdeep-tool-terminal --all-features"
+      ]
     },
     {
       "source": "packages/terminal/tool-terminal/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-terminal/tests/terminal_parity.rs",
+        "crates/terminal-bash/tests/local_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-terminal 21/21 including real Loader/PTTY composition",
+        "cargo test -p seekdeep-tool-terminal --all-features",
+        "cargo test -p seekdeep-terminal-bash --all-features"
+      ]
     },
     {
       "source": "packages/terminal/tool-terminal/tests/render.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-terminal/tests/terminal_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-terminal 21/21",
+        "cargo test -p seekdeep-tool-terminal --all-features"
+      ]
     },
     {
       "source": "packages/terminal/tool-terminal/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-terminal/tests/terminal_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-terminal 21/21",
+        "Rust real registry test drives all six tools, owner authority, typed schemas, foreground metadata, UI presenters, background jobs, config gating, and bounded rendering",
+        "cargo test -p seekdeep-tool-terminal --all-features"
+      ]
     },
     {
       "source": "packages/terminal/tool-terminal/tsconfig.json",

@@ -28,6 +28,8 @@ harness 可以运行前台与后台命令、编辑文件和委派工作，但无
 
 就绪判定仍属于 PTY 后端行为，不是第二条公共约定。终端进程提供方只提供基底事实，例如前台进程组，以及能否证明该组正在等待输入；`seekdeep-terminal-bash` 将这些事实与提示符和静默证据组合成统一的发送结果。
 
+`seekdeep-tool-terminal` Rust crate 通过可逆 Cordis effect 注册全部 6 个类型化工具，使用 `TerminalSessionService` 执行确切 owner 鉴权，并且只在 `JobRegistry.start()` 的 job preflight 成功后才启动后台 send。它的末端 finalizer 会在完整工具流水线之后限制每个单文本结果，而策略刻意返回的结构化多块输出保持不变。
+
 ### agent 所有权与身份
 
 `TerminalSessionService` 在进程内保存活会话，但每个会话都由工具执行上下文传入的确切 `Agent` 拥有。服务铸造不透明的 `TerminalSessionId`；模型可选填的 `name` 只是显示元数据，仅在该 owner 内唯一。所有操作都以 `sessionId` 为目标，`list`/`read`/`signal`/`kill` 会拒绝 owner 之外的调用方。
@@ -55,7 +57,7 @@ agent scope dispose（资源释放）时先撤销注册，再等待全部所属 
 | `terminal_send` | 发送文本、可选提交 Enter，并等待就绪或注册一个后台任务 | 有界 viewport、等待状态和会话状态；后台模式还返回 `jobId` |
 | `terminal_read` | 从保留的 scrollback 读取一个有界页 | `{ text, totalLines, lineBegin, lineEnd, truncated }` |
 | `terminal_signal` | 向当前前台进程组发送一种允许的信号 | `{ delivered, targetPgid }` |
-| `terminal_close` | 关闭一个会话并等待进程树完全停稳 | `{ killed }` |
+| `terminal_close` | 关闭一个会话并等待进程树完全停稳 | `{ sessionId, outcome: 'closed' | 'already-closing' }` |
 | `terminal_list` | 列出调用方的活会话 | 按 owner 隔离的会话摘要 |
 
 UI 渲染约定精确且不携带位置信息。`terminal_send` 只为前台发送使用 terminal 调用卡片和结果卡片；后台形式使用通用 `execute` 卡片。`terminal_open`、`terminal_read`、`terminal_signal`、`terminal_close` 和 `terminal_list` 分别使用通用 `execute`、`read`、`execute`、`delete` 和 `read` 卡片。所有 PTY 工具都不发出 `locations`。
