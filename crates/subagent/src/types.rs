@@ -167,7 +167,7 @@ pub trait SubagentRun: Send + Sync {
     /// The exact published in-process child, or none for a remote run.
     fn local_agent(&self) -> Option<&Arc<Agent>>;
     /// Resolves with the child's terminal result.
-    fn result(&self) -> BoxFuture<'static, SubagentResult>;
+    fn result(&self) -> BoxFuture<'static, anyhow::Result<SubagentResult>>;
     /// Cancels remaining work, reaches quiescence, and releases resources.
     fn dispose(&self) -> BoxFuture<'static, anyhow::Result<()>>;
 }

@@ -53,16 +53,23 @@ pub fn observe_run(
     let run_end = Arc::clone(&run);
     tokio::spawn(async move {
         let result = run_end.result().await;
+        let (stop_reason, output) = match result {
+            Ok(result) => (result.stop_reason, result.output),
+            Err(error) => {
+                tracing::warn!(%error, "subagent result channel failed");
+                (SubagentStopReason::Error, Vec::new())
+            }
+        };
         let info = SubagentRunEndInfo {
             run_id: identity_end.run_id,
             provider: identity_end.provider,
             id: identity_end.id,
             local: identity_end.local,
-            stop_reason: result.stop_reason,
-            last_assistant_message: if result.output.is_empty() {
+            stop_reason,
+            last_assistant_message: if output.is_empty() {
                 None
             } else {
-                Some(result.output)
+                Some(output)
             },
         };
         emit_subagent_lifecycle(

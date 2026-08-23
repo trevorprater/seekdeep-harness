@@ -41,7 +41,7 @@ bash seam（[能力 seam](../architecture/2026-06-13-capability-seams.md)）在�
 
 ### 原语：异步 `start → SubagentRun`
 
-提供方暴露 `start(request) → Promise<SubagentRun>`。完成时发布一个子 agent，并将其运行句柄转交给调用方。发布前失败的工作会拒绝 `start()`，而发布后的提示词、轮次、取消与基础设施结果会通过 `run.result` 结算，且不会隐藏 child id。同一个信号覆盖发布前后的取消；`dispose()`（资源释放）取消剩余工作并等待完全停稳。启动被拒绝时会清理未发布资源，且不发出生命周期事件；发布后的结果失败则会结束已经发布的生命周期事件对。`start` 与传输方式无关；`spawn` 仅指代全新的进程内后端。
+提供方暴露 `start(request) → Promise<SubagentRun>`。完成时发布一个子 agent，并将其运行句柄转交给调用方。发布前失败的工作会拒绝 `start()`，而发布后的提示词、轮次、取消与基础设施结果会通过 `run.result` 结算，且不会隐藏 child id。Rust 的 `SubagentRun::result()` 返回 `anyhow::Result<SubagentResult>`，从而让基础设施 rejection 与 `dispose()` 失败保持独立；生命周期遥测会把被拒绝的结果通道映射为 `error`，而收集边界仍保留 dispose 诊断。同一个信号覆盖发布前后的取消；`dispose()`（资源释放）取消剩余工作并等待完全停稳。启动被拒绝时会清理未发布资源，且不发出生命周期事件；发布后的结果失败则会结束已经发布的生命周期事件对。provider-added listener 在注册提交边界运行：同步 veto 会回滚提供方条目，而提供方移除与 run 生命周期观测会隔离 listener 失败。`start` 与传输方式无关；`spawn` 仅指代全新的进程内后端。
 
 ### 两类可选能力，两种发现方式
 

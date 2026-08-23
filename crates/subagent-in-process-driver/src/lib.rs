@@ -262,8 +262,8 @@ impl SubagentRun for InProcessRun {
         Some(&self.agent)
     }
 
-    fn result(&self) -> BoxFuture<'static, SubagentResult> {
-        Box::pin(self.result.clone())
+    fn result(&self) -> BoxFuture<'static, anyhow::Result<SubagentResult>> {
+        Box::pin(self.result.clone().map(Ok))
     }
 
     fn dispose(&self) -> BoxFuture<'static, anyhow::Result<()>> {

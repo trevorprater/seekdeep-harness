@@ -135,6 +135,12 @@ impl SubagentRuntime {
         provider: Arc<dyn SubagentProvider>,
     ) -> anyhow::Result<EffectHandle> {
         let name = provider.name().to_owned();
+        let event_args = seekdeep_cordis::EventArgs::one(provider.clone());
+        let emission = self.context.events().prepare_emit(
+            &self.context,
+            "subagent/provider-added",
+            &event_args,
+        )?;
         {
             let mut providers = self.providers.lock();
             if providers.contains_key(&name) {
@@ -144,7 +150,11 @@ impl SubagentRuntime {
                 )
                 .into());
             }
-            providers.insert(name.clone(), provider.clone());
+            providers.insert(name.clone(), provider);
+        }
+        if let Err(error) = emission.emit() {
+            self.providers.lock().remove(&name);
+            return Err(error);
         }
         let runtime = Arc::clone(self);
         let effect = EffectHandle::new("subagents.registerProvider()", move || {
@@ -156,12 +166,6 @@ impl SubagentRuntime {
                 Ok(())
             })
         });
-        emit_subagent_lifecycle(
-            &self.context,
-            "subagent/provider-added",
-            seekdeep_cordis::EventArgs::one(provider),
-            None,
-        );
         Ok(effect)
     }
 

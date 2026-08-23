@@ -38,7 +38,20 @@ pub fn assert_positive_finite(prefix: &str, name: &str, value: f64) -> anyhow::R
 }
 
 fn is_enterable_directory(path: &Path) -> bool {
-    std::fs::metadata(path).is_ok_and(|meta| meta.is_dir())
+    std::fs::metadata(path).is_ok_and(|meta| {
+        if !meta.is_dir() {
+            return false;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            meta.permissions().mode() & 0o111 != 0
+        }
+        #[cfg(not(unix))]
+        {
+            true
+        }
+    })
 }
 
 /// Asserts cwd can host the child: absolute and an existing directory.
@@ -206,14 +219,14 @@ impl SubagentRun for SubprocessRunHandle {
         None
     }
 
-    fn result(&self) -> futures::future::BoxFuture<'static, SubagentResult> {
+    fn result(&self) -> futures::future::BoxFuture<'static, anyhow::Result<SubagentResult>> {
         let result = self.result.lock().clone();
         Box::pin(async move {
-            result.unwrap_or(SubagentResult {
+            Ok(result.unwrap_or(SubagentResult {
                 output: Vec::new(),
                 structured: None,
                 stop_reason: SubagentStopReason::Error,
-            })
+            }))
         })
     }
 
@@ -239,5 +252,120 @@ impl SubagentRun for SubprocessRunHandle {
             notify.notified().await;
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+
+    #[test]
+    fn out_of_process_capabilities_and_positive_bounds_are_fail_closed() {
+        assert_eq!(no_start_capabilities(), SubagentCapabilities::default());
+        assert!(assert_positive_finite("p", "graceMs", 1.0).is_ok());
+        for value in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert!(assert_positive_finite("p", "graceMs", value).is_err());
+        }
+    }
+
+    #[test]
+    fn cwd_resolution_requires_an_absolute_enterable_directory() {
+        let temporary = tempfile::tempdir().unwrap();
+        let directory = temporary.path().to_string_lossy().into_owned();
+        assert_eq!(
+            assert_usable_cwd("p", "config cwd", &directory).unwrap(),
+            directory
+        );
+        assert!(assert_usable_cwd("p", "config cwd", "relative/path").is_err());
+        let file = temporary.path().join("file");
+        std::fs::write(&file, "x").unwrap();
+        assert!(assert_usable_cwd("p", "config cwd", &file.to_string_lossy()).is_err());
+        assert_eq!(validate_configured_cwd("p", None).unwrap(), None);
+        assert!(validate_configured_cwd("p", Some("")).is_err());
+        assert_eq!(
+            resolve_child_cwd("p", Some(&directory), None).unwrap(),
+            directory
+        );
+        assert!(resolve_child_cwd("p", None, None).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn directory_without_search_permission_is_not_usable() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let temporary = tempfile::tempdir().unwrap();
+        std::fs::set_permissions(temporary.path(), std::fs::Permissions::from_mode(0o600)).unwrap();
+        let result = assert_usable_cwd("p", "config cwd", &temporary.path().to_string_lossy());
+        std::fs::set_permissions(temporary.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn result_settlement_contains_failures_and_preserves_cancelled_partial_output() {
+        let result = settle_run_result(RunResultSettlement {
+            attempt: Box::new(|| Box::pin(async { anyhow::bail!("transport died") })),
+            collect_output: Box::new(|| {
+                vec![ContentBlock::Text {
+                    text: "partial".to_owned(),
+                }]
+            }),
+            cancelled: Box::new(|| true),
+            on_error: None,
+            signal: AbortSignal::default(),
+            on_abort: Box::new(|| {}),
+        })
+        .await;
+        assert_eq!(result.stop_reason, SubagentStopReason::Aborted);
+        assert_eq!(
+            result.output,
+            [ContentBlock::Text {
+                text: "partial".to_owned()
+            }]
+        );
+
+        let errors = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&errors);
+        let failed = settle_run_result(RunResultSettlement {
+            attempt: Box::new(|| Box::pin(async { anyhow::bail!("transport died") })),
+            collect_output: Box::new(Vec::new),
+            cancelled: Box::new(|| false),
+            on_error: Some(Box::new(move |_, reason| {
+                assert_eq!(reason, SubagentStopReason::Error);
+                observed.fetch_add(1, Ordering::SeqCst);
+                panic!("sink failure is contained");
+            })),
+            signal: AbortSignal::default(),
+            on_abort: Box::new(|| {}),
+        })
+        .await;
+        assert_eq!(failed.stop_reason, SubagentStopReason::Error);
+        assert_eq!(errors.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn subprocess_handle_result_and_disposal_are_idempotent() {
+        let teardown = Arc::new(AtomicUsize::new(0));
+        let disposed = Arc::clone(&teardown);
+        let handle = SubprocessRunHandle::new(
+            SessionId::new("remote"),
+            Box::pin(async move {
+                disposed.fetch_add(1, Ordering::SeqCst);
+            }),
+        );
+        handle.set_result(SubagentResult {
+            output: Vec::new(),
+            structured: None,
+            stop_reason: SubagentStopReason::Completed,
+        });
+        assert_eq!(
+            handle.result().await.unwrap().stop_reason,
+            SubagentStopReason::Completed
+        );
+        handle.dispose().await.unwrap();
+        handle.dispose().await.unwrap();
+        assert_eq!(teardown.load(Ordering::SeqCst), 1);
     }
 }

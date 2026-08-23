@@ -132,4 +132,92 @@ mod tests {
             }]
         );
     }
+
+    #[test]
+    fn non_empty_message_outranks_streamed_text_on_both_sides() {
+        let events = vec![
+            event(
+                "assistant/chunk",
+                json!({"chunk": {"type": "text-delta", "text": "earlier"}}),
+            ),
+            event(
+                "assistant/message",
+                json!({"message": {"content": [{"type": "text", "text": "complete"}]}}),
+            ),
+            event(
+                "assistant/chunk",
+                json!({"chunk": {"type": "text-delta", "text": "later"}}),
+            ),
+            event("assistant/message", json!({"message": {"content": []}})),
+        ];
+        assert_eq!(
+            final_assistant_output(&events),
+            Some(vec![ContentBlock::Text {
+                text: "complete".to_owned()
+            }])
+        );
+    }
+
+    #[test]
+    fn textless_reasoning_message_is_still_authoritative() {
+        let events = vec![
+            event(
+                "assistant/chunk",
+                json!({"chunk": {"type": "text-delta", "text": "partial"}}),
+            ),
+            event(
+                "assistant/message",
+                json!({"message": {"content": [{"type": "reasoning", "text": "complete reasoning"}]}}),
+            ),
+        ];
+        assert_eq!(
+            final_assistant_output(&events),
+            Some(vec![ContentBlock::Reasoning {
+                text: "complete reasoning".to_owned()
+            }])
+        );
+    }
+
+    #[test]
+    fn fallback_excludes_reasoning_chunks_and_tool_results() {
+        let events = vec![
+            event(
+                "assistant/chunk",
+                json!({"chunk": {"type": "reasoning-delta", "text": "thinking"}}),
+            ),
+            event(
+                "assistant/chunk",
+                json!({"chunk": {"type": "text-delta", "text": "partial "}}),
+            ),
+            event(
+                "tool/result",
+                json!({"message": {"content": [{"type": "text", "text": "tool"}]}}),
+            ),
+            event(
+                "assistant/chunk",
+                json!({"chunk": {"type": "text-delta", "text": "answer"}}),
+            ),
+        ];
+        assert_eq!(
+            final_assistant_output(&events),
+            Some(vec![ContentBlock::Text {
+                text: "partial answer".to_owned()
+            }])
+        );
+    }
+
+    #[test]
+    fn empty_fold_and_non_text_output_collect_none() {
+        assert_eq!(AssistantOutputFold::new().collect(), None);
+        assert_eq!(
+            final_assistant_output(&[
+                event(
+                    "assistant/chunk",
+                    json!({"chunk": {"type": "reasoning-delta", "text": "thinking"}}),
+                ),
+                event("assistant/message", json!({"message": {"content": []}})),
+            ]),
+            None
+        );
+    }
 }

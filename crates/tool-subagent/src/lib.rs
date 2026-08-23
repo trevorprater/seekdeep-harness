@@ -226,19 +226,23 @@ fn partial_text_error(headline: &str, output: &[ContentBlock]) -> String {
 }
 
 async fn settle_foreground(run: Arc<dyn SubagentRun>) -> anyhow::Result<DelegationValue> {
-    let result = run.result().await;
-    let execution = if let Some(error) = stop_reason_error(&result) {
-        Err(anyhow::anyhow!(partial_text_error(error, &result.output)))
-    } else {
-        let output = result
-            .output
-            .iter()
-            .map(serde_json::to_value)
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(DelegationValue::Foreground {
-            run_id: run.id().clone(),
-            output,
-        })
+    let execution = match run.result().await {
+        Err(error) => Err(error),
+        Ok(result) => {
+            if let Some(error) = stop_reason_error(&result) {
+                Err(anyhow::anyhow!(partial_text_error(error, &result.output)))
+            } else {
+                let output = result
+                    .output
+                    .iter()
+                    .map(serde_json::to_value)
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(DelegationValue::Foreground {
+                    run_id: run.id().clone(),
+                    output,
+                })
+            }
+        }
     };
     let disposal = run.dispose().await;
     match (execution, disposal) {

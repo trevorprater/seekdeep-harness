@@ -211,7 +211,7 @@ async fn published_fresh_child_inherits_route_cwd_depth_and_disposes_quiescently
     assert_eq!(live.options().subagent_depth, Some(1));
     assert_eq!(live.options().max_tokens, Some(321));
 
-    let result = run.result().await;
+    let result = run.result().await.unwrap();
     assert_eq!(result.stop_reason, SubagentStopReason::Completed);
     assert_eq!(text(&result.output), "child answer");
     let events = live.session().events();
@@ -279,7 +279,7 @@ async fn structured_child_commits_the_exact_value_and_concludes_without_an_extra
     let run = start_in_process_run(request, InProcessRunOptions::default())
         .await
         .unwrap();
-    let result = run.result().await;
+    let result = run.result().await.unwrap();
     assert_eq!(result.stop_reason, SubagentStopReason::Completed);
     assert_eq!(result.structured, Some(json!({ "answer": 42 })));
     assert_eq!(harness.adapter.requests.lock().len(), 1);

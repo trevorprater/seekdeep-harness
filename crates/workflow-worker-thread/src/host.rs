@@ -33,7 +33,7 @@ impl ChildHandle for HostChildHandle {
     fn result(&self) -> BoxFuture<'static, anyhow::Result<ChildResult>> {
         let run = Arc::clone(&self.run);
         Box::pin(async move {
-            let result = run.result().await;
+            let result = run.result().await?;
             Ok(ChildResult {
                 output: result.output,
                 structured: result.structured,

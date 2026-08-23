@@ -56,9 +56,9 @@ impl SubagentRun for ScriptedRun {
         None
     }
 
-    fn result(&self) -> BoxFuture<'static, SubagentResult> {
+    fn result(&self) -> BoxFuture<'static, anyhow::Result<SubagentResult>> {
         let result = self.behavior.result.clone();
-        Box::pin(async move { result })
+        Box::pin(async move { Ok(result) })
     }
 
     fn dispose(&self) -> BoxFuture<'static, anyhow::Result<()>> {

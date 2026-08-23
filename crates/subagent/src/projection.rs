@@ -160,3 +160,80 @@ pub fn subagent_identity_projection_definition() -> ProjectionDefinition {
         },
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use seekdeep_session_projection::ProjectionTransition;
+    use serde_json::json;
+
+    use super::*;
+
+    fn event(event_type: &str, seq: u64, time: i64) -> SessionEvent {
+        SessionEvent {
+            event_type: event_type.to_owned(),
+            seq,
+            time,
+            data: json!({}),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        }
+    }
+
+    fn fold(events: &[SessionEvent]) -> Value {
+        let definition = subagent_timing_projection_definition();
+        let mut state = definition.initial_state().unwrap();
+        for event in events {
+            if let ProjectionTransition::Changed(next) =
+                definition.apply_event(&state, event).unwrap()
+            {
+                state = next;
+            }
+        }
+        definition.project(&state).unwrap()
+    }
+
+    #[test]
+    fn descriptor_resets_inherited_timing_and_later_turns_accumulate() {
+        assert_eq!(
+            fold(&[
+                event("turn/start", 0, 100),
+                event("subagent/descriptor", 1, 110),
+                event("turn/end", 2, 300),
+                event("turn/start", 3, 1_000),
+                event("subagent/descriptor", 4, 1_100),
+                event("turn/end", 5, 4_100),
+                event("turn/start", 6, 10_000),
+                event("turn/end", 7, 12_000),
+            ]),
+            json!({ "settledMs": 5_100 })
+        );
+    }
+
+    #[test]
+    fn open_turn_tracks_through_and_reversed_boundaries_never_subtract() {
+        assert_eq!(
+            fold(&[
+                event("turn/start", 0, 1_000),
+                event("subagent/descriptor", 1, 1_100),
+                event("turn/end", 2, 900),
+                event("turn/start", 3, 2_000),
+                event("assistant/chunk", 4, 2_500),
+            ]),
+            json!({ "settledMs": 0, "active": { "since": 2_000, "through": 2_500 } })
+        );
+    }
+
+    #[test]
+    fn completed_pre_descriptor_turns_and_unrelated_idle_events_are_ignored() {
+        assert_eq!(
+            fold(&[
+                event("turn/start", 0, 100),
+                event("turn/end", 1, 200),
+                event("subagent/descriptor", 2, 300),
+                event("assistant/chunk", 3, 400),
+            ]),
+            json!({ "settledMs": 0 })
+        );
+    }
+}

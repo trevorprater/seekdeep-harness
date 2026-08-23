@@ -68768,7 +68768,14 @@
     {
       "source": "packages/subagent/subagent/tests/assistant-output.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/assistant_output.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: five focused subagent suites 71/71",
+        "cargo test -p seekdeep-subagent --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent/tests/continuation-inheritance.spec.ts",
@@ -68793,22 +68800,58 @@
     {
       "source": "packages/subagent/subagent/tests/out-of-process.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/out_of_process.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: five focused subagent suites 71/71",
+        "cargo test -p seekdeep-subagent --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent/tests/run-settlement.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/run_settlement.rs",
+        "crates/subagent/src/types.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: five focused subagent suites 71/71",
+        "Rust result channel preserves infrastructure rejection independently from disposal failure",
+        "cargo test -p seekdeep-subagent --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent/tests/service.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/index.rs",
+        "crates/subagent/src/lifecycle.rs",
+        "crates/subagent/src/types.rs",
+        "crates/tool-subagent/tests/delegation_parity.rs",
+        "crates/subagent-spawn-in-process/tests/provider_parity.rs",
+        "crates/subagent-fork-in-process/tests/provider_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: five focused subagent suites 71/71",
+        "Rust provider registration rollback, duplicate/capability enforcement, lifecycle telemetry, result failure, and provider revocation tests",
+        "cargo test -p seekdeep-subagent -p seekdeep-tool-subagent -p seekdeep-subagent-spawn-in-process -p seekdeep-subagent-fork-in-process --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent/tests/timing-projection.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/projection.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: five focused subagent suites 71/71",
+        "cargo test -p seekdeep-subagent --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent/tsconfig.json",
