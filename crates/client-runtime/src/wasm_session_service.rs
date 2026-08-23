@@ -120,6 +120,12 @@ pub struct WasmSessionRuntime {
     list_face: JsValue,
 }
 
+impl WasmSessionRuntime {
+    pub(crate) fn core_runtime(&self) -> Rc<SessionRuntime> {
+        self.state.runtime.clone()
+    }
+}
+
 #[wasm_bindgen(js_class = SessionRuntime)]
 impl WasmSessionRuntime {
     /// Creates the browser root Sessions service.
@@ -795,7 +801,9 @@ fn selection_address_to_js(address: &SubagentAddress) -> Result<JsValue, JsValue
     Ok(value.into())
 }
 
-fn session_create_error_to_js(error: &crate::SessionCreateFailure) -> Result<JsValue, JsValue> {
+pub(crate) fn session_create_error_to_js(
+    error: &crate::SessionCreateFailure,
+) -> Result<JsValue, JsValue> {
     let value = Object::from(JsValue::from(js_sys::Error::new(&error.to_string())));
     set(&value, "name", &JsValue::from_str("SessionCreateError"))?;
     set(&value, "rpcError", &rpc_error_to_js(&error.error)?)?;

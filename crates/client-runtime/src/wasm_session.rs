@@ -286,7 +286,7 @@ fn parse_rpc_result(value: &JsValue) -> Result<ClientRpcResult<Value>, JsValue> 
     }
 }
 
-fn parse_rpc_error(value: &JsValue) -> Result<ClientRpcError, JsValue> {
+pub(crate) fn parse_rpc_error(value: &JsValue) -> Result<ClientRpcError, JsValue> {
     let details = Reflect::get(value, &JsValue::from_str("details"))?;
     let details = if details.is_undefined() {
         JsonMap::new()

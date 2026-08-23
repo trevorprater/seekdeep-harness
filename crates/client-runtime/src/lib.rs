@@ -46,6 +46,11 @@ mod wasm_session_service;
 mod wasm_slots;
 #[cfg(target_arch = "wasm32")]
 mod wasm_store;
+#[cfg(target_arch = "wasm32")]
+mod wasm_workspace_service;
+mod workspace;
+mod workspace_manager;
+mod workspace_service;
 
 pub use assistant_timing::*;
 pub use context_provenance::*;
@@ -91,6 +96,11 @@ pub use wasm_session_service::*;
 pub use wasm_slots::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_store::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_workspace_service::*;
+pub use workspace::*;
+pub use workspace_manager::*;
+pub use workspace_service::*;
 
 /// Host-side package row; the observable runtime lives in the browser entrypoint.
 #[must_use]

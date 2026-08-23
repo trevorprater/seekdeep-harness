@@ -38756,7 +38756,18 @@
     {
       "source": "packages/client/runtime/src/client/contract/sessions-port.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/workspace_service.rs",
+        "crates/client-runtime/src/session_service.rs",
+        "crates/client-runtime/tests/workspace_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/workspaces-service.client.spec.ts --reporter=dot (pinned source: 22 passed)",
+        "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+      ],
+      "note": "WorkspaceSessionsPort is an explicit narrow Rust sibling-domain trait exposing only the Session list snapshot, subscription, Workspace-targeted create, open, and clear; SessionRuntimeWorkspacePort delegates those operations to the same Rust Sessions core without widening Workspaces to its implementation"
     },
     {
       "source": "packages/client/runtime/src/client/contract/sessions.ts",
@@ -38789,7 +38800,20 @@
     {
       "source": "packages/client/runtime/src/client/contract/workspaces.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/workspace_service.rs",
+        "crates/client-runtime/src/wasm_workspace_service.rs",
+        "crates/client-runtime/tests/workspace_service_parity.rs",
+        "crates/client-runtime/tests/wasm_workspace_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/workspaces-service.client.spec.ts --reporter=dot (pinned source: 22 passed)",
+        "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_workspace_service_parity-*.wasm (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust/WASM Workspaces face exposes the exact list, connect/start, create, picker, browse, filesystem-open, rename/delete/reorder/move/archive operation roster; opaque WorkspaceId and SessionId newtypes cross the core boundary, directory browse forwards the caller's exact AbortSignal, and structured create/browse failures retain their source-visible classes and rpcError fields"
     },
     {
       "source": "packages/client/runtime/src/client/conversation/definition-registry.ts",
@@ -39277,7 +39301,18 @@
     {
       "source": "packages/client/runtime/src/client/workspaces/manager.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/workspace_manager.rs",
+        "crates/client-runtime/src/workspace.rs",
+        "crates/client-runtime/tests/workspace_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/workspaces-service.client.spec.ts --reporter=dot (pinned source: 22 passed)",
+        "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust manager preserves single-flight baseline state and first-success readiness, replays ordered upsert/remove/order frames, protects newer archive sets, rejects older updatedAt echoes through an injected Date.parse seam, retains Workspace object identities, tombstones removed UUIDs, installs synchronous unary echoes, and arbitrates optimistic overlapping reorders by exact local-request and Host-frame generations with committed-order rollback"
     },
     {
       "source": "packages/client/runtime/src/client/workspaces/path.ts",
@@ -39295,12 +39330,37 @@
     {
       "source": "packages/client/runtime/src/client/workspaces/service.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/workspace_service.rs",
+        "crates/client-runtime/src/wasm_workspace_service.rs",
+        "crates/client-runtime/tests/workspace_service_parity.rs",
+        "crates/client-runtime/tests/wasm_workspace_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/workspaces-service.client.spec.ts --reporter=dot (pinned source: 22 passed)",
+        "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_workspace_service_parity-*.wasm (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust service joins Workspace and Session readiness, derives recent Workspace with Host-order tie breaking, coalesces per-Workspace blank creation, reuses only visible accounted non-archived blanks, runs one retryable and disposable initial-selection policy, targets New Session explicitly/current/recent, installs all Host action echoes, shields remote archives from stale baselines, and clears only an archived current selection; the WASM face preserves shared refresh and in-flight-create Promise identity while immediate reuse returns independent Promises, Workspace-row identity, exact action signatures, source error classes, AbortSignal identity, and raw Host routing"
     },
     {
       "source": "packages/client/runtime/src/client/workspaces/workspace.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/workspace.rs",
+        "crates/client-runtime/tests/workspace_service_parity.rs",
+        "crates/client-runtime/tests/wasm_workspace_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/workspaces-service.client.spec.ts --reporter=dot (pinned source: 22 passed)",
+        "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_workspace_service_parity-*.wasm (returned Workspace identity passed)"
+      ],
+      "note": "ClientWorkspace retains local path intent, basename, ready/creating/error state, one shared retryable materialization, stable object identity across successful Host adoption, exact-id adoption guards, and a generation rule that prevents a late create result from overwriting a newer externally adopted view"
     },
     {
       "source": "packages/client/runtime/src/env.d.ts",
@@ -39621,7 +39681,17 @@
     {
       "source": "packages/client/runtime/tests/workspaces-service.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/workspace_service_parity.rs",
+        "crates/client-runtime/tests/wasm_workspace_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/workspaces-service.client.spec.ts --reporter=dot (pinned source: 22 passed)",
+        "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 consolidated cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_workspace_service_parity-*.wasm (4 live JavaScript cases passed)"
+      ],
+      "note": "Native and live-WASM cases cover every source partition across hydration/frame replay, monotone readiness, business and transport failure, local intent materialization, optimistic and overlapping reorder arbitration, delete tombstones, recency, member-blank reuse and archive exclusion, per-Workspace connect coalescing, create/picker/browse/action errors, directory signal identity, initial selection and retry, action echoes, archive clearing and stale-baseline shielding, raw Host routing, Promise identity, and JavaScript row/return identity"
     },
     {
       "source": "packages/client/runtime/tsconfig.json",
