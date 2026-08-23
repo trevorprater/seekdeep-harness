@@ -172,6 +172,8 @@ Location 有 `session`、`turn`、`step` 和 `unresolved` 四种形状。Turn/St
 
 Append 普通 Event 只继承当前坐标；append 边界只重算所属 Turn。Prepend 会基于扩展后的完整连续窗口重建 Location facts，但引用稳定逻辑保留未变化 Turn/Step 对象。
 
+Rust/WASM 对象层在 `ConversationLocationIndex` 中实现这套约定：完整 rebuild 复用未变化的 timeline、Turn、Step 与 data-store identity；append 边界只替换所属 Turn，并报告 resolved Turn/Step 引用真正变化的每个 seq，使 replay 精确覆盖受影响 Match。Location-data replacement 保持 reader identity，先移除全部旧 publication 再安装下一组，允许原子 ownership transfer，并以源码诊断拒绝同时占用。
+
 Assembler 还把 reference-stable timeline 交给 View Builder。业务不重复维护 turn order、step list、last step 或边界 Map。
 
 ## 三种事件窗口链路

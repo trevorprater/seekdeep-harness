@@ -3,6 +3,7 @@
 mod assistant_timing;
 mod context_provenance;
 mod conversation_context;
+mod conversation_location;
 mod conversation_registry;
 mod lineage;
 mod notifier;
@@ -37,6 +38,7 @@ mod wasm_store;
 pub use assistant_timing::*;
 pub use context_provenance::*;
 pub use conversation_context::*;
+pub use conversation_location::*;
 pub use conversation_registry::*;
 pub use lineage::*;
 pub use notifier::*;

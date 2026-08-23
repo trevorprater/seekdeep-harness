@@ -172,6 +172,8 @@ Each Turn and Step also carries a reference-stable Location data store. A Defini
 
 An appended ordinary Event only inherits current coordinates, while an appended boundary recalculates only its owning Turn. Prepend rebuilds Location facts from the expanded contiguous window, but reference-stability logic retains unchanged Turn and Step objects.
 
+The Rust/WASM object layer implements this contract in `ConversationLocationIndex`: a complete rebuild reuses unchanged timeline, Turn, Step, and data-store identities; an appended boundary replaces only its owning Turn and reports every seq whose resolved Turn/Step reference changed, so replay reaches the exact affected Matches. Location-data replacement preserves reader identities, removes all prior publications before installing the next set, permits an atomic ownership transfer, and rejects simultaneous claims with the source diagnostic.
+
 The Assembler also passes a reference-stable timeline to each View Builder. Businesses do not separately maintain turn order, step lists, last-step values, or boundary Maps.
 
 ## Three Event-window paths

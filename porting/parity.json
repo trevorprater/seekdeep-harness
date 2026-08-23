@@ -38905,7 +38905,19 @@
     {
       "source": "packages/client/runtime/src/client/sessions/conversation-location-index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/conversation_location.rs",
+        "crates/client-runtime/tests/conversation_location_parity.rs"
+      ],
+      "evidence": [
+        "pinned source direct rebuild/data oracle: exact locations, Turn/Step status and boundary refs, stable rebuild identities, ownership transfer, conflict diagnostic, and complete clear",
+        "pinned source direct append oracle: exact reference-based changed-seq sets, inherited coordinates, Step/Turn closure, and non-boundary diagnostic",
+        "cargo test -p seekdeep-client-runtime --test conversation_location_parity --all-features (5 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The target-portable Rust index mirrors full-window rebuild and Turn-local append paths, safe-coordinate and explicit-session resolution, open/closed/unknown boundaries, reference-stable timelines and Location readers, reference-based changed-seq fanout, first-seq ordering, complete data replacement, remove-before-set ownership transfer, and exact conflict and missing-Step diagnostics"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/conversation.ts",
