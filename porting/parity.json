@@ -65450,12 +65450,30 @@
     {
       "source": "packages/shell/bash-sandbox/src/helpers.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-sandbox/src/lib.rs",
+        "crates/bash-sandbox/tests/helpers_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: bash-sandbox 78 passed",
+        "Rust tests pin typed runner-spawn attribution, exit-gated fatal rules, informational exclusions, malformed executables, and denial matching",
+        "cargo test -p seekdeep-bash-sandbox --all-features: 12 passed"
+      ]
     },
     {
       "source": "packages/shell/bash-sandbox/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-sandbox/src/lib.rs",
+        "crates/bash-local/src/lib.rs"
+      ],
+      "evidence": [
+        "Rust executor wraps exact bash -c argv through ctx.sandbox, resolves per-call policy, bypasses danger-full-access, fails closed on typed runner evidence, and stamps per-process facts before done settles",
+        "cargo test -p seekdeep-bash-sandbox --all-features: 12 passed",
+        "cargo clippy -p seekdeep-bash-local -p seekdeep-bash-sandbox --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/bash-sandbox/src/invariant.ts",
@@ -65484,17 +65502,46 @@
     {
       "source": "packages/shell/bash-sandbox/tests/partial-landlock.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-sandbox/tests/executor_parity.rs",
+        "crates/bash-sandbox/tests/helpers_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin informational partial notices, exit-gated fatal evidence, denial precedence, background runnerFailed precedence, and ordinary malformed executables",
+        "cargo test -p seekdeep-bash-sandbox --all-features: 12 passed"
+      ]
     },
     {
       "source": "packages/shell/bash-sandbox/tests/sandbox.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-sandbox/tests/executor_parity.rs",
+        "crates/bash-sandbox/tests/helpers_parity.rs",
+        "crates/bash-sandbox/tests/plugin_lifecycle.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: bash-sandbox 78 passed",
+        "Rust tests drive real subprocess foreground/background paths across policy overrides, denial, runner failure, cancellation, invalid cwd, full-access bypass, per-process facts, and reversible Loader activation",
+        "cargo test -p seekdeep-bash-sandbox --all-features: 12 passed"
+      ]
     },
     {
       "source": "packages/shell/bash-sandbox/tests/seatbelt.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-sandbox/tests/seatbelt_e2e.rs",
+        "crates/sandbox-local/tests/seatbelt_e2e.rs"
+      ],
+      "evidence": [
+        "Rust assembled macOS test drives LocalSandboxProvider through SandboxBashExecutor and the real subprocess service",
+        "read-only denial, allowed reads, workspace-write success, escape denial, and background settlement facts passed under real sandbox-exec",
+        "the model-facing seekdeep-tool-bash call rendered the denial marker from the same real assembled path",
+        "cargo test -p seekdeep-bash-sandbox --all-features: 12 passed",
+        "cargo test -p seekdeep-sandbox-local --all-features: real Seatbelt e2e passed"
+      ]
     },
     {
       "source": "packages/shell/bash-sandbox/tsconfig.json",

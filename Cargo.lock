@@ -4570,6 +4570,31 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
+name = "seekdeep-bash-sandbox"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "parking_lot",
+ "seekdeep-bash-local",
+ "seekdeep-cordis",
+ "seekdeep-llm",
+ "seekdeep-sandbox",
+ "seekdeep-sandbox-local",
+ "seekdeep-sandbox-policy",
+ "seekdeep-shell",
+ "seekdeep-shell-env",
+ "seekdeep-subprocess-local",
+ "seekdeep-system-prompt",
+ "seekdeep-tool-bash",
+ "seekdeep-tools",
+ "serde_json",
+ "tempfile",
  "tokio",
 ]
 

@@ -2,6 +2,7 @@
 members = [
   "apps/seekdeep",
   "crates/bash-local",
+  "crates/bash-sandbox",
   "crates/attachment",
   "crates/attachment-local",
   "crates/app-boot",

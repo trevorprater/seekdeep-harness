@@ -1,11 +1,11 @@
 [package]
-name = "seekdeep-bash-local"
+name = "seekdeep-bash-sandbox"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Local Bash provider over the SeekDeep Harness subprocess seam"
+description = "Sandbox-consuming Bash executor for SeekDeep Harness"
 
 [dependencies]
 anyhow.workspace = true
@@ -13,19 +13,21 @@ async-trait.workspace = true
 parking_lot.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-llm = { path = "../llm" }
-seekdeep-schemastery = { path = "../schemastery" }
-seekdeep-settings = { path = "../settings" }
+seekdeep-bash-local = { path = "../bash-local" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-shell = { path = "../shell" }
-seekdeep-subprocess = { path = "../subprocess" }
-seekdeep-util = { path = "../util" }
-serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
 
 [dev-dependencies]
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-shell-env = { path = "../shell-env" }
 seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tool-bash = { path = "../tool-bash" }
+seekdeep-tools = { path = "../tools" }
 tempfile.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

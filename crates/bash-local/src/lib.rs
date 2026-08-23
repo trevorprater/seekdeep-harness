@@ -122,7 +122,12 @@ pub fn assert_serviceable_bash_config(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn validate_config_value(value: &Value) -> anyhow::Result<Value> {
+/// Resolves schema defaults and rejects executor configurations that cannot run.
+///
+/// # Errors
+///
+/// Returns schema, deserialization, or serviceability failures.
+pub fn resolve_config_value(value: &Value) -> anyhow::Result<Value> {
     let resolved = config_schema()
         .resolve(value)
         .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -136,6 +141,48 @@ pub struct LocalBashExecutor {
     subprocess: Arc<seekdeep_subprocess::SubprocessService>,
     source: SettingsSectionSource,
     _settings_fiber: Arc<PluginFiber>,
+}
+
+/// Raw settlement facts delivered to a confining executor before process completion is observed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BashProcessSettlement {
+    /// Direct child exit status; absent for signal termination or spawn rejection.
+    pub exit_code: Option<i32>,
+    /// Complete retained stderr tail used for backend-specific classification.
+    pub stderr: String,
+    /// Executable-resolution or permission rejection when no process started.
+    pub spawn_error: Option<String>,
+}
+
+/// Synchronous settlement observer used by the sandboxing provider.
+pub type BashProcessObserver = Arc<dyn Fn(&BashProcessSettlement) + Send + Sync>;
+
+/// Typed evidence that the selected executable or its interpreter could not start.
+#[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
+#[error("{detail}")]
+pub struct BashSpawnFailure {
+    detail: String,
+}
+
+impl BashSpawnFailure {
+    /// Wraps provider evidence already classified as executable resolution or permission failure.
+    #[must_use]
+    pub fn new(detail: impl Into<String>) -> Self {
+        Self {
+            detail: detail.into(),
+        }
+    }
+}
+
+fn executable_spawn_failure_text(error: &str) -> bool {
+    let error = error.to_lowercase();
+    error.contains("no such file")
+        || error.contains("not found")
+        || error.contains("permission denied")
+        || error.contains("access is denied")
+        || error.contains("os error 2")
+        || error.contains("os error 5")
+        || error.contains("os error 13")
 }
 
 impl std::fmt::Debug for LocalBashExecutor {
@@ -157,6 +204,12 @@ impl LocalBashExecutor {
     pub fn config(&self) -> Config {
         serde_json::from_value(self.source.get())
             .expect("bash-local settings validation keeps the source well formed")
+    }
+
+    /// Builds the exact Bash argv for one resolved shell request.
+    #[must_use]
+    pub fn argv(&self, spec: &ShellExecSpec) -> Vec<String> {
+        vec!["bash".to_owned(), "-c".to_owned(), spec.command.clone()]
     }
 
     fn collected(
@@ -227,7 +280,12 @@ impl LocalBashExecutor {
         }
     }
 
-    async fn run_argv(
+    /// Runs an exact argv through the local process mechanics.
+    ///
+    /// # Errors
+    ///
+    /// Returns subprocess spawn, collection, timeout-construction, or settlement failures.
+    pub async fn run_argv(
         &self,
         spec: ShellExecSpec,
         argv: Vec<String>,
@@ -239,7 +297,16 @@ impl LocalBashExecutor {
             spec.stdout_max_bytes,
             Some(deadline.signal.clone()),
         ))?;
-        let outcome = handle.done().await?;
+        let outcome = match handle.done().await {
+            Ok(outcome) => outcome,
+            Err(error)
+                if handle.pid().as_i64() == -1
+                    && executable_spawn_failure_text(&error.to_string()) =>
+            {
+                return Err(anyhow::Error::new(BashSpawnFailure::new(error.to_string())));
+            }
+            Err(error) => return Err(error),
+        };
         let (stdout, stderr) = Self::collected(&handle)?;
         let timed_out = timeout_of(&deadline.signal, Some("BASH_TIMEOUT")).is_some();
         let aborted = deadline.signal.is_aborted() && !timed_out;
@@ -255,10 +322,29 @@ impl LocalBashExecutor {
         })
     }
 
-    fn start_argv(
+    /// Starts an exact argv through the local background-process mechanics.
+    ///
+    /// # Errors
+    ///
+    /// Returns synchronous subprocess request or collection failures.
+    pub fn start_argv(
         &self,
         spec: &ShellExecSpec,
         argv: Vec<String>,
+    ) -> anyhow::Result<ShellProcessHandle> {
+        self.start_argv_observed(spec, argv, None)
+    }
+
+    /// Starts an exact argv and invokes an observer before completion waiters resume.
+    ///
+    /// # Errors
+    ///
+    /// Returns synchronous subprocess request or collection failures.
+    pub fn start_argv_observed(
+        &self,
+        spec: &ShellExecSpec,
+        argv: Vec<String>,
+        observer: Option<BashProcessObserver>,
     ) -> anyhow::Result<ShellProcessHandle> {
         let config = self.config();
         let signal = spec.signal.clone();
@@ -269,7 +355,7 @@ impl LocalBashExecutor {
             signal.clone(),
         ))?;
         let (stdout, stderr) = Self::collected(&running)?;
-        let process = Arc::new(LocalBashProcess::new(running, stdout, stderr));
+        let process = Arc::new(LocalBashProcess::new(running, stdout, stderr, observer));
         LocalBashProcess::observe(process.clone(), signal);
         Ok(process)
     }
@@ -309,14 +395,13 @@ impl ShellExecutor for LocalBashExecutor {
     }
 
     async fn run(&self, spec: ShellExecSpec) -> anyhow::Result<ShellRunResult> {
-        let command = spec.command.clone();
-        self.run_argv(spec, vec!["bash".to_owned(), "-c".to_owned(), command])
-            .await
+        let argv = self.argv(&spec);
+        self.run_argv(spec, argv).await
     }
 
     fn start(&self, spec: ShellExecSpec) -> anyhow::Result<ShellProcessHandle> {
-        let command = spec.command.clone();
-        self.start_argv(&spec, vec!["bash".to_owned(), "-c".to_owned(), command])
+        let argv = self.argv(&spec);
+        self.start_argv(&spec, argv)
     }
 }
 
@@ -344,14 +429,24 @@ struct ReadOffsets {
     stderr: u64,
 }
 
-#[derive(Debug)]
 struct LocalBashProcess {
     running: SubprocessHandleRef,
     stdout: SubprocessOutputReaderHandle,
     stderr: SubprocessOutputReaderHandle,
     state: Mutex<ProcessState>,
     offsets: Mutex<ReadOffsets>,
+    observer: Option<BashProcessObserver>,
     settled: Notify,
+}
+
+impl std::fmt::Debug for LocalBashProcess {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("LocalBashProcess")
+            .field("running", &self.running)
+            .field("state", &self.state)
+            .finish_non_exhaustive()
+    }
 }
 
 impl LocalBashProcess {
@@ -359,6 +454,7 @@ impl LocalBashProcess {
         running: SubprocessHandleRef,
         stdout: SubprocessOutputReaderHandle,
         stderr: SubprocessOutputReaderHandle,
+        observer: Option<BashProcessObserver>,
     ) -> Self {
         Self {
             running,
@@ -372,35 +468,58 @@ impl LocalBashProcess {
                 settled: false,
             }),
             offsets: Mutex::new(ReadOffsets::default()),
+            observer,
             settled: Notify::new(),
         }
     }
 
     fn observe(process: Arc<Self>, execution_signal: Option<seekdeep_llm::AbortSignal>) {
         tokio::spawn(async move {
+            let native_spawn_rejected = process.running.pid().as_i64() == -1;
             match process.running.done().await {
                 Ok(outcome) => {
-                    let mut state = process.state.lock();
-                    if state.status == ShellProcessStatus::Running {
-                        state.status = if execution_signal
-                            .as_ref()
-                            .is_some_and(seekdeep_llm::AbortSignal::is_aborted)
-                            || outcome.signal.is_some()
-                        {
-                            ShellProcessStatus::Killed
-                        } else {
-                            ShellProcessStatus::Completed
-                        };
+                    {
+                        let mut state = process.state.lock();
+                        if state.status == ShellProcessStatus::Running {
+                            state.status = if execution_signal
+                                .as_ref()
+                                .is_some_and(seekdeep_llm::AbortSignal::is_aborted)
+                                || outcome.signal.is_some()
+                            {
+                                ShellProcessStatus::Killed
+                            } else {
+                                ShellProcessStatus::Completed
+                            };
+                        }
+                        state.exit_code = outcome.exit_code;
+                        state.signal = outcome.signal;
                     }
-                    state.exit_code = outcome.exit_code;
-                    state.signal = outcome.signal;
-                    state.settled = true;
+                    if let Some(observer) = process.observer.as_ref() {
+                        observer(&BashProcessSettlement {
+                            exit_code: outcome.exit_code,
+                            stderr: process.stderr.read_from(0).text,
+                            spawn_error: None,
+                        });
+                    }
+                    process.state.lock().settled = true;
                 }
                 Err(error) => {
-                    let mut state = process.state.lock();
-                    state.status = ShellProcessStatus::Killed;
-                    state.spawn_failure_note = Some(format!("spawn failed: {error}"));
-                    state.settled = true;
+                    let spawn_error = error.to_string();
+                    {
+                        let mut state = process.state.lock();
+                        state.status = ShellProcessStatus::Killed;
+                        state.spawn_failure_note = Some(format!("spawn failed: {spawn_error}"));
+                    }
+                    if let Some(observer) = process.observer.as_ref() {
+                        let attributable =
+                            native_spawn_rejected && executable_spawn_failure_text(&spawn_error);
+                        observer(&BashProcessSettlement {
+                            exit_code: None,
+                            stderr: String::new(),
+                            spawn_error: attributable.then_some(spawn_error),
+                        });
+                    }
+                    process.state.lock().settled = true;
                 }
             }
             process.settled.notify_waiters();
@@ -482,12 +601,12 @@ impl ShellProcess for LocalBashProcess {
     }
 }
 
-/// Installs settings layering and publishes the local Bash provider.
+/// Builds the local executor and its settings layer without occupying `ctx.shell`.
 ///
 /// # Errors
 ///
-/// Returns invalid configuration, missing subprocess, settings, or service-seat failures.
-pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<LocalBashExecutor>> {
+/// Returns invalid configuration or missing subprocess/settings dependencies.
+pub async fn build(context: &Context, config: Config) -> anyhow::Result<Arc<LocalBashExecutor>> {
     assert_serviceable_bash_config(&config)?;
     let subprocess = context
         .get(SUBPROCESS)
@@ -510,6 +629,16 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Loca
         source: installed.source,
         _settings_fiber: installed.fiber,
     });
+    Ok(executor)
+}
+
+/// Installs settings layering and publishes the local Bash provider.
+///
+/// # Errors
+///
+/// Returns invalid configuration, missing subprocess, settings, or service-seat failures.
+pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<LocalBashExecutor>> {
+    let executor = build(context, config).await?;
     let erased: Arc<dyn ShellExecutor> = executor.clone();
     ShellService::new(erased).provide(context)?;
     Ok(executor)
@@ -520,11 +649,11 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Loca
 pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
         Box::pin(async move {
-            let resolved = validate_config_value(&config)?;
+            let resolved = resolve_config_value(&config)?;
             let config: Config = serde_json::from_value(resolved)?;
             apply(&context, config).await?;
             Ok(())
         })
     })
-    .with_config_validator(validate_config_value)
+    .with_config_validator(resolve_config_value)
 }
