@@ -19,6 +19,7 @@ members = [
   "crates/client-modules",
   "crates/client-hmr",
   "crates/client-schema-form",
+  "crates/client-ui-cordis",
   "crates/win32-durable-namespace",
   "crates/win32-directory-dialog",
   "crates/cmdline",

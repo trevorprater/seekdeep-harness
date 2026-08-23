@@ -4651,6 +4651,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-ui-cordis"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "js-sys",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-cordis-client-runner",
+ "seekdeep-cordis-dynamic-types",
+ "seekdeep-identity",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+]
+
+[[package]]
 name = "seekdeep-cmdline"
 version = "0.1.0-rc.5"
 dependencies = [

@@ -19,7 +19,12 @@ use serde::{Deserialize, Serialize};
 use crate::ClientMountRejection;
 
 /// One Plugin's page-side approval or activation activity.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "phase",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum CordisRunActivity {
     /// Waiting for an explicit user decision.
     AwaitingApproval {
@@ -48,7 +53,8 @@ pub enum CordisRunActivity {
 }
 
 /// Why this page's latest activation attempt failed.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CordisRunFailure {
     /// Target immutable Package.
     pub package_id: CordisDynamicPackageId,
@@ -61,7 +67,8 @@ pub struct CordisRunFailure {
 }
 
 /// Page-side activation failure category.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum CordisPageFailureReason {
     /// Host half could not start.
     HostHalfFailed,

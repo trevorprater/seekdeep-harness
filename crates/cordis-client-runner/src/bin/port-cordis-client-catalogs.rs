@@ -47,6 +47,8 @@ fn main() -> anyhow::Result<()> {
     )?;
     write_json(&output.join("slot-catalog.json"), &slots)?;
 
+    write_ui_catalogs(&target, &source)?;
+
     let host_output = target.join("crates/tool-cordis/data");
     std::fs::create_dir_all(&host_output)?;
     let host_catalog = run_tsx(
@@ -126,6 +128,35 @@ fn verify_source(target: &Path, source: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn write_ui_catalogs(target: &Path, source: &Path) -> anyhow::Result<()> {
+    let output = target.join("crates/client-ui-cordis/data");
+    std::fs::create_dir_all(&output)?;
+    let locales = run_tsx(
+        source,
+        concat!(
+            "import {NS,en,zh} from ",
+            "'./packages/extensions/ui-cordis/src/client/locales.ts';",
+            "console.log(JSON.stringify({namespace:NS,en,zh}))",
+        ),
+    )?;
+    write_json(&output.join("locales.json"), &locales)?;
+    let mut styles = String::new();
+    for (name, prefix) in [
+        ("CordisDefineRow.module.css", "seekdeep-cordis-define-"),
+        ("CordisRunRow.module.css", "seekdeep-cordis-run-"),
+        ("CordisPanel.module.css", "seekdeep-cordis-panel-"),
+    ] {
+        let css = std::fs::read_to_string(
+            source
+                .join("packages/extensions/ui-cordis/src/client")
+                .join(name),
+        )?;
+        styles.push_str(&scope_css_classes(&css, prefix));
+        styles.push('\n');
+    }
+    write_text(&output.join("styles.css"), styles.as_bytes())
+}
+
 fn run_tsx(source: &Path, program: &str) -> anyhow::Result<Vec<u8>> {
     let output = Command::new("pnpm")
         .args(["exec", "tsx", "-e", program])
@@ -155,4 +186,47 @@ fn write_text(path: &Path, raw: &[u8]) -> anyhow::Result<()> {
     text.push('\n');
     std::fs::write(path, text)?;
     Ok(())
+}
+
+fn scope_css_classes(source: &str, prefix: &str) -> String {
+    let bytes = source.as_bytes();
+    let mut output = Vec::with_capacity(source.len() + source.len() / 8);
+    let mut at = 0;
+    while at < bytes.len() {
+        if bytes[at] != b'.'
+            || bytes
+                .get(at + 1)
+                .is_none_or(|byte| !byte.is_ascii_alphabetic() && *byte != b'_')
+        {
+            output.push(bytes[at]);
+            at += 1;
+            continue;
+        }
+        output.push(b'.');
+        output.extend_from_slice(prefix.as_bytes());
+        at += 1;
+        while at < bytes.len()
+            && (bytes[at].is_ascii_alphanumeric() || matches!(bytes[at], b'_' | b'-'))
+        {
+            output.push(bytes[at]);
+            at += 1;
+        }
+    }
+    String::from_utf8(output).expect("scoping UTF-8 CSS preserves every source byte")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scope_css_classes;
+
+    #[test]
+    fn css_scoping_renames_classes_without_touching_decimals_or_utf8() {
+        assert_eq!(
+            scope_css_classes(
+                ".card .row:hover { letter-spacing: 0.04em; } /* 终端 .card */",
+                "cordis-",
+            ),
+            ".cordis-card .cordis-row:hover { letter-spacing: 0.04em; } /* 终端 .cordis-card */"
+        );
+    }
 }

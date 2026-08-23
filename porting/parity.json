@@ -51280,7 +51280,19 @@
     {
       "source": "packages/extensions/ui-cordis/src/client/CordisActionRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/presentation.rs",
+        "crates/client-ui-cordis/src/wasm_components.rs",
+        "crates/client-ui-cordis/tests/presentation_parity.rs",
+        "crates/client-ui-cordis/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-cordis --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_ui_parity-*.wasm (3 passed)",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust/WASM renders localized Stop and Remove cards with source-compatible lifecycle icons, summaries, inspect affordance, output, classes, and data attributes"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/CordisDefineRow.module.css",
@@ -51296,7 +51308,19 @@
     {
       "source": "packages/extensions/ui-cordis/src/client/CordisDefineRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/presentation.rs",
+        "crates/client-ui-cordis/src/wasm_components.rs",
+        "crates/client-ui-cordis/tests/presentation_parity.rs",
+        "crates/client-ui-cordis/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-cordis --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_ui_parity-*.wasm (3 passed)",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust component preserves disclosure state, accessible lifecycle copy, removed/live status, Host/Client availability fallback, source tabs, CodeBlock copy labels, output, panel hint, inspect action, and source data attributes"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/CordisPanel.module.css",
@@ -51312,7 +51336,20 @@
     {
       "source": "packages/extensions/ui-cordis/src/client/CordisPanel.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/presentation.rs",
+        "crates/client-ui-cordis/src/wasm_components.rs",
+        "crates/client-ui-cordis/src/wasm_plugin.rs",
+        "crates/client-ui-cordis/tests/presentation_parity.rs",
+        "crates/client-ui-cordis/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-cordis --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_ui_parity-*.wasm (3 passed)",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust/WASM merges Host inventory with page activity, groups current and other Sessions with approval blockers first, auto-opens on new requests, derives exact status and version actions, serializes per-Plugin actions, reports Host/Client/render failures, and renders the fixed badge and panel"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/CordisRunRow.module.css",
@@ -51328,62 +51365,184 @@
     {
       "source": "packages/extensions/ui-cordis/src/client/CordisRunRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/presentation.rs",
+        "crates/client-ui-cordis/src/wasm_components.rs",
+        "crates/client-ui-cordis/tests/presentation_parity.rs",
+        "crates/client-ui-cordis/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-cordis --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_ui_parity-*.wasm (3 passed)",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust component preserves exact-generation card observation, removal/supersession/approval/failure precedence, source-compatible status and summary copy, inspect and output presentation, and keyed Package business-view ownership"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/card-model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/card_model.rs",
+        "crates/client-ui-cordis/src/wasm.rs"
+      ],
+      "evidence": [
+        "pinned source ui-cordis suites: 20 passed",
+        "cargo test -p seekdeep-client-ui-cordis --all-features",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --lib -- -D warnings"
+      ],
+      "note": "Rust derives running, successful, failed, interrupted, truncated-argument, missing-call-head, metadata, and non-text-content cards from the same frozen call/result fields; the WASM facade accepts the original browser block shape"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/dynamic-port.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/dynamic_port.rs"
+      ],
+      "evidence": [
+        "cargo clippy -p seekdeep-client-ui-cordis --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the typed Rust RPC boundary preserves stop, remove, inventory, successful/no-op settlement, user-facing rejection, and transport failure distinctions"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/events.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cordis-dynamic-types/src/lib.rs",
+        "crates/client-ui-cordis/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-cordis --all-features",
+        "cargo check -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --lib"
+      ],
+      "note": "the browser UI re-exports the shared Rust dynamic Cordis identity, inventory, request, resolution, retraction, and run-mode types instead of duplicating wire vocabulary"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/wasm_plugin.rs",
+        "crates/client-ui-cordis/src/wasm_components.rs",
+        "crates/client-ui-cordis/data/locales.json",
+        "crates/client-ui-cordis/data/styles.css",
+        "crates/client-ui-cordis/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "cargo run -p seekdeep-cordis-client-runner --bin port-cordis-client-catalogs -- /Users/trevor/ws/deepseek-harness",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_ui_parity-*.wasm (3 passed)",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust/WASM plugin installs source-generated dictionaries and scoped CSS, generation-safe inventory and reconciliation, all Remote and reconnect listeners, five Slot entries, panel lifecycle callbacks, the session-local Run-card registry, and the @pluginId source before its initial read"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/inventory.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/inventory.rs",
+        "crates/client-ui-cordis/src/wasm.rs",
+        "crates/client-ui-cordis/tests/inventory_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-cordis inventory suite: 7 passed",
+        "cargo test -p seekdeep-client-ui-cordis --test inventory_parity --all-features",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --lib -- -D warnings"
+      ],
+      "note": "generation-scoped read tickets enforce single-flight reads, immediately free the slot on reconnect, discard stale success and failure settlements, preserve known rows on current failures, and retain explicit removal history"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/data/locales.json",
+        "crates/client-ui-cordis/src/locales.rs",
+        "crates/cordis-client-runner/src/bin/port-cordis-client-catalogs.rs"
+      ],
+      "evidence": [
+        "cargo run -p seekdeep-cordis-client-runner --bin port-cordis-client-catalogs -- /Users/trevor/ws/deepseek-harness",
+        "cargo test -p seekdeep-client-ui-cordis --test versioning_parity --all-features"
+      ],
+      "note": "the pinned-source generator owns the exact cordis namespace and all 49 English and Simplified Chinese messages"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/run-card-index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/run_card_index.rs",
+        "crates/client-ui-cordis/src/wasm.rs",
+        "crates/client-ui-cordis/tests/versioning_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-cordis versioning suite: 5 passed",
+        "cargo test -p seekdeep-client-ui-cordis --test versioning_parity --all-features",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --lib -- -D warnings"
+      ],
+      "note": "one page registry retains one observable Store per typed SessionId; only a strictly greater append-only log sequence can replace a Plugin-and-Package pointer"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/slots.rs",
+        "crates/client-ui-cordis/src/wasm_plugin.rs",
+        "crates/client-ui-cordis/tests/presentation_parity.rs",
+        "crates/client-ui-cordis/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-cordis --test presentation_parity --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_ui_parity-*.wasm (3 passed)"
+      ],
+      "note": "typed Rust faces preserve inventory/runtime/orchestrator/Host-port ownership; the WASM assembly installs the exact five registrations and declares the keyed session-scoped tool.view.cordis child only on cordis_run"
     },
     {
       "source": "packages/extensions/ui-cordis/src/client/status.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/status.rs",
+        "crates/client-ui-cordis/src/wasm.rs",
+        "crates/client-ui-cordis/tests/versioning_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-cordis versioning suite: 5 passed",
+        "cargo test -p seekdeep-client-ui-cordis --test versioning_parity --all-features",
+        "cargo clippy -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --lib -- -D warnings"
+      ],
+      "note": "Rust distinguishes idle, Host-only running, Client-pending, and exact-generation Client-loaded states"
     },
     {
       "source": "packages/extensions/ui-cordis/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/Cargo.toml",
+        "packages/extensions/ui-cordis/src/client/CordisDefineRow.module.css",
+        "packages/extensions/ui-cordis/src/client/CordisPanel.module.css",
+        "packages/extensions/ui-cordis/src/client/CordisRunRow.module.css"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --lib"
+      ],
+      "note": "the Rust/WASM build consumes the preserved CSS assets without a TypeScript CSS-module declaration layer"
     },
     {
       "source": "packages/extensions/ui-cordis/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-cordis --all-features"
+      ],
+      "note": "the Rust host plugin intentionally applies no Host behavior because this package owns browser UI only"
     },
     {
       "source": "packages/extensions/ui-cordis/src/invariant.ts",
@@ -51402,17 +51561,38 @@
     {
       "source": "packages/extensions/ui-cordis/tests/card-model.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/tests/card_model_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/ui-cordis/tests/card-model.client.spec.ts packages/extensions/ui-cordis/tests/inventory.client.spec.ts packages/extensions/ui-cordis/tests/versioning.client.spec.ts --reporter=dot (pinned source: 20 passed)",
+        "cargo test -p seekdeep-client-ui-cordis --test card_model_parity --all-features (8 passed)"
+      ]
     },
     {
       "source": "packages/extensions/ui-cordis/tests/inventory.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/tests/inventory_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/ui-cordis/tests/card-model.client.spec.ts packages/extensions/ui-cordis/tests/inventory.client.spec.ts packages/extensions/ui-cordis/tests/versioning.client.spec.ts --reporter=dot (pinned source: 20 passed)",
+        "cargo test -p seekdeep-client-ui-cordis --test inventory_parity --all-features (7 passed)"
+      ]
     },
     {
       "source": "packages/extensions/ui-cordis/tests/versioning.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/tests/versioning_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/extensions/ui-cordis/tests/card-model.client.spec.ts packages/extensions/ui-cordis/tests/inventory.client.spec.ts packages/extensions/ui-cordis/tests/versioning.client.spec.ts --reporter=dot (pinned source: 20 passed)",
+        "cargo test -p seekdeep-client-ui-cordis --test versioning_parity --all-features (6 passed, including generated locale parity)"
+      ]
     },
     {
       "source": "packages/extensions/ui-cordis/tsconfig.json",
@@ -51428,7 +51608,17 @@
     {
       "source": "packages/extensions/ui-cordis/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-cordis/Cargo.toml",
+        "crates/client-ui-cordis/src/lib.rs",
+        "crates/client-ui-cordis/src/wasm.rs"
+      ],
+      "evidence": [
+        "cargo check -p seekdeep-client-ui-cordis --all-targets --all-features",
+        "cargo check -p seekdeep-client-ui-cordis --target wasm32-unknown-unknown --lib"
+      ],
+      "note": "the Rust crate emits native rlib and browser cdylib artifacts without a JavaScript library build"
     },
     {
       "source": "packages/feedback/README.i18n.yaml",

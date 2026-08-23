@@ -10,6 +10,46 @@ use parking_lot::Mutex;
 use seekdeep_cordis_client_runner::*;
 use seekdeep_cordis_dynamic_types::*;
 use seekdeep_identity::SessionId;
+use serde_json::json;
+
+#[test]
+fn ui_activity_and_failure_snapshots_keep_exact_browser_shapes() {
+    let activity = CordisRunActivity::AwaitingApproval {
+        request_id: ApprovalRequestId::new("approval-1"),
+        agent_id: SessionId::new("session-a"),
+        package_id: CordisDynamicPackageId::new("pkg-1"),
+        mode: DynamicCordisRunMode::Update,
+        name: "Clock".to_owned(),
+        purpose: "show time".to_owned(),
+    };
+    assert_eq!(
+        serde_json::to_value(activity).unwrap(),
+        json!({
+            "phase": "awaiting-approval",
+            "requestId": "approval-1",
+            "agentId": "session-a",
+            "packageId": "pkg-1",
+            "mode": "update",
+            "name": "Clock",
+            "purpose": "show time"
+        })
+    );
+    let failure = CordisRunFailure {
+        package_id: CordisDynamicPackageId::new("pkg-1"),
+        reason: CordisPageFailureReason::ClientHalfFailed,
+        message: "broken".to_owned(),
+        stack: Some("stack".to_owned()),
+    };
+    assert_eq!(
+        serde_json::to_value(failure).unwrap(),
+        json!({
+            "packageId": "pkg-1",
+            "reason": "client-half-failed",
+            "message": "broken",
+            "stack": "stack"
+        })
+    );
+}
 
 async fn eventually(mut condition: impl FnMut() -> bool, message: &str) {
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
