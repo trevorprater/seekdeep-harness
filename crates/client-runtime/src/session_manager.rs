@@ -460,6 +460,14 @@ impl SessionManager {
         self.notifier.notify_now();
     }
 
+    /// Retains one restored durable child address before its catalog reloads.
+    pub fn retain_subagent_address(&self, address: crate::SubagentAddress) {
+        self.state
+            .borrow_mut()
+            .addresses
+            .insert(address.child_session_id.clone(), address);
+    }
+
     /// Drops one materialized Session; durable history rebuilds it later.
     pub fn drop_session(&self, session_id: &SessionId) {
         self.state.borrow_mut().sessions.shift_remove(session_id);

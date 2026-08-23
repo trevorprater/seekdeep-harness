@@ -38936,7 +38936,27 @@
     {
       "source": "packages/client/runtime/src/client/sessions/conversation.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/partial.rs",
+        "crates/client-runtime/src/assistant_timing.rs",
+        "crates/client-runtime/src/tool_call_tree.rs",
+        "crates/client-runtime/src/queue_mirror.rs",
+        "crates/client-runtime/src/request_inspection.rs",
+        "crates/client-runtime/src/session.rs",
+        "crates/client-runtime/src/wasm_misc.rs",
+        "crates/client-runtime/src/wasm_session.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/conversation.client.spec.ts --reporter=dot (pinned source: 1 passed)",
+        "cargo test -p seekdeep-client-runtime --test conversation_classifier_parity --all-features (2 passed)",
+        "cargo test -p seekdeep-client-runtime --test partial_parity --all-features (6 passed)",
+        "cargo test -p seekdeep-client-runtime --test assistant_timing_parity --all-features (4 passed)",
+        "cargo test -p seekdeep-client-runtime --test tool_call_tree_parity --all-features (5 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_classifier_parity-*.wasm (1 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_parity-*.wasm (2 snapshot-shape cases passed)"
+      ],
+      "note": "The Rust object layer and WASM facade expose the complete Conversation snapshot vocabulary and stable empty/default faces, classified Assistant blocks, finalized and partial nodes, timing, recursive Tool calls with render intents and presence-preserving metadata, typed queue IDs, pending waits, subagent and composer state, error/open/paging facts, and exact top-level and unchanged-substructure JavaScript identity"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/failure-display.ts",
@@ -38968,7 +38988,21 @@
     {
       "source": "packages/client/runtime/src/client/sessions/manager.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/session_manager.rs",
+        "crates/client-runtime/src/wasm_session_manager.rs",
+        "crates/client-runtime/tests/session_manager_parity.rs",
+        "crates/client-runtime/tests/wasm_session_manager_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/manager.client.spec.ts --reporter=dot (pinned source: 60 passed)",
+        "cargo test -p seekdeep-client-runtime --test session_manager_parity --all-features (14 consolidated cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_manager_parity-*.wasm (2 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust and WASM preserve lazy resident instances, exact pre-instantiation request/queue compaction, ordered single-flight list hydration with mutation replay, monotonic phase and errors, direct-user activity, create/fork/search and workspace-attachment reconciliation, projection and job lifetimes, generation cleanup, pending priority, completion reminders, durable child addresses, catalog activity/expandability overlays, injected 50 ms debounce and one trailing stale refresh, activation detach semantics, parent availability invalidation, cached list and Session identities, raw frame routing, and exact browser AbortSignal forwarding"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/notifier.ts",
@@ -39075,7 +39109,19 @@
     {
       "source": "packages/client/runtime/src/client/sessions/remotes.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/session.rs",
+        "crates/client-runtime/src/wasm_session.rs",
+        "crates/client-runtime/tests/session_parity.rs",
+        "crates/client-runtime/tests/wasm_session_parity.rs"
+      ],
+      "evidence": [
+        "pinned source structural contract audit: Session cluster reaches only the generated commands namespace beyond IApiClient",
+        "cargo test -p seekdeep-client-runtime --test session_parity --all-features (commands.execute matched and unmatched admission cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_parity-*.wasm (generated API and Remote namespace adapter passed)"
+      ],
+      "note": "The portable Session transport separates ordinary generated API calls from the sole extra Remote dependency, commands.execute; the WASM adapter invokes remote.commands.execute with exact Session identity and line arguments while every other operation remains on IApiClient namespaces"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/request-inspection.ts",
@@ -39101,7 +39147,23 @@
     {
       "source": "packages/client/runtime/src/client/sessions/session.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/session.rs",
+        "crates/client-runtime/src/wasm_session.rs",
+        "crates/client-runtime/tests/session_parity.rs",
+        "crates/client-runtime/tests/wasm_session_parity.rs",
+        "crates/client-runtime/tests/session_manager_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/session.client.spec.ts --reporter=dot (pinned source: 50 passed)",
+        "cargo test -p seekdeep-client-runtime --test session_parity --all-features (15 consolidated cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_parity-*.wasm (2 live JavaScript cases passed)",
+        "cargo test -p seekdeep-client-runtime --test session_manager_parity --all-features (14 manager-integration cases passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust and WASM preserve resident ownership, one-scope binding, synchronous open and prompt prefixes, shared Promise and future work, exact-generation guards after every history await, ordinary and addressed operations, attachment bytes, command Remote routing, contiguous paging, live overlap and coalesced gap repair, second stitch, pending response correlation and settlement, queue generation semantics, projection seeding, notifier cadence, resync re-minting, view carriage, source defaults, and cached snapshot and substructure identities"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/steering-history.ts",
@@ -39324,7 +39386,17 @@
     {
       "source": "packages/client/runtime/tests/manager.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/session_manager_parity.rs",
+        "crates/client-runtime/tests/wasm_session_manager_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/manager.client.spec.ts --reporter=dot (pinned source: 60 passed)",
+        "cargo test -p seekdeep-client-runtime --test session_manager_parity --all-features (14 consolidated cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_manager_parity-*.wasm (2 live JavaScript cases passed)"
+      ],
+      "note": "Consolidated Rust cases retain every source partition across instance buffering, hydration, list state, projections, search/create/fork, Host and mux routes, catalogs and stale pulls, connected generations, pending statuses, reminders, job mirrors, identity reuse, timers, and cancellation forwarding"
     },
     {
       "source": "packages/client/runtime/tests/node-half.client.spec.ts",
@@ -39358,12 +39430,40 @@
     {
       "source": "packages/client/runtime/tests/projection-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/projection_store_parity.rs",
+        "crates/client-runtime/tests/wasm_projection_store_parity.rs",
+        "crates/client-runtime/tests/session_parity.rs",
+        "crates/client-runtime/tests/session_manager_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/queue-store.client.spec.ts packages/client/runtime/tests/projection-store.client.spec.ts --reporter=dot (pinned source: 28 passed total, 14 projection cases)",
+        "cargo test -p seekdeep-client-runtime --test projection_store_parity --all-features (7 core cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_projection_store_parity-*.wasm (2 passed)",
+        "cargo test -p seekdeep-client-runtime --test session_parity --all-features (15 cases including tail seeding and stale baselines)",
+        "cargo test -p seekdeep-client-runtime --test session_manager_parity --all-features (14 cases including cold routing, list projection, truncation, and removal)"
+      ],
+      "note": "Core, Session, manager, and live WASM tests cover all source partitions: absent reads, higher-seq wins, stale and fresh baselines, truncation, key and coarse notifications, face and aggregate identity, tail seeding, pre-instantiation routing, list title and aggregate projection, subscription-baseline phantom removal, and permanent Session removal"
     },
     {
       "source": "packages/client/runtime/tests/queue-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/pending_queue_steering_parity.rs",
+        "crates/client-runtime/tests/session_parity.rs",
+        "crates/client-runtime/tests/session_manager_parity.rs",
+        "crates/client-runtime/tests/wasm_session_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/queue-store.client.spec.ts packages/client/runtime/tests/projection-store.client.spec.ts --reporter=dot (pinned source: 28 passed total, 14 queue cases)",
+        "cargo test -p seekdeep-client-runtime --test pending_queue_steering_parity --all-features (4 core cases passed)",
+        "cargo test -p seekdeep-client-runtime --test session_parity --all-features (15 cases including mux intake, durable handoff, operation transport, subscribed reset, and resync race)",
+        "cargo test -p seekdeep-client-runtime --test session_manager_parity --all-features (14 cases including latest pre-instantiation buffering and generation compaction)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_parity-*.wasm (2 live JavaScript cases passed)"
+      ],
+      "note": "Rust and WASM cover stable typed IDs, preview and editable text, Unicode cap, authoritative replacement and identity, steering content and one-occurrence durable handoff, no-optimism mutation transport, subscribed reset, resync ordering, running non-retirement, latest-only manager buffering, and generation queue/request separation"
     },
     {
       "source": "packages/client/runtime/tests/scope.client.spec.ts",
@@ -39373,7 +39473,19 @@
     {
       "source": "packages/client/runtime/tests/session.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/session_parity.rs",
+        "crates/client-runtime/tests/wasm_session_parity.rs",
+        "crates/client-runtime/tests/session_manager_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/session.client.spec.ts --reporter=dot (pinned source: 50 passed)",
+        "cargo test -p seekdeep-client-runtime --test session_parity --all-features (15 consolidated core cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_session_parity-*.wasm (2 live JavaScript cases passed)",
+        "cargo test -p seekdeep-client-runtime --test session_manager_parity --all-features (14 integration cases passed)"
+      ],
+      "note": "Consolidated core and live-WASM cases preserve every source partition across open and second stitch, live overlap and gaps, paging, operations and addressed children, rename/projection, pending waits, unknown/default branches, subscriptions, view carriage, queue/projection races, generation-fenced open/stitch/repair/resync, resident disposal, and snapshot substructure identity"
     },
     {
       "source": "packages/client/runtime/tests/sessions-service.client.spec.ts",

@@ -336,6 +336,7 @@ struct SessionState {
     live_buffer: Vec<SessionHistoryEntry>,
     stitching: bool,
     subscribed_last_seq: Option<u64>,
+    scope_bound: bool,
     snapshot: Rc<SessionSnapshot>,
 }
 
@@ -425,6 +426,7 @@ impl ClientSession {
                     live_buffer: Vec::new(),
                     stitching: false,
                     subscribed_last_seq: None,
+                    scope_bound: false,
                     snapshot: initial,
                 }),
                 queue: RefCell::new(SessionQueueMirror::default()),
@@ -465,6 +467,28 @@ impl ClientSession {
     #[must_use]
     pub fn conversation_snapshot(&self, target: &str) -> Option<Rc<Value>> {
         self.conversation.borrow().snapshot(target)
+    }
+
+    /// Binds the single Agent-scoped Client context marker.
+    ///
+    /// # Errors
+    ///
+    /// Returns the source diagnostic on a second bind.
+    pub fn bind_scope(&self) -> Result<(), String> {
+        let mut state = self.state.borrow_mut();
+        if state.scope_bound {
+            return Err(format!(
+                "session {} already has a bound scope",
+                self.session_id
+            ));
+        }
+        state.scope_bound = true;
+        Ok(())
+    }
+
+    /// Releases the scoped marker so a newly minted scope may bind later.
+    pub fn unbind_scope(&self) {
+        self.state.borrow_mut().scope_bound = false;
     }
 
     /// First open; concurrent callers share one underlying operation.

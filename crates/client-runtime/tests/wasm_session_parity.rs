@@ -157,6 +157,10 @@ async fn open_promise_and_snapshot_identity_follow_the_browser_contract() {
     );
     assert!(Object::is(&opened, &session.get_snapshot().unwrap()));
     assert_eq!(fake.history_calls.get(), 1);
+    session.bind_scope(Object::new().into()).unwrap();
+    assert!(session.bind_scope(Object::new().into()).is_err());
+    session.unbind_scope();
+    session.bind_scope(Object::new().into()).unwrap();
 
     let ticks = Rc::new(Cell::new(0));
     let observed = ticks.clone();

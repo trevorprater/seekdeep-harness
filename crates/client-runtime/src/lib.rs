@@ -36,6 +36,8 @@ mod wasm_provide;
 #[cfg(target_arch = "wasm32")]
 mod wasm_session;
 #[cfg(target_arch = "wasm32")]
+mod wasm_session_manager;
+#[cfg(target_arch = "wasm32")]
 mod wasm_slots;
 #[cfg(target_arch = "wasm32")]
 mod wasm_store;
@@ -73,6 +75,8 @@ pub use wasm_projection_store::*;
 pub use wasm_provide::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_session::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_session_manager::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_slots::*;
 #[cfg(target_arch = "wasm32")]

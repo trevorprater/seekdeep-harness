@@ -31,9 +31,15 @@ impl SessionTaskSpawner for BrowserSessionSpawner {
     }
 }
 
-struct BrowserSessionTransport {
+pub(crate) struct BrowserSessionTransport {
     api: JsValue,
     remote: JsValue,
+}
+
+impl BrowserSessionTransport {
+    pub(crate) fn new(api: JsValue, remote: JsValue) -> Self {
+        Self { api, remote }
+    }
 }
 
 impl SessionTransport for BrowserSessionTransport {
@@ -313,6 +319,7 @@ pub struct WasmClientSession {
     projections_face: JsValue,
     empty_chat: JsValue,
     open_promise: Rc<RefCell<Option<Promise>>>,
+    scope: RefCell<Option<JsValue>>,
 }
 
 #[wasm_bindgen(js_class = Session)]
@@ -350,7 +357,7 @@ impl WasmClientSession {
                     }
                 }) as Rc<dyn Fn(SessionId)>
             });
-        let transport = Rc::new(BrowserSessionTransport { api, remote });
+        let transport = Rc::new(BrowserSessionTransport::new(api, remote));
         let session = ClientSession::new(
             SessionId::new(session_id),
             transport,
@@ -381,6 +388,7 @@ impl WasmClientSession {
             projections_face,
             empty_chat: empty_chat_snapshot()?,
             open_promise: Rc::new(RefCell::new(None)),
+            scope: RefCell::new(None),
         })
     }
 
@@ -584,6 +592,28 @@ impl WasmClientSession {
     pub fn dispose(&self) {
         self.session.dispose();
     }
+
+    /// Binds one Agent-scoped Client context.
+    ///
+    /// # Errors
+    ///
+    /// Returns the source diagnostic on a second bind.
+    #[wasm_bindgen(js_name = bindScope)]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn bind_scope(&self, scope: JsValue) -> Result<(), JsValue> {
+        self.session
+            .bind_scope()
+            .map_err(|error| js_sys::Error::new(&error))?;
+        *self.scope.borrow_mut() = Some(scope);
+        Ok(())
+    }
+
+    /// Releases the bound Client context.
+    #[wasm_bindgen(js_name = unbindScope)]
+    pub fn unbind_scope(&self) {
+        self.scope.borrow_mut().take();
+        self.session.unbind_scope();
+    }
 }
 
 fn views_face(session: &Rc<ClientSession>) -> Result<JsValue, JsValue> {
@@ -716,7 +746,7 @@ fn empty_chat_snapshot() -> Result<JsValue, JsValue> {
     Ok(chat.into())
 }
 
-fn parse_mux_frame(frame: &JsValue) -> Result<SessionMuxFrame, JsValue> {
+pub(crate) fn parse_mux_frame(frame: &JsValue) -> Result<SessionMuxFrame, JsValue> {
     let frame_type = required_string(frame, "type", "mux frame")?;
     match frame_type.as_str() {
         "session/event" => {
@@ -796,7 +826,7 @@ fn parse_mux_frame(frame: &JsValue) -> Result<SessionMuxFrame, JsValue> {
     }
 }
 
-fn parse_subagent_address(value: &JsValue) -> Result<SubagentAddress, JsValue> {
+pub(crate) fn parse_subagent_address(value: &JsValue) -> Result<SubagentAddress, JsValue> {
     Ok(SubagentAddress {
         parent_session_id: SessionId::new(required_string(
             value,
@@ -865,7 +895,7 @@ fn prompt_error_to_js(error: &SessionPromptError) -> Result<JsValue, JsValue> {
     Ok(value.into())
 }
 
-fn rpc_error_to_js(error: &ClientRpcError) -> Result<JsValue, JsValue> {
+pub(crate) fn rpc_error_to_js(error: &ClientRpcError) -> Result<JsValue, JsValue> {
     let value = Object::new();
     set(&value, "code", &JsValue::from_str(&error.code))?;
     set(&value, "message", &JsValue::from_str(&error.message))?;
@@ -877,7 +907,7 @@ fn rpc_error_to_js(error: &ClientRpcError) -> Result<JsValue, JsValue> {
     Ok(value.into())
 }
 
-fn rpc_result_to_js(result: ClientRpcResult<Value>) -> Result<JsValue, JsValue> {
+pub(crate) fn rpc_result_to_js(result: ClientRpcResult<Value>) -> Result<JsValue, JsValue> {
     let value = Object::new();
     match result {
         ClientRpcResult::Success(carried) => {
@@ -905,7 +935,11 @@ fn stripped_payload(value: &JsValue, removed: &[&str]) -> Result<Value, JsValue>
     Ok(payload)
 }
 
-fn call_path(root: &JsValue, path: &[&str], arguments: &[JsValue]) -> Result<JsValue, JsValue> {
+pub(crate) fn call_path(
+    root: &JsValue,
+    path: &[&str],
+    arguments: &[JsValue],
+) -> Result<JsValue, JsValue> {
     let (method, owners) = path
         .split_last()
         .ok_or_else(|| js_sys::Error::new("empty JavaScript method path"))?;
@@ -925,7 +959,7 @@ fn call_method(value: &JsValue, method: &str, arguments: &[JsValue]) -> Result<J
     function.apply(value, &args)
 }
 
-fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {
+pub(crate) fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {
     let member = Reflect::get(value, &JsValue::from_str(key))?;
     if member.is_undefined() || member.is_null() {
         Err(js_sys::Error::new(&format!("{owner} requires {key:?}")).into())
@@ -934,7 +968,7 @@ fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue>
     }
 }
 
-fn optional(value: &JsValue, key: &str) -> Result<Option<JsValue>, JsValue> {
+pub(crate) fn optional(value: &JsValue, key: &str) -> Result<Option<JsValue>, JsValue> {
     if value.is_undefined() || value.is_null() {
         return Ok(None);
     }
@@ -949,7 +983,7 @@ fn optional_member(value: &JsValue, key: &str) -> Result<Option<JsValue>, JsValu
     optional(value, key)
 }
 
-fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, JsValue> {
+pub(crate) fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, JsValue> {
     required(value, key, owner)?
         .as_string()
         .ok_or_else(|| js_sys::Error::new(&format!("{owner} {key} must be a string")).into())
@@ -965,7 +999,7 @@ fn js_safe_number(value: u64) -> Result<f64, JsValue> {
     Ok(value as f64)
 }
 
-fn safe_u64(value: &JsValue, owner: &str) -> Result<u64, JsValue> {
+pub(crate) fn safe_u64(value: &JsValue, owner: &str) -> Result<u64, JsValue> {
     let number = value
         .as_f64()
         .filter(|number| {
@@ -978,7 +1012,7 @@ fn safe_u64(value: &JsValue, owner: &str) -> Result<u64, JsValue> {
     Ok(number as u64)
 }
 
-fn safe_i64(value: &JsValue, owner: &str) -> Result<i64, JsValue> {
+pub(crate) fn safe_i64(value: &JsValue, owner: &str) -> Result<i64, JsValue> {
     let number = value
         .as_f64()
         .filter(|number| {
@@ -999,18 +1033,18 @@ fn set(object: &Object, key: &str, value: &JsValue) -> Result<(), JsValue> {
     }
 }
 
-fn js_to_json(value: &JsValue) -> Result<Value, JsValue> {
+pub(crate) fn js_to_json(value: &JsValue) -> Result<Value, JsValue> {
     serde_wasm_bindgen::from_value(value.clone())
         .map_err(|error| js_sys::Error::new(&error.to_string()).into())
 }
 
-fn json_to_js(value: &Value) -> Result<JsValue, JsValue> {
+pub(crate) fn json_to_js(value: &Value) -> Result<JsValue, JsValue> {
     value
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
         .map_err(|error| js_sys::Error::new(&error.to_string()).into())
 }
 
-fn render_js(value: &JsValue) -> String {
+pub(crate) fn render_js(value: &JsValue) -> String {
     value
         .as_string()
         .or_else(|| {
@@ -1021,7 +1055,7 @@ fn render_js(value: &JsValue) -> String {
         .unwrap_or_else(|| format!("{value:?}"))
 }
 
-fn console_error(message: &str) {
+pub(crate) fn console_error(message: &str) {
     let global = js_sys::global();
     let Some((console, error)) = Reflect::get(&global, &JsValue::from_str("console"))
         .ok()
@@ -1038,6 +1072,24 @@ fn console_error(message: &str) {
 }
 
 impl WasmClientSession {
+    pub(crate) fn from_session(session: Rc<ClientSession>) -> Result<Self, JsValue> {
+        let views_face = views_face(&session)?;
+        let projections_face = projections_face(session.projections())?;
+        Ok(Self {
+            session,
+            snapshot_cache: RefCell::new(None),
+            chat_cache: RefCell::new(None),
+            queue_cache: RefCell::new(None),
+            pending_cache: RefCell::new(None),
+            pending_faces: RefCell::new(Vec::new()),
+            views_face,
+            projections_face,
+            empty_chat: empty_chat_snapshot()?,
+            open_promise: Rc::new(RefCell::new(None)),
+            scope: RefCell::new(None),
+        })
+    }
+
     #[allow(clippy::too_many_lines)] // Mirrors the source's one atomic public snapshot shape.
     fn snapshot_to_js(&self, snapshot: &Rc<SessionSnapshot>) -> Result<JsValue, JsValue> {
         let value = Object::new();

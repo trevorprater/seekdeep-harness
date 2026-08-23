@@ -788,6 +788,13 @@ fn snapshot_notifications_dedupe_running_flips_and_keep_unrelated_arrays_stable(
     session.handle_running(false);
     scheduler.flush();
     assert_eq!(ticks.get(), 1);
+    session.bind_scope().unwrap();
+    assert_eq!(
+        session.bind_scope().unwrap_err(),
+        "session s1 already has a bound scope"
+    );
+    session.unbind_scope();
+    session.bind_scope().unwrap();
 }
 
 #[test]
