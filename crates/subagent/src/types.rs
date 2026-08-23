@@ -182,6 +182,12 @@ pub trait SubagentProvider: Send + Sync {
     /// Whether the child sees the parent's completed-turn prefix.
     fn inherits_parent_context(&self) -> bool;
 
+    /// Whether this provider overrides continuable-child preparation.
+    #[must_use]
+    fn supports_continuable(&self) -> bool {
+        false
+    }
+
     /// Establishes a one-shot child and returns its handle after publication.
     ///
     /// # Errors

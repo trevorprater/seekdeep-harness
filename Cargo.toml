@@ -137,6 +137,7 @@ members = [
   "crates/tool-ralph",
   "crates/tool-subagent-report",
   "crates/tool-subagent-control",
+  "crates/tool-subagent",
   "crates/tool-skill",
   "crates/tool-workflow",
   "crates/tool-todo",
