@@ -14,7 +14,8 @@ use base64::Engine as _;
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use parking_lot::{Mutex, RwLock};
 use seekdeep_agent::{
-    AGENT, Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection,
+    AGENT, AGENTS, Agent, AgentOptions, AgentSetup, CreateAgentMeta, CreateAgentOptions,
+    ModelSelection as AgentModelSelection,
 };
 use seekdeep_agent_presets::{
     AGENT_PRESETS, InvalidPresetIdError, PresetExistsError, PresetMountError,
@@ -51,9 +52,10 @@ use crate::{
         },
         sessions::{
             ModelSelection as SessionModelSelection, PromptContentPart, PromptMode,
-            SessionAttachmentRequest, SessionAttachmentValue, SessionModelsRequest,
-            SessionModelsValue, SessionPromptRequest, SessionPromptValue, SessionRenameRequest,
-            SessionRenameValue, SessionSelectModelRequest, SessionSelectModelValue,
+            SessionAttachmentRequest, SessionAttachmentValue, SessionForkRequest, SessionForkValue,
+            SessionModelsRequest, SessionModelsValue, SessionPromptRequest, SessionPromptValue,
+            SessionRenameRequest, SessionRenameValue, SessionSelectModelRequest,
+            SessionSelectModelValue,
         },
         skills::{SkillEntry, SkillListRequest, SkillListValue},
     },
@@ -119,6 +121,11 @@ struct ApiModelSelection {
 enum PreparedPromptPart {
     Text(String),
     Image(SaveImageAttachment),
+}
+
+struct ForkSource {
+    header: seekdeep_core::session::SessionHeader,
+    events: Vec<seekdeep_core::session::SessionEvent>,
 }
 
 impl ApiModelSelection {
@@ -329,6 +336,7 @@ impl PresetApiProxyRuntime {
             RpcMethod::SessionSelectModel => self.select_model(request, signal).await,
             RpcMethod::SessionPrompt => self.prompt(request, signal).await,
             RpcMethod::SessionAttachment => self.attachment(request, signal).await,
+            RpcMethod::SessionFork => self.fork(request, signal).await,
             RpcMethod::SessionRename => self.rename_session(request).await,
             RpcMethod::SkillList => self.list_skills(request).await,
             RpcMethod::GoalCreate
@@ -1023,6 +1031,255 @@ impl PresetApiProxyRuntime {
                 Map::new(),
             )),
         }
+    }
+
+    #[allow(clippy::too_many_lines)] // One ordered fork transaction preserves cut, publication, and attachment boundaries.
+    async fn fork(
+        &self,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionForkRequest = serde_json::from_value(request.payload.clone())?;
+        let source = match self.fork_source(&payload.session_id).await {
+            Ok(source) => source,
+            Err(error)
+                if error
+                    .downcast_ref::<seekdeep_api_remotes::ApiRemoteSessionNotFound>()
+                    .is_some() =>
+            {
+                return Ok(failure(
+                    request,
+                    "session-not-found",
+                    error.to_string(),
+                    Map::from_iter([(
+                        "sessionId".to_owned(),
+                        Value::String(payload.session_id.to_string()),
+                    )]),
+                ));
+            }
+            Err(error) => {
+                return Ok(failure(
+                    request,
+                    "internal",
+                    format!(
+                        "fork source unavailable for session \"{}\": {error}",
+                        payload.session_id
+                    ),
+                    Map::new(),
+                ));
+            }
+        };
+        let last_seq = source.events.last().map(|event| event.seq);
+        let boundary = payload.at_seq.and_then(|anchor| {
+            source
+                .events
+                .iter()
+                .find(|event| event.event_type == "turn/end" && event.seq >= anchor)
+        });
+        let boundary = boundary.or_else(|| {
+            if payload.at_seq.is_none() || payload.at_seq > last_seq {
+                source
+                    .events
+                    .iter()
+                    .rev()
+                    .find(|event| event.event_type == "turn/end")
+            } else {
+                None
+            }
+        });
+        let Some(boundary) = boundary else {
+            let message =
+                if let Some(anchor) = payload.at_seq.filter(|_| payload.at_seq <= last_seq) {
+                    format!(
+                        "session \"{}\" has not completed the turn containing event {anchor}",
+                        payload.session_id
+                    )
+                } else {
+                    format!(
+                        "session \"{}\" has no completed turn to fork from",
+                        payload.session_id
+                    )
+                };
+            return Ok(failure(
+                request,
+                "fork-unavailable",
+                message,
+                Map::from_iter([(
+                    "sessionId".to_owned(),
+                    Value::String(payload.session_id.to_string()),
+                )]),
+            ));
+        };
+        let boundary_index = source
+            .events
+            .iter()
+            .position(|event| event.seq == boundary.seq)
+            .expect("boundary came from source events");
+        let mut cut = boundary_index + 1;
+        while source
+            .events
+            .get(cut)
+            .is_some_and(|event| event.event_type != "turn/start")
+        {
+            cut += 1;
+        }
+        let workspace = match self.fork_workspace(&source.header, signal).await {
+            Ok(workspace) => workspace,
+            Err(error) => {
+                return Ok(failure(
+                    request,
+                    "internal",
+                    format!(
+                        "failed to resolve fork workspace for session \"{}\": {error}",
+                        payload.session_id
+                    ),
+                    Map::new(),
+                ));
+            }
+        };
+        let preset = resolve_session_preset(&source.header, &source.events);
+        let (agent_preset, setup) = self.fork_setup(preset.as_deref()).await?;
+        let child_id =
+            seekdeep_core::session::SessionId::new(format!("session-{}", uuid::Uuid::new_v4()));
+        let defaults = (self.options.default_model_selection)();
+        let options = CreateAgentOptions {
+            session_id: child_id.clone(),
+            meta: CreateAgentMeta {
+                cwd: source.header.cwd.clone(),
+                parent_session: Some(source.header.id.clone()),
+                seed_length: Some(u64::try_from(cut).unwrap_or(u64::MAX)),
+                agent_preset,
+                ..CreateAgentMeta::default()
+            },
+            seed: Some(source.events[..cut].to_vec()),
+            agent_options: AgentOptions {
+                provider: Some(ProviderId::new(defaults.provider)),
+                model: Some(ModelId::new(defaults.model)),
+                ..AgentOptions::default()
+            },
+            signal: None,
+            setup: Some(setup),
+            owner_agent: None,
+        };
+        let agents = self
+            .context
+            .get(AGENTS)
+            .ok_or_else(|| anyhow::anyhow!("agents registry is absent"))?;
+        if let Err(error) = agents.create(options).await {
+            return Ok(failure(
+                request,
+                "internal",
+                format!("failed to fork session \"{}\": {error}", payload.session_id),
+                Map::new(),
+            ));
+        }
+        if let Some(workspace) = workspace
+            && let Err(error) = workspace.attach_session(child_id.clone()).await
+        {
+            return Ok(failure(
+                request,
+                "workspace-attach-failed",
+                format!(
+                    "session \"{child_id}\" was forked but could not attach to workspace \"{}\": {error}",
+                    workspace.id()
+                ),
+                Map::from_iter([
+                    ("sessionId".to_owned(), Value::String(child_id.to_string())),
+                    (
+                        "workspaceId".to_owned(),
+                        Value::String(workspace.id().to_string()),
+                    ),
+                ]),
+            ));
+        }
+        typed_success(
+            request,
+            &SessionForkValue {
+                session_id: child_id,
+            },
+        )
+    }
+
+    async fn fork_source(
+        &self,
+        session_id: &seekdeep_core::session::SessionId,
+    ) -> anyhow::Result<ForkSource> {
+        if let Some(session) = self
+            .context
+            .get(seekdeep_core::session_store::SESSIONS)
+            .and_then(|sessions| sessions.get(session_id))
+        {
+            return Ok(ForkSource {
+                header: session.header().clone(),
+                events: session.events(),
+            });
+        }
+        let (header, events) = inspect_api_remote_session(&self.context, session_id).await?;
+        Ok(ForkSource { header, events })
+    }
+
+    async fn fork_workspace(
+        &self,
+        source: &seekdeep_core::session::SessionHeader,
+        signal: AbortSignal,
+    ) -> anyhow::Result<Option<Arc<seekdeep_workspace::Workspace>>> {
+        let Some(registry) = self.context.get(seekdeep_workspace::WORKSPACE_REGISTRY) else {
+            return Ok(None);
+        };
+        let workspaces = registry.list()?;
+        if source.origin != Some(seekdeep_core::session::SessionOrigin::Subagent) {
+            return Ok(workspaces
+                .into_iter()
+                .find(|workspace| workspace.session_ids().contains(&source.id)));
+        }
+        let query = self
+            .context
+            .get(seekdeep_session_query::SESSION_QUERY)
+            .ok_or_else(|| {
+                anyhow::anyhow!("subagent fork workspace resolution requires sessionQuery")
+            })?;
+        let trace = query.trace_session(source.id.clone(), Some(signal)).await?;
+        for ancestor in trace.ancestors {
+            if let Some(workspace) = workspaces
+                .iter()
+                .find(|workspace| workspace.session_ids().contains(&ancestor.header.id))
+            {
+                return Ok(Some(workspace.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn fork_setup(
+        &self,
+        preset: Option<&str>,
+    ) -> anyhow::Result<(Option<String>, AgentSetup)> {
+        let mounted = if let Some(roster) = self.context.get(AGENT_PRESETS) {
+            let preset = roster.resolve_mountable(preset).await?;
+            let id = preset.id.clone();
+            Some((roster, preset, id))
+        } else {
+            None
+        };
+        let agent_preset = mounted.as_ref().map(|(_, _, id)| id.clone());
+        let defaults = self.options.default_model_selection.clone();
+        let selections = self.selections.clone();
+        let setup: AgentSetup = Arc::new(move |agent_context| {
+            let mounted = mounted.clone();
+            let defaults = defaults.clone();
+            let selections = selections.clone();
+            Box::pin(async move {
+                let agent = agent_context
+                    .get(AGENT)
+                    .ok_or_else(|| anyhow::anyhow!("API Proxy fork setup has no scoped Agent"))?;
+                install_api_model_selection(&agent, defaults, &selections)?;
+                if let Some((roster, preset, _)) = mounted {
+                    roster.mount_resolved(&agent_context, preset).await?;
+                }
+                Ok(None)
+            })
+        });
+        Ok((agent_preset, setup))
     }
 
     fn selection_for(&self, agent: &Arc<Agent>) -> anyhow::Result<Arc<ApiModelSelection>> {

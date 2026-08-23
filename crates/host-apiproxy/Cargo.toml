@@ -26,6 +26,7 @@ seekdeep-credentials = { path = "../credentials" }
 seekdeep-goal = { path = "../goal" }
 seekdeep-host-directory-picker = { path = "../host-directory-picker" }
 seekdeep-invariants = { path = "../invariants" }
+seekdeep-jobs = { path = "../jobs" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-settings = { path = "../settings" }
 seekdeep-skill = { path = "../skill" }
@@ -54,6 +55,7 @@ uuid.workspace = true
 [dev-dependencies]
 seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-host-webserver = { path = "../host-webserver" }
+seekdeep-jobs-local = { path = "../jobs-local" }
 seekdeep-loader = { path = "../loader" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-storage = { path = "../storage" }

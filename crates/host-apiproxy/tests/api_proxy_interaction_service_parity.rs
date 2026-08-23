@@ -523,6 +523,7 @@ async fn session_mux_baseline_precedes_replayed_pending_interactions() {
             projections: Arc::new(NoProjections),
             projection_registry: None,
             tools: None,
+            jobs: None,
         },
         SessionApiProxyOptions::default(),
         harness.runtime.clone(),

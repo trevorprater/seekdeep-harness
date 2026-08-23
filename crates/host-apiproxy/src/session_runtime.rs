@@ -29,6 +29,7 @@ use seekdeep_core::{
     session::{Session, SessionEvent, SessionHeader, SessionId, SessionOrigin, SurfaceOp},
     session_store::{SESSIONS, SessionStore},
 };
+use seekdeep_jobs::{JOBS, JobRegistryService};
 use seekdeep_llm::{AbortSignal, ContentBlock, Message, ModelId, ProviderId};
 use seekdeep_session_persistence::{
     SESSION_PERSISTENCE, SessionPersistence, ensure_persistence_not_aborted,
@@ -56,6 +57,7 @@ use crate::{
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
+        jobs::{JobId as WireJobId, JobStatus as WireJobStatus, JobView},
         sessions::{
             HistoryEntry, SESSION_SEARCH_RESULT_LIMIT, SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
             SessionCreateRequest, SessionCreateValue, SessionHistoryRequest, SessionHistoryValue,
@@ -199,6 +201,8 @@ pub struct SessionApiProxyServices {
     pub projection_registry: Option<Arc<SessionProjectionRegistry>>,
     /// Optional replay-safe tool presenters.
     pub tools: Option<Arc<ToolRuntime>>,
+    /// Optional non-consuming background-job snapshot source.
+    pub jobs: Option<Arc<JobRegistryService>>,
 }
 
 impl std::fmt::Debug for SessionApiProxyServices {
@@ -209,6 +213,7 @@ impl std::fmt::Debug for SessionApiProxyServices {
             .field("has_persistence", &self.persistence.is_some())
             .field("has_query", &self.query.is_some())
             .field("has_tools", &self.tools.is_some())
+            .field("has_jobs", &self.jobs.is_some())
             .field(
                 "has_projection_registry",
                 &self.projection_registry.is_some(),
@@ -227,6 +232,7 @@ pub struct SessionApiProxyRuntime {
     projections: Arc<dyn SessionProjectionReads>,
     projection_registry: Option<Arc<SessionProjectionRegistry>>,
     tools: Option<Arc<ToolRuntime>>,
+    jobs: Option<Arc<JobRegistryService>>,
     artifact_metadata: Arc<dyn ColdArtifactMetadata>,
     options: SessionApiProxyOptions,
     creation_locks: Arc<Mutex<HashMap<SessionId, Arc<tokio::sync::Mutex<()>>>>>,
@@ -297,6 +303,7 @@ impl SessionApiProxyRuntime {
                 projections,
                 projection_registry: projection_registry.clone(),
                 tools: context.get(TOOLS),
+                jobs: context.get(JOBS),
             },
             options,
             domains,
@@ -323,6 +330,7 @@ impl SessionApiProxyRuntime {
             projections: services.projections,
             projection_registry: services.projection_registry,
             tools: services.tools,
+            jobs: services.jobs,
             artifact_metadata,
             options,
             creation_locks: Arc::new(Mutex::new(HashMap::new())),
@@ -923,6 +931,7 @@ impl SessionApiProxyRuntime {
         }
     }
 
+    #[allow(clippy::too_many_lines)] // One listener transaction rolls back every Session mux source together.
     fn register_mux_listeners(
         self: &Arc<Self>,
         sender: &tokio::sync::mpsc::UnboundedSender<RpcRequest<MuxFrame>>,
@@ -968,6 +977,8 @@ impl SessionApiProxyRuntime {
             )?);
             let created_sender = sender.clone();
             let created_subscribed = subscribed.clone();
+            let created_jobs = self.jobs.clone();
+            let created_agents = self.agents.clone();
             effects.push(self.context.events().on_sync(
                 &self.context,
                 "session/created",
@@ -976,6 +987,13 @@ impl SessionApiProxyRuntime {
                         .get::<Session>(0)
                         .ok_or_else(|| anyhow::anyhow!("session/created lacks a session"))?;
                     send_subscribed_if_new(&created_sender, &created_subscribed, &session);
+                    if let Some(jobs) = &created_jobs {
+                        let agent = created_agents.get(session.id());
+                        let views = job_views(jobs.list(agent.as_ref()));
+                        if !views.is_empty() {
+                            let _ = created_sender.send(job_envelope(session.id().clone(), views));
+                        }
+                    }
                     Ok(EventReply::Undefined)
                 },
                 EventOptions::default(),
@@ -1016,6 +1034,25 @@ impl SessionApiProxyRuntime {
                     }),
                 )?);
             }
+            if let Some(jobs) = &self.jobs {
+                let jobs = jobs.clone();
+                let jobs_sender = sender.clone();
+                let jobs_sessions = self.sessions.clone();
+                let jobs_agents = self.agents.clone();
+                let changed_jobs = jobs.clone();
+                effects.push(jobs.on_jobs_changed(Arc::new(move |owner| {
+                    if let Some(owner) = owner {
+                        let views = job_views(changed_jobs.list(Some(owner)));
+                        let _ = jobs_sender.send(job_envelope(owner.id().clone(), views));
+                        return;
+                    }
+                    for session in jobs_sessions.list() {
+                        let agent = jobs_agents.get(session.id());
+                        let views = job_views(changed_jobs.list(agent.as_ref()));
+                        let _ = jobs_sender.send(job_envelope(session.id().clone(), views));
+                    }
+                })));
+            }
             Ok(())
         })();
         (effects, result)
@@ -1040,6 +1077,13 @@ impl SessionApiProxyRuntime {
         for session in self.sessions.list() {
             if subscribed.lock().insert(session.id().clone()) {
                 baseline.push(subscribed_envelope(&session));
+                if let Some(jobs) = &self.jobs {
+                    let agent = self.agents.get(session.id());
+                    let views = job_views(jobs.list(agent.as_ref()));
+                    if !views.is_empty() {
+                        baseline.push(job_envelope(session.id().clone(), views));
+                    }
+                }
             }
         }
         let live_signal = signal.clone();
@@ -1220,6 +1264,7 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
             projections: self.projections.clone(),
             projection_registry: self.projection_registry.clone(),
             tools: self.tools.clone(),
+            jobs: self.jobs.clone(),
             artifact_metadata: self.artifact_metadata.clone(),
             options: self.options.clone(),
             creation_locks: self.creation_locks.clone(),
@@ -1246,6 +1291,7 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
             projections: self.projections.clone(),
             projection_registry: self.projection_registry.clone(),
             tools: self.tools.clone(),
+            jobs: self.jobs.clone(),
             artifact_metadata: self.artifact_metadata.clone(),
             options: self.options.clone(),
             creation_locks: self.creation_locks.clone(),
@@ -1733,6 +1779,34 @@ fn subscribed_envelope(session: &Session) -> RpcRequest<MuxFrame> {
                 .saturating_sub(1),
         },
     )
+}
+
+fn job_envelope(session_id: SessionId, jobs: Vec<JobView>) -> RpcRequest<MuxFrame> {
+    RpcRequest::new(
+        next_session_frame_id(),
+        MuxFrame::SessionJobs { session_id, jobs },
+    )
+}
+
+fn job_views(snapshots: Vec<seekdeep_jobs::JobSnapshot>) -> Vec<JobView> {
+    snapshots
+        .into_iter()
+        .map(|snapshot| JobView {
+            id: WireJobId::new(snapshot.id.as_str()),
+            kind: snapshot.kind,
+            label: snapshot.label,
+            status: match snapshot.status {
+                seekdeep_jobs::JobStatus::Running => WireJobStatus::Running,
+                seekdeep_jobs::JobStatus::Stopping => WireJobStatus::Stopping,
+                seekdeep_jobs::JobStatus::Completed => WireJobStatus::Completed,
+                seekdeep_jobs::JobStatus::Killed => WireJobStatus::Killed,
+                seekdeep_jobs::JobStatus::Failed => WireJobStatus::Failed,
+            },
+            detail: snapshot.detail,
+            started_at: snapshot.started_at,
+            finished_at: snapshot.finished_at,
+        })
+        .collect()
 }
 
 fn send_subscribed_if_new(

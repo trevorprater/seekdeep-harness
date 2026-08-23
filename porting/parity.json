@@ -55578,12 +55578,34 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-fork.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/presets.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_create_service_parity.rs",
+        "crates/core/src/session_store.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-fork.spec.ts --reporter=dot (7 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_create_service_parity --all-features (6 consolidated create and fork cases passed)",
+        "cargo test -p seekdeep-core --all-features",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Production Rust reads live or cold sources without resuming them, resolves arbitrary anchors to the containing completed turn, includes trailing standalone events, accepts aborted turn ends, records cwd and direct lineage, clears subagent origin, inherits the log-resolved preset and request route before child publication, and attaches ordinary or nearest-ancestor workspaces after the child commits."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-jobs.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/tests/api_proxy_jobs_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-jobs.spec.ts --reporter=dot (10 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_jobs_service_parity --all-features (3 consolidated job mux cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Session mux uses only non-consuming job snapshots: empty baselines are absent, non-empty baselines follow subscription, owner changes push that owner's whole set, unowned changes fan out to every attached Session, newly created Sessions receive the standing unowned set, and wire views omit ownerSession, reported, and outputLimitBytes."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-models.spec.ts",

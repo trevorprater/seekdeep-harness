@@ -5304,6 +5304,8 @@ dependencies = [
  "seekdeep-host-directory-picker",
  "seekdeep-host-webserver",
  "seekdeep-invariants",
+ "seekdeep-jobs",
+ "seekdeep-jobs-local",
  "seekdeep-llm",
  "seekdeep-loader",
  "seekdeep-schemastery",

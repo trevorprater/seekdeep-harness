@@ -246,6 +246,7 @@ impl Harness {
                 projections: self.projections.clone(),
                 projection_registry: None,
                 tools: None,
+                jobs: None,
             },
             options,
             Arc::new(TerminalDomains),
