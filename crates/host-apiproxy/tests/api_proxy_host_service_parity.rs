@@ -7,6 +7,7 @@ use std::{
 };
 
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
+use seekdeep_cordis::Context;
 use seekdeep_host_apiproxy::{
     ApiDownlinkStream, ApiProxyDefaults, ApiProxyRuntime, ApiProxyService, ClientResponse,
     ModelSelection, PathOpenerInternals, RpcError, RpcId, RpcMethod, RpcReceipt, RpcRequest,
@@ -20,7 +21,7 @@ use seekdeep_host_directory_picker::{
     DirectoryEntry, DirectoryListing, DirectoryPickerCapability, DirectoryPickerError,
     DirectoryPickerErrorCode, DirectoryPickerFailure, DirectoryPickerService,
 };
-use seekdeep_llm::AbortSignal;
+use seekdeep_llm::{AbortSignal, LlmRuntime};
 use serde_json::{Map, Value, json};
 
 #[derive(Debug, Default)]
@@ -94,6 +95,7 @@ fn defaults() -> ApiProxyDefaults {
         }),
         cwd: "/tmp/project".to_owned(),
         open_path: None,
+        open_text_file: None,
         can_open_path: Some(Arc::new(|| false)),
         native_path_opener: PathOpenerInternals::default(),
     }
@@ -203,6 +205,37 @@ async fn native_picker_returns_selection_and_explicit_cancellation() {
         ),
         json!({ "path": null })
     );
+}
+
+#[tokio::test]
+async fn context_constructor_requires_and_composes_the_configuration_runtime() {
+    let context = Context::new();
+    native_picker(|_| async { Ok(None) }.boxed())
+        .provide(&context)
+        .unwrap();
+    let domains = Arc::new(RemainingDomains::default());
+    let missing =
+        ApiProxyService::from_context(&context, defaults(), Arc::new(|| 0), domains.clone())
+            .unwrap_err();
+    assert!(missing.to_string().contains("llm service is required"));
+
+    LlmRuntime::install(&context).unwrap();
+    let service =
+        ApiProxyService::from_context(&context, defaults(), Arc::new(|| 0), domains.clone())
+            .unwrap();
+    assert_eq!(
+        value(
+            invoke(
+                &service,
+                RpcMethod::LlmProviders,
+                json!({}),
+                AbortSignal::default(),
+            )
+            .await
+        ),
+        json!({ "providers": [] })
+    );
+    assert!(domains.calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

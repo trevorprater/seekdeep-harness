@@ -406,6 +406,7 @@ fn service(workspace: Arc<dyn WorkspaceRuntime>) -> Arc<ApiProxyService> {
             }),
             cwd: "/tmp".to_owned(),
             open_path: None,
+            open_text_file: None,
             can_open_path: Some(Arc::new(|| false)),
             native_path_opener: PathOpenerInternals::default(),
         },

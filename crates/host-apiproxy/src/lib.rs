@@ -6,6 +6,7 @@
 
 pub mod api;
 pub mod client;
+pub mod configuration;
 pub mod handler;
 pub mod invariant;
 pub mod native_path_opener;
@@ -28,6 +29,7 @@ pub use client::{
     SessionsClient, SettingsClient, SkillsClient, SubagentsClient, WorkspaceClient,
     new_web_api_client, new_web_api_client_with_timeout, parse_method_result,
 };
+pub use configuration::{ConfigurationApiProxyOptions, ConfigurationApiProxyRuntime};
 pub use handler::{
     ApiDownlinkStream, ApiProxyHandler, ApiProxyRuntime, FetchBody, FetchBodyStream, FetchHandler,
     FetchResponse,

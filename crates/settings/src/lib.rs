@@ -410,6 +410,12 @@ impl SettingsService {
         self.storage.document_path().map(Path::to_path_buf)
     }
 
+    /// Whether the mounted provider currently accepts writes.
+    #[must_use]
+    pub fn writable(&self) -> bool {
+        self.storage.writable()
+    }
+
     /// Prepares the provider's local document for a native editor.
     ///
     /// # Errors

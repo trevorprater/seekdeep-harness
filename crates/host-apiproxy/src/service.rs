@@ -17,8 +17,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    ApiDownlinkStream, ApiProxyRuntime, ClientResponse, RpcId, RpcMethod, RpcReceipt, RpcRequest,
-    RpcResponse,
+    ApiDownlinkStream, ApiProxyRuntime, ClientResponse, ConfigurationApiProxyOptions,
+    ConfigurationApiProxyRuntime, RpcId, RpcMethod, RpcReceipt, RpcRequest, RpcResponse,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -156,6 +156,8 @@ pub struct ApiProxyDefaults {
     pub cwd: String,
     /// Optional native open-with-default-application boundary.
     pub open_path: Option<PathOpener>,
+    /// Optional native text-document editor boundary.
+    pub open_text_file: Option<PathOpener>,
     /// Optional native-open capability override.
     pub can_open_path: Option<PathCapabilityProbe>,
     /// Platform facts and command runner used by the default native opener.
@@ -168,6 +170,7 @@ impl std::fmt::Debug for ApiProxyDefaults {
             .debug_struct("ApiProxyDefaults")
             .field("cwd", &self.cwd)
             .field("has_open_path", &self.open_path.is_some())
+            .field("has_open_text_file", &self.open_text_file.is_some())
             .field("has_can_open_path", &self.can_open_path.is_some())
             .field("native_path_opener", &self.native_path_opener)
             .finish_non_exhaustive()
@@ -230,11 +233,12 @@ impl ApiProxyService {
         })
     }
 
-    /// Composes from Cordis' required directory-picker service.
+    /// Composes Host and configuration domains from their Cordis services.
     ///
     /// # Errors
     ///
-    /// Returns an error when the composition does not mount a picker.
+    /// Returns an error when the composition does not mount its required
+    /// directory-picker or LLM service.
     pub fn from_context(
         context: &seekdeep_cordis::Context,
         defaults: ApiProxyDefaults,
@@ -244,7 +248,20 @@ impl ApiProxyService {
         let picker = context
             .get(DIRECTORY_PICKER)
             .ok_or_else(|| anyhow::anyhow!("directoryPicker service is required"))?;
-        Ok(Self::new(defaults, picker, attached_session_count, domains))
+        let configuration = ConfigurationApiProxyRuntime::from_context(
+            context,
+            ConfigurationApiProxyOptions {
+                open_text_file: defaults.open_text_file.clone(),
+                native_path_opener: defaults.native_path_opener.clone(),
+            },
+            domains,
+        )?;
+        Ok(Self::new(
+            defaults,
+            picker,
+            attached_session_count,
+            configuration,
+        ))
     }
 
     async fn host_unary(

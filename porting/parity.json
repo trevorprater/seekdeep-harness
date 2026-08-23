@@ -55528,7 +55528,18 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-config.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/configuration.rs",
+        "crates/host-apiproxy/tests/api_proxy_configuration_service_parity.rs",
+        "crates/settings/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-config.spec.ts --reporter=dot (30 passed)",
+        "cargo test -p seekdeep-host-apiproxy -p seekdeep-settings --all-features (all configuration, carrier, schema, lifecycle, and settings tests passed)",
+        "cargo clippy -p seekdeep-host-apiproxy -p seekdeep-settings --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Sixteen consolidated production-runtime tests cover all 30 source cases: optional-service failures, redacted and allowlisted settings views, provider-owned document opening and cancellation, CAS and write semantics, read-only and withdrawn namespaces, value-free credentials including shadowing, provider/catalog containment, draft model discovery, live topology forwarding, and deterministic listener teardown."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-fork.spec.ts",

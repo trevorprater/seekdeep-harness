@@ -18,9 +18,11 @@ seekdeep-attachment = { path = "../attachment" }
 seekdeep-client-connection = { path = "../client-connection" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
+seekdeep-credentials = { path = "../credentials" }
 seekdeep-host-directory-picker = { path = "../host-directory-picker" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-settings = { path = "../settings" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-storage-domain = { path = "../storage-domain" }
 seekdeep-user-approval = { path = "../user-approval" }
@@ -38,6 +40,7 @@ uuid.workspace = true
 
 [dev-dependencies]
 seekdeep-host-webserver = { path = "../host-webserver" }
+seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-storage = { path = "../storage" }
 seekdeep-storage-json = { path = "../storage-json" }
 tempfile.workspace = true
