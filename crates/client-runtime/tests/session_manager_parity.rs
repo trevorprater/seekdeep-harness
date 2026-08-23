@@ -9,7 +9,8 @@ use seekdeep_client_runtime::{
     ManagerSessionSummary, NotifierScheduler, QueueItemInput, QueuePlacement, SessionHistoryEntry,
     SessionHistoryPage, SessionHistoryRequest, SessionListPhase, SessionListState, SessionManager,
     SessionManagerOptions, SessionMuxFrame, SessionTaskSpawner, SessionTransport,
-    SessionTransportRequest,
+    SessionTransportRequest, SubagentAddress, SubagentCatalogEntry, SubagentCatalogState,
+    SubagentMode,
 };
 use seekdeep_identity::{MessageId, RpcId, SessionId};
 use serde_json::{Map, Value, json};
@@ -593,4 +594,251 @@ fn connected_generation_refreshes_list_and_resyncs_only_opened_instances() {
     assert_eq!(transport.calls.borrow().len(), 1);
     assert_eq!(transport.calls.borrow()[0].method, "session.list");
     assert_eq!(*transport.history_calls.borrow(), 2);
+}
+
+#[test]
+fn search_create_fork_and_preset_echo_preserve_results_and_publish_real_sessions() {
+    let mut pool = LocalPool::new();
+    let transport = Rc::new(Transport::default());
+    transport.plans.borrow_mut().extend([
+        CallPlan::Ready(Ok(ClientRpcResult::Success(Some(json!({
+            "items":[{"sessionId":"s1","snippet":"hit"}],"hasMore":false
+        }))))),
+        CallPlan::Ready(Ok(ClientRpcResult::Success(Some(json!({
+            "sessionId":"created","agentPreset":"preset-a"
+        }))))),
+        CallPlan::Ready(Ok(ClientRpcResult::Failure(ClientRpcError {
+            code: "workspace-attach-failed".to_owned(),
+            message: "published first".to_owned(),
+            details: Map::from_iter([(
+                "sessionId".to_owned(),
+                Value::String("ungrouped".to_owned()),
+            )]),
+        }))),
+        CallPlan::Ready(Ok(ClientRpcResult::Success(Some(json!({
+            "sessionId":"forked"
+        }))))),
+    ]);
+    let manager = manager(
+        transport.clone(),
+        Rc::new(ManualScheduler::default()),
+        &pool,
+    );
+    manager.handle_host_frame(ManagerHostFrame::Added(ManagerSessionSummary {
+        cwd: Some("/workspace".to_owned()),
+        ..summary("source", false, false)
+    }));
+    assert!(pool.run_until(manager.search("hit")).is_ok());
+    assert!(
+        pool.run_until(manager.create(json!({"cwd":"/created"})))
+            .is_ok()
+    );
+    let created_snapshot = manager.snapshot();
+    let created = created_snapshot
+        .items
+        .iter()
+        .find(|entry| entry.summary.session_id.as_str() == "created")
+        .unwrap();
+    assert!(created.summary.blank);
+    assert_eq!(created.summary.cwd.as_deref(), Some("/created"));
+    assert_eq!(created.summary.agent_preset.as_deref(), Some("preset-a"));
+    assert!(matches!(
+        pool.run_until(manager.create(json!({"workspaceId":"w"}))),
+        ClientRpcResult::Failure(_)
+    ));
+    assert!(
+        manager
+            .snapshot()
+            .items
+            .iter()
+            .any(|entry| entry.summary.session_id.as_str() == "ungrouped")
+    );
+    assert!(
+        pool.run_until(manager.fork(&SessionId::new("source"), Some(4)))
+            .is_ok()
+    );
+    let forked_snapshot = manager.snapshot();
+    let forked = forked_snapshot
+        .items
+        .iter()
+        .find(|entry| entry.summary.session_id.as_str() == "forked")
+        .unwrap();
+    assert!(!forked.summary.blank);
+    assert_eq!(
+        forked
+            .summary
+            .parent_session_id
+            .as_ref()
+            .map(SessionId::as_str),
+        Some("source")
+    );
+    assert_eq!(forked.summary.cwd.as_deref(), Some("/workspace"));
+    manager.note_agent_preset(&SessionId::new("created"), "preset-b");
+    assert_eq!(
+        manager
+            .snapshot()
+            .items
+            .iter()
+            .find(|entry| entry.summary.session_id.as_str() == "created")
+            .unwrap()
+            .summary
+            .agent_preset
+            .as_deref(),
+        Some("preset-b")
+    );
+    assert_eq!(transport.calls.borrow()[0].method, "session.search");
+    assert_eq!(transport.calls.borrow()[1].method, "session.create");
+    assert_eq!(transport.calls.borrow()[3].method, "session.fork");
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn catalog_value(entries: Value, parent_available: bool) -> Value {
+    json!({"entries":entries,"parentAvailable":parent_available})
+}
+
+#[test]
+fn catalog_selection_retains_direct_address_routes_and_activation_detach_state() {
+    let mut pool = LocalPool::new();
+    let transport = Rc::new(Transport::default());
+    transport
+        .plans
+        .borrow_mut()
+        .push_back(CallPlan::Ready(Ok(ClientRpcResult::Success(Some(
+            catalog_value(
+                json!([{
+                    "kind":"child","id":"child","mode":"continuable","label":"worker",
+                    "activity":"running","hasChildren":false
+                }]),
+                true,
+            ),
+        )))));
+    let manager = manager(transport, Rc::new(ManualScheduler::default()), &pool);
+    manager.handle_host_frame(ManagerHostFrame::Added(summary("parent", false, false)));
+    manager.handle_host_frame(ManagerHostFrame::Added(ManagerSessionSummary {
+        parent_session_id: Some(SessionId::new("parent")),
+        origin: Some("subagent".to_owned()),
+        ..summary("child", true, false)
+    }));
+    pool.run_until(manager.refresh_subagents(&SessionId::new("parent")));
+    let address = SubagentAddress {
+        parent_session_id: SessionId::new("parent"),
+        child_session_id: SessionId::new("child"),
+        mode: SubagentMode::Continuable,
+    };
+    manager.select_subagent(address.clone()).unwrap();
+    assert_eq!(manager.snapshot().current_address, Some(address.clone()));
+    let child = manager.get(&SessionId::new("child"));
+    assert_eq!(child.snapshot().subagent.as_ref().unwrap().address, address);
+    assert!(child.snapshot().subagent.as_ref().unwrap().parent_available);
+    assert!(child.snapshot().running);
+    manager.select(&SessionId::new("child")).unwrap();
+    assert!(manager.snapshot().current_address.is_some());
+    manager.handle_host_frame(ManagerHostFrame::Status {
+        session_id: SessionId::new("child"),
+        running: false,
+    });
+    assert!(matches!(
+        manager.snapshot().subagents_by_parent[&SessionId::new("parent")].entries[0],
+        SubagentCatalogEntry::Child { running: false, .. }
+    ));
+    manager.handle_host_frame(ManagerHostFrame::Removed {
+        session_id: SessionId::new("child"),
+    });
+    assert!(
+        manager
+            .snapshot()
+            .items
+            .iter()
+            .any(|entry| entry.summary.session_id.as_str() == "child")
+    );
+    assert!(!child.snapshot().removed);
+}
+
+#[test]
+fn catalog_inflight_overlays_expandability_and_activity_and_overlapping_reads_singleflight() {
+    let mut pool = LocalPool::new();
+    let transport = Rc::new(Transport::default());
+    let (sender, receiver) = oneshot::channel();
+    transport
+        .plans
+        .borrow_mut()
+        .push_back(CallPlan::Deferred(receiver));
+    let manager = manager(
+        transport.clone(),
+        Rc::new(ManualScheduler::default()),
+        &pool,
+    );
+    let first = manager.refresh_subagents(&SessionId::new("root"));
+    let second = manager.refresh_subagents(&SessionId::new("root"));
+    pool.spawner().spawn_local(first).unwrap();
+    pool.spawner().spawn_local(second).unwrap();
+    pool.run_until_stalled();
+    manager.handle_host_frame(ManagerHostFrame::Added(ManagerSessionSummary {
+        parent_session_id: Some(SessionId::new("parent")),
+        origin: Some("subagent".to_owned()),
+        ..summary("grandchild", false, false)
+    }));
+    manager.handle_host_frame(ManagerHostFrame::Status {
+        session_id: SessionId::new("parent"),
+        running: true,
+    });
+    assert!(
+        sender
+            .send(Ok(ClientRpcResult::Success(Some(catalog_value(
+                json!([{
+                    "kind":"child","id":"parent","mode":"continuable","label":"parent",
+                    "activity":"inactive","hasChildren":false
+                }]),
+                true,
+            )))))
+            .is_ok()
+    );
+    pool.run_until_stalled();
+    assert_eq!(transport.calls.borrow().len(), 1);
+    let snapshot = manager.snapshot();
+    let catalog = &snapshot.subagents_by_parent[&SessionId::new("root")];
+    assert_eq!(catalog.state, SubagentCatalogState::Ready);
+    assert!(matches!(
+        catalog.entries[0],
+        SubagentCatalogEntry::Child {
+            running: true,
+            has_children: true,
+            ..
+        }
+    ));
+}
+
+#[test]
+fn removing_catalog_owner_invalidates_parent_availability_and_child_session_hint() {
+    let mut pool = LocalPool::new();
+    let transport = Rc::new(Transport::default());
+    transport
+        .plans
+        .borrow_mut()
+        .push_back(CallPlan::Ready(Ok(ClientRpcResult::Success(Some(
+            catalog_value(
+                json!([{
+                    "kind":"child","id":"child","mode":"continuable","label":"worker",
+                    "activity":"inactive","hasChildren":false
+                }]),
+                true,
+            ),
+        )))));
+    let manager = manager(transport, Rc::new(ManualScheduler::default()), &pool);
+    manager.handle_host_frame(ManagerHostFrame::Added(summary("parent", false, false)));
+    pool.run_until(manager.refresh_subagents(&SessionId::new("parent")));
+    manager
+        .select_subagent(SubagentAddress {
+            parent_session_id: SessionId::new("parent"),
+            child_session_id: SessionId::new("child"),
+            mode: SubagentMode::Continuable,
+        })
+        .unwrap();
+    let child = manager.get(&SessionId::new("child"));
+    assert!(child.snapshot().subagent.as_ref().unwrap().parent_available);
+    manager.handle_host_frame(ManagerHostFrame::Removed {
+        session_id: SessionId::new("parent"),
+    });
+    assert!(!manager.snapshot().subagents_by_parent[&SessionId::new("parent")].parent_available);
+    assert!(!child.snapshot().subagent.as_ref().unwrap().parent_available);
 }

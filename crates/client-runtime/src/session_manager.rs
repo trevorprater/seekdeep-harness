@@ -57,6 +57,63 @@ pub enum SessionListPhase {
     Ready,
 }
 
+/// Durable direct-child catalog row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SubagentCatalogEntry {
+    /// Healthy addressable child.
+    Child {
+        /// Child Session identity.
+        id: SessionId,
+        /// Activation mode.
+        mode: crate::SubagentMode,
+        /// Human label when supplied.
+        label: Option<String>,
+        /// Sampled driver activity.
+        running: bool,
+        /// Whether a direct descendant exists.
+        has_children: bool,
+    },
+    /// Non-addressable diagnostic row.
+    Diagnostic {
+        /// Child Session identity.
+        id: SessionId,
+        /// Corrupt, unsupported, or unavailable reason.
+        reason: String,
+    },
+}
+
+impl SubagentCatalogEntry {
+    fn id(&self) -> &SessionId {
+        match self {
+            Self::Child { id, .. } | Self::Diagnostic { id, .. } => id,
+        }
+    }
+}
+
+/// Catalog request lifecycle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubagentCatalogState {
+    /// Pull in flight.
+    Loading,
+    /// Latest pull succeeded.
+    Ready,
+    /// Latest pull failed.
+    Error,
+}
+
+/// One direct-parent durable child catalog.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SubagentCatalogSnapshot {
+    /// Complete rows.
+    pub entries: Rc<Vec<SubagentCatalogEntry>>,
+    /// Delivery-time exact-parent availability hint.
+    pub parent_available: bool,
+    /// Pull lifecycle.
+    pub state: SubagentCatalogState,
+    /// Latest pull failure.
+    pub error: Option<ClientRpcError>,
+}
+
 /// Immutable manager list snapshot.
 pub struct ManagerListSnapshot {
     /// Flattened lineage rows with stable entry identities.
@@ -69,8 +126,12 @@ pub struct ManagerListSnapshot {
     pub phase: SessionListPhase,
     /// Latest list failure.
     pub error: Option<ClientRpcError>,
+    /// Loaded direct-child catalogs by parent.
+    pub subagents_by_parent: Rc<IndexMap<SessionId, Rc<SubagentCatalogSnapshot>>>,
     /// Background jobs by Session; absent means empty.
     pub jobs_by_session: Rc<IndexMap<SessionId, Rc<Vec<Value>>>>,
+    /// Retained direct-parent transport address for the current child.
+    pub current_address: Option<crate::SubagentAddress>,
 }
 
 /// Mux envelope routed through the manager.
@@ -162,6 +223,13 @@ struct BufferedFrame {
     frame: SessionMuxFrame,
 }
 
+struct CatalogInflight {
+    task: futures::future::Shared<LocalBoxFuture<'static, ()>>,
+    expandable: Rc<RefCell<IndexSet<SessionId>>>,
+    activity: Rc<RefCell<IndexMap<SessionId, bool>>>,
+    parent_available_override: Rc<RefCell<Option<bool>>>,
+}
+
 struct ManagerState {
     sessions: IndexMap<SessionId, Rc<ClientSession>>,
     pending_buffers: IndexMap<SessionId, Vec<BufferedFrame>>,
@@ -177,10 +245,16 @@ struct ManagerState {
     list_inflight: Option<(u64, futures::future::Shared<LocalBoxFuture<'static, ()>>)>,
     list_mutations: Option<Rc<RefCell<Vec<ListMutation>>>>,
     jobs_by_session: IndexMap<SessionId, Rc<Vec<Value>>>,
+    addresses: IndexMap<SessionId, crate::SubagentAddress>,
+    catalogs: IndexMap<SessionId, Rc<SubagentCatalogSnapshot>>,
+    catalog_inflight: IndexMap<SessionId, CatalogInflight>,
+    catalog_stale: IndexSet<SessionId>,
+    open_catalogs: IndexSet<SessionId>,
     selected: Option<SessionId>,
     entry_cache: IndexMap<SessionId, Rc<SessionListEntry>>,
     items_cache: Rc<Vec<Rc<SessionListEntry>>>,
     jobs_cache: Option<Rc<IndexMap<SessionId, Rc<Vec<Value>>>>>,
+    catalogs_cache: Option<Rc<IndexMap<SessionId, Rc<SubagentCatalogSnapshot>>>>,
     snapshot: Rc<ManagerListSnapshot>,
 }
 
@@ -206,7 +280,9 @@ impl SessionManager {
             state: SessionListState::Idle,
             phase: SessionListPhase::Pending,
             error: None,
+            subagents_by_parent: Rc::new(IndexMap::new()),
             jobs_by_session: Rc::new(IndexMap::new()),
+            current_address: None,
         });
         Rc::new_cyclic(move |weak: &std::rc::Weak<Self>| {
             let weak = weak.clone();
@@ -235,10 +311,16 @@ impl SessionManager {
                     list_inflight: None,
                     list_mutations: None,
                     jobs_by_session: IndexMap::new(),
+                    addresses: IndexMap::new(),
+                    catalogs: IndexMap::new(),
+                    catalog_inflight: IndexMap::new(),
+                    catalog_stale: IndexSet::new(),
+                    open_catalogs: IndexSet::new(),
                     selected: restored_selection,
                     entry_cache: IndexMap::new(),
                     items_cache: Rc::new(Vec::new()),
                     jobs_cache: None,
+                    catalogs_cache: None,
                     snapshot: initial,
                 }),
                 options,
@@ -271,14 +353,93 @@ impl SessionManager {
             .summaries
             .iter()
             .any(|summary| summary.session_id == *session_id)
+            && !state.addresses.contains_key(session_id)
         {
             return Err(format!("sessions.select: unknown session {session_id}"));
         }
         state.selected = Some(session_id.clone());
         state.completed.shift_remove(session_id);
+        let address = state.addresses.get(session_id).cloned();
+        let parent_available = address.as_ref().is_some_and(|address| {
+            state
+                .catalogs
+                .get(&address.parent_session_id)
+                .is_some_and(|catalog| catalog.parent_available)
+        });
+        let session = state.sessions.get(session_id).cloned();
         drop(state);
+        if let Some(session) = session {
+            session.configure_subagent(address, parent_available);
+        }
         self.notifier.notify_now();
         Ok(())
+    }
+
+    /// Selects one healthy direct child through its durable catalog address.
+    ///
+    /// # Errors
+    ///
+    /// Returns when the loaded catalog does not contain the exact healthy child.
+    pub fn select_subagent(&self, address: crate::SubagentAddress) -> Result<(), String> {
+        let mut state = self.state.borrow_mut();
+        let healthy = state
+            .catalogs
+            .get(&address.parent_session_id)
+            .and_then(|catalog| {
+                catalog.entries.iter().find(|entry| {
+                    matches!(
+                        entry,
+                        SubagentCatalogEntry::Child { id, mode, .. }
+                            if *id == address.child_session_id && *mode == address.mode
+                    )
+                })
+            })
+            .is_some();
+        if !healthy {
+            return Err(format!(
+                "sessions.selectSubagent: {} is not a healthy catalog child",
+                address.child_session_id
+            ));
+        }
+        let parent_available = state
+            .catalogs
+            .get(&address.parent_session_id)
+            .is_some_and(|catalog| catalog.parent_available);
+        state
+            .addresses
+            .insert(address.child_session_id.clone(), address.clone());
+        state.selected = Some(address.child_session_id.clone());
+        state.completed.shift_remove(&address.child_session_id);
+        let session = state.sessions.get(&address.child_session_id).cloned();
+        drop(state);
+        if let Some(session) = session {
+            session.configure_subagent(Some(address), parent_available);
+        }
+        self.notifier.notify_now();
+        Ok(())
+    }
+
+    /// Returns one retained or loaded-catalog direct-parent address.
+    #[must_use]
+    pub fn navigation_address(&self, session_id: &SessionId) -> Option<crate::SubagentAddress> {
+        let state = self.state.borrow();
+        if let Some(address) = state.addresses.get(session_id) {
+            return Some(address.clone());
+        }
+        state.catalogs.iter().find_map(|(parent, catalog)| {
+            catalog.entries.iter().find_map(|entry| match entry {
+                SubagentCatalogEntry::Child { id, mode, .. } if id == session_id => {
+                    Some(crate::SubagentAddress {
+                        parent_session_id: parent.clone(),
+                        child_session_id: id.clone(),
+                        mode: *mode,
+                    })
+                }
+                SubagentCatalogEntry::Child { .. } | SubagentCatalogEntry::Diagnostic { .. } => {
+                    None
+                }
+            })
+        })
     }
 
     /// Clears the current selection synchronously.
@@ -299,13 +460,21 @@ impl SessionManager {
             return session.clone();
         }
         let projections = self.projection_store(session_id);
+        let address = self.navigation_address(session_id);
+        let parent_available = address.as_ref().is_some_and(|address| {
+            self.state
+                .borrow()
+                .catalogs
+                .get(&address.parent_session_id)
+                .is_some_and(|catalog| catalog.parent_available)
+        });
         let weak = Rc::downgrade(self);
         let session = ClientSession::new(
             session_id.clone(),
             self.transport.clone(),
             SessionOptions {
-                address: None,
-                parent_available: false,
+                address: address.clone(),
+                parent_available,
                 projections: Some(projections),
                 conversation: Some((self.options.create_conversation)()),
                 scheduler: self.options.scheduler.clone(),
@@ -340,6 +509,23 @@ impl SessionManager {
         if let Some(summary) = summary {
             session.handle_blank(summary.blank);
             session.handle_running(summary.running);
+        } else if let Some(address) = address {
+            let child = self
+                .state
+                .borrow()
+                .catalogs
+                .get(&address.parent_session_id)
+                .and_then(|catalog| {
+                    catalog
+                        .entries
+                        .iter()
+                        .find(|entry| entry.id() == session_id)
+                })
+                .cloned();
+            if let Some(SubagentCatalogEntry::Child { running, .. }) = child {
+                session.handle_blank(false);
+                session.handle_running(running);
+            }
         }
         session
     }
@@ -378,6 +564,292 @@ impl SessionManager {
         .shared();
         self.state.borrow_mut().list_inflight = Some((token, task.clone()));
         task
+    }
+
+    /// Refreshes one direct-child catalog with one shared in-flight operation.
+    pub fn refresh_subagents(
+        self: &Rc<Self>,
+        parent_session_id: &SessionId,
+    ) -> futures::future::Shared<LocalBoxFuture<'static, ()>> {
+        if let Some(inflight) = self.state.borrow().catalog_inflight.get(parent_session_id) {
+            return inflight.task.clone();
+        }
+        let previous = self.state.borrow().catalogs.get(parent_session_id).cloned();
+        {
+            let mut state = self.state.borrow_mut();
+            state.catalogs.insert(
+                parent_session_id.clone(),
+                Rc::new(SubagentCatalogSnapshot {
+                    entries: previous
+                        .as_ref()
+                        .map_or_else(|| Rc::new(Vec::new()), |catalog| catalog.entries.clone()),
+                    parent_available: previous
+                        .as_ref()
+                        .is_some_and(|catalog| catalog.parent_available),
+                    state: SubagentCatalogState::Loading,
+                    error: None,
+                }),
+            );
+            state.catalogs_cache = None;
+        }
+        self.notifier.mark_dirty();
+        let expandable = Rc::new(RefCell::new(IndexSet::new()));
+        let activity = Rc::new(RefCell::new(IndexMap::new()));
+        let parent_override = Rc::new(RefCell::new(None));
+        let weak = Rc::downgrade(self);
+        let parent = parent_session_id.clone();
+        let task_expandable = expandable.clone();
+        let task_activity = activity.clone();
+        let task_override = parent_override.clone();
+        let task = async move {
+            if let Some(manager) = weak.upgrade() {
+                manager
+                    .run_catalog_refresh(
+                        parent,
+                        previous,
+                        task_expandable,
+                        task_activity,
+                        task_override,
+                    )
+                    .await;
+            }
+        }
+        .boxed_local()
+        .shared();
+        self.state.borrow_mut().catalog_inflight.insert(
+            parent_session_id.clone(),
+            CatalogInflight {
+                task: task.clone(),
+                expandable,
+                activity,
+                parent_available_override: parent_override,
+            },
+        );
+        task
+    }
+
+    async fn run_catalog_refresh(
+        self: &Rc<Self>,
+        parent_session_id: SessionId,
+        previous: Option<Rc<SubagentCatalogSnapshot>>,
+        expandable: Rc<RefCell<IndexSet<SessionId>>>,
+        activity: Rc<RefCell<IndexMap<SessionId, bool>>>,
+        parent_override: Rc<RefCell<Option<bool>>>,
+    ) {
+        let result = self
+            .call_folded(
+                "subagent.list",
+                json!({"parentSessionId":parent_session_id.as_str()}),
+            )
+            .await;
+        let next = match result {
+            ClientRpcResult::Success(Some(value)) => match parse_catalog(&value) {
+                Ok((entries, parent_available)) => Rc::new(SubagentCatalogSnapshot {
+                    entries: Rc::new(apply_catalog_mutations(
+                        &entries,
+                        &expandable.borrow(),
+                        &activity.borrow(),
+                    )),
+                    parent_available: parent_override.borrow().unwrap_or(parent_available),
+                    state: SubagentCatalogState::Ready,
+                    error: None,
+                }),
+                Err(error) => Rc::new(SubagentCatalogSnapshot {
+                    entries: previous
+                        .as_ref()
+                        .map_or_else(|| Rc::new(Vec::new()), |catalog| catalog.entries.clone()),
+                    parent_available: parent_override.borrow().unwrap_or_else(|| {
+                        previous
+                            .as_ref()
+                            .is_some_and(|catalog| catalog.parent_available)
+                    }),
+                    state: SubagentCatalogState::Error,
+                    error: Some(error),
+                }),
+            },
+            ClientRpcResult::Failure(error) => Rc::new(SubagentCatalogSnapshot {
+                entries: Rc::new(apply_catalog_mutations(
+                    previous
+                        .as_ref()
+                        .map_or(&[] as &[SubagentCatalogEntry], |catalog| {
+                            catalog.entries.as_slice()
+                        }),
+                    &expandable.borrow(),
+                    &activity.borrow(),
+                )),
+                parent_available: parent_override.borrow().unwrap_or_else(|| {
+                    previous
+                        .as_ref()
+                        .is_some_and(|catalog| catalog.parent_available)
+                }),
+                state: SubagentCatalogState::Error,
+                error: Some(error),
+            }),
+            ClientRpcResult::Success(None) => Rc::new(SubagentCatalogSnapshot {
+                entries: previous
+                    .as_ref()
+                    .map_or_else(|| Rc::new(Vec::new()), |catalog| catalog.entries.clone()),
+                parent_available: parent_override.borrow().unwrap_or(false),
+                state: SubagentCatalogState::Error,
+                error: Some(internal_error("subagent.list response omitted value")),
+            }),
+        };
+        let child_sessions = {
+            let mut state = self.state.borrow_mut();
+            state
+                .catalogs
+                .insert(parent_session_id.clone(), next.clone());
+            state.catalogs_cache = None;
+            state.catalog_inflight.shift_remove(&parent_session_id);
+            state
+                .addresses
+                .iter()
+                .filter(|(_, address)| address.parent_session_id == parent_session_id)
+                .filter_map(|(child, _)| state.sessions.get(child).cloned())
+                .collect::<Vec<_>>()
+        };
+        for session in child_sessions {
+            session.handle_subagent_parent_available(next.parent_available);
+        }
+        let trailing = self
+            .state
+            .borrow_mut()
+            .catalog_stale
+            .shift_remove(&parent_session_id);
+        if trailing {
+            let refresh = self.refresh_subagents(&parent_session_id);
+            self.options.spawner.spawn(refresh.boxed_local());
+        }
+        self.notifier.mark_dirty();
+    }
+
+    /// Marks whether a catalog is consuming membership updates.
+    pub fn set_subagent_catalog_open(self: &Rc<Self>, parent_session_id: &SessionId, open: bool) {
+        if open {
+            self.state
+                .borrow_mut()
+                .open_catalogs
+                .insert(parent_session_id.clone());
+            let refresh = self.refresh_subagents(parent_session_id);
+            self.options.spawner.spawn(refresh.boxed_local());
+        } else {
+            self.state
+                .borrow_mut()
+                .open_catalogs
+                .shift_remove(parent_session_id);
+        }
+    }
+
+    /// Searches visible Session content without mutating list query state.
+    pub async fn search(&self, query: &str) -> ClientRpcResult<Value> {
+        self.call_folded("session.search", json!({"query":query}))
+            .await
+    }
+
+    /// Creates one blank Session and merges the Host-published identity immediately.
+    pub async fn create(&self, options: Value) -> ClientRpcResult<Value> {
+        let result = self.call_folded("session.create", options.clone()).await;
+        match &result {
+            ClientRpcResult::Success(Some(value)) => {
+                if let Some(session_id) = value.get("sessionId").and_then(Value::as_str) {
+                    self.record_mutation(&ListMutation::Upsert(ManagerSessionSummary {
+                        session_id: SessionId::new(session_id),
+                        updated_at: (self.options.clock)(),
+                        running: false,
+                        blank: true,
+                        parent_session_id: None,
+                        origin: None,
+                        cwd: options
+                            .get("cwd")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        agent_preset: value
+                            .get("agentPreset")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned),
+                        projections: None,
+                    }));
+                }
+            }
+            ClientRpcResult::Failure(error) => {
+                if let Some(session_id) = workspace_attach_session_id(error) {
+                    self.record_mutation(&ListMutation::Upsert(ManagerSessionSummary {
+                        session_id,
+                        updated_at: (self.options.clock)(),
+                        running: false,
+                        blank: true,
+                        parent_session_id: None,
+                        origin: None,
+                        cwd: None,
+                        agent_preset: None,
+                        projections: None,
+                    }));
+                }
+            }
+            ClientRpcResult::Success(None) => {}
+        }
+        result
+    }
+
+    /// Forks one Session and immediately publishes the non-blank lineage child.
+    pub async fn fork(
+        &self,
+        source_session_id: &SessionId,
+        at_seq: Option<u64>,
+    ) -> ClientRpcResult<Value> {
+        let source = self
+            .state
+            .borrow()
+            .summaries
+            .iter()
+            .find(|summary| summary.session_id == *source_session_id)
+            .cloned();
+        let result = self
+            .call_folded(
+                "session.fork",
+                json!({
+                    "sessionId":source_session_id.as_str(),
+                    "atSeq":at_seq
+                }),
+            )
+            .await;
+        let child_id = match &result {
+            ClientRpcResult::Success(Some(value)) => value
+                .get("sessionId")
+                .and_then(Value::as_str)
+                .map(SessionId::new),
+            ClientRpcResult::Failure(error) => workspace_attach_session_id(error),
+            ClientRpcResult::Success(None) => None,
+        };
+        if let Some(child_id) = child_id {
+            self.record_mutation(&ListMutation::Upsert(ManagerSessionSummary {
+                session_id: child_id,
+                updated_at: (self.options.clock)(),
+                running: false,
+                blank: false,
+                parent_session_id: Some(source_session_id.clone()),
+                origin: None,
+                cwd: source.and_then(|source| source.cwd),
+                agent_preset: None,
+                projections: None,
+            }));
+        }
+        result
+    }
+
+    /// Records one Host-confirmed Agent preset switch.
+    pub fn note_agent_preset(&self, session_id: &SessionId, agent_preset: &str) {
+        self.record_mutation(&ListMutation::Upsert(ManagerSessionSummary {
+            session_id: session_id.clone(),
+            updated_at: (self.options.clock)(),
+            running: false,
+            blank: true,
+            parent_session_id: None,
+            origin: None,
+            cwd: None,
+            agent_preset: Some(agent_preset.to_owned()),
+            projections: None,
+        }));
     }
 
     async fn run_list_refresh(
@@ -463,6 +935,20 @@ impl SessionManager {
             }
         }
         self.notifier.mark_dirty();
+    }
+
+    async fn call_folded(&self, method: &str, payload: Value) -> ClientRpcResult<Value> {
+        match self
+            .transport
+            .call(SessionTransportRequest {
+                method: method.to_owned(),
+                payload,
+            })
+            .await
+        {
+            Ok(result) => result,
+            Err(error) => ClientRpcResult::Failure(internal_error(error)),
+        }
     }
 
     /// Routes one mux frame without instantiating Sessions for durable frames.
@@ -564,31 +1050,88 @@ impl SessionManager {
     }
 
     /// Routes one Host frame into list upkeep and materialized Sessions.
-    pub fn handle_host_frame(&self, frame: ManagerHostFrame) {
+    #[allow(clippy::too_many_lines)] // Preserve the source's one ordered Host-frame transaction.
+    pub fn handle_host_frame(self: &Rc<Self>, frame: ManagerHostFrame) {
         match frame {
             ManagerHostFrame::Added(mut summary) => {
                 if summary.updated_at == 0 {
                     summary.updated_at = (self.options.clock)();
                 }
                 let session_id = summary.session_id.clone();
+                let parent = summary.parent_session_id.clone();
+                let is_subagent = summary.origin.as_deref() == Some("subagent");
                 let blank = summary.blank;
                 self.record_mutation(&ListMutation::Upsert(summary));
                 if let Some(session) = self.state.borrow().sessions.get(&session_id) {
                     session.handle_blank(blank);
                 }
+                if is_subagent && let Some(parent) = &parent {
+                    self.mark_catalog_parent_expandable(parent);
+                }
+                if let Some(parent) = parent
+                    && self.state.borrow().open_catalogs.contains(&parent)
+                {
+                    self.schedule_catalog_refresh(&parent);
+                }
             }
             ManagerHostFrame::Removed { session_id } => {
-                self.record_mutation(&ListMutation::Remove(session_id.clone()));
+                let durable_subagent = {
+                    let state = self.state.borrow();
+                    state
+                        .summaries
+                        .iter()
+                        .find(|summary| summary.session_id == session_id)
+                        .is_some_and(|summary| summary.origin.as_deref() == Some("subagent"))
+                        || state.addresses.contains_key(&session_id)
+                };
+                self.record_mutation(&if durable_subagent {
+                    ListMutation::Status(session_id.clone(), false)
+                } else {
+                    ListMutation::Remove(session_id.clone())
+                });
+                self.update_catalog_activity(&session_id, false);
                 let mut state = self.state.borrow_mut();
                 if let Some(session) = state.sessions.get(&session_id) {
-                    session.handle_removed();
+                    if durable_subagent {
+                        session.handle_running(false);
+                    } else {
+                        session.handle_removed();
+                    }
                 }
                 state.pending_buffers.shift_remove(&session_id);
                 state.pending_interactions.shift_remove(&session_id);
                 state.jobs_by_session.shift_remove(&session_id);
                 state.jobs_cache = None;
-                state.projection_stores.shift_remove(&session_id);
+                if !durable_subagent {
+                    state.projection_stores.shift_remove(&session_id);
+                }
                 state.completed.shift_remove(&session_id);
+                if let Some(inflight) = state.catalog_inflight.get(&session_id) {
+                    *inflight.parent_available_override.borrow_mut() = Some(false);
+                    state.catalog_stale.insert(session_id.clone());
+                }
+                if let Some(catalog) = state.catalogs.get(&session_id).cloned()
+                    && catalog.parent_available
+                {
+                    state.catalogs.insert(
+                        session_id.clone(),
+                        Rc::new(SubagentCatalogSnapshot {
+                            parent_available: false,
+                            ..catalog.as_ref().clone()
+                        }),
+                    );
+                    state.catalogs_cache = None;
+                }
+                let children = state
+                    .addresses
+                    .iter()
+                    .filter(|(_, address)| address.parent_session_id == session_id)
+                    .filter_map(|(child, _)| state.sessions.get(child).cloned())
+                    .collect::<Vec<_>>();
+                drop(state);
+                for child in children {
+                    child.handle_subagent_parent_available(false);
+                }
             }
             ManagerHostFrame::Status {
                 session_id,
@@ -598,6 +1141,7 @@ impl SessionManager {
                 if let Some(session) = self.state.borrow().sessions.get(&session_id) {
                     session.handle_running(running);
                 }
+                self.update_catalog_activity(&session_id, running);
             }
             ManagerHostFrame::AgentError {
                 session_id,
@@ -645,6 +1189,132 @@ impl SessionManager {
         for session in self.state.borrow().sessions.values() {
             let resync = session.resync();
             self.options.spawner.spawn(resync);
+        }
+        let parents = self
+            .state
+            .borrow()
+            .open_catalogs
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        for parent in parents {
+            let refresh = self.refresh_subagents(&parent);
+            self.options.spawner.spawn(refresh.boxed_local());
+        }
+    }
+
+    fn schedule_catalog_refresh(self: &Rc<Self>, parent_session_id: &SessionId) {
+        if self
+            .state
+            .borrow()
+            .catalog_inflight
+            .contains_key(parent_session_id)
+        {
+            self.state
+                .borrow_mut()
+                .catalog_stale
+                .insert(parent_session_id.clone());
+            return;
+        }
+        let refresh = self.refresh_subagents(parent_session_id);
+        self.options.spawner.spawn(refresh.boxed_local());
+    }
+
+    fn update_catalog_activity(&self, child_session_id: &SessionId, running: bool) {
+        let mut state = self.state.borrow_mut();
+        for inflight in state.catalog_inflight.values() {
+            inflight
+                .activity
+                .borrow_mut()
+                .insert(child_session_id.clone(), running);
+        }
+        let mut any_changed = false;
+        for catalog in state.catalogs.values_mut() {
+            let mut changed = false;
+            let entries = catalog
+                .entries
+                .iter()
+                .map(|entry| match entry {
+                    SubagentCatalogEntry::Child {
+                        id,
+                        mode,
+                        label,
+                        running: current,
+                        has_children,
+                    } if id == child_session_id && *current != running => {
+                        changed = true;
+                        SubagentCatalogEntry::Child {
+                            id: id.clone(),
+                            mode: *mode,
+                            label: label.clone(),
+                            running,
+                            has_children: *has_children,
+                        }
+                    }
+                    _ => entry.clone(),
+                })
+                .collect::<Vec<_>>();
+            if changed {
+                any_changed = true;
+                *catalog = Rc::new(SubagentCatalogSnapshot {
+                    entries: Rc::new(entries),
+                    ..catalog.as_ref().clone()
+                });
+            }
+        }
+        if any_changed {
+            state.catalogs_cache = None;
+            drop(state);
+            self.notifier.mark_dirty();
+        }
+    }
+
+    fn mark_catalog_parent_expandable(&self, parent_session_id: &SessionId) {
+        let mut state = self.state.borrow_mut();
+        for inflight in state.catalog_inflight.values() {
+            inflight
+                .expandable
+                .borrow_mut()
+                .insert(parent_session_id.clone());
+        }
+        let mut any_changed = false;
+        for catalog in state.catalogs.values_mut() {
+            let mut changed = false;
+            let entries = catalog
+                .entries
+                .iter()
+                .map(|entry| match entry {
+                    SubagentCatalogEntry::Child {
+                        id,
+                        mode,
+                        label,
+                        running,
+                        has_children: false,
+                    } if id == parent_session_id => {
+                        changed = true;
+                        SubagentCatalogEntry::Child {
+                            id: id.clone(),
+                            mode: *mode,
+                            label: label.clone(),
+                            running: *running,
+                            has_children: true,
+                        }
+                    }
+                    _ => entry.clone(),
+                })
+                .collect::<Vec<_>>();
+            if changed {
+                any_changed = true;
+                *catalog = Rc::new(SubagentCatalogSnapshot {
+                    entries: Rc::new(entries),
+                    ..catalog.as_ref().clone()
+                });
+            }
+        }
+        if any_changed {
+            state.catalogs_cache = None;
+            drop(state);
+            self.notifier.mark_dirty();
         }
     }
 
@@ -736,6 +1406,7 @@ impl SessionManager {
         self.notifier.mark_dirty();
     }
 
+    #[allow(clippy::too_many_lines)] // One owner preserves cross-field snapshot identity checks.
     fn rebuild_snapshot(&self) {
         let mut state = self.state.borrow_mut();
         let mut titled = Vec::new();
@@ -815,21 +1486,105 @@ impl SessionManager {
         if state.jobs_cache.is_none() {
             state.jobs_cache = Some(Rc::new(state.jobs_by_session.clone()));
         }
+        if state.catalogs_cache.is_none() {
+            state.catalogs_cache = Some(Rc::new(state.catalogs.clone()));
+        }
         let current = state.selected.as_ref().filter(|selected| {
             state
                 .items_cache
                 .iter()
                 .any(|entry| entry.summary.session_id == **selected)
+                || state.addresses.contains_key(*selected)
         });
+        let current_address = current
+            .and_then(|current| state.addresses.get(current))
+            .cloned();
         state.snapshot = Rc::new(ManagerListSnapshot {
             items: state.items_cache.clone(),
             current: current.cloned(),
             state: state.list_state,
             phase: state.list_phase,
             error: state.list_error.clone(),
+            subagents_by_parent: state.catalogs_cache.clone().unwrap_or_default(),
             jobs_by_session: state.jobs_cache.clone().unwrap_or_default(),
+            current_address,
         });
     }
+}
+
+fn parse_catalog(value: &Value) -> Result<(Vec<SubagentCatalogEntry>, bool), ClientRpcError> {
+    let entries = value
+        .get("entries")
+        .and_then(Value::as_array)
+        .ok_or_else(|| internal_error("subagent.list response requires entries"))?;
+    let entries = entries
+        .iter()
+        .map(|entry| {
+            let id = entry
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| internal_error("subagent catalog row requires id"))?;
+            match entry.get("kind").and_then(Value::as_str) {
+                Some("child") => Ok(SubagentCatalogEntry::Child {
+                    id: SessionId::new(id),
+                    mode: match entry.get("mode").and_then(Value::as_str) {
+                        Some("one-shot") => crate::SubagentMode::OneShot,
+                        Some("continuable") => crate::SubagentMode::Continuable,
+                        _ => return Err(internal_error("subagent child requires a known mode")),
+                    },
+                    label: entry
+                        .get("label")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned),
+                    running: entry.get("activity").and_then(Value::as_str) == Some("running"),
+                    has_children: entry
+                        .get("hasChildren")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                }),
+                Some("diagnostic") => Ok(SubagentCatalogEntry::Diagnostic {
+                    id: SessionId::new(id),
+                    reason: entry
+                        .get("reason")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unavailable")
+                        .to_owned(),
+                }),
+                _ => Err(internal_error("subagent catalog row requires a known kind")),
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let parent_available = value
+        .get("parentAvailable")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| internal_error("subagent.list response requires parentAvailable"))?;
+    Ok((entries, parent_available))
+}
+
+fn apply_catalog_mutations(
+    entries: &[SubagentCatalogEntry],
+    expandable: &IndexSet<SessionId>,
+    activity: &IndexMap<SessionId, bool>,
+) -> Vec<SubagentCatalogEntry> {
+    entries
+        .iter()
+        .map(|entry| match entry {
+            SubagentCatalogEntry::Child {
+                id,
+                mode,
+                label,
+                running,
+                has_children,
+            } => SubagentCatalogEntry::Child {
+                id: id.clone(),
+                mode: *mode,
+                label: label.clone(),
+                running: activity.get(id).copied().unwrap_or(*running),
+                has_children: *has_children || expandable.contains(id),
+            },
+            SubagentCatalogEntry::Diagnostic { .. } => entry.clone(),
+        })
+        .collect()
 }
 
 fn parse_list(value: &Value) -> Result<Vec<ManagerSessionSummary>, ClientRpcError> {
@@ -1079,4 +1834,11 @@ fn internal_error(message: impl Into<String>) -> ClientRpcError {
         message: message.into(),
         details: Map::new(),
     }
+}
+
+fn workspace_attach_session_id(error: &ClientRpcError) -> Option<SessionId> {
+    (error.code == "workspace-attach-failed")
+        .then(|| error.details.get("sessionId").and_then(Value::as_str))
+        .flatten()
+        .map(SessionId::new)
 }
