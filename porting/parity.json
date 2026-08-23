@@ -65676,12 +65676,31 @@
     {
       "source": "packages/shell/pwsh-sandbox/src/helpers.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/pwsh-sandbox/src/lib.rs",
+        "crates/pwsh-sandbox/tests/helpers_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: pwsh-sandbox 6 passed, 13 real-pwsh cases environment-skipped",
+        "Rust tests pin runner-spawn attribution, exit-gated fatal rules, informational-line exclusions, empty signatures, and denial matching",
+        "cargo test -p seekdeep-pwsh-sandbox --all-features: 9 passed"
+      ]
     },
     {
       "source": "packages/shell/pwsh-sandbox/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/pwsh-sandbox/src/lib.rs",
+        "crates/pwsh-local/src/lib.rs"
+      ],
+      "evidence": [
+        "Rust executor wraps exact PowerShell argv through ctx.sandbox, resolves per-call policy, bypasses danger-full-access, fails closed on runner failures, and stamps per-process facts before done settles",
+        "cargo test -p seekdeep-pwsh-sandbox --all-features: 9 passed",
+        "cargo check --target x86_64-pc-windows-msvc -p seekdeep-pwsh-local -p seekdeep-pwsh-sandbox --lib",
+        "cargo clippy -p seekdeep-pwsh-local -p seekdeep-pwsh-sandbox --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/pwsh-sandbox/src/invariant.ts",
@@ -65705,7 +65724,16 @@
     {
       "source": "packages/shell/pwsh-sandbox/tests/sandbox.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/pwsh-sandbox/tests/executor_parity.rs",
+        "crates/pwsh-sandbox/tests/helpers_parity.rs",
+        "crates/pwsh-sandbox/tests/plugin_lifecycle.rs"
+      ],
+      "evidence": [
+        "Rust tests drive the real local subprocess service through clean, denied, fatal-runner, missing-runner, abort, bad-cwd, foreground, background, full-access, and reversible Loader paths",
+        "cargo test -p seekdeep-pwsh-sandbox --all-features: 9 passed"
+      ]
     },
     {
       "source": "packages/shell/pwsh-sandbox/tsconfig.json",

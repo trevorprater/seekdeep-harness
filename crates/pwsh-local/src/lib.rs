@@ -208,7 +208,12 @@ pub fn assert_serviceable_pwsh_config(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn validate_config_value(value: &Value) -> anyhow::Result<Value> {
+/// Resolves schema defaults and rejects executor configurations that cannot run.
+///
+/// # Errors
+///
+/// Returns schema, deserialization, or serviceability failures.
+pub fn resolve_config_value(value: &Value) -> anyhow::Result<Value> {
     let resolved = config_schema()
         .resolve(value)
         .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -229,6 +234,48 @@ pub struct LocalPwshExecutor {
 struct ResolvedPwshPath {
     declared: Option<String>,
     executable: String,
+}
+
+/// Raw settlement facts delivered to a confining executor before process completion is observed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PwshProcessSettlement {
+    /// Direct child exit status; absent for signal termination or spawn rejection.
+    pub exit_code: Option<i32>,
+    /// Complete retained stderr tail used for backend-specific classification.
+    pub stderr: String,
+    /// Executable-resolution or permission rejection when no process started.
+    pub spawn_error: Option<String>,
+}
+
+/// Synchronous settlement observer used by the sandboxing provider.
+pub type PwshProcessObserver = Arc<dyn Fn(&PwshProcessSettlement) + Send + Sync>;
+
+/// Typed evidence that the selected executable or its interpreter could not start.
+#[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
+#[error("{detail}")]
+pub struct PwshSpawnFailure {
+    detail: String,
+}
+
+impl PwshSpawnFailure {
+    /// Wraps provider evidence already classified as executable resolution or permission failure.
+    #[must_use]
+    pub fn new(detail: impl Into<String>) -> Self {
+        Self {
+            detail: detail.into(),
+        }
+    }
+}
+
+fn executable_spawn_failure_text(error: &str) -> bool {
+    let error = error.to_lowercase();
+    error.contains("no such file")
+        || error.contains("not found")
+        || error.contains("permission denied")
+        || error.contains("access is denied")
+        || error.contains("os error 2")
+        || error.contains("os error 5")
+        || error.contains("os error 13")
 }
 
 impl std::fmt::Debug for LocalPwshExecutor {
@@ -345,7 +392,12 @@ impl LocalPwshExecutor {
         }
     }
 
-    async fn run_argv(
+    /// Runs an exact argv through the local process mechanics.
+    ///
+    /// # Errors
+    ///
+    /// Returns subprocess spawn, collection, timeout-construction, or settlement failures.
+    pub async fn run_argv(
         &self,
         spec: ShellExecSpec,
         argv: Vec<String>,
@@ -357,7 +409,16 @@ impl LocalPwshExecutor {
             spec.stdout_max_bytes,
             Some(deadline.signal.clone()),
         ))?;
-        let outcome = handle.done().await?;
+        let outcome = match handle.done().await {
+            Ok(outcome) => outcome,
+            Err(error)
+                if handle.pid().as_i64() == -1
+                    && executable_spawn_failure_text(&error.to_string()) =>
+            {
+                return Err(anyhow::Error::new(PwshSpawnFailure::new(error.to_string())));
+            }
+            Err(error) => return Err(error),
+        };
         let (stdout, stderr) = Self::collected(&handle)?;
         let timed_out = timeout_of(&deadline.signal, Some("BASH_TIMEOUT")).is_some();
         let aborted = deadline.signal.is_aborted() && !timed_out;
@@ -373,10 +434,29 @@ impl LocalPwshExecutor {
         })
     }
 
-    fn start_argv(
+    /// Starts an exact argv through the local background-process mechanics.
+    ///
+    /// # Errors
+    ///
+    /// Returns synchronous subprocess request or collection failures.
+    pub fn start_argv(
         &self,
         spec: &ShellExecSpec,
         argv: Vec<String>,
+    ) -> anyhow::Result<ShellProcessHandle> {
+        self.start_argv_observed(spec, argv, None)
+    }
+
+    /// Starts an exact argv and invokes an observer before completion waiters resume.
+    ///
+    /// # Errors
+    ///
+    /// Returns synchronous subprocess request or collection failures.
+    pub fn start_argv_observed(
+        &self,
+        spec: &ShellExecSpec,
+        argv: Vec<String>,
+        observer: Option<PwshProcessObserver>,
     ) -> anyhow::Result<ShellProcessHandle> {
         let config = self.config();
         let signal = spec.signal.clone();
@@ -387,7 +467,7 @@ impl LocalPwshExecutor {
             signal.clone(),
         ))?;
         let (stdout, stderr) = Self::collected(&running)?;
-        let process = Arc::new(LocalPwshProcess::new(running, stdout, stderr));
+        let process = Arc::new(LocalPwshProcess::new(running, stdout, stderr, observer));
         LocalPwshProcess::observe(process.clone(), signal);
         Ok(process)
     }
@@ -461,14 +541,24 @@ struct ReadOffsets {
     stderr: u64,
 }
 
-#[derive(Debug)]
 struct LocalPwshProcess {
     running: SubprocessHandleRef,
     stdout: SubprocessOutputReaderHandle,
     stderr: SubprocessOutputReaderHandle,
     state: Mutex<ProcessState>,
     offsets: Mutex<ReadOffsets>,
+    observer: Option<PwshProcessObserver>,
     settled: Notify,
+}
+
+impl std::fmt::Debug for LocalPwshProcess {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("LocalPwshProcess")
+            .field("running", &self.running)
+            .field("state", &self.state)
+            .finish_non_exhaustive()
+    }
 }
 
 impl LocalPwshProcess {
@@ -476,6 +566,7 @@ impl LocalPwshProcess {
         running: SubprocessHandleRef,
         stdout: SubprocessOutputReaderHandle,
         stderr: SubprocessOutputReaderHandle,
+        observer: Option<PwshProcessObserver>,
     ) -> Self {
         Self {
             running,
@@ -489,35 +580,58 @@ impl LocalPwshProcess {
                 settled: false,
             }),
             offsets: Mutex::new(ReadOffsets::default()),
+            observer,
             settled: Notify::new(),
         }
     }
 
     fn observe(process: Arc<Self>, execution_signal: Option<seekdeep_llm::AbortSignal>) {
         tokio::spawn(async move {
+            let native_spawn_rejected = process.running.pid().as_i64() == -1;
             match process.running.done().await {
                 Ok(outcome) => {
-                    let mut state = process.state.lock();
-                    if state.status == ShellProcessStatus::Running {
-                        state.status = if execution_signal
-                            .as_ref()
-                            .is_some_and(seekdeep_llm::AbortSignal::is_aborted)
-                            || outcome.signal.is_some()
-                        {
-                            ShellProcessStatus::Killed
-                        } else {
-                            ShellProcessStatus::Completed
-                        };
+                    {
+                        let mut state = process.state.lock();
+                        if state.status == ShellProcessStatus::Running {
+                            state.status = if execution_signal
+                                .as_ref()
+                                .is_some_and(seekdeep_llm::AbortSignal::is_aborted)
+                                || outcome.signal.is_some()
+                            {
+                                ShellProcessStatus::Killed
+                            } else {
+                                ShellProcessStatus::Completed
+                            };
+                        }
+                        state.exit_code = outcome.exit_code;
+                        state.signal = outcome.signal;
                     }
-                    state.exit_code = outcome.exit_code;
-                    state.signal = outcome.signal;
-                    state.settled = true;
+                    if let Some(observer) = process.observer.as_ref() {
+                        observer(&PwshProcessSettlement {
+                            exit_code: outcome.exit_code,
+                            stderr: process.stderr.read_from(0).text,
+                            spawn_error: None,
+                        });
+                    }
+                    process.state.lock().settled = true;
                 }
                 Err(error) => {
-                    let mut state = process.state.lock();
-                    state.status = ShellProcessStatus::Killed;
-                    state.spawn_failure_note = Some(format!("spawn failed: {error}"));
-                    state.settled = true;
+                    let spawn_error = error.to_string();
+                    {
+                        let mut state = process.state.lock();
+                        state.status = ShellProcessStatus::Killed;
+                        state.spawn_failure_note = Some(format!("spawn failed: {spawn_error}"));
+                    }
+                    if let Some(observer) = process.observer.as_ref() {
+                        let attributable =
+                            native_spawn_rejected && executable_spawn_failure_text(&spawn_error);
+                        observer(&PwshProcessSettlement {
+                            exit_code: None,
+                            stderr: String::new(),
+                            spawn_error: attributable.then_some(spawn_error),
+                        });
+                    }
+                    process.state.lock().settled = true;
                 }
             }
             process.settled.notify_waiters();
@@ -599,12 +713,12 @@ impl ShellProcess for LocalPwshProcess {
     }
 }
 
-/// Installs settings layering and publishes the local `PowerShell` provider.
+/// Builds the local executor and its settings layer without occupying `ctx.shell`.
 ///
 /// # Errors
 ///
-/// Returns invalid configuration, missing subprocess, settings, or service-seat failures.
-pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<LocalPwshExecutor>> {
+/// Returns invalid configuration or missing subprocess/settings dependencies.
+pub async fn build(context: &Context, config: Config) -> anyhow::Result<Arc<LocalPwshExecutor>> {
     assert_serviceable_pwsh_config(&config)?;
     let subprocess = context
         .get(SUBPROCESS)
@@ -633,6 +747,16 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Loca
         }),
         _settings_fiber: installed.fiber,
     });
+    Ok(executor)
+}
+
+/// Installs settings layering and publishes the local `PowerShell` provider.
+///
+/// # Errors
+///
+/// Returns invalid configuration, missing subprocess, settings, or service-seat failures.
+pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<LocalPwshExecutor>> {
+    let executor = build(context, config).await?;
     let erased: Arc<dyn ShellExecutor> = executor.clone();
     ShellService::new(erased).provide(context)?;
     Ok(executor)
@@ -643,11 +767,11 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Loca
 pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
         Box::pin(async move {
-            let resolved = validate_config_value(&config)?;
+            let resolved = resolve_config_value(&config)?;
             let config: Config = serde_json::from_value(resolved)?;
             apply(&context, config).await?;
             Ok(())
         })
     })
-    .with_config_validator(validate_config_value)
+    .with_config_validator(resolve_config_value)
 }
