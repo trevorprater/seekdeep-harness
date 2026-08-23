@@ -6,6 +6,7 @@ use std::{
     process::Command as ProcessCommand,
 };
 
+use base64::Engine as _;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +36,21 @@ enum Command {
         #[arg(long, value_enum, default_value_t = Scope::All)]
         scope: Scope,
     },
+    /// Builds one Rust/WASM Client package as a synchronous classic module-table bundle.
+    WasmPackage {
+        /// Cargo package containing the browser cdylib.
+        #[arg(long, default_value = "seekdeep-client-runtime")]
+        package: String,
+        /// Cargo artifact stem (`-` becomes `_`).
+        #[arg(long, default_value = "seekdeep_client_runtime")]
+        artifact: String,
+        /// Client module-table identity.
+        #[arg(long, default_value = "@seekdeep-ai/seekdeep-client-runtime")]
+        module_id: String,
+        /// Package output directory.
+        #[arg(long, default_value = "packages/client/runtime/lib")]
+        out_dir: PathBuf,
+    },
 }
 
 /// Which surfaces the parity gate enforces.
@@ -52,7 +68,110 @@ fn main() -> anyhow::Result<()> {
         Command::Docs => docs(),
         Command::Inventory { source } => inventory(&source),
         Command::Parity { source, scope } => parity(&source, scope),
+        Command::WasmPackage {
+            package,
+            artifact,
+            module_id,
+            out_dir,
+        } => wasm_package(&package, &artifact, &module_id, &out_dir),
     }
+}
+
+fn wasm_package(
+    package: &str,
+    artifact: &str,
+    module_id: &str,
+    out_dir: &Path,
+) -> anyhow::Result<()> {
+    let status = ProcessCommand::new("cargo")
+        .args([
+            "build",
+            "-p",
+            package,
+            "--target",
+            "wasm32-unknown-unknown",
+            "--release",
+        ])
+        .status()?;
+    anyhow::ensure!(
+        status.success(),
+        "Rust/WASM release build failed for {package}"
+    );
+    let wasm =
+        PathBuf::from("target/wasm32-unknown-unknown/release").join(format!("{artifact}.wasm"));
+    anyhow::ensure!(
+        wasm.is_file(),
+        "Rust/WASM artifact is missing: {}",
+        wasm.display()
+    );
+    let staging = PathBuf::from("target/xtask/wasm-package").join(artifact);
+    if staging.exists() {
+        std::fs::remove_dir_all(&staging)?;
+    }
+    std::fs::create_dir_all(&staging)?;
+    let global = format!("__seekdeep_{}_wasm", artifact.replace('-', "_"));
+    let status = ProcessCommand::new("wasm-bindgen")
+        .args([
+            "--target",
+            "no-modules",
+            "--out-name",
+            "client",
+            "--no-modules-global",
+            &global,
+            "--out-dir",
+        ])
+        .arg(&staging)
+        .arg(&wasm)
+        .status()?;
+    anyhow::ensure!(status.success(), "wasm-bindgen failed for {package}");
+    let bindings = std::fs::read_to_string(staging.join("client.js"))?;
+    let bytes = std::fs::read(staging.join("client_bg.wasm"))?;
+    let bundle = classic_module_bundle(&bindings, &bytes, &global, module_id)?;
+    std::fs::create_dir_all(out_dir)?;
+    std::fs::write(out_dir.join("client.js"), bundle)?;
+    let type_dir = out_dir.join("types/client");
+    std::fs::create_dir_all(&type_dir)?;
+    std::fs::copy(staging.join("client.d.ts"), type_dir.join("index.d.ts"))?;
+    println!(
+        "built {module_id} Rust/WASM classic bundle at {}",
+        out_dir.join("client.js").display()
+    );
+    Ok(())
+}
+
+fn classic_module_bundle(
+    bindings: &str,
+    wasm: &[u8],
+    global: &str,
+    module_id: &str,
+) -> anyhow::Result<String> {
+    anyhow::ensure!(
+        is_javascript_identifier(global),
+        "WASM global must be a JavaScript identifier"
+    );
+    let unique_declaration = format!("var {global} =");
+    let bindings = if bindings.contains("let wasm_bindgen =") {
+        bindings.replacen("let wasm_bindgen =", &unique_declaration, 1)
+    } else {
+        anyhow::ensure!(
+            bindings.contains(&unique_declaration),
+            "wasm-bindgen output omitted its expected global declaration"
+        );
+        bindings.to_owned()
+    };
+    let module_id = serde_json::to_string(module_id)?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(wasm);
+    Ok(format!(
+        "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n  window.__ModuleLoader__.load({{ id: {module_id}, factory: () => {global} }});\n}})();\n"
+    ))
+}
+
+fn is_javascript_identifier(value: &str) -> bool {
+    let mut chars = value.chars();
+    chars.next().is_some_and(|character| {
+        character == '_' || character == '$' || character.is_ascii_alphabetic()
+    }) && chars
+        .all(|character| character == '_' || character == '$' || character.is_ascii_alphanumeric())
 }
 
 fn docs() -> anyhow::Result<()> {
@@ -320,6 +439,7 @@ fn verify_rust_only() -> anyhow::Result<()> {
         if path
             .components()
             .any(|part| matches!(part.as_os_str().to_str(), Some(".git" | "target")))
+            || is_generated_package_output(path)
         {
             continue;
         }
@@ -339,9 +459,20 @@ fn verify_rust_only() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn is_generated_package_output(path: &Path) -> bool {
+    let parts = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .filter(|component| *component != ".")
+        .collect::<Vec<_>>();
+    parts.len() >= 4 && parts[0] == "packages" && parts[3] == "lib"
+}
+
 #[cfg(test)]
 mod tests {
-    use super::is_localization;
+    use std::path::Path;
+
+    use super::{classic_module_bundle, is_generated_package_output, is_localization};
 
     #[test]
     fn localization_predicate_defers_only_chinese_and_translation_metadata() {
@@ -353,5 +484,41 @@ mod tests {
         assert!(!is_localization("packages/core/src/session.rs"));
         assert!(!is_localization("packages/core/package.json"));
         assert!(!is_localization("packages/core/tests/session.spec.ts"));
+    }
+
+    #[test]
+    fn classic_bundle_embeds_bytes_initializes_sync_and_registers_exact_module() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1, 2, 3],
+            "__seekdeep_probe_wasm",
+            "@seekdeep-ai/probe",
+        )
+        .unwrap();
+        assert!(bundle.contains("AQID"));
+        assert!(bundle.starts_with("var __seekdeep_probe_wasm = {};"));
+        assert!(!bundle.contains("let wasm_bindgen ="));
+        assert!(bundle.contains("__seekdeep_probe_wasm.initSync({ module: bytes })"));
+        assert!(bundle.contains("id: \"@seekdeep-ai/probe\""));
+        assert!(bundle.contains("factory: () => __seekdeep_probe_wasm"));
+    }
+
+    #[test]
+    fn classic_bundle_rejects_an_unsafe_global_identifier() {
+        let error = classic_module_bundle("", &[], "not-valid", "probe").unwrap_err();
+        assert!(error.to_string().contains("JavaScript identifier"));
+    }
+
+    #[test]
+    fn rust_only_gate_skips_only_package_lib_derivatives() {
+        assert!(is_generated_package_output(Path::new(
+            "packages/client/runtime/lib/client.js"
+        )));
+        assert!(!is_generated_package_output(Path::new(
+            "packages/client/runtime/src/client.js"
+        )));
+        assert!(!is_generated_package_output(Path::new(
+            "packages/client/lib/client.js"
+        )));
     }
 }

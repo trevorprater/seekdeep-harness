@@ -39819,7 +39819,18 @@
     {
       "source": "packages/client/runtime/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/main.rs",
+        "xtask/Cargo.toml",
+        "crates/client-runtime/Cargo.toml"
+      ],
+      "evidence": [
+        "cargo test -p xtask (classic WASM bundle construction and unsafe-global rejection passed)",
+        "cargo xtask wasm-package (optimized seekdeep-client-runtime cdylib lowered and emitted packages/client/runtime/lib/client.js plus declarations)",
+        "Node classic-script smoke evaluated the generated bundle twice, observed two exact @seekdeep-ai/seekdeep-client-runtime registrations, materialized both factories, and found applyClientRuntime/applyClientRuntimeInvariant/SessionRuntime/WorkspaceRuntime/ClientSlotRegistry exports"
+      ],
+      "note": "The Rust replacement emits the source module loader's synchronous classic-script contract rather than an unusable asynchronous ESM module: release WASM is lowered with wasm-bindgen no-modules bindings, embedded, initialized through initSync, and returned from __ModuleLoader__.load; package-unique var globals avoid cross-package collision and permit same-bundle HMR re-evaluation, while generated declarations land under lib/types/client/index.d.ts"
     },
     {
       "source": "packages/client/schema-form/README.i18n.yaml",
