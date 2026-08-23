@@ -12,7 +12,7 @@ child 作用域的 `report` 提示词要求发送自包含的最终报告，而[
 
 ## 决策
 
-`tool-subagent` 根据选定的生命周期策略解析省略的 `run_in_background`。`backgroundMode: continuable` 会把省略解析为后台并立即返回持久化 child id；显式传入 `false` 会选择前台并等待结果。`backgroundMode: one-shot` 保留前台默认行为，因为它的后台输出仍需通过 Task 收集。`enableRunInBackground: false` 仍会省略该参数、拒绝强制传入的 `true` 并在前台运行。系统不增加第二个默认选择配置。
+`seekdeep-tool-subagent` Rust crate 根据选定的生命周期策略解析省略的 `run_in_background`。`backgroundMode: continuable` 会把省略解析为后台并立即返回持久化 child id；显式传入 `false` 会选择前台并等待结果。`backgroundMode: one-shot` 保留前台默认行为，因为它的后台输出仍需通过 Task 收集。`enableRunInBackground: false` 仍会省略该参数、拒绝强制传入的 `true` 并在前台运行。系统不增加第二个默认选择配置。Rust 提供方通过 `supports_continuable()` 表达源提供方可选 `prepareContinuable` 方法的类型化等价能力，因此不受支持的可继续策略会在该提供方挂载时失败，而不会拖到首次委派时才失败。
 
 面向模型的文本按位置划分职责：
 

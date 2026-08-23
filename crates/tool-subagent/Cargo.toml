@@ -25,6 +25,8 @@ tracing.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-jobs-local = { path = "../jobs-local" }
 seekdeep-scope = { path = "../scope" }
 tokio.workspace = true
 

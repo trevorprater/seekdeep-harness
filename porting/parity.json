@@ -68943,7 +68943,16 @@
     {
       "source": "packages/subagent/tool-subagent/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent/src/lib.rs",
+        "crates/subagent/src/types.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-subagent and scripted-provider 68/68",
+        "cargo test -p seekdeep-tool-subagent --all-features",
+        "cargo clippy -p seekdeep-tool-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent/src/invariant.ts",
@@ -68962,17 +68971,38 @@
     {
       "source": "packages/subagent/tool-subagent/tests/scripted-provider.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent/tests/delegation_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-subagent and scripted-provider 68/68",
+        "cargo test -p seekdeep-tool-subagent --all-features"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent/tests/scripted-provider.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent/tests/delegation_parity.rs"
+      ],
+      "evidence": [
+        "Rust ScriptedProvider exercises lifecycle, capabilities, request capture, stop reasons, cancellation, and disposal",
+        "cargo test -p seekdeep-tool-subagent --all-features"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent/tests/tool-subagent.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent/tests/delegation_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: tool-subagent and scripted-provider 68/68",
+        "cargo test -p seekdeep-tool-subagent --all-features"
+      ]
     },
     {
       "source": "packages/subagent/tool-subagent/tsconfig.json",

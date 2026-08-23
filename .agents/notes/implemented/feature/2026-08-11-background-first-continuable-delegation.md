@@ -12,7 +12,7 @@ The child-scoped `report` prompt requires a self-contained final report, while [
 
 ## Decision
 
-`tool-subagent` resolves an omitted `run_in_background` from the selected lifecycle policy. `backgroundMode: continuable` resolves omission to background and returns the durable child id immediately; explicit `false` selects foreground and waits for the result. `backgroundMode: one-shot` keeps its foreground default because background output still requires Task collection. `enableRunInBackground: false` continues to omit the parameter, reject forced `true`, and run in the foreground. No second default-selection config is added.
+The `seekdeep-tool-subagent` Rust crate resolves an omitted `run_in_background` from the selected lifecycle policy. `backgroundMode: continuable` resolves omission to background and returns the durable child id immediately; explicit `false` selects foreground and waits for the result. `backgroundMode: one-shot` keeps its foreground default because background output still requires Task collection. `enableRunInBackground: false` continues to omit the parameter, reject forced `true`, and run in the foreground. No second default-selection config is added. Rust providers expose `supports_continuable()` as the typed equivalent of the source provider's optional `prepareContinuable` method, so an unsupported continuable policy fails when that provider mounts rather than on the first delegation.
 
 The model-facing text divides responsibility by location:
 
