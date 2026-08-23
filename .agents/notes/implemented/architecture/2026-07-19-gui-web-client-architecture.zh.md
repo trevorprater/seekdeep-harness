@@ -34,6 +34,8 @@ Status: implemented
 
 Rust/WASM Client package 使用同一个同步 module-table handoff。`cargo xtask wasm-package` 构建 optimized cdylib，经 wasm-bindgen classic no-modules target lowering，嵌入 WASM byte，调用 `initSync`，并把编译后的 Rust export object 注册为 package factory。生成的 package-global 唯一且使用 `var`，因此独立装载的 package 不会冲突，同一个 rebuilt script 也能在 HMR 期间再次执行；异步 WASM initialization 不会泄漏进同步 factory contract。
 
+Client Runtime factory 以相同名称公开 source barrel 的完整 value roster 与 generated declaration。薄 compatibility binding 提供 alias、reference-stable empty constant 与原生 `Error` subclass，而 helper、service、`PendingWait`、Conversation assembler 和 Location-index 行为全部委托给编译后的 Rust；内部 wasm-bindgen export 不会取代或削弱已记录的 public face。
+
 类型宇宙在聚合层拆分——`tsconfig.host.json` 是 host program、`tsconfig.client.json` 是 client program，二者由 solution 根 `tsconfig.json` 引用，因为两侧都在相同键（`sessions`、`loader`）上对 cordis `Context` 做声明合并且服务不同；client 包经纯类型子路径（`@seekdeep-ai/seekdeep-session/types` 等）消费协议词汇，host 侧的声明合并不会搭车进入 client program。
 
 ## slot 体系：页面怎么拼

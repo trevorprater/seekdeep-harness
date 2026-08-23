@@ -431,7 +431,7 @@ fn previous_context_to_js(context: &ConversationPreviousContext) -> Result<JsVal
     Ok(value.into())
 }
 
-fn location_to_js(location: &ConversationLocation) -> Result<JsValue, JsValue> {
+pub(crate) fn location_to_js(location: &ConversationLocation) -> Result<JsValue, JsValue> {
     let value = Object::new();
     match location {
         ConversationLocation::Session => set(&value, "kind", &JsValue::from_str("session"))?,
@@ -498,7 +498,7 @@ fn data_store_to_js(store: Rc<ConversationLocationDataStore>) -> Result<JsValue,
     Ok(value.into())
 }
 
-fn timeline_to_js(timeline: &ConversationTimelineSnapshot) -> Result<JsValue, JsValue> {
+pub(crate) fn timeline_to_js(timeline: &ConversationTimelineSnapshot) -> Result<JsValue, JsValue> {
     let value = Object::new();
     let order = Array::new();
     for turn in timeline.turn_order.iter() {
@@ -537,7 +537,9 @@ fn view_node_from_js(value: &JsValue) -> Result<ConversationViewNode, JsValue> {
     })
 }
 
-fn location_data_from_js(value: &JsValue) -> Result<Rc<ConversationLocationData>, JsValue> {
+pub(crate) fn location_data_from_js(
+    value: &JsValue,
+) -> Result<Rc<ConversationLocationData>, JsValue> {
     let kind = required_string(value, "kind", "Conversation Location data")?;
     let turn = required_u64(value, "turn", "Conversation Location data")?;
     let key = required_string(value, "key", "Conversation Location data")?;

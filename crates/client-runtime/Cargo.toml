@@ -17,6 +17,7 @@ futures.workspace = true
 seekdeep-client-ui-slots = { path = "../client-ui-slots" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-identity = { path = "../identity" }
+seekdeep-failure-display = { path = "../failure-display" }
 serde_json.workspace = true
 serde.workspace = true
 thiserror.workspace = true

@@ -560,16 +560,30 @@ async fn call_browser_rpc(
 }
 
 fn workspace_create_error_to_js(error: &WorkspaceCreateFailure) -> Result<JsValue, JsValue> {
+    let rpc_error = rpc_error_to_js(&error.rpc_error)?;
+    if let Some(value) = crate::wasm_public_api::construct_public_error(
+        "WorkspaceCreateError",
+        std::slice::from_ref(&rpc_error),
+    ) {
+        return Ok(value);
+    }
     let value = Object::from(JsValue::from(js_sys::Error::new(&error.to_string())));
     set(&value, "name", &JsValue::from_str("WorkspaceCreateError"))?;
-    set(&value, "rpcError", &rpc_error_to_js(&error.rpc_error)?)?;
+    set(&value, "rpcError", &rpc_error)?;
     Ok(value.into())
 }
 
 fn directory_browse_error_to_js(error: &DirectoryBrowseFailure) -> Result<JsValue, JsValue> {
+    let rpc_error = rpc_error_to_js(&error.rpc_error)?;
+    if let Some(value) = crate::wasm_public_api::construct_public_error(
+        "DirectoryBrowseError",
+        std::slice::from_ref(&rpc_error),
+    ) {
+        return Ok(value);
+    }
     let value = Object::from(JsValue::from(js_sys::Error::new(&error.to_string())));
     set(&value, "name", &JsValue::from_str("DirectoryBrowseError"))?;
-    set(&value, "rpcError", &rpc_error_to_js(&error.rpc_error)?)?;
+    set(&value, "rpcError", &rpc_error)?;
     Ok(value.into())
 }
 

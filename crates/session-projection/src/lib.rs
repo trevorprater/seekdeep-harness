@@ -1,9 +1,6 @@
 //! Eager, checkpointable projections over committed session event logs.
 
-/// Display-safe durable failure projection.
-pub mod failure_display;
-
-pub use failure_display::display_failure_message;
+pub use seekdeep_failure_display::display_failure_message;
 
 use std::{collections::HashMap, sync::Arc};
 

@@ -38915,7 +38915,25 @@
     {
       "source": "packages/client/runtime/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/lib.rs",
+        "crates/client-runtime/src/wasm_client_runtime.rs",
+        "crates/client-runtime/src/wasm_public_api.rs",
+        "crates/client-runtime/src/wasm_pending.rs",
+        "crates/client-runtime/src/wasm_conversation_public.rs",
+        "xtask/src/main.rs",
+        "crates/client-runtime/tests/wasm_public_api_parity.rs",
+        "crates/client-runtime/tests/wasm_client_apply_parity.rs"
+      ],
+      "evidence": [
+        "Pinned source runtime suites: apply/wire 7, Conversation 33, Session/service/scope 98, Workspaces 22",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_apply_parity-*.wasm (4 assembled runtime and model-authored Definition cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_public_api_parity-*.wasm (3 helper, PendingWait, assembler and Location-index cases passed)",
+        "cargo xtask wasm-package plus a double-evaluation Node module-table smoke found all 32 source value exports on both factories",
+        "TypeScript --ignoreConfig --noEmit --skipLibCheck false --lib ESNext,DOM accepted the generated and compatibility declarations"
+      ],
+      "note": "The distributable Rust/WASM barrel now exposes every source runtime value: surface predicates, Slot/Conversation registries, direct assembler and Location constructors, context key, Session/Workspace services and Error subclasses, scope/title/path/lineage helpers, provide/store APIs, empty snapshot constants, Assistant/token/context/failure helpers, and PendingWait; thin generated compatibility bindings supply source names and true Error subclasses while all behavior delegates to compiled Rust, and apply owns the full Cordis/connection runtime"
     },
     {
       "source": "packages/client/runtime/src/client/ordered-baseline.ts",
@@ -39048,13 +39066,16 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/session-projection/src/failure_display.rs"
+        "crates/failure-display/src/lib.rs",
+        "crates/client-runtime/src/wasm_public_api.rs",
+        "crates/client-runtime/tests/wasm_public_api_parity.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-projection failure_display::tests --all-features",
-        "cargo clippy -p seekdeep-session-projection --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-failure-display -p seekdeep-session-projection --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_public_api_parity-*.wasm (AUTH browser helper passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
       ],
-      "note": "AUTH redaction, primitive String conversion, message selection, JavaScript number formatting, integer-key enumeration, and compact fallback JSON are preserved"
+      "note": "The dependency-light shared Rust owner preserves AUTH redaction, primitive String conversion, message selection, JavaScript number formatting, integer-key enumeration, and compact fallback JSON; Host session projections re-export it and browser WASM calls the same implementation without importing Host networking or persistence dependencies"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/lineage.ts",
@@ -39536,12 +39557,32 @@
     {
       "source": "packages/client/runtime/tests/event-script.client.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/support/event_script.rs",
+        "crates/client-runtime/tests/event_script_contract.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/conversation-assembler.client.spec.ts packages/client/runtime/tests/conversation-registry.client.spec.ts packages/client/runtime/tests/conversation.client.spec.ts --reporter=dot (pinned source: 33 passed using the source fixture)",
+        "cargo test -p seekdeep-client-runtime --test event_script_contract --all-features (all source builder and optional-field branches passed)",
+        "cargo clippy -p seekdeep-client-runtime --test event_script_contract --all-features -- -D warnings"
+      ],
+      "note": "The Rust fixture builds every source Turn/Step, user/assistant/chunk, Tool and Code Dispatch, retry, completion/abort/dispose, command, compaction summary/checkpoint, plain-turn, and history-entry shape with exact discriminants, timestamps, surface markers, optional-field presence, nested content, and provenance arrays; fixture MessageIds derive deterministically from seq instead of violating the port's no-ambient-randomness rule"
     },
     {
       "source": "packages/client/runtime/tests/fake-api.client.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/support/fake_api.rs",
+        "crates/client-runtime/tests/fake_api_contract.rs"
+      ],
+      "evidence": [
+        "Pinned source Client runtime suites passed with the source fake: Session/service/scope 98, Workspaces 22, apply/wire 7",
+        "cargo test -p seekdeep-client-runtime --test fake_api_contract --all-features (full method-roster/default/script/call/signal/stream cases passed)",
+        "cargo clippy -p seekdeep-client-runtime --test fake_api_contract --all-features -- -D warnings"
+      ],
+      "note": "The Rust fake carries the complete 53-method generated Client roster with source-compatible OK-empty/default model, attachment, directory, Workspace, preset, skill, goal, Settings, credentials, LLM and receipt results; chronological per-method call inspection; one-shot scripted business and transport overrides; request-local search-signal capture; and replicated mux/Host hubs with suppress, hold, release, frame, clean-end and failure controls"
     },
     {
       "source": "packages/client/runtime/tests/invariant.client.spec.ts",

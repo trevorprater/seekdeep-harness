@@ -4645,6 +4645,7 @@ dependencies = [
  "js-sys",
  "seekdeep-client-ui-slots",
  "seekdeep-cordis",
+ "seekdeep-failure-display",
  "seekdeep-identity",
  "serde",
  "serde-wasm-bindgen",
@@ -5072,6 +5073,14 @@ dependencies = [
  "tokio",
  "tracing",
  "yaml-edit",
+]
+
+[[package]]
+name = "seekdeep-failure-display"
+version = "0.1.0-rc.5"
+dependencies = [
+ "ryu-js",
+ "serde_json",
 ]
 
 [[package]]
@@ -6028,6 +6037,7 @@ dependencies = [
  "ryu-js",
  "seekdeep-cordis",
  "seekdeep-core",
+ "seekdeep-failure-display",
  "seekdeep-invariants",
  "serde",
  "serde_json",

@@ -98,6 +98,7 @@ members = [
   "crates/session-persistence-sqlite",
   "crates/session-checkpoint-policy",
   "crates/session-projection",
+  "crates/failure-display",
   "crates/session-projection-cache",
   "crates/session-query",
   "crates/session-reference",

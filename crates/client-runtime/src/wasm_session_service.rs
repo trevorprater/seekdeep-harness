@@ -834,21 +834,34 @@ fn selection_address_to_js(address: &SubagentAddress) -> Result<JsValue, JsValue
 pub(crate) fn session_create_error_to_js(
     error: &crate::SessionCreateFailure,
 ) -> Result<JsValue, JsValue> {
+    let rpc_error = rpc_error_to_js(&error.error)?;
+    let requested = error
+        .requested_session_id
+        .as_ref()
+        .map_or(JsValue::UNDEFINED, |id| JsValue::from_str(id.as_str()));
+    if let Some(value) = crate::wasm_public_api::construct_public_error(
+        "SessionCreateError",
+        &[rpc_error.clone(), requested.clone()],
+    ) {
+        return Ok(value);
+    }
     let value = Object::from(JsValue::from(js_sys::Error::new(&error.to_string())));
     set(&value, "name", &JsValue::from_str("SessionCreateError"))?;
-    set(&value, "rpcError", &rpc_error_to_js(&error.error)?)?;
-    set(
-        &value,
-        "requestedSessionId",
-        &error
-            .requested_session_id
-            .as_ref()
-            .map_or(JsValue::UNDEFINED, |id| JsValue::from_str(id.as_str())),
-    )?;
+    set(&value, "rpcError", &rpc_error)?;
+    set(&value, "requestedSessionId", &requested)?;
     Ok(value.into())
 }
 
 fn session_fork_error_to_js(error: &crate::SessionForkFailure) -> Result<JsValue, JsValue> {
+    if error.kind == crate::SessionForkFailureKind::Fork {
+        let rpc_error = rpc_error_to_js(&error.error)?;
+        let source = JsValue::from_str(error.source_session_id.as_str());
+        if let Some(value) =
+            crate::wasm_public_api::construct_public_error("SessionForkError", &[rpc_error, source])
+        {
+            return Ok(value);
+        }
+    }
     let value = Object::from(JsValue::from(js_sys::Error::new(&error.to_string())));
     if error.kind == crate::SessionForkFailureKind::Fork {
         set(&value, "name", &JsValue::from_str("SessionForkError"))?;

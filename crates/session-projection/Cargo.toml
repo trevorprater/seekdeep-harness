@@ -12,6 +12,7 @@ parking_lot.workspace = true
 ryu-js.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
+seekdeep-failure-display = { path = "../failure-display" }
 seekdeep-invariants = { path = "../invariants" }
 serde.workspace = true
 serde_json.workspace = true

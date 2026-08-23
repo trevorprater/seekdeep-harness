@@ -34,6 +34,8 @@ The loading chain — the two package kinds (plain vs seekdeep.client plugin), t
 
 Rust/WASM Client packages use the same synchronous module-table handoff. `cargo xtask wasm-package` builds an optimized cdylib, lowers it through wasm-bindgen's classic no-modules target, embeds the WASM bytes, calls `initSync`, and registers the compiled Rust export object as the package factory. The generated package-global is unique and uses `var`, so independently loaded packages cannot collide and the same rebuilt script can execute again during HMR; no asynchronous WASM initialization escapes into the synchronous factory contract.
 
+The Client Runtime factory exposes the source barrel's complete value roster and generated declarations under the same names. Thin compatibility bindings supply aliases, reference-stable empty constants, and native `Error` subclasses, while helper, service, `PendingWait`, Conversation assembler, and Location-index behavior delegates to compiled Rust; internal wasm-bindgen exports do not replace or weaken the documented public face.
+
 Type universes stay split at the aggregate level — `tsconfig.host.json` is the host program and `tsconfig.client.json` the client program, both referenced by the solution root `tsconfig.json` — because both sides merge cordis `Context` under the same keys (`sessions`, `loader`) with different services; client packages consume the wire vocabulary through pure type subpaths (`@seekdeep-ai/seekdeep-session/types` and kin) so no host augmentation rides into the client program.
 
 ## The slot system: how the page composes

@@ -30,6 +30,8 @@ mod wasm_client_runtime;
 #[cfg(target_arch = "wasm32")]
 mod wasm_conversation_adapter;
 #[cfg(target_arch = "wasm32")]
+mod wasm_conversation_public;
+#[cfg(target_arch = "wasm32")]
 mod wasm_conversation_registry;
 #[cfg(target_arch = "wasm32")]
 mod wasm_invariant;
@@ -38,9 +40,13 @@ mod wasm_misc;
 #[cfg(target_arch = "wasm32")]
 mod wasm_notifier;
 #[cfg(target_arch = "wasm32")]
+mod wasm_pending;
+#[cfg(target_arch = "wasm32")]
 mod wasm_projection_store;
 #[cfg(target_arch = "wasm32")]
 mod wasm_provide;
+#[cfg(target_arch = "wasm32")]
+mod wasm_public_api;
 #[cfg(target_arch = "wasm32")]
 mod wasm_scope;
 #[cfg(target_arch = "wasm32")]
@@ -87,15 +93,21 @@ pub use tool_call_tree::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_client_runtime::*;
 #[cfg(target_arch = "wasm32")]
+pub use wasm_conversation_public::*;
+#[cfg(target_arch = "wasm32")]
 pub use wasm_conversation_registry::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_invariant::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_misc::*;
 #[cfg(target_arch = "wasm32")]
+pub use wasm_pending::*;
+#[cfg(target_arch = "wasm32")]
 pub use wasm_projection_store::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_provide::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_public_api::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_scope::*;
 #[cfg(target_arch = "wasm32")]

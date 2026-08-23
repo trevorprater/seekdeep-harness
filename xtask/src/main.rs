@@ -109,7 +109,7 @@ fn wasm_package(
         std::fs::remove_dir_all(&staging)?;
     }
     std::fs::create_dir_all(&staging)?;
-    let global = format!("__seekdeep_{}_wasm", artifact.replace('-', "_"));
+    let global = format!("__{}_wasm", artifact.replace('-', "_"));
     let status = ProcessCommand::new("wasm-bindgen")
         .args([
             "--target",
@@ -131,7 +131,9 @@ fn wasm_package(
     std::fs::write(out_dir.join("client.js"), bundle)?;
     let type_dir = out_dir.join("types/client");
     std::fs::create_dir_all(&type_dir)?;
-    std::fs::copy(staging.join("client.d.ts"), type_dir.join("index.d.ts"))?;
+    let mut declarations = std::fs::read_to_string(staging.join("client.d.ts"))?;
+    declarations.push_str(&compatibility_declarations(module_id));
+    std::fs::write(type_dir.join("index.d.ts"), declarations)?;
     println!(
         "built {module_id} Rust/WASM classic bundle at {}",
         out_dir.join("client.js").display()
@@ -159,11 +161,28 @@ fn classic_module_bundle(
         );
         bindings.to_owned()
     };
+    let compatibility = compatibility_prelude(global, module_id);
     let module_id = serde_json::to_string(module_id)?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(wasm);
     Ok(format!(
-        "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n  window.__ModuleLoader__.load({{ id: {module_id}, factory: () => {global} }});\n}})();\n"
+        "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n{compatibility}  window.__ModuleLoader__.load({{ id: {module_id}, factory: () => {global} }});\n}})();\n"
     ))
+}
+
+fn compatibility_prelude(global: &str, module_id: &str) -> String {
+    if module_id != "@seekdeep-ai/seekdeep-client-runtime" {
+        return String::new();
+    }
+    format!(
+        "  class SessionCreateError extends Error {{ constructor(rpcError, requestedSessionId) {{ super(`session create failed: ${{rpcError.code}}: ${{rpcError.message}}`); this.name = 'SessionCreateError'; this.rpcError = rpcError; this.requestedSessionId = requestedSessionId; }} }}\n  class SessionForkError extends Error {{ constructor(rpcError, sourceSessionId) {{ super(`session fork failed: ${{rpcError.code}}: ${{rpcError.message}}`); this.name = 'SessionForkError'; this.rpcError = rpcError; this.sourceSessionId = sourceSessionId; }} }}\n  class WorkspaceCreateError extends Error {{ constructor(rpcError) {{ super(`workspace create failed: ${{rpcError.code}}: ${{rpcError.message}}`); this.name = 'WorkspaceCreateError'; this.rpcError = rpcError; }} }}\n  class DirectoryBrowseError extends Error {{ constructor(rpcError) {{ super(`directory browse failed: ${{rpcError.code}}: ${{rpcError.message}}`); this.name = 'DirectoryBrowseError'; this.rpcError = rpcError; }} }}\n  Object.assign({global}, {{ apply: {global}.applyClientRuntime, SlotRegistry: {global}.ClientSlotRegistry, SessionCreateError, SessionForkError, WorkspaceCreateError, DirectoryBrowseError, EMPTY_CHAT_SNAPSHOT: {global}.emptyChatSnapshot(), EMPTY_CONVERSATION_VIEWS: {global}.emptyConversationViews() }});\n"
+    )
+}
+
+fn compatibility_declarations(module_id: &str) -> String {
+    if module_id != "@seekdeep-ai/seekdeep-client-runtime" {
+        return String::new();
+    }
+    "\nexport const apply: typeof wasm_bindgen.applyClientRuntime;\nexport const isAppendSurfaceEvent: typeof wasm_bindgen.isAppendSurfaceEvent;\nexport const isReplacementSurfaceEvent: typeof wasm_bindgen.isReplacementSurfaceEvent;\nexport const SlotRegistry: typeof wasm_bindgen.ClientSlotRegistry;\nexport const ConversationEventRegistry: typeof wasm_bindgen.ConversationEventRegistry;\nexport const ConversationViewRegistry: typeof wasm_bindgen.ConversationViewRegistry;\nexport const ConversationNodeAssembler: typeof wasm_bindgen.ConversationNodeAssembler;\nexport const ConversationLocationIndex: typeof wasm_bindgen.ConversationLocationIndex;\nexport const conversationContextKey: typeof wasm_bindgen.conversationContextKey;\nexport const SessionRuntime: typeof wasm_bindgen.SessionRuntime;\nexport const scopeOf: typeof wasm_bindgen.scopeOf;\nexport const workspaceTitleOf: typeof wasm_bindgen.workspaceTitleOf;\nexport const indexSubagentDescendants: typeof wasm_bindgen.indexSubagentDescendants;\nexport const SessionProvideChannel: typeof wasm_bindgen.SessionProvideChannel;\nexport const createScope: typeof wasm_bindgen.createScope;\nexport const WorkspaceRuntime: typeof wasm_bindgen.WorkspaceRuntime;\nexport const resolveWorkspacePath: typeof wasm_bindgen.resolveWorkspacePath;\nexport const createSnapshotStore: typeof wasm_bindgen.createSnapshotStore;\nexport const defineStore: typeof wasm_bindgen.defineStore;\nexport const shallowEqual: typeof wasm_bindgen.shallowEqual;\nexport const toAssistantBlock: typeof wasm_bindgen.toAssistantBlock;\nexport const toAssistantBlocks: typeof wasm_bindgen.toAssistantBlocks;\nexport const emptyAssistantBlock: typeof wasm_bindgen.emptyAssistantBlock;\nexport const isTokenDelta: typeof wasm_bindgen.isTokenDelta;\nexport const contextForm: typeof wasm_bindgen.contextForm;\nexport const contextProvenance: typeof wasm_bindgen.contextProvenance;\nexport const displayFailureMessage: typeof wasm_bindgen.displayFailureMessage;\nexport const PendingWait: typeof wasm_bindgen.PendingWait;\nexport class SessionCreateError extends Error { constructor(rpcError: any, requestedSessionId: string | undefined); readonly rpcError: any; readonly requestedSessionId: string | undefined; }\nexport class SessionForkError extends Error { constructor(rpcError: any, sourceSessionId: string); readonly rpcError: any; readonly sourceSessionId: string; }\nexport class WorkspaceCreateError extends Error { constructor(rpcError: any); readonly rpcError: any; }\nexport class DirectoryBrowseError extends Error { constructor(rpcError: any); readonly rpcError: any; }\nexport const EMPTY_CHAT_SNAPSHOT: ReturnType<typeof wasm_bindgen.emptyChatSnapshot>;\nexport const EMPTY_CONVERSATION_VIEWS: ReturnType<typeof wasm_bindgen.emptyConversationViews>;\n".to_owned()
 }
 
 fn is_javascript_identifier(value: &str) -> bool {
@@ -472,7 +491,10 @@ fn is_generated_package_output(path: &Path) -> bool {
 mod tests {
     use std::path::Path;
 
-    use super::{classic_module_bundle, is_generated_package_output, is_localization};
+    use super::{
+        classic_module_bundle, compatibility_declarations, is_generated_package_output,
+        is_localization,
+    };
 
     #[test]
     fn localization_predicate_defers_only_chinese_and_translation_metadata() {
@@ -520,5 +542,20 @@ mod tests {
         assert!(!is_generated_package_output(Path::new(
             "packages/client/lib/client.js"
         )));
+    }
+
+    #[test]
+    fn client_runtime_declarations_expose_compatibility_aliases_and_error_classes() {
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-runtime");
+        for expected in [
+            "const SlotRegistry: typeof wasm_bindgen.ClientSlotRegistry",
+            "const apply: typeof wasm_bindgen.applyClientRuntime",
+            "class SessionCreateError extends Error",
+            "class WorkspaceCreateError extends Error",
+            "EMPTY_CHAT_SNAPSHOT",
+        ] {
+            assert!(declarations.contains(expected));
+        }
+        assert!(compatibility_declarations("other").is_empty());
     }
 }

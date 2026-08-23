@@ -213,7 +213,9 @@ fn parse_history_entry(value: &JsValue) -> Result<SessionHistoryEntry, JsValue> 
     })
 }
 
-fn parse_event(value: &JsValue) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
+pub(crate) fn parse_event(
+    value: &JsValue,
+) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
     let wire = js_to_json(value)?;
     let seq = safe_u64(
         &required(value, "seq", "Session event")?,
@@ -715,7 +717,7 @@ fn projection_value_face(face: Rc<ProjectionFace<Value>>) -> Result<JsValue, JsV
     Ok(value.into())
 }
 
-fn empty_chat_snapshot() -> Result<JsValue, JsValue> {
+pub(crate) fn empty_chat_snapshot() -> Result<JsValue, JsValue> {
     let empty = Array::new();
     let nodes = Object::new();
     set(&nodes, "get", &Function::new_no_args("return undefined"))?;
@@ -1134,7 +1136,7 @@ impl WasmClientSession {
             "runningCalls",
             &optional_member(&legacy, "runningCalls")?.unwrap_or_else(|| empty.clone().into()),
         )?;
-        let pending: JsValue = self.pending_value(&snapshot.pending)?.into();
+        let pending: JsValue = self.pending_value(&snapshot.pending).into();
         set(&value, "pending", &pending)?;
         let queue: JsValue = self.queue_value(&snapshot.queue)?.into();
         set(&value, "queue", &queue)?;
@@ -1261,62 +1263,33 @@ impl WasmClientSession {
         Ok(value)
     }
 
-    fn pending_value(&self, pending: &PendingSnapshot) -> Result<Array, JsValue> {
+    fn pending_value(&self, pending: &PendingSnapshot) -> Array {
         if let Some((current, value)) = &*self.pending_cache.borrow()
             && Rc::ptr_eq(current, pending)
         {
-            return Ok(value.clone());
+            return value.clone();
         }
         let value = Array::new();
         for wait in pending.iter() {
-            value.push(&self.pending_face(wait)?);
+            value.push(&self.pending_face(wait));
         }
         *self.pending_cache.borrow_mut() = Some((pending.clone(), value.clone()));
-        Ok(value)
+        value
     }
 
-    fn pending_face(&self, wait: &Rc<PendingWait>) -> Result<JsValue, JsValue> {
+    fn pending_face(&self, wait: &Rc<PendingWait>) -> JsValue {
         if let Some((_, value)) = self
             .pending_faces
             .borrow()
             .iter()
             .find(|(candidate, _)| Rc::ptr_eq(candidate, wait))
         {
-            return Ok(value.clone());
+            return value.clone();
         }
-        let value = Object::new();
-        set(
-            &value,
-            "kind",
-            &JsValue::from_str(match wait.kind {
-                crate::PendingKind::Approval => "approval",
-                crate::PendingKind::Question => "question",
-            }),
-        )?;
-        set(&value, "key", &JsValue::from_str(&wait.key))?;
-        set(
-            &value,
-            "sessionId",
-            &JsValue::from_str(wait.session_id.as_str()),
-        )?;
-        set(&value, "payload", &json_to_js(&wait.payload)?)?;
-        let wait_for_response = wait.clone();
-        let respond = Closure::wrap(
-            Box::new(move |result: JsValue| -> Result<Promise, JsValue> {
-                let result = js_to_json(&result)?;
-                let response = wait_for_response
-                    .respond(result)
-                    .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-                Ok(future_to_promise(async move {
-                    let receipt = response.await.map_err(|error| js_sys::Error::new(&error))?;
-                    json_to_js(&receipt)
-                }))
-            }) as Box<dyn FnMut(JsValue) -> Result<Promise, JsValue>>,
-        );
-        set(&value, "respond", &respond.into_js_value())?;
+        let value: JsValue = crate::WasmPendingWait::from_native(wait.clone()).into();
         self.pending_faces
             .borrow_mut()
-            .push((wait.clone(), value.clone().into()));
-        Ok(value.into())
+            .push((wait.clone(), value.clone()));
+        value
     }
 }
