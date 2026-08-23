@@ -31,6 +31,8 @@ This Note retains the derivation, business-by-business validation, responsibilit
 
 Registry contributions are Cordis effects. Removing a Definition causes a low-frequency registry rebuild for existing Sessions; ordinary business Events do not change the Registry or rebuild every business type.
 
+The Rust `seekdeep-client-runtime` registries own this lifecycle directly: uniquely keyed Definitions and the sole fallback live in reference-stable registration-order snapshots, target and `buildViewNode` presence validate together, and exact-definition disposal invalidates subscribers synchronously. Their Rust/WASM faces route registration through the calling Client Cordis Context, and one injected microtask coordinator coalesces Event and View Registry changes into a single rebuild of resident Sessions.
+
 ### Overall `ConversationNodeDefinition` contract
 
 Each [`ConversationNodeDefinition`](../../../../packages/client/runtime/src/client/contract/conversation.ts) independently owns one business object's conversion from Events to State and final view Nodes. A Definition's `kind` is its unique Registry name and the namespace for its business IDs.

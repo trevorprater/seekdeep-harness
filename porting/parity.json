@@ -38781,17 +38781,51 @@
     {
       "source": "packages/client/runtime/src/client/conversation/definition-registry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/conversation_registry.rs",
+        "crates/client-runtime/src/wasm_conversation_registry.rs"
+      ],
+      "evidence": [
+        "pinned source conversation registry suite: 7 passed",
+        "cargo test -p seekdeep-client-runtime --test conversation_registry_parity --all-features (6 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)"
+      ],
+      "note": "the shared Rust registry retains uniquely keyed Definitions in stable registration order, publishes reference-stable arrays, invalidates synchronously, attaches exact-pointer idempotent disposal, and exposes caller-effect-owned WASM faces"
     },
     {
       "source": "packages/client/runtime/src/client/conversation/event-registry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/conversation_registry.rs",
+        "crates/client-runtime/src/wasm_conversation_registry.rs",
+        "crates/client-runtime/tests/conversation_registry_parity.rs",
+        "crates/client-runtime/tests/wasm_conversation_registry_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/conversation-registry.client.spec.ts --reporter=dot (pinned source: 7 passed)",
+        "cargo test -p seekdeep-client-runtime --test conversation_registry_parity --all-features (6 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)"
+      ],
+      "note": "Rust and WASM preserve unique kind ownership, target/buildViewNode paired presence, one targeted fallback, fallback invalidation, stable payload identity, caller-fiber disposal, and microtask-coalesced resident rebuild coordination"
     },
     {
       "source": "packages/client/runtime/src/client/conversation/view-registry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/conversation_registry.rs",
+        "crates/client-runtime/src/wasm_conversation_registry.rs",
+        "crates/client-runtime/tests/conversation_registry_parity.rs",
+        "crates/client-runtime/tests/wasm_conversation_registry_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation registry suite: 7 passed",
+        "cargo test -p seekdeep-client-runtime --test conversation_registry_parity --all-features (6 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)"
+      ],
+      "note": "per-target view builders are unique, registration-ordered, synchronously observable, exactly disposed, and caller-effect owned through the WASM Service face"
     },
     {
       "source": "packages/client/runtime/src/client/index.ts",
@@ -39079,7 +39113,17 @@
     {
       "source": "packages/client/runtime/tests/conversation-registry.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/conversation_registry_parity.rs",
+        "crates/client-runtime/tests/wasm_conversation_registry_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/conversation-registry.client.spec.ts --reporter=dot (pinned source: 7 passed)",
+        "cargo test -p seekdeep-client-runtime --test conversation_registry_parity --all-features (6 passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_conversation_registry_parity-*.wasm (2 passed)"
+      ],
+      "note": "native tests cover duplicates, target pairing, fallback, stable ordering, disposal, synchronous subscriptions, and coalesced rebuild; live WASM tests cover JavaScript identity, exact diagnostics, fallback, and caller-effect lifetime"
     },
     {
       "source": "packages/client/runtime/tests/conversation.client.spec.ts",

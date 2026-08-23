@@ -31,6 +31,8 @@ Client Runtime 提供 target-neutral 的 Conversation Node 组装引擎，业务
 
 Registry 注册是 Cordis effect，Definition 卸载会触发现有 Session 的低频 registry rebuild。普通业务 Event 不改变 Registry，也不会因此重建全部业务类型。
 
+Rust `seekdeep-client-runtime` Registry 直接拥有该生命周期：按唯一 key 保存的 Definition 和唯一 fallback 位于引用稳定、按注册顺序排列的 snapshot 中，target 与 `buildViewNode` 必须同时存在，精确 Definition dispose 会同步使订阅方失效。它们的 Rust/WASM face 让注册经过发起调用的 Client Cordis Context；一个可注入的 microtask coordinator 则把 Event 与 View Registry 变更合并成现有 Session 的单次 rebuild。
+
 ### `ConversationNodeDefinition` 总体契约
 
 每个 [`ConversationNodeDefinition`](../../../../packages/client/runtime/src/client/contract/conversation.ts) 独立拥有一种业务对象从 Event 到 State 和最终 view Node 的转换。Definition 的 `kind` 是 Registry 内唯一名称，也是业务 ID 的命名空间。
