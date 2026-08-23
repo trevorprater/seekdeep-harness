@@ -460,6 +460,12 @@ impl ClientSession {
         self.state.borrow().snapshot.clone()
     }
 
+    /// Reads one registered Conversation target snapshot.
+    #[must_use]
+    pub fn conversation_snapshot(&self, target: &str) -> Option<Rc<Value>> {
+        self.conversation.borrow().snapshot(target)
+    }
+
     /// First open; concurrent callers share one underlying operation.
     pub fn open(self: &Rc<Self>) -> futures::future::Shared<LocalBoxFuture<'static, ()>> {
         {

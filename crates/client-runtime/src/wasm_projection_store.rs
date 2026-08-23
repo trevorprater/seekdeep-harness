@@ -18,7 +18,7 @@ type ProjectionSnapshot = Rc<IndexMap<String, Rc<JsValue>>>;
 /// Browser `ProjectionValueStore` backed by the portable Rust core.
 #[wasm_bindgen(js_name = ProjectionValueStore)]
 pub struct WasmProjectionValueStore {
-    store: ProjectionValueStore<JsValue>,
+    store: Rc<ProjectionValueStore<JsValue>>,
     faces: RefCell<HashMap<String, JsValue>>,
     values_cache: RefCell<Option<(ProjectionSnapshot, JsValue)>>,
 }
@@ -29,7 +29,7 @@ impl WasmProjectionValueStore {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            store: ProjectionValueStore::new(browser_notifier_scheduler()),
+            store: Rc::new(ProjectionValueStore::new(browser_notifier_scheduler())),
             faces: RefCell::new(HashMap::new()),
             values_cache: RefCell::new(None),
         }
