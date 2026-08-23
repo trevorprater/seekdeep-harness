@@ -60412,7 +60412,13 @@
     {
       "source": "packages/preset/agent-presets/src/discovery.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/src/discovery.rs"],
+      "evidence": [
+        "cargo test -p seekdeep-agent-presets --all-features (9 consolidated foundation cases passed)",
+        "cargo clippy -p seekdeep-agent-presets --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust discovery re-reads ordered roots, expands and normalizes paths, filters safe ids, preserves broken occupied slots, validates the Loader !!js dialect and recursive group row shape, contains metadata failures, and applies declared-order then id sorting."
     },
     {
       "source": "packages/preset/agent-presets/src/index.ts",
@@ -60427,7 +60433,13 @@
     {
       "source": "packages/preset/agent-presets/src/metadata.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/src/metadata.rs"],
+      "evidence": [
+        "cargo test -p seekdeep-agent-presets --all-features (9 consolidated foundation cases passed)",
+        "cargo clippy -p seekdeep-agent-presets --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Optional YAML display metadata trims text, accepts only finite order, cannot carry identity or trust, degrades every read/parse/shape failure to empty, and renders minimal stable documents."
     },
     {
       "source": "packages/preset/agent-presets/src/mount.ts",
@@ -60437,17 +60449,38 @@
     {
       "source": "packages/preset/agent-presets/src/preset.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/src/preset.rs"],
+      "evidence": [
+        "cargo test -p seekdeep-agent-presets --all-features (9 consolidated foundation cases passed)",
+        "cargo clippy -p seekdeep-agent-presets --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust owns the closed trust/config vocabulary, safe directory-segment predicate, roster row including visible broken state, and distinct unknown-versus-unmountable errors."
     },
     {
       "source": "packages/preset/agent-presets/src/session.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/src/session.rs"],
+      "evidence": [
+        "cargo test -p seekdeep-agent-presets --all-features (9 consolidated foundation cases passed)",
+        "cargo clippy -p seekdeep-agent-presets --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The newest agent-preset/selected event wins over the creation header, later unrelated events do not hide it, and rosterless Sessions remain unlabelled."
     },
     {
       "source": "packages/preset/agent-presets/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/core/src/known_event_types.rs",
+        "crates/agent-presets/src/session.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-agent-presets --all-features",
+        "cargo test -p seekdeep-core --all-features"
+      ],
+      "note": "The merge-extensible event declaration is represented by the core known-event registry and the typed preset resolver rather than a TypeScript declaration merge."
     },
     {
       "source": "packages/preset/agent-presets/tests/authoring.spec.ts",
@@ -60457,7 +60490,13 @@
     {
       "source": "packages/preset/agent-presets/tests/discovery.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/tests/foundation_parity.rs"],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/session.spec.ts packages/preset/agent-presets/tests/metadata.spec.ts packages/preset/agent-presets/tests/discovery.spec.ts --reporter=dot (42 passed)",
+        "cargo test -p seekdeep-agent-presets --all-features (9 consolidated foundation cases passed)"
+      ],
+      "note": "Consolidated discovery cases cover ordering, duplicates, absent and unreadable inputs, safe-id filtering, trust, healthy and broken compositions, recursive groups, Loader !!js nodes, and empty compositions."
     },
     {
       "source": "packages/preset/agent-presets/tests/fixtures/plugins/contribute.js",
@@ -60602,7 +60641,13 @@
     {
       "source": "packages/preset/agent-presets/tests/metadata.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/tests/foundation_parity.rs"],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/session.spec.ts packages/preset/agent-presets/tests/metadata.spec.ts packages/preset/agent-presets/tests/discovery.spec.ts --reporter=dot (42 passed)",
+        "cargo test -p seekdeep-agent-presets --all-features (9 consolidated foundation cases passed)"
+      ],
+      "note": "Metadata read degradation, trimming, type filtering, finite ordering, identity exclusion, minimal rendering, and round-trip behavior are pinned together."
     },
     {
       "source": "packages/preset/agent-presets/tests/mount.spec.ts",
@@ -60612,7 +60657,13 @@
     {
       "source": "packages/preset/agent-presets/tests/session.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/agent-presets/tests/foundation_parity.rs"],
+      "evidence": [
+        "pnpm exec vitest run packages/preset/agent-presets/tests/session.spec.ts packages/preset/agent-presets/tests/metadata.spec.ts packages/preset/agent-presets/tests/discovery.spec.ts --reporter=dot (42 passed)",
+        "cargo test -p seekdeep-agent-presets --all-features (9 consolidated foundation cases passed)"
+      ],
+      "note": "Creation identity, one or multiple logged switches, later unrelated events, and the absent-preset case are mapped directly."
     },
     {
       "source": "packages/preset/agent-presets/tests/settings.spec.ts",

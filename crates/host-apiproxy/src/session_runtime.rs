@@ -1044,22 +1044,9 @@ fn summary(
             SessionOrigin::Subagent => SessionSummaryOrigin::Subagent,
         }),
         cwd: header.cwd.clone(),
-        agent_preset: resolved_agent_preset(header, events),
+        agent_preset: seekdeep_agent_presets::resolve_session_preset(header, events),
         projections,
     }
-}
-
-fn resolved_agent_preset(header: &SessionHeader, events: &[SessionEvent]) -> Option<String> {
-    events
-        .iter()
-        .rev()
-        .find_map(|event| {
-            (event.event_type == "agent-preset/selected")
-                .then(|| event.data.get("agentPreset").and_then(Value::as_str))
-                .flatten()
-                .map(ToOwned::to_owned)
-        })
-        .or_else(|| header.agent_preset.clone())
 }
 
 fn projection_block(snapshot: ProjectionSnapshot) -> SessionProjectionsBlock {

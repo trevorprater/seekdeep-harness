@@ -4379,6 +4379,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-agent-presets"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.0",
+ "path-clean",
+ "regex",
+ "seekdeep-core",
+ "seekdeep-loader",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-agent-tool-presentation"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5260,6 +5279,7 @@ dependencies = [
  "parking_lot",
  "regex",
  "seekdeep-agent",
+ "seekdeep-agent-presets",
  "seekdeep-attachment",
  "seekdeep-client-connection",
  "seekdeep-cordis",

@@ -7,6 +7,7 @@ members = [
   "crates/app-boot",
   "crates/bundle-base",
   "crates/agent",
+  "crates/agent-presets",
   "crates/agent-default-model",
   "crates/agent-instructions",
   "crates/agent-loop",
