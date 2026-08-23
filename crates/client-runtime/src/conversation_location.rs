@@ -12,6 +12,8 @@ const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 pub struct ConversationLocationEvent {
     /// Durable event sequence.
     pub seq: u64,
+    /// Unix epoch milliseconds.
+    pub time: i64,
     /// Merge-extensible Session event type.
     pub event_type: String,
     /// Complete event data object.
@@ -24,6 +26,18 @@ impl ConversationLocationEvent {
     pub fn new(seq: u64, event_type: impl Into<String>, data: Value) -> Rc<Self> {
         Rc::new(Self {
             seq,
+            time: 0,
+            event_type: event_type.into(),
+            data,
+        })
+    }
+
+    /// Creates one already-validated Session event with its recorded timestamp.
+    #[must_use]
+    pub fn with_time(seq: u64, time: i64, event_type: impl Into<String>, data: Value) -> Rc<Self> {
+        Rc::new(Self {
+            seq,
+            time,
             event_type: event_type.into(),
             data,
         })

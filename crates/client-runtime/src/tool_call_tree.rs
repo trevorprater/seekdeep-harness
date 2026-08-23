@@ -7,6 +7,8 @@ use std::{
 
 use serde_json::Value;
 
+use crate::OptionalJson;
+
 /// Fixed wire-safety ceiling for every recursive Tool call consumer.
 pub const MAX_TOOL_CALL_TREE_DEPTH: usize = 256;
 
@@ -25,8 +27,28 @@ pub struct RunningToolCall {
     pub step: i64,
     /// Start epoch milliseconds.
     pub time: i64,
+    /// Host-computed Tool call render intent; absent means generic JSON.
+    pub call_view: Option<Value>,
     /// Recursively projected child calls.
     pub sub_calls: Rc<Vec<Rc<ToolCallBlock>>>,
+}
+
+/// In-window Tool call head paired with a result.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolCallHead {
+    /// Tool name.
+    pub name: String,
+    /// Raw JSON argument text.
+    pub args_raw: String,
+}
+
+/// Structured Tool execution failure.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolResultError {
+    /// Error name.
+    pub name: String,
+    /// Stable error code.
+    pub code: String,
 }
 
 /// Settled Tool result projection.
@@ -38,16 +60,22 @@ pub struct ToolResultNode {
     pub time: i64,
     /// Stable call identity.
     pub call_id: String,
-    /// Tool name backfilled into the call head.
-    pub call_name: String,
-    /// Raw JSON argument text.
-    pub args_raw: String,
+    /// In-window call head, absent when window truncation removed it.
+    pub call: Option<ToolCallHead>,
     /// Paired start time when the start is in-window.
     pub call_time: Option<i64>,
     /// Result content blocks.
     pub content: Vec<Value>,
     /// Tool outcome flag.
     pub is_error: bool,
+    /// Structured Tool failure when supplied.
+    pub error: Option<ToolResultError>,
+    /// Merge-extensible metadata, preserving absent versus explicit null.
+    pub meta: OptionalJson,
+    /// Host-computed call render intent; absent means generic JSON.
+    pub call_view: Option<Value>,
+    /// Host-computed result render intent; absent means generic JSON.
+    pub result_view: Option<Value>,
     /// Recursively projected child calls.
     pub sub_calls: Rc<Vec<Rc<ToolCallBlock>>>,
 }
@@ -58,7 +86,7 @@ pub enum ToolCallBlock {
     /// Active call.
     Running(RunningToolCall),
     /// Settled result.
-    Settled(ToolResultNode),
+    Settled(Box<ToolResultNode>),
 }
 
 impl ToolCallBlock {
@@ -86,10 +114,10 @@ impl ToolCallBlock {
                 sub_calls,
                 ..call.clone()
             }),
-            Self::Settled(result) => Self::Settled(ToolResultNode {
+            Self::Settled(result) => Self::Settled(Box::new(ToolResultNode {
                 sub_calls,
-                ..result.clone()
-            }),
+                ..result.as_ref().clone()
+            })),
         }
     }
 }
@@ -200,6 +228,7 @@ impl ToolCallTree {
                     turn: 0,
                     step: 0,
                     time: *time,
+                    call_view: None,
                     sub_calls: Rc::new(Vec::new()),
                 }));
                 let mut siblings = self
@@ -236,17 +265,23 @@ impl ToolCallTree {
                     ToolCallBlock::Running(call) => Some(call.time),
                     ToolCallBlock::Settled(_) => None,
                 });
-                let settled = Rc::new(ToolCallBlock::Settled(ToolResultNode {
+                let settled = Rc::new(ToolCallBlock::Settled(Box::new(ToolResultNode {
                     seq: *seq,
                     time: *time,
                     call_id: sub_call_id.clone(),
-                    call_name: name.clone(),
-                    args_raw: json_text(arguments),
+                    call: Some(ToolCallHead {
+                        name: name.clone(),
+                        args_raw: json_text(arguments),
+                    }),
                     call_time,
                     content: content.clone(),
                     is_error: *is_error,
+                    error: None,
+                    meta: OptionalJson::Absent,
+                    call_view: None,
+                    result_view: None,
                     sub_calls: Rc::new(Vec::new()),
-                }));
+                })));
                 if let Some(index) = at {
                     siblings[index] = settled;
                 } else {

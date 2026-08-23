@@ -11,6 +11,7 @@ description = "React-free Rust/WASM Client object layer and runtime services"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+base64.workspace = true
 indexmap.workspace = true
 futures.workspace = true
 seekdeep-client-ui-slots = { path = "../client-ui-slots" }

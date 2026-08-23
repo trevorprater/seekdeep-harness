@@ -4639,6 +4639,7 @@ dependencies = [
 name = "seekdeep-client-runtime"
 version = "0.1.0-rc.5"
 dependencies = [
+ "base64 0.22.1",
  "futures",
  "indexmap 2.14.0",
  "js-sys",

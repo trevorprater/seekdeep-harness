@@ -36,6 +36,7 @@ fn root(id: &str) -> Rc<ToolCallBlock> {
         turn: 1,
         step: 1,
         time: 1_700_000_000_000,
+        call_view: None,
         sub_calls: Rc::new(Vec::new()),
     }))
 }
@@ -121,10 +122,7 @@ fn settlement_replaces_started_child_and_projection_caches_unchanged_inputs() {
     let settled = tree.project_running_calls(running);
     assert!(matches!(
         settled[0].sub_calls()[0].as_ref(),
-        ToolCallBlock::Settled(ToolResultNode {
-            call_time: Some(_),
-            ..
-        })
+        ToolCallBlock::Settled(result) if result.call_time.is_some()
     ));
     tree.reset();
     let base = Rc::new(vec![root("root")]);
