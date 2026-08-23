@@ -55588,7 +55588,18 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-models.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/presets.rs",
+        "crates/host-apiproxy/src/configuration.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_models_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-models.spec.ts --reporter=dot (10 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_models_service_parity --all-features (4 consolidated model, prompt-image, and attachment cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Production Rust owns weak per-Agent selection state, live defaults, logged restoration, grouped partial-failure catalogs, exact reasoning default and validation, next-assembly request routing, advisory unlisted selections, routability, save-default failure tolerance, image-aware selection fencing, validate-all-before-save prompt batches, and log-authorized attachment reads."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-projections.spec.ts",
@@ -55625,7 +55636,17 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-rename.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/presets.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_rename_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-rename.spec.ts --reporter=dot (4 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_rename_service_parity --all-features (3 consolidated rename cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy --test api_proxy_session_rename_service_parity --all-features -- -D warnings"
+      ],
+      "note": "The production gateway resolves the exact live or resumed Agent, delegates to the composed session-title service, echoes normalized user-source title and durable seq, maps only visible-empty normalization to title-invalid, and keeps missing-service or stale-session failures internal."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-search.spec.ts",

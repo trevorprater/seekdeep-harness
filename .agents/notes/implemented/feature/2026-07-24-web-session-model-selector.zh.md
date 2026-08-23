@@ -10,7 +10,7 @@ Web 对话需要一项由 Host 提供、可见且可更改的会话模型选择�
 
 ## 决策
 
-Web Host 为每个新建或恢复的 Agent 安装 `ModelSelection`。如果会话已经使用过模型，提供方／模型／推理（reasoning）选择来自最新的 `request/header`；否则来自 `ctx.agentDefaultModel`。`session.selectModel` 会赋值会话级选择，提示词组装则将它与请求路由一并捕获，因此运行中步骤发生的切换会应用于下一个组装步骤。下一个实际采用的选择通过完整的 `request/header` 快照持久化；尚未进入请求的选择则仅保存在当前进程中。
+Web Host 为每个新建或恢复的 Agent 安装 `ModelSelection`。如果会话已经使用过模型，提供方／模型／推理（reasoning）选择来自最新的 `request/header`；否则来自 `ctx.agentDefaultModel`。Rust API Proxy 以弱引用的按 Agent 状态条目拥有该选择，其提示词与请求 listener 由 Agent scope 持有，因此替换或销毁 Agent 时不会复用另一 generation 的进程内选择。`session.selectModel` 会赋值会话级选择，提示词组装则将它与请求路由一并捕获，因此运行中步骤发生的切换会应用于下一个组装步骤。下一个实际采用的选择通过完整的 `request/header` 快照持久化；尚未进入请求的选择则仅保存在当前进程中。
 
 会话 RPC 领域公开 `session.models` 模型目录与 `session.selectModel`。该目录从 LLM（大语言模型）注册表动态构建，并按提供方分组；每个已列出模型的精确元数据还会加入由适配器持有的推理强度 ID、名称、说明和可选默认值。各提供方的目录与精确元数据会按提供方并发加载，且彼此独立失败，因此成功加载的分组仍可与可重试的失败记录一同使用。模型是否位于目录仅供参考：`session.models.current` 独立返回，即使不在任何分组中也仍然可以路由，但提供方停止公布该模型后，Host 不会合成未列出行。两个前端对这一状态给出不同回答：TUI 把未列出的当前模型渲染为独立一行，Web 则显示未设置状态的触发器标签并要求选择替代模型。Web 是编辑目录所在的前端，因此缺席的目录行代表一项待作出的选择；TUI 只从现有行中选择。显示未设置标签的 Web composer 仍可以使用当前可路由选择发送消息。精确解析决定提供方／模型组合与显式推理强度是否可用。选择操作通过 `resolveCallConfig` 拒绝不支持的推理强度 ID，并在赋值该选择前具体化适配器配置的默认值。
 

@@ -224,6 +224,7 @@ impl Harness {
                     model: "model".to_owned(),
                     reasoning_effort: None,
                 }),
+                save_default_model_selection: None,
                 open_path: Some(Arc::new(move |path, _| {
                     open_paths.lock().push(path);
                     async { Ok(()) }.boxed()
@@ -669,6 +670,7 @@ async fn rosterless_deployment_lists_empty_and_refuses_management() {
                 model: "m".to_owned(),
                 reasoning_effort: None,
             }),
+            save_default_model_selection: None,
             open_path: None,
             can_open_path: Some(Arc::new(|| false)),
             native_path_opener: PathOpenerInternals::default(),

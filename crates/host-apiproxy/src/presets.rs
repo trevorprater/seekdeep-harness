@@ -4,32 +4,40 @@ use std::{
     collections::HashMap,
     pin::Pin,
     sync::{
-        Arc,
+        Arc, Weak,
         atomic::{AtomicU64, Ordering},
     },
     task::{Context as TaskContext, Poll},
 };
 
+use base64::Engine as _;
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
-use parking_lot::Mutex;
-use seekdeep_agent::{AgentOptions, AgentSetup};
+use parking_lot::{Mutex, RwLock};
+use seekdeep_agent::{
+    AGENT, Agent, AgentOptions, AgentSetup, ModelSelection as AgentModelSelection,
+};
 use seekdeep_agent_presets::{
     AGENT_PRESETS, InvalidPresetIdError, PresetExistsError, PresetMountError,
     PresetNotWritableError, PresetTrust, UnknownPresetError, resolve_session_preset,
 };
 use seekdeep_api_remotes::{
     ApiRemoteAgentOptions, ApiRemoteAgentResult, ApiRemoteLookupError,
-    create_api_remote_agent_resolver,
+    create_api_remote_agent_resolver, inspect_api_remote_session,
 };
+use seekdeep_attachment::{ATTACHMENTS, AttachmentError, ImageAttachmentRef, SaveImageAttachment};
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
-use seekdeep_llm::{AbortSignal, ModelId, ProviderId};
+use seekdeep_llm::{
+    AbortSignal, ContentBlock, LLM, LlmCallConfig, MessageSource, ModelId, ProviderId,
+    ReasoningEffortId, UserMessage, content_has_image,
+};
 use seekdeep_skill::{SKILLS, SkillLookupOptions, SkillViewOptions, is_user_invocable};
 use serde_json::{Map, Value, json};
 
 use crate::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, DefaultModelSelection, PathOpener,
     PathOpenerInternals, RpcId, RpcMethod, RpcReceipt, RpcRequest, RpcResponse,
+    SaveDefaultModelSelection,
     api::{
         agent_presets::{
             AgentPresetCopyRequest, AgentPresetEntry, AgentPresetIdValue, AgentPresetListValue,
@@ -41,8 +49,15 @@ use crate::{
             GoalClearValue, GoalCreateRequest, GoalEditRequest, GoalRef as WireGoalRef,
             GoalRefRequest, GoalRefValue,
         },
+        sessions::{
+            ModelSelection as SessionModelSelection, PromptContentPart, PromptMode,
+            SessionAttachmentRequest, SessionAttachmentValue, SessionModelsRequest,
+            SessionModelsValue, SessionPromptRequest, SessionPromptValue, SessionRenameRequest,
+            SessionRenameValue, SessionSelectModelRequest, SessionSelectModelValue,
+        },
         skills::{SkillEntry, SkillListRequest, SkillListValue},
     },
+    configuration::build_model_catalog,
     native_path_opener::{can_open_native_path, open_native_path},
 };
 
@@ -53,6 +68,8 @@ static NEXT_HOST_EVENT_ID: AtomicU64 = AtomicU64::new(1);
 pub struct PresetApiProxyOptions {
     /// Default model options for a cold Agent resume.
     pub default_model_selection: DefaultModelSelection,
+    /// Optional persistence callback for an accepted model switch.
+    pub save_default_model_selection: Option<SaveDefaultModelSelection>,
     /// Optional native path opener.
     pub open_path: Option<PathOpener>,
     /// Optional native-open capability override.
@@ -66,6 +83,10 @@ impl std::fmt::Debug for PresetApiProxyOptions {
         formatter
             .debug_struct("PresetApiProxyOptions")
             .field("has_open_path", &self.open_path.is_some())
+            .field(
+                "has_save_default_model_selection",
+                &self.save_default_model_selection.is_some(),
+            )
             .field("has_can_open_path", &self.can_open_path.is_some())
             .field("native_path_opener", &self.native_path_opener)
             .finish_non_exhaustive()
@@ -82,7 +103,126 @@ pub struct PresetApiProxyRuntime {
             + Sync,
     >,
     switches: Arc<Mutex<HashMap<seekdeep_core::session::SessionId, Arc<tokio::sync::Mutex<()>>>>>,
+    selections: Arc<Mutex<HashMap<seekdeep_core::session::SessionId, Weak<ApiModelSelection>>>>,
+    image_admissions:
+        Arc<Mutex<HashMap<seekdeep_core::session::SessionId, Arc<tokio::sync::Mutex<()>>>>>,
     domains: Arc<dyn ApiProxyRuntime>,
+}
+
+struct ApiModelSelection {
+    session: Arc<seekdeep_core::session::Session>,
+    defaults: DefaultModelSelection,
+    picked: RwLock<Option<AgentModelSelection>>,
+    assembled: RwLock<Option<AgentModelSelection>>,
+}
+
+enum PreparedPromptPart {
+    Text(String),
+    Image(SaveImageAttachment),
+}
+
+impl ApiModelSelection {
+    fn new(
+        session: Arc<seekdeep_core::session::Session>,
+        defaults: DefaultModelSelection,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            session,
+            defaults,
+            picked: RwLock::new(None),
+            assembled: RwLock::new(None),
+        })
+    }
+
+    fn current(&self) -> AgentModelSelection {
+        if let Some(picked) = self.picked.read().clone() {
+            return picked;
+        }
+        if let Some(header) = self.session.request_header() {
+            return AgentModelSelection {
+                provider: header.config.provider,
+                model: header.config.model,
+                reasoning_effort: header.config.reasoning_effort,
+            };
+        }
+        let defaults = (self.defaults)();
+        AgentModelSelection {
+            provider: ProviderId::new(defaults.provider),
+            model: ModelId::new(defaults.model),
+            reasoning_effort: defaults.reasoning_effort.map(ReasoningEffortId::new),
+        }
+    }
+
+    fn select(&self, selection: AgentModelSelection) {
+        *self.picked.write() = Some(selection);
+    }
+}
+
+fn install_api_model_selection(
+    agent: &Arc<Agent>,
+    defaults: DefaultModelSelection,
+    selections: &Arc<Mutex<HashMap<seekdeep_core::session::SessionId, Weak<ApiModelSelection>>>>,
+) -> anyhow::Result<Arc<ApiModelSelection>> {
+    if let Some(existing) = selections
+        .lock()
+        .get(agent.id())
+        .and_then(Weak::upgrade)
+        .filter(|state| Arc::ptr_eq(&state.session, agent.session()))
+    {
+        return Ok(existing);
+    }
+    let prompt = agent
+        .context()
+        .get(seekdeep_system_prompt::SYSTEM_PROMPT)
+        .ok_or_else(|| anyhow::anyhow!("model selection requires systemPrompt"))?;
+    let state = ApiModelSelection::new(agent.session().clone(), defaults);
+    let assembly_state = state.clone();
+    prompt.on_assemble(
+        agent.context(),
+        move |_assembly, _context, next| {
+            let state = assembly_state.clone();
+            async move {
+                let selected = state.current();
+                let mut assembly = next.run().await?;
+                *state.assembled.write() = Some(selected.clone());
+                assembly
+                    .variables
+                    .insert("provider".to_owned(), Some(selected.provider.into_string()));
+                assembly
+                    .variables
+                    .insert("model".to_owned(), Some(selected.model.into_string()));
+                Ok(assembly)
+            }
+        },
+        EventOptions::default(),
+    )?;
+    let request_state = state.clone();
+    agent.context().events().on_waterfall(
+        agent.context(),
+        "agent/request",
+        move |_, _, next| {
+            let state = request_state.clone();
+            Box::pin(async move {
+                let reply = next.run().await?;
+                let Some(config) = reply.downcast::<LlmCallConfig>() else {
+                    anyhow::bail!("agent/request returned an invalid call config");
+                };
+                let Some(selected) = state.assembled.read().clone() else {
+                    return Ok(EventReply::Value(config));
+                };
+                let mut resolved = (*config).clone();
+                resolved.provider = selected.provider;
+                resolved.model = selected.model;
+                resolved.reasoning_effort = selected.reasoning_effort;
+                Ok(EventReply::Value(Arc::new(resolved)))
+            })
+        },
+        EventOptions::default(),
+    )?;
+    selections
+        .lock()
+        .insert(agent.id().clone(), Arc::downgrade(&state));
+    Ok(state)
 }
 
 impl std::fmt::Debug for PresetApiProxyRuntime {
@@ -91,6 +231,8 @@ impl std::fmt::Debug for PresetApiProxyRuntime {
             .debug_struct("PresetApiProxyRuntime")
             .field("options", &self.options)
             .field("switch_locks", &self.switches.lock().len())
+            .field("selection_slots", &self.selections.lock().len())
+            .field("image_admission_locks", &self.image_admissions.lock().len())
             .finish_non_exhaustive()
     }
 }
@@ -103,7 +245,10 @@ impl PresetApiProxyRuntime {
         options: PresetApiProxyOptions,
         domains: Arc<dyn ApiProxyRuntime>,
     ) -> Arc<Self> {
+        let selections = Arc::new(Mutex::new(HashMap::new()));
         let setup_context = context.clone();
+        let setup_defaults = options.default_model_selection.clone();
+        let setup_selections = selections.clone();
         let setup: Arc<
             dyn Fn(
                     seekdeep_session_persistence::SessionInspection,
@@ -112,18 +257,28 @@ impl PresetApiProxyRuntime {
                 + Sync,
         > = Arc::new(move |inspection| {
             let roster = setup_context.get(AGENT_PRESETS);
+            let defaults = setup_defaults.clone();
+            let selections = setup_selections.clone();
             Box::pin(async move {
-                let Some(roster) = roster else {
-                    return Ok(None);
+                let mounted = if let Some(roster) = roster {
+                    let id = resolve_session_preset(&inspection.meta, &inspection.events);
+                    let preset = roster.resolve_mountable(id.as_deref()).await?;
+                    Some((roster, preset))
+                } else {
+                    None
                 };
-                let id = resolve_session_preset(&inspection.meta, &inspection.events);
-                let preset = roster.resolve_mountable(id.as_deref()).await?;
-                let setup_roster = roster.clone();
                 let setup: AgentSetup = Arc::new(move |agent_context| {
-                    let roster = setup_roster.clone();
-                    let preset = preset.clone();
+                    let mounted = mounted.clone();
+                    let defaults = defaults.clone();
+                    let selections = selections.clone();
                     Box::pin(async move {
-                        roster.mount_resolved(&agent_context, preset).await?;
+                        let agent = agent_context.get(AGENT).ok_or_else(|| {
+                            anyhow::anyhow!("API Proxy Agent setup has no scoped Agent")
+                        })?;
+                        install_api_model_selection(&agent, defaults, &selections)?;
+                        if let Some((roster, preset)) = mounted {
+                            roster.mount_resolved(&agent_context, preset).await?;
+                        }
                         Ok(None)
                     })
                 });
@@ -151,6 +306,8 @@ impl PresetApiProxyRuntime {
             options,
             resolve_agent,
             switches: Arc::new(Mutex::new(HashMap::new())),
+            selections,
+            image_admissions: Arc::new(Mutex::new(HashMap::new())),
             domains,
         })
     }
@@ -168,6 +325,11 @@ impl PresetApiProxyRuntime {
             RpcMethod::AgentPresetCopy => self.copy(request).await,
             RpcMethod::AgentPresetOpenDocument => self.open_document(request, signal).await,
             RpcMethod::AgentPresetRemove => self.remove(request).await,
+            RpcMethod::SessionModels => self.models(request).await,
+            RpcMethod::SessionSelectModel => self.select_model(request, signal).await,
+            RpcMethod::SessionPrompt => self.prompt(request, signal).await,
+            RpcMethod::SessionAttachment => self.attachment(request, signal).await,
+            RpcMethod::SessionRename => self.rename_session(request).await,
             RpcMethod::SkillList => self.list_skills(request).await,
             RpcMethod::GoalCreate
             | RpcMethod::GoalEdit
@@ -380,6 +542,495 @@ impl PresetApiProxyRuntime {
             Ok(()) => typed_success(request, &json!({})),
             Err(error) => Ok(preset_error(request, &payload.agent_preset, &error)),
         }
+    }
+
+    async fn rename_session(
+        &self,
+        request: RpcRequest<Value>,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionRenameRequest = serde_json::from_value(request.payload.clone())?;
+        let agent = match (self.resolve_agent)(payload.session_id.clone()).await {
+            ApiRemoteAgentResult::Agent(agent) => agent,
+            ApiRemoteAgentResult::Error(error) => return remote_failure(request, error),
+        };
+        let Some(titles) = self.context.get(seekdeep_session_title::SESSION_TITLE) else {
+            return Ok(failure(
+                request,
+                "internal",
+                "renaming is unavailable: this deployment mounts no session-title service",
+                Map::new(),
+            ));
+        };
+        match titles.rename(agent.session(), &payload.title) {
+            Ok(accepted) => typed_success(
+                request,
+                &SessionRenameValue {
+                    title: accepted.event.title,
+                    seq: accepted.event_seq,
+                },
+            ),
+            Err(error)
+                if error
+                    .downcast_ref::<seekdeep_session_title::SessionTitleInvalidError>()
+                    .is_some() =>
+            {
+                Ok(failure(
+                    request,
+                    "title-invalid",
+                    error.to_string(),
+                    Map::from_iter([(
+                        "sessionId".to_owned(),
+                        Value::String(payload.session_id.to_string()),
+                    )]),
+                ))
+            }
+            Err(error) => Ok(failure(
+                request,
+                "internal",
+                format!(
+                    "failed to rename session \"{}\": {error}",
+                    payload.session_id
+                ),
+                Map::new(),
+            )),
+        }
+    }
+
+    async fn models(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionModelsRequest = serde_json::from_value(request.payload.clone())?;
+        let agent = match (self.resolve_agent)(payload.session_id.clone()).await {
+            ApiRemoteAgentResult::Agent(agent) => agent,
+            ApiRemoteAgentResult::Error(error) => return remote_failure(request, error),
+        };
+        let selection = self.selection_for(&agent)?;
+        let llm = self
+            .context
+            .get(LLM)
+            .ok_or_else(|| anyhow::anyhow!("llm service is absent"))?;
+        let current = wire_model_selection(selection.current());
+        let routable = llm
+            .list_providers()
+            .iter()
+            .any(|provider| provider.id.as_str() == current.provider);
+        let (groups, failures) = build_model_catalog(llm).await;
+        typed_success(
+            request,
+            &SessionModelsValue {
+                current,
+                routable,
+                groups,
+                failures,
+            },
+        )
+    }
+
+    async fn select_model(
+        &self,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionSelectModelRequest = serde_json::from_value(request.payload.clone())?;
+        let agent = match (self.resolve_agent)(payload.session_id.clone()).await {
+            ApiRemoteAgentResult::Agent(agent) => agent,
+            ApiRemoteAgentResult::Error(error) => return remote_failure(request, error),
+        };
+        let lock = {
+            let mut locks = self.image_admissions.lock();
+            locks
+                .entry(payload.session_id.clone())
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                .clone()
+        };
+        let _guard = lock.lock().await;
+        let llm = self
+            .context
+            .get(LLM)
+            .ok_or_else(|| anyhow::anyhow!("llm service is absent"))?;
+        let requested = LlmCallConfig {
+            provider: ProviderId::new(&payload.provider),
+            model: ModelId::new(&payload.model),
+            reasoning_effort: payload
+                .reasoning_effort
+                .as_deref()
+                .map(ReasoningEffortId::new),
+            temperature: None,
+            max_tokens: None,
+            stop: None,
+        };
+        let resolved = match llm.resolve_call_config(&requested, Some(&signal)).await {
+            Ok(resolved) => resolved,
+            Err(error) => {
+                return Ok(model_unavailable(
+                    request,
+                    &payload.provider,
+                    &payload.model,
+                    &error,
+                ));
+            }
+        };
+        if agent_has_visible_image(&agent) {
+            let info = match llm
+                .resolve_model_info(&resolved.provider, &resolved.model, Some(&signal))
+                .await
+            {
+                Ok(info) => info,
+                Err(error) => {
+                    return Ok(model_unavailable(
+                        request,
+                        &payload.provider,
+                        &payload.model,
+                        &error,
+                    ));
+                }
+            };
+            if info
+                .input_modalities
+                .as_ref()
+                .is_some_and(|modalities| !modalities.iter().any(|modality| modality.0 == "image"))
+            {
+                return Ok(failure(
+                    request,
+                    "model-unavailable",
+                    format!(
+                        "Model \"{}\" does not accept image input, but this session already contains images; select an image-capable model.",
+                        resolved.model
+                    ),
+                    Map::from_iter([
+                        (
+                            "provider".to_owned(),
+                            Value::String(payload.provider.clone()),
+                        ),
+                        ("model".to_owned(), Value::String(payload.model.clone())),
+                    ]),
+                ));
+            }
+        }
+        let selected = AgentModelSelection {
+            provider: resolved.provider,
+            model: resolved.model,
+            reasoning_effort: resolved.reasoning_effort,
+        };
+        self.selection_for(&agent)?.select(selected.clone());
+        if let Some(save) = &self.options.save_default_model_selection
+            && let Err(error) = save(default_model_selection(selected.clone())).await
+        {
+            tracing::warn!(%error, "API Proxy model switch applied but default persistence failed");
+        }
+        typed_success(
+            request,
+            &SessionSelectModelValue {
+                selected: wire_model_selection(selected),
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_lines)] // One ordered admission transaction validates before any image is saved.
+    async fn prompt(
+        &self,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionPromptRequest = serde_json::from_value(request.payload.clone())?;
+        let agent = match (self.resolve_agent)(payload.session_id.clone()).await {
+            ApiRemoteAgentResult::Agent(agent) => agent,
+            ApiRemoteAgentResult::Error(error) => return remote_failure(request, error),
+        };
+        let selection = self.selection_for(&agent)?.current();
+        let llm = self
+            .context
+            .get(LLM)
+            .ok_or_else(|| anyhow::anyhow!("llm service is absent"))?;
+        if !llm
+            .list_providers()
+            .iter()
+            .any(|provider| provider.id == selection.provider)
+        {
+            return Ok(failure(
+                request,
+                "model-unavailable",
+                format!(
+                    "No adapter serves provider \"{}\" for this session; select an available model before prompting.",
+                    selection.provider
+                ),
+                Map::from_iter([
+                    (
+                        "provider".to_owned(),
+                        Value::String(selection.provider.to_string()),
+                    ),
+                    (
+                        "model".to_owned(),
+                        Value::String(selection.model.to_string()),
+                    ),
+                ]),
+            ));
+        }
+        let has_image = payload
+            .content
+            .iter()
+            .any(|part| matches!(part, PromptContentPart::Image { .. }));
+        let lock = if has_image {
+            Some({
+                let mut locks = self.image_admissions.lock();
+                locks
+                    .entry(payload.session_id.clone())
+                    .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                    .clone()
+            })
+        } else {
+            None
+        };
+        let _guard = match &lock {
+            Some(lock) => Some(lock.lock().await),
+            None => None,
+        };
+        if has_image {
+            let info = match llm
+                .resolve_model_info(&selection.provider, &selection.model, Some(&signal))
+                .await
+            {
+                Ok(info) => info,
+                Err(error) => {
+                    return Ok(model_unavailable(
+                        request,
+                        selection.provider.as_str(),
+                        selection.model.as_str(),
+                        &error,
+                    ));
+                }
+            };
+            if info
+                .input_modalities
+                .as_ref()
+                .is_some_and(|modalities| !modalities.iter().any(|modality| modality.0 == "image"))
+            {
+                return Ok(failure(
+                    request,
+                    "attachment-error",
+                    format!(
+                        "Model \"{}\" does not support image input.",
+                        selection.model
+                    ),
+                    Map::from_iter([(
+                        "reason".to_owned(),
+                        Value::String("MODEL_DOES_NOT_SUPPORT_IMAGES".to_owned()),
+                    )]),
+                ));
+            }
+        }
+        let content = match self.durable_prompt_content(payload.content).await {
+            Ok(content) => content,
+            Err(error) => return Ok(prompt_failure(request, &error)),
+        };
+        let mut source = MessageSource::user();
+        source.fields.insert(
+            "rpcId".to_owned(),
+            Value::String(request.rpc_id.to_string()),
+        );
+        if let Some(zone) = payload.client_time_zone {
+            source
+                .fields
+                .insert("clientTimeZone".to_owned(), Value::String(zone));
+        }
+        let message = UserMessage::new(content, source);
+        let admitted = match payload.mode {
+            PromptMode::Queue => agent.followup(message),
+            PromptMode::Steer => agent.steer(message),
+        };
+        match admitted {
+            Ok(()) => typed_success(
+                request,
+                &SessionPromptValue {
+                    accepted: true,
+                    command: None,
+                },
+            ),
+            Err(error) => Ok(failure(
+                request,
+                "agent-busy",
+                "prompt rejected",
+                Map::from_iter([("reason".to_owned(), Value::String(error.to_string()))]),
+            )),
+        }
+    }
+
+    async fn durable_prompt_content(
+        &self,
+        content: Vec<PromptContentPart>,
+    ) -> anyhow::Result<Vec<ContentBlock>> {
+        if content
+            .iter()
+            .all(|part| matches!(part, PromptContentPart::Text { .. }))
+        {
+            return Ok(content
+                .into_iter()
+                .map(|part| match part {
+                    PromptContentPart::Text { text } => ContentBlock::Text { text },
+                    PromptContentPart::Image { .. } => unreachable!("checked above"),
+                })
+                .collect());
+        }
+        let attachments = self
+            .context
+            .get(ATTACHMENTS)
+            .ok_or_else(|| anyhow::anyhow!("attachment service is absent"))?;
+        let image_count = content
+            .iter()
+            .filter(|part| matches!(part, PromptContentPart::Image { .. }))
+            .count();
+        if u64::try_from(image_count).unwrap_or(u64::MAX)
+            > attachments.image_limits().max_images_per_message
+        {
+            return Err(AttachmentError::new(
+                "Prompt exceeds the configured image-count limit.",
+                "TOO_MANY_IMAGES",
+            )
+            .into());
+        }
+        let mut prepared = Vec::with_capacity(content.len());
+        let mut total_bytes = 0_u64;
+        for part in content {
+            match part {
+                PromptContentPart::Text { text } => prepared.push(PreparedPromptPart::Text(text)),
+                PromptContentPart::Image {
+                    media_type,
+                    data,
+                    name,
+                } => {
+                    let decoded = base64::engine::general_purpose::STANDARD
+                        .decode(&data)
+                        .ok()
+                        .filter(|decoded| {
+                            !data.is_empty()
+                                && base64::engine::general_purpose::STANDARD.encode(decoded) == data
+                        })
+                        .ok_or_else(|| {
+                            AttachmentError::new(
+                                "Image upload is not canonical base64.",
+                                "INVALID_IMAGE_BASE64",
+                            )
+                        })?;
+                    total_bytes = total_bytes
+                        .saturating_add(u64::try_from(decoded.len()).unwrap_or(u64::MAX));
+                    prepared.push(PreparedPromptPart::Image(SaveImageAttachment {
+                        data: decoded,
+                        media_type,
+                        name,
+                    }));
+                }
+            }
+        }
+        if total_bytes > attachments.image_limits().max_message_image_bytes {
+            return Err(AttachmentError::new(
+                "Prompt exceeds the configured aggregate image-byte limit.",
+                "IMAGES_TOO_LARGE",
+            )
+            .into());
+        }
+        for part in &prepared {
+            if let PreparedPromptPart::Image(image) = part {
+                attachments.validate_image(image).await?;
+            }
+        }
+        let mut durable = Vec::with_capacity(prepared.len());
+        for part in prepared {
+            match part {
+                PreparedPromptPart::Text(text) => durable.push(ContentBlock::Text { text }),
+                PreparedPromptPart::Image(image) => durable.push(ContentBlock::Image {
+                    attachment: attachments.save_image(image).await?,
+                }),
+            }
+        }
+        Ok(durable)
+    }
+
+    async fn attachment(
+        &self,
+        request: RpcRequest<Value>,
+        signal: AbortSignal,
+    ) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionAttachmentRequest = serde_json::from_value(request.payload.clone())?;
+        let events = if let Some(session) = self
+            .context
+            .get(seekdeep_core::session_store::SESSIONS)
+            .and_then(|sessions| sessions.get(&payload.session_id))
+        {
+            session.events()
+        } else {
+            match inspect_api_remote_session(&self.context, &payload.session_id).await {
+                Ok((_, events)) => events,
+                Err(error)
+                    if error
+                        .downcast_ref::<seekdeep_api_remotes::ApiRemoteSessionNotFound>()
+                        .is_some() =>
+                {
+                    return Ok(failure(
+                        request,
+                        "session-not-found",
+                        error.to_string(),
+                        Map::from_iter([(
+                            "sessionId".to_owned(),
+                            Value::String(payload.session_id.to_string()),
+                        )]),
+                    ));
+                }
+                Err(error) => {
+                    return Ok(failure(
+                        request,
+                        "internal",
+                        format!(
+                            "attachment authorization unavailable for session \"{}\": {error}",
+                            payload.session_id
+                        ),
+                        Map::new(),
+                    ));
+                }
+            }
+        };
+        let Some(reference) = referenced_image(&events, payload.attachment_id.as_str()) else {
+            return Ok(failure(
+                request,
+                "attachment-error",
+                "Image is not referenced by this session.",
+                Map::from_iter([(
+                    "reason".to_owned(),
+                    Value::String("ATTACHMENT_NOT_REFERENCED".to_owned()),
+                )]),
+            ));
+        };
+        let Some(attachments) = self.context.get(ATTACHMENTS) else {
+            return Ok(failure(
+                request,
+                "internal",
+                "Unable to read image attachment.",
+                Map::new(),
+            ));
+        };
+        match attachments.read_image(&reference, Some(signal)).await {
+            Ok(stored) => typed_success(
+                request,
+                &SessionAttachmentValue {
+                    attachment: stored.reference,
+                    data: base64::engine::general_purpose::STANDARD.encode(stored.data),
+                },
+            ),
+            Err(error) if error.downcast_ref::<AttachmentError>().is_some() => {
+                Ok(attachment_failure(request, &error))
+            }
+            Err(_) => Ok(failure(
+                request,
+                "internal",
+                "Unable to read image attachment.",
+                Map::new(),
+            )),
+        }
+    }
+
+    fn selection_for(&self, agent: &Arc<Agent>) -> anyhow::Result<Arc<ApiModelSelection>> {
+        install_api_model_selection(
+            agent,
+            self.options.default_model_selection.clone(),
+            &self.selections,
+        )
     }
 
     async fn list_skills(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
@@ -638,6 +1289,8 @@ impl ApiProxyRuntime for PresetApiProxyRuntime {
             options: self.options.clone(),
             resolve_agent: self.resolve_agent.clone(),
             switches: self.switches.clone(),
+            selections: self.selections.clone(),
+            image_admissions: self.image_admissions.clone(),
             domains: self.domains.clone(),
         });
         async move { runtime.preset_unary(method, request, signal).await }.boxed()
@@ -741,6 +1394,155 @@ fn wire_trust(trust: PresetTrust) -> AgentPresetTrust {
         PresetTrust::System => AgentPresetTrust::System,
         PresetTrust::User => AgentPresetTrust::User,
     }
+}
+
+fn wire_model_selection(selection: AgentModelSelection) -> SessionModelSelection {
+    SessionModelSelection {
+        provider: selection.provider.into_string(),
+        model: selection.model.into_string(),
+        reasoning_effort: selection
+            .reasoning_effort
+            .map(ReasoningEffortId::into_string),
+    }
+}
+
+fn default_model_selection(selection: AgentModelSelection) -> crate::ModelSelection {
+    crate::ModelSelection {
+        provider: selection.provider.into_string(),
+        model: selection.model.into_string(),
+        reasoning_effort: selection
+            .reasoning_effort
+            .map(ReasoningEffortId::into_string),
+    }
+}
+
+fn agent_has_visible_image(agent: &Agent) -> bool {
+    let messages = agent.session().derive_messages();
+    let next_turn = agent.inbox().next_turn();
+    let next_step = agent.inbox().next_step();
+    messages
+        .iter()
+        .any(|message| content_has_image(message.content()))
+        || next_turn
+            .iter()
+            .any(|message| content_has_image(message.content()))
+        || next_step
+            .iter()
+            .any(|message| content_has_image(message.content()))
+}
+
+fn model_unavailable(
+    request: RpcRequest<Value>,
+    provider: &str,
+    model: &str,
+    error: &anyhow::Error,
+) -> RpcResponse<Value> {
+    failure(
+        request,
+        "model-unavailable",
+        error.to_string(),
+        Map::from_iter([
+            ("provider".to_owned(), Value::String(provider.to_owned())),
+            ("model".to_owned(), Value::String(model.to_owned())),
+        ]),
+    )
+}
+
+fn prompt_failure(request: RpcRequest<Value>, error: &anyhow::Error) -> RpcResponse<Value> {
+    if error.downcast_ref::<AttachmentError>().is_some() {
+        return attachment_failure(request, error);
+    }
+    failure(
+        request,
+        "agent-busy",
+        "prompt rejected",
+        Map::from_iter([("reason".to_owned(), Value::String(error.to_string()))]),
+    )
+}
+
+fn attachment_failure(request: RpcRequest<Value>, error: &anyhow::Error) -> RpcResponse<Value> {
+    let attachment = error
+        .downcast_ref::<AttachmentError>()
+        .expect("caller established attachment error");
+    failure(
+        request,
+        "attachment-error",
+        attachment.to_string(),
+        Map::from_iter([("reason".to_owned(), Value::String(attachment.code.clone()))]),
+    )
+}
+
+fn referenced_image(
+    events: &[seekdeep_core::session::SessionEvent],
+    attachment_id: &str,
+) -> Option<ImageAttachmentRef> {
+    events
+        .iter()
+        .find_map(|event| image_in_event(event, attachment_id))
+}
+
+fn image_in_event(
+    event: &seekdeep_core::session::SessionEvent,
+    attachment_id: &str,
+) -> Option<ImageAttachmentRef> {
+    for content in [
+        event.data.get("content"),
+        event
+            .data
+            .get("message")
+            .and_then(|message| message.get("content")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(reference) = image_in_content(content, attachment_id) {
+            return Some(reference);
+        }
+    }
+    if let Some(inserted) = event.data.get("inserted").and_then(Value::as_array) {
+        for message in inserted {
+            if let Some(reference) = message
+                .get("content")
+                .and_then(|content| image_in_content(content, attachment_id))
+            {
+                return Some(reference);
+            }
+        }
+    }
+    if event.event_type == "assistant/chunk"
+        && event
+            .data
+            .get("chunk")
+            .and_then(|chunk| chunk.get("type"))
+            .and_then(Value::as_str)
+            == Some("block-end")
+        && let Some(block) = event.data.get("chunk").and_then(|chunk| chunk.get("block"))
+    {
+        return image_in_content(&Value::Array(vec![block.clone()]), attachment_id);
+    }
+    None
+}
+
+fn image_in_content(content: &Value, attachment_id: &str) -> Option<ImageAttachmentRef> {
+    for block in content.as_array()? {
+        if block.get("type").and_then(Value::as_str) == Some("image")
+            && let Some(reference) = block
+                .get("attachment")
+                .cloned()
+                .and_then(|value| serde_json::from_value::<ImageAttachmentRef>(value).ok())
+            && reference.attachment_id.as_str() == attachment_id
+        {
+            return Some(reference);
+        }
+        if block.get("type").and_then(Value::as_str) == Some("tool-result")
+            && let Some(reference) = block
+                .get("content")
+                .and_then(|nested| image_in_content(nested, attachment_id))
+        {
+            return Some(reference);
+        }
+    }
+    None
 }
 
 fn goal_session_id(

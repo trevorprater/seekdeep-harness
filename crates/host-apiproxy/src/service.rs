@@ -51,6 +51,9 @@ pub struct ModelSelection {
 
 /// Dynamic default-model reader.
 pub type DefaultModelSelection = Arc<dyn Fn() -> ModelSelection + Send + Sync>;
+/// Optional persistence boundary for the user-wide default model selection.
+pub type SaveDefaultModelSelection =
+    Arc<dyn Fn(ModelSelection) -> BoxFuture<'static, anyhow::Result<()>> + Send + Sync>;
 /// Dynamic attached-agent count reader.
 pub type AttachedSessionCount = Arc<dyn Fn() -> usize + Send + Sync>;
 /// Native path-open boundary.
@@ -154,6 +157,8 @@ pub trait WorkspaceRuntime: Send + Sync + 'static {
 pub struct ApiProxyDefaults {
     /// Read on every access so a saved default reaches the next session.
     pub default_model_selection: DefaultModelSelection,
+    /// Optional persistence callback after a Session accepts a model switch.
+    pub save_default_model_selection: Option<SaveDefaultModelSelection>,
     /// Project directory for new sessions with no explicit cwd.
     pub cwd: String,
     /// Optional native open-with-default-application boundary.
@@ -173,6 +178,10 @@ impl std::fmt::Debug for ApiProxyDefaults {
         formatter
             .debug_struct("ApiProxyDefaults")
             .field("cwd", &self.cwd)
+            .field(
+                "has_save_default_model_selection",
+                &self.save_default_model_selection.is_some(),
+            )
             .field("has_open_path", &self.open_path.is_some())
             .field("has_open_text_file", &self.open_text_file.is_some())
             .field("has_can_open_path", &self.can_open_path.is_some())
@@ -273,6 +282,7 @@ impl ApiProxyService {
                 &child,
                 PresetApiProxyOptions {
                     default_model_selection: defaults.default_model_selection.clone(),
+                    save_default_model_selection: defaults.save_default_model_selection.clone(),
                     open_path: defaults.open_path.clone(),
                     can_open_path: defaults.can_open_path.clone(),
                     native_path_opener: defaults.native_path_opener.clone(),

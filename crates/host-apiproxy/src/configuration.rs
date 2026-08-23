@@ -759,7 +759,7 @@ fn configurable_provider_view(
     }
 }
 
-async fn build_model_catalog(
+pub(crate) async fn build_model_catalog(
     llm: Arc<LlmRuntime>,
 ) -> (Vec<ModelProviderGroup>, Vec<ModelCatalogFailure>) {
     let entries = futures::future::join_all(llm.list_providers().into_iter().map(|provider| {

@@ -9,6 +9,7 @@ license.workspace = true
 anyhow.workspace = true
 async-stream.workspace = true
 async-trait.workspace = true
+base64.workspace = true
 crc32fast.workspace = true
 flate2.workspace = true
 futures.workspace = true
@@ -32,6 +33,8 @@ seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-session-projection-cache = { path = "../session-projection-cache" }
 seekdeep-session-query = { path = "../session-query" }
+seekdeep-session-title = { path = "../session-title" }
+seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-storage-domain = { path = "../storage-domain" }
 seekdeep-tools = { path = "../tools" }
@@ -55,7 +58,6 @@ seekdeep-loader = { path = "../loader" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-storage = { path = "../storage" }
 seekdeep-storage-json = { path = "../storage-json" }
-seekdeep-system-prompt = { path = "../system-prompt" }
 tempfile.workspace = true
 
 [lints]

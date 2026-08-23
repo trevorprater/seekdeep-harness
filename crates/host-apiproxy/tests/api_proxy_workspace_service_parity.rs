@@ -404,6 +404,7 @@ fn service(workspace: Arc<dyn WorkspaceRuntime>) -> Arc<ApiProxyService> {
                 model: "m".into(),
                 reasoning_effort: None,
             }),
+            save_default_model_selection: None,
             cwd: "/tmp".to_owned(),
             open_path: None,
             open_text_file: None,

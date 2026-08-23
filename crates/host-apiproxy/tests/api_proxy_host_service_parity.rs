@@ -96,6 +96,7 @@ fn defaults() -> ApiProxyDefaults {
             model: "test-model".into(),
             reasoning_effort: None,
         }),
+        save_default_model_selection: None,
         cwd: "/tmp/project".to_owned(),
         open_path: None,
         open_text_file: None,

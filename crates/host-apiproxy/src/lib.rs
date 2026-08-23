@@ -49,7 +49,8 @@ pub use seekdeep_client_connection::{
 };
 pub use service::{
     ApiProxyDefaults, ApiProxyService, AttachedSessionCount, DefaultModelSelection, ModelSelection,
-    PathCapabilityProbe, PathOpener, WorkspaceRuntime, WorkspaceRuntimeError, WorkspaceSnapshot,
+    PathCapabilityProbe, PathOpener, SaveDefaultModelSelection, WorkspaceRuntime,
+    WorkspaceRuntimeError, WorkspaceSnapshot,
 };
 pub use session_export::{
     AttachmentStoreExportAdapter, DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
