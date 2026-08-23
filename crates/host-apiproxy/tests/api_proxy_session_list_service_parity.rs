@@ -24,7 +24,7 @@ use seekdeep_core::{
 use seekdeep_host_apiproxy::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, RpcId, RpcMethod, RpcReceipt,
     RpcReceiptReason, RpcRequest, RpcResponse, SessionApiProxyOptions, SessionApiProxyRuntime,
-    SessionProjectionReads,
+    SessionApiProxyServices, SessionProjectionReads,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -117,6 +117,13 @@ impl SessionProjectionReads for FakeProjectionReads {
             anyhow::bail!("hostile cached projection")
         }
         Ok(self.cached.lock().get(&meta.id).cloned())
+    }
+
+    fn snapshot_for_events(
+        &self,
+        _events: &[SessionEvent],
+    ) -> anyhow::Result<Option<ProjectionSnapshot>> {
+        Ok(None)
     }
 }
 
@@ -230,11 +237,16 @@ impl Harness {
         options: SessionApiProxyOptions,
     ) -> Arc<SessionApiProxyRuntime> {
         SessionApiProxyRuntime::new(
-            self.sessions.clone(),
-            self.agents.clone(),
-            persistence,
-            None,
-            self.projections.clone(),
+            SessionApiProxyServices {
+                context: self.context.clone(),
+                sessions: self.sessions.clone(),
+                agents: self.agents.clone(),
+                persistence,
+                query: None,
+                projections: self.projections.clone(),
+                projection_registry: None,
+                tools: None,
+            },
             options,
             Arc::new(TerminalDomains),
         )

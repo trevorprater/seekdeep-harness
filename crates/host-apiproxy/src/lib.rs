@@ -59,5 +59,5 @@ pub use session_export::{
 };
 pub use session_runtime::{
     ColdArtifactMetadata, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES, SessionApiProxyOptions,
-    SessionApiProxyRuntime, SessionProjectionReads,
+    SessionApiProxyRuntime, SessionApiProxyServices, SessionProjectionReads,
 };

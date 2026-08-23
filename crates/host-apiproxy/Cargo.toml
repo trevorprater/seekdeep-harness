@@ -28,7 +28,9 @@ seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-session-projection-cache = { path = "../session-projection-cache" }
 seekdeep-session-query = { path = "../session-query" }
+seekdeep-scope = { path = "../scope" }
 seekdeep-storage-domain = { path = "../storage-domain" }
+seekdeep-tools = { path = "../tools" }
 seekdeep-user-approval = { path = "../user-approval" }
 seekdeep-user-questions = { path = "../user-questions" }
 seekdeep-util = { path = "../util" }
@@ -45,7 +47,6 @@ uuid.workspace = true
 [dev-dependencies]
 seekdeep-host-webserver = { path = "../host-webserver" }
 seekdeep-schemastery = { path = "../schemastery" }
-seekdeep-scope = { path = "../scope" }
 seekdeep-storage = { path = "../storage" }
 seekdeep-storage-json = { path = "../storage-json" }
 tempfile.workspace = true

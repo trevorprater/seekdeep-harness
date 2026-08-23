@@ -22,7 +22,7 @@ use seekdeep_core::{
 use seekdeep_host_apiproxy::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, ColdArtifactMetadata, RpcId, RpcMethod,
     RpcReceipt, RpcReceiptReason, RpcRequest, RpcResponse, SessionApiProxyOptions,
-    SessionApiProxyRuntime, SessionProjectionReads,
+    SessionApiProxyRuntime, SessionApiProxyServices, SessionProjectionReads,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -114,6 +114,13 @@ impl SessionProjectionReads for NoProjections {
     }
 
     fn cached_snapshot(&self, _meta: &SessionHeader) -> anyhow::Result<Option<ProjectionSnapshot>> {
+        Ok(None)
+    }
+
+    fn snapshot_for_events(
+        &self,
+        _events: &[seekdeep_core::session::SessionEvent],
+    ) -> anyhow::Result<Option<ProjectionSnapshot>> {
         Ok(None)
     }
 }
@@ -339,11 +346,16 @@ impl Harness {
     fn runtime(&self, engine: Option<Arc<ScriptedQueryEngine>>) -> Arc<SessionApiProxyRuntime> {
         let query = engine.map(|engine| SessionQueryService::new(engine));
         SessionApiProxyRuntime::new(
-            self.sessions.clone(),
-            self.agents.clone(),
-            None,
-            query,
-            Arc::new(NoProjections),
+            SessionApiProxyServices {
+                context: self.context.clone(),
+                sessions: self.sessions.clone(),
+                agents: self.agents.clone(),
+                persistence: None,
+                query,
+                projections: Arc::new(NoProjections),
+                projection_registry: None,
+                tools: None,
+            },
             SessionApiProxyOptions::default(),
             Arc::new(TerminalDomains),
         )
@@ -838,11 +850,16 @@ async fn cancellation_awaits_every_started_cold_metadata_read_and_stops_next_bat
     let query = SessionQueryService::new(engine.clone());
     let metadata = BlockingMetadata::new();
     let runtime = SessionApiProxyRuntime::new(
-        harness.sessions.clone(),
-        harness.agents.clone(),
-        Some(persistence),
-        Some(query),
-        Arc::new(NoProjections),
+        SessionApiProxyServices {
+            context: harness.context.clone(),
+            sessions: harness.sessions.clone(),
+            agents: harness.agents.clone(),
+            persistence: Some(persistence),
+            query: Some(query),
+            projections: Arc::new(NoProjections),
+            projection_registry: None,
+            tools: None,
+        },
         SessionApiProxyOptions {
             artifact_metadata: Some(metadata.clone()),
             ..SessionApiProxyOptions::default()

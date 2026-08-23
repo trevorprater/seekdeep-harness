@@ -6,10 +6,14 @@ use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use seekdeep_agent::{Agent, AgentOptions, AgentRegistry, Inbox, NoopInboxNotifications};
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
 use seekdeep_cordis::{Context, EventArgs, EventReply, Fiber};
-use seekdeep_core::session::{AppendOptions, Session, SessionId};
+use seekdeep_core::{
+    session::{AppendOptions, Session, SessionEvent, SessionHeader, SessionId},
+    session_store::SessionStore,
+};
 use seekdeep_host_apiproxy::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, InteractionApiProxyRuntime, RpcId,
-    RpcMethod, RpcReceipt, RpcReceiptReason, RpcRequest, RpcResponse,
+    RpcMethod, RpcReceipt, RpcReceiptReason, RpcRequest, RpcResponse, SessionApiProxyOptions,
+    SessionApiProxyRuntime, SessionApiProxyServices, SessionProjectionReads,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -17,6 +21,7 @@ use seekdeep_host_apiproxy::{
 };
 use seekdeep_llm::{AbortSignal, CallId};
 use seekdeep_scope::{ScopeKey, scope_target, scoped_event_args};
+use seekdeep_session_projection::ProjectionSnapshot;
 use seekdeep_user_approval::{
     ApprovalAnswer, ApprovalConfig, ApprovalOutcome, ApprovalRequest, ApprovalRequestId,
     ApprovalService,
@@ -29,6 +34,25 @@ use serde_json::{Value, json};
 
 #[derive(Debug)]
 struct TerminalDomains;
+
+struct NoProjections;
+
+impl SessionProjectionReads for NoProjections {
+    fn live_snapshot(&self, _session: &Arc<Session>) -> anyhow::Result<Option<ProjectionSnapshot>> {
+        Ok(None)
+    }
+
+    fn cached_snapshot(&self, _meta: &SessionHeader) -> anyhow::Result<Option<ProjectionSnapshot>> {
+        Ok(None)
+    }
+
+    fn snapshot_for_events(
+        &self,
+        _events: &[SessionEvent],
+    ) -> anyhow::Result<Option<ProjectionSnapshot>> {
+        Ok(None)
+    }
+}
 
 impl ApiProxyRuntime for TerminalDomains {
     fn unary(
@@ -467,6 +491,68 @@ async fn question_abort_withdraws_the_pending_response_address() {
         }
     );
     mux_signal.abort();
+}
+
+#[tokio::test]
+async fn session_mux_baseline_precedes_replayed_pending_interactions() {
+    let harness = Harness::new();
+    let sessions = SessionStore::install(&harness.context).unwrap();
+    let agent = harness.agent("ordered-baseline");
+    let detach = sessions.enter(agent.session()).unwrap();
+    harness.context.own(detach).unwrap();
+    sessions.announce(agent.session()).unwrap();
+    let questions = harness.questions.clone();
+    let asking_agent = agent.clone();
+    let asked = tokio::spawn(async move {
+        questions
+            .ask(question_request(
+                asking_agent,
+                question("ordered", false),
+                None,
+            ))
+            .await
+    });
+    tokio::task::yield_now().await;
+    let runtime = SessionApiProxyRuntime::new(
+        SessionApiProxyServices {
+            context: harness.context.clone(),
+            sessions,
+            agents: harness.agents.clone(),
+            persistence: None,
+            query: None,
+            projections: Arc::new(NoProjections),
+            projection_registry: None,
+            tools: None,
+        },
+        SessionApiProxyOptions::default(),
+        harness.runtime.clone(),
+    );
+    let signal = AbortSignal::default();
+    let mut mux = runtime.mux(
+        RpcRequest::new(RpcId::new("ordered-mux"), json!({})),
+        signal.clone(),
+    );
+    assert!(matches!(
+        mux.next().await.unwrap().unwrap().payload,
+        MuxFrame::SessionSubscribed { .. }
+    ));
+    let requested = mux.next().await.unwrap().unwrap();
+    assert!(matches!(
+        requested.payload,
+        MuxFrame::QuestionRequested { .. }
+    ));
+    assert_eq!(
+        runtime
+            .respond(
+                question_answer(requested.rpc_id, agent.id(), "ordered", &["Code"], None,),
+                AbortSignal::default(),
+            )
+            .await
+            .unwrap(),
+        RpcReceipt::Accepted
+    );
+    assert_eq!(asked.await.unwrap().unwrap().answers[0].selected, ["Code"]);
+    signal.abort();
 }
 
 #[tokio::test]

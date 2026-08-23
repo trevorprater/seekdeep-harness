@@ -181,7 +181,7 @@ The remaining frame types are not re-copied here; the full unions are `MuxFrame`
 
 ### Session semantics (impl-side commitments)
 
-- **History = event replay**: one fold (client side); history pagination and live increments share one code path; the server maintains no second materialized-snapshot system. History **page boundaries align to message boundaries** (never cut mid-message; chunks group with their finalized message), and the tail page includes the in-flight partial's chunks.
+- **History = event replay**: `SessionApiProxyRuntime` serves one fold; history pagination and live increments share one event and presenter path, and the server maintains no second materialized-snapshot system. History **page boundaries align to message boundaries** (never cut mid-message; chunks group with their finalized message), and the tail page includes the in-flight partial's chunks.
 - **Prompt correlation**: the prompt's rpcId rides MessageSource (`'user-rpc'`) into the `user/message` event; the client uses it to promote the optimistic echo.
 - **Reconnect = rebuild**: no resume cursor (`mux`'s `since` signature is a reserved seat, ignored if passed); on disconnect reopen the stream + refetch history; compare `subscribed.lastSeq` with the history tail seq and backfill once if there is a gap.
 - **Cold session handling follows ownership**: `session.history` and the source read for `session.fork` inspect persistence without an Agent, while Agent-bound ordinary-session methods such as `prompt` resume through a deduplicated in-flight table. Session-backed subagents reject that generic resume path, and attachment status is not exposed to clients (`running` already covers it).

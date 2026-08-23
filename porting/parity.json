@@ -55579,7 +55579,18 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-projections.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_history_service_parity.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_list_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-view.spec.ts packages/host/apiproxy/tests/api-proxy-projections.spec.ts --reporter=dot (19 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_history_service_parity --test api_proxy_session_list_service_parity --all-features (12 consolidated projection/history cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Production projection coverage pins exact-cut history tails, older-page omission, live and cached list columns, fail-soft rows, gateway lifecycle ownership, constant image limits, changed-unit mux frames with sequence watermarks, and projection-free compositions."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-question.spec.ts",
@@ -55625,7 +55636,17 @@
     {
       "source": "packages/host/apiproxy/tests/api-proxy-view.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/host-apiproxy/tests/api_proxy_session_history_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/host/apiproxy/tests/api-proxy-view.spec.ts packages/host/apiproxy/tests/api-proxy-projections.spec.ts --reporter=dot (19 passed)",
+        "cargo test -p seekdeep-host-apiproxy --test api_proxy_session_history_service_parity --all-features (8 consolidated history/mux cases passed)",
+        "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The production presenter path covers live and history call/result cards, page-local and post-turn backscan pairing, absent and panicking presenter soft-fall, raw-event preservation, disposal without an open-call leak, and append-origin compaction-aware pagination."
     },
     {
       "source": "packages/host/apiproxy/tests/api-proxy-workspace.spec.ts",

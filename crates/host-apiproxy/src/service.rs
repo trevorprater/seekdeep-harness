@@ -259,28 +259,28 @@ impl ApiProxyService {
             let picker = child
                 .get(DIRECTORY_PICKER)
                 .ok_or_else(|| anyhow::anyhow!("directoryPicker service is required"))?;
-            let sessions = SessionApiProxyRuntime::from_context(
-                &child,
-                SessionApiProxyOptions {
-                    cold_blank_probe_max_bytes: defaults.cold_blank_probe_max_bytes,
-                    artifact_metadata: None,
-                },
-                domains,
-            )?;
             let configuration = ConfigurationApiProxyRuntime::from_context(
                 &child,
                 ConfigurationApiProxyOptions {
                     open_text_file: defaults.open_text_file.clone(),
                     native_path_opener: defaults.native_path_opener.clone(),
                 },
-                sessions,
+                domains,
             )?;
             let interactions = InteractionApiProxyRuntime::from_context(&child, configuration)?;
+            let sessions = SessionApiProxyRuntime::from_context(
+                &child,
+                SessionApiProxyOptions {
+                    cold_blank_probe_max_bytes: defaults.cold_blank_probe_max_bytes,
+                    artifact_metadata: None,
+                },
+                interactions,
+            )?;
             Ok::<_, anyhow::Error>(Self::new(
                 defaults,
                 picker,
                 attached_session_count,
-                interactions,
+                sessions,
             ))
         })();
         let service = match build {

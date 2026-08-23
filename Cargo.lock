@@ -5279,6 +5279,7 @@ dependencies = [
  "seekdeep-storage",
  "seekdeep-storage-domain",
  "seekdeep-storage-json",
+ "seekdeep-tools",
  "seekdeep-user-approval",
  "seekdeep-user-questions",
  "seekdeep-util",

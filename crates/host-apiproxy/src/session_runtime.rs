@@ -3,18 +3,22 @@
 use std::{
     collections::{BTreeMap, HashSet},
     path::PathBuf,
+    pin::Pin,
     sync::Arc,
+    sync::atomic::{AtomicU64, Ordering},
+    task::{Context as TaskContext, Poll},
 };
 
-use futures::{FutureExt as _, future::BoxFuture};
+use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use seekdeep_agent::{AGENTS, AgentRegistry, AgentStatus};
+use seekdeep_attachment::ATTACHMENTS;
 use seekdeep_client_connection::{HttpResponse, RpcError, RpcResult};
-use seekdeep_cordis::Context;
+use seekdeep_cordis::{Context, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::{
-    session::{Session, SessionEvent, SessionHeader, SessionOrigin},
+    session::{Session, SessionEvent, SessionHeader, SessionId, SessionOrigin, SurfaceOp},
     session_store::{SESSIONS, SessionStore},
 };
-use seekdeep_llm::AbortSignal;
+use seekdeep_llm::{AbortSignal, ContentBlock, Message};
 use seekdeep_session_persistence::{
     SESSION_PERSISTENCE, SessionPersistence, ensure_persistence_not_aborted,
 };
@@ -31,6 +35,7 @@ use seekdeep_session_query::{
         SessionSearchExecContext as QueryExecContext, SessionSearchRequest as QueryRequest,
     },
 };
+use seekdeep_tools::{TOOLS, ToolResult, ToolRuntime};
 use serde_json::{Map, Value};
 
 use crate::{
@@ -40,9 +45,10 @@ use crate::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
         sessions::{
-            SESSION_SEARCH_RESULT_LIMIT, SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
-            SessionListMetadata, SessionListValue, SessionProjectionsBlock, SessionSearchItem,
-            SessionSearchRequest, SessionSearchValue, SessionSummary, SessionSummaryOrigin,
+            HistoryEntry, SESSION_SEARCH_RESULT_LIMIT, SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
+            SessionHistoryRequest, SessionHistoryValue, SessionListMetadata, SessionListValue,
+            SessionProjectionsBlock, SessionSearchItem, SessionSearchRequest, SessionSearchValue,
+            SessionSummary, SessionSummaryOrigin, ToolEventView, ToolEventViewTarget,
         },
     },
 };
@@ -51,6 +57,7 @@ use crate::{
 pub const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES: u64 = 1024;
 const COLD_SUMMARY_BATCH_SIZE: usize = 16;
 const SESSION_SEARCH_PROVIDER_CALL_LIMIT: usize = 100;
+static NEXT_SESSION_FRAME_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Session-domain runtime options.
 #[derive(Clone, Default)]
@@ -89,6 +96,16 @@ pub trait SessionProjectionReads: Send + Sync + 'static {
     ///
     /// Returns a cache decoding or projection-view failure.
     fn cached_snapshot(&self, meta: &SessionHeader) -> anyhow::Result<Option<ProjectionSnapshot>>;
+
+    /// Folds a detached projection baseline over one exact event cut.
+    ///
+    /// # Errors
+    ///
+    /// Returns a projection initialization, fold, or view failure.
+    fn snapshot_for_events(
+        &self,
+        events: &[SessionEvent],
+    ) -> anyhow::Result<Option<ProjectionSnapshot>>;
 }
 
 /// Physical artifact metadata boundary used by bounded cold blankness probes.
@@ -126,15 +143,68 @@ impl SessionProjectionReads for CordisProjectionReads {
             .as_ref()
             .and_then(|cache| cache.cached_snapshot(meta)))
     }
+
+    fn snapshot_for_events(
+        &self,
+        events: &[SessionEvent],
+    ) -> anyhow::Result<Option<ProjectionSnapshot>> {
+        self.live
+            .as_ref()
+            .map(|registry| {
+                registry
+                    .restore(&indexmap::IndexMap::new(), events, 0)
+                    .map(|restored| restored.snapshot)
+            })
+            .transpose()
+    }
+}
+
+/// Services consumed by the Session API Proxy domain.
+pub struct SessionApiProxyServices {
+    /// Lifecycle and event context for this gateway generation.
+    pub context: Context,
+    /// Authoritative live Session registry.
+    pub sessions: Arc<SessionStore>,
+    /// Exact live Agent registry.
+    pub agents: Arc<AgentRegistry>,
+    /// Optional cold Session persistence.
+    pub persistence: Option<Arc<dyn SessionPersistence>>,
+    /// Optional indexed Session query provider.
+    pub query: Option<Arc<SessionQueryService>>,
+    /// Optional live and cached projection reads.
+    pub projections: Arc<dyn SessionProjectionReads>,
+    /// Optional live projection change source.
+    pub projection_registry: Option<Arc<SessionProjectionRegistry>>,
+    /// Optional replay-safe tool presenters.
+    pub tools: Option<Arc<ToolRuntime>>,
+}
+
+impl std::fmt::Debug for SessionApiProxyServices {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SessionApiProxyServices")
+            .field("live_sessions", &self.sessions.list().len())
+            .field("has_persistence", &self.persistence.is_some())
+            .field("has_query", &self.query.is_some())
+            .field("has_tools", &self.tools.is_some())
+            .field(
+                "has_projection_registry",
+                &self.projection_registry.is_some(),
+            )
+            .finish_non_exhaustive()
+    }
 }
 
 /// Session-domain decorator over the remaining API Proxy domains.
 pub struct SessionApiProxyRuntime {
+    context: Context,
     sessions: Arc<SessionStore>,
     agents: Arc<AgentRegistry>,
     persistence: Option<Arc<dyn SessionPersistence>>,
     query: Option<Arc<SessionQueryService>>,
     projections: Arc<dyn SessionProjectionReads>,
+    projection_registry: Option<Arc<SessionProjectionRegistry>>,
+    tools: Option<Arc<ToolRuntime>>,
     artifact_metadata: Arc<dyn ColdArtifactMetadata>,
     options: SessionApiProxyOptions,
     domains: Arc<dyn ApiProxyRuntime>,
@@ -176,17 +246,35 @@ impl SessionApiProxyRuntime {
         let projection_registry = context.get(SESSION_PROJECTIONS);
         if let Some(registry) = &projection_registry {
             registry.register(context, session_list_projection_definition())?;
+            if let Some(attachments) = context.get(ATTACHMENTS) {
+                let limits = attachments.image_limits().clone();
+                registry.register(
+                    context,
+                    ProjectionDefinition::new(
+                        "imageLimits",
+                        1,
+                        || Ok(Value::Null),
+                        |_, _| Ok(ProjectionTransition::Unchanged),
+                        move |_| Ok(serde_json::to_value(&limits)?),
+                    ),
+                )?;
+            }
         }
         let projections: Arc<dyn SessionProjectionReads> = Arc::new(CordisProjectionReads {
-            live: projection_registry,
+            live: projection_registry.clone(),
             cache: context.get(SESSION_PROJECTION_CACHE),
         });
         Ok(Self::new(
-            sessions,
-            agents,
-            persistence,
-            query,
-            projections,
+            SessionApiProxyServices {
+                context: context.clone(),
+                sessions,
+                agents,
+                persistence,
+                query,
+                projections,
+                projection_registry: projection_registry.clone(),
+                tools: context.get(TOOLS),
+            },
             options,
             domains,
         ))
@@ -195,11 +283,7 @@ impl SessionApiProxyRuntime {
     /// Composes explicit services for alternate hosts and differential tests.
     #[must_use]
     pub fn new(
-        sessions: Arc<SessionStore>,
-        agents: Arc<AgentRegistry>,
-        persistence: Option<Arc<dyn SessionPersistence>>,
-        query: Option<Arc<SessionQueryService>>,
-        projections: Arc<dyn SessionProjectionReads>,
+        services: SessionApiProxyServices,
         options: SessionApiProxyOptions,
         domains: Arc<dyn ApiProxyRuntime>,
     ) -> Arc<Self> {
@@ -208,11 +292,14 @@ impl SessionApiProxyRuntime {
             .clone()
             .unwrap_or_else(|| Arc::new(FilesystemColdArtifactMetadata));
         Arc::new(Self {
-            sessions,
-            agents,
-            persistence,
-            query,
-            projections,
+            context: services.context,
+            sessions: services.sessions,
+            agents: services.agents,
+            persistence: services.persistence,
+            query: services.query,
+            projections: services.projections,
+            projection_registry: services.projection_registry,
+            tools: services.tools,
             artifact_metadata,
             options,
             domains,
@@ -228,6 +315,7 @@ impl SessionApiProxyRuntime {
         match method {
             RpcMethod::SessionList => self.list(request).await,
             RpcMethod::SessionSearch => self.search(request, signal).await,
+            RpcMethod::SessionHistory => self.history(request).await,
             _ => self.domains.unary(method, request, signal).await,
         }
     }
@@ -379,6 +467,299 @@ impl SessionApiProxyRuntime {
         }
     }
 
+    async fn history(&self, request: RpcRequest<Value>) -> anyhow::Result<RpcResponse<Value>> {
+        let payload: SessionHistoryRequest = serde_json::from_value(request.payload.clone())?;
+        let source = match self.history_source(&payload.session_id).await {
+            Ok(source) => source,
+            Err(error) if error.downcast_ref::<HistoryNotFound>().is_some() => {
+                return Ok(session_failure(
+                    request,
+                    "session-not-found",
+                    error.to_string(),
+                    Map::from_iter([(
+                        "sessionId".to_owned(),
+                        Value::String(payload.session_id.to_string()),
+                    )]),
+                ));
+            }
+            Err(error) => {
+                return Ok(session_failure(
+                    request,
+                    "internal",
+                    format!(
+                        "history unavailable for session \"{}\": {error}",
+                        payload.session_id
+                    ),
+                    Map::new(),
+                ));
+            }
+        };
+        let projections = if payload.before_seq.is_none() {
+            self.projections
+                .snapshot_for_events(&source.events)
+                .ok()
+                .flatten()
+                .map(projection_block)
+        } else {
+            None
+        };
+        let scope = self
+            .agents
+            .get(&payload.session_id)
+            .map(|agent| agent.scope_key());
+        let (events, has_more) = paginate_history(
+            &source.events,
+            payload.before_seq,
+            payload.max_messages.unwrap_or(50),
+        );
+        let entries = events
+            .iter()
+            .map(|event| -> anyhow::Result<HistoryEntry> {
+                Ok(HistoryEntry {
+                    event: serde_json::from_value(serde_json::to_value(event)?)?,
+                    view: self.history_view(event, &events, scope),
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let value = serde_json::to_value(SessionHistoryValue {
+            events: entries,
+            has_more,
+            projections,
+        })?;
+        Ok(RpcResponse::new(
+            request.rpc_id,
+            RpcResult::Success { value: Some(value) },
+        ))
+    }
+
+    async fn history_source(&self, session_id: &SessionId) -> anyhow::Result<HistorySource> {
+        if let Some(session) = self.sessions.get(session_id) {
+            return Ok(HistorySource {
+                events: session.events(),
+            });
+        }
+        let persistence = self.persistence.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "session persistence is not configured (load a seekdeep-session-persistence backend)"
+            )
+        })?;
+        let listed = persistence.list(None).await?;
+        if !listed
+            .iter()
+            .any(|meta| meta.id == *session_id && meta.cwd.is_some())
+        {
+            return Err(HistoryNotFound(session_id.clone()).into());
+        }
+        let inspected = persistence.inspect(session_id, None).await?;
+        if inspected.meta.cwd.is_none() {
+            return Err(HistoryNotFound(session_id.clone()).into());
+        }
+        Ok(HistorySource {
+            events: inspected.events,
+        })
+    }
+
+    fn history_view(
+        &self,
+        event: &SessionEvent,
+        page: &[SessionEvent],
+        scope: Option<seekdeep_scope::ScopeKey>,
+    ) -> Option<ToolEventView> {
+        let tools = self.tools.as_ref()?;
+        match event.event_type.as_str() {
+            "tool/call" => {
+                let name = event.data.get("name")?.as_str()?;
+                let arguments: Value =
+                    serde_json::from_str(event.data.get("arguments")?.as_str()?).ok()?;
+                let definition = tools.get(name, scope)?;
+                let presenter = definition.present_call.as_ref()?;
+                let view = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    presenter(&arguments)
+                }))
+                .ok()??;
+                Some(ToolEventView {
+                    target: ToolEventViewTarget::Call,
+                    view: serde_json::to_value(view).ok()?.as_object()?.clone(),
+                })
+            }
+            "tool/result" => {
+                let message: Message =
+                    serde_json::from_value(event.data.get("message")?.clone()).ok()?;
+                let call_id = message.source().fields.get("callId")?.as_str()?;
+                let (name, arguments) = backscan_call(page, call_id)?;
+                let ContentBlock::ToolResult {
+                    content, is_error, ..
+                } = message.content().first()?
+                else {
+                    return None;
+                };
+                let definition = tools.get(&name, scope)?;
+                let presenter = definition.present_result.as_ref()?;
+                let result = ToolResult {
+                    content: content.clone(),
+                    is_error: is_error.unwrap_or(false),
+                    meta: event.data.get("meta").cloned(),
+                };
+                let view = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    presenter(&arguments, &result)
+                }))
+                .ok()??;
+                Some(ToolEventView {
+                    target: ToolEventViewTarget::Result,
+                    view: serde_json::to_value(view).ok()?.as_object()?.clone(),
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn register_mux_listeners(
+        self: &Arc<Self>,
+        sender: &tokio::sync::mpsc::UnboundedSender<RpcRequest<MuxFrame>>,
+        subscribed: &Arc<parking_lot::Mutex<HashSet<SessionId>>>,
+    ) -> (Vec<EffectHandle>, anyhow::Result<()>) {
+        let mut effects = Vec::new();
+        let result = (|| -> anyhow::Result<()> {
+            let runtime = self.clone();
+            let event_sender = sender.clone();
+            let event_subscribed = subscribed.clone();
+            effects.push(self.context.events().on_sync(
+                &self.context,
+                "session/event",
+                move |_, args| {
+                    let session = args
+                        .get::<Session>(0)
+                        .ok_or_else(|| anyhow::anyhow!("session/event lacks a session"))?;
+                    let event = args
+                        .get::<SessionEvent>(1)
+                        .ok_or_else(|| anyhow::anyhow!("session/event lacks an event"))?;
+                    send_subscribed_if_new(&event_sender, &event_subscribed, &session);
+                    let scope = runtime
+                        .agents
+                        .get(session.id())
+                        .map(|agent| agent.scope_key());
+                    let view = runtime.history_view(&event, &session.events(), scope);
+                    let Ok(wire_event) = serde_json::from_value(serde_json::to_value(&*event)?)
+                    else {
+                        tracing::warn!(session = %session.id(), "API Proxy could not encode a committed Session event");
+                        return Ok(EventReply::Undefined);
+                    };
+                    let _ = event_sender.send(RpcRequest::new(
+                        next_session_frame_id(),
+                        MuxFrame::SessionEvent {
+                            session_id: session.id().clone(),
+                            event: wire_event,
+                            view,
+                        },
+                    ));
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )?);
+            let created_sender = sender.clone();
+            let created_subscribed = subscribed.clone();
+            effects.push(self.context.events().on_sync(
+                &self.context,
+                "session/created",
+                move |_, args| {
+                    let session = args
+                        .get::<Session>(0)
+                        .ok_or_else(|| anyhow::anyhow!("session/created lacks a session"))?;
+                    send_subscribed_if_new(&created_sender, &created_subscribed, &session);
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )?);
+            let disposed_subscribed = subscribed.clone();
+            effects.push(self.context.events().on_sync(
+                &self.context,
+                "session/disposed",
+                move |_, args| {
+                    if let Some(session) = args.get::<Session>(0) {
+                        disposed_subscribed.lock().remove(session.id());
+                    }
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )?);
+            if let Some(projections) = &self.projection_registry {
+                let projection_sender = sender.clone();
+                let projection_subscribed = subscribed.clone();
+                effects.push(projections.on_changed(
+                    &self.context,
+                    Arc::new(move |session, key, value, seq| {
+                        send_subscribed_if_new(
+                            &projection_sender,
+                            &projection_subscribed,
+                            &session,
+                        );
+                        let _ = projection_sender.send(RpcRequest::new(
+                            next_session_frame_id(),
+                            MuxFrame::SessionProjection {
+                                session_id: session.id().clone(),
+                                key: key.to_owned(),
+                                value: value.clone(),
+                                seq,
+                            },
+                        ));
+                        Ok(())
+                    }),
+                )?);
+            }
+            Ok(())
+        })();
+        (effects, result)
+    }
+
+    fn mux_stream(
+        self: &Arc<Self>,
+        signal: &AbortSignal,
+        domains: ApiDownlinkStream<MuxFrame>,
+    ) -> ApiDownlinkStream<MuxFrame> {
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let subscribed = Arc::new(parking_lot::Mutex::new(HashSet::new()));
+        let (effects, register) = self.register_mux_listeners(&sender, &subscribed);
+        if let Err(error) = register {
+            return SessionMuxStream {
+                inner: futures::stream::once(async move { Err(error) }).boxed(),
+                _guard: SessionMuxListenerGuard::new(effects),
+            }
+            .boxed();
+        }
+        let mut baseline = Vec::new();
+        for session in self.sessions.list() {
+            if subscribed.lock().insert(session.id().clone()) {
+                baseline.push(subscribed_envelope(&session));
+            }
+        }
+        let live_signal = signal.clone();
+        let live = async_stream::stream! {
+            loop {
+                tokio::select! {
+                    () = live_signal.cancelled() => break,
+                    envelope = receiver.recv() => match envelope {
+                        Some(envelope) => yield Ok(envelope),
+                        None => break,
+                    },
+                }
+            }
+        };
+        let mut tail = futures::stream::select(live.boxed(), domains);
+        let inner = async_stream::stream! {
+            for envelope in baseline {
+                yield Ok(envelope);
+            }
+            while let Some(envelope) = tail.next().await {
+                yield envelope;
+            }
+        };
+        SessionMuxStream {
+            inner: inner.boxed(),
+            _guard: SessionMuxListenerGuard::new(effects),
+        }
+        .boxed()
+    }
+
     async fn search(
         &self,
         request: RpcRequest<Value>,
@@ -521,11 +902,14 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
         signal: AbortSignal,
     ) -> BoxFuture<'static, anyhow::Result<RpcResponse<Value>>> {
         let runtime = Arc::new(Self {
+            context: self.context.clone(),
             sessions: self.sessions.clone(),
             agents: self.agents.clone(),
             persistence: self.persistence.clone(),
             query: self.query.clone(),
             projections: self.projections.clone(),
+            projection_registry: self.projection_registry.clone(),
+            tools: self.tools.clone(),
             artifact_metadata: self.artifact_metadata.clone(),
             options: self.options.clone(),
             domains: self.domains.clone(),
@@ -542,7 +926,21 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
     }
 
     fn mux(&self, request: RpcRequest<Value>, signal: AbortSignal) -> ApiDownlinkStream<MuxFrame> {
-        self.domains.mux(request, signal)
+        let runtime = Arc::new(Self {
+            context: self.context.clone(),
+            sessions: self.sessions.clone(),
+            agents: self.agents.clone(),
+            persistence: self.persistence.clone(),
+            query: self.query.clone(),
+            projections: self.projections.clone(),
+            projection_registry: self.projection_registry.clone(),
+            tools: self.tools.clone(),
+            artifact_metadata: self.artifact_metadata.clone(),
+            options: self.options.clone(),
+            domains: self.domains.clone(),
+        });
+        let domains = self.domains.mux(request, signal.clone());
+        runtime.mux_stream(&signal, domains)
     }
 
     fn host(
@@ -761,5 +1159,162 @@ fn finish_search(mut authorized: Vec<SessionSearchItem>) -> SessionSearchValue {
     SessionSearchValue {
         items: authorized,
         has_more,
+    }
+}
+
+struct HistorySource {
+    events: Vec<SessionEvent>,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("session \"{0}\" not found")]
+struct HistoryNotFound(SessionId);
+
+fn paginate_history(
+    events: &[SessionEvent],
+    before_seq: Option<u64>,
+    max_messages: u64,
+) -> (Vec<SessionEvent>, bool) {
+    let window = events
+        .iter()
+        .filter(|event| before_seq.is_none_or(|before| event.seq < before))
+        .cloned()
+        .collect::<Vec<_>>();
+    let maximum = usize::try_from(max_messages).unwrap_or(usize::MAX);
+    let mut count = 0;
+    let mut cut = 0;
+    for event in window.iter().rev() {
+        if !matches!(
+            event.event_type.as_str(),
+            "user/message" | "assistant/message"
+        ) || !matches!(&event.surface_op, Some(SurfaceOp::Marker(marker)) if marker == "append")
+        {
+            continue;
+        }
+        count += 1;
+        let group_start = event
+            .source_event_seqs
+            .as_ref()
+            .and_then(|sources| sources.iter().copied().min())
+            .map_or(event.seq, |source| source.min(event.seq));
+        if count >= maximum {
+            cut = group_start;
+            break;
+        }
+    }
+    (
+        window
+            .into_iter()
+            .filter(|event| event.seq >= cut)
+            .collect(),
+        cut > 0,
+    )
+}
+
+fn backscan_call(page: &[SessionEvent], call_id: &str) -> Option<(String, Value)> {
+    page.iter().rev().find_map(|event| {
+        if event.event_type != "tool/call"
+            || event.data.get("callId").and_then(Value::as_str) != Some(call_id)
+        {
+            return None;
+        }
+        let name = event.data.get("name")?.as_str()?.to_owned();
+        let arguments = serde_json::from_str(event.data.get("arguments")?.as_str()?).ok()?;
+        Some((name, arguments))
+    })
+}
+
+fn session_failure(
+    request: RpcRequest<Value>,
+    code: impl Into<String>,
+    message: impl Into<String>,
+    details: Map<String, Value>,
+) -> RpcResponse<Value> {
+    RpcResponse::new(
+        request.rpc_id,
+        RpcResult::Failure {
+            error: RpcError {
+                code: code.into(),
+                message: message.into(),
+                details,
+            },
+        },
+    )
+}
+
+fn subscribed_envelope(session: &Session) -> RpcRequest<MuxFrame> {
+    RpcRequest::new(
+        next_session_frame_id(),
+        MuxFrame::SessionSubscribed {
+            session_id: session.id().clone(),
+            last_seq: i64::try_from(session.seq())
+                .unwrap_or(i64::MAX)
+                .saturating_sub(1),
+        },
+    )
+}
+
+fn send_subscribed_if_new(
+    sender: &tokio::sync::mpsc::UnboundedSender<RpcRequest<MuxFrame>>,
+    subscribed: &parking_lot::Mutex<HashSet<SessionId>>,
+    session: &Session,
+) {
+    if subscribed.lock().insert(session.id().clone()) {
+        let _ = sender.send(subscribed_envelope(session));
+    }
+}
+
+fn next_session_frame_id() -> crate::RpcId {
+    crate::RpcId::new(format!(
+        "session-frame-{}",
+        NEXT_SESSION_FRAME_ID.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
+struct SessionMuxListenerGuard {
+    effects: Option<Vec<EffectHandle>>,
+}
+
+impl SessionMuxListenerGuard {
+    const fn new(effects: Vec<EffectHandle>) -> Self {
+        Self {
+            effects: Some(effects),
+        }
+    }
+}
+
+impl Drop for SessionMuxListenerGuard {
+    fn drop(&mut self) {
+        let Some(effects) = self.effects.take() else {
+            return;
+        };
+        let dispose = async move {
+            for effect in effects.into_iter().rev() {
+                if let Err(error) = effect.dispose().await {
+                    tracing::warn!(%error, "Session mux listener disposal failed");
+                }
+            }
+        };
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(dispose);
+        } else {
+            std::thread::spawn(move || futures::executor::block_on(dispose));
+        }
+    }
+}
+
+struct SessionMuxStream {
+    inner: ApiDownlinkStream<MuxFrame>,
+    _guard: SessionMuxListenerGuard,
+}
+
+impl futures::Stream for SessionMuxStream {
+    type Item = anyhow::Result<RpcRequest<MuxFrame>>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        context: &mut TaskContext<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        self.inner.as_mut().poll_next(context)
     }
 }
