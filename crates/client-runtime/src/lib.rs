@@ -2,6 +2,7 @@
 
 mod assistant_timing;
 mod context_provenance;
+mod conversation_context;
 mod conversation_registry;
 mod lineage;
 mod notifier;
@@ -10,6 +11,7 @@ mod partial;
 mod pending;
 mod projection_store;
 mod queue_mirror;
+mod request_inspection;
 mod slots;
 mod steering_history;
 mod store;
@@ -31,6 +33,7 @@ mod wasm_store;
 
 pub use assistant_timing::*;
 pub use context_provenance::*;
+pub use conversation_context::*;
 pub use conversation_registry::*;
 pub use lineage::*;
 pub use notifier::*;
@@ -39,6 +42,7 @@ pub use partial::*;
 pub use pending::*;
 pub use projection_store::*;
 pub use queue_mirror::*;
+pub use request_inspection::*;
 pub use slots::*;
 pub use steering_history::*;
 pub use store::*;

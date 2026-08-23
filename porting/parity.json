@@ -38889,7 +38889,18 @@
     {
       "source": "packages/client/runtime/src/client/sessions/conversation-context.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/conversation_context.rs",
+        "crates/client-runtime/src/request_inspection.rs",
+        "crates/client-runtime/tests/request_inspection_parity.rs"
+      ],
+      "evidence": [
+        "pinned source structural contract audit: zero-based generation, optional parent/origin metadata, inherited prompt header, and complete ordered Node list",
+        "cargo test -p seekdeep-client-runtime --test request_inspection_parity --all-features (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Target-portable Rust preserves the closed compaction/rewind/rewrite origin set, exact camelCase metadata, optional initial-generation fields, inherited request header, and arbitrary JSON-compatible Conversation Nodes without introducing React or native-runtime dependencies"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/conversation-location-index.ts",
@@ -39028,7 +39039,18 @@
     {
       "source": "packages/client/runtime/src/client/sessions/request-inspection.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/request_inspection.rs",
+        "crates/client-runtime/tests/request_inspection_parity.rs"
+      ],
+      "evidence": [
+        "pinned source structural contract audit: ordinary and compaction request discriminants, lifecycle nullability, prompt-change kinds, retry metadata, full Tool schemas, and ordered call-schema map",
+        "cargo test -p seekdeep-client-runtime --test request_inspection_parity --all-features (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust models the exact assistant/compaction closed union, required null completedAt and compaction turn fields, camelCase configuration and retry fields, insertion-ordered Tool schemas, complete safe/raw compaction blocks, and presence-preserving arbitrary usage JSON including explicit null"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/service.ts",
