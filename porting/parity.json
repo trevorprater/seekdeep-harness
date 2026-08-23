@@ -38801,17 +38801,51 @@
     {
       "source": "packages/client/runtime/src/client/ordered-baseline.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/ordered_baseline.rs",
+        "crates/client-runtime/src/wasm_misc.rs",
+        "crates/client-runtime/tests/misc_parity.rs",
+        "crates/client-runtime/tests/wasm_misc_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-runtime --test misc_parity --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_misc_parity-*.wasm (3 passed)",
+        "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust and live WASM keep the established relative order of known identities, replace rows with authoritative baseline values, insert new identities before their nearest following known identity, append tail-only identities, and remove identities absent from the baseline"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/assistant-timing.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/assistant_timing.rs",
+        "crates/client-runtime/tests/assistant_timing_parity.rs"
+      ],
+      "evidence": [
+        "pinned source direct oracle: assistantStepKey/indexAssistantStepTiming/settledAssistantTiming exact JSON projection",
+        "cargo test -p seekdeep-client-runtime --test assistant_timing_parity --all-features (4 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust preserves the NUL-separated turn/step key, non-empty text/reasoning/tool-name/tool-argument first-token predicate, step-start overwrite, first-token first-writer rule, out-of-window null boundaries, and completed-message timestamp"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/context-provenance.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/context_provenance.rs",
+        "crates/client-runtime/src/wasm_misc.rs",
+        "crates/client-runtime/tests/misc_parity.rs",
+        "crates/client-runtime/tests/wasm_misc_parity.rs"
+      ],
+      "evidence": [
+        "pinned source time-zone/context-provenance/lineage suites: 16 passed",
+        "cargo test -p seekdeep-client-runtime --test misc_parity --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_misc_parity-*.wasm (3 passed)"
+      ],
+      "note": "the Rust projection reads only durable source JSON, preserves recall versus inject, deduplicates instruction/reference labels in first-seen order, falls back to readable kind, degrades malformed and future records without dropping rows, and recognizes exactly the six source presentation forms"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/conversation-assembler.ts",
@@ -38849,7 +38883,16 @@
     {
       "source": "packages/client/runtime/src/client/sessions/lineage.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/lineage.rs",
+        "crates/client-runtime/tests/misc_parity.rs"
+      ],
+      "evidence": [
+        "pinned source time-zone/context-provenance/lineage suites: 16 passed",
+        "cargo test -p seekdeep-client-runtime --test misc_parity --all-features"
+      ],
+      "note": "typed SessionId rows retain established root and sibling order, expand children depth-first, degrade absent parents to roots, emit every cycle member once with an injected warning, and project pending interaction and completion-reminder state"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/manager.ts",
@@ -38914,7 +38957,17 @@
     {
       "source": "packages/client/runtime/src/client/sessions/subagent-lineage.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/subagent_lineage.rs",
+        "crates/client-runtime/tests/subagent_lineage_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/subagent-lineage.client.spec.ts --reporter=dot (pinned source: 2 passed)",
+        "cargo test -p seekdeep-client-runtime --test subagent_lineage_parity --all-features (2 passed)",
+        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+      ],
+      "note": "typed SessionId aggregation counts each exact descendant under every uninterrupted subagent-origin ancestor, carries the descendant's own running state, stops at ordinary forks, terminates cycles, and retains missing parents as harmless future owner keys"
     },
     {
       "source": "packages/client/runtime/src/client/sessions/tool-call-tree.ts",
@@ -38942,7 +38995,19 @@
     {
       "source": "packages/client/runtime/src/client/time-zone.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/time_zone.rs",
+        "crates/client-runtime/src/wasm_misc.rs",
+        "crates/client-runtime/tests/misc_parity.rs",
+        "crates/client-runtime/tests/wasm_misc_parity.rs"
+      ],
+      "evidence": [
+        "pinned source time-zone/context-provenance/lineage suites: 16 passed",
+        "cargo test -p seekdeep-client-runtime --test misc_parity --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_misc_parity-*.wasm (3 passed)"
+      ],
+      "note": "the portable function uses an injected resolver and the WASM binding calls the browser Intl.DateTimeFormat runtime on every operation; both reject absent and empty zones with the exact source diagnostic"
     },
     {
       "source": "packages/client/runtime/src/client/workspaces/manager.ts",
@@ -38995,7 +39060,16 @@
     {
       "source": "packages/client/runtime/tests/context-provenance.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/misc_parity.rs",
+        "crates/client-runtime/tests/wasm_misc_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/time-zone.client.spec.ts packages/client/runtime/tests/context-provenance.client.spec.ts packages/client/runtime/tests/lineage.client.spec.ts --reporter=dot (pinned source: 16 passed)",
+        "cargo test -p seekdeep-client-runtime --test misc_parity --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_misc_parity-*.wasm (3 passed)"
+      ]
     },
     {
       "source": "packages/client/runtime/tests/conversation-assembler.client.spec.ts",
@@ -39030,7 +39104,14 @@
     {
       "source": "packages/client/runtime/tests/lineage.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/misc_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/time-zone.client.spec.ts packages/client/runtime/tests/context-provenance.client.spec.ts packages/client/runtime/tests/lineage.client.spec.ts --reporter=dot (pinned source: 16 passed)",
+        "cargo test -p seekdeep-client-runtime --test misc_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/runtime/tests/manager.client.spec.ts",
@@ -39110,12 +39191,28 @@
     {
       "source": "packages/client/runtime/tests/subagent-lineage.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/subagent_lineage_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/subagent-lineage.client.spec.ts --reporter=dot (pinned source: 2 passed)",
+        "cargo test -p seekdeep-client-runtime --test subagent_lineage_parity --all-features (2 passed)"
+      ]
     },
     {
       "source": "packages/client/runtime/tests/time-zone.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/misc_parity.rs",
+        "crates/client-runtime/tests/wasm_misc_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/runtime/tests/time-zone.client.spec.ts packages/client/runtime/tests/context-provenance.client.spec.ts packages/client/runtime/tests/lineage.client.spec.ts --reporter=dot (pinned source: 16 passed)",
+        "cargo test -p seekdeep-client-runtime --test misc_parity --all-features",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_misc_parity-*.wasm (3 passed)"
+      ]
     },
     {
       "source": "packages/client/runtime/tests/tool-call-tree.client.spec.ts",

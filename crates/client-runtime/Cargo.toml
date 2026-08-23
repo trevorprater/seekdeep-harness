@@ -14,6 +14,7 @@ crate-type = ["cdylib", "rlib"]
 indexmap.workspace = true
 seekdeep-client-ui-slots = { path = "../client-ui-slots" }
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-identity = { path = "../identity" }
 serde_json.workspace = true
 serde.workspace = true
 thiserror.workspace = true

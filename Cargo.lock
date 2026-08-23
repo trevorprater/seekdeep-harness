@@ -4642,6 +4642,7 @@ dependencies = [
  "js-sys",
  "seekdeep-client-ui-slots",
  "seekdeep-cordis",
+ "seekdeep-identity",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
