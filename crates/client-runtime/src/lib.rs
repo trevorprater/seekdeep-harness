@@ -8,6 +8,7 @@ mod notifier;
 mod ordered_baseline;
 mod partial;
 mod pending;
+mod projection_store;
 mod queue_mirror;
 mod slots;
 mod steering_history;
@@ -19,6 +20,10 @@ mod tool_call_tree;
 mod wasm_conversation_registry;
 #[cfg(target_arch = "wasm32")]
 mod wasm_misc;
+#[cfg(target_arch = "wasm32")]
+mod wasm_notifier;
+#[cfg(target_arch = "wasm32")]
+mod wasm_projection_store;
 #[cfg(target_arch = "wasm32")]
 mod wasm_slots;
 #[cfg(target_arch = "wasm32")]
@@ -32,6 +37,7 @@ pub use notifier::*;
 pub use ordered_baseline::*;
 pub use partial::*;
 pub use pending::*;
+pub use projection_store::*;
 pub use queue_mirror::*;
 pub use slots::*;
 pub use steering_history::*;
@@ -43,6 +49,8 @@ pub use tool_call_tree::*;
 pub use wasm_conversation_registry::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_misc::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_projection_store::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_slots::*;
 #[cfg(target_arch = "wasm32")]
