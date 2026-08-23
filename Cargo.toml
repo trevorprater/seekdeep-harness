@@ -83,6 +83,7 @@ members = [
   "crates/persona",
   "crates/plan-mode",
   "crates/process-exit-hook",
+  "crates/pwsh-local",
   "crates/repeat-tool-reminder",
   "crates/sandbox",
   "crates/sandbox-local",

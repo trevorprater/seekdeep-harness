@@ -1,0 +1,30 @@
+[package]
+name = "seekdeep-pwsh-local"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Local PowerShell provider over the SeekDeep Harness subprocess seam"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-settings = { path = "../settings" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

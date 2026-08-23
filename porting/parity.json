@@ -65554,7 +65554,16 @@
     {
       "source": "packages/shell/pwsh-local/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/pwsh-local/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: pwsh-local and tool-pwsh 76 passed, 34 environment-skipped without a local pwsh executable",
+        "cargo test -p seekdeep-pwsh-local --all-features: 13 passed including deterministic real-process argv-shim coverage",
+        "cargo check --target x86_64-pc-windows-msvc -p seekdeep-pwsh-local --lib",
+        "cargo clippy -p seekdeep-pwsh-local -p seekdeep-tool-pwsh --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/pwsh-local/src/invariant.ts",
@@ -65573,17 +65582,41 @@
     {
       "source": "packages/shell/pwsh-local/src/resolve.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/pwsh-local/src/lib.rs",
+        "crates/pwsh-local/tests/resolver_parity.rs"
+      ],
+      "evidence": [
+        "Rust pure tests pin explicit selection, non-Windows fallback, Windows candidate order, quote stripping, file/symlink acceptance, and directory rejection",
+        "cargo test -p seekdeep-pwsh-local --all-features: 13 passed"
+      ]
     },
     {
       "source": "packages/shell/pwsh-local/tests/executor.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/pwsh-local/tests/executor_parity.rs",
+        "crates/pwsh-local/tests/resolver_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest exercised every platform-pure case; real-pwsh cases self-skipped because pwsh is absent",
+        "Rust deterministic argv shim runs foreground, background, timeout, abort, self-signal, spill, process ownership, and teardown through the real local subprocess service",
+        "cargo test -p seekdeep-pwsh-local --all-features: 13 passed"
+      ]
     },
     {
       "source": "packages/shell/pwsh-local/tests/settings.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/pwsh-local/tests/settings_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin settings override validation, executable changes, composition fallback, and reversible namespace ownership",
+        "cargo test -p seekdeep-pwsh-local --all-features: 13 passed"
+      ]
     },
     {
       "source": "packages/shell/pwsh-local/tsconfig.json",
@@ -66212,7 +66245,16 @@
     {
       "source": "packages/shell/tool-pwsh/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-pwsh/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: pwsh-local and tool-pwsh 76 passed, 34 environment-skipped without a local pwsh executable",
+        "cargo test -p seekdeep-tool-pwsh --all-features: 16 passed",
+        "cargo check --target x86_64-pc-windows-msvc -p seekdeep-tool-pwsh --lib",
+        "cargo clippy -p seekdeep-pwsh-local -p seekdeep-tool-pwsh --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/shell/tool-pwsh/src/invariant.ts",
@@ -66245,17 +66287,42 @@
     {
       "source": "packages/shell/tool-pwsh/tests/integration.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-pwsh/tests/tool_pwsh_parity.rs",
+        "crates/pwsh-local/tests/executor_parity.rs"
+      ],
+      "evidence": [
+        "Rust deterministic PowerShell argv shim drives the real subprocess provider, pwsh-local executor, tool registry, and Jobs controller",
+        "cargo test -p seekdeep-tool-pwsh --all-features: 16 passed"
+      ]
     },
     {
       "source": "packages/shell/tool-pwsh/tests/loader.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-pwsh/tests/plugin_lifecycle.rs"
+      ],
+      "evidence": [
+        "Rust Loader-compatible plugin stays pending until shell activation and reverses its tool and prompt effects on disposal",
+        "cargo test -p seekdeep-tool-pwsh --all-features: 16 passed"
+      ]
     },
     {
       "source": "packages/shell/tool-pwsh/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-pwsh/src/lib.rs",
+        "crates/tool-pwsh/tests/tool_pwsh_parity.rs",
+        "crates/tool-pwsh/tests/sandbox_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: pwsh-local and tool-pwsh 76 passed, 34 environment-skipped without a local pwsh executable",
+        "Rust tests pin schemas, validation, workdirs, managed environment, foreground and background execution, canonical output, cancellation, policy escalation, ownership, Jobs controls, rendering, and presenters",
+        "cargo test -p seekdeep-tool-pwsh --all-features: 16 passed"
+      ]
     },
     {
       "source": "packages/shell/tool-pwsh/tsconfig.json",
