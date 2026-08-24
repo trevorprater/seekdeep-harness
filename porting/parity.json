@@ -48053,7 +48053,9 @@
     {
       "source": "packages/compaction/compaction/tests/tool-pairing.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/compaction/src/tool_pairing.rs"],
+      "evidence": ["pinned-source Vitest: tool-pairing 11 passed", "Rust tests pin balanced tool-call/result cuts and unmatched-result rejection", "cargo test -p seekdeep-compaction --all-features: 7 passed"]
     },
     {
       "source": "packages/compaction/compaction/tsconfig.json",
