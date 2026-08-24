@@ -36,6 +36,15 @@ enum Command {
         #[arg(long, value_enum, default_value_t = Scope::All)]
         scope: Scope,
     },
+    /// Generate or verify the durable Session event catalog from the pinned source tree.
+    PersistenceCatalog {
+        /// Source checkout recorded in `SOURCE_SNAPSHOT`.
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Verify tracked outputs without writing them.
+        #[arg(long)]
+        check: bool,
+    },
     /// Builds one Rust/WASM Client package as a synchronous classic module-table bundle.
     WasmPackage {
         /// Cargo package containing the browser cdylib.
@@ -68,6 +77,9 @@ fn main() -> anyhow::Result<()> {
         Command::Docs => docs(),
         Command::Inventory { source } => inventory(&source),
         Command::Parity { source, scope } => parity(&source, scope),
+        Command::PersistenceCatalog { source, check } => {
+            xtask::persistence_catalog::run(Path::new("."), &source, check)
+        }
         Command::WasmPackage {
             package,
             artifact,

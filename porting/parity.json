@@ -36120,8 +36120,10 @@
         "package.json"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "mechanical rename port (dsh to seekdeep)",
+        "gen-persistence-catalog and verify-persistence-catalog delegate directly to the verified Rust cargo xtask persistence-catalog command"
+      ],
+      "note": "root package metadata preserves source command names while Rust owns persistence-catalog generation and freshness behavior"
     },
     {
       "source": "packages/AGENTS.md",
@@ -49848,7 +49850,18 @@
     {
       "source": "packages/core/session/tests/gen-persistence-catalog.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/persistence_catalog.rs",
+        "xtask/tests/persistence_catalog_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/core/session/tests/gen-persistence-catalog.spec.ts (25 passed)",
+        "cargo test --locked --offline -p xtask --all-features (17 passed)",
+        "cargo clippy --locked --offline -p xtask --all-targets --all-features -- -D warnings",
+        "cargo xtask persistence-catalog --check"
+      ],
+      "note": "seven grouped Rust cases cover all 25 source scenarios for owning and merged declarations, exported homes, inheritance, member shapes, JSDoc and @mode aggregation, duplicate events and envelope types, missing envelope declarations, literal surface unions, stale surface members, forward-slash pointers, and deterministic rendering"
     },
     {
       "source": "packages/core/session/tests/invariant.spec.ts",
@@ -75889,7 +75902,21 @@
     {
       "source": "scripts/gen-persistence-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "package.json",
+        "xtask/src/persistence_catalog.rs",
+        "docs/persistence-catalog.md",
+        "crates/core/src/known_event_types.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/core/session/tests/gen-persistence-catalog.spec.ts (25 passed)",
+        "cargo test --locked --offline -p xtask --all-features (17 passed)",
+        "cargo clippy --locked --offline -p xtask --all-targets --all-features -- -D warnings",
+        "cargo xtask persistence-catalog --check",
+        "package.json generation and verification commands delegate directly to cargo xtask persistence-catalog"
+      ],
+      "note": "Rust/Oxc owns source discovery, AST validation, aggregate diagnostics, payload printing, source pointers, surface annotation, target-identity projection, exact Markdown rendering, Rust known-event generation, and write/check modes; package scripts invoke the Rust command directly"
     },
     {
       "source": "scripts/gen-scoped-events.ts",
