@@ -63157,22 +63157,30 @@
     {
       "source": "packages/session-query/session-query/tests/search-helpers.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-query/src/extraction.rs", "crates/session-query/src/filters.rs", "crates/session-query/src/documents.rs"],
+      "evidence": ["pinned-source Vitest: session-query 70 passed", "Rust tests pin text/tool extraction, structural omission, document classification, regex-safe filters, OR/AND clauses, and range validation", "cargo test -p seekdeep-session-query --all-features: 23 passed"]
     },
     {
       "source": "packages/session-query/session-query/tests/session-query.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-query/src/index.rs", "crates/session-query/src/corpus.rs", "crates/session-query/src/filters.rs", "crates/session-query/src/sources.rs"],
+      "evidence": ["Rust tests drive live and replayed session listing, event windows, titles, source compatibility, session/event filters, and config validation", "cargo test -p seekdeep-session-query --all-features: 23 passed", "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session-query/session-query/tests/test-service.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-query/src/index.rs", "crates/session-query/src/corpus.rs"],
+      "evidence": ["Rust in-crate service fixtures exercise the real query service over live and replayed session corpora without a separate TypeScript test-service module"]
     },
     {
       "source": "packages/session-query/session-query/tests/tracing.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/session-query/src/tracing.rs"],
+      "evidence": ["Rust tests pin complete/partial lineages, replacement chains, source relations, current surface cloning, cycles, missing targets, and deeply nested descendants without recursion", "cargo test -p seekdeep-session-query --all-features: 23 passed"]
     },
     {
       "source": "packages/session-query/session-query/tsconfig.json",
