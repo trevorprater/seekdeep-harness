@@ -12345,7 +12345,7 @@
         ".agents/notes/implemented/feature/2026-07-10-sqlite-session-query-provider.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "paired Agent Note hashes re-record the native SQLite query and schema owner"
       ]
     },
     {
@@ -12356,7 +12356,7 @@
         ".agents/notes/implemented/feature/2026-07-10-sqlite-session-query-provider.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "implemented decision records parameterized rusqlite predicates, cursor identity, Unicode snippets, and guarded derived-schema reset"
       ]
     },
     {
@@ -12367,7 +12367,7 @@
         ".agents/notes/implemented/feature/2026-07-10-sqlite-session-query-provider.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "Chinese implemented decision mirrors the native SQLite query and schema owner"
       ]
     },
     {
@@ -63374,12 +63374,30 @@
     {
       "source": "packages/session-query/session-query-sqlite/src/query.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query-sqlite/src/query.rs",
+        "crates/session-query-sqlite/tests/query_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: query.spec.ts passed 10/10",
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features (9 passed)",
+        "Rust grouped tests pin owned normalization, range validation, all session/event SQL clauses, binding and FTS5 predicate ceilings, literal MATCH quoting, reserved-marker sanitization, canonical fingerprints, and Unicode snippet bounds",
+        "cargo clippy --locked --offline -p seekdeep-session-query-sqlite --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/src/schema.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query-sqlite/src/schema.rs",
+        "crates/session-query-sqlite/tests/schema_parity.rs"
+      ],
+      "evidence": [
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features (9 passed)",
+        "Rust tests pin application id and version, persistent and TEMP FTS5 schemas, owner-only file creation, preserved parent modes, foreign/unknown database refusal, recognized reset, and unknown-table refusal"
+      ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/tests/load-path.e2e.ts",
@@ -63389,7 +63407,15 @@
     {
       "source": "packages/session-query/session-query-sqlite/tests/query.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query-sqlite/tests/query_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: query.spec.ts passed 10/10",
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features (9 passed)",
+        "Rust's closed enums make runtime-unknown filter discriminants unrepresentable; serde rejects non-text/session-id/cursor and fractional numeric wire values before normalization"
+      ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/tests/sqlite.spec.ts",

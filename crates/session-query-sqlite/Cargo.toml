@@ -1,0 +1,20 @@
+[package]
+name = "seekdeep-session-query-sqlite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+rusqlite.workspace = true
+seekdeep-core = { path = "../core" }
+seekdeep-session-query = { path = "../session-query" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

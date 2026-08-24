@@ -26,6 +26,8 @@ Ordering is deterministic and comparable across the persistent and TEMP FTS tabl
 
 Queries are trimmed, whitespace-normalized, and quoted as one literal FTS5 phrase. Embedded quotes are doubled before binding, so MATCH operators such as `OR`, `NEAR`, quotes, parentheses, and `*` remain data rather than executable query syntax. NUL is rejected before SQLite execution. Reserved highlight noncharacters and NUL in documents are normalized before indexing, making inserted presentation markers collision-free. Phrase matching follows tokenizer tokens rather than arbitrary substrings.
 
+The Rust provider's query and schema layer compiles the same owned clauses into parameterized `rusqlite` predicates, enforces the portable binding and FTS5 outer-predicate ceilings before statement preparation, canonicalizes cursor request identity, and bounds snippets by Unicode code point. Its schema owner creates missing paths with owner-only modes, refuses foreign or unknown databases before journal-mode mutation, resets only recognized derived tables on version mismatch, and recreates persistent FTS5 plus connection-local TEMP overlays.
+
 ## Tokenizer choice
 
 Both persistent and live FTS5 tables use `unicode61`. The implementation experiment found that this tokenizer supports the two-character token `AI` and produces an index about 2.1× smaller than the trigram alternative. The accepted limitation is token/phrase recall: `AI` does not match the larger token `BRAID`, and arbitrary substring search uses the provider-independent text scan instead.

@@ -6460,6 +6460,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-session-query-sqlite"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "rusqlite",
+ "seekdeep-core",
+ "seekdeep-session-query",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "seekdeep-session-reference"
 version = "0.1.0-rc.5"
 dependencies = [
