@@ -8,8 +8,8 @@ pub mod types;
 
 pub use client::{FULL_ACCESS_PRESET, display_permission_preset, display_preset_name};
 pub use index::{
-    CUSTOM_PRESET, Config, KnobState, PERMISSION_PRESETS, PermissionPresetService,
-    PermissionSettings, PresetSpec, apply, apply_knob_event, config_schema,
-    effective_permission_preset, plugin,
+    CUSTOM_PRESET, Config, KnobState, PERMISSION_PRESETS, PERMISSION_SETTINGS_NAMESPACE,
+    PermissionPresetService, PermissionSettings, PresetSpec, apply, apply_knob_event,
+    config_schema, effective_permission_preset, plugin,
 };
 pub use types::{PermissionSelect, PresetOption};

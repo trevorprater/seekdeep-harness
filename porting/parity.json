@@ -57447,17 +57447,41 @@
     {
       "source": "packages/interaction/permission-presets/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/permission-presets/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "Rust drives configured and unrelated live events, rejects an unknown preset before commit, and rejects an unknown durable preset during late invariant registration",
+        "pinned source permission suites: 31 passed; Rust permission suites: 15 passed"
+      ]
     },
     {
       "source": "packages/interaction/permission-presets/tests/permission-presets.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/permission-presets/tests/permission_presets_parity.rs",
+        "crates/permission-presets/src/index.rs"
+      ],
+      "evidence": [
+        "Rust covers fold order, table order and ties, custom derivation, exact write-through/no-op/repair events, composition admission, option rendering, configured and stored defaults, and fresh/seeded/partial/late session pinning",
+        "differential audit fixed the configured-default base, dynamic settings enum, and live approval-injection paths exposed by the source cases",
+        "pinned source permission suites: 31 passed; Rust permission suites: 15 passed"
+      ]
     },
     {
       "source": "packages/interaction/permission-presets/tests/projection.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/permission-presets/tests/projection_parity.rs",
+        "crates/permission-presets/src/index.rs"
+      ],
+      "evidence": [
+        "Rust covers the default/custom select, one change notification per knob transition, unrelated-event stability, reversible projection registration, and /permission switch/status/error lifecycle with model-facing approval injection",
+        "pinned source permission suites: 31 passed; Rust permission suites: 15 passed"
+      ]
     },
     {
       "source": "packages/interaction/permission-presets/tsconfig.json",

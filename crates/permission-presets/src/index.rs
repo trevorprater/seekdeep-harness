@@ -177,6 +177,28 @@ fn fold_knobs(events: &[SessionEvent]) -> KnobState {
     state
 }
 
+fn derive_preset(
+    presets: &IndexMap<String, PresetSpec>,
+    state: &KnobState,
+    sandbox_default: Option<SandboxMode>,
+    approval_default: Option<ApprovalPolicy>,
+) -> String {
+    let sandbox = state.sandbox.or(sandbox_default);
+    let approval = state.approval.or(approval_default);
+    let matches =
+        |spec: &PresetSpec| Some(spec.sandbox) == sandbox && Some(spec.approval) == approval;
+    if let Some(preset) = &state.preset
+        && let Some(spec) = presets.get(preset)
+        && matches(spec)
+    {
+        return preset.clone();
+    }
+    presets
+        .iter()
+        .find_map(|(name, spec)| matches(spec).then(|| name.clone()))
+        .unwrap_or_else(|| CUSTOM_PRESET.to_owned())
+}
+
 /// Owns the deployment's permission presets and their write path.
 pub struct PermissionPresetService {
     context: Context,
@@ -207,26 +229,12 @@ impl PermissionPresetService {
         let approval = context
             .get(APPROVAL)
             .ok_or_else(|| anyhow::anyhow!("permission-presets requires approval"))?;
-        let service = Arc::new(Self {
-            context: context.clone(),
-            presets,
-            default_settings_source: {
-                // Placeholder replaced by install_settings_section below.
-                let ns = settings_namespace(PERMISSION_SETTINGS_NAMESPACE)?;
-                let entry = json!({"defaultPreset": "workspace-write"});
-                let schema = Schema::object([("defaultPreset", Schema::string().required())]);
-                let installed = install_settings_section(
-                    context,
-                    &ns,
-                    schema,
-                    entry,
-                    None,
-                    Arc::new(|| Ok(())),
-                )?;
-                installed.source
-            },
-        });
-        let inferred_default = service.derive(&KnobState::default());
+        let inferred_default = derive_preset(
+            &presets,
+            &KnobState::default(),
+            shell.sandbox_mode(),
+            Some(approval.policy()),
+        );
         let default_preset = config
             .default_preset
             .clone()
@@ -235,9 +243,26 @@ impl PermissionPresetService {
             default_preset != CUSTOM_PRESET,
             "permission: composed sandbox and approval defaults match no preset; configure defaultPreset explicitly"
         );
-        service.resolve(&default_preset)?;
-        let _ = approval.policy();
-        let _ = shell.sandbox_mode();
+        anyhow::ensure!(
+            presets.contains_key(&default_preset),
+            "permission: unknown preset \"{default_preset}\" (known: {})",
+            presets.keys().cloned().collect::<Vec<_>>().join(", ")
+        );
+        let ns = settings_namespace(PERMISSION_SETTINGS_NAMESPACE)?;
+        let choices = Schema::union(presets.keys().cloned().map(Schema::constant)).required();
+        let installed = install_settings_section(
+            context,
+            &ns,
+            Schema::object([("defaultPreset", choices)]),
+            json!({"defaultPreset": default_preset}),
+            None,
+            Arc::new(|| Ok(())),
+        )?;
+        let service = Arc::new(Self {
+            context: context.clone(),
+            presets,
+            default_settings_source: installed.source,
+        });
         context.provide(PERMISSION_PRESETS, service.clone())?;
         Ok(service)
     }
@@ -270,22 +295,7 @@ impl PermissionPresetService {
             .get(SHELL)
             .and_then(|shell| shell.sandbox_mode());
         let approval_default = self.context.get(APPROVAL).map(|approval| approval.policy());
-        let sandbox = state.sandbox.or(shell_default);
-        let approval = state.approval.or(approval_default);
-        let matches =
-            |spec: &PresetSpec| Some(spec.sandbox) == sandbox && Some(spec.approval) == approval;
-        if let Some(preset) = &state.preset
-            && let Some(spec) = self.presets.get(preset)
-            && matches(spec)
-        {
-            return preset.clone();
-        }
-        for (name, spec) in &self.presets {
-            if matches(spec) {
-                return name.clone();
-            }
-        }
-        CUSTOM_PRESET.to_owned()
+        derive_preset(&self.presets, state, shell_default, approval_default)
     }
 
     /// Builds the whole select value for one folded knob state.
@@ -486,7 +496,18 @@ impl PermissionPresetService {
                                     service.names().join(", ")
                                 ))
                             } else {
-                                match service.set(invocation.agent.session(), name) {
+                                let switched = service
+                                    .context
+                                    .get(APPROVAL)
+                                    .ok_or_else(|| {
+                                        anyhow::anyhow!("permission-presets requires approval")
+                                    })
+                                    .and_then(|approval| {
+                                        service.apply(invocation.agent.session(), name, &|policy| {
+                                            approval.set_policy(invocation.agent.as_ref(), policy)
+                                        })
+                                    });
+                                match switched {
                                     Ok(()) => {
                                         CommandResult::success(Some(format!("preset {name}")))
                                     }

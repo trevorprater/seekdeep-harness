@@ -14,7 +14,7 @@ Web「通用」设置页将「权限」显示为禁用的骨架控件，尽管 `
 
 服务会在 `session/created` 时同步读取当前 Settings 值。真正的新会话会收到三个显式事件：`permission/preset`、`sandbox/mode` 和 `approval/policy`。这些事实将创建时选中的权限固定下来，因此后续 Settings 变更只影响之后的会话。带 seed 或只完成部分初始化的会话会保留其有效调节项，只补齐缺失的事实；恢复时绝不会采用最新的用户默认值。`Session` 甚至会用 `session/end-seed` 标记显式为空的构造器 seed，因此不能把空的持久化日志误认为新会话。
 
-现有 `/permission` 命令和 `permissions` 投影仍是当前会话的操作路径。浏览器插件现在向 `settings.general.item` 贡献「权限」行，从脱敏后的 Settings 描述符读取动态 enum，并只通过经过 revision 校验的 `settings.mutate` 写入 `defaultPreset`。该行通过 slot 的 `hooks` 格注入 observable，而不是绑定渲染器专用钩子；权限服务挂载时会遍历并固定所有已存活会话，因此 HMR（热模块替换）不会遗留未固定的会话。无归属的「通用」设置包不贡献任何占位行。
+现有 `/permission` 命令和 `permissions` 投影仍是当前会话的操作路径。`/permission` 会通过 `ApprovalService.set_policy` 写入切换中的审批部分，因此持久化调节项变更及其面向模型的策略变更注入仍属于一次实时 agent 操作；服务的程序化 `set` 路径写入相同的持久化事实，但不要求存在实时 agent。浏览器插件向 `settings.general.item` 贡献「权限」行，从脱敏后的 Settings 描述符读取动态 enum，并只通过经过 revision 校验的 `settings.mutate` 写入 `defaultPreset`。该行通过 slot 的 `hooks` 格注入 observable，而不是绑定渲染器专用钩子；权限服务挂载时会遍历并固定所有已存活会话，因此 HMR（热模块替换）不会遗留未固定的会话。无归属的「通用」设置包不贡献任何占位行。
 
 ApiProxy 在可配置提供方 namespace 之外，将 `permission` 显式加入 Web Settings allowlist。这是局部的边界决策，而不是通用注册标志或 `local-client` 访问模型：注册其他 Settings namespace 仍不会将其暴露。权限变更通过转发的 `settings/document-updated` 到达客户端（[转发的 Remote 事件](../architecture/2026-08-10-remote-event-delivery.md)），不会宣告模型拓扑。
 
@@ -23,6 +23,10 @@ ApiProxy 在可配置提供方 namespace 之外，将 `permission` 显式加入 
 在 Settings 中更改「权限」会立即更新 `settings.yaml` 和选择器，但不会改变已打开的会话。之后的每个会话都可以从三个已固定的权限事实中重建，即使用户再次更改默认值或进程重启也不受影响。如果部署中组合后的沙箱和审批默认值与任何 preset 都不匹配，则必须显式配置 `defaultPreset`。
 
 组装后的 Web 快照包含功能完整的「权限」选择器。其无密钥浏览器场景会写入 `read-only`，验证现有的 `workspace-write` 会话保持不变，并验证随后创建的会话以 read-only 事件三元组启动。
+
+## 测试
+
+Rust permission-preset 套件会驱动与固定源相同的 31 个情形：表顺序与并列消解、写穿/无操作/修复行为、组合失败、动态 Settings 校验、新建/带 seed/部分初始化/延迟挂载会话固定、invariant 回放与提交前拒绝、投影变更通知与 HMR 移除，以及 `/permission` 的成功、状态、拒绝、命令生命周期和审批注入。源套件与 Rust 套件彼此独立运行，因此共享实现无法同时让比较的两侧通过。
 
 ## 曾考虑的替代方案
 

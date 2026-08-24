@@ -5843,20 +5843,27 @@ name = "seekdeep-permission-presets"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
  "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-agent",
  "seekdeep-commands",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
  "seekdeep-sandbox",
  "seekdeep-sandbox-policy",
  "seekdeep-schemastery",
+ "seekdeep-scope",
  "seekdeep-session-projection",
  "seekdeep-settings",
  "seekdeep-shell",
  "seekdeep-user-approval",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 
