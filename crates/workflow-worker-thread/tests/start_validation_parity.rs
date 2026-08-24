@@ -13,6 +13,7 @@ use seekdeep_subagent::{
 };
 use seekdeep_workflow::{
     WorkflowEngine, WorkflowError, WorkflowErrorCode, WorkflowMeta, WorkflowStartRequest,
+    WorkflowStopReason,
 };
 use seekdeep_workflow_worker_thread::{Config, WorkerThreadWorkflowEngine};
 
@@ -148,4 +149,35 @@ fn rejects_every_prepublication_validation_failure_without_panicking_or_returnin
     let error = rejected(&engine, high_cap, "over-ceiling cap returned a run");
     assert_eq!(code(&error), Some(WorkflowErrorCode::InvalidArgument));
     assert!(error.to_string().contains("exceeds the engine ceiling"));
+}
+
+#[tokio::test]
+async fn compiled_default_engine_runs_a_keyless_source_compatibility_script() {
+    let context = Context::new();
+    let subagents = SubagentRuntime::install(&context).expect("subagents");
+    subagents
+        .register_provider(Arc::new(Provider {
+            capabilities: SubagentCapabilities {
+                output_schema: true,
+                depth_limit: true,
+                tool_filter: true,
+                persona: true,
+            },
+        }))
+        .expect("provider");
+    let engine = WorkerThreadWorkflowEngine::new(&context, Config::default()).expect("engine");
+    let mut request = request();
+    request.script = "return 6 * 7".to_owned();
+    request.meta = WorkflowMeta {
+        name: "source-worker-compat".to_owned(),
+        description: "exercise the compiled worker runtime".to_owned(),
+        when_to_use: None,
+        phases: None,
+    };
+    let run = engine.start(request).expect("start");
+    let result = run.result().await;
+    assert_eq!(result.value, serde_json::json!(42));
+    assert_eq!(result.stop_reason, WorkflowStopReason::Completed);
+    assert_eq!(result.agents_started, 0);
+    run.dispose().await;
 }

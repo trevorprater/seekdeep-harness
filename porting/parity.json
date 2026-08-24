@@ -74812,7 +74812,16 @@
     {
       "source": "packages/workflow/workflow-worker-thread/tests/integration.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/workflow-worker-thread/tests/integration.spec.ts (2 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (18 passed)",
+        "cargo clippy --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ],
+      "note": "real assembled Rust engine drives the spawn provider, structured-output attachment, invariant-wrapped AgentLoop, plain child text, schema child value, null-on-schema-failure path, publication-time child observation, and quiescent child disposal with only the LLM adapter scripted"
     },
     {
       "source": "packages/workflow/workflow-worker-thread/tests/meta.spec.ts",
@@ -74849,7 +74858,16 @@
     {
       "source": "packages/workflow/workflow-worker-thread/tests/source-worker.compat.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/tests/start_validation_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/workflow-worker-thread/tests/source-worker.compat.spec.ts (1 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (16 passed)",
+        "cargo clippy --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the compiled Rust engine with default config validates, starts, executes, settles 6 * 7 to JSON number 42 with zero agents, and disposes without invoking the registered child provider"
     },
     {
       "source": "packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.e2e.ts",

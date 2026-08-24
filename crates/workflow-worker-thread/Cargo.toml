@@ -27,7 +27,12 @@ tokio.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-invariants = { path = "../invariants" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-subagent-in-process-driver = { path = "../subagent-in-process-driver" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
 
 [lints]
 workspace = true
