@@ -11,6 +11,8 @@ use seekdeep_cordis::{
     Context, CordisError, EventArgs, Plugin, PreparedEmission, ServiceKey, fiber::EffectHandle,
 };
 use seekdeep_scope::{ScopeKey, scope_target};
+use seekdeep_typert_protocol::{TypertHostObject, TypertLookupProvider, TypertLookupRegistry as _};
+use seekdeep_typert_registry::TYPERT;
 use serde_json::Value;
 use thiserror::Error;
 
@@ -246,6 +248,7 @@ struct SessionStoreInner {
     context: Context,
     sessions: Mutex<IndexMap<SessionId, Arc<SessionEntry>>>,
     counter: Mutex<u64>,
+    typert_effect: Mutex<Option<EffectHandle>>,
 }
 
 /// In-memory store and publication owner for live sessions.
@@ -281,10 +284,74 @@ impl SessionStore {
                 context: context.clone(),
                 sessions: Mutex::new(IndexMap::new()),
                 counter: Mutex::new(0),
+                typert_effect: Mutex::new(None),
             }),
         });
-        context.provide(SESSIONS, store.clone())?;
+        let service_effect = context.provide(SESSIONS, store.clone())?;
+        if let Err(error) = store.reconcile_typert(context) {
+            futures::executor::block_on(service_effect.dispose()).ok();
+            return Err(CordisError::ServicePublication(format!("{error:#}")));
+        }
+        if let Err(error) = store.register_typert_reconciliation(context) {
+            let typert_effect = store.inner.typert_effect.lock().take();
+            if let Some(typert_effect) = typert_effect {
+                futures::executor::block_on(typert_effect.dispose()).ok();
+            }
+            futures::executor::block_on(service_effect.dispose()).ok();
+            return Err(error);
+        }
         Ok(store)
+    }
+
+    fn reconcile_typert(&self, context: &Context) -> anyhow::Result<()> {
+        let registry = context.get(TYPERT);
+        let mut effect = self.inner.typert_effect.lock();
+        match (registry, effect.is_some()) {
+            (Some(registry), false) => {
+                let store = Arc::downgrade(&self.inner);
+                let provider = TypertLookupProvider {
+                    parameter: "session".to_owned(),
+                    wire: "sessionId".to_owned(),
+                    host_type_symbol: "@seekdeep-ai/seekdeep-session#Session".to_owned(),
+                    wire_type_symbol: "@seekdeep-ai/seekdeep-session/types#SessionId".to_owned(),
+                    resolve: Arc::new(move |value| {
+                        let store = store.clone();
+                        Box::pin(async move {
+                            let Some(id) = value.as_json().and_then(Value::as_str) else {
+                                return Ok(None);
+                            };
+                            let Some(store) = store.upgrade() else {
+                                return Ok(None);
+                            };
+                            let session = SessionStore { inner: store }.get(&SessionId::new(id));
+                            Ok(session.map(|session| session as TypertHostObject))
+                        })
+                    }),
+                };
+                *effect = Some(registry.lookups().register(context, "session", provider)?);
+            }
+            (None, true) => {
+                let stale = effect.take();
+                drop(effect);
+                if let Some(stale) = stale {
+                    futures::executor::block_on(stale.dispose())?;
+                }
+            }
+            (Some(_), true) | (None, false) => {}
+        }
+        Ok(())
+    }
+
+    fn register_typert_reconciliation(&self, context: &Context) -> Result<(), CordisError> {
+        let store = self.clone();
+        let owner = context.clone();
+        context.on_service_change_checked(move |name| {
+            if name == "typert" {
+                store.reconcile_typert(&owner)?;
+            }
+            Ok(())
+        })?;
+        Ok(())
     }
 
     /// Builds but does not publish a session.

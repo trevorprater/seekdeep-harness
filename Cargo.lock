@@ -5081,6 +5081,8 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-scope",
+ "seekdeep-typert-protocol",
+ "seekdeep-typert-registry",
  "seekdeep-util",
  "serde",
  "serde_json",

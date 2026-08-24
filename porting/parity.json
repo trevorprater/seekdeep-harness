@@ -49960,7 +49960,17 @@
     {
       "source": "packages/core/session/tests/typert.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/core/src/session_store.rs",
+        "crates/core/tests/typert_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/core/session/tests/typert.spec.ts (1 passed)",
+        "cargo test --locked --offline -p seekdeep-core --all-features (71 passed)",
+        "cargo clippy --locked --offline -p seekdeep-core --all-targets --all-features -- -D warnings"
+      ],
+      "note": "SessionStore contributes the exact session Typert lookup metadata and live object identity in either Service load order, follows Typert provider replacement, rejects non-string identities as absent, and removes the provider with its owning Session fiber"
     },
     {
       "source": "packages/core/session/tsconfig.json",
