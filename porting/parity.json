@@ -50190,12 +50190,35 @@
     {
       "source": "packages/core/tools/src/code-mode.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/runtime.rs",
+        "crates/tools/src/ts_types.rs",
+        "crates/tools/src/py_types.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: core tools code-mode, Python SDK, and registry suites passed in a 288/288 combined run",
+        "cargo test --locked --offline -p seekdeep-tools --all-features passed 151/151 including real TypeScript worker dispatch",
+        "cargo clippy --locked --offline -p seekdeep-tools --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust owns run_code schema selection, SDK projection, nested guarded dispatch, concurrency classification, cancellation, durable dispatch events, and scoped mode lifecycle; the assembled transport is exercised through the real Rust TypeScript worker."
     },
     {
       "source": "packages/core/tools/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/runtime.rs",
+        "crates/tools/src/schema.rs",
+        "crates/tools/tests/approval_routing_parity.rs",
+        "crates/tools/tests/scoped_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: core tools code-mode, Python SDK, generator, and registry suites passed in a 288/288 combined run",
+        "cargo test --locked --offline -p seekdeep-tools --all-features passed 151/151",
+        "cargo clippy --locked --offline -p seekdeep-tools --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust owns registration, scoped schema views, prompt assembly, validation, typed pre/execute/post waterfalls, approval routing, guarded dispatch, result normalization, cancellation, lifecycle rollback, presentation, and structured failures."
     },
     {
       "source": "packages/core/tools/src/invariant.ts",
@@ -50304,7 +50327,17 @@
     {
       "source": "packages/core/tools/tests/code-mode.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/runtime.rs",
+        "crates/tools/src/ts_types.rs",
+        "crates/tools/src/py_types.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/tools/tests/code-mode.spec.ts packages/core/tools/tests/gen-tool-catalog.spec.ts packages/core/tools/tests/py-types.spec.ts packages/core/tools/tests/tools.spec.ts passed 288/288 against the pinned source",
+        "cargo test --locked --offline -p seekdeep-tools --all-features passed 151/151",
+        "Rust tests cover scoped presentation, language-specific schemas, nested real-worker execution, safe/exclusive scheduling, overlap caps, guarded re-entry, captured failures, cancellation, and durable dispatch logging"
+      ]
     },
     {
       "source": "packages/core/tools/tests/execution-mode.spec.ts",
@@ -50381,7 +50414,15 @@
     {
       "source": "packages/core/tools/tests/py-types.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/py_types.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/tools/tests/code-mode.spec.ts packages/core/tools/tests/gen-tool-catalog.spec.ts packages/core/tools/tests/py-types.spec.ts packages/core/tools/tests/tools.spec.ts passed 288/288 against the pinned source",
+        "cargo test --locked --offline -p seekdeep-tools --all-features passed 151/151",
+        "Rust tests pin schema roots, TypedDict dependency order, collision suffixes, Unicode identifier normalization, UTF-16 ordering, depth/name caps, deterministic output, Python-safe escaping, and hostile-schema degradation"
+      ]
     },
     {
       "source": "packages/core/tools/tests/schema.spec.ts",
@@ -50415,7 +50456,18 @@
     {
       "source": "packages/core/tools/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tools/src/runtime.rs",
+        "crates/tools/src/schema.rs",
+        "crates/tools/tests/approval_routing_parity.rs",
+        "crates/tools/tests/scoped_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/core/tools/tests/code-mode.spec.ts packages/core/tools/tests/gen-tool-catalog.spec.ts packages/core/tools/tests/py-types.spec.ts packages/core/tools/tests/tools.spec.ts passed 288/288 against the pinned source",
+        "cargo test --locked --offline -p seekdeep-tools --all-features passed 151/151",
+        "Rust tests cover schema snapshots, scoped registration and restrictions, approval outcomes, pre/execute/post waterfalls, cancellation races, guarded dispatch, result/value normalization, presentation, structured errors, and deterministic disposal"
+      ]
     },
     {
       "source": "packages/core/tools/tests/ts-types.spec.ts",
