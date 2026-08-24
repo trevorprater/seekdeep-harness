@@ -15,7 +15,7 @@ pub mod types;
 pub use host::WorkerRun;
 pub use index::{Config, INJECT, NAME, WorkerThreadWorkflowEngine, plugin};
 pub use invariant::register_invariant;
-pub use meta::validate_meta;
+pub use meta::{validate_meta, validate_meta_value};
 pub use protocol::{HostToWorkerMessage, HostToWorkerType, WorkerToHostMessage, WorkerToHostType};
 pub use realm::{MaterializeError, materialize_from_realm, render_thrown};
 pub use runtime::{ExecutionObserver, WorkflowExecution};

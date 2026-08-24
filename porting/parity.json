@@ -74817,7 +74817,17 @@
     {
       "source": "packages/workflow/workflow-worker-thread/tests/meta.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/src/meta.rs",
+        "crates/workflow-worker-thread/tests/meta_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/workflow-worker-thread/tests/meta.spec.ts (7 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (15 passed)",
+        "cargo clippy --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust lossless-JSON compatibility boundary returns a detached typed copy and aggregates every source diagnostic for non-objects, unknown or missing fields, mistyped optionals, and malformed phase entries under META_INVALID"
     },
     {
       "source": "packages/workflow/workflow-worker-thread/tests/realm.spec.ts",
