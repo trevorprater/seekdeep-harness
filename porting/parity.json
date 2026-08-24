@@ -47245,12 +47245,16 @@
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/bootstrap.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/engine.rs", "crates/code-runtime-worker-thread/src/job_executor.rs"],
+      "evidence": ["pinned-source Vitest: worker-thread runtime 104 passed", "Rust engine owns isolated evaluation globals, async bindings, timers, cancellation, compute limits, output ledgers, and terminal messages", "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/runtime.rs", "crates/code-runtime-worker-thread/src/lib.rs"],
+      "evidence": ["Rust public backend validates config, mounts and isolates executions, maps abort/compute/wall controls, caps combined output, and disposes deterministically", "cargo clippy -p seekdeep-code-runtime-worker-thread --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/invariant.ts",
@@ -47281,27 +47285,37 @@
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/protocol.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/engine.rs", "crates/code-runtime-worker-thread/src/runtime.rs", "crates/code-runtime-worker-thread/src/snapshot.rs"],
+      "evidence": ["Rust protocol state machines validate call/resolution/rejection/log/completion/exit/limit traffic and reject forged lossy shapes", "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/worker-json.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/worker_json.rs", "crates/code-runtime-worker-thread/src/snapshot.rs"],
+      "evidence": ["Rust flat bounded-depth wire codec preserves every lossless JSON root, deep values, and prototype-colliding keys while rejecting malformed/decorated/lossy input", "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/worker.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/engine.rs", "crates/code-runtime-worker-thread/src/job_executor.rs"],
+      "evidence": ["Rust worker executor owns the isolated job lifecycle and message bridge without a JavaScript worker bootstrap", "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/tests/bootstrap.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/engine.rs"],
+      "evidence": ["Rust engine tests pin globals, async TypeScript evaluation, binding calls, timers, stdout, mutated globals, exceptions, pending exits, and limits"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/tests/built-lib.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/Cargo.toml", "crates/code-runtime-worker-thread/src/lib.rs"],
+      "evidence": ["Cargo compiles and tests the directly linked native runtime artifact; no TypeScript bundle indirection remains", "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/tests/output-json.spec.ts",
@@ -47319,17 +47333,23 @@
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/tests/runtime.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/runtime.rs", "crates/code-runtime-worker-thread/src/engine.rs"],
+      "evidence": ["Rust runtime tests cover mount/run/isolation/preabort/disposal, forged traffic containment, config defaults, output boundaries, diagnostics, compute/wall/abort controls, and typed failures", "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/tests/source-worker.compat.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/engine.rs", "crates/code-runtime-worker-thread/src/typescript.rs"],
+      "evidence": ["Rust tests execute the portable TypeScript semantics directly and pin erasable syntax, globals, bindings, timers, output, errors, deep JSON, and cancellation"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/tests/worker-json.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/src/worker_json.rs", "crates/code-runtime-worker-thread/src/snapshot.rs"],
+      "evidence": ["Rust worker-json and snapshot tests cover every lossless root, deep structures, malformed/incomplete/decorated wire, forged completions, and exotic-value rejection"]
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/tsconfig.json",
@@ -47346,7 +47366,9 @@
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/code-runtime-worker-thread/Cargo.toml"],
+      "evidence": ["Cargo builds the native isolated runtime directly without TypeScript library/worker bundle wrappers", "cargo clippy -p seekdeep-code-runtime-worker-thread --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/code-runtime/code-runtime/README.i18n.yaml",
