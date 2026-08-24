@@ -378,8 +378,8 @@ impl AgentController for RejectingController {
         Ok(())
     }
 
-    fn when_idle(&self) -> futures::future::BoxFuture<'static, ()> {
-        Box::pin(async {})
+    fn when_idle(&self) -> futures::future::BoxFuture<'static, anyhow::Result<()>> {
+        Box::pin(async { Ok(()) })
     }
 
     fn begin_maintenance(&self) -> Result<MaintenanceReservation, AgentControlError> {
@@ -821,7 +821,7 @@ async fn cancellation_before_and_during_a_round_pauses_fail_closed() {
         .agent()
         .cancel(AgentCancelCause::User, CancelOptions::default())
         .unwrap();
-    during.agent().when_idle().unwrap().await;
+    during.agent().when_idle().unwrap().await.unwrap();
     let paused = wait_goal(&during.goals, during.agent(), |goal| {
         goal.phase == GoalPhase::Paused
     })
@@ -837,7 +837,7 @@ async fn forged_positive_goal_source_is_rejected_but_round_zero_uses_the_ordinar
         .agent()
         .followup(goal_message("forged automatic work", 1))
         .unwrap();
-    forged.agent().when_idle().unwrap().await;
+    forged.agent().when_idle().unwrap().await.unwrap();
     assert!(forged.adapter.requests().is_empty());
     assert!(
         forged
@@ -854,7 +854,7 @@ async fn forged_positive_goal_source_is_rejected_but_round_zero_uses_the_ordinar
         .agent()
         .followup(goal_message("goal context", 0))
         .unwrap();
-    context.agent().when_idle().unwrap().await;
+    context.agent().when_idle().unwrap().await.unwrap();
     let requests = context.adapter.requests();
     assert_eq!(requests.len(), 1);
     assert!(request_text(&requests[0]).contains("goal context"));
@@ -882,7 +882,7 @@ async fn ordinary_cancel_does_not_invent_goal_state_and_orphan_session_events_ar
     test.agent()
         .cancel(AgentCancelCause::User, CancelOptions::default())
         .unwrap();
-    test.agent().when_idle().unwrap().await;
+    test.agent().when_idle().unwrap().await.unwrap();
     assert!(test.goals.get(test.agent()).unwrap().is_none());
 
     let orphan = test
@@ -1109,7 +1109,7 @@ async fn rejected_turn_end_and_post_turn_error_disarm_without_continuing() {
         8,
     );
     wait_until(|| rejected.adapter.requests().len() == 1).await;
-    rejected.agent().when_idle().unwrap().await;
+    rejected.agent().when_idle().unwrap().await.unwrap();
     let goal = wait_goal(&rejected.goals, rejected.agent(), |goal| {
         goal.activation == GoalActivation::Disarmed
     })
@@ -1199,7 +1199,7 @@ async fn pause_observer_work_runs_after_cancelled_round_before_any_new_drive() {
         .cancel(AgentCancelCause::User, CancelOptions::default())
         .unwrap();
     wait_until(|| test.adapter.requests().len() == 2).await;
-    test.agent().when_idle().unwrap().await;
+    test.agent().when_idle().unwrap().await.unwrap();
     let goal = test.goals.get(test.agent()).unwrap().unwrap();
     assert_eq!(goal.phase, GoalPhase::Paused);
     assert_eq!(goal.rounds_started, 1);
@@ -1345,7 +1345,7 @@ async fn blocked_goal_observer_work_remains_queued_without_reserving_again() {
         goal.phase == GoalPhase::Blocked
     })
     .await;
-    test.agent().when_idle().unwrap().await;
+    test.agent().when_idle().unwrap().await.unwrap();
     assert!(test.adapter.requests().is_empty());
     assert_eq!(test.agent().inbox().next_turn().len(), 1);
     assert_eq!(
@@ -1706,7 +1706,7 @@ async fn cancellation_of_unrelated_human_work_disarms_without_pausing_goal() {
     test.agent()
         .cancel(AgentCancelCause::User, CancelOptions::default())
         .unwrap();
-    test.agent().when_idle().unwrap().await;
+    test.agent().when_idle().unwrap().await.unwrap();
     let goal = test.goals.get(test.agent()).unwrap().unwrap();
     assert_eq!(goal.id, created.id);
     assert_eq!(goal.revision, created.revision);
@@ -1800,7 +1800,7 @@ async fn downstream_cancel_then_throw_does_not_reschedule_or_double_clear() {
         goal.phase == GoalPhase::Paused
     })
     .await;
-    test.agent().when_idle().unwrap().await;
+    test.agent().when_idle().unwrap().await.unwrap();
     tokio::task::yield_now().await;
     assert_eq!(goal.rounds_started, 0);
     assert!(test.adapter.requests().is_empty());
@@ -2006,7 +2006,7 @@ async fn terminal_goal_failure_leaves_human_work_queued_until_a_new_wakeup() {
     test.agent()
         .steer(user("resume after failure"))
         .expect("new wakeup");
-    test.agent().when_idle().unwrap().await;
+    test.agent().when_idle().unwrap().await.unwrap();
     let requests = test.adapter.requests();
     assert_eq!(requests.len(), 2);
     assert!(request_text(&requests[1]).contains("human interleaved"));

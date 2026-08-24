@@ -211,7 +211,7 @@ use seekdeep_tools::{
     presentation::{GenericCallView, ToolCallKind, ToolCallView},
 };
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::{
     domain::{
@@ -315,6 +315,147 @@ pub fn register_schedule_tools(
     tools.register(tool_ctx, delete)
 }
 
+fn view_schema() -> Value {
+    let shared = |kind: &str, interval: Option<&str>| {
+        let mut properties = serde_json::Map::from_iter([
+            ("id".to_owned(), json!({"type": "string", "required": true})),
+            (
+                "prompt".to_owned(),
+                json!({"type": "string", "required": true}),
+            ),
+            (
+                "scheduledAt".to_owned(),
+                json!({"type": "string", "required": true}),
+            ),
+            (
+                "state".to_owned(),
+                json!({"type": "string", "required": true, "enum": ["scheduled", "overdue"]}),
+            ),
+            (
+                "deliveryMode".to_owned(),
+                json!({"type": "string", "required": true, "const": "session-local"}),
+            ),
+            (
+                "kind".to_owned(),
+                json!({"type": "string", "required": true, "const": kind}),
+            ),
+        ]);
+        if let Some(field) = interval {
+            properties.insert(
+                field.to_owned(),
+                json!({"type": "integer", "required": true}),
+            );
+        }
+        json!({
+            "type": "object",
+            "additionalProperties": false,
+            "properties": properties,
+        })
+    };
+    json!({
+        "oneOf": [
+            shared("after", Some("afterSeconds")),
+            shared("at", None),
+            shared("every", Some("everySeconds")),
+        ],
+    })
+}
+
+fn basic_error_schema(code: &str) -> Value {
+    json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "code": {"type": "string", "required": true, "const": code},
+            "message": {"type": "string", "required": true},
+        },
+    })
+}
+
+fn error_schemas() -> Vec<Value> {
+    let mut errors = [
+        "invalid_prompt",
+        "invalid_selector",
+        "invalid_rule",
+        "invalid_time_zone",
+        "not_future",
+        "time_out_of_range",
+        "frequency_too_high",
+        "corrupt_schedule_log",
+        "internal_error",
+    ]
+    .into_iter()
+    .map(basic_error_schema)
+    .collect::<Vec<_>>();
+    errors.push(json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "code": {"type": "string", "required": true, "const": "persistence_uncertain"},
+            "message": {"type": "string", "required": true},
+            "operation": {"type": "string", "required": true, "enum": ["create", "list", "delete"]},
+            "id": {"type": "string"},
+        },
+    }));
+    errors
+}
+
+fn create_output_schema() -> Value {
+    let mut variants = vec![view_schema()];
+    variants.extend(error_schemas());
+    json!({"oneOf": variants})
+}
+
+fn list_output_schema() -> Value {
+    let mut variants = vec![json!({"type": "array", "items": view_schema()})];
+    variants.extend(error_schemas());
+    json!({"oneOf": variants})
+}
+
+fn delete_output_schema() -> Value {
+    let mut variants = vec![
+        json!({
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "id": {"type": "string", "required": true},
+                "deleted": {"type": "boolean", "required": true, "const": true},
+            },
+        }),
+        json!({
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "id": {"type": "string", "required": true},
+                "deleted": {"type": "boolean", "required": true, "const": false},
+                "code": {"type": "string", "required": true, "const": "schedule_not_found"},
+            },
+        }),
+    ];
+    variants.extend(error_schemas());
+    json!({"oneOf": variants})
+}
+
+const CREATE_DESCRIPTION: &str = concat!(
+    "Create one reminder in the current session. Supply a non-empty prompt and exactly one selector: ",
+    "a positive safe-integer after_seconds delay, at as a strict offset date-time or local ",
+    "date/time object, or safe-integer every_seconds of at least 300. ",
+    "Fixed-rate reminders stay creation-aligned, skip missed occurrences, and batch one latest ",
+    "occurrence per overdue rule. ",
+    "Delivery is session-local: the reminder runs on time only while this session ",
+    "is live and otherwise becomes overdue until the session is resumed.",
+);
+
+const LIST_DESCRIPTION: &str = concat!(
+    "List every active reminder in the current session in creation order, including its exact id, ",
+    "UTC target, scheduled or overdue state, and session-local delivery mode.",
+);
+
+const DELETE_DESCRIPTION: &str = concat!(
+    "Delete one active reminder in the current session by its exact id returned by schedule_create ",
+    "or schedule_list. Unknown or already-finished ids return deleted false.",
+);
+
 #[allow(clippy::too_many_lines)]
 fn schedule_create_definition(
     root_ctx: &Context,
@@ -323,12 +464,12 @@ fn schedule_create_definition(
 ) -> anyhow::Result<seekdeep_tools::ToolDefinition> {
     let root_ctx = root_ctx.clone();
     let output = DefineToolOutput::new(
-        json!({"type": "object"}),
+        create_output_schema(),
         Arc::new(render_value::<ScheduleCreateArgs, ScheduleCreateValue>),
     );
     define_tool(DefineToolOptions::new(
         "schedule_create",
-        "Create one reminder in the current session.",
+        CREATE_DESCRIPTION,
         json!({
             "prompt": {"type": "string", "required": true, "description": "Reminder content to present when the target becomes due."},
             "after_seconds": {"type": "number", "description": "Positive safe-integer delay in seconds."},
@@ -438,13 +579,13 @@ fn schedule_list_definition(
 ) -> anyhow::Result<seekdeep_tools::ToolDefinition> {
     let root_ctx = root_ctx.clone();
     let output = DefineToolOutput::new(
-        json!({"type": "object"}),
+        list_output_schema(),
         Arc::new(render_value::<(), ScheduleListValue>),
     );
     define_tool(
         DefineToolOptions::new(
             "schedule_list",
-            "List every active reminder in the current session in creation order.",
+            LIST_DESCRIPTION,
             json!({}),
             output,
             Arc::new(move |_args: (), execution| {
@@ -516,13 +657,13 @@ fn schedule_delete_definition(
 ) -> anyhow::Result<seekdeep_tools::ToolDefinition> {
     let root_ctx = root_ctx.clone();
     let output = DefineToolOutput::new(
-        json!({"type": "object"}),
+        delete_output_schema(),
         Arc::new(render_value::<ScheduleDeleteArgs, ScheduleDeleteValue>),
     );
     define_tool(
         DefineToolOptions::new(
             "schedule_delete",
-            "Delete one active reminder in the current session by its exact id.",
+            DELETE_DESCRIPTION,
             json!({"id": {"type": "string", "required": true, "description": "Exact session-local schedule id."}}),
             output,
             Arc::new(move |args: ScheduleDeleteArgs, execution| {

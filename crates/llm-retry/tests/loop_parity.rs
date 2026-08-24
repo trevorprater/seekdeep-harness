@@ -341,7 +341,7 @@ async fn failed_partial_attempt_retries_inside_one_step_and_never_enters_model_h
     )
     .unwrap();
     loop_agent.agent.followup(user("go")).unwrap();
-    loop_agent.agent.when_idle().unwrap().await;
+    loop_agent.agent.when_idle().unwrap().await.unwrap();
 
     assert_eq!(requests.lock().len(), 2);
     assert_failed_attempt_is_diagnostic_only(&session, &tool_executions);
@@ -425,6 +425,7 @@ async fn turn_cancellation_during_backoff_reaches_idle_without_another_attempt_o
         loop_agent.agent.when_idle().unwrap(),
     )
     .await
+    .unwrap()
     .unwrap();
 
     assert_eq!(requests.lock().len(), 1);
@@ -449,6 +450,7 @@ async fn turn_cancellation_during_backoff_reaches_idle_without_another_attempt_o
 }
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn synchronous_cancellation_from_the_retry_status_event_beats_zero_delay() {
     let context = Context::new();
     let sessions = SessionStore::install(&context).unwrap();
@@ -534,6 +536,7 @@ async fn synchronous_cancellation_from_the_retry_status_event_beats_zero_delay()
         loop_agent.agent.when_idle().unwrap(),
     )
     .await
+    .unwrap()
     .unwrap();
 
     assert_eq!(requests.lock().len(), 1);
@@ -639,6 +642,7 @@ async fn turn_cancellation_waits_for_delegated_always_recovery_before_becoming_i
     release.add_permits(1);
     tokio::time::timeout(Duration::from_secs(1), idle)
         .await
+        .unwrap()
         .unwrap();
 
     assert_eq!(requests.lock().len(), 1);
@@ -728,6 +732,7 @@ async fn assert_earlier_listener_cancellation(policy: ResolvedRetryPolicy, id: &
         loop_agent.agent.when_idle().unwrap(),
     )
     .await
+    .unwrap()
     .unwrap();
 
     assert_eq!(requests.lock().len(), 1);

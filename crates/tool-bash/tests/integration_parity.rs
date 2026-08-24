@@ -227,7 +227,8 @@ async fn run(harness: &Harness, task: &str) {
         .agent
         .when_idle()
         .expect("idle waiter")
-        .await;
+        .await
+        .unwrap();
 }
 
 fn event<'a>(events: &'a [SessionEvent], event_type: &str) -> &'a SessionEvent {

@@ -1484,9 +1484,13 @@ impl SubagentContinuationManager {
                 .handle
                 .agent
                 .when_idle()
-                .unwrap_or_else(|_| Box::pin(async {}));
+                .unwrap_or_else(|error| Box::pin(async move { Err(error.into()) }));
             tokio::select! {
-                () = idle => {},
+                result = idle => {
+                    if result.is_err() {
+                        return;
+                    }
+                },
                 () = activation.poke.wait_after(generation) => {},
             }
             if activation.disposal.lock().is_some() {
@@ -1563,7 +1567,7 @@ impl SubagentContinuationManager {
             .handle
             .agent
             .when_idle()
-            .unwrap_or_else(|_| Box::pin(async {}));
+            .unwrap_or_else(|error| Box::pin(async move { Err(error.into()) }));
         let children: Vec<Arc<Activation>> = {
             let owned = activation.owned_children.lock();
             let activations = self.activations.lock();
@@ -1591,7 +1595,7 @@ impl SubagentContinuationManager {
     async fn finish_disposal_async(
         &self,
         activation: &Arc<Activation>,
-        idle: BoxFuture<'static, ()>,
+        idle: BoxFuture<'static, anyhow::Result<()>>,
         child_disposals: Vec<BoxFuture<'static, anyhow::Result<()>>>,
     ) -> anyhow::Result<()> {
         let child_id = activation.child_id.clone();
@@ -1614,7 +1618,7 @@ impl SubagentContinuationManager {
         }
 
         let phase_failure = async {
-            idle.await;
+            idle.await?;
             self.flush_final_state(activation).await;
             activation
                 .observer

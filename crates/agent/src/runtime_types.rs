@@ -121,7 +121,14 @@ pub trait AgentController: Send + Sync + 'static {
         options: CancelOptions,
     ) -> Result<(), AgentControlError>;
     /// Resolves after the complete current/replacement activity converges idle.
-    fn when_idle(&self) -> BoxFuture<'static, ()>;
+    fn when_idle(&self) -> BoxFuture<'static, anyhow::Result<()>>;
+    /// Awaits controller-owned admission work after the idle phase is reserved.
+    ///
+    /// Custom agents use this to preserve asynchronous `runMaintenance`
+    /// rejection without invoking the supplied task.
+    fn maintenance_ready(&self) -> BoxFuture<'static, anyhow::Result<()>> {
+        Box::pin(async { Ok(()) })
+    }
     /// Atomically reserves the true idle phase for maintenance.
     ///
     /// # Errors
@@ -367,7 +374,8 @@ impl Agent {
     ///
     /// # Errors
     ///
-    /// Returns when no controller is installed.
+    /// Returns immediately when no controller is installed. The returned
+    /// future preserves an asynchronous quiescence-observation failure.
     pub fn cancel(
         &self,
         cause: AgentCancelCause,
@@ -381,7 +389,7 @@ impl Agent {
     /// # Errors
     ///
     /// Returns when no controller is installed.
-    pub fn when_idle(&self) -> Result<BoxFuture<'static, ()>, AgentControlError> {
+    pub fn when_idle(&self) -> Result<BoxFuture<'static, anyhow::Result<()>>, AgentControlError> {
         Ok(self.controller()?.when_idle())
     }
 
@@ -391,21 +399,26 @@ impl Agent {
     ///
     /// # Errors
     ///
-    /// Rejects active work or a missing/disposed controller.
+    /// Rejects active work or a missing/disposed controller immediately. The
+    /// returned future preserves controller-owned asynchronous admission
+    /// failure and never invokes `job` after that failure.
     pub fn run_maintenance<T, Fut>(
         &self,
-        job: impl FnOnce(AbortSignal) -> Fut,
-    ) -> Result<BoxFuture<'static, T>, AgentControlError>
+        job: impl FnOnce(AbortSignal) -> Fut + Send + 'static,
+    ) -> Result<BoxFuture<'static, anyhow::Result<T>>, AgentControlError>
     where
         T: Send + 'static,
         Fut: Future<Output = T> + Send + 'static,
     {
-        let reservation = self.controller()?.begin_maintenance()?;
-        let future = job(reservation.signal());
+        let controller = self.controller()?;
+        let reservation = controller.begin_maintenance()?;
+        let ready = controller.maintenance_ready();
+        let signal = reservation.signal();
         Ok(Box::pin(async move {
-            let result = future.await;
+            ready.await?;
+            let result = job(signal).await;
             reservation.finish();
-            result
+            Ok(result)
         }))
     }
 }

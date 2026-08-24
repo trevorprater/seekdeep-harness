@@ -18,6 +18,8 @@ Status: implemented
 
 `whenIdle()` **保留**为公开的完全停稳观测原语（agent 退出 `running` 状态并完全停稳后 resolve，已处于 idle 时立即 resolve，dispose 后等待循环退出）。它不是停止动词；它是非所有者在不 dispose agent 的前提下观测停止*完成*的方式。它的活跃消费方是 ACP 和通过此公开约定等待结算的 agent 测试（`packages/acp/acp/tests`、`packages/core/agent-loop/tests`）；生产环境的 ACP 桥接层拥有其 agent 并通过 `AgentHandle.dispose()` 销毁它们，因此 `packages/acp/acp/src` 本身没有 `whenIdle()` 调用。
 
+异步结果会把拒绝结果保留为公开约定的一部分。内置循环会正常 resolve，自定义 Agent 则可以拒绝完全停稳观测；生命周期消费方自行决定该失败应中止操作，还是在尽力 teardown 期间被收容。
+
 公共 `abort()` 已不存在，disposer 仍为异步并等待循环停止。测试通过公共类型化原因和显式 signal API 验证取消，而不会伸入 holder 内部。
 
 ## 曾考虑的替代方案

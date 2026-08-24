@@ -9,9 +9,10 @@ use std::{
 };
 
 use parking_lot::Mutex;
-use seekdeep_agent::{AGENTS, AgentLifecycleEvent, AgentStatus};
+use seekdeep_agent::{AGENTS, AgentEvent, AgentLifecycleEvent, AgentStatus};
 use seekdeep_agent_loop::AgentStatusChanged;
-use seekdeep_cordis::{Context, EventOptions, EventReply, fiber::EffectHandle};
+use seekdeep_cordis::{Context, EventOptions, EventReply, Fiber, Plugin, fiber::EffectHandle};
+use seekdeep_tools::{TOOLS, ToolRestriction};
 
 use crate::{runtime::ScheduleRuntime, tools::register_schedule_tools};
 
@@ -54,26 +55,57 @@ pub fn apply(ctx: &Context) -> anyhow::Result<()> {
                         .any(|root_agent| Arc::ptr_eq(root_agent, &event.agent))
                 });
                 if !is_root {
+                    if let Some(tools) = root.get(TOOLS) {
+                        let names = ["schedule_create", "schedule_list", "schedule_delete"];
+                        if names
+                            .iter()
+                            .any(|name| tools.get(name, Some(agent.scope_key())).is_some())
+                        {
+                            let fiber = Fiber::active_child("schedule child restriction");
+                            let scoped = agent.context().with_fiber(fiber.clone());
+                            tools.restrict(
+                                &scoped,
+                                ToolRestriction {
+                                    allow: None,
+                                    deny: Some(names.iter().map(ToString::to_string).collect()),
+                                },
+                            )?;
+                            let cleanup = EffectHandle::new("schedule.child-restriction()", {
+                                let runtimes = runtimes.clone();
+                                move || {
+                                    Box::pin(async move {
+                                        fiber.dispose().await?;
+                                        runtimes.lock().remove(&key);
+                                        Ok(())
+                                    })
+                                }
+                            });
+                            let owned = agent.context().own(cleanup.clone())?;
+                            runtimes.lock().insert(key, owned);
+                        }
+                    }
                     return Ok(EventReply::Undefined);
                 }
 
                 let runtime = ScheduleRuntime::new(&root, agent.clone());
                 let runtime_drive = runtime.clone();
-                register_schedule_tools(&root, agent.context(), agent.clone(), move || {
-                    runtime_drive.request_drive();
-                })?;
-                {
+                let fiber = Fiber::active_child("schedule agent runtime");
+                let agent_context = agent.context().with_fiber(fiber.clone());
+                let installation = (|| -> anyhow::Result<()> {
+                    register_schedule_tools(&root, &agent_context, agent.clone(), move || {
+                        runtime_drive.request_drive();
+                    })?;
                     let runtime = runtime.clone();
                     let status_agent = agent.clone();
-                    let agent_context = agent.context().clone();
                     agent_context.events().on_sync(
                         &agent_context,
                         "agent/status",
                         move |_, args| {
-                            let status = args
-                                .get::<AgentStatusChanged>(0)
+                            let event = args
+                                .get::<AgentEvent<AgentStatusChanged>>(0)
                                 .ok_or_else(|| anyhow::anyhow!("agent/status lacks its payload"))?;
-                            if status.status == AgentStatus::Idle
+                            if Arc::ptr_eq(&event.agent, &status_agent)
+                                && event.payload.status == AgentStatus::Idle
                                 && status_agent
                                     .session()
                                     .events()
@@ -89,15 +121,27 @@ pub fn apply(ctx: &Context) -> anyhow::Result<()> {
                             ..EventOptions::default()
                         },
                     )?;
+                    Ok(())
+                })();
+                if let Err(error) = installation {
+                    let cleanup = futures::executor::block_on(fiber.dispose());
+                    return match cleanup {
+                        Ok(()) => Err(error),
+                        Err(cleanup) => {
+                            Err(anyhow::anyhow!("{error:#}: cleanup failed: {cleanup:#}"))
+                        }
+                    };
                 }
                 runtime.start();
 
                 let cleanup = EffectHandle::new("schedule.runtime()", {
                     let runtime = runtime.clone();
                     let runtimes = runtimes.clone();
+                    let fiber = fiber.clone();
                     move || {
                         Box::pin(async move {
                             runtime.dispose().await;
+                            fiber.dispose().await?;
                             runtimes.lock().remove(&key);
                             Ok(())
                         })
@@ -132,4 +176,15 @@ pub fn apply(ctx: &Context) -> anyhow::Result<()> {
     });
     ctx.own(lifecycle)?;
     Ok(())
+}
+
+/// Builds the Loader-compatible Schedule function plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), move |context, _| {
+        Box::pin(async move {
+            apply(&context)?;
+            Ok(())
+        })
+    })
 }

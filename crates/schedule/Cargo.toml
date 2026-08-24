@@ -30,6 +30,11 @@ tracing.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+tempfile.workspace = true
 tokio.workspace = true
 
 [lints]

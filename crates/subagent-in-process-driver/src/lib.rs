@@ -389,7 +389,7 @@ fn drive_published_run(
                 () = signal.cancelled() => cancel_child(&result_child, &result_cancelled).await,
                 () = async {
                     if let Ok(wait) = wait {
-                        wait.await;
+                        let _ = wait.await;
                     }
                 } => {}
             }
@@ -417,7 +417,7 @@ async fn cancel_child(child: &Arc<Agent>, cancelled: &AtomicBool) {
     cancelled.store(true, Ordering::Release);
     let _ = child.cancel(AgentCancelCause::Parent, CancelOptions::default());
     if let Ok(wait) = child.when_idle() {
-        wait.await;
+        let _ = wait.await;
     }
 }
 

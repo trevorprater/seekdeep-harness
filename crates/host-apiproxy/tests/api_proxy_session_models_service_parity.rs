@@ -113,8 +113,8 @@ impl AgentController for TestController {
         Ok(())
     }
 
-    fn when_idle(&self) -> BoxFuture<'static, ()> {
-        async {}.boxed()
+    fn when_idle(&self) -> BoxFuture<'static, anyhow::Result<()>> {
+        async { Ok(()) }.boxed()
     }
 
     fn begin_maintenance(&self) -> Result<MaintenanceReservation, AgentControlError> {

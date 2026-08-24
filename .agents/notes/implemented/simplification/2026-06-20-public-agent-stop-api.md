@@ -18,6 +18,8 @@ The extra surface area made the loop carry a public verb that was mostly a teard
 
 `whenIdle()` is **retained** as the public quiescence-observation primitive (resolve once the agent settles out of `running`, resolve immediately when already idle, await the loop exit when disposed). It is not a stop verb; it is how a non-owner observes the stop *completing* without disposing the agent. Its live consumers are ACP and agent tests that await settlement through this public contract (`packages/acp/acp/tests`, `packages/core/agent-loop/tests`); the production ACP bridge owns its agents and tears them down through `AgentHandle.dispose()`, so `packages/acp/acp/src` itself has no `whenIdle()` call.
 
+The async result retains rejection as part of the public contract. The built-in loop resolves normally, while a custom Agent may reject a quiescence observation; lifecycle consumers choose whether that failure aborts their operation or is contained during best-effort teardown.
+
 Public `abort()` is absent, and the disposer remains async and waits for the loop to stop. Tests exercise cancellation through the public typed cause and explicit signal APIs rather than reaching into the holder.
 
 ## Alternatives considered

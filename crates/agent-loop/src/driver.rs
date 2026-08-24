@@ -959,7 +959,7 @@ mod tests {
         )
         .expect("agent");
         loop_agent.agent.followup(user("hello")).expect("followup");
-        loop_agent.agent.when_idle().expect("idle").await;
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
 
         let event_types = session
             .events()
@@ -1062,7 +1062,7 @@ mod tests {
             .agent
             .followup(user("use tool"))
             .expect("followup");
-        loop_agent.agent.when_idle().expect("idle").await;
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
 
         let requests = requests.lock();
         assert_eq!(requests.len(), 2);
@@ -1138,7 +1138,8 @@ mod tests {
             loop_agent.agent.when_idle().expect("idle"),
         )
         .await
-        .expect("cancel converged");
+        .expect("cancel converged")
+        .expect("idle convergence");
         let first_events = session.events();
         assert_eq!(
             first_events
@@ -1178,7 +1179,12 @@ mod tests {
             .agent
             .followup(user("after cancellation"))
             .expect("second prompt");
-        loop_agent.agent.when_idle().expect("second idle").await;
+        loop_agent
+            .agent
+            .when_idle()
+            .expect("second idle")
+            .await
+            .unwrap();
         assert_eq!(requests.lock().len(), 2);
         assert_eq!(
             session
@@ -1227,7 +1233,7 @@ mod tests {
                 seekdeep_agent::CancelOptions { keep_inbox: true },
             )
             .expect("cancel");
-        loop_agent.agent.when_idle().expect("idle").await;
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
         assert!(loop_agent.agent.inbox().has_pending());
         assert_eq!(
             session
@@ -1238,7 +1244,12 @@ mod tests {
             1
         );
         loop_agent.agent.followup(user("wake")).expect("wake");
-        loop_agent.agent.when_idle().expect("replayed").await;
+        loop_agent
+            .agent
+            .when_idle()
+            .expect("replayed")
+            .await
+            .unwrap();
         assert!(!loop_agent.agent.inbox().has_pending());
         let events = session.events();
         assert_eq!(
@@ -1303,7 +1314,7 @@ mod tests {
         )
         .expect("agent");
         loop_agent.agent.followup(user("original")).expect("prompt");
-        loop_agent.agent.when_idle().expect("idle").await;
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
         {
             let requests = requests.lock();
             assert_eq!(requests.len(), 1);
@@ -1346,7 +1357,7 @@ mod tests {
         )
         .expect("agent");
         loop_agent.agent.followup(user("blocked")).expect("prompt");
-        loop_agent.agent.when_idle().expect("idle").await;
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
         assert!(requests.lock().is_empty());
         assert!(
             session

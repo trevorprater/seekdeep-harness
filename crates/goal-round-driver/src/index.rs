@@ -849,7 +849,7 @@ pub fn apply(context: &Context) -> anyhow::Result<()> {
                     let _ = run.await;
                 }
                 for wait in idle_waits {
-                    wait.await;
+                    let _ = wait.await;
                 }
                 cleanup_driver.states.lock().clear();
                 Ok(())

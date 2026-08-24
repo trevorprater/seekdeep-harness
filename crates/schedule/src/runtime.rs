@@ -1,7 +1,11 @@
 //! Due-reminder selection and the disposable timer projection.
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
+use parking_lot::Mutex;
 use seekdeep_agent::{AGENTS, Agent};
 use seekdeep_cordis::Context;
 use seekdeep_core::session::AppendOptions;
@@ -127,7 +131,7 @@ pub fn due_decision(folded: &FoldedSchedules, now: i64) -> Result<DueDecision, S
 }
 
 struct RuntimeInner {
-    state: tokio::sync::Mutex<RuntimeState>,
+    state: Mutex<RuntimeState>,
     stop: Notify,
     disposed: tokio::sync::OnceCell<()>,
 }
@@ -147,20 +151,92 @@ pub struct ScheduleRuntime {
     context: Context,
     agent: Arc<Agent>,
     inner: Arc<RuntimeInner>,
+    clock: Arc<dyn ScheduleClock>,
+    messages: Arc<dyn ScheduleMessageFactory>,
+}
+
+/// Injectable wall clock for durable due-time decisions.
+pub trait ScheduleClock: std::fmt::Debug + Send + Sync {
+    /// Current Unix epoch time in milliseconds.
+    fn now_millis(&self) -> i64;
+}
+
+#[derive(Debug)]
+struct SystemScheduleClock;
+
+impl ScheduleClock for SystemScheduleClock {
+    fn now_millis(&self) -> i64 {
+        i64::try_from(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |duration| duration.as_millis()),
+        )
+        .unwrap_or(i64::MAX)
+    }
+}
+
+/// Injectable construction boundary for identified reminder messages.
+pub trait ScheduleMessageFactory: std::fmt::Debug + Send + Sync {
+    /// Builds one plugin-attributed reminder message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an identity or framing failure before queue publication.
+    fn reminder(&self, text: String) -> anyhow::Result<UserMessage>;
+}
+
+#[derive(Debug)]
+struct SystemScheduleMessageFactory;
+
+impl ScheduleMessageFactory for SystemScheduleMessageFactory {
+    fn reminder(&self, text: String) -> anyhow::Result<UserMessage> {
+        Ok(UserMessage::new(
+            vec![ContentBlock::Text { text }],
+            MessageSource::plugin("schedule"),
+        ))
+    }
 }
 
 impl ScheduleRuntime {
     /// Constructs an inactive runtime; `start` begins the first preflight.
     #[must_use]
     pub fn new(context: &Context, agent: Arc<Agent>) -> Arc<Self> {
+        Self::new_with_clock(context, agent, Arc::new(SystemScheduleClock))
+    }
+
+    /// Constructs an inactive runtime with an injected decision clock.
+    #[must_use]
+    pub fn new_with_clock(
+        context: &Context,
+        agent: Arc<Agent>,
+        clock: Arc<dyn ScheduleClock>,
+    ) -> Arc<Self> {
+        Self::new_with_environment(
+            context,
+            agent,
+            clock,
+            Arc::new(SystemScheduleMessageFactory),
+        )
+    }
+
+    /// Constructs an inactive runtime with every decision boundary injected.
+    #[must_use]
+    pub fn new_with_environment(
+        context: &Context,
+        agent: Arc<Agent>,
+        clock: Arc<dyn ScheduleClock>,
+        messages: Arc<dyn ScheduleMessageFactory>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             context: context.clone(),
             agent,
             inner: Arc::new(RuntimeInner {
-                state: tokio::sync::Mutex::new(RuntimeState::default()),
+                state: Mutex::new(RuntimeState::default()),
                 stop: Notify::new(),
                 disposed: tokio::sync::OnceCell::new(),
             }),
+            clock,
+            messages,
         })
     }
 
@@ -171,7 +247,7 @@ impl ScheduleRuntime {
 
     /// Recomputes the live projection after a committed mutation or idle transition.
     pub fn request_drive(self: &Arc<Self>) {
-        let mut state = self.inner.state.blocking_lock();
+        let mut state = self.inner.state.lock();
         if state.stopping || state.faulted {
             return;
         }
@@ -187,14 +263,34 @@ impl ScheduleRuntime {
         let handle = tokio::spawn(async move {
             if let Some(registry) = registry {
                 let loop_this = this.clone();
-                let _ = registry
-                    .scope_without_initiator(async move {
-                        run_requested_loop(loop_this).await;
-                    })
-                    .await;
+                match registry
+                    .scope_without_initiator(async move { run_requested_loop(loop_this).await })
+                    .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        if this.is_live() {
+                            tracing::warn!(
+                                agent = %this.agent.id().as_str(),
+                                %error,
+                                "schedule: runtime failed",
+                            );
+                        }
+                        this.inner.state.lock().faulted = true;
+                    }
+                    Err(error) => {
+                        if this.is_live() {
+                            tracing::warn!(
+                                agent = %this.agent.id().as_str(),
+                                %error,
+                                "schedule: could not start runtime",
+                            );
+                        }
+                    }
+                }
             }
             let rearm = {
-                let mut state = this.inner.state.lock().await;
+                let mut state = this.inner.state.lock();
                 state.run = None;
                 state.requested && !state.stopping && !state.faulted
             };
@@ -211,7 +307,7 @@ impl ScheduleRuntime {
             .disposed
             .get_or_init(|| async {
                 let (run, idle_wait) = {
-                    let mut state = self.inner.state.lock().await;
+                    let mut state = self.inner.state.lock();
                     state.stopping = true;
                     state.requested = false;
                     if let Some(timer) = state.timer.take() {
@@ -231,7 +327,7 @@ impl ScheduleRuntime {
     }
 
     fn clear_timer(&self) {
-        let mut state = self.inner.state.blocking_lock();
+        let mut state = self.inner.state.lock();
         if let Some(timer) = state.timer.take() {
             timer.abort();
         }
@@ -244,12 +340,12 @@ impl ScheduleRuntime {
         let handle = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             {
-                let mut state = this.inner.state.blocking_lock();
+                let mut state = this.inner.state.lock();
                 state.timer = None;
             }
             this.request_drive();
         });
-        self.inner.state.blocking_lock().timer = Some(handle.abort_handle());
+        self.inner.state.lock().timer = Some(handle.abort_handle());
     }
 
     fn is_live(&self) -> bool {
@@ -265,7 +361,7 @@ impl ScheduleRuntime {
     }
 
     fn is_runnable(&self) -> bool {
-        !self.inner.state.blocking_lock().stopping && self.is_live()
+        !self.inner.state.lock().stopping && self.is_live()
     }
 
     fn read_folded(&self) -> Option<FoldedSchedules> {
@@ -279,7 +375,7 @@ impl ScheduleRuntime {
         match fold_schedule_events(&self.agent.session().events(), seed_length) {
             Ok(folded) => Some(folded),
             Err(error @ ScheduleLogError { .. }) => {
-                self.inner.state.blocking_lock().faulted = true;
+                self.inner.state.lock().faulted = true;
                 tracing::warn!(
                     agent = %self.agent.id().as_str(),
                     detail = %error.message,
@@ -306,7 +402,7 @@ impl ScheduleRuntime {
 
     fn wait_for_idle(self: &Arc<Self>) {
         {
-            let state = self.inner.state.blocking_lock();
+            let state = self.inner.state.lock();
             if state.idle_wait.is_some() {
                 return;
             }
@@ -326,23 +422,33 @@ impl ScheduleRuntime {
         };
         let this = self.clone();
         let handle = tokio::spawn(async move {
-            tokio::select! {
-                () = idle => {}
-                () = this.inner.stop.notified() => {}
-            }
+            let idle_result = tokio::select! {
+                result = idle => Some(result),
+                () = this.inner.stop.notified() => None,
+            };
             {
-                let mut state = this.inner.state.blocking_lock();
+                let mut state = this.inner.state.lock();
                 state.idle_wait = None;
+            }
+            if let Some(Err(error)) = idle_result {
+                if this.is_live() {
+                    tracing::warn!(
+                        agent = %this.agent.id().as_str(),
+                        %error,
+                        "schedule: idle wait failed",
+                    );
+                }
+                return;
             }
             this.request_drive();
         });
-        self.inner.state.blocking_lock().idle_wait = Some(handle);
+        self.inner.state.lock().idle_wait = Some(handle);
     }
 
-    async fn drive_once(self: &Arc<Self>) {
+    async fn drive_once(self: &Arc<Self>) -> anyhow::Result<()> {
         self.clear_timer();
         if !self.is_runnable() {
-            return;
+            return Ok(());
         }
         if let Err(error) = flush_schedule_persistence(&self.context, self.agent.session()).await {
             if self.is_live() {
@@ -352,23 +458,23 @@ impl ScheduleRuntime {
                     "schedule: preflight failed",
                 );
             }
-            return;
+            return Ok(());
         }
         if !self.is_runnable() {
-            return;
+            return Ok(());
         }
         let Some(folded) = self.read_folded() else {
-            return;
+            return Ok(());
         };
-        let wake_now = now_millis();
+        let wake_now = self.clock.now_millis();
         let Some(wake_decision) = self.decide(&folded, wake_now) else {
-            return;
+            return Ok(());
         };
         if let DueDecision::Wait { target } = &wake_decision {
             if let Some(target) = target {
                 self.arm(*target, wake_now);
             }
-            return;
+            return Ok(());
         }
         let this = self.clone();
         let Ok(maintenance) = self.agent.run_maintenance(move |_signal| {
@@ -378,10 +484,10 @@ impl ScheduleRuntime {
             if self.is_live() {
                 self.wait_for_idle();
             }
-            return;
+            return Ok(());
         };
-        if !maintenance.await {
-            return;
+        if !maintenance.await? {
+            return Ok(());
         }
         if let Err(error) = flush_schedule_persistence(&self.context, self.agent.session()).await {
             if self.is_live() {
@@ -391,11 +497,12 @@ impl ScheduleRuntime {
                     "schedule: dispatch barrier failed",
                 );
             }
-            return;
+            return Ok(());
         }
         if self.is_runnable() {
             self.request_drive();
         }
+        Ok(())
     }
 
     fn dispatch_decision(self: &Arc<Self>) -> bool {
@@ -405,7 +512,7 @@ impl ScheduleRuntime {
         let Some(claimed) = self.read_folded() else {
             return false;
         };
-        let decision_now = now_millis();
+        let decision_now = self.clock.now_millis();
         let Some(decision) = self.decide(&claimed, decision_now) else {
             return false;
         };
@@ -420,10 +527,19 @@ impl ScheduleRuntime {
             DueDecision::Every { reminders, .. } => render_every_reminder_batch_framing(reminders),
             DueDecision::Wait { .. } => return false,
         };
-        let message = UserMessage::new(
-            vec![ContentBlock::Text { text }],
-            MessageSource::plugin("schedule"),
-        );
+        let message = match self.messages.reminder(text) {
+            Ok(message) => message,
+            Err(error) => {
+                if self.is_live() {
+                    tracing::warn!(
+                        agent = %self.agent.id().as_str(),
+                        %error,
+                        "schedule: framing or followup failed",
+                    );
+                }
+                return false;
+            }
+        };
         if let Err(error) = self.agent.followup(message) {
             if self.is_live() {
                 tracing::warn!(
@@ -435,7 +551,7 @@ impl ScheduleRuntime {
             return false;
         }
         if let Err(error) = self.append_dispatch(&decision) {
-            self.inner.state.blocking_lock().faulted = true;
+            self.inner.state.lock().faulted = true;
             self.clear_timer();
             tracing::warn!(
                 agent = %self.agent.id().as_str(),
@@ -492,10 +608,10 @@ impl ScheduleRuntime {
     }
 }
 
-async fn run_requested_loop(this: Arc<ScheduleRuntime>) {
+async fn run_requested_loop(this: Arc<ScheduleRuntime>) -> anyhow::Result<()> {
     loop {
         let should_run = {
-            let mut state = this.inner.state.lock().await;
+            let mut state = this.inner.state.lock();
             if state.stopping || state.faulted || !state.requested {
                 false
             } else {
@@ -511,15 +627,7 @@ async fn run_requested_loop(this: Arc<ScheduleRuntime>) {
             let this = loop_this.clone();
             Box::pin(async move { this.drive_once().await })
         })
-        .await;
+        .await?;
     }
-}
-
-fn now_millis() -> i64 {
-    i64::try_from(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_millis()),
-    )
-    .unwrap_or(i64::MAX)
+    Ok(())
 }

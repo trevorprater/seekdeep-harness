@@ -716,11 +716,13 @@ mod tests {
                 seekdeep_llm::MessageSource::user(),
             ))
             .expect("second prompt");
-        futures::future::join(
+        let (first_idle, second_idle) = futures::future::join(
             first.agent.when_idle().expect("first idle"),
             second.agent.when_idle().expect("second idle"),
         )
         .await;
+        first_idle.unwrap();
+        second_idle.unwrap();
         let mut observations = observations.lock().clone();
         observations.sort();
         assert_eq!(
@@ -762,7 +764,7 @@ mod tests {
                 seekdeep_llm::MessageSource::user(),
             ))
             .expect("prompt");
-        original.agent.when_idle().expect("idle").await;
+        original.agent.when_idle().expect("idle").await.unwrap();
         let persisted = seekdeep_session_persistence::SessionInspection {
             meta: original.agent.session().header().clone(),
             events: original.agent.session().events(),
@@ -822,7 +824,12 @@ mod tests {
                 seekdeep_llm::MessageSource::user(),
             ))
             .expect("prompt after resume");
-        resumed.agent.when_idle().expect("idle resumed").await;
+        resumed
+            .agent
+            .when_idle()
+            .expect("idle resumed")
+            .await
+            .unwrap();
         let events = resumed.agent.session().events();
         let live_header = events
             .iter()

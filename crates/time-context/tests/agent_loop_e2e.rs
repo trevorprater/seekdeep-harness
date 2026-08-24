@@ -180,7 +180,7 @@ async fn real_driver_persists_one_ordered_reading_per_request_without_header_lea
             MessageSource::user(),
         ))
         .expect("followup");
-    loop_agent.agent.when_idle().expect("idle").await;
+    loop_agent.agent.when_idle().expect("idle").await.unwrap();
 
     let requests = requests.lock();
     assert_eq!(requests.len(), 2);

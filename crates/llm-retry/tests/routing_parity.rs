@@ -271,7 +271,7 @@ async fn selects_policy_from_the_failed_request_provider() {
     let (normal_session, normal_agent) =
         create_agent(&context, services.clone(), "routing-normal", "mock");
     normal_agent.agent.followup(user("normal")).unwrap();
-    normal_agent.agent.when_idle().unwrap().await;
+    normal_agent.agent.when_idle().unwrap().await.unwrap();
     assert!(
         !normal_session
             .events()
@@ -282,7 +282,7 @@ async fn selects_policy_from_the_failed_request_provider() {
     let (always_session, always_agent) =
         create_agent(&context, services, "routing-always", "other");
     always_agent.agent.followup(user("always")).unwrap();
-    always_agent.agent.when_idle().unwrap().await;
+    always_agent.agent.when_idle().unwrap().await.unwrap();
     let retry_event = always_session
         .events()
         .into_iter()
@@ -348,7 +348,7 @@ async fn agent_request_rerouting_selects_the_rerouted_provider_policy() {
     .unwrap();
     let (session, agent) = create_agent(&context, services, "routing-waterfall", "mock");
     agent.agent.followup(user("reroute")).unwrap();
-    agent.agent.when_idle().unwrap().await;
+    agent.agent.when_idle().unwrap().await.unwrap();
 
     assert_eq!(
         requests
@@ -427,7 +427,7 @@ async fn one_step_keeps_finite_budgets_separate_when_request_routing_changes_pro
     .unwrap();
     let (session, agent) = create_agent(&context, services, "routing-provider-budgets", "mock");
     agent.agent.followup(user("switch provider")).unwrap();
-    agent.agent.when_idle().unwrap().await;
+    agent.agent.when_idle().unwrap().await.unwrap();
 
     assert_eq!(
         requests
@@ -463,7 +463,7 @@ async fn no_final_adapter_has_no_policy_and_does_not_retry() {
     let (_llm, services) = install_services(&context);
     let (session, agent) = create_agent(&context, services, "routing-missing", "missing");
     agent.agent.followup(user("missing route")).unwrap();
-    agent.agent.when_idle().unwrap().await;
+    agent.agent.when_idle().unwrap().await.unwrap();
 
     assert!(
         !session
@@ -526,7 +526,7 @@ async fn assert_in_flight_policy_capture(in_band: bool, session_id: &str) {
     .unwrap();
     release.add_permits(1);
     wait_for_retry(&session, 2).await;
-    agent.agent.when_idle().unwrap().await;
+    agent.agent.when_idle().unwrap().await.unwrap();
 
     let events = session
         .events()

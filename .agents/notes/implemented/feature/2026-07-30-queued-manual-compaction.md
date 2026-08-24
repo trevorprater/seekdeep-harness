@@ -28,6 +28,8 @@ The seam's `ManualCompactAgentContext` adds only `runMaintenance()` to the sessi
 
 `Agent.runMaintenance(task)` starts only from the idle phase and claims that phase before invoking the task. A waking send starts the loop immediately when idle, so whichever operation claims the phase first owns the boundary.
 
+The public async result preserves a controller-owned admission rejection after the phase is claimed; on that path the supplied task is never invoked and the reservation still releases. Consumers can therefore distinguish synchronous busy rejection from asynchronous maintenance-start failure without losing quiescence.
+
 Maintenance does not create a second queue. Later sends keep their `MessageId`, placement, FIFO order, and wakeup facts. Waking input remains queued until maintenance settles, then starts the existing driver path; `inject()` remains non-waking.
 
 `whenIdle()` treats maintenance and any waking work released behind it as unfinished activity. Cancellation aborts the agent-owned maintenance signal, and lifecycle teardown drains the same activity boundary before disposal completes.

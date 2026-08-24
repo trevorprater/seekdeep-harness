@@ -62402,12 +62402,28 @@
     {
       "source": "packages/schedule/schedule/tests/jsonl-restart.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/schedule/tests/jsonl_restart_parity.rs"],
+      "evidence": [
+        "pnpm exec vitest run packages/schedule/schedule/tests/runtime.spec.ts packages/schedule/schedule/tests/plugin.spec.ts packages/schedule/schedule/tests/jsonl-restart.spec.ts --reporter=dot (30 passed)",
+        "cargo test -p seekdeep-schedule --all-features"
+      ],
+      "note": "real Agent resume over production JSONL dispatches one overdue reminder exactly once, then a second cold runtime and raw persistence inspection prove no redispatch"
     },
     {
       "source": "packages/schedule/schedule/tests/plugin.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schedule/tests/plugin_parity.rs",
+        "crates/schedule/src/index.rs",
+        "crates/schedule/src/tools.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/schedule/schedule/tests/runtime.spec.ts packages/schedule/schedule/tests/plugin.spec.ts packages/schedule/schedule/tests/jsonl-restart.spec.ts --reporter=dot (30 passed)",
+        "cargo test -p seekdeep-schedule --all-features"
+      ],
+      "note": "Loader plugin shape, future-root-only installation, exact output schemas, child masking, departing-agent cleanup, HMR disposal, and unrelated idle behavior are exercised through the compiled tool and AgentLoop stack"
     },
     {
       "source": "packages/schedule/schedule/tests/recurrence.spec.ts",
@@ -62419,7 +62435,18 @@
     {
       "source": "packages/schedule/schedule/tests/runtime.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schedule/tests/runtime_parity.rs",
+        "crates/schedule/src/runtime.rs",
+        "crates/agent/src/runtime_types.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/schedule/schedule/tests/runtime.spec.ts packages/schedule/schedule/tests/plugin.spec.ts packages/schedule/schedule/tests/jsonl-restart.spec.ts --reporter=dot (30 passed)",
+        "cargo test -p seekdeep-schedule --all-features",
+        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+      ],
+      "note": "injected-clock and message-factory differential covers segmented waits, wall-clock movement, admission ordering, one-shot priority, fixed-rate batching, refold/reclock, persistence and append faults, async idle/maintenance rejection, liveness loss, and quiescent teardown"
     },
     {
       "source": "packages/schedule/schedule/tests/tools.spec.ts",

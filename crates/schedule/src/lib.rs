@@ -18,10 +18,13 @@ pub use domain::{
     fold_schedule_events, render_every_reminder_batch_framing, render_reminder_framing,
     resolve_every_occurrence, schedule_view,
 };
-pub use index::{INJECT, NAME as PACKAGE_NAME, apply};
+pub use index::{INJECT, NAME as PACKAGE_NAME, apply, plugin};
 pub use invariant::{NAME, register_invariant};
 pub use persistence::{SchedulePersistenceError, flush_schedule_persistence};
-pub use runtime::{DueDecision, MAX_TIMER_DELAY_MS, due_decision};
+pub use runtime::{
+    DueDecision, MAX_TIMER_DELAY_MS, ScheduleClock, ScheduleMessageFactory, ScheduleRuntime,
+    due_decision,
+};
 pub use tools::{
     ScheduleCreateArgs, corrupt_log_error, input_error, internal_error, persistence_error,
     register_schedule_tools, validate_create_args,

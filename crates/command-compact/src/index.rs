@@ -48,7 +48,7 @@ fn maintenance_runner(agent: &Arc<Agent>) -> MaintenanceRunner {
         let agent = agent.clone();
         Box::pin(async move {
             match agent.run_maintenance(task) {
-                Ok(future) => future.await,
+                Ok(future) => future.await?,
                 Err(error) => Err(anyhow::anyhow!(error.to_string())),
             }
         })

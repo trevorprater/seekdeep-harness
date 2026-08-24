@@ -183,7 +183,7 @@ impl LoopController {
     /// Permanently rejects new work after cancelling and converging the driver.
     pub async fn dispose(&self) {
         let _ = self.cancel(AgentCancelCause::Disposed, CancelOptions::default());
-        self.when_idle().await;
+        let _ = self.when_idle().await;
         let last_turn = match &self.state.lock().phase {
             Phase::Idle { last_turn }
             | Phase::Disposed { last_turn }
@@ -433,12 +433,12 @@ impl AgentController for LoopController {
         Ok(())
     }
 
-    fn when_idle(&self) -> BoxFuture<'static, ()> {
+    fn when_idle(&self) -> BoxFuture<'static, anyhow::Result<()>> {
         let weak = self.self_weak.clone();
         Box::pin(async move {
             loop {
                 let Some(controller) = weak.upgrade() else {
-                    return;
+                    return Ok(());
                 };
                 let notified = controller.changed.notified();
                 let idle = {
@@ -448,7 +448,7 @@ impl AgentController for LoopController {
                         && state.completed_activity == state.next_activity
                 };
                 if idle {
-                    return;
+                    return Ok(());
                 }
                 notified.await;
             }
@@ -698,7 +698,7 @@ mod tests {
         assert_eq!(started_rx.recv().await, Some(2));
         assert!(idle.as_mut().now_or_never().is_none());
         releases.add_permits(1);
-        loop_agent.agent.when_idle().expect("idle 2").await;
+        loop_agent.agent.when_idle().expect("idle 2").await.unwrap();
         assert_eq!(
             *statuses.lock(),
             [
@@ -742,17 +742,22 @@ mod tests {
         loop_agent.agent.followup(message("queued")).expect("queue");
         assert!(started_rx.try_recv().is_err());
         finish_tx.send(()).expect("finish maintenance");
-        assert_eq!(maintenance.await, 7);
+        assert_eq!(maintenance.await.unwrap(), 7);
         assert_eq!(started_rx.recv().await, Some(1));
         releases.add_permits(1);
-        loop_agent.agent.when_idle().expect("idle").await;
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
 
         let dropped = loop_agent
             .agent
             .run_maintenance(|_| async { futures::future::pending::<()>().await })
             .expect("second maintenance");
         drop(dropped);
-        loop_agent.agent.when_idle().expect("drop released").await;
+        loop_agent
+            .agent
+            .when_idle()
+            .expect("drop released")
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -797,6 +802,6 @@ mod tests {
             .expect("second cancel");
         assert_eq!(signal.reason().expect("reason")["reason"], "first");
         releases.add_permits(1);
-        loop_agent.agent.when_idle().expect("idle").await;
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
     }
 }

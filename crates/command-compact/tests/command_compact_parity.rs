@@ -57,8 +57,8 @@ impl AgentController for IdleController {
         Ok(())
     }
 
-    fn when_idle(&self) -> BoxFuture<'static, ()> {
-        Box::pin(async {})
+    fn when_idle(&self) -> BoxFuture<'static, anyhow::Result<()>> {
+        Box::pin(async { Ok(()) })
     }
 
     fn begin_maintenance(&self) -> Result<MaintenanceReservation, AgentControlError> {

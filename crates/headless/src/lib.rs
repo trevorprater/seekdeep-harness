@@ -209,7 +209,7 @@ impl HeadlessRunner {
         }));
 
         let handle = self.agents.create(options).await?;
-        handle.agent.when_idle()?.await;
+        handle.agent.when_idle()?.await?;
         let first_seq = handle.agent.session().seq();
         handle.agent.followup(UserMessage::new(
             vec![ContentBlock::Text {
@@ -217,7 +217,7 @@ impl HeadlessRunner {
             }],
             MessageSource::user(),
         ))?;
-        handle.agent.when_idle()?.await;
+        handle.agent.when_idle()?.await?;
         self.sessions.flush(handle.agent.session()).await?;
         let outcome = summarize(&handle.agent.session().events(), first_seq);
         Ok((session_id, outcome))

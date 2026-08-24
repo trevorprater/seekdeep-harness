@@ -287,7 +287,7 @@ impl Harness {
 
     async fn run(&self) {
         self.agent.followup(user()).unwrap();
-        self.agent.when_idle().unwrap().await;
+        self.agent.when_idle().unwrap().await.unwrap();
     }
 
     fn retry_codes(&self) -> Vec<String> {

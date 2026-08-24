@@ -52,6 +52,8 @@ Every 是固定时长间隔，而不是日历规则。第一个目标是创建�
 
 Agent-scoped owner 从持久 fold 派生最早目标。超长目标使用有界 timer 分段，每次 wake 都会重新读取墙钟，因此回拨不会提前触发，前跳则会形成 overdue。已到期的一次性提醒优先，每次准入一条；否则，所有逾期 Every 记录会按目标时间和创建顺序进入同一个批次。如果 Agent 已被某个轮次或另一项 maintenance task 占用，`runMaintenance()` 会拒绝此次认领；这些记录保持活动，并由一次 `whenIdle()` wait 触发另一次尝试。被拒绝的 preflight 或被收容的 framing／入队失败同样会使其保持活动，但不会启动私有重试 timer。
 
+Rust 生产代码位于 [`crates/schedule`](../../../../crates/schedule/src/runtime.rs)。timer 决策通过注入的 `ScheduleClock` 获取墙钟，提醒身份与 framing 则经过注入的 `ScheduleMessageFactory`，因此测试可以确定性覆盖回拨、前跳、无效时钟与构造失败。每个未来根 Agent 都会获得一个由插件拥有、同时包含工具与运行时的子 fiber；后代则获得由插件拥有的限制，以屏蔽继承的 Schedule 工具。因此，Agent dispose 或 Schedule HMR（热模块替换）会移除确切注册，不会遗留后代屏蔽规则或 timer 代次。
+
 获得准入的路径会刷新所有 pending persistence 并认领真正的 idle phase。它会重新折叠确切的 Session 后缀、采样 decision clock、用经过 JSON 转义的值构造固定提醒 framing、同步排入一个 `followup()`，并在释放 maintenance 前追加 dispatch。一次性提醒会追加只含 id 的终结 dispatch。固定速率批次会为每条参与记录追加一个 `id + acceptedAt` 转换。触发唤醒的 input 会保持 parked，直到 maintenance 释放，因此在 dispatch 进入日志前，消息不会被认领；随后 owner 会为 dispatch 执行 checkpoint。
 
 dispatch 记录的是队列准入，而不是模型完成或用户收到提醒。framing 构造或同步入队失败不会追加 dispatch。append 失败会使该 owner fault，因为消息可能已经入队。Agent 或插件 dispose 会取消 timer、停止新工作、撤销工具注册，并等待进行中的工作，且不会删除持久记录。follow-up 获得准入后、持久 dispatch 前发生崩溃，可能使提醒在恢复后重复；本设计不作 exactly-once 承诺。
@@ -74,7 +76,7 @@ dispatch 记录的是队列准入，而不是模型完成或用户收到提醒�
 
 ## 验证
 
-包测试以逐文件 100% coverage 固定严格回放、一次性与 Every 状态转换、创建锚点运算、只追赶最新一次、多记录批处理、fork 后缀、id 复用、偏移量与本地日历 profile、IANA 校验、夏令时缺口与重叠、时间边界、timer 分段、墙钟变化、overdue 准入、固定 framing、入队与 append 失败、barrier 恢复、注册 rollback 和完全停稳的 dispose。属性测试会在不同间隔与跳过跨度下比较 Every 计算与回放。production JSONL restart 测试证明一条 overdue 提醒会经过真实 Agent 生命周期 dispatch，并且再次 restart 后不会重复 dispatch。Host／client 测试固定浏览器时区采样与绑定到提示词的校验。无密钥组装 Web 场景覆盖浏览器本地 At，以及通过普通 assistant follow-up 交付的逾期双记录 Every 批次，两者都没有回执 UI。
+包测试以逐文件 100% coverage 固定严格回放、一次性与 Every 状态转换、创建锚点运算、只追赶最新一次、多记录批处理、fork 后缀、id 复用、偏移量与本地日历 profile、IANA 校验、夏令时缺口与重叠、时间边界、timer 分段、墙钟变化、overdue 准入、固定 framing、入队与 append 失败、barrier 恢复、注册 rollback 和完全停稳的 dispose。Rust 差分测试通过注入时钟的 timer 分段、maintenance 与 idle 拒绝、部分批次 fault、存活性竞争、作用域工具注册、Loader dispose 和 dispatch barrier 来驱动已编译运行时。属性测试会在不同间隔与跳过跨度下比较 Every 计算与回放。production JSONL restart 测试证明一条 overdue 提醒会经过真实 Agent 生命周期 dispatch，并且再次 restart 后不会重复 dispatch。Host／client 测试固定浏览器时区采样与绑定到提示词的校验。无密钥组装 Web 场景覆盖浏览器本地 At，以及通过普通 assistant follow-up 交付的逾期双记录 Every 批次，两者都没有回执 UI。
 
 ## 后果
 
