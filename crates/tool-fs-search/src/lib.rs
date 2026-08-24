@@ -1005,6 +1005,210 @@ fn install_post_handler(
     Ok(())
 }
 
+fn glob_model_schema(caps: ResolvedConfig) -> (String, Value) {
+    let over_cap_description = if caps.sample {
+        format!(
+            "a larger result instead returns {} paths sampled across top-level entries",
+            caps.glob_max
+        )
+    } else {
+        format!(
+            "a larger result returns the first {} paths in modification-time order",
+            caps.glob_max
+        )
+    };
+    let description = format!(
+        "Find files whose paths match a glob pattern. Returns matching file paths — never directories — including hidden and ignored files (VCS metadata directories are excluded). Up to {} paths come back in modification-time order; {over_cap_description}, says so, and reports where the complete sorted list was saved. This tool does not enumerate directory entries.",
+        caps.glob_max
+    );
+    let parameters = json!({
+        "pattern": {
+            "type": "string",
+            "required": true,
+            "description": "Glob pattern to match file paths against (e.g. \"**/*.ts\", \"src/**/*.test.js\"). A pattern with no \"/\" matches the basename at any depth, so \"*\" and \"*.ts\" both search the whole tree; include a separator to anchor the depth."
+        },
+        "path": {
+            "type": "string",
+            "description": "Directory to search in. Defaults to the session workspace; a relative path resolves against it."
+        }
+    });
+    (description, parameters)
+}
+
+fn grep_model_schema(caps: ResolvedConfig) -> (String, Value) {
+    let description = format!(
+        "Search file contents with a ripgrep regular expression. Returns matching lines with line numbers, grouped by file. Returns the first {} matches inline; a capped result reports where the complete match list was saved. Use read on a matched file for surrounding context.",
+        caps.grep_max
+    );
+    let parameters = json!({
+        "pattern": {
+            "type": "string",
+            "required": true,
+            "description": "Regular expression to search for (ripgrep syntax)."
+        },
+        "path": {
+            "type": "string",
+            "description": "File or directory to search. Defaults to the session workspace; a relative path resolves against it."
+        },
+        "include": {
+            "type": "string",
+            "description": "One glob filter for which files to search (e.g. \"*.ts\", \"*.{js,jsx}\"). Not a list; negation is not supported."
+        }
+    });
+    (description, parameters)
+}
+
+fn register_glob(
+    context: &Context,
+    tools: Arc<seekdeep_tools::ToolRuntime>,
+    runtime: Arc<SearchRuntime>,
+    caps: ResolvedConfig,
+) -> anyhow::Result<()> {
+    let output = DefineToolOutput::new(
+        json!({"type":"object","additionalProperties":false,"properties":{"root":{"type":"string","required":true},"paths":{"type":"array","required":true,"items":{"type":"string"}}}}),
+        Arc::new(move |_args: &GlobInput, value: &GlobValue| Ok(vec![ContentBlock::Text { text: format_glob(&value.paths, &value.root, caps, None) }])),
+    ).presentation_meta(Arc::new(move |_args, value| {
+        let paths = if value.paths.len() <= caps.glob_max { value.paths.clone() } else if caps.sample { sample_across_top_level(&value.paths, caps.glob_max, &value.root).0 } else { value.paths[..caps.glob_max].to_vec() };
+        Ok(serde_json::to_value(cap_meta(SearchMeta::Paths { paths, truncated: value.paths.len() > caps.glob_max, total: value.paths.len() as u64 }, caps.meta_max))?)
+    }));
+    let (description, parameters) = glob_model_schema(caps);
+    let options = DefineToolOptions::new(
+        "glob",
+        description,
+        parameters,
+        output,
+        Arc::new(move |args: GlobInput, exec| {
+            let runtime = runtime.clone();
+            Box::pin(async move {
+                let input = parse_glob_args(args)?;
+                let (stdout, no_matches, workdir) = runtime
+                    .run(&exec, "glob", build_glob_command(&input), caps)
+                    .await?;
+                let root = input
+                    .path
+                    .as_ref()
+                    .map_or_else(|| ".".into(), |path| to_workdir_relative(path, &workdir));
+                let paths = if no_matches {
+                    Vec::new()
+                } else {
+                    stdout
+                        .lines()
+                        .filter(|line| !line.is_empty())
+                        .map(|line| to_workdir_relative(line, &workdir))
+                        .collect()
+                };
+                Ok(GlobValue { root, paths })
+            })
+        }),
+    )
+    .timeout_ms(caps.timeout_ms)
+    .present_call(Arc::new(|args| {
+        Some(ToolCallView::Generic(GenericCallView {
+            title: format!(
+                "Glob {}{}",
+                args.pattern,
+                args.path
+                    .as_ref()
+                    .map_or(String::new(), |path| format!(" in {path}"))
+            ),
+            kind: Some(ToolCallKind::Search),
+            raw_input: Some(json!(args.pattern)),
+            content: None,
+            locations: None,
+        }))
+    }))
+    .present_result(Arc::new(|_, result: &ToolResult| {
+        if result.is_error {
+            None
+        } else {
+            search_view(result.meta.as_ref())
+                .map(ToolResultView::Search)
+                .filter(|view| matches!(view, ToolResultView::Search(SearchResultView::Paths(_))))
+        }
+    }));
+    tools.register(context, define_tool(options)?)?;
+    let definition = tools
+        .get("glob", seekdeep_scope::scope_of(context))
+        .ok_or_else(|| anyhow::anyhow!("registered glob disappeared"))?;
+    install_post_handler(context, tools, definition, caps, true)
+}
+
+fn register_grep(
+    context: &Context,
+    tools: Arc<seekdeep_tools::ToolRuntime>,
+    runtime: Arc<SearchRuntime>,
+    caps: ResolvedConfig,
+) -> anyhow::Result<()> {
+    let output = DefineToolOutput::new(
+        json!({"type":"object","additionalProperties":false,"properties":{"matches":{"type":"array","required":true,"items":{"type":"object","additionalProperties":false,"properties":{"path":{"type":"string","required":true},"lineNumber":{"type":"integer","required":true},"line":{"type":"string","required":true}}}}}}),
+        Arc::new(move |_args: &GrepInput, value: &GrepValue| Ok(vec![ContentBlock::Text { text: format_grep(&value.matches, caps, None) }])),
+    ).presentation_meta(Arc::new(move |_args, value| {
+        let retained = retained_matches(&value.matches, caps.grep_max, caps.line_max);
+        Ok(serde_json::to_value(cap_meta(SearchMeta::Matches { files: group_matches(&retained), truncated: value.matches.len() > caps.grep_max, total: value.matches.len() as u64 }, caps.meta_max))?)
+    }));
+    let (description, parameters) = grep_model_schema(caps);
+    let options = DefineToolOptions::new(
+        "grep",
+        description,
+        parameters,
+        output,
+        Arc::new(move |args: GrepInput, exec| {
+            let runtime = runtime.clone();
+            Box::pin(async move {
+                let input = parse_grep_args(args)?;
+                let (stdout, no_matches, workdir) = runtime
+                    .run(&exec, "grep", build_grep_command(&input), caps)
+                    .await?;
+                let matches = if no_matches {
+                    Vec::new()
+                } else {
+                    parse_grep_matches(&stdout)?
+                        .into_iter()
+                        .map(|mut item| {
+                            item.path = to_workdir_relative(&item.path, &workdir);
+                            item
+                        })
+                        .collect()
+                };
+                Ok(GrepValue { matches })
+            })
+        }),
+    )
+    .timeout_ms(caps.timeout_ms)
+    .present_call(Arc::new(|args| {
+        Some(ToolCallView::Generic(GenericCallView {
+            title: format!(
+                "Grep {}{}{}",
+                args.pattern,
+                args.path
+                    .as_ref()
+                    .map_or(String::new(), |path| format!(" in {path}")),
+                args.include
+                    .as_ref()
+                    .map_or(String::new(), |include| format!(" ({include})"))
+            ),
+            kind: Some(ToolCallKind::Search),
+            raw_input: Some(json!(args.pattern)),
+            content: None,
+            locations: None,
+        }))
+    }))
+    .present_result(Arc::new(|_, result: &ToolResult| {
+        if result.is_error {
+            None
+        } else {
+            search_view(result.meta.as_ref())
+                .map(ToolResultView::Search)
+                .filter(|view| matches!(view, ToolResultView::Search(SearchResultView::Matches(_))))
+        }
+    }));
+    tools.register(context, define_tool(options)?)?;
+    let definition = tools
+        .get("grep", seekdeep_scope::scope_of(context))
+        .ok_or_else(|| anyhow::anyhow!("registered grep disappeared"))?;
+    install_post_handler(context, tools, definition, caps, false)
+}
+
 /// Registers both search tools.
 ///
 /// # Errors
@@ -1029,62 +1233,8 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     prompt.section(context, PromptSection::new("tool:glob", 103.0, seekdeep_system_prompt::PromptText::Static("Use the glob tool — not shell find — to discover files by path pattern. A pattern with no \"/\" matches basenames at any depth, so \"*\" matches every file in the tree rather than its top level. Results are files only, never directories, and include hidden and ignored files.".into())))?;
     prompt.section(context, PromptSection::new("tool:grep", 104.0, seekdeep_system_prompt::PromptText::Static("Use the grep tool — not shell grep or rg — to search file contents. Use read on a matched file when you need surrounding context.".into())))?;
 
-    let glob_output = DefineToolOutput::new(
-        json!({"type":"object","additionalProperties":false,"properties":{"root":{"type":"string","required":true},"paths":{"type":"array","required":true,"items":{"type":"string"}}}}),
-        Arc::new(move |_args: &GlobInput, value: &GlobValue| Ok(vec![ContentBlock::Text { text: format_glob(&value.paths, &value.root, caps, None) }])),
-    ).presentation_meta(Arc::new(move |_args, value| {
-        let paths = if value.paths.len() <= caps.glob_max { value.paths.clone() } else if caps.sample { sample_across_top_level(&value.paths, caps.glob_max, &value.root).0 } else { value.paths[..caps.glob_max].to_vec() };
-        Ok(serde_json::to_value(cap_meta(SearchMeta::Paths { paths, truncated: value.paths.len() > caps.glob_max, total: value.paths.len() as u64 }, caps.meta_max))?)
-    }));
-    let glob_runtime = runtime.clone();
-    let glob_options = DefineToolOptions::new(
-        "glob",
-        "Find files whose paths match a glob pattern. Returns matching file paths — never directories — including hidden and ignored files (VCS metadata directories are excluded).",
-        json!({"pattern":{"type":"string","required":true},"path":{"type":"string"}}),
-        glob_output,
-        Arc::new(move |args: GlobInput, exec| { let runtime = glob_runtime.clone(); Box::pin(async move {
-            let input = parse_glob_args(args)?;
-            let (stdout, no_matches, workdir) = runtime.run(&exec, "glob", build_glob_command(&input), caps).await?;
-            let root = input.path.as_ref().map_or_else(|| ".".into(), |path| to_workdir_relative(path, &workdir));
-            let paths = if no_matches { Vec::new() } else { stdout.lines().filter(|line| !line.is_empty()).map(|line| to_workdir_relative(line, &workdir)).collect() };
-            Ok(GlobValue { root, paths })
-        }) }),
-    ).timeout_ms(caps.timeout_ms)
-        .present_call(Arc::new(|args| Some(ToolCallView::Generic(GenericCallView { title: format!("Glob {}{}", args.pattern, args.path.as_ref().map_or(String::new(), |path| format!(" in {path}"))), kind: Some(ToolCallKind::Search), raw_input: Some(json!(args.pattern)), content: None, locations: None }))))
-        .present_result(Arc::new(|_, result: &ToolResult| if result.is_error { None } else { search_view(result.meta.as_ref()).map(ToolResultView::Search).filter(|view| matches!(view, ToolResultView::Search(SearchResultView::Paths(_)))) }));
-    tools.register(context, define_tool(glob_options)?)?;
-    let glob_def = tools
-        .get("glob", seekdeep_scope::scope_of(context))
-        .ok_or_else(|| anyhow::anyhow!("registered glob disappeared"))?;
-    install_post_handler(context, tools.clone(), glob_def, caps, true)?;
-
-    let grep_output = DefineToolOutput::new(
-        json!({"type":"object","additionalProperties":false,"properties":{"matches":{"type":"array","required":true,"items":{"type":"object","additionalProperties":false,"properties":{"path":{"type":"string","required":true},"lineNumber":{"type":"integer","required":true},"line":{"type":"string","required":true}}}}}}),
-        Arc::new(move |_args: &GrepInput, value: &GrepValue| Ok(vec![ContentBlock::Text { text: format_grep(&value.matches, caps, None) }])),
-    ).presentation_meta(Arc::new(move |_args, value| {
-        let retained = retained_matches(&value.matches, caps.grep_max, caps.line_max);
-        Ok(serde_json::to_value(cap_meta(SearchMeta::Matches { files: group_matches(&retained), truncated: value.matches.len() > caps.grep_max, total: value.matches.len() as u64 }, caps.meta_max))?)
-    }));
-    let grep_runtime = runtime;
-    let grep_options = DefineToolOptions::new(
-        "grep",
-        "Search file contents with a ripgrep regular expression. Returns matching lines with line numbers, grouped by file. Use read on a matched file for surrounding context.",
-        json!({"pattern":{"type":"string","required":true},"path":{"type":"string"},"include":{"type":"string"}}),
-        grep_output,
-        Arc::new(move |args: GrepInput, exec| { let runtime = grep_runtime.clone(); Box::pin(async move {
-            let input = parse_grep_args(args)?;
-            let (stdout, no_matches, workdir) = runtime.run(&exec, "grep", build_grep_command(&input), caps).await?;
-            let matches = if no_matches { Vec::new() } else { parse_grep_matches(&stdout)?.into_iter().map(|mut item| { item.path = to_workdir_relative(&item.path, &workdir); item }).collect() };
-            Ok(GrepValue { matches })
-        }) }),
-    ).timeout_ms(caps.timeout_ms)
-        .present_call(Arc::new(|args| Some(ToolCallView::Generic(GenericCallView { title: format!("Grep {}{}{}", args.pattern, args.path.as_ref().map_or(String::new(), |path| format!(" in {path}")), args.include.as_ref().map_or(String::new(), |include| format!(" ({include})"))), kind: Some(ToolCallKind::Search), raw_input: Some(json!(args.pattern)), content: None, locations: None }))))
-        .present_result(Arc::new(|_, result: &ToolResult| if result.is_error { None } else { search_view(result.meta.as_ref()).map(ToolResultView::Search).filter(|view| matches!(view, ToolResultView::Search(SearchResultView::Matches(_)))) }));
-    tools.register(context, define_tool(grep_options)?)?;
-    let grep_def = tools
-        .get("grep", seekdeep_scope::scope_of(context))
-        .ok_or_else(|| anyhow::anyhow!("registered grep disappeared"))?;
-    install_post_handler(context, tools, grep_def, caps, false)?;
+    register_glob(context, tools.clone(), runtime.clone(), caps)?;
+    register_grep(context, tools, runtime, caps)?;
     Ok(())
 }
 

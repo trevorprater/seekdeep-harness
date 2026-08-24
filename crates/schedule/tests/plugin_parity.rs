@@ -145,6 +145,14 @@ async fn installs_only_on_future_roots_and_unwinds_tools_on_plugin_disposal() {
             "missing {name}"
         );
     }
+    assert_eq!(
+        test.dependencies
+            .tools
+            .get("schedule_delete", Some(root.agent.scope_key()))
+            .unwrap()
+            .description,
+        "Delete one active reminder in the current session by the exact id returned by schedule_create or schedule_list. Unknown or already-finished ids return deleted false."
+    );
     assert!(
         test.dependencies
             .tools

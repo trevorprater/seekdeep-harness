@@ -328,5 +328,24 @@ async fn config_timeout_and_plugin_disposal_preserve_loader_lifecycle() {
         harness.tools.get("glob", None).unwrap().timeout_ms,
         Some(30_000.0)
     );
+    let glob = harness.tools.get("glob", None).unwrap();
+    assert!(
+        glob.description.contains(
+            "Up to 100 paths come back in modification-time order; a larger result instead returns 100 paths sampled across top-level entries"
+        )
+    );
+    assert_eq!(
+        glob.parameters["properties"]["pattern"]["description"],
+        "Glob pattern to match file paths against (e.g. \"**/*.ts\", \"src/**/*.test.js\"). A pattern with no \"/\" matches the basename at any depth, so \"*\" and \"*.ts\" both search the whole tree; include a separator to anchor the depth."
+    );
+    let grep = harness.tools.get("grep", None).unwrap();
+    assert!(
+        grep.description
+            .contains("Returns the first 250 matches inline")
+    );
+    assert_eq!(
+        grep.parameters["properties"]["include"]["description"],
+        "One glob filter for which files to search (e.g. \"*.ts\", \"*.{js,jsx}\"). Not a list; negation is not supported."
+    );
     harness.context.fiber().dispose().await.unwrap();
 }

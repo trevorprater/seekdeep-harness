@@ -45,6 +45,15 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Generate or verify the model-facing tool-schema catalog from Rust runtime registrations.
+    ToolCatalog {
+        /// Pinned source checkout used for the exhaustive `tool-*` inventory.
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Verify the tracked output without writing it.
+        #[arg(long)]
+        check: bool,
+    },
     /// Builds one Rust/WASM Client package as a synchronous classic module-table bundle.
     WasmPackage {
         /// Cargo package containing the browser cdylib.
@@ -79,6 +88,13 @@ fn main() -> anyhow::Result<()> {
         Command::Parity { source, scope } => parity(&source, scope),
         Command::PersistenceCatalog { source, check } => {
             xtask::persistence_catalog::run(Path::new("."), &source, check)
+        }
+        Command::ToolCatalog { source, check } => {
+            verify_source(&source)?;
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?
+                .block_on(xtask::tool_catalog::run(Path::new("."), &source, check))
         }
         Command::WasmPackage {
             package,

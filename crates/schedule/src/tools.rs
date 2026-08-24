@@ -452,7 +452,7 @@ const LIST_DESCRIPTION: &str = concat!(
 );
 
 const DELETE_DESCRIPTION: &str = concat!(
-    "Delete one active reminder in the current session by its exact id returned by schedule_create ",
+    "Delete one active reminder in the current session by the exact id returned by schedule_create ",
     "or schedule_list. Unknown or already-finished ids return deleted false.",
 );
 

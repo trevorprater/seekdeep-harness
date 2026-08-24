@@ -7,8 +7,10 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 base64.workspace = true
 clap.workspace = true
+futures.workspace = true
 oxc_allocator.workspace = true
 oxc_ast.workspace = true
 oxc_codegen.workspace = true
@@ -16,6 +18,55 @@ oxc_parser.workspace = true
 oxc_span.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+seekdeep-agent = { path = "../crates/agent" }
+seekdeep-attachment-local = { path = "../crates/attachment-local" }
+seekdeep-bash-local = { path = "../crates/bash-local" }
+seekdeep-cordis = { path = "../crates/cordis" }
+seekdeep-cordis-host-runner = { path = "../crates/cordis-host-runner" }
+seekdeep-core = { path = "../crates/core" }
+seekdeep-fs-local = { path = "../crates/fs-local" }
+seekdeep-goal = { path = "../crates/goal" }
+seekdeep-jobs-local = { path = "../crates/jobs-local" }
+seekdeep-llm = { path = "../crates/llm" }
+seekdeep-lsp = { path = "../crates/lsp" }
+seekdeep-plan-mode = { path = "../crates/plan-mode" }
+seekdeep-pwsh-local = { path = "../crates/pwsh-local" }
+seekdeep-schedule = { path = "../crates/schedule" }
+seekdeep-scope = { path = "../crates/scope" }
+seekdeep-session-query = { path = "../crates/session-query" }
+seekdeep-session-query-sqlite = { path = "../crates/session-query-sqlite" }
+seekdeep-shell-env = { path = "../crates/shell-env" }
+seekdeep-skill = { path = "../crates/skill" }
+seekdeep-subagent = { path = "../crates/subagent" }
+seekdeep-subprocess-local = { path = "../crates/subprocess-local" }
+seekdeep-system-prompt = { path = "../crates/system-prompt" }
+seekdeep-terminal = { path = "../crates/terminal" }
+seekdeep-tool-ask-user = { path = "../crates/tool-ask-user" }
+seekdeep-tool-bash = { path = "../crates/tool-bash" }
+seekdeep-tool-bash-persistent = { path = "../crates/tool-bash-persistent" }
+seekdeep-tool-cordis = { path = "../crates/tool-cordis" }
+seekdeep-tool-fs = { path = "../crates/tool-fs" }
+seekdeep-tool-fs-search = { path = "../crates/tool-fs-search" }
+seekdeep-tool-goal = { path = "../crates/tool-goal" }
+seekdeep-tool-jobs = { path = "../crates/tool-jobs" }
+seekdeep-tool-lsp = { path = "../crates/tool-lsp" }
+seekdeep-tool-pwsh = { path = "../crates/tool-pwsh" }
+seekdeep-tool-ralph = { path = "../crates/tool-ralph" }
+seekdeep-tool-session-query = { path = "../crates/tool-session-query" }
+seekdeep-tool-skill = { path = "../crates/tool-skill" }
+seekdeep-tool-str-replace-editor = { path = "../crates/tool-str-replace-editor" }
+seekdeep-tool-subagent = { path = "../crates/tool-subagent" }
+seekdeep-tool-subagent-control = { path = "../crates/tool-subagent-control" }
+seekdeep-tool-subagent-report = { path = "../crates/tool-subagent-report" }
+seekdeep-tool-terminal = { path = "../crates/tool-terminal" }
+seekdeep-tool-todo = { path = "../crates/tool-todo" }
+seekdeep-tool-web = { path = "../crates/tool-web" }
+seekdeep-tool-workflow = { path = "../crates/tool-workflow" }
+seekdeep-tools = { path = "../crates/tools" }
+seekdeep-user-questions = { path = "../crates/user-questions" }
+seekdeep-web = { path = "../crates/web" }
+seekdeep-workflow = { path = "../crates/workflow" }
+tokio.workspace = true
 walkdir.workspace = true
 
 [dev-dependencies]

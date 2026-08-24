@@ -3247,7 +3247,6 @@ fn run_code_definition(
             },
         },
         "required": ["code", "description"],
-        "additionalProperties": false,
     })
     .as_object()
     .expect("run_code parameters are an object")
@@ -4124,6 +4123,10 @@ mod tests {
         assert_eq!(
             run_code.parameters["properties"]["code"]["description"],
             json!("The program: the body of an async Python function.")
+        );
+        assert!(
+            !run_code.parameters.contains_key("additionalProperties"),
+            "source run_code arguments remain open to undeclared keys"
         );
     }
 

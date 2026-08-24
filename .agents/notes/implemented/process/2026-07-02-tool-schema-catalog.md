@@ -10,30 +10,30 @@ The repository had no single reference for the names, descriptions, and JSON Sch
 
 ## Decision
 
-Generate the catalog by **booting each tool plugin and reading its registered schemas**, not by parsing source. `scripts/gen-tool-catalog.ts` mounts each shipped tool package on a fresh cordis `Context` (with `SystemPrompt` + `ToolRuntime` and the injected services the plugin's `apply` reads), calls `ctx.tools.schemas()` — exactly the `ToolSchema[]` the model is sent — disposes the context, and renders one `## <package>` section per package with a ` ```json ` `parameters` block per tool. It mirrors the `gen-cordis-catalog` / `gen-module-graph` CLI shape: default `--write` regenerates, `--check` fails if the committed copy is stale, output is deterministic (manifest-ordered, tools sorted by name). `verify-tool-catalog` (the `--check`) runs inside `doc-sync`, so relevant documentation changes and CI exercise the same freshness check.
+Generate the catalog by **booting each Rust tool package and reading its registered schemas**, not by parsing source. [`xtask/src/tool_catalog.rs`](../../../../xtask/src/tool_catalog.rs) mounts each package on a fresh Cordis `Context` with `SystemPrompt`, `ToolRuntime`, and the services its registration reads; calls `ToolRuntime::schemas()`, which returns the exact ordered `ToolSchema` values sent to the model; disposes the context to quiescence; and renders one `## <package>` section with a ` ```json ` `parameters` block per tool. `cargo xtask tool-catalog` regenerates the deterministic manifest-ordered, name-sorted output, while `--check` rejects a stale committed copy. The `verify-tool-catalog` package script invokes that Rust check inside `doc-sync`, so documentation changes and CI use the same freshness path.
 
 ### Why boot, not parse (the crux)
 
-The cordis catalog is a pure TypeScript-AST pass because every event/service name is a string literal that round-trips to a static declaration — the AST is the whole truth. **Tool schemas are not statically knowable**, so the same technique would produce a doc that lies:
+The pinned source's Cordis catalog can use a static-source pass because every event and service name round-trips to a declaration. **Tool schemas are not statically knowable**, so static TypeScript or Rust analysis would produce a document that lies:
 
-- `tool-todo` writes `enum: [...STATUSES]` — a spread of a runtime `const`. The AST sees the spread expression, not `["pending","in_progress","completed"]`.
-- Every description is built by string **concatenation** (`'…' + '…'`). The AST sees concatenation nodes, not the final prose the model reads.
-- `tool-subagent`'s tool name is `config.toolName ?? 'subagent'` — chosen at load, not a literal.
-- An MCP plugin can register **raw JSON Schema** directly via `ctx.tools.register()` without `defineTool` at all, so enumerating `defineTool(` call sites structurally under-counts.
+- `tool-todo` expands its status constants into `["pending","in_progress","completed"]` at runtime; syntax inspection sees the construction, not the registered literals.
+- Descriptions incorporate resolved caps and configuration, so the model reads final strings rather than their source fragments.
+- `tool-subagent` chooses its tool name at load time, including the shipped `subagent_fork` alias.
+- An MCP compatibility plugin may register **raw JSON Schema** without the typed `define_tool` helper, so enumerating helper call sites under-counts.
 
 The only faithful source of truth is the schema the registry actually holds after the plugin loads. Booting is the [testing-policy discipline](../../../../docs/testing.md) "verify the world, not the self-report" applied to a doc generator: read the shipped artifact, not a re-derivation of it.
 
 ### Restoring "nothing silently omitted"
 
-Booting has a cost the AST pass did not: there is no source declaration set to enumerate, so a new tool package could simply be forgotten. A **completeness guard** restores the guarantee — `assertManifestComplete` globs every `tool-*` package under `packages/` and hard-errors if any is absent from the generator's boot manifest. A new tool package fails the generator, and therefore `doc-sync`, until it is registered. This is the same structural property the cordis generator gets for free from enumerating source, re-created for a boot-based generator.
+Booting has no declaration set to enumerate, so a new tool package could be forgotten. `assert_manifest_complete` restores the guarantee by comparing the Rust boot manifest with every `packages/*/tool-*` directory in the pinned source checkout. Any omitted source package fails the generator, and therefore `doc-sync`, until its Rust boot recipe is present.
 
 ### A hand-maintained boot manifest is the irreducible policy
 
-The filesystem discovers the tool-package inventory and the completeness guard rejects omissions. `TOOL_PACKAGES` still owns an explicit boot recipe for each package because required Service Providers and config are policy, not facts that can be inferred safely from layout or injection names.
+The pinned filesystem discovers the required package inventory and the completeness guard rejects omissions. `tool_packages()` still owns an explicit Rust boot recipe for each package because required Service Providers, scoped registration, and configuration choices are policy, not facts that layout or injection names can determine safely.
 
 ### Scope
 
-Shipped product tool packages under `packages/*/tool-*`, each booted with its default config, including `seekdeep-tool-bash` (`bash`), `seekdeep-tool-jobs` (`job_output`, `job_list`, `job_kill`), and `seekdeep-tool-subagent` (`subagent`). Example-only tools are excluded.
+The manifest covers every shipped product tool corresponding to the pinned `packages/*/tool-*` inventory, plus schemas owned by the core tool registry, plan mode, and Schedule. Each package boots with its deployment default unless a required choice is recorded in its catalog note. Example-only tools are excluded.
 
 The catalog unit is a package, not every configured tool instance. Each package boots once with default config; load-time aliases such as `subagent_fork` are noted without enumerating every deployment permutation. A deployment inventory is a separate, unbounded surface.
 
@@ -41,9 +41,13 @@ The catalog unit is a package, not every configured tool instance. Each package 
 
 Schema blocks use ` ```json `, not a bespoke `ts`-family fence. `doc-typecheck` only extracts `ts*` fences, so a JSON block is invisible to it — no `BlockKind` wiring is needed (unlike the cordis catalog's `ts cordis-catalog` fence, which had to be allowlisted so a bare signature fragment isn't compiled).
 
+## Verification
+
+The Rust generator tests boot every package, assert the complete 52-name catalog, exercise scoped Schedule and report registrations, retain the runtime-expanded todo enum, verify Rust source attribution and the `subagent_fork` note, reject incomplete manifests and empty harvests, and pin Markdown rendering. The source generator guarantee suite remains the oracle, while the generated catalog differential requires every tool name, description, and pretty-printed JSON Schema block to be byte-identical to the pinned source; this also pins schema-object key order that affects serialized model requests and request-cache bytes.
+
 ## Alternatives considered
 
-- **A pure TypeScript-AST pass, like the cordis catalog** — tool schemas are not statically knowable (the crux above): runtime spreads, string concatenation, config-chosen names, and raw `ctx.tools.register()` registrations all make an AST-derived doc lie.
+- **Static TypeScript or Rust source analysis** — tool schemas are not statically knowable: runtime values, resolved descriptions, configured names, and raw registrations make a syntax-derived document lie.
 - **Inferring each package's boot recipe from its injects** — the "too clever" path [the discover-package-inventory proposal](../../proposed/process/2026-06-20-discover-package-inventory.md) warns against; the recipe stays hand-written policy while the inventory is discovered and completeness-guarded.
 - **A bespoke `ts`-family fence for schema blocks** — unnecessary: a plain ` ```json ` fence is invisible to `doc-typecheck`, so no `BlockKind` allowlisting is needed.
 
@@ -51,5 +55,5 @@ Schema blocks use ` ```json `, not a bespoke `ts`-family fence. `doc-typecheck` 
 
 - The catalog cannot drift: a tool schema change the committed file doesn't reflect fails `verify-tool-catalog` in `doc-sync` and CI. A new `tool-*` package not added to the manifest fails the completeness guard outright.
 - Tool description prose has a single home — the `defineTool` `description` at the source — and the generated entry is only as good as it, the same forcing function the cordis catalog applies to event JSDoc.
-- The generator imports and executes workspace packages (the first repo script to do so; the others only read text). It runs under `tsx` via the root `tsconfig` `paths` map, the same unbuilt-source path the demos and tests use, so it needs no build step.
+- The generator links and executes the Rust workspace packages through `cargo xtask`; it requires no Node runtime or separately built package artifacts.
 - A new capability seam behind a future tool means a new manifest recipe entry (which seams to mount). This is the deliberate hand-written cost called out above; it changes only when a tool package is added.

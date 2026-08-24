@@ -28843,7 +28843,8 @@
         "docs/tool-catalog.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "recorded Git blob hashes match the Rust-generated English catalog and its reviewed Chinese counterpart",
+        "paired heading, table, link, and 52 byte-identical JSON-fence structures were compared before re-recording"
       ]
     },
     {
@@ -28854,8 +28855,11 @@
         "docs/tool-catalog.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
-      ]
+        "cargo xtask tool-catalog --check",
+        "Rust/source differential: all 52 tool names, descriptions, and pretty-printed JSON Schema blocks are byte-identical to the pinned generated source catalog",
+        "cargo xtask docs"
+      ],
+      "note": "The English catalog is generated from live Rust registrations and attributes every tool to its Rust implementation source."
     },
     {
       "source": "docs/tool-catalog.zh.md",
@@ -28865,8 +28869,10 @@
         "docs/tool-catalog.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "reviewed Chinese counterpart mirrors the Rust generator, pinned-source scope, Cordis supervised-host boundary, and current subagent-control dependencies",
+        "all 52 JSON Schema fences and Rust source targets match the generated English catalog"
+      ],
+      "note": "Generated English and reviewed Chinese remain an equal-authority recorded pair."
     },
     {
       "source": "docs/tool-execution-pipeline.i18n.yaml",
@@ -36121,9 +36127,10 @@
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
-        "gen-persistence-catalog and verify-persistence-catalog delegate directly to the verified Rust cargo xtask persistence-catalog command"
+        "gen-persistence-catalog and verify-persistence-catalog delegate directly to the verified Rust cargo xtask persistence-catalog command",
+        "gen-tool-catalog and verify-tool-catalog delegate directly to the verified Rust cargo xtask tool-catalog command"
       ],
-      "note": "root package metadata preserves source command names while Rust owns persistence-catalog generation and freshness behavior"
+      "note": "root package metadata preserves source command names while Rust owns persistence- and tool-catalog generation and freshness behavior"
     },
     {
       "source": "packages/AGENTS.md",
@@ -50370,7 +50377,16 @@
     {
       "source": "packages/core/tools/tests/gen-tool-catalog.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/tool_catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: packages/core/tools/tests/gen-tool-catalog.spec.ts passed 10/10",
+        "cargo test --locked --offline -p xtask -p seekdeep-tools -p seekdeep-tool-fs-search -p seekdeep-schedule --all-features",
+        "Rust generator tests boot every shipped package, retain runtime enum values and attribution, verify aliases, reject incomplete manifests and empty harvests, and pin rendered Markdown",
+        "cargo xtask docs"
+      ]
     },
     {
       "source": "packages/core/tools/tests/invariant.spec.ts",
@@ -76453,7 +76469,21 @@
     {
       "source": "scripts/gen-tool-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/tool_catalog.rs",
+        "xtask/src/main.rs",
+        "package.json",
+        "docs/tool-catalog.md"
+      ],
+      "evidence": [
+        "pinned-source Vitest: packages/core/tools/tests/gen-tool-catalog.spec.ts passed 10/10",
+        "cargo test --locked --offline -p xtask -p seekdeep-tools -p seekdeep-tool-fs-search -p seekdeep-schedule --all-features",
+        "cargo xtask tool-catalog --check",
+        "Rust/source differential: 52/52 names, descriptions, and pretty-printed ordered JSON Schema blocks are byte-identical",
+        "cargo xtask docs"
+      ],
+      "note": "Rust boots each package on an isolated Cordis context, harvests live schemas including scoped registrations, checks the pinned source tool-package inventory, fails on empty boots, disposes to quiescence, and renders deterministic Rust source attribution."
     },
     {
       "source": "scripts/gen-translation-brief.ts",

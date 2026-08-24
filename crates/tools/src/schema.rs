@@ -710,15 +710,17 @@ fn assemble(mut nodes: Vec<CompiledNode>, root: usize) -> Value {
 }
 
 fn assemble_node(node: CompiledNode, values: &mut [Option<Value>]) -> Value {
-    let mut object = node.annotations;
-    match node.kind {
-        CompiledKind::Json => {}
+    let CompiledNode { annotations, kind } = node;
+    let mut object = Map::new();
+    match kind {
+        CompiledKind::Json => object.extend(annotations),
         CompiledKind::Scalar {
             schema_type,
             enumeration,
             constant,
         } => {
             object.insert("type".to_owned(), Value::String(schema_type));
+            object.extend(annotations);
             if let Some(enumeration) = enumeration {
                 object.insert("enum".to_owned(), enumeration);
             }
@@ -728,6 +730,7 @@ fn assemble_node(node: CompiledNode, values: &mut [Option<Value>]) -> Value {
         }
         CompiledKind::Array { items } => {
             object.insert("type".to_owned(), Value::String("array".to_owned()));
+            object.extend(annotations);
             if let Some(items) = items {
                 object.insert("items".to_owned(), take_value(values, items));
             }
@@ -737,6 +740,7 @@ fn assemble_node(node: CompiledNode, values: &mut [Option<Value>]) -> Value {
             additional_properties,
         } => {
             object.insert("type".to_owned(), Value::String("object".to_owned()));
+            object.extend(annotations);
             object.insert(
                 "additionalProperties".to_owned(),
                 Value::Bool(additional_properties),
@@ -755,6 +759,7 @@ fn assemble_node(node: CompiledNode, values: &mut [Option<Value>]) -> Value {
                         .collect(),
                 ),
             );
+            object.extend(annotations);
         }
         CompiledKind::ParameterRoot { properties } => {
             object.insert("type".to_owned(), Value::String("object".to_owned()));
@@ -908,6 +913,40 @@ mod tests {
                 },
                 "required": ["closed"]
             })
+        );
+    }
+
+    #[test]
+    fn compiled_schema_key_order_matches_javascript_projection_order() {
+        let parameters = parameter_schema_spec_to_json_schema(json!({
+            "scalar": {
+                "type": "string",
+                "required": true,
+                "description": "scalar description",
+                "title": "Scalar",
+                "enum": ["a", "b"]
+            },
+            "object": {
+                "type": "object",
+                "description": "object description",
+                "additionalProperties": false,
+                "properties": {
+                    "item": {
+                        "type": "array",
+                        "description": "array description",
+                        "items": {"type": "integer"}
+                    }
+                }
+            },
+            "choice": {
+                "oneOf": [{"type": "boolean"}, {"type": "null"}],
+                "description": "choice description"
+            }
+        }))
+        .expect("schema");
+        assert_eq!(
+            serde_json::to_string(parameters.as_value()).expect("serialize"),
+            r#"{"type":"object","properties":{"scalar":{"type":"string","description":"scalar description","title":"Scalar","enum":["a","b"]},"object":{"type":"object","description":"object description","additionalProperties":false,"properties":{"item":{"type":"array","description":"array description","items":{"type":"integer"}}}},"choice":{"oneOf":[{"type":"boolean"},{"type":"null"}],"description":"choice description"}},"required":["scalar"]}"#
         );
     }
 
