@@ -225,7 +225,6 @@ pub fn apply_edit_tool(ctx: &Context, sandbox: &Arc<FsSandboxController>) -> any
 
 /// Raw schema-validated edit arguments, including the escalation fields.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct EditArgsRaw {
     /// Path to edit.
     pub file_path: String,

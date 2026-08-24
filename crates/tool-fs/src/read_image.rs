@@ -20,7 +20,6 @@ use crate::read_target::{emit_fs_observed, resolve_regular_read_target};
 
 /// Raw schema-validated `read_image` arguments.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ReadImageArgs {
     /// Path to the image file.
     pub file_path: String,

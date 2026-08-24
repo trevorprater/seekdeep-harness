@@ -229,7 +229,6 @@ pub fn apply_write_tool(ctx: &Context, sandbox: &Arc<FsSandboxController>) -> an
 
 /// Raw schema-validated write arguments, including the escalation fields.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct WriteArgsRaw {
     /// Path to write.
     pub file_path: String,

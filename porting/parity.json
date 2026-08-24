@@ -53776,7 +53776,9 @@
     {
       "source": "packages/fs/tool-fs/tests/fs-tools.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs/tests/integration_parity.rs", "crates/fs-local/tests/filesystem_parity.rs"],
+      "evidence": ["pinned-source Vitest: tool-fs 175 passed", "Rust assembled tests drive ctx.tools through read/write/edit into real disk with session cwd, observation state, and canonical result/meta projections", "cargo test -p seekdeep-tool-fs --all-features: 30 passed"]
     },
     {
       "source": "packages/fs/tool-fs/tests/harness.ts",
@@ -53788,7 +53790,9 @@
     {
       "source": "packages/fs/tool-fs/tests/integration.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs/tests/integration_parity.rs"],
+      "evidence": ["Rust integration pins write-read-edit round trips, owner-scoped read-before-edit, real fs-sandbox denial and escalation advertisement, disk verification, and replay-safe diff cards", "cargo test -p seekdeep-tool-fs --all-features: 30 passed"]
     },
     {
       "source": "packages/fs/tool-fs/tests/read-image.spec.ts",
@@ -53807,7 +53811,9 @@
     {
       "source": "packages/fs/tool-fs/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs/src/read.rs", "crates/tool-fs/src/write.rs", "crates/tool-fs/src/edit.rs", "crates/tool-fs/tests/integration_parity.rs"],
+      "evidence": ["Rust unit and assembled tests pin exact snake_case wire arguments, schemas, validation/defaults, prompts, renderers, structured errors, observation events, sandbox fields, canonical values, metadata, presenters, and real provider execution", "cargo test -p seekdeep-tool-fs --all-features: 30 passed", "cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/fs/tool-fs/tsconfig.json",

@@ -24,5 +24,14 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+seekdeep-core = { path = "../core" }
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-fs-observation-policy = { path = "../fs-observation-policy" }
+seekdeep-fs-sandbox = { path = "../fs-sandbox" }
+seekdeep-scope = { path = "../scope" }
+tempfile.workspace = true
+tokio.workspace = true
+
 [lints]
 workspace = true

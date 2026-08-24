@@ -42,7 +42,6 @@ pub struct ReadToolCaps {
 
 /// Raw schema-validated read arguments.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ReadArgsRaw {
     /// Path to read.
     pub file_path: String,

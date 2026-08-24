@@ -51,7 +51,7 @@ Consumer 包仅依赖 Service Definition 包，从不依赖 `seekdeep-fs-local`�
 
 `@seekdeep-ai/seekdeep-fs-local` 依赖 `@seekdeep-ai/seekdeep-fs` 和 `cordis`。生产代码位于 [`crates/fs-local`](../../../../crates/fs-local/src/index.rs)：它实现 `FileSystem`，将自身注册为 `ctx.fs`，拥有本地后端配置（如基目录），并包含安全的宿主文件系统访问；不可避免的 Win32 发布 FFI 被隔离在 [`crates/fs-local-win32-native`](../../../../crates/fs-local-win32-native/src/lib.rs)。按目标的弱引用锁会序列化共享同一规范身份的变更，受保护创建通过不替换的硬链接发布，确定性的独占暂存目录在不使用环境随机性的情况下保护原子写入。它不持有观测状态存储——新鲜度是后端铸造、策略插件记录的版本令牌。
 
-`@seekdeep-ai/seekdeep-tool-fs` 依赖 `@seekdeep-ai/seekdeep-fs`、`@seekdeep-ai/seekdeep-tools`、`@seekdeep-ai/seekdeep-system-prompt` 和 `cordis`。它注册面向模型的工具和提示词段落。它禁止导入 `node:fs`、`node:path` 或 `@seekdeep-ai/seekdeep-fs-local`；文件系统执行始终通过 `ctx.fs`。如果实现需要具体的 agent（智能体）或会话辅助类型，这些依赖属于 `tool-fs`；它们禁止回漏到 `seekdeep-fs` 中。
+`@seekdeep-ai/seekdeep-tool-fs` 依赖 `@seekdeep-ai/seekdeep-fs`、`@seekdeep-ai/seekdeep-tools`、`@seekdeep-ai/seekdeep-system-prompt` 和 `cordis`。生产代码位于 [`crates/tool-fs`](../../../../crates/tool-fs/src/index.rs)；其原始参数类型保留模型 schema 的精确 snake_case 字段（`file_path`、`old_string`、`new_string`、`replace_all` 与 `sandbox_permissions`）。它注册面向模型的工具和提示词段落。兼容性源禁止导入 `node:fs`、`node:path` 或 `@seekdeep-ai/seekdeep-fs-local`，Rust 实现也只依赖文件系统 seam；执行始终通过 `ctx.fs`。具体的 agent（智能体）或会话辅助类型属于 `tool-fs`，禁止回漏到 `seekdeep-fs` 中。
 
 根 `tool-fs` 插件通过组合各工具的注册辅助函数来注册完整的文件系统工具套件（`read`、`write` 和 `edit`）。它注入 `fs`，从不导入 Service Provider 包。
 
