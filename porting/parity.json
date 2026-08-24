@@ -53760,12 +53760,16 @@
     {
       "source": "packages/fs/tool-fs/tests/diff.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs/src/diff.rs"],
+      "evidence": ["pinned-source Vitest: tool-fs 175 passed", "Rust tests pin empty insertion, replacement, identical text, contextual diff metadata, and defensive replay narrowing", "cargo test -p seekdeep-tool-fs --all-features: 26 passed"]
     },
     {
       "source": "packages/fs/tool-fs/tests/error.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs/src/error.rs", "crates/tool-fs/src/sandbox.rs"],
+      "evidence": ["Rust tests pin guarded-mutation remediation, ordinary error passthrough, and sandbox-denial-only marker rewriting", "cargo test -p seekdeep-tool-fs --all-features: 26 passed"]
     },
     {
       "source": "packages/fs/tool-fs/tests/fs-tools.e2e.ts",
@@ -53775,7 +53779,9 @@
     {
       "source": "packages/fs/tool-fs/tests/harness.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs/src/index.rs"],
+      "evidence": ["Rust in-module tests use the real typed tool components directly; no separate TypeScript harness adapter is required"]
     },
     {
       "source": "packages/fs/tool-fs/tests/integration.spec.ts",
@@ -53785,12 +53791,16 @@
     {
       "source": "packages/fs/tool-fs/tests/read-image.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs/src/read_image.rs"],
+      "evidence": ["Rust tests pin case-insensitive image extension mapping plus canonical attachment reference/output rendering", "cargo test -p seekdeep-tool-fs --all-features: 26 passed"]
     },
     {
       "source": "packages/fs/tool-fs/tests/read-render.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs/src/read_render.rs"],
+      "evidence": ["Rust tests pin numbered windows, bounds, byte caps, long-line truncation, language mapping, envelopes, and pagination footer", "cargo test -p seekdeep-tool-fs --all-features: 26 passed", "cargo clippy -p seekdeep-tool-fs --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/fs/tool-fs/tests/tools.spec.ts",
