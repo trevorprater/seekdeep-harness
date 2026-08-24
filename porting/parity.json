@@ -60751,7 +60751,7 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/plan/plan-mode/tests/integration.spec.ts (3 passed)",
-        "cargo test --locked --offline -p seekdeep-plan-mode --all-targets --all-features (22 passed)",
+        "cargo test --locked --offline -p seekdeep-plan-mode --all-targets --all-features (41 passed)",
         "cargo clippy --locked --offline -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
       ],
       "note": "real Rust AgentLoop integration pins idle pre-turn commit before the first request header, guidance-only write execution, stable exit/read/write schemas, exactly one between-turn notice, complete changed request snapshots, and error-retry deferral until the following step boundary"
@@ -60771,7 +60771,20 @@
     {
       "source": "packages/plan/plan-mode/tests/plan-mode.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/plan-mode/src/index.rs",
+        "crates/plan-mode/tests/command_parity.rs",
+        "crates/plan-mode/tests/integration_parity.rs",
+        "crates/plan-mode/tests/projection_parity.rs",
+        "crates/plan-mode/tests/review_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/plan/plan-mode/tests/plan-mode.spec.ts (62 passed)",
+        "cargo test --locked --offline -p seekdeep-plan-mode --all-targets --all-features (41 passed)",
+        "cargo clippy --locked --offline -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+      ],
+      "note": "grouped Rust parity scenarios pin exact config validation, log-folded and boundary-applied state, retryable append failure, stable native and Code Mode schemas, guidance-only execution, optional command/projection lifecycles, command steering, reviewed-exit consent and failure semantics, nested Code Mode dispatch, replay-safe presentation, and owning-fiber disposal"
     },
     {
       "source": "packages/plan/plan-mode/tests/projection.spec.ts",
@@ -60782,7 +60795,7 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/plan/plan-mode/tests/projection.spec.ts (7 passed)",
-        "cargo test --locked --offline -p seekdeep-plan-mode --all-targets --all-features (22 passed)",
+        "cargo test --locked --offline -p seekdeep-plan-mode --all-targets --all-features (41 passed)",
         "cargo clippy --locked --offline -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
       ],
       "note": "Rust projection mirror pins empty state, command-run intent folding, off and message arguments, omitted input, non-plan isolation, repeated no-op stability, commit clearing, cold log-only reconstruction, optional composition, and HMR key removal; it also corrected opposite-selection comparison to use the committed active state"

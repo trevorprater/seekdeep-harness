@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+futures.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
 seekdeep-agent = { path = "../agent" }
@@ -26,8 +27,9 @@ tracing.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
-futures.workspace = true
 seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-code-runtime = { path = "../code-runtime" }
+seekdeep-scope = { path = "../scope" }
 tokio.workspace = true
 
 [lints]

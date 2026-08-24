@@ -74,10 +74,39 @@ pub fn first_heading(plan: &str) -> Option<String> {
 ///
 /// Returns a blank-section failure.
 pub fn resolve_config(config: &PlanModeConfig) -> anyhow::Result<PlanModeConfig> {
-    if config.section.trim().is_empty() {
-        anyhow::bail!("PlanModeConfig needs a non-empty 'section'");
+    resolve_config_value(&serde_json::to_value(config)?)
+}
+
+/// Validates dynamically typed plugin configuration with source diagnostics.
+///
+/// # Errors
+///
+/// Returns exact missing, mistyped, blank, or unknown-key failures.
+pub fn resolve_config_value(value: &Value) -> anyhow::Result<PlanModeConfig> {
+    let Some(object) = value.as_object() else {
+        anyhow::bail!("PlanModeConfig needs a string `section`");
+    };
+    let section = object
+        .get("section")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("PlanModeConfig needs a string `section`"))?;
+    if section.trim().is_empty() {
+        anyhow::bail!("PlanModeConfig needs a non-empty `section`");
     }
-    Ok(config.clone())
+    let unknown = object
+        .keys()
+        .filter(|key| key.as_str() != "section")
+        .cloned()
+        .collect::<Vec<_>>();
+    if !unknown.is_empty() {
+        anyhow::bail!(
+            "PlanModeConfig has unknown key(s) {} — config is {{ section }}",
+            unknown.join(", ")
+        );
+    }
+    Ok(PlanModeConfig {
+        section: section.to_owned(),
+    })
 }
 
 /// Whether plan mode is active after the first end events.
@@ -201,6 +230,8 @@ pub struct PlanModeController {
     section: String,
     pending_intents: Mutex<HashMap<usize, PendingIntent>>,
     disposed: Arc<AtomicBool>,
+    command_effect: Mutex<Option<EffectHandle>>,
+    projection_effect: Mutex<Option<EffectHandle>>,
 }
 
 impl PlanModeController {
@@ -215,13 +246,16 @@ impl PlanModeController {
             section,
             pending_intents: Mutex::new(HashMap::new()),
             disposed: Arc::new(AtomicBool::new(false)),
+            command_effect: Mutex::new(None),
+            projection_effect: Mutex::new(None),
         });
         controller.register_pre_step(context)?;
         controller.register_system_prompt(context)?;
-        Self::register_projection(context)?;
-        controller.register_command(context)?;
         controller.register_exit_tool(context)?;
         controller.register_dispose_effect(context)?;
+        controller.reconcile_projection(context)?;
+        controller.reconcile_command(context)?;
+        controller.register_optional_service_reconciliation(context)?;
         Ok(controller)
     }
 
@@ -447,11 +481,8 @@ impl PlanModeController {
         Ok(())
     }
 
-    fn register_projection(context: &Context) -> anyhow::Result<()> {
-        let Some(registry) = context.get(SESSION_PROJECTIONS) else {
-            return Ok(());
-        };
-        let definition = ProjectionDefinition::new(
+    fn projection_definition() -> ProjectionDefinition {
+        ProjectionDefinition::new(
             "plan",
             1,
             || Ok(serde_json::to_value(PlanUnitState::default())?),
@@ -489,15 +520,68 @@ impl PlanModeController {
                     pending,
                 })?)
             },
-        );
-        registry.register(context, definition)?;
+        )
+    }
+
+    fn reconcile_projection(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
+        let registry = context.get(SESSION_PROJECTIONS);
+        let mut effect = self.projection_effect.lock();
+        match (registry, effect.is_some()) {
+            (Some(registry), false) => {
+                *effect = Some(registry.register(context, Self::projection_definition())?);
+            }
+            (None, true) => {
+                if let Some(stale) = effect.take() {
+                    // Service guards are synchronous, and registry removals are
+                    // synchronous effects wrapped by the common async handle.
+                    futures::executor::block_on(stale.dispose())?;
+                }
+            }
+            (Some(_), true) | (None, false) => {}
+        }
         Ok(())
     }
 
-    fn register_command(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
-        let Some(commands) = context.get(COMMANDS) else {
-            return Ok(());
-        };
+    fn reconcile_command(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
+        let present = context.get(COMMANDS).is_some();
+        let mut effect = self.command_effect.lock();
+        match (present, effect.is_some()) {
+            (true, false) => *effect = Some(self.register_command(context)?),
+            (false, true) => {
+                if let Some(stale) = effect.take() {
+                    // Remove the old service's contribution before a later
+                    // provider can publish the same command name.
+                    futures::executor::block_on(stale.dispose())?;
+                }
+            }
+            (true, true) | (false, false) => {}
+        }
+        Ok(())
+    }
+
+    fn register_optional_service_reconciliation(
+        self: &Arc<Self>,
+        context: &Context,
+    ) -> anyhow::Result<()> {
+        let controller = Arc::downgrade(self);
+        let owner = context.clone();
+        context.on_service_change_checked(move |name| {
+            let Some(controller) = controller.upgrade() else {
+                return Ok(());
+            };
+            match name {
+                "commands" => controller.reconcile_command(&owner),
+                "sessionProjections" => controller.reconcile_projection(&owner),
+                _ => Ok(()),
+            }
+        })?;
+        Ok(())
+    }
+
+    fn register_command(self: &Arc<Self>, context: &Context) -> anyhow::Result<EffectHandle> {
+        let commands = context
+            .get(COMMANDS)
+            .ok_or_else(|| anyhow::anyhow!("plan-mode command registration requires commands"))?;
         let controller = Arc::clone(self);
         let definition = CommandDefinition::new(
             "plan",
@@ -546,8 +630,7 @@ impl PlanModeController {
             }),
         )
         .with_input("[off|message]");
-        let _ = commands.register(context, definition)?;
-        Ok(())
+        commands.register(context, definition)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -720,6 +803,7 @@ pub fn plugin() -> Plugin {
             Ok(())
         })
     })
+    .with_config_validator(|value| Ok(serde_json::to_value(resolve_config_value(value)?)?))
 }
 
 #[cfg(test)]
@@ -801,16 +885,41 @@ mod tests {
 
     #[test]
     fn config_requires_non_empty_section() {
-        assert!(
-            resolve_config(&PlanModeConfig {
-                section: "  ".to_owned()
-            })
-            .is_err()
-        );
+        let error = resolve_config(&PlanModeConfig {
+            section: "  ".to_owned(),
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("non-empty `section`"));
         let ok = resolve_config(&PlanModeConfig {
             section: "guidance".to_owned(),
         })
         .expect("ok");
         assert_eq!(ok.section, "guidance");
+    }
+
+    #[test]
+    fn config_wire_rejects_missing_mistyped_and_unknown_fields_and_detaches() {
+        for (value, fragment) in [
+            (json!({}), "needs a string `section`"),
+            (Value::Null, "needs a string `section`"),
+            (json!({"section": 5}), "needs a string `section`"),
+            (
+                json!({"section": 5, "tools": ["read"]}),
+                "needs a string `section`",
+            ),
+            (
+                json!({"section": "guidance", "tools": ["read"]}),
+                "has unknown key(s) tools — config is { section }",
+            ),
+        ] {
+            let error = resolve_config_value(&value).unwrap_err();
+            assert!(error.to_string().contains(fragment));
+        }
+        let config = PlanModeConfig {
+            section: "guidance".to_owned(),
+        };
+        let resolved = resolve_config(&config).unwrap();
+        assert_eq!(resolved, config);
+        assert_ne!(resolved.section.as_ptr(), config.section.as_ptr());
     }
 }

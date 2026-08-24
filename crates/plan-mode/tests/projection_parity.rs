@@ -206,6 +206,57 @@ async fn composition_and_hmr_control_the_projection_key() {
     assert!(!absent.values().values.contains_key("plan"));
 }
 
+#[tokio::test]
+async fn optional_projection_service_mounts_unmounts_and_rebinds_after_plan_mode() {
+    let context = Context::new();
+    let sessions = SessionStore::install(&context).unwrap();
+    let prompt = SystemPrompt::new(&context, SystemPromptConfig::default()).unwrap();
+    prompt.provide(&context).unwrap();
+    seekdeep_tools::install(&context, &prompt, ToolRuntimeConfig::default()).unwrap();
+    let controller_fiber = Fiber::active_child("plan-before-projections");
+    let controller_context = context.with_fiber(controller_fiber.clone());
+    PlanModeController::new(
+        &controller_context,
+        &PlanModeConfig {
+            section: "plan policy".to_owned(),
+        },
+    )
+    .unwrap();
+    let session = sessions
+        .create(
+            &context,
+            Some(SessionId::new("late-projections")),
+            CreateSessionOptions::default(),
+        )
+        .unwrap();
+
+    let first_fiber = Fiber::active_child("projections-first");
+    let first_context = context.with_fiber(first_fiber.clone());
+    let first = SessionProjectionRegistry::install(&first_context).unwrap();
+    assert_eq!(
+        first.snapshot(&session).unwrap().values["plan"],
+        json!({"active": false, "pending": false})
+    );
+    first_fiber.dispose().await.unwrap();
+    assert!(
+        !first
+            .snapshot(&session)
+            .unwrap()
+            .values
+            .contains_key("plan")
+    );
+
+    let second_fiber = Fiber::active_child("projections-second");
+    let second_context = context.with_fiber(second_fiber.clone());
+    let second = SessionProjectionRegistry::install(&second_context).unwrap();
+    assert_eq!(
+        second.snapshot(&session).unwrap().values["plan"],
+        json!({"active": false, "pending": false})
+    );
+    second_fiber.dispose().await.unwrap();
+    controller_fiber.dispose().await.unwrap();
+}
+
 #[test]
 fn cold_replay_recovers_pending_from_the_log_alone() {
     let hot = Harness::new(true);

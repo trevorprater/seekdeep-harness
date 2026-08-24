@@ -59,10 +59,10 @@ Plan mode 拥有一个 plan 专用产品包：位于 `packages/plan/plan-mode/` 
 
 ## 验证
 
-- 包测试通过布尔服务继续覆盖边界顺序、重试、追加失败、HMR（热模块替换）资源释放、提示词组装、稳定的原生 schema 与 Code Mode schema、评审结果和不变式。`plan` 投影会折叠已记录的 `command/run` 选择与 `plan/mode` 提交，将未结算目标与已提交 active 状态比较，从冷日志重建待生效意图，并随所属 fiber 移除其 key。
+- 源 oracle 与 Rust 包测试通过布尔服务固定边界顺序、重试、追加失败、HMR（热模块替换）资源释放、提示词组装、稳定的原生 schema 与 Code Mode schema、评审结果和不变式。可选命令与投影注册遵循各自 Cordis 服务的生命周期，包括延迟组合、卸载、替换和随所属 fiber 释放。`plan` 投影会折叠已记录的 `command/run` 选择与 `plan/mode` 提交，将未结算目标与已提交 active 状态比较，从冷日志重建待生效意图，并随所属 fiber 移除其 key。
 - 命令测试覆盖不带参数的 `/plan`、`/plan <message>`、激活状态下的 `/plan off`、取消待生效的进入选择、未激活状态下的幂等性、不存在 `/mode` 和 `/review`，以及随 effect 作用域移除。
 - 无密钥 TUI 场景通过 `/plan <message>` 进入、通过 `/plan off` 退出，并证明每个已提交的 `plan/mode` 都先于其所改变的请求头，进入消息在 plan 引导下记录到日志，且退出后的请求不含该引导。
-- 完整的 `exit_plan_mode` 评审流程有包测试，但交互式 ACP 场景退役后没有组装应用快照；当前无密钥 TUI 场景只覆盖命令进入和直接退出。
+- 完整的 `exit_plan_mode` 评审流程有包测试，其中包括仅单项选择才生效的精确同意、自由文本拒绝、取消、中止、提供方失败、拒绝运行时拥有的子 agent、评审待定期间的资源释放，以及携带原样计划的 Code Mode 分派。交互式 ACP 场景退役后仍没有组装应用快照；当前无密钥 TUI 场景只覆盖命令进入和直接退出。
 
 ## 后果
 
