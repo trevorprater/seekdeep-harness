@@ -177,7 +177,7 @@ impl SubprocessRuntime for StubRuntime {
             Box::pin(tokio::io::empty());
         Ok(Arc::new(StubTerminal {
             pid: i64::try_from(spec.argv.len()).expect("small argv"),
-            output: Arc::new(tokio::sync::Mutex::new(output)),
+            output: SubprocessOutput::new(output),
             terminated: AtomicBool::new(false),
             writes: parking_lot::Mutex::new(Vec::new()),
         }))

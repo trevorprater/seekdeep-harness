@@ -91,9 +91,7 @@ struct BootstrapFilterState {
 impl BootstrapOutputFilter {
     fn new(marker: Vec<u8>) -> (Arc<Self>, SubprocessOutput) {
         let (reader, mut writer) = tokio::io::duplex(64 * 1024);
-        let output: SubprocessOutput = Arc::new(tokio::sync::Mutex::new(
-            Box::pin(reader) as Pin<Box<dyn AsyncRead + Send + Unpin + 'static>>
-        ));
+        let output = SubprocessOutput::new(Box::pin(reader));
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
         tokio::spawn(async move {
             while let Some(bytes) = receiver.recv().await {

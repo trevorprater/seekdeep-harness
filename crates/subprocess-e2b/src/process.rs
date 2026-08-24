@@ -104,9 +104,7 @@ impl PipeOutput {
     fn new() -> Self {
         let (reader, writer) = tokio::io::duplex(64 * 1024);
         Self {
-            reader: Arc::new(tokio::sync::Mutex::new(
-                Box::pin(reader) as Pin<Box<dyn AsyncRead + Send + Unpin + 'static>>
-            )),
+            reader: SubprocessOutput::new(Box::pin(reader)),
             writer: Arc::new(tokio::sync::Mutex::new(Some(writer))),
         }
     }

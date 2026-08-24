@@ -699,7 +699,7 @@ fn configure_output(
 ) {
     match mode {
         SubprocessOutputMode::Pipe => {
-            let output = stream.map(|stream| Arc::new(tokio::sync::Mutex::new(stream)));
+            let output = stream.map(SubprocessOutput::new);
             (output, None)
         }
         SubprocessOutputMode::Inherit => (None, None),

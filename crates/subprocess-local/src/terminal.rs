@@ -321,7 +321,7 @@ impl LocalTerminalHandle {
             offset: 0,
             ended: false,
         });
-        let output = Arc::new(tokio::sync::Mutex::new(output));
+        let output = SubprocessOutput::new(output);
         let done = Arc::new(DoneSlot::default());
         let exited = Arc::new(AtomicBool::new(false));
         let wait_exited = exited.clone();
@@ -866,7 +866,7 @@ mod tests {
         let output: Pin<Box<dyn AsyncRead + Send + Unpin>> = Box::pin(tokio::io::empty());
         Arc::new(LocalTerminalHandle {
             pid,
-            output: Arc::new(tokio::sync::Mutex::new(output)),
+            output: SubprocessOutput::new(output),
             writer: Arc::new(Mutex::new(Box::new(RecordingWriter::default()))),
             killer: Arc::new(Mutex::new(Box::new(FakeKiller::default()))),
             inspector,

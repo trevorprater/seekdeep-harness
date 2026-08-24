@@ -98,7 +98,7 @@ impl FakeTerminal {
     fn new() -> Arc<Self> {
         let (writer, reader) = tokio::io::duplex(65_536);
         Arc::new(Self {
-            output: Arc::new(tokio::sync::Mutex::new(Box::pin(reader))),
+            output: SubprocessOutput::new(Box::pin(reader)),
             writer: tokio::sync::Mutex::new(Some(writer)),
             outcome: Arc::new(Completion::default()),
             writes: Mutex::new(Vec::new()),

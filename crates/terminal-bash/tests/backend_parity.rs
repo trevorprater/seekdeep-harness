@@ -89,7 +89,7 @@ impl DummyTerminal {
     fn new() -> Arc<Self> {
         let (_writer, reader) = tokio::io::duplex(1024);
         Arc::new(Self {
-            output: Arc::new(tokio::sync::Mutex::new(Box::pin(reader))),
+            output: SubprocessOutput::new(Box::pin(reader)),
             outcome: Arc::new(Completion::default()),
         })
     }

@@ -295,9 +295,63 @@ impl SubprocessInput {
     }
 }
 
-/// Shared asynchronous child-output stream.
-pub type SubprocessOutput =
-    Arc<tokio::sync::Mutex<Pin<Box<dyn AsyncRead + Send + Unpin + 'static>>>>;
+/// Erased provider-owned readable child pipe.
+type BoxedSubprocessOutput = Pin<Box<dyn AsyncRead + Send + Unpin + 'static>>;
+
+/// Shared asynchronous child-output stream with explicit consumer closure.
+#[derive(Clone)]
+pub struct SubprocessOutput {
+    inner: Arc<tokio::sync::Mutex<BoxedSubprocessOutput>>,
+    closed: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl std::fmt::Debug for SubprocessOutput {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SubprocessOutput")
+            .field(
+                "closed",
+                &self.closed.load(std::sync::atomic::Ordering::Acquire),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl SubprocessOutput {
+    /// Wraps one provider-owned readable pipe.
+    #[must_use]
+    pub fn new(stream: BoxedSubprocessOutput) -> Self {
+        Self {
+            inner: Arc::new(tokio::sync::Mutex::new(stream)),
+            closed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    /// Locks the current readable stream.
+    pub async fn lock(
+        &self,
+    ) -> tokio::sync::MutexGuard<'_, BoxedSubprocessOutput> {
+        self.inner.lock().await
+    }
+
+    /// Closes the provider pipe for every clone and makes later reads return EOF.
+    pub async fn close(&self) {
+        if self
+            .closed
+            .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return;
+        }
+        let mut inner = self.inner.lock().await;
+        *inner = Box::pin(tokio::io::empty());
+    }
+
+    /// Whether a consumer explicitly closed this output surface.
+    #[must_use]
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(std::sync::atomic::Ordering::Acquire)
+    }
+}
 
 /// Live owned ordinary process tree.
 #[async_trait]
