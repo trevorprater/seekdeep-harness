@@ -35,4 +35,11 @@ windows-sys = { version = "0.61.2", features = [
 ] }
 
 [dev-dependencies]
+seekdeep-cordis = { path = "../cordis" }
 seekdeep-pwsh-local = { path = "../pwsh-local" }
+seekdeep-pwsh-sandbox = { path = "../pwsh-sandbox" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }

@@ -66049,7 +66049,17 @@
     {
       "source": "packages/shell/pwsh-sandbox/tests/acl.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sandbox-windows-acl-native/tests/assembled_pwsh_parity.rs",
+        "crates/pwsh-sandbox/tests/executor_parity.rs",
+        "crates/sandbox-windows-acl-native/tests/native_runner_parity.rs"
+      ],
+      "evidence": [
+        "the real-Windows assembled Rust test drives LocalSandboxProvider, SandboxPolicyService, LocalSubprocessRuntime, SandboxPwshExecutor, the compiled windows-acl-run binary, and PowerShell 7 through both modes",
+        "the assembled assertions pin ordinary and ambient-temp write denial, workspace and private-temp writes, outside reads, raw-denial classification, partial enforcement facts, and runner-owned private-temp removal",
+        "strict x86_64-pc-windows-msvc all-target clippy compiles the vertical suite; native Windows CI executes it"
+      ]
     },
     {
       "source": "packages/shell/pwsh-sandbox/tests/sandbox.spec.ts",

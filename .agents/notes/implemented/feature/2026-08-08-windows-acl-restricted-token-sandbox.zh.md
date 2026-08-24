@@ -36,7 +36,7 @@ AppContainer 令牌没有环境读访问：每个可读路径都必须预先通�
 
 ## 测试
 
-产品可见的 Windows 阵容切换仅存在于 win32，因此在 macOS/Linux 上重放的 keyless 快照无法覆盖它。`crates/sandbox-windows-acl/tests/` 下的可移植测试通过注入绑定钉住参数语法、SID 派生、DACL/令牌/spawn 失败所有权、回滚、清理聚合与子进程等待幂等性。`crates/sandbox-windows-acl-native/tests/` 下受平台门控的 `abi_probe_parity`、`native_acl_parity`、`native_probe_parity` 与 `native_runner_parity` 套件镜像固定源中的 ABI 探针及真实 Windows 套件：它们钉住 SDK 布局、精确 ACE 共存与生命周期、成对 SID 验证、同级会话临时目录拒绝、无 agent 临时目录创建/移除、TMP/TEMP 重写、模式降级、Public 拒绝、Everyone/硬链接部分边界、PowerShell 语言行为与孙进程 stdio。PR 的 `windows-native` job 与 master 的 `serial-windows` 备用 job 会在 Windows 内核上运行两个 Rust ACL crate；MSVC 交叉 clippy 提供非 Windows 编译信号。
+产品可见的 Windows 阵容切换仅存在于 win32，因此在 macOS/Linux 上重放的 keyless 快照无法覆盖它。`crates/sandbox-windows-acl/tests/` 下的可移植测试通过注入绑定钉住参数语法、SID 派生、DACL/令牌/spawn 失败所有权、回滚、清理聚合与子进程等待幂等性。`crates/sandbox-windows-acl-native/tests/` 下受平台门控的 `abi_probe_parity`、`native_acl_parity`、`native_probe_parity`、`native_runner_parity` 与 `assembled_pwsh_parity` 套件镜像固定源中的 ABI 探针及真实 Windows 套件：它们钉住 SDK 布局、精确 ACE 共存与生命周期、成对 SID 验证、同级会话临时目录拒绝、无 agent 临时目录创建/移除、TMP/TEMP 重写、模式降级、Public 拒绝、Everyone/硬链接部分边界、PowerShell 语言行为、孙进程 stdio，以及组装后的本地提供方/策略/subprocess/PowerShell 路径及其结算拒绝事实。PR 的 `windows-native` job 与 master 的 `serial-windows` 备用 job 会在 Windows 内核上运行两个 Rust ACL crate；MSVC 交叉 clippy 提供非 Windows 编译信号。
 
 ## Related
 

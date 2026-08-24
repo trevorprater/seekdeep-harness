@@ -1,8 +1,9 @@
 //! Platform process-table inspection for terminal readiness and safe teardown.
 
+#[cfg(unix)]
+use std::fs::File;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::File,
     io,
     sync::Arc,
 };
