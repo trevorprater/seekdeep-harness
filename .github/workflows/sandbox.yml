@@ -64,6 +64,9 @@ jobs:
         with:
           node-version: 24
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+        if: matrix.runner == 'bwrap' || matrix.runner == 'landlock'
+
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
@@ -86,6 +89,22 @@ jobs:
           sudo apt-get install -yq musl-tools
           pnpm --dir native/landlock-run run build:ts
           pnpm --dir native/landlock-run run build:native
+
+      - name: Rust sandbox e2e (real kernel confinement)
+        if: matrix.runner == 'bwrap' || matrix.runner == 'landlock'
+        env:
+          SEEKDEEP_REQUIRE_SANDBOX_E2E: '1'
+        run: |
+          if [[ '${{ matrix.runner }}' == 'bwrap' ]]; then
+            cargo test --locked \
+              --package seekdeep-sandbox-local \
+              --package seekdeep-bash-sandbox \
+              --test bwrap_e2e --all-features
+          else
+            cargo test --locked \
+              --package seekdeep-landlock-run \
+              --all-targets --all-features
+          fi
 
       # The unit suite runs on ubuntu in `checks`; this is the one darwin leg
       # in the workflow, so run it here too — the platform-dependent unit

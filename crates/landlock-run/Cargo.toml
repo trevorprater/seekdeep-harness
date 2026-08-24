@@ -23,7 +23,15 @@ thiserror.workspace = true
 landlock = "0.4.7"
 
 [dev-dependencies]
+seekdeep-bash-sandbox = { path = "../bash-sandbox" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
 tempfile.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

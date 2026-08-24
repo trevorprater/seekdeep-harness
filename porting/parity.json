@@ -65831,12 +65831,30 @@
     {
       "source": "packages/shell/bash-sandbox/tests/bwrap.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/bash-sandbox/tests/bwrap_e2e.rs",
+        "crates/sandbox-local/tests/bwrap_e2e.rs",
+        ".github/workflows/sandbox.yml"
+      ],
+      "evidence": [
+        "the Linux-gated Rust assembly drives LocalSandboxProvider, SandboxPolicyService, LocalSubprocessRuntime, and SandboxBashExecutor through read-only, workspace-write, escape, explicit retry, and background-settlement world effects",
+        "strict x86_64-unknown-linux-gnu all-target clippy compiles the suite; the bwrap sandbox workflow leg requires its functional probe and executes both Rust backend and executor tests"
+      ]
     },
     {
       "source": "packages/shell/bash-sandbox/tests/landlock.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/landlock-run/tests/assembled_bash_parity.rs",
+        "crates/landlock-run/tests/launcher_parity.rs",
+        ".github/workflows/sandbox.yml"
+      ],
+      "evidence": [
+        "the Linux-gated Rust assembly uses the exact compiled landlock-run binary, forces bwrap off, preserves full or partial probe facts, and drives read-only, workspace-write, escape, explicit retry, and background-settlement world effects",
+        "strict x86_64-unknown-linux-gnu all-target clippy compiles the suite; both native-architecture Landlock workflow legs require enforcement and execute the Rust launcher and assembled executor tests"
+      ]
     },
     {
       "source": "packages/shell/bash-sandbox/tests/partial-landlock.spec.ts",

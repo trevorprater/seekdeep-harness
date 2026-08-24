@@ -5607,8 +5607,16 @@ name = "seekdeep-landlock-run"
 version = "0.1.0-rc.5"
 dependencies = [
  "landlock",
+ "seekdeep-bash-sandbox",
+ "seekdeep-cordis",
+ "seekdeep-sandbox",
+ "seekdeep-sandbox-local",
+ "seekdeep-sandbox-policy",
+ "seekdeep-shell",
+ "seekdeep-subprocess-local",
  "tempfile",
  "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
