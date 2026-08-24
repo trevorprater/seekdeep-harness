@@ -48043,12 +48043,30 @@
     {
       "source": "packages/compaction/compaction/tests/compaction.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction/tests/compaction_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/compaction/compaction/tests/compaction.spec.ts packages/compaction/compaction/tests/invariant.spec.ts (36 passed)",
+        "cargo test --locked --offline -p seekdeep-compaction --all-targets --all-features (17 passed)",
+        "cargo clippy --locked --offline -p seekdeep-compaction --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust behavioral mirror pins service registration and HMR-safe disposal, all abstract operations, shared cancellation state, log-only lifecycle ordering, checkpoint provenance, and exact compaction result accounting"
     },
     {
       "source": "packages/compaction/compaction/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/compaction/compaction/tests/compaction.spec.ts packages/compaction/compaction/tests/invariant.spec.ts (36 passed)",
+        "cargo test --locked --offline -p seekdeep-compaction --all-targets --all-features (17 passed)",
+        "cargo clippy --locked --offline -p seekdeep-compaction --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust differential mirror covers every source lifecycle case, including numbered and standalone ownership, exact diagnostics, checkpoint correlation, late registration and bare-session adoption, turn-boundary rejection, and end-seed orphan recovery"
     },
     {
       "source": "packages/compaction/compaction/tests/tool-pairing.spec.ts",
