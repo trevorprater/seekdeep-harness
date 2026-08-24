@@ -48047,7 +48047,9 @@
     {
       "source": "packages/compaction/compaction/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/compaction/Cargo.toml"],
+      "evidence": ["Cargo builds the native compaction library directly without a TypeScript bundle wrapper", "cargo test -p seekdeep-compaction --all-features: 7 passed", "cargo clippy -p seekdeep-compaction --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/context/README.i18n.yaml",
@@ -54110,7 +54112,9 @@
     {
       "source": "packages/goal/goal-round-driver/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/goal-round-driver/Cargo.toml"],
+      "evidence": ["Cargo builds the native goal round driver library directly without a TypeScript bundle wrapper", "cargo test -p seekdeep-goal-round-driver --all-features", "cargo clippy -p seekdeep-goal-round-driver --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/goal/goal/README.i18n.yaml",
@@ -54280,7 +54284,9 @@
     {
       "source": "packages/goal/goal/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/goal/Cargo.toml"],
+      "evidence": ["Cargo builds the native goal domain library directly without a TypeScript bundle wrapper", "cargo test -p seekdeep-goal --all-features: 10 passed", "cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/goal/tool-goal/README.i18n.yaml",
@@ -62324,7 +62330,9 @@
     {
       "source": "packages/schedule/schedule/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/schedule/Cargo.toml"],
+      "evidence": ["Cargo builds the native schedule library directly without a TypeScript bundle wrapper", "cargo test -p seekdeep-schedule --all-features: 18 passed including invariant tests", "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/sdk/README.i18n.yaml",
