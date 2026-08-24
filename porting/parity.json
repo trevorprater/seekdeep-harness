@@ -55228,12 +55228,30 @@
     {
       "source": "packages/hooks/hooks-claude-code/src/config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-claude-code/src/config.rs",
+        "crates/hooks-claude-code/tests/config_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: hooks-claude-code suite passed 63/63",
+        "Rust parser pins seven supported events, wrapper/bare forms, all-occurrence substitutions, fractional timeout source numbers, malformed tolerance, skip reporting, subjectless matcher removal, unsupported-event isolation, and event-qualified regex failures"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-claude-code/src/bridge.rs",
+        "crates/hooks-claude-code/src/lib.rs",
+        "crates/hooks-claude-code/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust native Cordis bridge owns seven global interception points, exact Claude payload/newline/env/substitution behavior, ask/deny/context/Stop mappings, durable hook pairs, retained child workspace, tolerant load, and detached/HMR quiescence",
+        "cargo test --locked --offline -p seekdeep-hook-protocol -p seekdeep-hooks-claude-code --all-features: 89 passed",
+        "cargo clippy --locked --offline -p seekdeep-hook-protocol -p seekdeep-hooks-claude-code --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/src/invariant.ts",
@@ -55252,37 +55270,88 @@
     {
       "source": "packages/hooks/hooks-claude-code/tests/bridge.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-claude-code/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "pinned source hooks-claude-code suite passed 63/63; Rust grouped tests drive prompt/pre/post/session/Stop/subagent paths, ask fail-closed, matching, load resilience, and disposal"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/tests/config.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-claude-code/tests/config_parity.rs"
+      ],
+      "evidence": [
+        "Rust four grouped parser tests cover all thirteen source config cases"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/tests/coverage-cases.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/codec.rs",
+        "crates/hook-protocol/src/events.rs",
+        "crates/hook-protocol/src/matcher.rs",
+        "crates/hook-protocol/src/merge.rs",
+        "crates/hook-protocol/src/runner.rs",
+        "crates/hooks-claude-code/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "78 shared protocol/invariant tests plus eleven Claude bridge/parser groups cover the reusable result, runner, matcher, decision, context, payload, lifecycle, and subagent matrix"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/tests/coverage-config.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-claude-code/tests/config_parity.rs",
+        "crates/hooks-claude-code/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin substitution, skipped hooks, invalid caps, direct apply defaults, missing paths, invalid regexes, and unsupported-event isolation"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/tests/coverage-context.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-claude-code/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust real AgentEvents/ToolRuntime tests pin SessionStart injection, prompt blocking, post-tool context, plugin attribution, downstream-safe folding, and Stop steering"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/tests/coverage-edge-paths.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/codec.rs",
+        "crates/hook-protocol/src/runner.rs",
+        "crates/hooks-claude-code/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust closed types and grouped tests pin no-agent calls, nonblocking runner rejection/exit, mismatched hookSpecificOutput, empty/default reasons, warnings, exact workspace/env, and durable summaries"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/tests/coverage-stop.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-claude-code/tests/bridge_parity.rs",
+        "crates/hook-protocol/src/merge.rs"
+      ],
+      "evidence": [
+        "Rust AgentController test pins Stop reason/default steering; shared merge tests pin continue:false recording without bridge-level hard halt"
+      ]
     },
     {
       "source": "packages/hooks/hooks-claude-code/tsconfig.json",
