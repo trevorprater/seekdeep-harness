@@ -54299,22 +54299,60 @@
     {
       "source": "packages/goal/goal/tests/goal.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/goal/tests/goal_e2e.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts packages/goal/goal/tests/goal.e2e.ts --reporter=dot",
+        "cargo test -p seekdeep-goal --all-features"
+      ],
+      "note": "real compiled-Rust cordis.yml composition drives HeadlessRunner through a model/tool round trip and cold-verifies the round-zero goal snapshot in JSONL"
     },
     {
       "source": "packages/goal/goal/tests/goal.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/goal/tests/fold_parity.rs",
+        "crates/goal/tests/goal_parity.rs",
+        "crates/goal/src/index.rs",
+        "crates/goal/src/fold.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/goal/goal/tests --reporter=dot",
+        "cargo test -p seekdeep-goal --all-features",
+        "cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
+      ],
+      "note": "strict replay, safe-integer decoding, service CAS/lifecycle, exact live identity, notification containment, deterministic time, external append, corruption, and SessionStore fork matrices ported"
     },
     {
       "source": "packages/goal/goal/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/goal/tests/invariant_parity.rs",
+        "crates/goal/src/invariant.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/goal/goal/tests --reporter=dot",
+        "cargo test -p seekdeep-goal --all-features"
+      ],
+      "note": "canonical admission, precommit rejection with reusable staged state, and late-load reconstruction are exercised through the real invariant registry and session publisher"
     },
     {
       "source": "packages/goal/goal/tests/projection.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/goal/tests/projection_parity.rs",
+        "crates/goal/src/index.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/goal/goal/tests --reporter=dot",
+        "cargo test -p seekdeep-goal --all-features"
+      ],
+      "note": "null/create/mutation/clear, fail-soft unchanged transitions, inbox independence, goal-fiber HMR disposal, and late/replaced projection-registry reconciliation are covered"
     },
     {
       "source": "packages/goal/goal/tsconfig.json",

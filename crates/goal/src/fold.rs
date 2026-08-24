@@ -13,6 +13,8 @@ use crate::domain::{
 use crate::runtime::GOAL_CHANGE_VERSION;
 use crate::types::{GoalBlockReason, GoalId, GoalPhase, GoalRef, GoalSnapshot};
 
+const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+
 /// Mutable accumulator kept private to the pure fold.
 #[derive(Clone, Debug, Default)]
 pub struct GoalFoldState {
@@ -58,7 +60,7 @@ fn positive_integer(value: &Value, field: &str) -> anyhow::Result<u64> {
     let Some(number) = value.as_u64() else {
         anyhow::bail!("goal change {field} must be a positive safe integer");
     };
-    if number < 1 {
+    if !(1..=MAX_SAFE_INTEGER).contains(&number) {
         anyhow::bail!("goal change {field} must be a positive safe integer");
     }
     Ok(number)
@@ -68,6 +70,9 @@ fn non_negative_integer(value: &Value, field: &str) -> anyhow::Result<u64> {
     let Some(number) = value.as_u64() else {
         anyhow::bail!("goal change {field} must be a non-negative safe integer");
     };
+    if number > MAX_SAFE_INTEGER {
+        anyhow::bail!("goal change {field} must be a non-negative safe integer");
+    }
     Ok(number)
 }
 

@@ -40,6 +40,9 @@ pub const GOAL: ServiceKey<GoalService> = ServiceKey::new("goals");
 /// Deployment default for goal creation.
 pub const DEFAULT_MAX_GOAL_ROUNDS: u64 = 256;
 
+/// Largest integer represented exactly by the source JavaScript runtime.
+const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+
 /// Injectable decision-time and goal-identity environment.
 pub trait GoalEnvironment: std::fmt::Debug + Send + Sync {
     /// Current decision time in Unix milliseconds.
@@ -110,7 +113,7 @@ fn is_lower_kebab(value: &str) -> bool {
 ///
 /// Returns an invalid-round-cap failure.
 pub fn resolve_max_goal_rounds(value: u64) -> Result<u64, GoalError> {
-    if value < 1 {
+    if !(1..=MAX_SAFE_INTEGER).contains(&value) {
         return Err(GoalError::new(
             "maxGoalRounds must be a positive safe integer",
             GoalErrorCode::GoalInvalidMaxRounds,
@@ -227,6 +230,12 @@ struct GoalCache {
     pending_activation: Option<PendingActivation>,
 }
 
+#[derive(Debug, Default)]
+struct ProjectionBinding {
+    registry: Option<usize>,
+    handle: Option<EffectHandle>,
+}
+
 /// Goal service backed exclusively by the owning session log.
 pub struct GoalService {
     context: Context,
@@ -286,9 +295,14 @@ impl GoalService {
             global_events(),
         )?;
 
-        if let Some(registry) = context.get(SESSION_PROJECTIONS) {
-            registry.register(context, goal_projection_definition())?;
-        }
+        let projection = Arc::new(Mutex::new(ProjectionBinding::default()));
+        reconcile_projection(context, &projection)?;
+        let watched_context = context.clone();
+        context.on_service_change(move || {
+            if let Err(error) = reconcile_projection(&watched_context, &projection) {
+                tracing::error!(%error, "goal: projection dependency reconciliation failed");
+            }
+        })?;
         Ok(service)
     }
 
@@ -853,6 +867,31 @@ impl GoalService {
             activation: guard.activation,
         }))
     }
+}
+
+fn reconcile_projection(
+    context: &Context,
+    binding: &Arc<Mutex<ProjectionBinding>>,
+) -> anyhow::Result<()> {
+    let registry = context.get(SESSION_PROJECTIONS);
+    let identity = registry
+        .as_ref()
+        .map(|registry| Arc::as_ptr(registry) as usize);
+    let mut binding = binding.lock();
+    if binding.registry == identity {
+        return Ok(());
+    }
+    if let Some(handle) = binding.handle.take() {
+        futures::executor::block_on(handle.dispose())?;
+    }
+    binding.registry = None;
+    let Some(registry) = registry else {
+        return Ok(());
+    };
+    let handle = registry.register(context, goal_projection_definition())?;
+    binding.registry = identity;
+    binding.handle = Some(handle);
+    Ok(())
 }
 
 impl TypertRemoteService for GoalService {

@@ -16,6 +16,8 @@ Durable lifecycle and permission to continue are different facts. A session may 
 
 Rust production lives in [`crates/goal`](../../../../crates/goal/src/index.rs). `GoalService` takes decision time and identity creation through an injectable `GoalEnvironment`; the production environment derives an opaque UUIDv5 goal id deterministically from session identity, session sequence, and decision time, while tests supply a seeded clock and id. No goal decision reads ambient randomness, and mutation timestamps clamp monotonically when the injected wall clock moves backward.
 
+The optional `goal` session projection follows the projection registry's service lifecycle. A registry that appears after the goal plugin, or replaces an earlier registry, receives a replayed projection registration; registry withdrawal and goal-fiber disposal remove the old registration. This preserves Cordis dependency and HMR semantics without retaining a stale registry generation.
+
 The durable phases are `active`, `paused`, `blocked`, and `complete`. A blocked snapshot includes a policy-owned lower-kebab-case code and a normalized free-form message, so usage limits, round caps, execution failures, and human-input dependencies share one lifecycle state without losing their cause. A separate live activation is `armed` or `disarmed`. Creation and explicit resume arm activation; pause, completion, blocking, and clear disarm it. Edits preserve activation and any blocker reason; resume and completion clear that reason. Activation is never part of the persisted snapshot.
 
 ### Durable record and replay
@@ -38,7 +40,7 @@ The service accepts only the exact live `Agent` object registered under its id. 
 
 ## Testing
 
-Unit coverage pins creation defaults, exact-live-agent checks, compare-and-set rejection, every lifecycle transition, blocker reason validation and retention, cap enforcement on resume, clear/replacement, seeded replay and `SessionStore.fork()` inheritance, session-start and lifecycle-owner disarming, active-goal rearming, durable event folding, inbox independence, stable corrupt-event replay, service/listener disposal, listener containment, backward-clock clamping, strict record decoding, lifecycle continuity, and sequential round attribution. A keyless Loader/stdio process test mounts the service and a lifecycle consumer through test-only `cordis.yml`, then reads the persisted JSONL externally to verify the goal record and absence of an unrequested goal round. The package source is held to the repository's per-file 100% coverage gate.
+Unit coverage pins creation defaults, exact-live-agent checks, compare-and-set rejection, every lifecycle transition, blocker reason validation and retention, cap enforcement on resume, clear/replacement, seeded replay and `SessionStore.fork()` inheritance, session-start and lifecycle-owner disarming, active-goal rearming, durable event folding, inbox independence, stable corrupt-event replay, service/listener disposal, listener containment, backward-clock clamping, strict record decoding, lifecycle continuity, sequential round attribution, and projection-registry replacement. The source process test and its Rust differential both mount the service and a lifecycle consumer through test-only `cordis.yml`; the Rust path drives a real headless model/tool turn and cold-reopens the persisted JSONL to verify the goal record and absence of an unrequested goal round. The package source is held to the repository's per-file 100% coverage gate.
 
 ## Alternatives considered
 

@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+futures.workspace = true
 parking_lot.workspace = true
 seekdeep-agent = { path = "../agent" }
 seekdeep-agent-loop = { path = "../agent-loop" }
@@ -20,10 +21,21 @@ seekdeep-util = { path = "../util" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+seekdeep-headless = { path = "../headless" }
+seekdeep-loader = { path = "../loader" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tool-todo = { path = "../tool-todo" }
+seekdeep-tools = { path = "../tools" }
+tempfile.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true
