@@ -5170,6 +5170,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-fs-e2b"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "base64 0.22.1",
+ "futures",
+ "hex",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-fs",
+ "seekdeep-llm",
+ "seekdeep-sandbox",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "seekdeep-fs-local"
 version = "0.1.0-rc.5"
 dependencies = [

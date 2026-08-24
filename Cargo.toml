@@ -56,6 +56,7 @@ members = [
   "crates/credentials",
   "crates/credentials-local",
   "crates/fs",
+  "crates/fs-e2b",
   "crates/fs-local",
   "crates/fs-local-win32-native",
   "crates/fs-observation-policy",

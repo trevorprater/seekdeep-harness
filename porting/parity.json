@@ -50932,7 +50932,17 @@
     {
       "source": "packages/e2b/fs-e2b/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-e2b/src/lib.rs",
+        "crates/fs-e2b/src/types.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/e2b/fs-e2b/tests/filesystem.spec.ts (36 passed)",
+        "cargo test --locked --offline -p seekdeep-fs-e2b --all-features (8 passed)",
+        "cargo clippy --locked --offline -p seekdeep-fs-e2b --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust backend preserves strict base64/NUL canonical paths, POSIX process paths and containment, metadata versions, no-follow lstat, symlink-aware stable listing, UTF-8 and sampled-binary streams, bounded raw reads, remote cancellation, typed error mapping, atomic rename and guarded-link commits, post-commit success, CRLF-preserving literal edits, and per-target version serialization; process-monotonic staging replaces ambient UUID randomness"
     },
     {
       "source": "packages/e2b/fs-e2b/src/invariant.ts",
@@ -50951,7 +50961,16 @@
     {
       "source": "packages/e2b/fs-e2b/tests/filesystem.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-e2b/tests/filesystem_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/e2b/fs-e2b/tests/filesystem.spec.ts (36 passed)",
+        "cargo test --locked --offline -p seekdeep-fs-e2b --all-features (8 passed)",
+        "cargo clippy --locked --offline -p seekdeep-fs-e2b --all-targets --all-features -- -D warnings"
+      ],
+      "note": "eight grouped fake-client scenarios cover the source path/list/read/stream/byte/mutation/edit/error matrix, including strict canonical framing, multibyte chunk boundaries, stream abandonment, post-stat growth, binary edit refusal, intent races, competing files/directories, invalid guarded publication, cleanup failures, post-commit abort, mode preservation, and concurrent version guards"
     },
     {
       "source": "packages/e2b/fs-e2b/tsconfig.json",
