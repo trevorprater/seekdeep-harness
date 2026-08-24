@@ -5906,10 +5906,13 @@ name = "seekdeep-plan-mode"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
  "parking_lot",
  "regex",
  "seekdeep-agent",
  "seekdeep-agent-loop",
+ "seekdeep-agent-loop-testkit",
  "seekdeep-commands",
  "seekdeep-cordis",
  "seekdeep-core",

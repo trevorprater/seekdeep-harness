@@ -25,6 +25,9 @@ serde_json.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
 tokio.workspace = true
 
 [lints]
