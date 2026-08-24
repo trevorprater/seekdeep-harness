@@ -55,6 +55,7 @@ members = [
   "crates/compaction-tool-result-pruner",
   "crates/credentials",
   "crates/credentials-local",
+  "crates/e2b",
   "crates/fs",
   "crates/fs-e2b",
   "crates/fs-local",

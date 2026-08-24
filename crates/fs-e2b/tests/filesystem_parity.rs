@@ -413,13 +413,22 @@ impl E2bCommands for FakeRemote {
 
 struct FakeSandbox(Arc<FakeRemote>);
 
+#[async_trait::async_trait]
 impl E2bSandbox for FakeSandbox {
+    fn sandbox_id(&self) -> &'static str {
+        "fake-sandbox"
+    }
+
     fn files(&self) -> Arc<dyn E2bFiles> {
         self.0.clone()
     }
 
     fn commands(&self) -> Arc<dyn E2bCommands> {
         self.0.clone()
+    }
+
+    async fn kill(&self) -> anyhow::Result<()> {
+        Ok(())
     }
 }
 

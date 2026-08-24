@@ -50848,7 +50848,18 @@
     {
       "source": "packages/e2b/e2b/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/e2b/src/lib.rs",
+        "crates/e2b/src/types.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/e2b/e2b/tests/e2b.spec.ts (16 passed)",
+        "cargo test --locked --offline -p seekdeep-e2b --all-features (6 passed)",
+        "cargo test --locked --offline -p seekdeep-fs-e2b --all-features (8 passed)",
+        "cargo clippy --locked --offline -p seekdeep-e2b -p seekdeep-fs-e2b --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the native owner validates key/cwd/finite lifetime before creation, eagerly opens one secure kill-on-timeout sandbox through an injected SDK factory, creates and verifies the shared runtime root, isolates login-shell HOME without ambient randomness, shares one readiness result, fences disposal races, makes one setup rollback kill attempt, accepts already-absent teardown, and owns the object-safe client contracts consumed by adapters"
     },
     {
       "source": "packages/e2b/e2b/src/invariant.ts",
@@ -50867,12 +50878,22 @@
     {
       "source": "packages/e2b/e2b/tests/composition.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "note": "requires a live E2B_API_KEY and the still-pending Rust subprocess-e2b, PTY, and remote LSP assembled path; unit/fake lifecycle evidence does not substitute for this world-level deletion and credential-scrubbing proof"
     },
     {
       "source": "packages/e2b/e2b/tests/e2b.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/e2b/tests/e2b_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/e2b/e2b/tests/e2b.spec.ts (16 passed)",
+        "cargo test --locked --offline -p seekdeep-e2b --all-features (6 passed)",
+        "cargo clippy --locked --offline -p seekdeep-e2b -p seekdeep-fs-e2b --all-targets --all-features -- -D warnings"
+      ],
+      "note": "six grouped fake-SDK scenarios cover shell quoting and isolated control homes, default and configured creation options, shared readiness, directory protection, teardown, setup/disposal races, one-shot rollback, already-deleted cleanup, invalid runtime-root types, and configuration rejection before factory invocation"
     },
     {
       "source": "packages/e2b/e2b/tsconfig.json",
@@ -50935,7 +50956,7 @@
       "status": "verified",
       "targets": [
         "crates/fs-e2b/src/lib.rs",
-        "crates/fs-e2b/src/types.rs"
+        "crates/e2b/src/types.rs"
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/e2b/fs-e2b/tests/filesystem.spec.ts (36 passed)",

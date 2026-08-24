@@ -5143,6 +5143,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-e2b"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-llm",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "seekdeep-failure-display"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5182,6 +5199,7 @@ dependencies = [
  "indexmap 2.14.0",
  "parking_lot",
  "seekdeep-cordis",
+ "seekdeep-e2b",
  "seekdeep-fs",
  "seekdeep-llm",
  "seekdeep-sandbox",

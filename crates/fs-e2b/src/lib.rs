@@ -1,7 +1,5 @@
 //! Remote E2B filesystem provider over an object-safe sandbox client.
 
-mod types;
-
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{
@@ -13,7 +11,8 @@ use std::{
 use base64::Engine as _;
 use futures::{StreamExt as _, stream::BoxStream};
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, Plugin, ServiceKey};
+use seekdeep_cordis::{Context, Plugin};
+use seekdeep_e2b::E2B;
 use seekdeep_fs::{
     FileSystem, FileSystemService, FsDirEntry, FsEditOutcome, FsEditRequest, FsError, FsErrorCode,
     FsInfo, FsKind, FsPathInfo, FsPathKind, FsTarget, FsTargetKey, FsVersion, FsWriteIntent,
@@ -23,13 +22,15 @@ use seekdeep_llm::AbortSignal;
 use seekdeep_sandbox::SandboxExecutionPolicy;
 use sha2::{Digest as _, Sha256};
 
-pub use types::*;
+pub use seekdeep_e2b::{
+    E2bByteStream, E2bCommandExit, E2bCommandResult, E2bCommands, E2bCreateOptions, E2bEntryInfo,
+    E2bFileNotFound, E2bFileType, E2bFiles, E2bSandbox, E2bSandboxFactory, E2bSandboxFuture,
+    E2bSandboxNotFound, E2bService,
+};
 
 const VERSION_METADATA_KEY: &str = "seekdeep-version";
 const BINARY_SAMPLE_BYTES: usize = 8_192;
 
-/// Cordis E2B capability slot.
-pub const E2B: ServiceKey<E2bService> = ServiceKey::new("e2b");
 /// Cordis plugin name.
 pub const NAME: &str = "fs-e2b";
 /// Required services.
