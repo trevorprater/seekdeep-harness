@@ -14,6 +14,8 @@ Durable lifecycle and permission to continue are different facts. A session may 
 
 `@seekdeep-ai/seekdeep-goal` in `packages/goal/goal/` owns one current same-session goal through `ctx.goals`. A goal has a branded id, objective, durable phase, compare-and-set revision, and `maxGoalRounds`. `defaultMaxGoalRounds` is a validated deployment setting with default `256`; `create()` materializes it internally before mutation rather than exposing resolution as another service verb.
 
+Rust production lives in [`crates/goal`](../../../../crates/goal/src/index.rs). `GoalService` takes decision time and identity creation through an injectable `GoalEnvironment`; the production environment derives an opaque UUIDv5 goal id deterministically from session identity, session sequence, and decision time, while tests supply a seeded clock and id. No goal decision reads ambient randomness, and mutation timestamps clamp monotonically when the injected wall clock moves backward.
+
 The durable phases are `active`, `paused`, `blocked`, and `complete`. A blocked snapshot includes a policy-owned lower-kebab-case code and a normalized free-form message, so usage limits, round caps, execution failures, and human-input dependencies share one lifecycle state without losing their cause. A separate live activation is `armed` or `disarmed`. Creation and explicit resume arm activation; pause, completion, blocking, and clear disarm it. Edits preserve activation and any blocker reason; resume and completion clear that reason. Activation is never part of the persisted snapshot.
 
 ### Durable record and replay

@@ -14,8 +14,8 @@ pub use domain::{
     GoalSourceKind,
 };
 pub use index::{
-    Config, DEFAULT_MAX_GOAL_ROUNDS, GOAL, GoalService, INJECT, NAME, ResolvedConfig,
-    apply_goal_projection, plugin,
+    Config, DEFAULT_MAX_GOAL_ROUNDS, GOAL, GoalEnvironment, GoalService, INJECT, NAME,
+    ResolvedConfig, apply_goal_projection, plugin,
 };
 pub use types::{
     CreateGoalRequest, CreateGoalResult, EditGoalRequest, GoalActivation, GoalBlockReason, GoalId,

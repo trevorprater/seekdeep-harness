@@ -254,7 +254,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
 unicode-ident = "1.0.22"
 unicode-normalization = "0.1.25"
-uuid = { version = "1.19.0", features = ["serde", "v4", "v7"] }
+uuid = { version = "1.19.0", features = ["serde", "v4", "v5", "v7"] }
 wasm-bindgen = "0.2.127"
 wasm-bindgen-futures = "0.4.77"
 serde-wasm-bindgen = "0.6.5"

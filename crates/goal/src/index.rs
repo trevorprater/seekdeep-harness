@@ -40,6 +40,35 @@ pub const GOAL: ServiceKey<GoalService> = ServiceKey::new("goals");
 /// Deployment default for goal creation.
 pub const DEFAULT_MAX_GOAL_ROUNDS: u64 = 256;
 
+/// Injectable decision-time and goal-identity environment.
+pub trait GoalEnvironment: std::fmt::Debug + Send + Sync {
+    /// Current decision time in Unix milliseconds.
+    fn now_millis(&self) -> u64;
+    /// Opaque goal identity for a create event at the supplied session position.
+    fn goal_id(&self, session: &Session, now: u64) -> GoalId;
+}
+
+#[derive(Debug)]
+struct SystemGoalEnvironment;
+
+impl GoalEnvironment for SystemGoalEnvironment {
+    fn now_millis(&self) -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |duration| {
+                u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+            })
+    }
+
+    fn goal_id(&self, session: &Session, now: u64) -> GoalId {
+        let seed = format!("{}:{}:{now}", session.id(), session.seq());
+        GoalId::new(format!(
+            "goal-{}",
+            Uuid::new_v5(&Uuid::NAMESPACE_OID, seed.as_bytes())
+        ))
+    }
+}
+
 /// Deployment defaults for goal creation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -203,6 +232,7 @@ pub struct GoalService {
     context: Context,
     resolved: ResolvedConfig,
     caches: Mutex<HashMap<usize, Arc<Mutex<GoalCache>>>>,
+    environment: Arc<dyn GoalEnvironment>,
 }
 
 impl GoalService {
@@ -213,6 +243,19 @@ impl GoalService {
     /// Returns an invalid default round cap, a listener registration failure,
     /// or a projection registration failure.
     pub fn new(context: &Context, config: Config) -> anyhow::Result<Arc<Self>> {
+        Self::new_with_environment(context, config, Arc::new(SystemGoalEnvironment))
+    }
+
+    /// Constructs the service with an injected deterministic environment.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same configuration, listener, and projection failures as [`Self::new`].
+    pub fn new_with_environment(
+        context: &Context,
+        config: Config,
+        environment: Arc<dyn GoalEnvironment>,
+    ) -> anyhow::Result<Arc<Self>> {
         let service = Arc::new(Self {
             context: context.clone(),
             resolved: ResolvedConfig {
@@ -223,6 +266,7 @@ impl GoalService {
                 )?,
             },
             caches: Mutex::new(HashMap::new()),
+            environment,
         });
 
         let weak = Arc::downgrade(&service);
@@ -323,9 +367,9 @@ impl GoalService {
                 GoalErrorCode::GoalAlreadyExists,
             ));
         }
-        let now = now_millis();
+        let now = self.environment.now_millis();
         let goal = GoalSnapshot {
-            id: GoalId::new(format!("goal-{}", Uuid::new_v4())),
+            id: self.environment.goal_id(agent.session(), now),
             revision: 1,
             objective: spec.objective,
             phase: GoalPhase::Active,
@@ -503,7 +547,7 @@ impl GoalService {
             id: current.id.clone(),
             revision: current.revision + 1,
         };
-        let cleared_at = Self::next_mutation_time(&cache)?;
+        let cleared_at = self.next_mutation_time(&cache)?;
         let change = GoalChangeMeta::Clear(GoalClearChangeMeta {
             kind: GoalChangeKind::GoalChange,
             version: GOAL_CHANGE_VERSION,
@@ -694,7 +738,7 @@ impl GoalService {
             .created_at
             .ok_or_else(|| anyhow::anyhow!("current goal cache lacks createdAt"))?;
         let rounds_started = cache.lock().state.rounds_started;
-        let updated_at = Self::next_mutation_time(cache)?;
+        let updated_at = self.next_mutation_time(cache)?;
         self.commit_snapshot(
             agent,
             cache,
@@ -708,13 +752,13 @@ impl GoalService {
     }
 
     /// Clamps a current goal's next timestamp across backward wall-clock movement.
-    fn next_mutation_time(cache: &Arc<Mutex<GoalCache>>) -> anyhow::Result<u64> {
+    fn next_mutation_time(&self, cache: &Arc<Mutex<GoalCache>>) -> anyhow::Result<u64> {
         let updated_at = cache
             .lock()
             .state
             .updated_at
             .ok_or_else(|| anyhow::anyhow!("current goal cache lacks updatedAt"))?;
-        Ok(now_millis().max(updated_at))
+        Ok(self.environment.now_millis().max(updated_at))
     }
 
     /// Builds and commits one full-snapshot mutation.
@@ -972,14 +1016,6 @@ fn session_key(session: &Arc<Session>) -> usize {
     Arc::as_ptr(session) as usize
 }
 
-fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| {
-            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-        })
-}
-
 fn global_events() -> EventOptions {
     EventOptions {
         global: true,
@@ -1120,13 +1156,42 @@ mod tests {
 
 #[cfg(test)]
 mod service_tests {
+    use std::collections::VecDeque;
+
     use seekdeep_agent::{
         AgentOptions, AgentRegistry, Inbox, InboxNotifications, NoopInboxNotifications,
+        SessionStartSource,
     };
     use seekdeep_core::session::SessionId;
     use seekdeep_scope::ScopeKey;
+    use serde_json::json;
 
     use super::*;
+
+    #[derive(Debug)]
+    struct TestEnvironment {
+        times: Mutex<VecDeque<u64>>,
+        id: GoalId,
+    }
+
+    impl TestEnvironment {
+        fn new(times: impl IntoIterator<Item = u64>, id: &str) -> Arc<Self> {
+            Arc::new(Self {
+                times: Mutex::new(times.into_iter().collect()),
+                id: GoalId::new(id),
+            })
+        }
+    }
+
+    impl GoalEnvironment for TestEnvironment {
+        fn now_millis(&self) -> u64 {
+            self.times.lock().pop_front().expect("scripted goal time")
+        }
+
+        fn goal_id(&self, _session: &Session, _now: u64) -> GoalId {
+            self.id.clone()
+        }
+    }
 
     fn agent(context: &Context, id: &str) -> Arc<Agent> {
         let id = SessionId::new(id);
@@ -1152,6 +1217,23 @@ mod service_tests {
             .register(&context, &subject, None)
             .expect("register agent");
         let service = GoalService::install(&context, Config::default()).expect("install goal");
+        (context, subject, service)
+    }
+
+    fn setup_with_environment(
+        id: &str,
+        environment: Arc<dyn GoalEnvironment>,
+    ) -> (Context, Arc<Agent>, Arc<GoalService>) {
+        let context = Context::new();
+        let registry = Arc::new(AgentRegistry::new(context.clone()));
+        registry.provide(&context).expect("provide agents");
+        let subject = agent(&context, id);
+        registry
+            .register(&context, &subject, None)
+            .expect("register agent");
+        let service = GoalService::new_with_environment(&context, Config::default(), environment)
+            .expect("goal service");
+        service.provide(&context).expect("provide goal");
         (context, subject, service)
     }
 
@@ -1316,5 +1398,128 @@ mod service_tests {
             )
             .expect_err("armed");
         assert!(error.to_string().contains("already active and armed"));
+    }
+
+    #[test]
+    fn injected_time_identity_block_resume_and_session_start_are_deterministic() {
+        let environment = TestEnvironment::new([100, 90, 110, 120], "goal-fixed");
+        let (context, subject, service) = setup_with_environment("deterministic", environment);
+        let created = service
+            .create(
+                &subject,
+                &CreateGoalRequest {
+                    objective: "finish".into(),
+                    max_goal_rounds: Some(3),
+                },
+            )
+            .unwrap();
+        assert_eq!(created.id, GoalId::new("goal-fixed"));
+        assert_eq!((created.created_at, created.updated_at), (100, 100));
+        let edited = service
+            .edit(
+                &subject,
+                &GoalRef {
+                    id: created.id.clone(),
+                    revision: created.revision,
+                },
+                &EditGoalRequest {
+                    objective: Some("finish fully".into()),
+                    max_goal_rounds: None,
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            edited.updated_at, 100,
+            "backward wall time clamps monotonically"
+        );
+        let blocked = service
+            .block(
+                &subject,
+                &GoalRef {
+                    id: edited.id.clone(),
+                    revision: edited.revision,
+                },
+                &json!({"code":"waiting", "message":"Need approval"}),
+            )
+            .unwrap();
+        assert_eq!(blocked.phase, GoalPhase::Blocked);
+        assert_eq!(blocked.blocked_reason.as_ref().unwrap().code, "waiting");
+        let resumed = service
+            .resume(
+                &subject,
+                &GoalRef {
+                    id: blocked.id.clone(),
+                    revision: blocked.revision,
+                },
+            )
+            .unwrap();
+        assert_eq!(resumed.activation, GoalActivation::Armed);
+
+        AgentEvents::new(context, subject.clone()).emit(
+            "agent/session-start",
+            SessionStartEvent {
+                source: SessionStartSource::Resume,
+            },
+        );
+        let disarmed = service.get(&subject).unwrap().unwrap();
+        assert_eq!(disarmed.revision, resumed.revision);
+        assert_eq!(disarmed.activation, GoalActivation::Disarmed);
+    }
+
+    #[test]
+    fn seeded_session_reconstructs_goal_disarmed_and_corruption_repeats_after_valid_prefix() {
+        let (_context, subject, service) = setup("seed-source");
+        let created = service
+            .create(
+                &subject,
+                &CreateGoalRequest {
+                    objective: "persist".into(),
+                    max_goal_rounds: Some(5),
+                },
+            )
+            .unwrap();
+        let paused = service
+            .pause(
+                &subject,
+                &GoalRef {
+                    id: created.id.clone(),
+                    revision: created.revision,
+                },
+            )
+            .unwrap();
+        let seed = subject.session().events();
+
+        let context = Context::new();
+        let registry = Arc::new(AgentRegistry::new(context.clone()));
+        registry.provide(&context).unwrap();
+        let id = SessionId::new("seed-child");
+        let session = Session::create(&id, Some(seed), None).unwrap();
+        let inbox =
+            Arc::new(Inbox::new(session.clone(), Arc::new(NoopInboxNotifications)).unwrap());
+        let child = Arc::new(Agent::new(
+            id,
+            AgentOptions::default(),
+            session.clone(),
+            inbox,
+            context.clone(),
+            ScopeKey::new(),
+        ));
+        registry.register(&context, &child, None).unwrap();
+        let child_service = GoalService::install(&context, Config::default()).unwrap();
+        let inherited = child_service.get(&child).unwrap().unwrap();
+        assert_eq!(inherited.id, paused.id);
+        assert_eq!(inherited.revision, paused.revision);
+        assert_eq!(inherited.activation, GoalActivation::Disarmed);
+
+        session
+            .append(
+                "goal/change",
+                json!({"kind":"goal/change", "version":999}),
+                AppendOptions::default(),
+            )
+            .unwrap();
+        let first = child_service.get(&child).unwrap_err().to_string();
+        let second = child_service.get(&child).unwrap_err().to_string();
+        assert_eq!(first, second);
     }
 }
