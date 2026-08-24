@@ -7014,6 +7014,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-subprocess-e2b"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "seekdeep-e2b",
+ "seekdeep-llm",
+ "seekdeep-subprocess",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-subprocess-local"
 version = "0.1.0-rc.5"
 dependencies = [

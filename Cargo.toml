@@ -129,6 +129,7 @@ members = [
   "crates/storage-json",
   "crates/storage-sqlite",
   "crates/subprocess",
+  "crates/subprocess-e2b",
   "crates/subprocess-local",
   "crates/system-prompt",
   "crates/terminal",

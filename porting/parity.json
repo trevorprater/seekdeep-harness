@@ -7131,7 +7131,7 @@
         ".agents/notes/implemented/architecture/2026-07-28-portable-execution-world-consumers.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "paired Agent Note hashes re-record the native E2B subprocess substrate"
       ]
     },
     {
@@ -7142,7 +7142,7 @@
         ".agents/notes/implemented/architecture/2026-07-28-portable-execution-world-consumers.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "implemented architecture records native strict environment/output framing, bounded tails, control HOME, polling, and group signalling"
       ]
     },
     {
@@ -7153,7 +7153,7 @@
         ".agents/notes/implemented/architecture/2026-07-28-portable-execution-world-consumers.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "Chinese implemented architecture mirrors the native E2B subprocess substrate"
       ]
     },
     {
@@ -51051,7 +51051,17 @@
     {
       "source": "packages/e2b/subprocess-e2b/src/environment.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subprocess-e2b/src/environment.rs",
+        "crates/subprocess-e2b/tests/environment_parity.rs",
+        "crates/subprocess/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: subprocess-e2b suites passed 106/106",
+        "cargo test --locked --offline -p seekdeep-subprocess-e2b --all-features (10 passed)",
+        "strict base64/UTF-8 transport, passwd login HOME, ambient scrubbing, explicit opt-in/tombstones, bootstrap blanking, and malformed entry rejection"
+      ]
     },
     {
       "source": "packages/e2b/subprocess-e2b/src/index.ts",
@@ -51075,7 +51085,16 @@
     {
       "source": "packages/e2b/subprocess-e2b/src/output.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subprocess-e2b/src/output.rs",
+        "crates/subprocess-e2b/tests/output_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: subprocess-e2b suites passed 106/106",
+        "cargo test --locked --offline -p seekdeep-subprocess-e2b --all-features (10 passed)",
+        "canonical incremental base64 frames, exact byte tails, independent offsets, loss flags, completion validation, and spill eligibility"
+      ]
     },
     {
       "source": "packages/e2b/subprocess-e2b/src/process.ts",
@@ -51085,7 +51104,17 @@
     {
       "source": "packages/e2b/subprocess-e2b/src/remote.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subprocess-e2b/src/remote.rs",
+        "crates/subprocess-e2b/tests/remote_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: subprocess-e2b suites passed 106/106",
+        "cargo test --locked --offline -p seekdeep-subprocess-e2b --all-features (10 passed)",
+        "isolated control environments, abortable poll ticks, exact negative-PGID signals, and command-exit/sandbox-loss tolerance",
+        "cargo clippy --locked --offline -p seekdeep-subprocess-e2b -p seekdeep-subprocess --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/e2b/subprocess-e2b/src/terminal.ts",

@@ -51,7 +51,16 @@ pub fn scrub_environment(
 }
 
 fn safe_ambient_key(key: &OsStr) -> bool {
-    let uppercase = key.to_string_lossy().to_ascii_uppercase();
+    is_safe_ambient_environment_name(&key.to_string_lossy())
+}
+
+/// Whether an ambient environment name may cross a subprocess provider boundary.
+///
+/// Harness-managed names and credential-shaped names are removed
+/// case-insensitively. Explicit request entries remain a caller-owned opt-in.
+#[must_use]
+pub fn is_safe_ambient_environment_name(name: &str) -> bool {
+    let uppercase = name.to_ascii_uppercase();
     !uppercase.starts_with(SEEKDEEP_ENV_PREFIX)
         && !SENSITIVE_ENV_FRAGMENTS
             .iter()
