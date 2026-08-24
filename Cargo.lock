@@ -7058,6 +7058,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-fs-search"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-agent-loop-testkit",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-spill",
+ "seekdeep-spill-local",
+ "seekdeep-subprocess",
+ "seekdeep-subprocess-local",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-tool-goal"
 version = "0.1.0-rc.5"
 dependencies = [

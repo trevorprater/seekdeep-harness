@@ -138,6 +138,7 @@ members = [
   "crates/tool-bash-persistent",
   "crates/tool-cordis",
   "crates/tool-fs",
+  "crates/tool-fs-search",
   "crates/tool-str-replace-editor",
   "crates/tool-goal",
   "crates/tool-jobs",

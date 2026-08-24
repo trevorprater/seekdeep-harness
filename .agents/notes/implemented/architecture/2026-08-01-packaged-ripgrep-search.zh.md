@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`@seekdeep-ai/seekdeep-tool-fs-search` 现在运行 PACKAGED（打包的）ripgrep 二进制（`@vscode/ripgrep`，一个 npm 依赖，其可选平台包随附二进制），经由 `ctx.subprocess` seam：`runRipgrep()` 以纯 argv 向量 spawn `rgPath`，向量前缀 `--no-config`，配以 collect 模式 stdout/stderr、`graceMs` 与转发的 `exec.signal`。`rgPath` 在首次调用时懒解析（进程内 memoize）：`@vscode/ripgrep` 在模块求值阶段解析其平台包，静态导入会把平台包缺失/损坏（`--omit=optional`、安装不全）变成 Loader 组合加载失败——这正是本次改动要消除的加载期失败模式。不再有 shell 层，执行路径上的 shell 引号边界随之消失；`singleQuote` 工具与其 shell spawn 测试一并删除。原始流使用 seam 的诊断尾部 collect 形态（无 spill 文件——工具从不读取原始 spill 路径；lossy stdout 读取以 `SEARCH_RAW_OUTPUT_OVERFLOW` 失败）。终止宽限与 stderr 尾部预算成为经校验的 `Config` 字段（`graceMs` 默认 3000，`stderrMaxBytes` 默认 64 KiB），不再继承自 bash-local 的配置。注册变为无条件——加载期 `command -v rg` 探针与条件注册决策被删除，连同那条 "rg not found" 警告。本包注入 `tools`、`systemPrompt` 与 `subprocess`。
+`@seekdeep-ai/seekdeep-tool-fs-search` 经 `ctx.subprocess` seam 运行打包的 ripgrep 二进制。TypeScript 兼容性源从 `@vscode/ripgrep` 获得该二进制；Rust 生产代码位于 [`crates/tool-fs-search`](../../../../crates/tool-fs-search/src/lib.rs)，从 release 可执行文件同级目录（或其 `bin` 子目录）解析 `rg`，并且仅在 debug 构建中允许 PATH 回退。解析采用懒加载并 memoize，因此资源缺失或损坏会让首次搜索以 `SEARCH_FAILED` 失败，而不会破坏 Loader 组合。运行时 spawn 以 `--no-config` 为前缀的纯 argv 向量，并转发 collect 模式 stdout/stderr、`graceMs` 与 `exec.signal`。不存在 shell 层或引号边界。原始流使用不含原始 spill 文件的诊断尾部 collect 形态；lossy stdout 以 `SEARCH_RAW_OUTPUT_OVERFLOW` 失败。终止宽限与 stderr 尾部预算是经校验的 `Config` 字段（`graceMs` 默认 3000，`stderrMaxBytes` 默认 64 KiB）。注册无条件进行，本包注入 `tools`、`systemPrompt` 与 `subprocess`。
 
 退出语义仍由工具拥有：退出码 0 为有结果的成功，1 为成功的空搜索，其余归入既有 `SEARCH_*` 词汇（无效模式、启动失败、信号杀死、原始输出溢出）。超时是挂在工具定义上的协作式工具调用预算：`@seekdeep-ai/seekdeep-tool-call-timeout-policy` 中止 `exec.signal`，subprocess seam 的终止升级提供硬终止，工具报告 `SEARCH_ABORTED`。工作目录为会话 header cwd（存在时），否则为 `process.cwd()`——不再有执行器配置可供默认化，因此回退由工具自己拥有。
 
