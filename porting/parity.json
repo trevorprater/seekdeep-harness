@@ -72590,17 +72590,28 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "crates/loader/Cargo.toml"
+        "packages/typert/loader/package.json",
+        "crates/typert-loader/Cargo.toml"
       ],
       "evidence": [
-        "crates/loader/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration",
-        "cargo metadata resolves the crate as a workspace member"
+        "mechanical package metadata rename plus Rust 2024 crate manifest",
+        "cargo metadata resolves seekdeep-typert-loader as a workspace member"
       ]
     },
     {
       "source": "packages/typert/loader/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/typert-loader/src/lib.rs",
+        "crates/typert-registry/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/typert/loader/tests/loader.spec.ts (16 passed)",
+        "cargo test --locked --offline -p seekdeep-typert-loader --all-features (8 passed)",
+        "cargo clippy --locked --offline -p seekdeep-typert-loader -p seekdeep-typert-registry --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the native loader replaces Node package-export import with a lifecycle-owned compiled artifact registry; it preserves explicit and Loader-discovered eligibility, cached positive/negative/error verdicts, activation aggregation, contained steady-state failures, in-flight disposal fencing, incremental unmount/remount, typed manifest ownership/model/invocation validation, and exact registration withdrawal"
     },
     {
       "source": "packages/typert/loader/src/invariant.ts",
@@ -72619,18 +72630,27 @@
     {
       "source": "packages/typert/loader/tests/loader.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/typert-loader/tests/loader_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/typert/loader/tests/loader.spec.ts (16 passed)",
+        "cargo test --locked --offline -p seekdeep-typert-loader --all-features (8 passed)",
+        "cargo clippy --locked --offline -p seekdeep-typert-loader -p seekdeep-typert-registry --all-targets --all-features -- -D warnings"
+      ],
+      "note": "eight grouped Rust scenarios cover explicit packages and invocations, missing and Host-less artifacts, discovered mount/unmount/remount and late entries, duplicate notifications, cached negative verdicts, in-flight disposal, activation aggregation, steady-state containment, typed model fields, and intrinsic invocation validation"
     },
     {
       "source": "packages/typert/loader/tsconfig.json",
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "crates/loader/Cargo.toml"
+        "crates/typert-loader/Cargo.toml"
       ],
       "evidence": [
-        "crates/loader/Cargo.toml is the Rust 2024 workspace manifest replacing the Node build configuration",
-        "cargo metadata resolves the crate as a workspace member"
+        "crates/typert-loader/Cargo.toml is the Rust 2024 build manifest",
+        "cargo metadata resolves seekdeep-typert-loader as a workspace member"
       ]
     },
     {

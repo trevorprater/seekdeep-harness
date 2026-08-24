@@ -168,6 +168,8 @@ lookup 注册表会在活 resolver 卸载后保留稳定的 wire 声明。SRC �
 
 Registry 的 Host 根入口拥有完整 `TypertRegistryContract` interface merge；Host 与 Client 共用的 registry 实现位于无环境声明的独立模块。Registry `/client` 入口只引用该共享实现，不经过 Host 根入口，因此不会把 Host Cordis 声明带入 Client Program。
 
+原生 `seekdeep-typert-loader` 跟随 live Loader entry 名称，并通过生命周期所有的 `typertArtifacts` 注册表解析编译后的 Host contribution。显式 `packages` 即使没有直接 Loader row 仍保持 eligible；发现式扫描遇到缺失或无 Host 产物时会跳过，显式配置则明确失败；判定结果在 loader 生命周期内缓存，每项 Typert 注册随其 entry 或 loader fiber 撤销。Rust 生产路径以此取代 Node package export 查找和动态模块 import；原生、WebAssembly 或兼容 package host 会在产物边界注册类型化 factory，而不是把 JavaScript schema 对象传入 registry。
+
 ## 唯一类型、符号与 Zod
 
 Remote Client DTS 不复制业务 DTO，也不重新声明一个结构相同的影子类型。它只从不携带 Host Cordis merge 的公共纯类型 subpath 引用原始符号：

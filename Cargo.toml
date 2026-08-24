@@ -154,6 +154,7 @@ members = [
   "crates/tool-web",
   "crates/tool-todo",
   "crates/tools",
+  "crates/typert-loader",
   "crates/typert-protocol",
   "crates/typert-registry",
   "crates/web",

@@ -7547,6 +7547,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-typert-loader"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-loader",
+ "seekdeep-typert-protocol",
+ "seekdeep-typert-registry",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "seekdeep-typert-protocol"
 version = "0.1.0-rc.5"
 dependencies = [

@@ -168,6 +168,8 @@ Business-object and scoped-Context packages own stable declarations and default 
 
 The registry's Host root entry has the complete `TypertRegistryContract` interface merge. The registry implementation shared by Host and Client lives in a separate module without environment declarations. The registry's `/client` entry imports only that shared implementation and does not pass through the Host root entry, so it cannot bring Host Cordis declarations into the Client Program.
 
+The native `seekdeep-typert-loader` follows live Loader entry names and resolves compiled Host contributions through the lifecycle-owned `typertArtifacts` registry. Explicit `packages` remain eligible without a direct Loader row; discovered missing or Host-less artifacts are skipped, explicit ones fail loudly, verdicts are cached for the loader lifetime, and every Typert registration withdraws with either its entry or the loader fiber. This replaces Node package-export lookup and dynamic module import in the Rust production path; native, WebAssembly, or compatibility package hosts register typed factories at the artifact boundary instead of passing JavaScript schema objects into the registry.
+
 ## Canonical types, symbols, and Zod
 
 Remote Client DTS does not copy business DTOs or redeclare structurally identical shadow types. It imports original symbols only from public, type-only subpaths that do not carry Host Cordis merges:

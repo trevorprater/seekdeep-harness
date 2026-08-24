@@ -48,6 +48,26 @@ pub fn typert_endpoint(descriptor: &InvocationDescriptor) -> String {
     format!("{}/{}", descriptor.namespace, descriptor.method)
 }
 
+/// Validates one generated contribution without publishing it.
+///
+/// # Errors
+///
+/// Rejects malformed package, schema, or invocation identities and duplicate
+/// schemas or invocation endpoints within the contribution.
+pub fn validate_contribution(contribution: &TypertContribution) -> anyhow::Result<()> {
+    validate_segment("package name", &contribution.package)?;
+    let schema_records = make_schema_records(contribution)?;
+    let mut schemas = HashSet::new();
+    for record in schema_records {
+        anyhow::ensure!(
+            schemas.insert(record.key.clone()),
+            "typert: schema {:?} is already registered",
+            record.key
+        );
+    }
+    DescriptorState::default().validate("local", &contribution.invocations)
+}
+
 #[derive(Clone)]
 struct DescriptorEntry {
     descriptor: InvocationDescriptor,
@@ -253,7 +273,7 @@ impl TypertRegistry {
         context: &Context,
         contribution: &TypertContribution,
     ) -> anyhow::Result<TypertDisposer> {
-        validate_segment("package name", &contribution.package)?;
+        validate_contribution(contribution)?;
         let package_key = typert_package_key(&contribution.package, contribution.face);
         let owner = Uuid::now_v7();
         let package_record = TypertPackageRecord {
