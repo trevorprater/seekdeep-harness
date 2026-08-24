@@ -6332,6 +6332,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-session-log-export"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "js-sys",
+ "seekdeep-agent",
+ "seekdeep-commands",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-identity",
+ "seekdeep-invariants",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-system-prompt",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "seekdeep-session-persistence"
 version = "0.1.0-rc.5"
 dependencies = [

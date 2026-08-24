@@ -114,6 +114,7 @@ members = [
   "crates/session-projection-cache",
   "crates/session-query",
   "crates/session-query-sqlite",
+  "crates/session-log-export",
   "crates/tool-session-query",
   "crates/session-reference",
   "crates/session-stats",

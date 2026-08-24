@@ -16,7 +16,7 @@ The Header contribution occupies the right-aligned `conversation.session.header.
 
 The ZIP endpoint and persistence `readRaw` capability remain owned by `seekdeep-host-apiproxy` and the persistence package. The endpoint flushes a live root Session before reading its artifact, so the local acknowledgment cannot race ahead of durable command lifecycle rows. This package does not serialize Session events, write Host files, deliver Host paths, or implement SQLite fallback.
 
-The package is an ordinary Client aggregate project. Its single `tsconfig.json` compiles the Node loader entries and browser contribution together; Host-side tests still exercise the command and invariant through their source entries.
+The Rust port separates target ownership inside `seekdeep-session-log-export`: native builds contain the command and invariant registration, while the target-portable controller and its `web-sys` HEAD/anchor adapter compile for `wasm32-unknown-unknown` without pulling Host command, Agent, Tokio networking, or persistence dependencies into the browser. The controller owns the same one-flight state machine, exact URL and filename conventions, failure containment, dismissal behavior, and disposal quiescence. Header/Dialog Slot projection remains a distinct browser-composition layer, so its parity rows stay open until the Client locale, command, conversation, and primitive renderers are available in Rust/WASM.
 
 ## Alternatives considered
 
@@ -28,4 +28,4 @@ The package is an ordinary Client aggregate project. Its single `tsconfig.json` 
 
 ## Consequences
 
-The Header action and `/export` download the same ZIP and show the same feedback. An executed command remains visible in the durable transcript without creating a model turn. The preflight reports failures found before streaming starts; failures while the browser consumes the GET remain browser-download failures. Deployments whose persistence backend has no raw per-Session artifact receive the endpoint's existing failure; SQLite support remains separate work. Command availability before a Session's first turn is separate work.
+The Header action and `/export` download the same ZIP and show the same feedback. An executed command remains visible in the durable transcript without creating a model turn. The preflight reports failures found before streaming starts; failures while the browser consumes the GET remain browser-download failures. Deployments whose persistence backend has no raw per-Session artifact receive the endpoint's existing failure; SQLite support remains separate work. Command availability before a Session's first turn is separate work. Differential coverage pins the nine source command/controller/invariant cases; native Rust tests add save-failure containment, and both native strict Clippy and a strict `wasm32-unknown-unknown` build gate the split boundary.

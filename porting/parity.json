@@ -63221,7 +63221,17 @@
     {
       "source": "packages/session-query/session-log-export/src/client/controller.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/controller.rs",
+        "crates/session-log-export/tests/controller_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: controller.client.spec.ts passed 7/7",
+        "Rust controller pins exact HEAD URL/descendant query, safe filename, one-flight sharing, success/error state, dismissal, external clear, transport/body/save containment, disposal abort/join, late-request refusal, and null-origin fallback",
+        "cargo check --locked --offline --target wasm32-unknown-unknown -p seekdeep-session-log-export --all-features",
+        "cargo clippy --locked --offline --target wasm32-unknown-unknown -p seekdeep-session-log-export --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/src/client/index.ts",
@@ -63231,7 +63241,13 @@
     {
       "source": "packages/session-query/session-log-export/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/locales.rs"
+      ],
+      "evidence": [
+        "exact English and Simplified-Chinese namespace rows are compile-time Rust constants"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/src/css-modules.d.ts",
@@ -63241,7 +63257,15 @@
     {
       "source": "packages/session-query/session-log-export/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/command.rs",
+        "crates/session-log-export/tests/command_invariant_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: command.client.spec.ts passed 1/1",
+        "Rust native Cordis plugin registers the exact pathless /export descriptor/results and withdraws it with the plugin fiber"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/src/invariant.ts",
@@ -63265,12 +63289,25 @@
     {
       "source": "packages/session-query/session-log-export/tests/command.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/tests/command_invariant_parity.rs"
+      ],
+      "evidence": [
+        "pinned source command.client.spec.ts passed 1/1; Rust test executes success/path refusal through the real CommandRuntime and verifies disposal"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/tests/controller.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/tests/controller_parity.rs"
+      ],
+      "evidence": [
+        "pinned source controller.client.spec.ts passed 7/7",
+        "cargo test --locked --offline -p seekdeep-session-log-export --all-features: 7 passed"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/tests/dialog.client.spec.tsx",
@@ -63285,7 +63322,14 @@
     {
       "source": "packages/session-query/session-log-export/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/lib.rs",
+        "crates/session-log-export/tests/command_invariant_parity.rs"
+      ],
+      "evidence": [
+        "pinned source invariant.client.spec.ts passed 1/1; Rust test reserves, rejects duplicate, releases, and reuses the exact renamed package identity"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/tests/loader-composition.client.spec.ts",

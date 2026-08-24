@@ -16,7 +16,7 @@ Header 贡献占用最右侧的 `conversation.session.header.utilities` 列表�
 
 ZIP 端点与持久化 `readRaw` 能力仍由 `seekdeep-host-apiproxy` 和持久化包拥有。端点会在读取工件前 flush 活动的根 Session，因此本地确认不会早于持久命令生命周期行。本包不序列化 Session 事件、不写 Host 文件、不交付 Host 路径，也不实现 SQLite 回退。
 
-本包是普通的 Client 聚合项目。单一 `tsconfig.json` 会一起编译 Node loader 入口与浏览器贡献；Host 侧测试仍通过源码入口验证命令与 invariant。
+Rust 端口在 `seekdeep-session-log-export` 内按目标拆分所有权：原生构建包含命令与 invariant 注册，目标可移植控制器及其 `web-sys` HEAD／anchor 适配器则面向 `wasm32-unknown-unknown` 编译，不会把 Host 命令、Agent、Tokio 网络或持久化依赖带入浏览器。控制器拥有同样的单航班状态机、精确 URL 与文件名约定、失败隔离、关闭行为和释放静止性。Header／Dialog Slot 投影仍是独立的浏览器组合层，因此在 Client locale、command、conversation 与 primitive 渲染器具备 Rust/WASM 实现前，其 parity 条目保持未完成。
 
 ## Alternatives considered
 
@@ -28,4 +28,4 @@ ZIP 端点与持久化 `readRaw` 能力仍由 `seekdeep-host-apiproxy` 和持久
 
 ## Consequences
 
-Header 操作与 `/export` 会下载同一个 ZIP，并显示相同反馈。已执行命令保留在持久文本记录中，且不创建模型轮次。预检会报告流式传输开始前发现的失败；浏览器消费 GET 时发生的失败仍属于浏览器下载失败。持久化后端没有逐 Session 原始工件时，用户会收到端点现有的失败；SQLite 支持保留为独立工作。Session 首轮前的命令可用性属于独立工作。
+Header 操作与 `/export` 会下载同一个 ZIP，并显示相同反馈。已执行命令保留在持久文本记录中，且不创建模型轮次。预检会报告流式传输开始前发现的失败；浏览器消费 GET 时发生的失败仍属于浏览器下载失败。持久化后端没有逐 Session 原始工件时，用户会收到端点现有的失败；SQLite 支持保留为独立工作。Session 首轮前的命令可用性属于独立工作。差分覆盖固定九个源命令／控制器／invariant 用例；原生 Rust 测试另行覆盖保存失败隔离，原生 strict Clippy 与 strict `wasm32-unknown-unknown` 构建共同约束拆分边界。
