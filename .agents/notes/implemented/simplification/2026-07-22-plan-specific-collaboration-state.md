@@ -59,7 +59,7 @@ The tool renders the submitted plan as a generic card titled by its first headin
 
 ## Verification
 
-- Package tests retain boundary ordering, retry, append-failure, HMR disposal, prompt assembly, stable native and Code Mode schemas, review outcomes, and invariant coverage through the boolean service.
+- Package tests retain boundary ordering, retry, append-failure, HMR disposal, prompt assembly, stable native and Code Mode schemas, review outcomes, and invariant coverage through the boolean service. The `plan` projection folds logged `command/run` selections plus `plan/mode` commits, compares an unresolved target with the committed active state, reconstructs pending intent from a cold log, and removes its key with the owning fiber.
 - Command tests cover bare `/plan`, `/plan <message>`, active `/plan off`, pending-entry cancellation, inactive idempotence, absence of `/mode` and `/review`, and effect-scoped removal.
 - The keyless TUI scenarios enter through `/plan <message>`, leave through `/plan off`, and prove that each committed `plan/mode` precedes the request header it changes, the entry message is logged under plan guidance, and the post-exit request omits that guidance.
 - The complete `exit_plan_mode` review arc is package-tested but has no assembled-application snapshot after the interactive ACP scenarios were retired; current keyless TUI scenarios cover command entry and direct exit only.

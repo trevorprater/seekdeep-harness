@@ -464,7 +464,7 @@ impl PlanModeController {
                         return Ok(ProjectionTransition::Unchanged);
                     };
                     let wanted = args.trim() != "off";
-                    if wanted == current.wanted.unwrap_or(false) {
+                    if wanted == current.wanted.unwrap_or(current.active) {
                         return Ok(ProjectionTransition::Unchanged);
                     }
                     current.wanted = Some(wanted);

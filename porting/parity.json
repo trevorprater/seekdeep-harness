@@ -60767,7 +60767,16 @@
     {
       "source": "packages/plan/plan-mode/tests/projection.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/plan-mode/tests/projection_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/plan/plan-mode/tests/projection.spec.ts (7 passed)",
+        "cargo test --locked --offline -p seekdeep-plan-mode --all-targets --all-features (19 passed)",
+        "cargo clippy --locked --offline -p seekdeep-plan-mode --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust projection mirror pins empty state, command-run intent folding, off and message arguments, omitted input, non-plan isolation, repeated no-op stability, commit clearing, cold log-only reconstruction, optional composition, and HMR key removal; it also corrected opposite-selection comparison to use the committed active state"
     },
     {
       "source": "packages/plan/plan-mode/tsconfig.json",
