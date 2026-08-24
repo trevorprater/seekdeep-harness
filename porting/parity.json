@@ -54137,12 +54137,34 @@
     {
       "source": "packages/goal/goal-round-driver/tests/goal-round-driver.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/goal-round-driver/tests/driver_parity.rs",
+        "crates/goal-round-driver/src/index.rs",
+        "crates/goal-round-driver/src/prompt.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/goal/goal-round-driver/tests --reporter=dot",
+        "cargo test -p seekdeep-goal-round-driver --all-features",
+        "cargo clippy -p seekdeep-goal-round-driver --all-targets --all-features -- -D warnings"
+      ],
+      "note": "compiled real-loop differential covers prompt escaping, exact admission/caps, hot-load disarm, checkpoint ordering/failure, human and revision races, retry ownership, cancellation, custom-agent queue failures, scheduler failure/rearm, context restoration, lifecycle retirement, and queued/claimed/admitted teardown"
     },
     {
       "source": "packages/goal/goal-round-driver/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/goal-round-driver/tests/invariant_parity.rs",
+        "crates/goal-round-driver/src/invariant.rs",
+        "crates/invariants/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/goal/goal-round-driver/tests --reporter=dot",
+        "cargo test -p seekdeep-goal-round-driver --all-features",
+        "cargo test -p seekdeep-invariants --all-features"
+      ],
+      "note": "late reconstruction, canonical sequential prompts, counterfeit rejection, absent-goal rejection, and typed package-attributed startup failures are exercised through the real invariant registry"
     },
     {
       "source": "packages/goal/goal-round-driver/tsconfig.json",

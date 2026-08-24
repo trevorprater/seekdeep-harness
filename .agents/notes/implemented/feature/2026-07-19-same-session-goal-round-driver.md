@@ -14,6 +14,8 @@ That bridge has concurrency and durability obligations. Human input, cancellatio
 
 `@seekdeep-ai/seekdeep-goal-round-driver` in `packages/goal/goal-round-driver/` is a policy plugin over `ctx.goals`, the public `Agent` interface, and durable session events. It imports no concrete agent-loop implementation. For each exact live `Agent`, it owns process-local scheduling state and may reserve at most one automatic round.
 
+Rust production lives in [`crates/goal-round-driver`](../../../../crates/goal-round-driver/src/index.rs) with the same service and event boundary. Its serialized scheduler runs under the agent registry's initiator-free async scope, retires each completed task before rearming a requested pass, and retains stopping state through complete driver and agent quiescence during unload.
+
 The hierarchy is Goal → Goal Round → Turn → Step. A goal round is the outer continuation policy iteration; it becomes one goal-sourced session turn, and that turn can contain any number of ordinary model/tool steps. Human turns in the same session are not goal rounds and never increment `roundsStarted`.
 
 The plugin has no configuration. `maxGoalRounds` is resolved and persisted by `seekdeep-goal`, and the same-condition blocking threshold is resolved and prompted by `seekdeep-tool-goal`. Repeating those tunables in the driver would create multiple owners for one policy.
@@ -40,12 +42,11 @@ The driver classifies one closed goal-owned turn as follows:
 |---|---|
 | durable `completed` | continue while active/armed and under cap |
 | cancellation of a reserved/admitted goal round, or its `aborted` result | pause and disarm |
-| `error` with code `RATE_LIMIT` or `QUOTA` | block with code `usage-limited` |
-| other `error` | block with code `turn-error` |
-| `max-tokens` | block with code `max-tokens` |
+| terminal provider, request, persistence, or loop `error` | disarm without changing durable phase |
+| `max-tokens` | disarm without changing durable phase |
 | failed durability checkpoint | disarm without changing durable phase |
 | `disposed` or `interrupted` | disarm |
-| plugin-added unknown result | block for inspection |
+| plugin-added unknown result | disarm unless another policy records a durable stop |
 
 No abnormal outcome requests an automatic retry. A later human prompt can ask to continue in any language; the model reads the stopped goal and uses the goal tool's resume action, which records a new revision and arms continuation.
 
@@ -67,7 +68,7 @@ An inbox acceptance can win the microtask race immediately before plugin unload 
 
 ## Testing
 
-The unit suite uses the real agent loop and session service with only the model scripted. It covers exact sequential admission and cap enforcement, load/resume inertness, every outcome classification, rate limiting, request errors, max tokens, downstream prompt veto, pre-admission and in-flight cancellation, unrelated-human cancellation, failed-pause fallback, human-input ordering, queued and downstream revision races, forged goal attribution, failed mutation and turn checkpoints including a later one-shot injection, scheduler and custom-agent failures, session-start reset, exact lifecycle retirement, and queued/running plugin teardown. The new driver source has per-file 100% statement, branch, function, and line coverage.
+The source unit suite uses the real agent loop and session service with only the model scripted, and holds the package source to per-file 100% statement, branch, function, and line coverage. The Rust differential drives the compiled loop, goal service, session store, invariant registry, custom `AgentController`, scheduler shutdown, and plugin fibers through the same admission, durability, cancellation, revision, retry, prompt-veto, queue-failure, restoration, and teardown races.
 
 A keyless ACP snapshot mounts the shipped automation app with the real goal domain, goal tools, goal driver, agent loop, persistence, and replay adapter through `cordis.yml`. One human-originated turn creates and inspects a two-round goal, the first automatic turn stops normally, and ACP cancellation of a deliberately stalled second round records a durable pause. The normalized wire transcript and external JSONL assertions prove one session, round sources `1, 2`, the lifecycle mutation, and exact replay accounting without using `echo-agent` as an application surrogate.
 

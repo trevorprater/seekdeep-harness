@@ -287,7 +287,7 @@ fn request_text(request: &GenerateOptions) -> String {
     request
         .messages
         .iter()
-        .flat_map(|message| message.content())
+        .flat_map(seekdeep_llm::Message::content)
         .filter_map(|block| match block {
             ContentBlock::Text { text } => Some(text.as_str()),
             _ => None,
@@ -535,6 +535,7 @@ async fn hot_loaded_driver_disarms_existing_activation_until_explicit_resume() {
 #[tokio::test]
 async fn model_failure_and_max_tokens_disarm_after_the_admitted_round() {
     for entry in [
+        ScriptEntry::FinishError("slow down".to_owned()),
         ScriptEntry::Error("provider broke".to_owned()),
         ScriptEntry::MaxTokens("unfinished".to_owned()),
     ] {
@@ -1009,10 +1010,10 @@ async fn successful_retry_turn_settles_the_goal_round() {
             move |_, _, next| {
                 let once = once.clone();
                 Box::pin(async move {
-                    if !once.swap(true, std::sync::atomic::Ordering::AcqRel) {
-                        Ok(EventReply::Value(Arc::new(RequestErrorAction::Retry)))
-                    } else {
+                    if once.swap(true, std::sync::atomic::Ordering::AcqRel) {
                         next.run().await
+                    } else {
+                        Ok(EventReply::Value(Arc::new(RequestErrorAction::Retry)))
                     }
                 })
             },
@@ -1831,10 +1832,10 @@ async fn retry_of_human_failure_does_not_adopt_or_clear_goal_reservation() {
             move |_, _, next| {
                 let once = once.clone();
                 Box::pin(async move {
-                    if !once.swap(true, std::sync::atomic::Ordering::AcqRel) {
-                        Ok(EventReply::Value(Arc::new(RequestErrorAction::Retry)))
-                    } else {
+                    if once.swap(true, std::sync::atomic::Ordering::AcqRel) {
                         next.run().await
+                    } else {
+                        Ok(EventReply::Value(Arc::new(RequestErrorAction::Retry)))
                     }
                 })
             },
@@ -1876,9 +1877,7 @@ async fn pause_commit_failure_falls_back_to_process_local_disarm() {
                     let event = event_args
                         .get::<seekdeep_core::session::SessionEvent>(1)
                         .expect("event");
-                    if event.event_type == "goal/change"
-                        && event.data["operation"] == "pause"
-                    {
+                    if event.event_type == "goal/change" && event.data["operation"] == "pause" {
                         anyhow::bail!("pause failed");
                     }
                 }
@@ -1907,7 +1906,12 @@ async fn pause_commit_failure_falls_back_to_process_local_disarm() {
             EventOptions::default(),
         )
         .unwrap();
-    create_goal(&test.goals, test.agent(), "fail closed after cancellation", 8);
+    create_goal(
+        &test.goals,
+        test.agent(),
+        "fail closed after cancellation",
+        8,
+    );
     let goal = wait_goal(&test.goals, test.agent(), |goal| {
         goal.activation == GoalActivation::Disarmed
     })
@@ -1981,7 +1985,10 @@ async fn terminal_goal_failure_leaves_human_work_queued_until_a_new_wakeup() {
                 {
                     let agent = agent.clone();
                     tokio::spawn(async move {
-                        let _ = agent.followup(user("human interleaved"));
+                        let _ = agent.inbox().append(
+                            seekdeep_agent::InboxTarget::NextTurn,
+                            user("human interleaved"),
+                        );
                     });
                 }
                 Ok(EventReply::Undefined)
@@ -2004,5 +2011,31 @@ async fn terminal_goal_failure_leaves_human_work_queued_until_a_new_wakeup() {
     assert_eq!(requests.len(), 2);
     assert!(request_text(&requests[1]).contains("human interleaved"));
     assert!(request_text(&requests[1]).contains("resume after failure"));
+    test.shutdown().await;
+}
+
+#[tokio::test]
+async fn disposed_agent_state_retires_and_late_error_is_ignored() {
+    let test = Harness::new([], true).await;
+    let mut options = CreateAgentOptions::new(SessionId::new("goal-round-driver-retired"));
+    options.agent_options = AgentOptions {
+        provider: Some(ProviderId::new("mock")),
+        model: Some(ModelId::new("mock")),
+        max_tokens: None,
+        subagent_depth: None,
+    };
+    let retired = test.dependencies.agents.create(options).await.unwrap();
+    let retired_agent = retired.agent.clone();
+    retired.dispose().await.unwrap();
+    AgentEvents::new(test.context.clone(), retired_agent.clone()).emit(
+        "agent/error",
+        AgentErrorEvent {
+            turn: 1,
+            step: 1,
+            error: "late flush failure".to_owned(),
+        },
+    );
+    assert!(test.dependencies.agents.get(retired_agent.id()).is_none());
+    assert!(test.adapter.requests().is_empty());
     test.shutdown().await;
 }

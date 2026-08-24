@@ -14,6 +14,8 @@ Status: implemented
 
 位于 `packages/goal/goal-round-driver/` 的 `@seekdeep-ai/seekdeep-goal-round-driver` 是构建在 `ctx.goals`、公共 `Agent` 接口和持久会话事件之上的策略插件。它不导入具体 agent-loop 实现。它以每个实时 `Agent` 的确切对象身份为单位维护进程内调度状态，并且最多预留一个自动 Goal Round。
 
+Rust 生产代码位于 [`crates/goal-round-driver`](../../../../crates/goal-round-driver/src/index.rs)，并采用相同的服务与事件边界。其串行调度器在 agent 注册表不携带发起方的异步作用域中运行；每个已完成任务都会先退出，再按请求重新激活下一次执行；卸载时，停止状态会一直保留到驱动器与 agent 都完全停稳。
+
 层次关系为目标（Goal）→ Goal Round → 轮次（Turn）→ 步骤（Step）。Goal Round 是外层继续执行策略的一次迭代；它会成为一个归属于目标的会话轮次，而该轮次可以包含任意数量的普通模型或工具步骤。同一会话中的人类轮次不是 Goal Round，也绝不会增加 `roundsStarted`。
 
 该插件没有配置项。`maxGoalRounds` 由 `seekdeep-goal` 解析并持久化；「相同阻塞条件」的门槛由 `seekdeep-tool-goal` 解析并写入提示词。若驱动器重复声明这些可调值，一个策略就会出现多个所有者。
@@ -40,12 +42,11 @@ Status: implemented
 |---|---|
 | 持久化的 `completed` | 目标仍 active/armed 且未到上限时继续 |
 | 取消已预留/接纳的 Goal Round，或该 Round 产生 `aborted` 结果 | 暂停并解除激活 |
-| 代码为 `RATE_LIMIT` 或 `QUOTA` 的 `error` | 以 `usage-limited` 代码阻塞 |
-| 其他 `error` | 以 `turn-error` 代码阻塞 |
-| `max-tokens` | 以 `max-tokens` 代码阻塞 |
+| 终止性的提供方、请求、持久化或循环 `error` | 解除激活，但不改变持久化阶段 |
+| `max-tokens` | 解除激活，但不改变持久化阶段 |
 | 持久化检查点失败 | 解除激活，但不改变持久化阶段 |
 | `disposed` 或 `interrupted` | 解除激活 |
-| 插件新增的未知结果 | 阻塞并等待检查 |
+| 插件新增的未知结果 | 除非其他策略记录持久停止，否则解除激活 |
 
 异常结果都不会请求自动重试。之后的人类提示词可以用任何语言要求继续；模型读取已停止目标并调用目标工具的 resume 动作，记录新修订并重新激活继续执行。
 
@@ -67,7 +68,7 @@ Status: implemented
 
 ## 测试
 
-单元测试使用真实 agent loop 与会话服务，只对模型编写脚本。覆盖内容包括精确连续接纳和上限执行、加载与恢复的惰性、所有结果分类、限流、请求错误、最大 token、下游提示词否决、接纳前与执行中取消、无关人类工作取消、暂停失败回退、人类输入排序、排队时与下游修订竞争、伪造目标来源、变更与轮次检查点失败（包括后续一次性注入）、调度器与自定义 agent 失败、会话启动重置、精确生命周期退出，以及排队中和运行中的插件卸载。新驱动器源码达到逐文件 100% 语句、分支、函数和行覆盖率。
+源单元测试使用真实 agent loop 与会话服务，只对模型编写脚本，并把包源码保持在逐文件 100% 语句、分支、函数和行覆盖率。Rust 差分测试通过已编译的循环、目标服务、会话存储、不变式注册表、自定义 `AgentController`、调度器关闭和插件 fiber，覆盖相同的接纳、持久性、取消、修订、重试、提示词否决、排队失败、上下文恢复与卸载竞争。
 
 无密钥 ACP（Agent Client Protocol）快照通过 `cordis.yml` 挂载已发布的自动化应用，以及真实目标领域、目标工具、目标驱动器、agent loop、持久化和回放适配器。一个源自人类的轮次创建并检查一个包含两个 Round 的目标；第一个自动轮次正常停止，ACP 随后取消刻意停滞的第二个 Round 并记录持久暂停。规范化的协议层 transcript（文本记录）和外部 JSONL 断言证明只有一个会话、Round 来源依次为 `1, 2`、生命周期变更与回放计数精确，并且没有把 `echo-agent` 当作应用替身。
 

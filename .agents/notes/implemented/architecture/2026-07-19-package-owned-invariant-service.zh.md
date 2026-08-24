@@ -51,6 +51,8 @@ blocklist 匹配优先于 allowlist 匹配。每个条目都是区分大小写�
 
 启用的 installer 在服务拥有的独立 Cordis 子 fiber 中运行。`InvariantInstaller.inject` 显式声明该子 fiber 的服务 API；注册表不携带产品专用依赖元数据。服务会在注册成功前等待 installer 返回的 promise，因此异步启动检查仍具有事务性。installer 接收绑定后的 `fail(message)` 报告器。调用它会抛出名为 `InvariantError` 的 `Error` 子类，保留稳定代码 `INVARIANT` 并记录注册方 `packageName`；该错误不继承产品包中的错误基类。
 
+Rust 启动等待会在异步 installer 回滚期间保留带包归属的 `InvariantError` 类型，而不是把它压平为文本。因此，无论是即时检查还是延迟加载时的重建失败，原生与兼容调用方都能恢复相同的稳定代码、包名和消息。
+
 注册启动是事务性的。如果 installer 在注册监听器后失败，子 fiber 会完整释放，并在失败向外传播前解除包名占用。被过滤的注册不创建子 fiber，但会保留占用直到 dispose（资源释放）。伴随插件重载时总会从干净的 installer 状态开始；有状态贡献从其所属服务重建基线。
 
 原有函数式插件入口与单参数 `InvariantError` 构造函数不作为兼容 API 保留。仓库处于预发布阶段，所有调用方会一起迁移到服务和带包归属的错误。

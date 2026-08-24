@@ -51,6 +51,8 @@ The public registration boundary is `ctx.invariants.register(packageName, instal
 
 An enabled installer runs in a dedicated child Cordis fiber owned by the service. `InvariantInstaller.inject` declares the child fiber's service API explicitly; the registry carries no product-specific dependency metadata. The service joins a returned installer promise before registration succeeds, so asynchronous startup checks remain transactional. The installer receives a bound `fail(message)` reporter. Calling it throws an `Error` subclass named `InvariantError` with stable code `INVARIANT` and the registering `packageName`; it does not extend a product-package error base.
 
+The Rust startup join preserves a package-attributed `InvariantError` as a typed error through asynchronous installer rollback instead of flattening it to text. Native and compatibility callers can therefore recover the same stable code, package name, and message after either an immediate check or a late-load reconstruction failure.
+
 Registration setup is transactional. If an installer fails after registering listeners, the child fiber is disposed completely and the name reservation is released before the failure escapes. Filtered registrations create no child but retain their reservation until disposal. Reloading a companion therefore begins with one clean installer state; stateful contributions rebuild baselines from their owning services.
 
 The former functional-plugin entry point and one-argument `InvariantError` constructor are not retained as compatibility APIs. The repository is pre-release and all call sites move to the service and package-attributed error together.
