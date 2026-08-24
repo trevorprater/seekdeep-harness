@@ -52,7 +52,7 @@ async fn raw_pipe_stdio_is_exposed_without_a_collector() {
     assert!(running.collected().stdout.is_none());
     let input = running.stdin().expect("stdin pipe");
     input.write_all(b"through the pipe\n").await.unwrap();
-    input.close().await;
+    input.close().await.unwrap();
     let output = running.stdout().expect("stdout pipe");
     let mut text = String::new();
     output.lock().await.read_to_string(&mut text).await.unwrap();
@@ -288,7 +288,7 @@ async fn terminate_reaches_the_group_and_escalates_a_term_trap() {
         .unwrap()
         .unwrap();
     assert_eq!(outcome.signal.unwrap().as_str(), "SIGKILL");
-    assert!(running.wait_for_exit(None).await);
+    assert!(running.wait_for_exit(None).await.unwrap());
     wait_for_gone(descendant).await;
 }
 
@@ -316,7 +316,7 @@ async fn collected_pipe_drain_is_bounded_after_the_leader_exits() {
         "shell-done\n"
     );
     running.terminate();
-    assert!(running.wait_for_exit(None).await);
+    assert!(running.wait_for_exit(None).await.unwrap());
     wait_for_gone(descendant).await;
 }
 
@@ -326,13 +326,13 @@ async fn an_aborted_whole_tree_wait_reports_false_then_termination_quiesces() {
     let running = spawn_subprocess(spec("sleep 60", temp.path()), Some(temp.path())).unwrap();
     let signal = seekdeep_llm::AbortSignal::default();
     signal.abort();
-    assert!(!running.wait_for_exit(Some(signal)).await);
+    assert!(!running.wait_for_exit(Some(signal)).await.unwrap());
     running.terminate();
     assert_eq!(
         running.done().await.unwrap().signal.unwrap().as_str(),
         "SIGTERM"
     );
-    assert!(running.wait_for_exit(None).await);
+    assert!(running.wait_for_exit(None).await.unwrap());
 }
 
 #[tokio::test]
@@ -397,7 +397,7 @@ async fn injected_windows_wait_uses_direct_child_liveness() {
     )
     .unwrap();
     running.done().await.unwrap();
-    assert!(running.wait_for_exit(None).await);
+    assert!(running.wait_for_exit(None).await.unwrap());
 }
 
 #[tokio::test]
@@ -442,7 +442,7 @@ async fn inert_injected_windows_taskkill_leaves_live_child_for_bounded_wait() {
         tokio::time::sleep(Duration::from_millis(60)).await;
         abort.abort();
     });
-    assert!(!running.wait_for_exit(Some(bound)).await);
+    assert!(!running.wait_for_exit(Some(bound)).await.unwrap());
     kill_direct(running.pid());
     running.done().await.unwrap();
 }
@@ -479,10 +479,10 @@ async fn injected_linux_live_member_probe_can_classify_a_zombie_only_group() {
         tokio::time::sleep(Duration::from_millis(50)).await;
         abort.abort();
     });
-    assert!(!running.wait_for_exit(Some(bound)).await);
+    assert!(!running.wait_for_exit(Some(bound)).await.unwrap());
     assert_eq!(probes.load(std::sync::atomic::Ordering::Relaxed), 0);
     assert_eq!(running.done().await.unwrap().exit_code, Some(0));
-    assert!(running.wait_for_exit(None).await);
+    assert!(running.wait_for_exit(None).await.unwrap());
     assert!(probes.load(std::sync::atomic::Ordering::Relaxed) > 0);
     let _ = kill(Pid::from_raw(descendant), nix::sys::signal::Signal::SIGKILL);
     wait_for_gone(descendant).await;

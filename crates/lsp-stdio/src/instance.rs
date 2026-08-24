@@ -476,7 +476,7 @@ impl InstanceInner {
             self.connection.closed(),
             self.connection.wait_for_process_tree_exit(None),
         );
-        anyhow::ensure!(exited, "language-server process tree did not exit");
+        anyhow::ensure!(exited?, "language-server process tree did not exit");
         Ok(())
     }
 

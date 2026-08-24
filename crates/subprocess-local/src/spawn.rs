@@ -344,18 +344,18 @@ impl SubprocessHandle for LocalSubprocessHandle {
         });
     }
 
-    async fn wait_for_exit(&self, signal: Option<AbortSignal>) -> bool {
+    async fn wait_for_exit(&self, signal: Option<AbortSignal>) -> anyhow::Result<bool> {
         loop {
             if !self.tree_alive() {
-                return true;
+                return Ok(true);
             }
             if signal.as_ref().is_some_and(AbortSignal::is_aborted) {
-                return false;
+                return Ok(false);
             }
             if let Some(signal) = signal.as_ref() {
                 tokio::select! {
                     () = tokio::time::sleep(Duration::from_millis(15)) => {}
-                    () = signal.cancelled() => return false,
+                    () = signal.cancelled() => return Ok(false),
                 }
             } else {
                 tokio::time::sleep(Duration::from_millis(15)).await;
@@ -998,7 +998,7 @@ mod tests {
         let running = spawn_subprocess(request, Some(temp.path())).unwrap();
         assert_eq!(running.pid(), ProcessId::new(-1));
         assert!(running.done().await.is_err());
-        assert!(running.wait_for_exit(None).await);
+        assert!(running.wait_for_exit(None).await.unwrap());
     }
 
     #[test]

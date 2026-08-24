@@ -118,8 +118,8 @@ impl SubprocessHandle for Handle {
         }
     }
     fn terminate(&self) {}
-    async fn wait_for_exit(&self, _signal: Option<AbortSignal>) -> bool {
-        true
+    async fn wait_for_exit(&self, _signal: Option<AbortSignal>) -> anyhow::Result<bool> {
+        Ok(true)
     }
 }
 

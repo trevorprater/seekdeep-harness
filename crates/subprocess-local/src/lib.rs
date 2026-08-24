@@ -166,7 +166,7 @@ impl LocalSubprocessRuntime {
             pending.push(Box::pin(async move {
                 let _ = handle.done().await;
                 anyhow::ensure!(
-                    handle.wait_for_exit(None).await,
+                    handle.wait_for_exit(None).await?,
                     "process tree {} did not exit",
                     handle.pid().as_i64()
                 );

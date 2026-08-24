@@ -30,6 +30,7 @@ impl TestConnection {
             )
             .await
             .expect("tree-exit wait timed out")
+            .expect("tree-exit observation failed")
         );
     }
 }

@@ -47,6 +47,119 @@ pub struct E2bCommandResult {
     pub stderr: String,
 }
 
+/// Completed background-command result.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct E2bCommandCompletion {
+    /// Direct command exit code.
+    pub exit_code: i32,
+}
+
+/// Asynchronous output callback supplied to a managed background command.
+pub type E2bOutputCallback =
+    Arc<dyn Fn(String) -> BoxFuture<'static, anyhow::Result<()>> + Send + Sync>;
+
+/// Managed background-command start request.
+#[derive(Clone)]
+pub struct E2bCommandStartOptions {
+    /// Remote working directory.
+    pub cwd: String,
+    /// Whether the SDK command exposes stdin.
+    pub stdin: bool,
+    /// Provider command timeout; zero means no command-level deadline.
+    pub timeout_ms: f64,
+    /// Login-shell environment overrides.
+    pub env: BTreeMap<String, String>,
+    /// Optional allocation cancellation.
+    pub signal: Option<AbortSignal>,
+    /// Decoded SDK stdout callback.
+    pub on_stdout: E2bOutputCallback,
+    /// Decoded SDK stderr callback.
+    pub on_stderr: E2bOutputCallback,
+}
+
+impl std::fmt::Debug for E2bCommandStartOptions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("E2bCommandStartOptions")
+            .field("cwd", &self.cwd)
+            .field("stdin", &self.stdin)
+            .field("timeout_ms", &self.timeout_ms)
+            .field("env", &self.env)
+            .field("signal", &self.signal)
+            .field("on_stdout", &"<callback>")
+            .field("on_stderr", &"<callback>")
+            .finish()
+    }
+}
+
+/// One provider-owned managed background command.
+#[async_trait::async_trait]
+pub trait E2bCommandHandle: std::fmt::Debug + Send + Sync + 'static {
+    /// SDK-reported direct command pid.
+    fn pid(&self) -> i64;
+    /// Waits for direct command settlement.
+    async fn wait(&self) -> anyhow::Result<E2bCommandCompletion>;
+    /// Sends one stdin chunk.
+    async fn send_stdin(&self, data: Vec<u8>) -> anyhow::Result<()>;
+    /// Delivers stdin EOF.
+    async fn close_stdin(&self) -> anyhow::Result<()>;
+    /// Requests provider-level termination.
+    async fn kill(&self) -> anyhow::Result<bool>;
+    /// Disconnects callbacks that outlive direct status publication.
+    async fn disconnect(&self) -> anyhow::Result<()>;
+}
+
+/// Shared managed background-command handle.
+pub type E2bCommandHandleRef = Arc<dyn E2bCommandHandle>;
+
+/// Synchronous PTY data callback.
+pub type E2bPtyDataCallback = Arc<dyn Fn(Vec<u8>) + Send + Sync>;
+
+/// Remote PTY allocation request.
+#[derive(Clone)]
+pub struct E2bPtyCreateOptions {
+    /// Initial rows.
+    pub rows: u32,
+    /// Initial columns.
+    pub cols: u32,
+    /// Remote working directory.
+    pub cwd: String,
+    /// Login-shell environment overrides.
+    pub env: BTreeMap<String, String>,
+    /// Provider command timeout; zero means no command-level deadline.
+    pub timeout_ms: f64,
+    /// Raw PTY output callback.
+    pub on_data: E2bPtyDataCallback,
+}
+
+impl std::fmt::Debug for E2bPtyCreateOptions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("E2bPtyCreateOptions")
+            .field("rows", &self.rows)
+            .field("cols", &self.cols)
+            .field("cwd", &self.cwd)
+            .field("env", &self.env)
+            .field("timeout_ms", &self.timeout_ms)
+            .field("on_data", &"<callback>")
+            .finish()
+    }
+}
+
+/// Remote PTY operations used by the subprocess adapter.
+#[async_trait::async_trait]
+pub trait E2bPty: Send + Sync + 'static {
+    /// Allocates one PTY command handle.
+    async fn create(&self, options: E2bPtyCreateOptions) -> anyhow::Result<E2bCommandHandleRef>;
+    /// Sends raw input to a PTY by provider pid.
+    async fn send_input(
+        &self,
+        pid: i64,
+        data: Vec<u8>,
+        signal: Option<&AbortSignal>,
+    ) -> anyhow::Result<()>;
+}
+
 /// Provider-specific missing-file error.
 #[derive(Clone, Debug, thiserror::Error)]
 #[error("{message}")]
@@ -137,6 +250,26 @@ pub trait E2bCommands: Send + Sync + 'static {
         env: BTreeMap<String, String>,
         signal: Option<&AbortSignal>,
     ) -> anyhow::Result<E2bCommandResult>;
+
+    /// Runs one control command from an explicit remote working directory.
+    async fn run_in(
+        &self,
+        command: &str,
+        _cwd: &str,
+        env: BTreeMap<String, String>,
+        signal: Option<&AbortSignal>,
+    ) -> anyhow::Result<E2bCommandResult> {
+        self.run(command, env, signal).await
+    }
+
+    /// Starts one managed background command.
+    async fn start(
+        &self,
+        _command: &str,
+        _options: E2bCommandStartOptions,
+    ) -> anyhow::Result<E2bCommandHandleRef> {
+        anyhow::bail!("E2B SDK binding does not implement managed background commands")
+    }
 }
 
 /// One live remote sandbox.
@@ -148,6 +281,10 @@ pub trait E2bSandbox: Send + Sync + 'static {
     fn files(&self) -> Arc<dyn E2bFiles>;
     /// Commands API.
     fn commands(&self) -> Arc<dyn E2bCommands>;
+    /// Optional PTY API.
+    fn pty(&self) -> Option<Arc<dyn E2bPty>> {
+        None
+    }
     /// Deletes the remote sandbox.
     async fn kill(&self) -> anyhow::Result<()>;
 }

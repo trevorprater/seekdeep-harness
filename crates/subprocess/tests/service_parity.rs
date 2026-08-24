@@ -73,8 +73,8 @@ impl SubprocessHandle for StubHandle {
         self.terminated.store(true, Ordering::Release);
     }
 
-    async fn wait_for_exit(&self, signal: Option<AbortSignal>) -> bool {
-        !signal.is_some_and(|signal| signal.is_aborted())
+    async fn wait_for_exit(&self, signal: Option<AbortSignal>) -> anyhow::Result<bool> {
+        Ok(!signal.is_some_and(|signal| signal.is_aborted()))
     }
 }
 
@@ -229,7 +229,7 @@ async fn concrete_provider_serves_the_complete_ordinary_process_seam() {
         SubprocessOutputRead::default()
     );
     handle.terminate();
-    assert!(handle.wait_for_exit(None).await);
+    assert!(handle.wait_for_exit(None).await.unwrap());
     assert_eq!(
         handle.done().await.expect("done"),
         SubprocessOutcome {

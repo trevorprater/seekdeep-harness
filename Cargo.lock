@@ -7020,13 +7020,18 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "futures",
  "indexmap 2.14.0",
  "parking_lot",
+ "seekdeep-cordis",
  "seekdeep-e2b",
  "seekdeep-llm",
  "seekdeep-subprocess",
+ "seekdeep-util",
+ "serde",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

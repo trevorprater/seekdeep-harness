@@ -335,7 +335,14 @@ impl LspConnection {
     }
 
     /// Waits for complete process-tree exit, optionally bounded by a signal.
-    pub async fn wait_for_process_tree_exit(&self, signal: Option<&AbortSignal>) -> bool {
+    ///
+    /// # Errors
+    ///
+    /// Returns provider liveness or cleanup failures.
+    pub async fn wait_for_process_tree_exit(
+        &self,
+        signal: Option<&AbortSignal>,
+    ) -> anyhow::Result<bool> {
         self.inner.handle.wait_for_exit(signal.cloned()).await
     }
 }

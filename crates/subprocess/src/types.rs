@@ -275,9 +275,18 @@ impl SubprocessInput {
         stream.write_all(bytes).await
     }
 
-    /// Drops the writable descriptor, delivering EOF to the child. Idempotent.
-    pub async fn close(&self) {
-        self.inner.lock().await.take();
+    /// Shuts down the writable descriptor, delivering EOF to the child. Idempotent.
+    ///
+    /// # Errors
+    ///
+    /// Returns the provider-owned EOF delivery failure.
+    pub async fn close(&self) -> std::io::Result<()> {
+        let mut inner = self.inner.lock().await;
+        if let Some(stream) = inner.as_mut() {
+            stream.shutdown().await?;
+        }
+        inner.take();
+        Ok(())
     }
 
     /// Whether EOF has been delivered by closing this surface.
@@ -308,7 +317,11 @@ pub trait SubprocessHandle: std::fmt::Debug + Send + Sync {
     /// Starts idempotent tree-scoped termination escalation.
     fn terminate(&self);
     /// Waits for whole-tree exit, returning false when the wait signal wins.
-    async fn wait_for_exit(&self, signal: Option<AbortSignal>) -> bool;
+    ///
+    /// # Errors
+    ///
+    /// Returns provider liveness or cleanup failures.
+    async fn wait_for_exit(&self, signal: Option<AbortSignal>) -> anyhow::Result<bool>;
 }
 
 /// Shared ordinary-process handle.

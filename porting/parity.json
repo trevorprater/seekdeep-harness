@@ -7131,7 +7131,7 @@
         ".agents/notes/implemented/architecture/2026-07-28-portable-execution-world-consumers.i18n.yaml"
       ],
       "evidence": [
-        "paired Agent Note hashes re-record the native E2B subprocess substrate"
+        "paired Agent Note hashes re-record the complete native E2B subprocess owner"
       ]
     },
     {
@@ -7142,7 +7142,7 @@
         ".agents/notes/implemented/architecture/2026-07-28-portable-execution-world-consumers.md"
       ],
       "evidence": [
-        "implemented architecture records native strict environment/output framing, bounded tails, control HOME, polling, and group signalling"
+        "implemented architecture records the object-safe Commands/PTY boundary, checked liveness failures, process publication, terminal operations, and disposal ordering"
       ]
     },
     {
@@ -7153,7 +7153,7 @@
         ".agents/notes/implemented/architecture/2026-07-28-portable-execution-world-consumers.zh.md"
       ],
       "evidence": [
-        "Chinese implemented architecture mirrors the native E2B subprocess substrate"
+        "Chinese implemented architecture mirrors the complete native E2B subprocess owner"
       ]
     },
     {
@@ -51012,7 +51012,7 @@
         "packages/e2b/subprocess-e2b/README.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "paired README hashes re-record the native Rust command and terminal contract"
       ]
     },
     {
@@ -51023,7 +51023,7 @@
         "packages/e2b/subprocess-e2b/README.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package reference documents native Tokio streams, process-monotonic isolation, checked liveness, and PTY ownership"
       ]
     },
     {
@@ -51034,7 +51034,7 @@
         "packages/e2b/subprocess-e2b/README.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "Chinese package reference mirrors the native Tokio streams, isolation, liveness, and PTY ownership contract"
       ]
     },
     {
@@ -51066,7 +51066,17 @@
     {
       "source": "packages/e2b/subprocess-e2b/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subprocess-e2b/src/lib.rs",
+        "crates/subprocess-e2b/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: subprocess-e2b suites passed 106/106",
+        "cargo test --locked --offline -p seekdeep-subprocess-e2b --all-features (27 passed)",
+        "Rust plugin validates poll/grace/argv, resolves remote executables, owns pending terminal allocation, drains retained process and terminal groups, and preserves retryable cleanup failures",
+        "cargo clippy --locked --offline -p seekdeep-e2b -p seekdeep-subprocess -p seekdeep-subprocess-e2b --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/e2b/subprocess-e2b/src/invariant.ts",
@@ -51099,7 +51109,18 @@
     {
       "source": "packages/e2b/subprocess-e2b/src/process.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/e2b/src/types.rs",
+        "crates/subprocess-e2b/src/process.rs",
+        "crates/subprocess-e2b/tests/process_parity.rs",
+        "crates/subprocess/src/types.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: subprocess-e2b suites passed 106/106",
+        "cargo test --locked --offline -p seekdeep-subprocess-e2b --all-features (27 passed)",
+        "typed SDK handle boundary, deferred stdin, byte streams, process-group publication, direct-status precedence, bounded drain, checked wait_for_exit failures, rollback, and retryable TERM-to-KILL quiescence"
+      ]
     },
     {
       "source": "packages/e2b/subprocess-e2b/src/remote.ts",
@@ -51119,17 +51140,48 @@
     {
       "source": "packages/e2b/subprocess-e2b/src/terminal.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/e2b/src/types.rs",
+        "crates/subprocess-e2b/src/terminal.rs",
+        "crates/subprocess-e2b/tests/terminal_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: subprocess-e2b suites passed 106/106",
+        "cargo test --locked --offline -p seekdeep-subprocess-e2b --all-features (27 passed)",
+        "private state transaction, process-monotonic bootstrap boundary, cancellation-after-publication rollback, foreground inspection/signals, in-flight operation join, and retryable remote-session cleanup"
+      ]
     },
     {
       "source": "packages/e2b/subprocess-e2b/tests/subprocess.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/subprocess-e2b/tests/environment_parity.rs",
+        "crates/subprocess-e2b/tests/output_parity.rs",
+        "crates/subprocess-e2b/tests/process_parity.rs",
+        "crates/subprocess-e2b/tests/remote_parity.rs",
+        "crates/subprocess-e2b/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "pinned source suite passes 71 ordinary-process tests within the combined 106/106 run",
+        "Rust subprocess-e2b crate passes 27 grouped tests"
+      ],
+      "note": "the core command path is native and covered, but the Rust oracle still needs the source tables for provisional cleanup double failures, every liveness acquisition/abort race, output-drain disconnect edges, sink backpressure closure, automatic-release retry, and teardown failure aggregation"
     },
     {
       "source": "packages/e2b/subprocess-e2b/tests/terminal.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/subprocess-e2b/tests/terminal_parity.rs",
+        "crates/subprocess-e2b/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "pinned source terminal suite passes 35 tests within the combined 106/106 run",
+        "Rust subprocess-e2b crate passes 27 grouped tests"
+      ],
+      "note": "the native PTY path is covered, but the Rust oracle still needs every session-group error table, sandbox-loss class, cleanup retry, service-disposal setup race, automatic-release retention, and compound setup rollback failure"
     },
     {
       "source": "packages/e2b/subprocess-e2b/tsconfig.json",
@@ -70297,7 +70349,7 @@
         "crates/shell/src/types.rs"
       ],
       "evidence": [
-        "Rust types preserve fully explicit argv/cwd/stdio/grace/signal/environment specs, batch/pipe/inherit modes, non-consuming offset readers, ordinary and terminal handles, closed terminal signals, and unknown process signals",
+        "Rust types preserve fully explicit argv/cwd/stdio/grace/signal/environment specs, batch/pipe/inherit modes, non-consuming offset readers, checked whole-tree liveness failures, provider EOF errors, ordinary and terminal handles, closed terminal signals, and unknown process signals",
         "seekdeep-shell re-exports the subprocess-owned collected-output and managed-environment vocabulary, matching source ownership"
       ]
     },
