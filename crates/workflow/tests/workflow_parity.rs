@@ -19,7 +19,7 @@ use seekdeep_workflow::{
 struct StubEngine;
 
 impl WorkflowEngine for StubEngine {
-    fn start(&self, _request: WorkflowStartRequest) -> Arc<dyn WorkflowRun> {
+    fn start(&self, _request: WorkflowStartRequest) -> anyhow::Result<Arc<dyn WorkflowRun>> {
         panic!("start is not under test")
     }
 }

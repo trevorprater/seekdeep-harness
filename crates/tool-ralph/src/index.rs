@@ -675,43 +675,48 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                         max_total_agents: Some(max_rounds),
                         parent,
                         signal: Some(exec.signal()),
-                    });
+                    })?;
 
-                    let bridge_run = Arc::clone(&run);
                     let signal = exec.signal();
-                    let cancel_task = tokio::spawn(async move {
-                        signal.cancelled().await;
-                        bridge_run.cancel(Some("parent step aborted"));
-                    });
-                    if exec.signal().is_aborted() {
+                    let cancel_task = if signal.is_aborted() {
                         run.cancel(Some("parent step aborted"));
-                    }
-
-                    let result = run.result().await;
-                    if let Some(error) = stop_reason_error(&result) {
-                        run.dispose().await;
-                        cancel_task.abort();
-                        anyhow::bail!("{error}");
-                    }
-                    let terminal =
-                        read_run_result(&result.value, max_rounds, resolved.max_handoff_chars)?;
-                    if matches!(terminal, RalphTerminalResult::RoundFailed { .. }) {
-                        let message = render_round_failure(
-                            &terminal,
-                            usize::try_from(resolved.max_result_chars).unwrap_or(usize::MAX),
-                        );
-                        run.dispose().await;
-                        cancel_task.abort();
-                        anyhow::bail!("{message}");
-                    }
-                    let output = RalphToolOutput {
-                        run_id: run.id().clone(),
-                        agents_started: result.agents_started,
-                        result: terminal,
+                        None
+                    } else {
+                        let bridge_run = Arc::clone(&run);
+                        Some(tokio::spawn(async move {
+                            signal.cancelled().await;
+                            bridge_run.cancel(Some("parent step aborted"));
+                        }))
                     };
+
+                    let outcome = async {
+                        let result = run.result().await;
+                        if let Some(error) = stop_reason_error(&result) {
+                            anyhow::bail!("{error}");
+                        }
+                        let terminal = read_run_result(
+                            &result.value,
+                            max_rounds,
+                            resolved.max_handoff_chars,
+                        )?;
+                        if matches!(terminal, RalphTerminalResult::RoundFailed { .. }) {
+                            anyhow::bail!("{}", render_round_failure(
+                                &terminal,
+                                usize::try_from(resolved.max_result_chars).unwrap_or(usize::MAX),
+                            ));
+                        }
+                        Ok(RalphToolOutput {
+                            run_id: run.id().clone(),
+                            agents_started: result.agents_started,
+                            result: terminal,
+                        })
+                    }
+                    .await;
+                    if let Some(cancel_task) = cancel_task {
+                        cancel_task.abort();
+                    }
                     run.dispose().await;
-                    cancel_task.abort();
-                    Ok(output)
+                    outcome
                 })
             }),
         )

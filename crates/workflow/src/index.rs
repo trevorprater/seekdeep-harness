@@ -181,7 +181,12 @@ impl std::ops::Deref for WorkflowEngineService {
 /// run is holder-owned, its result never rejects.
 pub trait WorkflowEngine: Service + Send + Sync {
     /// Parses and executes a workflow script.
-    fn start(&self, request: WorkflowStartRequest) -> Arc<dyn WorkflowRun>;
+    ///
+    /// # Errors
+    ///
+    /// Returns request-validation or synchronous engine-start failures before
+    /// any live run is published.
+    fn start(&self, request: WorkflowStartRequest) -> anyhow::Result<Arc<dyn WorkflowRun>>;
 }
 
 /// Emits a workflow lifecycle event while containing each listener failure.

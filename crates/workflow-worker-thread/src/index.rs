@@ -8,8 +8,9 @@ use boa_engine::{Source, context::ContextBuilder, script::Script};
 use seekdeep_cordis::{Context, Plugin};
 use seekdeep_subagent::{SUBAGENTS, SubagentRuntime};
 use seekdeep_workflow::{
-    WorkflowEngine, WorkflowResultInfo, WorkflowRun, WorkflowRunId, WorkflowRunInfo,
-    WorkflowStartRequest, emit_workflow_event, index::WorkflowEngineService,
+    WorkflowEngine, WorkflowError, WorkflowErrorCode, WorkflowResultInfo, WorkflowRun,
+    WorkflowRunId, WorkflowRunInfo, WorkflowStartRequest, emit_workflow_event,
+    index::WorkflowEngineService,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -24,6 +25,8 @@ use crate::{
 pub const NAME: &str = "workflow-worker-thread";
 /// Services required by the engine.
 pub const INJECT: &[&str] = &["subagents"];
+
+const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 /// Plugin config.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,20 +80,33 @@ fn has_meta_statement(body: &str) -> bool {
 }
 
 /// Parse-check the body with the same wrapper the worker compiles.
-fn assert_body_parses(body: &str, _name: &str) {
-    assert!(
-        !has_meta_statement(body),
-        "workflow meta rides the meta request field, not the script: remove the export const meta statement from the body"
-    );
+fn assert_body_parses(body: &str, _name: &str) -> anyhow::Result<()> {
+    if has_meta_statement(body) {
+        return Err(WorkflowError::new(
+            "workflow meta rides the meta request field, not the script: remove the export const meta statement from the body",
+            WorkflowErrorCode::ScriptParse,
+        )
+        .into());
+    }
     let source = format!(
         "(async () => {{
 {body}
 }})()"
     );
-    let mut context = ContextBuilder::new().build().expect("workflow context");
+    let mut context = ContextBuilder::new().build().map_err(|error| {
+        WorkflowError::new(
+            format!("workflow script parser could not initialize: {error}"),
+            WorkflowErrorCode::ScriptParse,
+        )
+    })?;
     if let Err(error) = Script::parse(Source::from_bytes(&source), None, &mut context) {
-        panic!("workflow script does not parse: {error}");
+        return Err(WorkflowError::new(
+            format!("workflow script does not parse: {error}"),
+            WorkflowErrorCode::ScriptParse,
+        )
+        .into());
     }
+    Ok(())
 }
 
 /// Resolve one run's provider route before publishing work.
@@ -98,34 +114,48 @@ fn resolve_subagent_provider(
     context: &Context,
     configured: &str,
     override_provider: Option<&str>,
-) -> String {
+) -> anyhow::Result<String> {
     let provider = override_provider.unwrap_or(configured);
-    assert!(
-        !provider.is_empty() && provider == provider.trim(),
-        "workflow subagentProvider must be a non-empty normalized string"
-    );
-    let subagents = context.get(SUBAGENTS).expect("workflow requires subagents");
-    assert!(
-        subagents.get_provider(provider).is_some(),
-        "no subagent provider registered for \"{provider}\""
-    );
-    provider.to_owned()
+    if provider.is_empty() || provider != provider.trim() {
+        return Err(WorkflowError::new(
+            "workflow subagentProvider must be a non-empty normalized string",
+            WorkflowErrorCode::InvalidArgument,
+        )
+        .into());
+    }
+    let subagents = context.get(SUBAGENTS).ok_or_else(|| {
+        WorkflowError::new("workflow requires subagents", WorkflowErrorCode::AgentStart)
+    })?;
+    if subagents.get_provider(provider).is_none() {
+        return Err(WorkflowError::new(
+            format!("no subagent provider registered for \"{provider}\""),
+            WorkflowErrorCode::AgentStart,
+        )
+        .into());
+    }
+    Ok(provider.to_owned())
 }
 
 /// Resolve one run's total-child cap against the engine deployment ceiling.
-fn resolve_max_total_agents(requested: Option<u64>, ceiling: u64) -> u64 {
+fn resolve_max_total_agents(requested: Option<u64>, ceiling: u64) -> anyhow::Result<u64> {
     let Some(requested) = requested else {
-        return ceiling;
+        return Ok(ceiling);
     };
-    assert!(
-        requested >= 1,
-        "workflow maxTotalAgents must be a positive safe integer"
-    );
-    assert!(
-        requested <= ceiling,
-        "workflow maxTotalAgents {requested} exceeds the engine ceiling {ceiling}"
-    );
-    requested
+    if !(1..=MAX_SAFE_INTEGER).contains(&requested) {
+        return Err(WorkflowError::new(
+            "workflow maxTotalAgents must be a positive safe integer",
+            WorkflowErrorCode::InvalidArgument,
+        )
+        .into());
+    }
+    if requested > ceiling {
+        return Err(WorkflowError::new(
+            format!("workflow maxTotalAgents {requested} exceeds the engine ceiling {ceiling}"),
+            WorkflowErrorCode::InvalidArgument,
+        )
+        .into());
+    }
+    Ok(requested)
 }
 
 /// Auto-resolve the concurrency ceiling.
@@ -163,16 +193,16 @@ impl WorkerThreadWorkflowEngine {
 }
 
 impl WorkflowEngine for WorkerThreadWorkflowEngine {
-    fn start(&self, request: WorkflowStartRequest) -> Arc<dyn WorkflowRun> {
-        let meta = validate_meta(&request.meta).expect("invalid workflow meta");
-        assert_body_parses(&request.script, &meta.name);
+    fn start(&self, request: WorkflowStartRequest) -> anyhow::Result<Arc<dyn WorkflowRun>> {
+        let meta = validate_meta(&request.meta)?;
+        assert_body_parses(&request.script, &meta.name)?;
         let provider = resolve_subagent_provider(
             &self.context,
             &self.config.provider,
             request.subagent_provider.as_deref(),
-        );
+        )?;
         let max_total_agents =
-            resolve_max_total_agents(request.max_total_agents, self.config.max_total_agents);
+            resolve_max_total_agents(request.max_total_agents, self.config.max_total_agents)?;
         let id = WorkflowRunId::new(Uuid::new_v4().to_string());
         let info = WorkflowRunInfo {
             id: id.clone(),
@@ -227,7 +257,7 @@ impl WorkflowEngine for WorkerThreadWorkflowEngine {
             );
         });
 
-        run
+        Ok(run)
     }
 }
 

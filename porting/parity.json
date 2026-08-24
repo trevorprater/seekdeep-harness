@@ -74485,12 +74485,31 @@
     {
       "source": "packages/workflow/tool-ralph/tests/integration.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-ralph/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/tool-ralph/tests/tool-ralph.spec.ts packages/workflow/tool-ralph/tests/integration.spec.ts (23 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow -p seekdeep-workflow-worker-thread -p seekdeep-tool-workflow -p seekdeep-tool-ralph --all-targets --all-features (35 passed)",
+        "cargo clippy --locked --offline -p seekdeep-workflow -p seekdeep-workflow-worker-thread -p seekdeep-tool-workflow -p seekdeep-tool-ralph --all-targets --all-features -- -D warnings"
+      ],
+      "note": "real assembled Rust stack runs the fixed script through the workflow engine, spawn provider, structured-output runtime, and AgentLoop; it pins distinct unseeded children, shared cwd and lineage, one-way bounded handoff, failure preservation, report enforcement, and cancellation to child quiescence"
     },
     {
       "source": "packages/workflow/tool-ralph/tests/tool-ralph.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-ralph/tests/tool_ralph_parity.rs",
+        "crates/workflow-worker-thread/tests/start_validation_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/tool-ralph/tests/tool-ralph.spec.ts packages/workflow/tool-ralph/tests/integration.spec.ts (23 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow -p seekdeep-workflow-worker-thread -p seekdeep-tool-workflow -p seekdeep-tool-ralph --all-targets --all-features (35 passed)",
+        "cargo clippy --locked --offline -p seekdeep-workflow -p seekdeep-workflow-worker-thread -p seekdeep-tool-workflow -p seekdeep-tool-ralph --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust behavioral mirror covers fixed request construction, every terminal outcome and malformed boundary value, exact diagnostics, result bounds, provider and argument rejection, synchronous engine-start failure without a run, cancellation bridging, unconditional disposal, prompt and presentation projection, and HMR cleanup"
     },
     {
       "source": "packages/workflow/tool-ralph/tsconfig.json",

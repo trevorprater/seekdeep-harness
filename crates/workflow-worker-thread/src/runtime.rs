@@ -236,14 +236,18 @@ fn error_result(message: &str) -> WorkflowResult {
     }
 }
 
-fn cancelled_result(shared: &ExecutionShared, agents_started: u64) -> WorkflowResult {
+fn cancelled_result(shared: &ExecutionShared) -> WorkflowResult {
+    let state = shared.state.lock();
+    let agents_started = state.started;
+    let reason = state
+        .cancel_reason
+        .clone()
+        .unwrap_or_else(|| "workflow cancelled".to_owned());
+    drop(state);
     WorkflowResult {
         value: Value::Null,
         stop_reason: WorkflowStopReason::Cancelled,
-        error: Some(format!(
-            "workflow run cancelled: {}",
-            cancelled_message(shared)
-        )),
+        error: Some(format!("workflow run cancelled: {reason}")),
         agents_started,
     }
 }
@@ -376,7 +380,7 @@ async fn run_script(
     match promise.state() {
         boa_engine::builtins::promise::PromiseState::Fulfilled(value) if value.is_undefined() => {
             if shared.cancel.is_aborted() {
-                return Ok(cancelled_result(&shared, shared.state.lock().started));
+                return Ok(cancelled_result(&shared));
             }
             Ok(WorkflowResult {
                 value: Value::Null,
@@ -387,7 +391,7 @@ async fn run_script(
         }
         boa_engine::builtins::promise::PromiseState::Fulfilled(value) => {
             if shared.cancel.is_aborted() {
-                return Ok(cancelled_result(&shared, shared.state.lock().started));
+                return Ok(cancelled_result(&shared));
             }
             match materialize_result(&value, &mut context) {
                 Ok(value) => Ok(WorkflowResult {
@@ -401,13 +405,13 @@ async fn run_script(
         }
         boa_engine::builtins::promise::PromiseState::Rejected(value) => {
             if shared.cancel.is_aborted() {
-                return Ok(cancelled_result(&shared, shared.state.lock().started));
+                return Ok(cancelled_result(&shared));
             }
             Ok(error_result(&render_thrown(&value, &mut context)))
         }
         boa_engine::builtins::promise::PromiseState::Pending => {
             if shared.cancel.is_aborted() {
-                return Ok(cancelled_result(&shared, shared.state.lock().started));
+                return Ok(cancelled_result(&shared));
             }
             Ok(error_result("workflow script did not settle"))
         }

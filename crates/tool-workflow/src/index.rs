@@ -353,7 +353,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                         max_total_agents: None,
                         parent,
                         signal: Some(exec.signal()),
-                    });
+                    })?;
                     let records_run = exec.parent.is_none();
                     if records_run {
                         let session = exec.agent.as_ref().expect("checked above").session().clone();
