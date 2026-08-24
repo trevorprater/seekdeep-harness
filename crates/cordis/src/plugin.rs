@@ -468,6 +468,15 @@ impl PluginFiber {
         self.required_services()
     }
 
+    /// Required services currently absent from this plugin's lookup context.
+    #[must_use]
+    pub fn missing_inject(&self) -> Vec<String> {
+        self.required_services()
+            .into_iter()
+            .filter(|name| !self.context.has_named(name))
+            .collect()
+    }
+
     /// Adds a dependency during synchronous `internal/plugin` publication.
     ///
     /// # Errors

@@ -60961,27 +60961,59 @@
     {
       "source": "packages/preset/agent-presets/tests/fixtures/plugins/contribute.js",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/fixtures_parity.rs"
+      ],
+      "evidence": [
+        "the Rust fixture counterpart reads the row config and contributes both a scoped Tool definition and a scoped system-prompt section with the configured name"
+      ]
     },
     {
       "source": "packages/preset/agent-presets/tests/fixtures/plugins/global-service.js",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/mount_parity.rs"
+      ],
+      "evidence": [
+        "the Rust mount suite rejects a process-global service contribution and accepts the same provider behind an entry-local isolate realm"
+      ]
     },
     {
       "source": "packages/preset/agent-presets/tests/fixtures/plugins/late-service.js",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "the Rust invariant fixture publishes after mount audit and proves the late process-global service is rejected and removed"
+      ]
     },
     {
       "source": "packages/preset/agent-presets/tests/fixtures/plugins/needs-missing.js",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/fixtures_parity.rs",
+        "crates/cordis/src/plugin.rs",
+        "crates/agent-presets/src/mount.rs"
+      ],
+      "evidence": [
+        "the Rust fixture stays pending on its absent service and the preset mount fails with the unresolved service name rather than a generic inactive-row diagnostic"
+      ]
     },
     {
       "source": "packages/preset/agent-presets/tests/fixtures/plugins/self-dispose.js",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-presets/tests/fixtures_parity.rs"
+      ],
+      "evidence": [
+        "the Rust fixture disposes its own plugin fiber after activation and proves the shared agent.cordis.yml remains byte-identical"
+      ]
     },
     {
       "source": "packages/preset/agent-presets/tests/fixtures/system/minimal/agent.cordis.yml",

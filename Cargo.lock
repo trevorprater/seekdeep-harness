@@ -4399,6 +4399,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
+ "seekdeep-llm",
  "seekdeep-loader",
  "seekdeep-schemastery",
  "seekdeep-scope",

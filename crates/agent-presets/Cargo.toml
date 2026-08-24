@@ -31,6 +31,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+seekdeep-llm = { path = "../llm" }
 seekdeep-tools = { path = "../tools" }
 tempfile.workspace = true
 

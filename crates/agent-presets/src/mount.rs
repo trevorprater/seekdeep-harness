@@ -551,17 +551,32 @@ impl AgentPresetRegistry {
                 return Err(PresetMountError::new(&preset.id, format!("{error:#}")).into());
             }
         };
+        let missing = composition
+            .fibers()
+            .into_iter()
+            .filter_map(|fiber| {
+                let id = fiber.entry_id()?;
+                let missing = fiber.missing_inject();
+                (!missing.is_empty()).then_some((id, missing))
+            })
+            .collect::<std::collections::HashMap<_, _>>();
         let inactive = composition
             .entries()
             .into_iter()
             .filter(|entry| !entry.disabled && !entry.group)
             .filter(|entry| entry.state != Some(seekdeep_cordis::FiberState::Active))
-            .map(|entry| {
-                format!(
+            .map(|entry| match missing.get(entry.id.as_str()) {
+                Some(missing) => format!(
+                    "{} ({}): waiting for {}",
+                    entry.id,
+                    entry.plugin.as_str(),
+                    missing.join(", ")
+                ),
+                None => format!(
                     "{} ({}): never became active",
                     entry.id,
                     entry.plugin.as_str()
-                )
+                ),
             })
             .collect::<Vec<_>>();
         let leaked = self
