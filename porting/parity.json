@@ -53443,7 +53443,7 @@
       "targets": ["crates/tool-fs-search/src/lib.rs"],
       "evidence": [
         "Rust post-execute middleware spills only accepted successful direct calls still owned by the live exact tool definition",
-        "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"
+        "cargo test -p seekdeep-tool-fs-search --all-features: 9 passed"
       ]
     },
     {
@@ -53486,7 +53486,7 @@
       "kind": "production-code",
       "status": "verified",
       "targets": ["crates/tool-fs-search/src/lib.rs"],
-      "evidence": ["Rust projections share retained pages with model rendering, preserve totals/truncation, cap serialized meta, and defensively narrow replay metadata", "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"]
+      "evidence": ["Rust projections share retained pages with model rendering, preserve totals/truncation, cap serialized meta, and defensively narrow replay metadata", "cargo test -p seekdeep-tool-fs-search --all-features: 9 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/src/ripgrep.d.ts",
@@ -53500,14 +53500,14 @@
       "kind": "production-code",
       "status": "verified",
       "targets": ["crates/tool-fs-search/src/lib.rs"],
-      "evidence": ["Rust runtime memoizes binary resolution, spawns plain --no-config argv through ctx.subprocess, classifies exit/abort/overflow, relativizes paths, retains UTF-8, and saves formatted spill best-effort", "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"]
+      "evidence": ["Rust runtime memoizes binary resolution, spawns plain --no-config argv through ctx.subprocess, classifies exit/abort/overflow, relativizes paths, retains UTF-8, and saves formatted spill best-effort", "cargo test -p seekdeep-tool-fs-search --all-features: 9 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/tests/integration.spec.ts",
       "kind": "test",
       "status": "verified",
       "targets": ["crates/tool-fs-search/tests/search_parity.rs"],
-      "evidence": ["Rust integration drives real ripgrep and the real tool/subprocess/spill registries from a session workspace", "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"]
+      "evidence": ["Rust integration drives real ripgrep and the real tool/subprocess/spill registries from a session workspace", "cargo test -p seekdeep-tool-fs-search --all-features: 9 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/tests/load-path.spec.ts",
@@ -53528,12 +53528,14 @@
       "kind": "test",
       "status": "verified",
       "targets": ["crates/tool-fs-search/tests/search_parity.rs"],
-      "evidence": ["Rust test proves missing packaged ripgrep fails lazily as typed SEARCH_FAILED and the rejection is memoized across subsequent calls", "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"]
+      "evidence": ["Rust test proves missing packaged ripgrep fails lazily as typed SEARCH_FAILED and the rejection is memoized across subsequent calls", "cargo test -p seekdeep-tool-fs-search --all-features: 9 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs-search/tests/search_parity.rs", "crates/tool-fs-search/tests/runtime_failures.rs"],
+      "evidence": ["pinned-source Vitest: tool-fs-search 144 passed", "Rust deterministic subprocess tests pin exact argv/cwd/grace/signal, missing collectors, launch rejection, regex and ordinary nonzero exits, truncated stderr, signal/null exits, done failure, lossy stdout, and inline overflow", "Rust real integration tests pin config, registration, prompts, sampling, spill, presentations, session cwd, hidden/VCS behavior, and typed routes", "cargo test -p seekdeep-tool-fs-search --all-features: 9 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/tsconfig.json",
