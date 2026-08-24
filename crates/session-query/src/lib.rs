@@ -34,7 +34,7 @@ pub use types::{
     SessionAvailability, SessionEventReadRequest, SessionEventRecord, SessionEventResultFilter,
     SessionEventSearchDocument, SessionEventSearchHit, SessionEventSurface, SessionEventTrace,
     SessionEventTraceObservation, SessionEventTraceRequest, SessionEventWindow, SessionLineageNode,
-    SessionLineageTrace, SessionLogSnapshot, SessionRecord, SessionResultFilter,
-    SessionResultRange, SessionSearchHit, SessionSearchPage, SessionSurfaceSnapshot,
-    SessionTitleObservation,
+    SessionLineageTrace, SessionLogSnapshot, SessionRecord, SessionResultBound,
+    SessionResultFilter, SessionResultRange, SessionSearchHit, SessionSearchPage,
+    SessionSurfaceSnapshot, SessionTitleObservation,
 };

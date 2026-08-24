@@ -3,7 +3,8 @@
 use seekdeep_core::session::{SessionId, SessionId as CoreSessionId};
 use seekdeep_session_query::{
     SessionAvailability, SessionEventSurface, SessionQueryError, SessionQueryErrorCode,
-    SessionResultFilter, SessionSearchCursor, materialize_session_result_filters,
+    SessionResultBound, SessionResultFilter, SessionSearchCursor,
+    materialize_session_result_filters,
     types::{SessionEventMetadataFilter, SessionEventSearchRequest, SessionSearchRequest},
 };
 use serde_json::{Value, json};
@@ -63,8 +64,8 @@ pub struct NormalizedEventRequest {
 pub enum SqlParam {
     /// Text binding.
     Text(String),
-    /// Non-negative integer binding.
-    Integer(u64),
+    /// Finite source-number binding.
+    Number(SessionResultBound),
 }
 
 /// Parameterized SQL predicate fragment without a leading `WHERE`.
@@ -441,18 +442,18 @@ fn add_range(
     clauses: &mut Vec<String>,
     params: &mut Vec<SqlParam>,
     column: &str,
-    from: Option<u64>,
-    to: Option<u64>,
+    from: Option<SessionResultBound>,
+    to: Option<SessionResultBound>,
 ) -> anyhow::Result<()> {
     if let Some(from) = from {
         assert_portable_binding_count(params.len() + 1)?;
         clauses.push(format!("CAST({column} AS INTEGER) >= ?"));
-        params.push(SqlParam::Integer(from));
+        params.push(SqlParam::Number(from));
     }
     if let Some(to) = to {
         assert_portable_binding_count(params.len() + 1)?;
         clauses.push(format!("CAST({column} AS INTEGER) <= ?"));
-        params.push(SqlParam::Integer(to));
+        params.push(SqlParam::Number(to));
     }
     Ok(())
 }

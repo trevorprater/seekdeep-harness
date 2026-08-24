@@ -7,13 +7,23 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+parking_lot.workspace = true
 rusqlite.workspace = true
+seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-query = { path = "../session-query" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-session-persistence-sqlite = { path = "../session-persistence-sqlite" }
 tempfile.workspace = true
 
 [lints]

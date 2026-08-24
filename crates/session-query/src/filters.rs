@@ -6,7 +6,7 @@ use crate::{
     config::{SessionQueryError, SessionQueryErrorCode},
     types::{
         SessionAvailability, SessionEventResultFilter, SessionEventSearchDocument, SessionRecord,
-        SessionResultFilter, SessionResultRange,
+        SessionResultBound, SessionResultFilter, SessionResultRange,
     },
 };
 
@@ -138,7 +138,10 @@ fn session_predicate(filter: &SessionResultFilter) -> Result<SessionPredicate, S
         SessionResultFilter::CreatedAt { from, to } => {
             let range = validated_range("created-at", *from, *to)?;
             Ok(Box::new(move |record| {
-                matches_range(i128::from(record.header.created_at), &range)
+                matches_range(
+                    SessionResultBound::from(record.header.created_at).value(),
+                    &range,
+                )
             }))
         }
         SessionResultFilter::Parent { values } => {
@@ -164,13 +167,19 @@ fn event_predicate(filter: &SessionEventResultFilter) -> Result<EventPredicate, 
         SessionEventResultFilter::Seq { from, to } => {
             let range = validated_range("seq", *from, *to)?;
             Ok(Box::new(move |document| {
-                matches_range(i128::from(document.record.seq), &range)
+                matches_range(
+                    SessionResultBound::from(document.record.seq).value(),
+                    &range,
+                )
             }))
         }
         SessionEventResultFilter::Time { from, to } => {
             let range = validated_range("time", *from, *to)?;
             Ok(Box::new(move |document| {
-                matches_range(i128::from(document.record.time), &range)
+                matches_range(
+                    SessionResultBound::from(document.record.time).value(),
+                    &range,
+                )
             }))
         }
         SessionEventResultFilter::Type { values } => {
@@ -194,14 +203,18 @@ fn event_predicate(filter: &SessionEventResultFilter) -> Result<EventPredicate, 
 
 fn validated_range(
     name: &str,
-    from: Option<u64>,
-    to: Option<u64>,
+    from: Option<SessionResultBound>,
+    to: Option<SessionResultBound>,
 ) -> Result<SessionResultRange, SessionQueryError> {
     validate_range(name, from, to)?;
     Ok(SessionResultRange { from, to })
 }
 
-fn validate_range(name: &str, from: Option<u64>, to: Option<u64>) -> Result<(), SessionQueryError> {
+fn validate_range(
+    name: &str,
+    from: Option<SessionResultBound>,
+    to: Option<SessionResultBound>,
+) -> Result<(), SessionQueryError> {
     if let (Some(from), Some(to)) = (from, to)
         && from > to
     {
@@ -210,9 +223,9 @@ fn validate_range(name: &str, from: Option<u64>, to: Option<u64>) -> Result<(), 
     Ok(())
 }
 
-fn matches_range(value: i128, range: &SessionResultRange) -> bool {
-    range.from.is_none_or(|from| value >= i128::from(from))
-        && range.to.is_none_or(|to| value <= i128::from(to))
+fn matches_range(value: f64, range: &SessionResultRange) -> bool {
+    range.from.is_none_or(|from| value >= from.value())
+        && range.to.is_none_or(|to| value <= to.value())
 }
 
 fn invalid_range(name: &str, detail: &str) -> SessionQueryError {
@@ -281,8 +294,8 @@ mod tests {
                 values: vec![SessionId::new("a"), SessionId::new("x")],
             },
             SessionResultFilter::CreatedAt {
-                from: Some(5),
-                to: Some(15),
+                from: Some(5.into()),
+                to: Some(15.into()),
             },
             SessionResultFilter::Availability {
                 values: vec![SessionAvailability::Live],
@@ -335,23 +348,41 @@ mod tests {
     #[test]
     fn materializers_reject_inverted_ranges() {
         let error = materialize_session_result_filters(&[SessionResultFilter::CreatedAt {
-            from: Some(10),
-            to: Some(5),
+            from: Some(10.into()),
+            to: Some(5.into()),
         }])
         .expect_err("inverted created-at");
         assert_eq!(error.code, SessionQueryErrorCode::SessionQueryInvalidFilter);
         let error = materialize_session_event_result_filters(&[SessionEventResultFilter::Time {
-            from: Some(2),
-            to: Some(1),
+            from: Some(2.into()),
+            to: Some(1.into()),
         }])
         .expect_err("inverted time");
         assert_eq!(error.code, SessionQueryErrorCode::SessionQueryInvalidFilter);
         let kept = materialize_session_result_filters(&[SessionResultFilter::CreatedAt {
             from: None,
-            to: Some(2),
+            to: Some(2.into()),
         }])
         .expect("valid range");
         assert_eq!(kept.len(), 1);
+    }
+
+    #[test]
+    fn finite_fractional_bounds_compare_negative_event_times() {
+        let mut earlier = document(0, "user/message", "earlier", SessionEventSurface::Current);
+        earlier.record.time = -124;
+        let mut later = document(1, "user/message", "later", SessionEventSurface::Current);
+        later.record.time = -123;
+        let documents = vec![earlier, later.clone()];
+        let matches = filter_session_event_documents(
+            &documents,
+            &[SessionEventResultFilter::Time {
+                from: Some(SessionResultBound::new(-123.999_99).expect("finite")),
+                to: None,
+            }],
+        )
+        .expect("fractional range");
+        assert_eq!(matches, [later]);
     }
 
     #[test]

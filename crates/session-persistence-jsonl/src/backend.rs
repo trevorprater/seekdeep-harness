@@ -514,7 +514,7 @@ impl JsonlSessionPersistence {
                     let backend = weak
                         .upgrade()
                         .ok_or_else(|| anyhow::anyhow!("JSONL persistence was disposed"))?;
-                    backend.append(&id, &events).await
+                    backend.append_owned(&id, &events).await
                 }
             },
             |_| {},
@@ -2432,6 +2432,54 @@ mod tests {
             .await
             .expect("context teardown timed out")
             .expect("dispose context");
+    }
+
+    #[tokio::test]
+    async fn resumed_session_disposal_drains_buffered_events_without_waiting_on_itself() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, sessions, context) = backend(temporary.path());
+        let stored = balanced_session("jsonl-resumed-buffered-retirement");
+        backend.create(stored.header()).await.expect("create");
+        backend
+            .append(stored.id(), &stored.events())
+            .await
+            .expect("seed append");
+
+        let preparation = backend
+            .prepare(&sessions, stored.id(), None)
+            .await
+            .expect("prepare");
+        let resumed = preparation.session().clone();
+        let owner_fiber = Fiber::active_child("jsonl resumed buffered owner");
+        let owner = context.with_fiber(owner_fiber.clone());
+        let detach = sessions.enter(&resumed).expect("enter");
+        owner.own(detach).expect("own");
+        sessions.announce(&resumed).expect("announce");
+        drop(preparation);
+        resumed
+            .append("turn/start", json!({"turn": 2}), AppendOptions::default())
+            .expect("start");
+        resumed
+            .append(
+                "turn/end",
+                json!({"turn": 2, "reason": {"kind": "completed"}}),
+                AppendOptions::default(),
+            )
+            .expect("end");
+
+        tokio::time::timeout(Duration::from_secs(1), owner_fiber.dispose())
+            .await
+            .expect("resumed retirement timed out")
+            .expect("dispose owner");
+        let loaded = backend.load(stored.id()).await.expect("load");
+        assert_eq!(
+            loaded.events.last().map(|event| event.event_type.as_str()),
+            Some("turn/end")
+        );
+        assert_eq!(
+            loaded.events.last().map(|event| &event.data["turn"]),
+            Some(&json!(2))
+        );
     }
 
     #[tokio::test]

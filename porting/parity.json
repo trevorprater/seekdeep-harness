@@ -63355,7 +63355,20 @@
     {
       "source": "packages/session-query/session-query-sqlite/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query-sqlite/src/engine.rs",
+        "crates/session-query-sqlite/src/lib.rs",
+        "crates/session-query-sqlite/tests/engine_parity.rs",
+        "crates/session-query-sqlite/tests/reconciliation_parity.rs",
+        "crates/session-query-sqlite/tests/search_contract_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: sqlite.spec.ts passed 60/60",
+        "Rust engine owns startup/first-search/never readiness, serialized reconciliation, stable optional-persistence observation, persistent and TEMP live generations, literal FTS5 ranking, scoped cursors, cancellation, close fencing, and native Cordis service lifecycle",
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features: 33 passed",
+        "cargo clippy --locked --offline -p seekdeep-session-query-sqlite --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/src/invariant.ts",
@@ -63381,8 +63394,8 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: query.spec.ts passed 10/10",
-        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features (9 passed)",
-        "Rust grouped tests pin owned normalization, range validation, all session/event SQL clauses, binding and FTS5 predicate ceilings, literal MATCH quoting, reserved-marker sanitization, canonical fingerprints, and Unicode snippet bounds",
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features: 33 passed",
+        "Rust grouped tests pin owned normalization, finite fractional and negative range bindings, all session/event SQL clauses, binding and FTS5 predicate ceilings, literal MATCH quoting, reserved-marker sanitization, canonical fingerprints, and Unicode snippet bounds",
         "cargo clippy --locked --offline -p seekdeep-session-query-sqlite --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63395,14 +63408,22 @@
         "crates/session-query-sqlite/tests/schema_parity.rs"
       ],
       "evidence": [
-        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features (9 passed)",
-        "Rust tests pin application id and version, persistent and TEMP FTS5 schemas, owner-only file creation, preserved parent modes, foreign/unknown database refusal, recognized reset, and unknown-table refusal"
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features: 33 passed",
+        "Rust tests pin application id and version, persistent and TEMP FTS5 schemas, owner-only database/WAL/SHM/journal creation, preserved existing modes, foreign/unknown database refusal, recognized reset, and unknown-table refusal"
       ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/tests/load-path.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query-sqlite/src/lib.rs",
+        "crates/session-query-sqlite/tests/plugin_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: load-path.e2e.ts passed 1/1",
+        "Rust native Cordis plugin test mounts the real SQLite persistence backend, publishes sessionQuery, searches and lists the durable log, withdraws cleanly, and leaves persistence usable"
+      ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/tests/query.spec.ts",
@@ -63413,14 +63434,26 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: query.spec.ts passed 10/10",
-        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features (9 passed)",
-        "Rust's closed enums make runtime-unknown filter discriminants unrepresentable; serde rejects non-text/session-id/cursor and fractional numeric wire values before normalization"
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features: 33 passed",
+        "Rust's closed enums make runtime-unknown filter discriminants unrepresentable; serde rejects invalid text/session-id/cursor shapes while finite source-number bounds preserve fractional and pre-epoch comparisons"
       ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/tests/sqlite.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-query-sqlite/tests/engine_parity.rs",
+        "crates/session-query-sqlite/tests/plugin_parity.rs",
+        "crates/session-query-sqlite/tests/reconciliation_parity.rs",
+        "crates/session-query-sqlite/tests/schema_parity.rs",
+        "crates/session-query-sqlite/tests/search_contract_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: sqlite.spec.ts passed 60/60",
+        "Rust grouped tests pin config/open phases, FTS semantics and ranking, filters and snippets, cursor binding/generations, dynamic persistence, hostile observation races, source conflicts, unchanged-row reuse, rollback retry, schema/file safety, cancellation, close fencing, real persistence, and native plugin integration",
+        "cargo test --locked --offline -p seekdeep-session-query-sqlite --all-features: 33 passed"
+      ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/tsconfig.json",
@@ -63485,7 +63518,7 @@
         "crates/session-query/src/config.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-query --all-features",
+        "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed",
         "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63497,7 +63530,7 @@
         "crates/session-query/src/corpus.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-query --all-features",
+        "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed",
         "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63545,7 +63578,7 @@
         "crates/session-query/src/filters.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-query --all-features",
+        "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed, including negative and fractional range comparisons",
         "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63604,7 +63637,7 @@
         "crates/session-query/src/types.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-session-query --all-features",
+        "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed, including finite source-number wire bounds",
         "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63613,14 +63646,14 @@
       "kind": "test",
       "status": "verified",
       "targets": ["crates/session-query/src/extraction.rs", "crates/session-query/src/filters.rs", "crates/session-query/src/documents.rs"],
-      "evidence": ["pinned-source Vitest: session-query 70 passed", "Rust tests pin text/tool extraction, structural omission, document classification, regex-safe filters, OR/AND clauses, and range validation", "cargo test -p seekdeep-session-query --all-features: 23 passed"]
+      "evidence": ["pinned-source Vitest: session-query 70 passed", "Rust tests pin text/tool extraction, structural omission, document classification, regex-safe filters, OR/AND clauses, and finite fractional/negative range validation", "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed"]
     },
     {
       "source": "packages/session-query/session-query/tests/session-query.spec.ts",
       "kind": "test",
       "status": "verified",
       "targets": ["crates/session-query/src/index.rs", "crates/session-query/src/corpus.rs", "crates/session-query/src/filters.rs", "crates/session-query/src/sources.rs"],
-      "evidence": ["Rust tests drive live and replayed session listing, event windows, titles, source compatibility, session/event filters, and config validation", "cargo test -p seekdeep-session-query --all-features: 23 passed", "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"]
+      "evidence": ["Rust tests drive live and replayed session listing, event windows, titles, source compatibility, session/event filters, and config validation", "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed", "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session-query/session-query/tests/test-service.ts",
@@ -63634,7 +63667,7 @@
       "kind": "test",
       "status": "verified",
       "targets": ["crates/session-query/src/tracing.rs"],
-      "evidence": ["Rust tests pin complete/partial lineages, replacement chains, source relations, current surface cloning, cycles, missing targets, and deeply nested descendants without recursion", "cargo test -p seekdeep-session-query --all-features: 23 passed"]
+      "evidence": ["Rust tests pin complete/partial lineages, replacement chains, source relations, current surface cloning, cycles, missing targets, and deeply nested descendants without recursion", "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed"]
     },
     {
       "source": "packages/session-query/session-query/tsconfig.json",

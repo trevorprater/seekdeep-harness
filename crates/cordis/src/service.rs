@@ -81,6 +81,7 @@ pub(crate) struct ServiceStore {
     providers: RwLock<HashMap<ServiceSlot, Vec<Provider>>>,
     declarations: RwLock<HashSet<String>>,
     revision: AtomicU64,
+    slot_revisions: RwLock<HashMap<ServiceSlot, u64>>,
 }
 
 impl Default for ServiceStore {
@@ -89,6 +90,7 @@ impl Default for ServiceStore {
             providers: RwLock::new(HashMap::new()),
             declarations: RwLock::new(HashSet::new()),
             revision: AtomicU64::new(0),
+            slot_revisions: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -96,7 +98,7 @@ impl Default for ServiceStore {
 impl ServiceStore {
     pub(crate) fn insert<T: Service>(
         &self,
-        slot: ServiceSlot,
+        slot: &ServiceSlot,
         owner: &Arc<Fiber>,
         value: Arc<T>,
         expression_projection: Option<serde_json::Value>,
@@ -104,7 +106,7 @@ impl ServiceStore {
         let id = Uuid::now_v7();
         self.declarations.write().insert(slot.name.clone());
         let mut providers = self.providers.write();
-        let entries = providers.entry(slot).or_default();
+        let entries = providers.entry(slot.clone()).or_default();
         if !entries.is_empty() {
             return None;
         }
@@ -114,7 +116,6 @@ impl ServiceStore {
             value,
             expression_projection,
         });
-        self.revision.fetch_add(1, Ordering::AcqRel);
         Some(id)
     }
 
@@ -130,7 +131,6 @@ impl ServiceStore {
         if entries.is_empty() {
             providers.remove(slot);
         }
-        self.revision.fetch_add(1, Ordering::AcqRel);
         true
     }
 
@@ -215,6 +215,15 @@ impl ServiceStore {
 
     pub(crate) fn revision(&self) -> u64 {
         self.revision.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn mark_changed(&self, slot: &ServiceSlot) {
+        let revision = self.revision.fetch_add(1, Ordering::AcqRel) + 1;
+        self.slot_revisions.write().insert(slot.clone(), revision);
+    }
+
+    pub(crate) fn slot_revision(&self, slot: &ServiceSlot) -> u64 {
+        self.slot_revisions.read().get(slot).copied().unwrap_or(0)
     }
 
     pub(crate) fn is_declared(&self, name: &str) -> bool {

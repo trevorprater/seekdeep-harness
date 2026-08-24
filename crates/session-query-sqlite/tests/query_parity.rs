@@ -74,7 +74,7 @@ fn normalizes_both_scopes_defaults_owned_filters_limits_and_cursors() {
             session_id: SessionId::new("s"),
             query: "needle".to_owned(),
             filters: Some(vec![SessionEventMetadataFilter::Seq {
-                from: Some(1),
+                from: Some(1.into()),
                 to: None,
             }]),
             limit: None,
@@ -136,8 +136,8 @@ fn rejects_blank_nul_inverted_and_out_of_range_requests() {
             session_id: SessionId::new("s"),
             query: "x".to_owned(),
             filters: Some(vec![SessionEventMetadataFilter::Time {
-                from: Some(9),
-                to: Some(1),
+                from: Some(9.into()),
+                to: Some(1.into()),
             }]),
             limit: None,
             cursor: None,
@@ -184,8 +184,8 @@ fn compiles_all_session_clauses_including_empty_nullable_and_availability() {
     );
     let combined = build_session_where(&[
         SessionResultFilter::CreatedAt {
-            from: Some(1),
-            to: Some(2),
+            from: Some(1.into()),
+            to: Some(2.into()),
         },
         SessionResultFilter::Availability { values: vec![] },
         SessionResultFilter::Availability {
@@ -207,12 +207,12 @@ fn compiles_all_session_clauses_including_empty_nullable_and_availability() {
 fn compiles_every_event_clause_and_enforces_binding_and_predicate_budgets() {
     let compiled = build_event_where(&[
         SessionEventMetadataFilter::Seq {
-            from: Some(1),
+            from: Some(1.into()),
             to: None,
         },
         SessionEventMetadataFilter::Time {
             from: None,
-            to: Some(9),
+            to: Some(9.into()),
         },
         SessionEventMetadataFilter::Type {
             values: vec!["user/message".to_owned()],
@@ -252,6 +252,44 @@ fn compiles_every_event_clause_and_enforces_binding_and_predicate_budgets() {
 }
 
 #[test]
+fn preserves_negative_and_fractional_source_number_bounds() {
+    let lower = seekdeep_session_query::SessionResultBound::new(-123.999_99).unwrap();
+    let upper = seekdeep_session_query::SessionResultBound::new(123.000_01).unwrap();
+    let compiled = build_event_where(&[
+        SessionEventMetadataFilter::Time {
+            from: Some(lower),
+            to: Some(upper),
+        },
+        SessionEventMetadataFilter::Seq {
+            from: Some(seekdeep_session_query::SessionResultBound::new(0.5).unwrap()),
+            to: None,
+        },
+    ])
+    .unwrap();
+    assert_eq!(
+        compiled.params,
+        [
+            SqlParam::Number(lower),
+            SqlParam::Number(upper),
+            SqlParam::Number(seekdeep_session_query::SessionResultBound::new(0.5).unwrap()),
+        ]
+    );
+    let decoded: SessionEventMetadataFilter = serde_json::from_value(serde_json::json!({
+        "kind": "time",
+        "from": -123.99999,
+        "to": 123.00001
+    }))
+    .unwrap();
+    assert_eq!(
+        decoded,
+        SessionEventMetadataFilter::Time {
+            from: Some(lower),
+            to: Some(upper),
+        }
+    );
+}
+
+#[test]
 fn quotes_sanitizes_and_canonicalizes_request_identity() {
     assert_eq!(
         quote_fts_data("say \"needle\" OR *"),
@@ -272,13 +310,13 @@ fn quotes_sanitizes_and_canonicalizes_request_identity() {
                 values: vec![None, Some(SessionId::new("p"))],
             },
             SessionResultFilter::CreatedAt {
-                from: Some(1),
+                from: Some(1.into()),
                 to: None,
             },
         ],
         event_filters: vec![SessionEventMetadataFilter::Time {
             from: None,
-            to: Some(9),
+            to: Some(9.into()),
         }],
         cursor: None,
     };

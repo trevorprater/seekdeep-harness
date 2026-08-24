@@ -758,10 +758,10 @@ impl Context {
             });
         }
         let slot = self.slot(name);
-        let Some(id) =
-            self.root
-                .services
-                .insert(slot.clone(), &self.fiber, value, expression_projection)
+        let Some(id) = self
+            .root
+            .services
+            .insert(&slot, &self.fiber, value, expression_projection)
         else {
             return Err(CordisError::DuplicateService(name.to_owned()));
         };
@@ -769,6 +769,7 @@ impl Context {
             self.root.services.remove(&slot, id);
             return Err(CordisError::ServicePublication(format!("{error:#}")));
         }
+        self.root.services.mark_changed(&slot);
         self.root.plugins.notify_service_change();
         self.root.service_changes.notify();
         let services = self.root.services.clone();
@@ -777,6 +778,7 @@ impl Context {
         let disposal_slot = slot.clone();
         let effect = EffectHandle::synchronous(format!("ctx.provide({name:?})"), move || {
             if services.remove(&disposal_slot, id) {
+                services.mark_changed(&disposal_slot);
                 plugins.notify_service_change();
                 service_changes.notify();
                 service_changes.check(&disposal_slot.name)?;
@@ -786,7 +788,9 @@ impl Context {
         match self.own(effect.clone()) {
             Ok(effect) => Ok(effect),
             Err(error) => {
-                self.root.services.remove(&slot, id);
+                if self.root.services.remove(&slot, id) {
+                    self.root.services.mark_changed(&slot);
+                }
                 self.root.plugins.notify_service_change();
                 self.root.service_changes.notify();
                 let _ = self.root.service_changes.check(name);
@@ -841,6 +845,18 @@ impl Context {
     #[must_use]
     pub fn service_revision(&self) -> u64 {
         self.root.services.revision()
+    }
+
+    /// Monotonic revision of successful provision and withdrawal for one
+    /// service slot in this context's isolation scope.
+    ///
+    /// Unlike [`Self::service_revision`], unrelated service changes do not
+    /// advance this value. Consumers can therefore fence observations across
+    /// an optional dependency's mount, replacement generation, and unmount
+    /// without retaining the dependency itself.
+    #[must_use]
+    pub fn service_slot_revision<T: Service>(&self, key: ServiceKey<T>) -> u64 {
+        self.root.services.slot_revision(&self.slot(key.name()))
     }
 
     /// Snapshots all registered service implementations across isolation scopes.

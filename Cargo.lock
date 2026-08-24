@@ -6464,12 +6464,22 @@ name = "seekdeep-session-query-sqlite"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "parking_lot",
  "rusqlite",
+ "seekdeep-cordis",
  "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
+ "seekdeep-session-persistence-sqlite",
  "seekdeep-session-query",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

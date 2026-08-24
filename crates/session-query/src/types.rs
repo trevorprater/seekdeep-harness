@@ -1,6 +1,8 @@
 //! Public records for exact reads and relationship traces over the
 //! live-preferred logical session corpus.
 
+use std::hash::{Hash, Hasher};
+
 use seekdeep_core::session::{SessionEvent, SessionHeader, SessionId};
 use seekdeep_llm::AbortSignal;
 use seekdeep_session_title::SessionTitleSnapshot;
@@ -12,7 +14,7 @@ use crate::cursor::SessionSearchCursor;
 pub type SessionEventType = String;
 
 /// Whether an event is current model context, replaced context, or raw-log-only.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionEventSurface {
     /// Current model context.
@@ -193,10 +195,93 @@ pub struct SessionTitleObservation {
 pub struct SessionResultRange {
     /// Inclusive lower bound.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub from: Option<u64>,
+    pub from: Option<SessionResultBound>,
     /// Inclusive upper bound.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub to: Option<u64>,
+    pub to: Option<SessionResultBound>,
+}
+
+/// One finite source-number bound used by created-at, sequence, and time ranges.
+///
+/// The source accepts finite JavaScript numbers rather than integers here.
+/// This preserves negative and fractional epoch milliseconds while ruling out
+/// `NaN` and infinities at construction and deserialization boundaries.
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(transparent)]
+pub struct SessionResultBound(f64);
+
+impl SessionResultBound {
+    /// Creates a finite numeric bound.
+    #[must_use]
+    pub fn new(value: f64) -> Option<Self> {
+        value.is_finite().then_some(Self(value))
+    }
+
+    /// Returns the finite source-number value.
+    #[must_use]
+    pub const fn value(self) -> f64 {
+        self.0
+    }
+}
+
+impl PartialEq for SessionResultBound {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for SessionResultBound {}
+
+impl Hash for SessionResultBound {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if self.0 == 0.0 {
+            0_u64.hash(state);
+        } else {
+            self.0.to_bits().hash(state);
+        }
+    }
+}
+
+impl PartialOrd for SessionResultBound {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for SessionResultBound {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = f64::deserialize(deserializer)?;
+        Self::new(value).ok_or_else(|| serde::de::Error::custom("range bound must be finite"))
+    }
+}
+
+#[allow(clippy::cast_precision_loss)]
+impl From<i64> for SessionResultBound {
+    fn from(value: i64) -> Self {
+        Self(value as f64)
+    }
+}
+
+#[allow(clippy::cast_precision_loss)]
+impl From<u64> for SessionResultBound {
+    fn from(value: u64) -> Self {
+        Self(value as f64)
+    }
+}
+
+impl From<i32> for SessionResultBound {
+    fn from(value: i32) -> Self {
+        Self(f64::from(value))
+    }
+}
+
+impl From<u32> for SessionResultBound {
+    fn from(value: u32) -> Self {
+        Self(f64::from(value))
+    }
 }
 
 /// Source availability predicates understood by logical-session filters.
@@ -231,10 +316,10 @@ pub enum SessionResultFilter {
     CreatedAt {
         /// Inclusive lower bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        from: Option<u64>,
+        from: Option<SessionResultBound>,
         /// Inclusive upper bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        to: Option<u64>,
+        to: Option<SessionResultBound>,
     },
     /// Parent clause.
     Parent {
@@ -260,19 +345,19 @@ pub enum SessionEventResultFilter {
     Seq {
         /// Inclusive lower bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        from: Option<u64>,
+        from: Option<SessionResultBound>,
         /// Inclusive upper bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        to: Option<u64>,
+        to: Option<SessionResultBound>,
     },
     /// Time range clause.
     Time {
         /// Inclusive lower bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        from: Option<u64>,
+        from: Option<SessionResultBound>,
         /// Inclusive upper bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        to: Option<u64>,
+        to: Option<SessionResultBound>,
     },
     /// Type clause.
     Type {
@@ -350,19 +435,19 @@ pub enum SessionEventMetadataFilter {
     Seq {
         /// Inclusive lower bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        from: Option<u64>,
+        from: Option<SessionResultBound>,
         /// Inclusive upper bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        to: Option<u64>,
+        to: Option<SessionResultBound>,
     },
     /// Time range clause.
     Time {
         /// Inclusive lower bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        from: Option<u64>,
+        from: Option<SessionResultBound>,
         /// Inclusive upper bound.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        to: Option<u64>,
+        to: Option<SessionResultBound>,
     },
     /// Type clause.
     Type {

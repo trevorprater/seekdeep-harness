@@ -13,6 +13,7 @@ const VALUE: ServiceKey<usize> = ServiceKey::new("value");
 #[tokio::test]
 async fn observes_provision_and_withdrawal_with_relaxed_visibility() {
     let context = Context::new();
+    assert_eq!(context.service_slot_revision(VALUE), 0);
     let observations = Arc::new(Mutex::new(Vec::new()));
     let observer_context = context.clone();
     context
@@ -26,7 +27,9 @@ async fn observes_provision_and_withdrawal_with_relaxed_visibility() {
         })
         .unwrap();
     let provision = context.provide(VALUE, Arc::new(7)).unwrap();
+    assert_eq!(context.service_slot_revision(VALUE), 1);
     provision.dispose().await.unwrap();
+    assert_eq!(context.service_slot_revision(VALUE), 2);
     assert_eq!(*observations.lock(), vec![Some(7), None]);
 }
 
@@ -81,4 +84,6 @@ fn checked_listener_rolls_back_a_rejected_service_before_observers_or_lookup() {
     ));
     assert!(context.get(VALUE).is_none());
     assert_eq!(observations.load(Ordering::Acquire), 0);
+    assert_eq!(context.service_revision(), 0);
+    assert_eq!(context.service_slot_revision(VALUE), 0);
 }

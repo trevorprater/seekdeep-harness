@@ -67,6 +67,55 @@ fn creates_owner_only_file_without_changing_existing_parent_mode() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn creates_owner_only_wal_and_persistent_journal_sidecars_and_preserves_existing_mode() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let temporary = tempfile::tempdir().unwrap();
+    let wal_path = temporary.path().join("wal.sqlite");
+    let wal = open_search_database(wal_path.to_str().unwrap(), JournalMode::Wal).unwrap();
+    for path in [
+        wal_path.clone(),
+        wal_path.with_extension("sqlite-wal"),
+        wal_path.with_extension("sqlite-shm"),
+    ] {
+        assert_eq!(
+            std::fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+    drop(wal);
+
+    let persist_path = temporary.path().join("persist.sqlite");
+    let persist =
+        open_search_database(persist_path.to_str().unwrap(), JournalMode::Persist).unwrap();
+    assert_eq!(
+        std::fs::metadata(format!("{}-journal", persist_path.display()))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+    drop(persist);
+
+    let existing_path = temporary.path().join("existing.sqlite");
+    std::fs::write(&existing_path, []).unwrap();
+    std::fs::set_permissions(&existing_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let existing =
+        open_search_database(existing_path.to_str().unwrap(), JournalMode::Delete).unwrap();
+    assert_eq!(
+        std::fs::metadata(&existing_path)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o644
+    );
+    drop(existing);
+}
+
 #[test]
 fn refuses_foreign_or_unknown_databases_and_resets_recognized_versions() {
     let temporary = tempfile::tempdir().unwrap();
