@@ -1,6 +1,6 @@
 {
   "name": "@seekdeep-ai/seekdeep-session-telemetry-otel",
-  "description": "OpenTelemetry backend for the SeekDeep Harness telemetry seam: hands captured session records to the OTel JS SDK's log pipeline",
+  "description": "Native Rust OpenTelemetry backend for the SeekDeep Harness session telemetry seam",
   "version": "0.1.0-rc.5",
   "publishConfig": {
     "access": "public"

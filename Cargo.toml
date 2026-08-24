@@ -116,6 +116,7 @@ members = [
   "crates/session-reference",
   "crates/session-stats",
   "crates/session-telemetry",
+  "crates/session-telemetry-otel",
   "crates/session-title",
   "crates/session-title-all-prompts-llm",
   "crates/session-title-first-prompt-llm",
@@ -219,6 +220,9 @@ icu_timezone = "1.5.0"
 indexmap = { version = "2.12.1", features = ["serde"] }
 js-sys = "0.3.104"
 num-traits = "0.2.19"
+opentelemetry = { version = "0.32.0", default-features = false, features = ["logs"] }
+opentelemetry-otlp = { version = "0.32.0", default-features = false, features = ["gzip-http", "http-json", "logs", "reqwest-client", "reqwest-rustls"] }
+opentelemetry_sdk = { version = "0.32.1", default-features = false, features = ["experimental_logs_batch_log_processor_with_async_runtime", "logs", "rt-tokio"] }
 oxc_allocator = "=0.122.0"
 oxc_ast = "=0.122.0"
 oxc_ast_visit = "=0.122.0"

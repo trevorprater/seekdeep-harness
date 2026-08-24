@@ -2,36 +2,36 @@
 
 [English](README.md) | 中文
 
-[遥测（telemetry）seam](../session-telemetry/) 的 OpenTelemetry 后端，也是部署方唯一要加载的条目。其 `mode` 决定 seam 是实时跟随会话事件、仅在记录反馈时回放权威日志，还是将遥测留在本地。上传模式会原样组合 OTel JS SDK（`LoggerProvider` → `BatchLogRecordProcessor` → OTLP/HTTP 日志导出器），把每条已交接记录映射到 `logger.emit()`，并使用两个插桩作用域（instrumentation scope）：ledger 记录挂在 `@seekdeep-ai/seekdeep-session-sessionTelemetry-otel` 下，运维记录挂在 `@seekdeep-ai/seekdeep-session-sessionTelemetry-otel/ops` 下。资源身份包含 `service.name`/`service.version`（来自 `seekdeep-llm` 的 `APP_IDENTITY`），以及本包的匿名 `user.id`（`$SEEKDEEP_HOME/.anonymous-user-id`；首次使用时创建的随机 UUID，删除该文件可重置）；这些身份随每个导出批次携带一次，而非逐条记录携带。
+[遥测（telemetry）seam](../session-telemetry/) 的原生 Rust OpenTelemetry 后端，是部署方唯一要加载的条目。其 `mode` 决定 seam 是实时跟随会话事件、仅在记录反馈时回放权威日志，还是将遥测留在本地。上传模式会构造带异步批处理器和 OTLP/HTTP JSON 导出器的 `SdkLoggerProvider`，再把每条已交接记录映射到 Rust OTel 日志 API，并使用两个插桩作用域（instrumentation scope）：ledger 记录挂在 `@seekdeep-ai/seekdeep-session-telemetry-otel` 下，运维记录挂在 `@seekdeep-ai/seekdeep-session-telemetry-otel/ops` 下。资源身份包含 `service.name`/`service.version`（来自 `seekdeep-llm` 的 `APP_IDENTITY`），以及本包的匿名 `user.id`（`$SEEKDEEP_HOME/.anonymous-user-id`；首次使用时创建的随机 UUID，删除该文件可重置）；这些身份随每个导出批次携带一次，而非逐条记录携带。
 
 ## 配置
 
 ```yaml
-- id: sessionTelemetry-otel
-  name: '@seekdeep-ai/seekdeep-session-sessionTelemetry-otel'
+- id: session-telemetry-otel
+  name: '@seekdeep-ai/seekdeep-session-telemetry-otel'
   config:
     mode: FULL                # explicit opt-in; default: DISABLED
     shutdownTimeoutMillis: 3000 # optional; defaults to 3000
-    exporter:                # passed verbatim to the SDK's OTLP/HTTP log exporter
+    exporter:                # passed intact to the native pipeline factory
       url: https://collector.example.com/v1/logs
       headers:
         authorization: !!js `Bearer ${process.env.OTLP_TOKEN}`
-    processor: {}            # optional; passed verbatim to BatchLogRecordProcessor
+    processor: {}            # optional native batch-processor options
 ```
 
 | `mode` | 行为 |
 |---|---|
-| `FULL` | 每条已投影记录都立即交给 OTel SDK，包括生命周期运维记录。 |
+| `FULL` | 每条已投影记录都立即交给 OTel 流水线，包括生命周期运维记录。 |
 | `FEEDBACK_ONLY` | 每个 `feedback/record` 都会回放权威会话日志中截至该事件的后缀，并进行投影与脱敏。后续记录等待下一个反馈事件；如果没有后续反馈，则留在本地。 |
-| `DISABLED` | 默认值。不构造协调器、提供方、处理器或导出器。没有遥测记录会离开进程。`feedback/record` 会记录 `session sessionTelemetry is DISABLED; nothing will be shared and this feedback remains local`；该事件留在本地会话日志中。 |
+| `DISABLED` | 默认值。不构造协调器、提供方、处理器或导出器。没有遥测记录会离开进程。`feedback/record` 会记录 `session telemetry is DISABLED; nothing will be shared and this feedback remains local`；该事件留在本地会话日志中。 |
 
-程序化 TypeScript 配置使用导出的 `SessionTelemetryMode` 枚举（`SessionTelemetryMode.FULL`、`SessionTelemetryMode.FEEDBACK_ONLY` 或 `SessionTelemetryMode.DISABLED`）；原始字符串字面量不可赋值。序列化后的 Cordis 配置继续使用上表所示的字符串值。
+程序化 Rust 安装使用 `OtelTelemetryConfig`；其序列化 `mode` 使用上表所示的值，而 `SessionTelemetryMode` 提供闭合的内部策略词汇。读取任何导出器字段前，未知值就会失败。
 
-上传授权采用显式许可，且为 fail-closed。通过直接构造传入未知模式时，会在读取传输配置前失败。只有 `FULL` 接受对 `ctx.sessionTelemetry.emit()` 的直接调用。`FEEDBACK_ONLY` 向其按需协调器提供私有后端能力，并且仅在 `feedback/record` 对象已经存储于 `session.events[event.seq]` 且对象身份完全相同时，才将其视为同意；独立发出的总线值会被忽略。即使存在导出器选项，`DISABLED` 也绝不会构造 SDK 流水线。
+上传授权采用显式许可，且为 fail-closed。只有 `FULL` 接受对 `sessionTelemetry.emit()` 的直接调用。`FEEDBACK_ONLY` 向其按需协调器提供私有后端能力，并且只把已提交到权威日志的 `feedback/record` 视为同意；独立发出的总线值会被忽略。即使存在导出器选项，`DISABLED` 也绝不会构造 OTel 流水线。
 
 已挂载的服务通过 seam 的 [`SessionTelemetrySharingStatus`](../session-telemetry/README.md#the-sharing-disclosure) `sharing` 属性披露解析后的模式（`full` / `feedback-only` / `disabled`），因此 `/feedback` 的确认文本可以报告会话是否以及如何被共享。该披露在构造函数中设置，与采集相互独立：即使 `DISABLED` 也会披露 `disabled`。
 
-`exporter.url` 在 `FULL` 与 `FEEDBACK_ONLY` 中必填，无默认值，且必须能解析为 `http(s)`；在 `DISABLED` 中可省略且不使用。在上传模式中，`shutdownTimeoutMillis` 是由 SEEKDEEP 管理的有限正数外层截止时间，默认值为 3000 ms；`processor.maxExportBatchSize` 不是正整数时也会在插件加载时失败，因为 SDK 会接受该值，随后却在关闭时挂起。两个 SDK 配置块都整体透传（passthrough）：`OTLPExporterNodeConfigBase` 的每个字段（`headers`、`timeoutMillis`、`compression`、`keepAlive` 等）都会到达导出器；批处理、导出节奏（`scheduledDelayMillis`）、重试、队列上限，以及持续失败下的丢失策略，都是通过 `processor` 调节的 SDK 行为。该后端不实现 `flush()`：常规 flush 由批处理器负责。关闭期间，OTel 会先等待 `exporter.forceFlush()`，再等待受处理器 `exportTimeoutMillis` 限制的完成 promise；如果该传输 promise 始终不结算，本包会在 `shutdownTimeoutMillis` 到期时放弃等待，通过协调器记录已隔离的关闭失败，并让应用继续拆卸。该截止时间无法取消 SDK 传输，因此届时仍待处理的记录可能在进程退出时丢失。
+`exporter.url` 在 `FULL` 与 `FEEDBACK_ONLY` 中必填，无默认值，且必须能解析为 `http(s)`；在 `DISABLED` 中可省略且不使用。在上传模式中，`shutdownTimeoutMillis` 是由 SeekDeep 管理的有限正数外层截止时间，默认值为 3000 ms；`processor.maxExportBatchSize` 不是正整数时会在插件加载时失败，因为它无法安全排空。对象安全的 `OtelLogPipelineFactory` 会收到完整的 `exporter` 与 `processor` 值。其默认原生实现把 OTLP URL、headers、请求超时、gzip、user agent、队列大小、批次大小、调度延迟和导出超时映射到 Rust OTel 流水线；平台集成可以替换该工厂，而不移动捕获、同意或脱敏策略。该后端不实现 `flush()`：常规 flush 由批处理器负责。`shutdown()` 会排空提供方并使其完全停稳，但如果 SDK 一直待处理，外层截止时间会让 Cordis dispose 继续；该截止时间无法取消进行中的传输，因此届时仍待处理的记录可能在进程退出时丢失。
 
 ## 哪些数据会离开本机
 
@@ -43,7 +43,7 @@ seam 记录 → SDK 日志记录：`time` → `timestamp`/`observedTimestamp`；
 
 ## 模型体验
 
-无。该后端只把 seam 脱敏后的记录转发进 OTel SDK 流水线；它绝不向模型请求贡献任何内容。
+无。该后端只把 seam 脱敏后的记录转发进 OTel 流水线；它绝不向模型请求贡献任何内容。
 
 #### KV Cache 影响
 
@@ -51,6 +51,6 @@ seam 记录 → SDK 日志记录：`time` → `timestamp`/`observedTimestamp`；
 
 ## 已知限制与暂缓事项
 
-- **上游实验性源码树**：`@opentelemetry/sdk-logs` 仍从上游实验性（experimental）源码树发布；SDK API 的变动只会落在本包，也仅落在本包；seam 约定不动。
-- **真实 collector 行为属于 SDK 导出器**：身份验证、TLS、限流及其他真实 OTLP 部署行为遵循上游 SDK，不由本包自有兼容层处理。
+- **上游日志 API 演进**：OpenTelemetry 日志 API 仍在演进；SDK API 的变动只会落在原生工厂，不会移动 seam 约定。
+- **真实 collector 行为属于导出器**：身份验证、TLS、限流及其他真实 OTLP 部署行为遵循 Rust 导出器，不由本包自有传输兼容层处理。
 - **反馈时快照**：`FEEDBACK_ONLY` 在反馈前不保留遥测自有副本。记录反馈时，它读取并脱敏当前的权威日志；反馈前发生崩溃时什么都不上传，而反馈前的策略变更会影响该次回放的导出内容。

@@ -13137,7 +13137,7 @@
         ".agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "paired Agent Note hashes re-record the native Rust OpenTelemetry factory decision"
       ]
     },
     {
@@ -13148,7 +13148,7 @@
         ".agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "implemented decision updated for the native Rust OpenTelemetry SDK and replaceable reporting factory"
       ]
     },
     {
@@ -13159,7 +13159,7 @@
         ".agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "Chinese implemented decision mirrors the native Rust OpenTelemetry SDK and replaceable reporting factory"
       ]
     },
     {
@@ -64668,7 +64668,7 @@
         "packages/session/session-telemetry-otel/README.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "paired README hashes re-record the native Rust backend contract"
       ]
     },
     {
@@ -64679,7 +64679,7 @@
         "packages/session/session-telemetry-otel/README.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package reference documents native Rust policy, OTLP wire mapping, config, lifecycle, and limitations"
       ]
     },
     {
@@ -64690,7 +64690,7 @@
         "packages/session/session-telemetry-otel/README.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "Chinese package reference mirrors the native Rust policy, OTLP wire mapping, config, lifecycle, and limitations"
       ]
     },
     {
@@ -64701,13 +64701,23 @@
         "packages/session/session-telemetry-otel/package.json"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package metadata retains the compatibility identity and names the native Rust implementation owner"
       ]
     },
     {
       "source": "packages/session/session-telemetry-otel/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry-otel/src/lib.rs",
+        "crates/session-telemetry-otel/src/native.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/session/session-telemetry-otel/tests/otel.spec.ts (25 passed)",
+        "cargo test --locked --offline -p seekdeep-session-telemetry-otel --all-features (9 passed, including real OTLP/HTTP JSON wire and Cordis disposal)",
+        "cargo clippy --locked --offline -p seekdeep-session-telemetry-otel --all-targets --all-features -- -D warnings",
+        "Rust OpenTelemetry SDK pipeline is the production default; object-safe factory replacement is limited to the reporting boundary"
+      ]
     },
     {
       "source": "packages/session/session-telemetry-otel/src/invariant.ts",
@@ -64726,12 +64736,29 @@
     {
       "source": "packages/session/session-telemetry-otel/tests/loader-composition.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/session-telemetry-otel/tests/native_otlp.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run --config vitest.e2e.config.ts packages/session/session-telemetry-otel/tests/loader-composition.e2e.ts (3 passed)",
+        "cargo test --locked --offline -p seekdeep-session-telemetry-otel --all-features --test native_otlp (3 passed)"
+      ],
+      "note": "the native backend and real OTLP wire are covered, but the target still needs the assembled Rust headless config path with a mounted redaction rule, mocked-model/tool turn, canonical JSONL comparison, feedback-only suffix, and disabled warning"
     },
     {
       "source": "packages/session/session-telemetry-otel/tests/otel.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry-otel/tests/otel_parity.rs",
+        "crates/session-telemetry-otel/tests/native_otlp.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/session/session-telemetry-otel/tests/otel.spec.ts (25 passed)",
+        "cargo test --locked --offline -p seekdeep-session-telemetry-otel --all-features (9 passed)",
+        "Rust tests cover policy, validation, canonical feedback, native OTLP JSON mapping, resource/scopes, headers, gzip, identity, bounded shutdown, and loader-compatible plugin mounting"
+      ]
     },
     {
       "source": "packages/session/session-telemetry-otel/tsconfig.json",
