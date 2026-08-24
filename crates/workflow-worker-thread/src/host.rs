@@ -28,8 +28,9 @@ use tokio::{
 };
 
 use crate::{
+    process::{ProcessExecution, WorkerCommand},
     runtime::{ExecutionObserver, WorkflowExecution},
-    types::{ChildHandle, ChildPort, ChildResult, ChildStartRequest, WorkerLimits},
+    types::{ChildHandle, ChildPort, ChildResult, ChildStartRequest, WorkerInit, WorkerLimits},
 };
 
 fn render_anyhow(error: &anyhow::Error) -> String {
@@ -82,7 +83,7 @@ impl ResultState {
     }
 }
 
-struct RunObserver {
+pub(crate) struct RunObserver {
     context: Context,
     info: WorkflowRunInfo,
     state: Arc<Mutex<RunState>>,
@@ -157,7 +158,7 @@ impl ExecutionObserver for RunObserver {
     }
 }
 
-struct ChildRegistry {
+pub(crate) struct ChildRegistry {
     runtime: tokio::runtime::Handle,
     subagents: Arc<SubagentRuntime>,
     parent: Arc<Agent>,
@@ -182,7 +183,7 @@ impl ChildRegistry {
             .then(|| "workflow run already settled".to_owned())
     }
 
-    async fn start(
+    pub(crate) async fn start(
         self: &Arc<Self>,
         request: ChildStartRequest,
     ) -> anyhow::Result<Arc<dyn ChildHandle>> {
@@ -263,6 +264,10 @@ impl ChildRegistry {
     fn finish(&self, key: u64) {
         self.children.lock().remove(&key);
         self.changed.notify_waiters();
+    }
+
+    pub(crate) fn started(&self) -> u64 {
+        self.started.load(Ordering::Acquire)
     }
 
     fn reap(&self, reason: &str) {
@@ -397,12 +402,56 @@ impl ChildPort for HostChildPort {
     }
 }
 
+enum ExecutionBackend {
+    Thread(Arc<WorkflowExecution>),
+    Process(Arc<ProcessExecution>),
+}
+
+impl ExecutionBackend {
+    fn launch(&self) {
+        if let Self::Process(process) = self {
+            process.launch();
+        }
+    }
+
+    fn cancel(&self, reason: &str) {
+        match self {
+            Self::Thread(execution) => execution.cancel(reason),
+            Self::Process(process) => process.cancel(reason),
+        }
+    }
+
+    fn result(&self) -> BoxFuture<'static, WorkflowResult> {
+        match self {
+            Self::Thread(execution) => {
+                let execution = execution.clone();
+                Box::pin(async move { execution.drive().await })
+            }
+            Self::Process(process) => process.result(),
+        }
+    }
+
+    fn terminate(&self) {
+        match self {
+            Self::Thread(execution) => execution.cancel("workflow worker terminated"),
+            Self::Process(process) => process.terminate(),
+        }
+    }
+
+    fn wait_terminated(&self) -> BoxFuture<'static, ()> {
+        match self {
+            Self::Thread(_) => Box::pin(async {}),
+            Self::Process(process) => process.wait_terminated(),
+        }
+    }
+}
+
 /// One live worker-engine run.
 pub struct WorkerRun {
     self_weak: Weak<Self>,
     id: WorkflowRunId,
     meta: WorkflowMeta,
-    execution: Arc<WorkflowExecution>,
+    execution: Arc<ExecutionBackend>,
     registry: Arc<ChildRegistry>,
     observer: Arc<RunObserver>,
     state: Arc<Mutex<RunState>>,
@@ -421,7 +470,7 @@ impl WorkerRun {
     ///
     /// Returns execution-context or script construction failures.
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(crate) fn new(
         context: &Context,
         subagents: Arc<SubagentRuntime>,
         id: WorkflowRunId,
@@ -433,6 +482,7 @@ impl WorkerRun {
         provider: String,
         info: WorkflowRunInfo,
         dispose_grace_ms: u64,
+        worker: Option<&WorkerCommand>,
     ) -> anyhow::Result<Arc<Self>> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|error| {
             anyhow::anyhow!("workflow engine requires an async runtime: {error}")
@@ -457,14 +507,29 @@ impl WorkerRun {
             children: Mutex::new(HashMap::new()),
             changed: Notify::new(),
         });
-        let execution = Arc::new(WorkflowExecution::new(
-            &meta,
-            body,
-            args,
-            limits,
-            observer.clone(),
-            Arc::new(HostChildPort(registry.clone())),
-        )?);
+        let init = WorkerInit {
+            meta: meta.clone(),
+            body: body.clone(),
+            args: args.clone(),
+            limits: limits.clone(),
+        };
+        let execution = match worker {
+            Some(worker) => ExecutionBackend::Process(ProcessExecution::new(
+                worker,
+                init,
+                registry.clone(),
+                observer.clone(),
+            )?),
+            None => ExecutionBackend::Thread(Arc::new(WorkflowExecution::new(
+                &meta,
+                body,
+                args,
+                limits,
+                observer.clone(),
+                Arc::new(HostChildPort(registry.clone())),
+            )?)),
+        };
+        let execution = Arc::new(execution);
         let result = ResultState::new();
         Ok(Arc::new_cyclic(|self_weak| Self {
             self_weak: self_weak.clone(),
@@ -500,10 +565,11 @@ impl WorkerRun {
                 }));
             }
         }
+        self.execution.launch();
         let execution = self.execution.clone();
         let weak = self.self_weak.clone();
         tokio::spawn(async move {
-            let outcome = execution.drive().await;
+            let outcome = execution.result().await;
             if let Some(run) = weak.upgrade() {
                 run.observer.end_stranded();
                 run.accept_result(outcome);
@@ -553,6 +619,7 @@ impl WorkerRun {
         };
         self.registry.reap(&reason);
         self.observer.end_stranded();
+        self.execution.terminate();
         self.finish_settle(Self::cancelled_result(
             &reason,
             self.registry.started.load(Ordering::Acquire),
@@ -627,6 +694,10 @@ impl WorkflowRun for WorkerRun {
                     {
                         run.force_cancel();
                     }
+                    run.execution.terminate();
+                    let _ =
+                        tokio::time::timeout(run.dispose_grace, run.execution.wait_terminated())
+                            .await;
                     run.registry.reap("workflow disposed");
                     run.observer.end_stranded();
                 })

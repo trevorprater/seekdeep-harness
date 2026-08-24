@@ -2,7 +2,7 @@
 //! in an escapable context on a fresh worker and bridges `agent()` calls to host
 //! subagents.
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use boa_engine::{Source, context::ContextBuilder, script::Script};
 use seekdeep_cordis::{Context, Plugin};
@@ -15,11 +15,7 @@ use seekdeep_workflow::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{
-    host::WorkerRun,
-    meta::validate_meta,
-    types::{WorkerInit, WorkerLimits},
-};
+use crate::{host::WorkerRun, meta::validate_meta, process::WorkerCommand, types::WorkerLimits};
 
 /// Cordis plugin name.
 pub const NAME: &str = "workflow-worker-thread";
@@ -172,6 +168,7 @@ pub struct WorkerThreadWorkflowEngine {
     context: Context,
     subagents: Arc<SubagentRuntime>,
     config: Config,
+    worker: Option<WorkerCommand>,
 }
 
 impl WorkerThreadWorkflowEngine {
@@ -181,6 +178,40 @@ impl WorkerThreadWorkflowEngine {
     ///
     /// Returns for invalid limits or when the subagents service is not mounted.
     pub fn new(context: &Context, config: Config) -> anyhow::Result<Arc<Self>> {
+        Self::new_with_optional_worker(context, config, discover_worker()?)
+    }
+
+    /// Constructs an engine pinned to one compiled worker executable.
+    ///
+    /// # Errors
+    ///
+    /// Returns for an absent executable, invalid limits, or missing services.
+    pub fn new_with_worker_path(
+        context: &Context,
+        config: Config,
+        worker_path: impl Into<PathBuf>,
+    ) -> anyhow::Result<Arc<Self>> {
+        let worker_path = worker_path.into();
+        anyhow::ensure!(
+            worker_path.is_file(),
+            "workflow worker executable does not exist: {}",
+            worker_path.display()
+        );
+        Self::new_with_optional_worker(
+            context,
+            config,
+            Some(WorkerCommand {
+                path: worker_path,
+                integrated: false,
+            }),
+        )
+    }
+
+    fn new_with_optional_worker(
+        context: &Context,
+        config: Config,
+        worker: Option<WorkerCommand>,
+    ) -> anyhow::Result<Arc<Self>> {
         validate_config(&config)?;
         let subagents = context
             .get(SUBAGENTS)
@@ -189,8 +220,57 @@ impl WorkerThreadWorkflowEngine {
             context: context.clone(),
             subagents,
             config,
+            worker,
         }))
     }
+}
+
+fn worker_executable_name() -> &'static str {
+    if cfg!(windows) {
+        "seekdeep-workflow-worker.exe"
+    } else {
+        "seekdeep-workflow-worker"
+    }
+}
+
+fn discover_worker() -> anyhow::Result<Option<WorkerCommand>> {
+    let current = std::env::current_exe()?;
+    let mut directories = Vec::new();
+    if let Some(directory) = current.parent() {
+        directories.push(directory.to_owned());
+        if directory.file_name().is_some_and(|name| name == "deps")
+            && let Some(profile) = directory.parent()
+        {
+            directories.push(profile.to_owned());
+        }
+    }
+    let found = directories
+        .into_iter()
+        .map(|directory| directory.join(worker_executable_name()))
+        .find(|candidate| candidate.is_file());
+    if let Some(path) = found {
+        return Ok(Some(WorkerCommand {
+            path,
+            integrated: false,
+        }));
+    }
+    if current
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "seekdeep")
+    {
+        return Ok(Some(WorkerCommand {
+            path: current,
+            integrated: true,
+        }));
+    }
+    if !cfg!(debug_assertions) {
+        anyhow::bail!(
+            "workflow worker executable {} is missing beside the harness",
+            worker_executable_name()
+        );
+    }
+    Ok(None)
 }
 
 fn validate_config(config: &Config) -> anyhow::Result<()> {
@@ -236,12 +316,6 @@ impl WorkflowEngine for WorkerThreadWorkflowEngine {
             max_items_per_call: self.config.max_items_per_call,
             sync_timeout_ms: self.config.sync_timeout_ms,
         };
-        let _init = WorkerInit {
-            meta: meta.clone(),
-            body: request.script.clone(),
-            args: request.args.clone(),
-            limits: limits.clone(),
-        };
         let input_signal = request.signal;
         let run = WorkerRun::new(
             &self.context,
@@ -255,6 +329,7 @@ impl WorkflowEngine for WorkerThreadWorkflowEngine {
             provider,
             info.clone(),
             self.config.dispose_grace_ms,
+            self.worker.as_ref(),
         )?;
 
         let _ = emit_workflow_event(

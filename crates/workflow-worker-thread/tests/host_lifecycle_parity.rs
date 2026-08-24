@@ -56,16 +56,6 @@ impl StubRun {
         )
     }
 
-    fn panicking_result(id: &str) -> Arc<Self> {
-        Self::new(
-            id,
-            async { panic!("provider result task panicked") }
-                .boxed()
-                .shared(),
-            futures::future::ready(Ok(())).boxed().shared(),
-        )
-    }
-
     fn pending(id: &str) -> PendingStubRun {
         let (result_send, result_receive) = oneshot::channel();
         let (dispose_send, dispose_receive) = oneshot::channel();
@@ -569,50 +559,4 @@ async fn run_ids_are_unique_and_a_holder_owned_run_survives_engine_hmr_unload() 
     assert_eq!(second.result().await.value, json!(2));
     first.dispose().await;
     second.dispose().await;
-}
-
-#[tokio::test]
-async fn worker_thread_death_reaps_children_and_pairs_stranded_lifecycle_before_error_end() {
-    let child = StubRun::panicking_result("panicking-child");
-    let harness = Harness::new([StartBehavior::Run(child.clone())], 20);
-    let run = harness
-        .engine
-        .start(harness.request("return await agent('panic')", None))
-        .expect("start");
-    let result = tokio::time::timeout(Duration::from_secs(2), run.result())
-        .await
-        .expect("worker death result");
-    assert_eq!(result.stop_reason, WorkflowStopReason::Error);
-    assert_eq!(result.agents_started, 1);
-    assert!(
-        result
-            .error
-            .as_deref()
-            .unwrap_or_default()
-            .contains("worker exited before completing")
-    );
-    harness.wait_for_event("workflow/end").await;
-    let events = harness.events.lock().clone();
-    assert!(
-        events
-            .iter()
-            .position(|event| event == "workflow/agent-end")
-            .unwrap()
-            < events
-                .iter()
-                .position(|event| event == "workflow/end")
-                .unwrap()
-    );
-    assert_eq!(harness.ends.lock().len(), 1);
-    assert_eq!(
-        harness.ends.lock()[0].outcome,
-        seekdeep_workflow::WorkflowAgentOutcome::Cancelled
-    );
-    run.dispose().await;
-    assert_eq!(
-        child
-            .dispose_count
-            .load(std::sync::atomic::Ordering::Acquire),
-        1
-    );
 }

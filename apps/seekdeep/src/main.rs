@@ -24,6 +24,27 @@ use seekdeep_util::abort::AbortSignal;
 const EXIT_CODE_UNSET: i32 = i32::MIN;
 
 fn main() -> ExitCode {
+    if std::env::var_os("SEEKDEEP_INTERNAL_WORKFLOW_WORKER").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                write_stderr(&format!("seekdeep-workflow-worker: {error}\n"));
+                return ExitCode::FAILURE;
+            }
+        };
+        return match runtime.block_on(seekdeep_workflow_worker_thread::worker::run_stdio_worker()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                write_stderr(&format!("seekdeep-workflow-worker: {error:#}\n"));
+                ExitCode::FAILURE
+            }
+        };
+    }
     let argv = std::env::args_os().skip(1).collect::<Vec<_>>();
     ExitCode::from(normalize_exit_code(dispatch(&argv)))
 }

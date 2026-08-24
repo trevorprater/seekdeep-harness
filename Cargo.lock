@@ -4273,6 +4273,8 @@ dependencies = [
  "seekdeep-tool-todo",
  "seekdeep-tools",
  "seekdeep-util",
+ "seekdeep-workflow",
+ "seekdeep-workflow-worker-thread",
  "serde_json",
  "tempfile",
  "terminal_size",

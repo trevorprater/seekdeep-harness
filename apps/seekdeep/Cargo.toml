@@ -32,12 +32,14 @@ seekdeep-system-prompt = { path = "../../crates/system-prompt" }
 seekdeep-tool-todo = { path = "../../crates/tool-todo" }
 seekdeep-tools = { path = "../../crates/tools" }
 seekdeep-util = { path = "../../crates/util" }
+seekdeep-workflow-worker-thread = { path = "../../crates/workflow-worker-thread" }
 terminal_size.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
 parking_lot.workspace = true
 portable-pty.workspace = true
+seekdeep-workflow = { path = "../../crates/workflow" }
 serde_json.workspace = true
 tempfile.workspace = true
 
