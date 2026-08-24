@@ -1,13 +1,17 @@
 //! Cordis-free local filesystem mechanics.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
 
+use futures::stream::BoxStream;
 use seekdeep_fs::types::{FsError, FsErrorCode, FsKind, FsTargetKey, FsVersion};
 use seekdeep_llm::AbortSignal;
-use tokio::io::AsyncWriteExt;
-use uuid::Uuid;
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 const BINARY_SAMPLE_BYTES: usize = 8192;
+static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 /// A resolved local path: the absolute path shown to callers and its realpath identity.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -149,6 +153,12 @@ fn resolve_path(cwd: &str, path: &str) -> String {
         .collect::<PathBuf>()
         .to_string_lossy()
         .into_owned()
+}
+
+/// Resolves an absolute display path without following the final component.
+#[must_use]
+pub fn resolve_display_path(cwd: &str, path: &str) -> String {
+    resolve_path(cwd, path)
 }
 
 /// Resolves a path to its absolute display path and realpath identity.
@@ -403,6 +413,85 @@ pub async fn read_whole_text(
     String::from_utf8(raw).map_err(|_| not_text_error("read", &target.display_path))
 }
 
+/// Streams a regular UTF-8 text file without retaining the whole file.
+///
+/// # Errors
+///
+/// Stream items report not-found, non-regular-file, binary, invalid-UTF-8,
+/// cancellation, or I/O failures.
+pub fn stream_whole_text(
+    target: LocalTarget,
+    signal: Option<AbortSignal>,
+) -> BoxStream<'static, Result<String, FsError>> {
+    Box::pin(async_stream::try_stream! {
+        stat_regular_file(&target, "read", signal.as_ref()).await?;
+        let mut file = tokio::fs::File::open(target.target_key.as_str())
+            .await
+            .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        let mut buffer = vec![0_u8; 16 * 1024];
+        let mut pending = Vec::new();
+        let mut sampled = 0_usize;
+        loop {
+            let read = if let Some(signal) = signal.as_ref() {
+                tokio::select! {
+                    read = file.read(&mut buffer) => read,
+                    () = signal.cancelled() => {
+                        Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "read aborted"))
+                    }
+                }
+            } else {
+                file.read(&mut buffer).await
+            }
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::Interrupted {
+                    FsError::new("read aborted", FsErrorCode::FsAborted)
+                } else {
+                    FsError::new(error.to_string(), FsErrorCode::FsIoError)
+                }
+            })?;
+            if read == 0 {
+                break;
+            }
+            if sampled < BINARY_SAMPLE_BYTES {
+                let sample_len = read.min(BINARY_SAMPLE_BYTES - sampled);
+                if buffer[..sample_len].contains(&0) {
+                    Err(FsError::new(
+                        format!("cannot read \"{}\": binary file", target.display_path),
+                        FsErrorCode::FsNotText,
+                    ))?;
+                }
+                sampled += sample_len;
+            }
+            pending.extend_from_slice(&buffer[..read]);
+            match std::str::from_utf8(&pending) {
+                Ok(text) => {
+                    if text.is_empty() {
+                        pending.clear();
+                    } else {
+                        let text = text.to_owned();
+                        pending.clear();
+                        yield text;
+                    }
+                }
+                Err(error) if error.error_len().is_none() => {
+                    let valid = error.valid_up_to();
+                    if valid > 0 {
+                        let text = String::from_utf8(pending[..valid].to_vec())
+                            .map_err(|_| not_text_error("read", &target.display_path))?;
+                        pending.drain(..valid);
+                        yield text;
+                    }
+                }
+                Err(_) => Err(not_text_error("read", &target.display_path))?,
+            }
+        }
+        if !pending.is_empty() {
+            Err(not_text_error("read", &target.display_path))?;
+        }
+        yield String::new();
+    })
+}
+
 /// Reads a whole regular file as raw bytes bounded by `max_bytes`.
 ///
 /// # Errors
@@ -424,9 +513,30 @@ pub async fn read_whole_bytes(
             FsErrorCode::FsTooLarge,
         ));
     }
-    let raw = tokio::fs::read(target.target_key.as_str())
+    let file = tokio::fs::File::open(target.target_key.as_str())
         .await
         .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+    let read_limit = max_bytes.checked_add(1).unwrap_or(max_bytes);
+    let mut reader = file.take(u64::try_from(read_limit).unwrap_or(u64::MAX));
+    let mut raw = Vec::with_capacity(max_bytes.min(64 * 1024));
+    let mut buffer = vec![0_u8; 16 * 1024];
+    loop {
+        let read = if let Some(signal) = signal {
+            tokio::select! {
+                read = reader.read(&mut buffer) => read,
+                () = signal.cancelled() => {
+                    return Err(FsError::new("read aborted", FsErrorCode::FsAborted));
+                }
+            }
+        } else {
+            reader.read(&mut buffer).await
+        }
+        .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        if read == 0 {
+            break;
+        }
+        raw.extend_from_slice(&buffer[..read]);
+    }
     ensure_not_aborted(signal, "read")?;
     if raw.len() > max_bytes {
         return Err(FsError::new(
@@ -438,6 +548,64 @@ pub async fn read_whole_bytes(
         ));
     }
     Ok(raw)
+}
+
+/// Reads an optional bounded, LF-normalized overwrite diff basis.
+///
+/// Ordinary descriptor, binary, decoding, size-limit, and concurrent-size
+/// failures return `None` so an already-authorized overwrite can proceed.
+/// Cancellation remains an error.
+///
+/// # Errors
+///
+/// Returns only cancellation or unexpected non-I/O runtime failures.
+pub async fn read_diff_basis(
+    absolute_path: &str,
+    signal: Option<&AbortSignal>,
+    max_bytes: u64,
+) -> Result<Option<String>, FsError> {
+    ensure_not_aborted(signal, "write")?;
+    let Ok(mut file) = tokio::fs::File::open(absolute_path).await else {
+        return Ok(None);
+    };
+    let metadata = match file.metadata().await {
+        Ok(metadata) if metadata.is_file() && metadata.len() < max_bytes => metadata,
+        Ok(_) | Err(_) => return Ok(None),
+    };
+    let limit = usize::try_from(max_bytes).unwrap_or(usize::MAX);
+    let mut raw = Vec::with_capacity(limit.min(64 * 1024));
+    let mut buffer = vec![0_u8; 16 * 1024];
+    loop {
+        let remaining = limit.saturating_sub(raw.len());
+        if remaining == 0 {
+            return Ok(None);
+        }
+        let take = remaining.min(buffer.len());
+        let read = if let Some(signal) = signal {
+            tokio::select! {
+                read = file.read(&mut buffer[..take]) => read,
+                () = signal.cancelled() => {
+                    return Err(FsError::new("write aborted", FsErrorCode::FsAborted));
+                }
+            }
+        } else {
+            file.read(&mut buffer[..take]).await
+        };
+        let Ok(read) = read else {
+            return Ok(None);
+        };
+        if read == 0 {
+            break;
+        }
+        raw.extend_from_slice(&buffer[..read]);
+    }
+    if raw.len() as u64 != metadata.len() || raw.contains(&0) {
+        return Ok(None);
+    }
+    let Ok(text) = String::from_utf8(raw) else {
+        return Ok(None);
+    };
+    Ok(Some(normalize_line_endings(&text)))
 }
 
 /// Collapses CRLF to LF, the canonical in-memory edit/diff form.
@@ -539,34 +707,59 @@ pub async fn read_for_edit(
 /// # Errors
 ///
 /// Returns structured I/O, permission, or abort failures.
+#[allow(clippy::too_many_lines)]
 pub async fn write_file_atomic(
     absolute_path: &str,
     content: &str,
     mode: Option<u32>,
     signal: Option<&AbortSignal>,
+    create_if_absent_display: Option<&str>,
 ) -> Result<(), FsError> {
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt as _;
+
     ensure_not_aborted(signal, "write")?;
     let directory = dirname(absolute_path);
     tokio::fs::create_dir_all(&directory)
         .await
         .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
     ensure_not_aborted(signal, "write")?;
-    let staging_dir_name = format!(
-        ".{}.{}.{}.tmpdir",
-        basename(absolute_path),
-        std::process::id(),
-        Uuid::new_v4()
-    );
-    let staging_dir = Path::new(&directory).join(&staging_dir_name);
+    let staging_dir = loop {
+        let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let candidate = Path::new(&directory).join(format!(
+            ".{}.{}.{sequence}.tmpdir",
+            basename(absolute_path),
+            std::process::id()
+        ));
+        #[allow(unused_mut)]
+        let mut builder = tokio::fs::DirBuilder::new();
+        #[cfg(unix)]
+        builder.mode(0o700);
+        match builder.create(&candidate).await {
+            Ok(()) => break candidate,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(FsError::new(error.to_string(), FsErrorCode::FsIoError));
+            }
+        }
+    };
     let temp_path = staging_dir.join(format!("{}.tmp", basename(absolute_path)));
-    tokio::fs::create_dir(&staging_dir)
-        .await
-        .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
     let result = async {
-        let mut handle = tokio::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
+        #[cfg(unix)]
+        tokio::fs::set_permissions(&staging_dir, std::fs::Permissions::from_mode(0o700))
+            .await
+            .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        let mut options = tokio::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut handle = options
             .open(&temp_path)
+            .await
+            .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
+        #[cfg(unix)]
+        handle
+            .set_permissions(std::fs::Permissions::from_mode(0o600))
             .await
             .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
         if cfg!(windows) && mode.is_some() {
@@ -583,7 +776,6 @@ pub async fn write_file_atomic(
             .map_err(|error| FsError::new(error.to_string(), FsErrorCode::FsIoError))?;
         #[cfg(unix)]
         if let Some(mode) = mode {
-            use std::os::unix::fs::PermissionsExt;
             handle
                 .set_permissions(std::fs::Permissions::from_mode(mode))
                 .await
@@ -591,7 +783,45 @@ pub async fn write_file_atomic(
         }
         drop(handle);
         ensure_not_aborted(signal, "write")?;
-        if cfg!(windows) && mode.is_some() {
+        if let Some(display_path) = create_if_absent_display {
+            match tokio::fs::hard_link(&temp_path, absolute_path).await {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let competitor = tokio::fs::symlink_metadata(absolute_path).await;
+                    let (message, code) = match competitor {
+                        Ok(metadata) if metadata.is_dir() => (
+                            format!("cannot write \"{display_path}\": not a regular file"),
+                            FsErrorCode::FsNotRegularFile,
+                        ),
+                        Ok(_) => (
+                            format!(
+                                "cannot overwrite existing \"{display_path}\" without reading it first"
+                            ),
+                            FsErrorCode::FsNotObserved,
+                        ),
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (
+                            format!(
+                                "cannot overwrite existing \"{display_path}\" without reading it first"
+                            ),
+                            FsErrorCode::FsNotObserved,
+                        ),
+                        Err(error) => {
+                            return Err(FsError::new(
+                                error.to_string(),
+                                FsErrorCode::FsIoError,
+                            ));
+                        }
+                    };
+                    return Err(FsError::new(message, code));
+                }
+                Err(error) => {
+                    return Err(FsError::new(
+                        error.to_string(),
+                        FsErrorCode::FsIoError,
+                    ));
+                }
+            }
+        } else if cfg!(windows) && mode.is_some() {
             match crate::win32::replace_file_win32(Path::new(absolute_path), &temp_path) {
                 Ok(()) => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {

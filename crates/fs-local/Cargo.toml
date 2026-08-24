@@ -9,6 +9,7 @@ description = "Local filesystem backend for the seekdeep-fs seam"
 
 [dependencies]
 anyhow.workspace = true
+async-stream.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 seekdeep-cordis = { path = "../cordis" }
@@ -22,7 +23,9 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 url.workspace = true
-uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

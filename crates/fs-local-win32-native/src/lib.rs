@@ -11,25 +11,204 @@
 
 use std::{io, path::Path};
 
+const DACL_SECURITY_INFORMATION: u32 = 0x0000_0004;
+const PROTECTED_DACL_SECURITY_INFORMATION: u32 = 0x8000_0000;
+
+/// Safe host boundary used by the checked Win32 call orchestration.
+pub trait Win32FileApi {
+    /// Probes or fills one self-relative security descriptor.
+    fn get_file_security(
+        &self,
+        path: &str,
+        requested: u32,
+        descriptor: Option<&mut [u8]>,
+        needed: &mut u32,
+    ) -> bool;
+
+    /// Applies one self-relative security descriptor.
+    fn set_file_security(&self, path: &str, information: u32, descriptor: &[u8]) -> bool;
+
+    /// Replaces one file with another on the same volume.
+    fn replace_file(&self, replaced: &str, replacement: &str) -> bool;
+
+    /// Returns the thread-local error from the immediately preceding call.
+    fn last_error(&self) -> u32;
+}
+
+/// Converts a Windows path to the extended-length spelling passed to Win32.
+#[must_use]
+pub fn namespaced_path(path: &Path) -> String {
+    let rendered = path.as_os_str().to_string_lossy();
+    if rendered.starts_with(r"\\?\") {
+        return rendered.into_owned();
+    }
+    if let Some(unc) = rendered.strip_prefix(r"\\") {
+        return format!(r"\\?\UNC\{unc}");
+    }
+    format!(r"\\?\{rendered}")
+}
+
+fn last_error(api: &dyn Win32FileApi) -> io::Error {
+    io::Error::from_raw_os_error(api.last_error().cast_signed())
+}
+
+/// Reads a DACL through an injected Win32 host boundary.
+///
+/// # Errors
+///
+/// Returns the boundary's exact last-error code.
+pub fn read_file_dacl_with(api: &dyn Win32FileApi, path: &Path) -> io::Result<Vec<u8>> {
+    let path = namespaced_path(path);
+    let mut needed = 0_u32;
+    let _ = api.get_file_security(&path, DACL_SECURITY_INFORMATION, None, &mut needed);
+    if needed == 0 {
+        return Err(last_error(api));
+    }
+    let capacity = usize::try_from(needed).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Win32 security descriptor length exceeded usize",
+        )
+    })?;
+    let mut descriptor = vec![0_u8; capacity];
+    if !api.get_file_security(
+        &path,
+        DACL_SECURITY_INFORMATION,
+        Some(&mut descriptor),
+        &mut needed,
+    ) {
+        return Err(last_error(api));
+    }
+    let length = usize::try_from(needed).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Win32 security descriptor length exceeded usize",
+        )
+    })?;
+    if length > descriptor.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Win32 security descriptor grew beyond the probed length",
+        ));
+    }
+    descriptor.truncate(length);
+    Ok(descriptor)
+}
+
+/// Copies and protects a DACL through an injected Win32 host boundary.
+///
+/// # Errors
+///
+/// Returns descriptor-read or installation failures.
+pub fn copy_file_dacl_with(
+    api: &dyn Win32FileApi,
+    source: &Path,
+    destination: &Path,
+) -> io::Result<()> {
+    let descriptor = read_file_dacl_with(api, source)?;
+    if api.set_file_security(
+        &namespaced_path(destination),
+        DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+        &descriptor,
+    ) {
+        Ok(())
+    } else {
+        Err(last_error(api))
+    }
+}
+
+/// Replaces a file through an injected Win32 host boundary.
+///
+/// # Errors
+///
+/// Returns the boundary's exact last-error code.
+pub fn replace_file_with(
+    api: &dyn Win32FileApi,
+    replaced: &Path,
+    replacement: &Path,
+) -> io::Result<()> {
+    if api.replace_file(&namespaced_path(replaced), &namespaced_path(replacement)) {
+        Ok(())
+    } else {
+        Err(last_error(api))
+    }
+}
+
 #[cfg(windows)]
-fn wide(path: &Path) -> Vec<u16> {
+#[derive(Debug)]
+struct SystemApi;
+
+#[cfg(windows)]
+fn wide(path: &str) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt as _;
-    namespaced(path)
+    std::ffi::OsStr::new(path)
         .encode_wide()
         .chain(std::iter::once(0))
         .collect()
 }
 
 #[cfg(windows)]
-fn namespaced(path: &Path) -> std::ffi::OsString {
-    let rendered = path.as_os_str().to_string_lossy();
-    if rendered.starts_with(r"\\?\") {
-        return path.as_os_str().to_owned();
+impl Win32FileApi for SystemApi {
+    fn get_file_security(
+        &self,
+        path: &str,
+        requested: u32,
+        descriptor: Option<&mut [u8]>,
+        needed: &mut u32,
+    ) -> bool {
+        use windows_sys::Win32::Security::GetFileSecurityW;
+
+        let path = wide(path);
+        let (descriptor, length) = descriptor.map_or((std::ptr::null_mut(), 0), |descriptor| {
+            let length = u32::try_from(descriptor.len()).unwrap_or(u32::MAX);
+            (descriptor.as_mut_ptr().cast(), length)
+        });
+        // SAFETY: path is NUL-terminated and live; descriptor is either null
+        // for the size probe or points to a live writable slice of length.
+        unsafe { GetFileSecurityW(path.as_ptr(), requested, descriptor, length, needed) != 0 }
     }
-    if let Some(unc) = rendered.strip_prefix(r"\\") {
-        return std::ffi::OsString::from(format!(r"\\?\UNC\{unc}"));
+
+    fn set_file_security(&self, path: &str, information: u32, descriptor: &[u8]) -> bool {
+        use windows_sys::Win32::Security::SetFileSecurityW;
+
+        let path = wide(path);
+        // SAFETY: path is NUL-terminated and live, and descriptor remains live
+        // for the complete call after being returned by GetFileSecurityW.
+        unsafe {
+            SetFileSecurityW(
+                path.as_ptr(),
+                information,
+                descriptor.as_ptr().cast_mut().cast(),
+            ) != 0
+        }
     }
-    std::ffi::OsString::from(format!(r"\\?\{rendered}"))
+
+    fn replace_file(&self, replaced: &str, replacement: &str) -> bool {
+        use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
+
+        let replaced = wide(replaced);
+        let replacement = wide(replacement);
+        // SAFETY: both buffers are NUL-terminated and live; all optional
+        // pointers are null and flags are zero.
+        unsafe {
+            ReplaceFileW(
+                replaced.as_ptr(),
+                replacement.as_ptr(),
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                std::ptr::null(),
+            ) != 0
+        }
+    }
+
+    fn last_error(&self) -> u32 {
+        use windows_sys::Win32::Foundation::GetLastError;
+
+        // SAFETY: GetLastError has no preconditions; callers invoke this
+        // immediately after the failing thread-local Win32 call.
+        unsafe { GetLastError() }
+    }
 }
 
 /// Reads an existing file's self-relative DACL security descriptor.
@@ -39,55 +218,7 @@ fn namespaced(path: &Path) -> std::ffi::OsString {
 /// Returns the exact Win32 last-error code through [`io::Error`].
 #[cfg(windows)]
 pub fn read_file_dacl(path: &Path) -> io::Result<Vec<u8>> {
-    use windows_sys::Win32::{
-        Foundation::GetLastError,
-        Security::{DACL_SECURITY_INFORMATION, GetFileSecurityW},
-    };
-
-    let path = wide(path);
-    let mut needed = 0_u32;
-    // SAFETY: path is a live NUL-terminated UTF-16 buffer; the null descriptor
-    // and zero length are the documented size probe, and needed is writable.
-    let _ = unsafe {
-        GetFileSecurityW(
-            path.as_ptr(),
-            DACL_SECURITY_INFORMATION,
-            std::ptr::null_mut(),
-            0,
-            &raw mut needed,
-        )
-    };
-    if needed == 0 {
-        // SAFETY: GetLastError has no preconditions and is read immediately
-        // after the failing thread-local API call.
-        let code = unsafe { GetLastError() };
-        return Err(io::Error::from_raw_os_error(code.cast_signed()));
-    }
-    let mut descriptor = vec![0_u8; needed as usize];
-    let descriptor_len = u32::try_from(descriptor.len()).map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Win32 security descriptor length exceeded u32",
-        )
-    })?;
-    // SAFETY: descriptor owns at least needed writable bytes, path remains
-    // live and terminated, and needed remains a valid output pointer.
-    let read = unsafe {
-        GetFileSecurityW(
-            path.as_ptr(),
-            DACL_SECURITY_INFORMATION,
-            descriptor.as_mut_ptr().cast(),
-            descriptor_len,
-            &raw mut needed,
-        )
-    };
-    if read == 0 {
-        // SAFETY: read immediately after the failing call above.
-        let code = unsafe { GetLastError() };
-        return Err(io::Error::from_raw_os_error(code.cast_signed()));
-    }
-    descriptor.truncate(needed as usize);
-    Ok(descriptor)
+    read_file_dacl_with(&SystemApi, path)
 }
 
 /// Copies and protects an existing file's DACL onto an empty staging file.
@@ -97,30 +228,7 @@ pub fn read_file_dacl(path: &Path) -> io::Result<Vec<u8>> {
 /// Returns descriptor-read or Win32 installation failures.
 #[cfg(windows)]
 pub fn copy_file_dacl(source: &Path, destination: &Path) -> io::Result<()> {
-    use windows_sys::Win32::{
-        Foundation::GetLastError,
-        Security::{
-            DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SetFileSecurityW,
-        },
-    };
-
-    let descriptor = read_file_dacl(source)?;
-    let destination = wide(destination);
-    // SAFETY: destination is live and NUL-terminated; descriptor is a live
-    // self-relative security descriptor returned by GetFileSecurityW.
-    let installed = unsafe {
-        SetFileSecurityW(
-            destination.as_ptr(),
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-            descriptor.as_ptr().cast_mut().cast(),
-        )
-    };
-    if installed != 0 {
-        return Ok(());
-    }
-    // SAFETY: read immediately after the failing call above.
-    let code = unsafe { GetLastError() };
-    Err(io::Error::from_raw_os_error(code.cast_signed()))
+    copy_file_dacl_with(&SystemApi, source, destination)
 }
 
 /// Replaces an existing file while preserving its security and replace metadata.
@@ -130,29 +238,7 @@ pub fn copy_file_dacl(source: &Path, destination: &Path) -> io::Result<()> {
 /// Returns the exact Win32 last-error code through [`io::Error`].
 #[cfg(windows)]
 pub fn replace_file(replaced: &Path, replacement: &Path) -> io::Result<()> {
-    use windows_sys::Win32::{Foundation::GetLastError, Storage::FileSystem::ReplaceFileW};
-
-    let replaced = wide(replaced);
-    let replacement = wide(replacement);
-    // SAFETY: both paths are live NUL-terminated buffers. Optional pointers
-    // are null and flags are zero, matching the documented metadata-preserving
-    // replacement call.
-    let replaced = unsafe {
-        ReplaceFileW(
-            replaced.as_ptr(),
-            replacement.as_ptr(),
-            std::ptr::null(),
-            0,
-            std::ptr::null(),
-            std::ptr::null(),
-        )
-    };
-    if replaced != 0 {
-        return Ok(());
-    }
-    // SAFETY: read immediately after the failing call above.
-    let code = unsafe { GetLastError() };
-    Err(io::Error::from_raw_os_error(code.cast_signed()))
+    replace_file_with(&SystemApi, replaced, replacement)
 }
 
 /// Non-Windows builds cannot read Win32 DACLs.

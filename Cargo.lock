@@ -5169,6 +5169,7 @@ name = "seekdeep-fs-local"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "futures",
  "seekdeep-cordis",
@@ -5180,9 +5181,9 @@ dependencies = [
  "seekdeep-schemastery",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "url",
- "uuid",
 ]
 
 [[package]]

@@ -1,10 +1,13 @@
 //! Host-filesystem implementation of ctx.fs.
 
-use std::path::Path;
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    path::Path,
+    sync::{Arc, Weak},
+};
 
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use seekdeep_cordis::{Context, Plugin};
 use seekdeep_fs::{
     FileSystem, FileSystemService,
@@ -19,8 +22,9 @@ use seekdeep_schemastery::Schema;
 use serde::{Deserialize, Serialize};
 
 use crate::fsio::{
-    LocalDirEntry, apply_literal_edit, list_directory, probe, read_for_edit, read_whole_bytes,
-    read_whole_text, resolve_local_target, restore_line_endings, write_file_atomic,
+    LocalDirEntry, apply_literal_edit, list_directory, probe, read_diff_basis, read_for_edit,
+    read_whole_bytes, read_whole_text, resolve_display_path, resolve_local_target,
+    restore_line_endings, stream_whole_text, write_file_atomic,
 };
 
 /// Cordis plugin name.
@@ -80,7 +84,7 @@ fn ensure_not_aborted(signal: Option<&AbortSignal>, verb: &str) -> anyhow::Resul
 /// The host-filesystem backend.
 pub struct LocalFileSystem {
     config: ResolvedConfig,
-    write_lock: tokio::sync::Mutex<()>,
+    mutation_locks: tokio::sync::Mutex<HashMap<String, Weak<tokio::sync::Mutex<()>>>>,
 }
 
 impl LocalFileSystem {
@@ -108,7 +112,7 @@ impl LocalFileSystem {
                 cwd,
                 diff_basis_max_bytes,
             },
-            write_lock: tokio::sync::Mutex::new(()),
+            mutation_locks: tokio::sync::Mutex::new(HashMap::new()),
         }))
     }
 
@@ -128,6 +132,20 @@ impl LocalFileSystem {
             || FsVersion::new(format!("missing:{}", target.target_key.as_str())),
             |info| info.version.clone(),
         )
+    }
+
+    async fn mutation_lock(&self, target: &FsTarget) -> Arc<tokio::sync::Mutex<()>> {
+        let mut locks = self.mutation_locks.lock().await;
+        locks.retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = locks
+            .get(target.target_key.as_str())
+            .and_then(Weak::upgrade)
+        {
+            return lock;
+        }
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        locks.insert(target.target_key.as_str().to_owned(), Arc::downgrade(&lock));
+        lock
     }
 }
 
@@ -191,10 +209,8 @@ impl FileSystem for LocalFileSystem {
                 FsErrorCode::FsNotFound
             ));
         }
-        let absolute = crate::fsio::resolve_local_target(cwd.unwrap_or(&self.config.cwd), path)
-            .await?
-            .target_key;
-        let meta = tokio::fs::symlink_metadata(absolute.as_str()).await;
+        let absolute = resolve_display_path(cwd.unwrap_or(&self.config.cwd), path);
+        let meta = tokio::fs::symlink_metadata(&absolute).await;
         ensure_not_aborted(signal, "lstat")?;
         let info = match meta {
             Ok(meta) => {
@@ -238,15 +254,15 @@ impl FileSystem for LocalFileSystem {
         target: &FsTarget,
         signal: Option<&AbortSignal>,
     ) -> anyhow::Result<futures::stream::BoxStream<'static, anyhow::Result<String>>> {
-        let text = read_whole_text(
-            &crate::fsio::LocalTarget {
+        Ok(stream_whole_text(
+            crate::fsio::LocalTarget {
                 display_path: target.display_path.clone(),
                 target_key: target.target_key.clone(),
             },
-            signal,
+            signal.cloned(),
         )
-        .await?;
-        Ok(futures::stream::once(async move { Ok(text) }).boxed())
+        .map_err(anyhow::Error::new)
+        .boxed())
     }
 
     async fn read_bytes(
@@ -302,7 +318,8 @@ impl FileSystem for LocalFileSystem {
         signal: Option<&AbortSignal>,
         _sandbox_policy: Option<&SandboxExecutionPolicy>,
     ) -> anyhow::Result<FsWriteOutcome> {
-        let _guard = self.write_lock.lock().await;
+        let lock = self.mutation_lock(target).await;
+        let _guard = lock.lock().await;
         let existing = probe(target.target_key.as_str()).await?;
         if existing
             .as_ref()
@@ -352,16 +369,12 @@ impl FileSystem for LocalFileSystem {
         }
         let before =
             if existing.is_some() && (content.len() as u64) < self.config.diff_basis_max_bytes {
-                Some(
-                    read_whole_text(
-                        &crate::fsio::LocalTarget {
-                            display_path: target.display_path.clone(),
-                            target_key: target.target_key.clone(),
-                        },
-                        signal,
-                    )
-                    .await?,
+                read_diff_basis(
+                    target.target_key.as_str(),
+                    signal,
+                    self.config.diff_basis_max_bytes,
                 )
+                .await?
             } else {
                 None
             };
@@ -370,6 +383,8 @@ impl FileSystem for LocalFileSystem {
             content,
             existing.as_ref().map(|info| info.mode),
             signal,
+            matches!(expected, Some(FsWriteIntent::CreateIfAbsent))
+                .then_some(target.display_path.as_str()),
         )
         .await?;
         let after = probe(target.target_key.as_str()).await?;
@@ -393,7 +408,8 @@ impl FileSystem for LocalFileSystem {
         signal: Option<&AbortSignal>,
         _sandbox_policy: Option<&SandboxExecutionPolicy>,
     ) -> anyhow::Result<FsEditOutcome> {
-        let _guard = self.write_lock.lock().await;
+        let lock = self.mutation_lock(target).await;
+        let _guard = lock.lock().await;
         let existing = probe(target.target_key.as_str()).await?;
         let Some(existing) = existing else {
             anyhow::bail!(FsError::new(
@@ -443,6 +459,7 @@ impl FileSystem for LocalFileSystem {
             &content,
             Some(existing.mode),
             signal,
+            None,
         )
         .await?;
         let after = probe(target.target_key.as_str()).await?;

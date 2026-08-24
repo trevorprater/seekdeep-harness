@@ -52994,17 +52994,45 @@
     {
       "source": "packages/fs/fs-local/tests/filesystem.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-local/tests/filesystem_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: fs-local 143 passed, 1 native-Windows case skipped",
+        "Rust real-filesystem tests pin config, resolution, metadata, lstat, text/stream/bytes/listing, guarded and unconditional writes, diff bases, per-target concurrency, literal edits, symlink aliases, cancellation, and reversible registration",
+        "cargo test -p seekdeep-fs-local --all-features: 13 passed",
+        "cargo clippy -p seekdeep-fs-local --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/fs-local/tests/fsio.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-local/tests/fsio_parity.rs",
+        "crates/fs-local/tests/filesystem_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin deepest-ancestor identities, stable listing, bounded descriptor reads, streaming UTF-8 boundaries, optional diff bases, private staging, deterministic exclusive names, hard-link guarded publication, mode preservation, cleanup, aborts, and edit helpers",
+        "cargo test -p seekdeep-fs-local --all-features: 13 passed",
+        "cargo clippy --target x86_64-pc-windows-msvc -p seekdeep-fs-local --lib -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/fs-local/tests/win32.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/fs-local-win32-native/tests/win32_parity.rs",
+        "crates/fs-local-win32-native/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: fs-local Win32 bindings 4 passed",
+        "Rust injected-boundary tests pin namespaced paths, DACL probe/read/install order, protected information bits, replacement arguments, descriptor bytes, and exact raw Win32 errors",
+        "cargo test -p seekdeep-fs-local-win32-native --all-features: 3 passed",
+        "cargo clippy --target x86_64-pc-windows-msvc -p seekdeep-fs-local-win32-native --lib -- -D warnings"
+      ]
     },
     {
       "source": "packages/fs/fs-local/tsconfig.json",

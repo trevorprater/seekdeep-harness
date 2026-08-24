@@ -49,7 +49,7 @@ Consumer 包仅依赖 Service Definition 包，从不依赖 `seekdeep-fs-local`�
 
 `@seekdeep-ai/seekdeep-fs` 仅依赖 `cordis` 加上来自 `@seekdeep-ai/seekdeep-llm` 的仓库级 `HarnessError` 基类。它声明 `ctx.fs` 键、抽象 `FileSystem` 服务、后端和消费方共享的词汇类型、文件系统错误词汇，以及 `fs/*` 策略事件词汇。它不持有观测状态存储，也不持有 owner 推导形态；事件传递一个不透明的 `object` actor，提供方从不读取它，`seekdeep-fs-observation-policy` 插件在这些事件之上拥有 owner 推导形态和观测状态存储。
 
-`@seekdeep-ai/seekdeep-fs-local` 依赖 `@seekdeep-ai/seekdeep-fs` 和 `cordis`。它继承 `FileSystem`，将自身注册为 `ctx.fs`，拥有本地后端配置（如基目录），并包含所有直接的 `node:fs` / `node:path` 访问。它不持有观测状态存储——新鲜度是后端铸造、策略插件记录的版本令牌。
+`@seekdeep-ai/seekdeep-fs-local` 依赖 `@seekdeep-ai/seekdeep-fs` 和 `cordis`。生产代码位于 [`crates/fs-local`](../../../../crates/fs-local/src/index.rs)：它实现 `FileSystem`，将自身注册为 `ctx.fs`，拥有本地后端配置（如基目录），并包含安全的宿主文件系统访问；不可避免的 Win32 发布 FFI 被隔离在 [`crates/fs-local-win32-native`](../../../../crates/fs-local-win32-native/src/lib.rs)。按目标的弱引用锁会序列化共享同一规范身份的变更，受保护创建通过不替换的硬链接发布，确定性的独占暂存目录在不使用环境随机性的情况下保护原子写入。它不持有观测状态存储——新鲜度是后端铸造、策略插件记录的版本令牌。
 
 `@seekdeep-ai/seekdeep-tool-fs` 依赖 `@seekdeep-ai/seekdeep-fs`、`@seekdeep-ai/seekdeep-tools`、`@seekdeep-ai/seekdeep-system-prompt` 和 `cordis`。它注册面向模型的工具和提示词段落。它禁止导入 `node:fs`、`node:path` 或 `@seekdeep-ai/seekdeep-fs-local`；文件系统执行始终通过 `ctx.fs`。如果实现需要具体的 agent（智能体）或会话辅助类型，这些依赖属于 `tool-fs`；它们禁止回漏到 `seekdeep-fs` 中。
 
