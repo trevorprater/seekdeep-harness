@@ -497,7 +497,7 @@ Each ported mechanism runs its source tests where possible and adds differential
 This ADR remains proposed until these decisions are resolved:
 
 1. Confirm the single-owner, non-Send portable Cordis core or choose an alternative executor-generic design. Whatever design is chosen, its task and event scheduling must be injectable so a seeded deterministic scheduler can drive the core in tests and simulation while production uses the normal executor.
-2. Select the Rust-owned source-compatible JavaScript execution or translation strategy. Rationale to weigh, recorded here without pre-deciding: `boa_engine` is already in-tree and its JITless execution is trivially deterministic (no GC/JIT timing leakage), which serves record/replay goals; a translation-to-WASM path is also deterministic and may win on latency. The chosen evaluator must support a deterministic mode (seeded, no wall-clock leakage into guest-visible behavior). The decision itself belongs to the planned evaluator bake-off against the source dynamic-Cordis corpus, not to this note.
+2. Confirm whether the implemented Rust-owned `boa_engine` Host evaluator remains the long-term compatibility strategy or is replaced by translation to WebAssembly, and select the Client evaluator strategy. The Host parity path already depends on accepting the source JavaScript surface and cannot remove it during a strategy change. Any chosen evaluator must support deterministic execution with seeded scheduling and no guest-visible ambient clock leakage. The final choice belongs to an evaluator bake-off against the source dynamic-Cordis corpus.
 3. Define the native WebAssembly interface world and proxy-generation system.
 4. Define the browser UI and callback ABI. The typed gateway between host and browser contexts must not assume a network transport: a deployment may place both sides in one process or one browser tab, so the ABI's reentrancy, backpressure, and failure-atomicity semantics must hold across an in-memory seam as well.
 5. Choose the graph transaction and generation-lease implementation. Every cross-generation completion and cutover step must be observable as ordered data (an internal event sequence), not only as logger output, so transactions can be audited and replayed.
@@ -512,7 +512,7 @@ This ADR remains proposed until these decisions are resolved:
 - The semantic conformance suite is incomplete.
 - Cordis is not target-portable yet.
 - Browser Cordis/WASM execution is not implemented.
-- Source-compatible dynamic Host and Client execution is not implemented.
+- Source-compatible dynamic Host execution runs in a Rust-owned interpreter worker. The guarded Host path covers lifecycle commands, Services, Tools, Events, callback and Promise timers, async-iterator intervals, throttle/debounce wrappers, exact-generation effect removal, cooperative callback pumping, and stack-safe lossless JSON cloning; the Client compatibility evaluator remains incomplete.
 - Native and browser WebAssembly plugin hosts are not implemented.
 - Shadow registries, graph transactions, generation leases, and general state migration are not implemented.
 - Native integration process replacement exists only in package-specific pieces.

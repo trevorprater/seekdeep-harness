@@ -51805,21 +51805,23 @@
     {
       "source": "packages/extensions/cordis-host-runner/src/guard.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/loader/src/javascript_plugin.rs",
         "crates/loader/src/sandbox_service.rs",
+        "crates/cordis-host-runner/tests/invoke_runtime_parity.rs",
         "crates/cordis-host-runner/tests/sandbox_runtime_parity.rs",
         "crates/cordis-host-runner/tests/native_service_runtime_parity.rs",
+        "crates/cordis-host-runner/tests/timer_runtime_parity.rs",
         "crates/cordis-host-runner/tests/tool_runtime_parity.rs"
       ],
       "evidence": [
-        "pinned cordis-host-runner sandbox and sandbox-context specs: 48 passed",
-        "cargo test -p seekdeep-cordis-host-runner --all-features",
-        "cargo test -p seekdeep-loader --all-features",
-        "cargo clippy -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/extensions/cordis-host-runner/tests/sandbox.spec.ts packages/extensions/cordis-host-runner/tests/sandbox-context.spec.ts (48 passed)",
+        "cargo test --locked --offline -p seekdeep-cordis-host-runner --all-features (71 passed)",
+        "cargo test --locked --offline -p seekdeep-loader --all-features (36 passed)",
+        "cargo clippy --locked --offline -p seekdeep-loader -p seekdeep-cordis-host-runner --all-targets --all-features -- -D warnings"
       ],
-      "note": "lossless cross-realm cloning, shared schema compilation, dynamic Tool marking/registration, execute/render/presentation projection, merge-extensible content shapes, exact-run handlers, read-only Context policy, optional/declared dynamic and explicitly adapted native Services, Slot-free Host lifecycle verbs, events, callback timers, and post-activation Guard reports are ported; late early-disposer commands, promise/async-iterator timer bindings, throttle/debounce wrapper calls, and stack-safe JavaScript-side deep cloning remain"
+      "note": "the Rust-owned Host evaluator preserves lossless cross-realm cloning, schema compilation, guarded dynamic Tool/Service/Event registration, exact-run handlers, read-only Context policy, callback and Promise timeouts, callback and async-iterator intervals, throttle/debounce wrappers, nested cooperative timer awaits, post-activation Guard reports, activation-local command identities, exact-generation late disposal, and explicit-stack JavaScript and Host JSON cloning"
     },
     {
       "source": "packages/extensions/cordis-host-runner/src/index.ts",

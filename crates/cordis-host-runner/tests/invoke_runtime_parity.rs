@@ -233,3 +233,52 @@ async fn disposed_and_invalid_handler_registrations_never_escape_a_failed_host_l
     assert!(runner.inventory()[1].active_run.is_none());
     context.fiber().dispose().await.unwrap();
 }
+
+#[tokio::test]
+async fn handler_json_clone_uses_an_explicit_stack_for_deep_plain_objects() {
+    const DEPTH: usize = 4_096;
+    let context = Context::new();
+    let runner = DynamicCordisRunner::install(&context, 5_000);
+    let session = SessionId::new("session-deep-clone");
+    let defined = runner
+        .define(DynamicCordisDefineRequest {
+            session_id: session.clone(),
+            plugin: DynamicCordisPluginSelector::New {
+                id_prefix: "clone".to_owned(),
+            },
+            name: "deep clone".to_owned(),
+            purpose: "clone deeply nested JSON without JavaScript recursion".to_owned(),
+            code: DynamicCordisCode {
+                host: Some(
+                    format!(
+                        "const root = {{}}; let cursor = root; for (let index = 0; index < {DEPTH}; index++) {{ cursor.next = {{}}; cursor = cursor.next; }} cursor.done = true; harness.handle('deep', async () => root); return {{ apply() {{}} }};"
+                    ),
+                ),
+                client: None,
+            },
+        })
+        .unwrap();
+    let run = run_id(
+        runner
+            .run(
+                &session,
+                &defined.plugin_id,
+                &defined.package_id,
+                DynamicCordisRunMode::Run,
+            )
+            .await,
+    );
+    let DynamicCordisInvokeResult::Success { value } = runner
+        .invoke(&defined.plugin_id, &run, "deep", json!(null))
+        .await
+    else {
+        panic!("deep handler result failed")
+    };
+    let mut cursor = &value;
+    for _ in 0..DEPTH {
+        cursor = cursor.get("next").expect("next level");
+    }
+    assert_eq!(cursor.get("done"), Some(&json!(true)));
+    runner.stop(&session, &defined.plugin_id).await;
+    context.fiber().dispose().await.unwrap();
+}

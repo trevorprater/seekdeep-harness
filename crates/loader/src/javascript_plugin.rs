@@ -2,7 +2,7 @@
 
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     io::Cursor,
     path::{Path, PathBuf},
     rc::Rc,
@@ -17,7 +17,8 @@ use std::{
 
 use base64::Engine as _;
 use boa_engine::{
-    Context as JavaScriptContext, JsNativeError, JsObject, JsValue, Module, NativeFunction, Source,
+    Context as JavaScriptContext, JsNativeError, JsObject, JsValue, JsVariant, Module,
+    NativeFunction, Source,
     builtins::promise::PromiseState,
     context::ContextBuilder,
     js_string,
@@ -61,7 +62,13 @@ impl Drop for ActiveDynamicServices {
 }
 
 #[derive(Debug)]
-enum HostCommand {
+struct HostCommand {
+    id: usize,
+    action: HostCommandAction,
+}
+
+#[derive(Debug)]
+enum HostCommandAction {
     Provide {
         name: String,
         value: Value,
@@ -83,6 +90,9 @@ enum HostCommand {
         repeat: bool,
     },
     RegisterTool(DynamicToolRegistration),
+    DisposeEffect {
+        command_id: usize,
+    },
     DisposeRoot,
 }
 
@@ -103,6 +113,7 @@ struct ActivationRequest {
     config: Value,
     declared: Vec<String>,
     dynamic_services: BTreeMap<String, Arc<DynamicJavaScriptService>>,
+    host_commands: tokio::sync::mpsc::UnboundedSender<HostCommandBatch>,
     sandboxed: bool,
     reply: tokio::sync::oneshot::Sender<Result<Vec<HostCommand>, String>>,
 }
@@ -139,6 +150,7 @@ enum WorkerCommand {
         reply: mpsc::SyncSender<Result<Value, String>>,
     },
     InvokeService {
+        activation_id: u64,
         service_id: usize,
         method: String,
         args: Value,
@@ -246,6 +258,8 @@ struct ModuleWorker {
     handlers: Vec<String>,
     label: String,
     contexts: parking_lot::Mutex<HashMap<u64, Context>>,
+    command_effects: parking_lot::Mutex<HashMap<(u64, usize), EffectHandle>>,
+    command_tasks: parking_lot::Mutex<HashMap<u64, tokio::task::JoinHandle<()>>>,
     sandboxed: bool,
 }
 
@@ -255,6 +269,12 @@ struct ActivationEffects {
     callbacks: JsObject,
     processed_commands: usize,
     dynamic_services: BTreeMap<String, Arc<DynamicJavaScriptService>>,
+    host_commands: tokio::sync::mpsc::UnboundedSender<HostCommandBatch>,
+}
+
+struct HostCommandBatch {
+    commands: Vec<HostCommand>,
+    reply: mpsc::SyncSender<Result<(), String>>,
 }
 
 struct DynamicJavaScriptService {
@@ -266,6 +286,7 @@ struct DynamicJavaScriptService {
 enum DynamicServiceBackend {
     Worker {
         worker: Arc<ModuleWorker>,
+        activation_id: u64,
         service_id: usize,
     },
     Native {
@@ -286,11 +307,16 @@ impl std::fmt::Debug for DynamicJavaScriptService {
 impl DynamicJavaScriptService {
     fn call(&self, method: &str, args: Value) -> anyhow::Result<Value> {
         match &self.backend {
-            DynamicServiceBackend::Worker { worker, service_id } => {
+            DynamicServiceBackend::Worker {
+                worker,
+                activation_id,
+                service_id,
+            } => {
                 let (reply, outcome) = mpsc::sync_channel(1);
                 worker
                     .sender
                     .send(WorkerCommand::InvokeService {
+                        activation_id: *activation_id,
                         service_id: *service_id,
                         method: method.to_owned(),
                         args,
@@ -335,7 +361,7 @@ impl ModuleWorker {
         let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
         let join = thread::Builder::new()
             .name("seekdeep-loader-js".to_owned())
-            .spawn(move || worker_main(&worker_path, process, receiver, ready_sender))?;
+            .spawn(move || worker_main(&worker_path, process, &receiver, ready_sender))?;
         let metadata = ready_receiver
             .recv()
             .map_err(|_| anyhow::anyhow!("JavaScript module worker exited during import"))?
@@ -349,6 +375,8 @@ impl ModuleWorker {
                 handlers: metadata.handlers.clone(),
                 label,
                 contexts: parking_lot::Mutex::new(HashMap::new()),
+                command_effects: parking_lot::Mutex::new(HashMap::new()),
+                command_tasks: parking_lot::Mutex::new(HashMap::new()),
                 sandboxed: false,
             }),
             metadata,
@@ -366,7 +394,7 @@ impl ModuleWorker {
         let join = thread::Builder::new()
             .name("seekdeep-dynamic-cordis".to_owned())
             .spawn(move || {
-                worker_main_body(&body, timeout_ms, &worker_label, receiver, ready_sender);
+                worker_main_body(&body, timeout_ms, &worker_label, &receiver, ready_sender);
             })?;
         let metadata = ready_receiver
             .recv()
@@ -381,6 +409,8 @@ impl ModuleWorker {
                 handlers: metadata.handlers.clone(),
                 label,
                 contexts: parking_lot::Mutex::new(HashMap::new()),
+                command_effects: parking_lot::Mutex::new(HashMap::new()),
+                command_tasks: parking_lot::Mutex::new(HashMap::new()),
                 sandboxed: true,
             }),
             metadata,
@@ -425,6 +455,29 @@ impl ModuleWorker {
                 );
             }
         }
+        let worker = Arc::clone(self);
+        context.own(EffectHandle::new("JavaScript plugin effects", move || {
+            let worker = Arc::clone(&worker);
+            Box::pin(async move { worker.deactivate(id).await })
+        }))?;
+        self.contexts.lock().insert(id, context.clone());
+        let (host_commands, mut command_batches) =
+            tokio::sync::mpsc::unbounded_channel::<HostCommandBatch>();
+        let weak = Arc::downgrade(self);
+        let owner = context.clone();
+        let command_task = tokio::spawn(async move {
+            while let Some(batch) = command_batches.recv().await {
+                let result = match weak.upgrade() {
+                    Some(worker) => worker
+                        .apply_commands(&owner, id, batch.commands)
+                        .await
+                        .map_err(|error| format!("{error:#}")),
+                    None => Err("JavaScript module worker is closed".to_owned()),
+                };
+                let _ = batch.reply.send(result);
+            }
+        });
+        self.command_tasks.lock().insert(id, command_task);
         let (reply, outcome) = tokio::sync::oneshot::channel();
         self.sender
             .send(WorkerCommand::Activate(ActivationRequest {
@@ -433,6 +486,7 @@ impl ModuleWorker {
                 config,
                 declared: self.declared.clone(),
                 dynamic_services,
+                host_commands,
                 sandboxed: self.sandboxed,
                 reply,
             }))
@@ -441,115 +495,133 @@ impl ModuleWorker {
             .await
             .map_err(|_| anyhow::anyhow!("JavaScript module worker ended without a result"))?
             .map_err(anyhow::Error::msg)?;
-
-        let worker = Arc::clone(self);
-        context.own(EffectHandle::new("JavaScript plugin effects", move || {
-            let worker = Arc::clone(&worker);
-            Box::pin(async move { worker.deactivate(id).await })
-        }))?;
-        self.contexts.lock().insert(id, context.clone());
-        self.apply_commands(context, id, commands)
+        self.apply_commands(context, id, commands).await
     }
 
-    fn apply_commands(
-        self: &Arc<Self>,
-        context: &Context,
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exhaustive Host effect dispatcher keeps command ownership in one match"
+    )]
+    fn apply_commands<'a>(
+        self: &'a Arc<Self>,
+        context: &'a Context,
         activation_id: u64,
         commands: Vec<HostCommand>,
-    ) -> anyhow::Result<()> {
-        for command in commands {
-            match command {
-                HostCommand::Provide { name, value } => {
-                    context.provide_named(&name, Arc::new(value))?;
-                }
-                HostCommand::ProvideDynamic {
-                    name,
-                    service_id,
-                    methods,
-                    projection,
-                } => {
-                    let service = Arc::new(DynamicJavaScriptService {
-                        backend: DynamicServiceBackend::Worker {
-                            worker: Arc::clone(self),
-                            service_id,
-                        },
-                        methods,
-                        projection: projection.clone(),
-                    });
-                    context.provide_named_projected(&name, service, projection)?;
-                }
-                HostCommand::On {
-                    name,
-                    callback_id,
-                    once,
-                } => {
-                    let worker = Arc::clone(self);
-                    let owner = context.clone();
-                    let fired = Arc::new(AtomicBool::new(false));
-                    context.events().on(
-                        context,
+    ) -> BoxFuture<'a, anyhow::Result<()>> {
+        Box::pin(async move {
+            for command in commands {
+                let HostCommand { id, action } = command;
+                let effect = match action {
+                    HostCommandAction::Provide { name, value } => {
+                        Some(context.provide_named(&name, Arc::new(value))?)
+                    }
+                    HostCommandAction::ProvideDynamic {
                         name,
-                        move |_, _| {
-                            let worker = Arc::clone(&worker);
+                        service_id,
+                        methods,
+                        projection,
+                    } => {
+                        let service = Arc::new(DynamicJavaScriptService {
+                            backend: DynamicServiceBackend::Worker {
+                                worker: Arc::clone(self),
+                                activation_id,
+                                service_id,
+                            },
+                            methods,
+                            projection: projection.clone(),
+                        });
+                        Some(context.provide_named_projected(&name, service, projection)?)
+                    }
+                    HostCommandAction::On {
+                        name,
+                        callback_id,
+                        once,
+                    } => {
+                        let worker = Arc::clone(self);
+                        let owner = context.clone();
+                        let fired = Arc::new(AtomicBool::new(false));
+                        Some(context.events().on(
+                            context,
+                            name,
+                            move |_, _| {
+                                let worker = Arc::clone(&worker);
+                                let owner = owner.clone();
+                                let fired = fired.clone();
+                                Box::pin(async move {
+                                    if once && fired.swap(true, Ordering::AcqRel) {
+                                        return Ok(EventReply::Undefined);
+                                    }
+                                    if let Err(error) = worker
+                                        .invoke_callback(&owner, activation_id, callback_id)
+                                        .await
+                                    {
+                                        worker.report_guard_failure(&owner, &error);
+                                        return Err(error);
+                                    }
+                                    Ok(EventReply::Undefined)
+                                })
+                            },
+                            EventOptions::default(),
+                        )?)
+                    }
+                    HostCommandAction::Timer {
+                        callback_id,
+                        delay_ms,
+                        repeat,
+                    } => {
+                        let timer = context.get(TIMER).ok_or_else(|| {
+                            anyhow::anyhow!("dynamic Host timer command requires inject: ['timer']")
+                        })?;
+                        let worker = Arc::clone(self);
+                        let owner = context.clone();
+                        let callback = Arc::new(move || {
+                            let worker = worker.clone();
                             let owner = owner.clone();
-                            let fired = fired.clone();
                             Box::pin(async move {
-                                if once && fired.swap(true, Ordering::AcqRel) {
-                                    return Ok(EventReply::Undefined);
-                                }
                                 if let Err(error) = worker
                                     .invoke_callback(&owner, activation_id, callback_id)
                                     .await
                                 {
                                     worker.report_guard_failure(&owner, &error);
-                                    return Err(error);
                                 }
-                                Ok(EventReply::Undefined)
-                            })
-                        },
-                        EventOptions::default(),
-                    )?;
-                }
-                HostCommand::Timer {
-                    callback_id,
-                    delay_ms,
-                    repeat,
-                } => {
-                    let timer = context.get(TIMER).ok_or_else(|| {
-                        anyhow::anyhow!("dynamic Host timer command requires inject: ['timer']")
-                    })?;
-                    let worker = Arc::clone(self);
-                    let owner = context.clone();
-                    let callback = Arc::new(move || {
-                        let worker = worker.clone();
-                        let owner = owner.clone();
-                        Box::pin(async move {
-                            if let Err(error) = worker
-                                .invoke_callback(&owner, activation_id, callback_id)
-                                .await
-                            {
-                                worker.report_guard_failure(&owner, &error);
-                            }
-                        }) as BoxFuture<'static, ()>
-                    });
-                    if repeat {
-                        timer.interval(context, callback, Duration::from_millis(delay_ms))?;
-                    } else {
-                        timer.timeout(context, callback, Duration::from_millis(delay_ms))?;
+                            }) as BoxFuture<'static, ()>
+                        });
+                        let effect = if repeat {
+                            timer.interval(context, callback, Duration::from_millis(delay_ms))?
+                        } else {
+                            timer.timeout(context, callback, Duration::from_millis(delay_ms))?
+                        };
+                        Some(effect)
                     }
-                }
-                HostCommand::RegisterTool(registration) => {
-                    self.register_dynamic_tool(context, activation_id, registration)?;
-                }
-                HostCommand::DisposeRoot => {
-                    let root = context.root_fiber().clone();
-                    tokio::spawn(async move {
-                        let _ = root.dispose().await;
-                    });
+                    HostCommandAction::RegisterTool(registration) => {
+                        Some(self.register_dynamic_tool(context, activation_id, registration)?)
+                    }
+                    HostCommandAction::DisposeEffect { command_id } => {
+                        let effect = self
+                            .command_effects
+                            .lock()
+                            .remove(&(activation_id, command_id));
+                        if let Some(effect) = effect {
+                            effect.dispose().await?;
+                        }
+                        None
+                    }
+                    HostCommandAction::DisposeRoot => {
+                        let root = context.root_fiber().clone();
+                        tokio::spawn(async move {
+                            let _ = root.dispose().await;
+                        });
+                        None
+                    }
+                };
+                if let Some(effect) = effect {
+                    self.command_effects
+                        .lock()
+                        .insert((activation_id, id), effect);
                 }
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     fn report_guard_failure(&self, context: &Context, error: &anyhow::Error) {
@@ -571,7 +643,7 @@ impl ModuleWorker {
         context: &Context,
         activation_id: u64,
         registration: DynamicToolRegistration,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<EffectHandle> {
         let DynamicToolRegistration {
             tool_id,
             name,
@@ -608,8 +680,7 @@ impl ModuleWorker {
         }
         let mut definition = ToolDefinition::new(name, description, parameters, output, execute);
         definition.timeout_ms = timeout_ms;
-        tools.register(context, definition)?;
-        Ok(())
+        tools.register(context, definition)
     }
 
     async fn deactivate(&self, id: u64) -> anyhow::Result<()> {
@@ -620,12 +691,28 @@ impl ModuleWorker {
             .send(WorkerCommand::Deactivate { id, reply })
             .is_err()
         {
+            let task = self.command_tasks.lock().remove(&id);
+            if let Some(task) = task {
+                task.abort();
+            }
+            self.command_effects
+                .lock()
+                .retain(|(activation_id, _), _| *activation_id != id);
             return Ok(());
         }
-        outcome
+        let result = outcome
             .await
             .map_err(|_| anyhow::anyhow!("JavaScript module worker ended during disposal"))?
-            .map_err(anyhow::Error::msg)
+            .map_err(anyhow::Error::msg);
+        self.command_effects
+            .lock()
+            .retain(|(activation_id, _), _| *activation_id != id);
+        let task = self.command_tasks.lock().remove(&id);
+        if let Some(task) = task {
+            task.await
+                .map_err(|error| anyhow::anyhow!("Host command task failed: {error}"))?;
+        }
+        result
     }
 
     async fn invoke(self: &Arc<Self>, method: &str, args: Value) -> anyhow::Result<Value> {
@@ -649,7 +736,8 @@ impl ModuleWorker {
             .map_err(|_| anyhow::anyhow!("dynamic Cordis worker ended during handler call"))?
             .map_err(anyhow::Error::msg)?;
         if let Some((activation_id, context)) = active {
-            self.apply_commands(&context, activation_id, commands)?;
+            self.apply_commands(&context, activation_id, commands)
+                .await?;
         }
         Ok(value)
     }
@@ -679,7 +767,8 @@ impl ModuleWorker {
             .await
             .map_err(|_| anyhow::anyhow!("dynamic Cordis worker ended during Tool execution"))?
             .map_err(anyhow::Error::msg)?;
-        self.apply_commands(&context, activation_id, commands)?;
+        self.apply_commands(&context, activation_id, commands)
+            .await?;
         Ok(value)
     }
 
@@ -739,7 +828,7 @@ impl ModuleWorker {
             .await
             .map_err(|_| anyhow::anyhow!("dynamic Cordis worker ended during event callback"))?
             .map_err(anyhow::Error::msg)?;
-        self.apply_commands(context, activation_id, commands)
+        self.apply_commands(context, activation_id, commands).await
     }
 }
 
@@ -888,7 +977,7 @@ pub(crate) fn load_body_runtime_named(
 fn worker_main(
     path: &Path,
     process: Value,
-    commands: mpsc::Receiver<WorkerCommand>,
+    commands: &mpsc::Receiver<WorkerCommand>,
     ready: mpsc::SyncSender<Result<ModuleMetadata, String>>,
 ) {
     let initialized = initialize_module(path, &process);
@@ -901,7 +990,7 @@ fn worker_main_body(
     body: &str,
     timeout_ms: u64,
     label: &str,
-    commands: mpsc::Receiver<WorkerCommand>,
+    commands: &mpsc::Receiver<WorkerCommand>,
     ready: mpsc::SyncSender<Result<ModuleMetadata, String>>,
 ) {
     worker_loop(initialize_body(body, timeout_ms, label), commands, &ready);
@@ -910,7 +999,7 @@ fn worker_main_body(
 
 fn worker_loop(
     initialized: Result<(JavaScriptContext, JsObject, ModuleMetadata), String>,
-    commands: mpsc::Receiver<WorkerCommand>,
+    commands: &mpsc::Receiver<WorkerCommand>,
     ready: &mpsc::SyncSender<Result<ModuleMetadata, String>>,
 ) {
     let (mut javascript, apply, metadata) = match initialized {
@@ -922,97 +1011,152 @@ fn worker_loop(
     };
     let _ = ready.send(Ok(metadata));
     let mut effects = HashMap::<u64, ActivationEffects>::new();
-    for command in commands {
-        match command {
-            WorkerCommand::Activate(request) => {
-                let result = activate(&mut javascript, &apply, &request, &mut effects);
-                let _ = request.reply.send(result);
-            }
-            WorkerCommand::Invoke {
-                activation_id,
-                method,
-                args,
-                reply,
-            } => {
-                let _active_services = enter_first_activation_services(&effects);
-                let result = invoke_handler(
-                    &mut javascript,
-                    activation_id.and_then(|id| effects.get_mut(&id)),
-                    &method,
-                    &args,
-                );
-                let _ = reply.send(result);
-            }
-            WorkerCommand::InvokeCallback {
-                activation_id,
-                callback_id,
-                reply,
-            } => {
-                let result = invoke_callback(
-                    &mut javascript,
-                    effects.get_mut(&activation_id),
-                    callback_id,
-                );
-                let _ = reply.send(result);
-            }
-            WorkerCommand::InvokeTool {
-                activation_id,
-                tool_id,
-                args,
-                reply,
-            } => {
-                let _active_services = enter_first_activation_services(&effects);
-                let result = invoke_tool_execute(
-                    &mut javascript,
-                    effects.get_mut(&activation_id),
-                    tool_id,
-                    &args,
-                );
-                let _ = reply.send(result);
-            }
-            WorkerCommand::RenderTool {
-                tool_id,
-                args,
-                value,
-                reply,
-            } => {
-                let _active_services = enter_first_activation_services(&effects);
-                let result = invoke_tool_render(&mut javascript, tool_id, &args, &value);
-                let _ = reply.send(result);
-            }
-            WorkerCommand::PresentTool {
-                tool_id,
-                args,
-                value,
-                reply,
-            } => {
-                let _active_services = enter_first_activation_services(&effects);
-                let result = invoke_tool_presentation(&mut javascript, tool_id, &args, &value);
-                let _ = reply.send(result);
-            }
-            WorkerCommand::InvokeService {
-                service_id,
-                method,
-                args,
-                reply,
-            } => {
-                let result = invoke_service(&mut javascript, service_id, &method, &args);
-                let _ = reply.send(result);
-            }
-            WorkerCommand::Deactivate { id, reply } => {
-                let result = effects.remove(&id).map_or(Ok(()), |activation| {
-                    deactivate_activation(&mut javascript, &activation)
-                });
-                let _ = reply.send(result);
-            }
-            WorkerCommand::Shutdown => {
-                for (_, activation) in effects.drain() {
-                    let _ = deactivate_activation(&mut javascript, &activation);
-                }
-                break;
-            }
+    let mut deferred = VecDeque::new();
+    loop {
+        let command = deferred
+            .pop_front()
+            .map_or_else(|| commands.recv().ok(), Some);
+        let Some(command) = command else {
+            break;
+        };
+        if !process_worker_command(
+            &mut javascript,
+            &apply,
+            &mut effects,
+            commands,
+            &mut deferred,
+            command,
+        ) {
+            break;
         }
     }
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one worker protocol dispatcher owns every reply channel"
+)]
+fn process_worker_command(
+    javascript: &mut JavaScriptContext,
+    apply: &JsObject,
+    effects: &mut HashMap<u64, ActivationEffects>,
+    commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
+    command: WorkerCommand,
+) -> bool {
+    match command {
+        WorkerCommand::Activate(request) => {
+            let result = activate(javascript, apply, &request, effects, commands, deferred);
+            let _ = request.reply.send(result);
+        }
+        WorkerCommand::Invoke {
+            activation_id,
+            method,
+            args,
+            reply,
+        } => {
+            let _active_services = enter_first_activation_services(effects);
+            let result = invoke_handler(
+                javascript,
+                effects,
+                activation_id,
+                &method,
+                &args,
+                apply,
+                commands,
+                deferred,
+            );
+            let _ = reply.send(result);
+        }
+        WorkerCommand::InvokeCallback {
+            activation_id,
+            callback_id,
+            reply,
+        } => {
+            let result = invoke_callback(
+                javascript,
+                effects,
+                activation_id,
+                callback_id,
+                apply,
+                commands,
+                deferred,
+            );
+            let _ = reply.send(result);
+        }
+        WorkerCommand::InvokeTool {
+            activation_id,
+            tool_id,
+            args,
+            reply,
+        } => {
+            let _active_services = enter_first_activation_services(effects);
+            let result = invoke_tool_execute(
+                javascript,
+                effects,
+                activation_id,
+                tool_id,
+                &args,
+                apply,
+                commands,
+                deferred,
+            );
+            let _ = reply.send(result);
+        }
+        WorkerCommand::RenderTool {
+            tool_id,
+            args,
+            value,
+            reply,
+        } => {
+            let _active_services = enter_first_activation_services(effects);
+            let result = invoke_tool_render(javascript, tool_id, &args, &value);
+            let _ = reply.send(result);
+        }
+        WorkerCommand::PresentTool {
+            tool_id,
+            args,
+            value,
+            reply,
+        } => {
+            let _active_services = enter_first_activation_services(effects);
+            let result = invoke_tool_presentation(javascript, tool_id, &args, &value);
+            let _ = reply.send(result);
+        }
+        WorkerCommand::InvokeService {
+            activation_id,
+            service_id,
+            method,
+            args,
+            reply,
+        } => {
+            let result = invoke_service(
+                javascript,
+                effects,
+                activation_id,
+                service_id,
+                &method,
+                &args,
+                apply,
+                commands,
+                deferred,
+            );
+            let _ = reply.send(result);
+        }
+        WorkerCommand::Deactivate { id, reply } => {
+            let result = effects.remove(&id).map_or(Ok(()), |activation| {
+                deactivate_activation(javascript, &activation)
+            });
+            let _ = reply.send(result);
+        }
+        WorkerCommand::Shutdown => {
+            for (_, activation) in effects.drain() {
+                let _ = deactivate_activation(javascript, &activation);
+            }
+            return false;
+        }
+    }
+    true
 }
 
 fn deactivate_activation(
@@ -1267,33 +1411,69 @@ globalThis.__seekdeep_provided_services__ = [];
 const dynamicToolIds = new WeakMap();
 const cloneHandlerJson = (root, path) => {
   const ancestors = new Set();
-  const clone = (value, at) => {
-    if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
-    if (typeof value === 'number' && Number.isFinite(value) && !Object.is(value, -0)) return value;
-    const reject = () => { throw new Error(`${at} must be lossless JSON data (objects, arrays, strings, numbers, booleans, null) — not a class instance, function, Map/Set, Date, or undefined. Return a plain object built from the values you need, or return null when the caller needs no value back.`); };
-    if (typeof value !== 'object' || ancestors.has(value)) return reject();
+  let output;
+  const assign = (destination, value) => {
+    if (destination.kind === 'root') output = value;
+    else if (destination.kind === 'array') destination.target[destination.index] = value;
+    else Object.defineProperty(destination.target, destination.key, {
+      value, enumerable: true, configurable: true, writable: true,
+    });
+  };
+  const reject = at => { throw new Error(`${at} must be lossless JSON data (objects, arrays, strings, numbers, booleans, null) — not a class instance, function, Map/Set, Date, or undefined. Return a plain object built from the values you need, or return null when the caller needs no value back.`); };
+  const tasks = [{ kind: 'visit', value: root, at: path, destination: { kind: 'root' } }];
+  for (let task = tasks.pop(); task !== undefined; task = tasks.pop()) {
+    if (task.kind === 'leave') {
+      ancestors.delete(task.source);
+      continue;
+    }
+    if (task.kind === 'arrayItem') {
+      if (!Object.hasOwn(task.source, task.index)) reject(task.at);
+      tasks.push({
+        kind: 'visit', value: task.source[task.index], at: `${task.at}[${task.index}]`,
+        destination: { kind: 'array', target: task.target, index: task.index },
+      });
+      continue;
+    }
+    const value = task.value;
+    const at = task.at;
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+      assign(task.destination, value);
+      continue;
+    }
+    if (typeof value === 'number' && Number.isFinite(value) && !Object.is(value, -0)) {
+      assign(task.destination, value);
+      continue;
+    }
+    if (typeof value !== 'object' || ancestors.has(value)) reject(at);
     const array = Array.isArray(value);
     const prototype = Object.getPrototypeOf(value);
-    if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) return reject();
+    if (array ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) reject(at);
     const ownKeys = Reflect.ownKeys(value);
     if (array ? ownKeys.length !== value.length + 1
-      : ownKeys.some(key => typeof key !== 'string' || !Object.prototype.propertyIsEnumerable.call(value, key))) return reject();
+      : ownKeys.some(key => typeof key !== 'string' || !Object.prototype.propertyIsEnumerable.call(value, key))) reject(at);
     ancestors.add(value);
-    let output;
     if (array) {
-      output = [];
-      for (let index = 0; index < value.length; index++) {
-        if (!Object.hasOwn(value, index)) return reject();
-        output[index] = clone(value[index], `${at}[${index}]`);
+      const clone = [];
+      assign(task.destination, clone);
+      tasks.push({ kind: 'leave', source: value });
+      for (let index = value.length - 1; index >= 0; index--) {
+        tasks.push({ kind: 'arrayItem', source: value, index, at, target: clone });
       }
     } else {
-      output = {};
-      for (const [key, item] of Object.entries(value)) output[key] = clone(item, `${at}.${key}`);
+      const clone = {};
+      assign(task.destination, clone);
+      tasks.push({ kind: 'leave', source: value });
+      const entries = Object.entries(value);
+      for (let index = entries.length - 1; index >= 0; index--) {
+        const [key, item] = entries[index];
+        tasks.push({
+          kind: 'visit', value: item, at: `${at}.${key}`,
+          destination: { kind: 'object', target: clone, key },
+        });
+      }
     }
-    ancestors.delete(value);
-    return output;
-  };
-  return clone(root, path);
+  }
+  return output;
 };
 globalThis.__seekdeep_clone_json__ = cloneHandlerJson;
 globalThis.harness = Object.freeze({
@@ -1758,16 +1938,11 @@ fn activate(
     apply: &JsObject,
     request: &ActivationRequest,
     effects: &mut HashMap<u64, ActivationEffects>,
+    worker_commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
 ) -> Result<Vec<HostCommand>, String> {
     let _active_services = ActiveDynamicServices::enter(&request.dynamic_services);
     let ctx = prepare_activation_context(javascript, request)?;
-    let config =
-        JsValue::from_json(&request.config, javascript).map_err(|error| error.to_string())?;
-    let returned = apply
-        .call(&JsValue::undefined(), &[ctx, config], javascript)
-        .map_err(|error| error.to_string())?;
-    settle_returned(&returned, javascript)?;
-
     let command_ledger = javascript
         .global_object()
         .get(js_string!("__seekdeep_commands__"), javascript)
@@ -1786,17 +1961,46 @@ fn activate(
         .map_err(|error| error.to_string())?
         .as_object()
         .ok_or_else(|| "JavaScript callback ledger is not an array".to_owned())?;
-    let mut activation = ActivationEffects {
-        commands: command_ledger,
-        disposers,
-        callbacks,
-        processed_commands: 0,
-        dynamic_services: request.dynamic_services.clone(),
-    };
-    let commands = read_commands(javascript, &mut activation)?;
-    effects.insert(request.id, activation);
+    effects.insert(
+        request.id,
+        ActivationEffects {
+            commands: command_ledger,
+            disposers,
+            callbacks,
+            processed_commands: 0,
+            dynamic_services: request.dynamic_services.clone(),
+            host_commands: request.host_commands.clone(),
+        },
+    );
+    let result = (|| {
+        let config =
+            JsValue::from_json(&request.config, javascript).map_err(|error| error.to_string())?;
+        let returned = apply
+            .call(&JsValue::undefined(), &[ctx, config], javascript)
+            .map_err(|error| error.to_string())?;
+        settle_returned_pumping(
+            &returned,
+            javascript,
+            apply,
+            effects,
+            worker_commands,
+            deferred,
+        )?;
+        flush_commands(
+            javascript,
+            effects
+                .get_mut(&request.id)
+                .ok_or_else(|| "JavaScript activation was disposed during apply".to_owned())?,
+        )?;
+        Ok(Vec::new())
+    })();
     cleanup_activation_globals(javascript);
-    Ok(commands)
+    if result.is_err()
+        && let Some(activation) = effects.remove(&request.id)
+    {
+        let _ = deactivate_activation(javascript, &activation);
+    }
+    result
 }
 
 fn read_commands(
@@ -1815,10 +2019,9 @@ fn read_commands(
         let command = activation
             .commands
             .get(PropertyKey::from(index as u64), javascript)
-            .map_err(|error| error.to_string())?
-            .to_json(javascript)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "JavaScript plugin command must be JSON-compatible".to_owned())?;
+            .map_err(|error| error.to_string())?;
+        let command = js_value_to_json_iterative(command, javascript)
+            .map_err(|_| "JavaScript plugin command must be JSON-compatible".to_owned())?;
         if command.get("active").and_then(Value::as_bool) == Some(false) {
             continue;
         }
@@ -1828,12 +2031,35 @@ fn read_commands(
     Ok(commands)
 }
 
+fn flush_commands(
+    javascript: &mut JavaScriptContext,
+    activation: &mut ActivationEffects,
+) -> Result<(), String> {
+    let commands = read_commands(javascript, activation)?;
+    if commands.is_empty() {
+        return Ok(());
+    }
+    let (reply, outcome) = mpsc::sync_channel(1);
+    activation
+        .host_commands
+        .send(HostCommandBatch { commands, reply })
+        .map_err(|_| "dynamic Host command sink is closed".to_owned())?;
+    outcome
+        .recv()
+        .map_err(|_| "dynamic Host command sink ended without a result".to_owned())?
+}
+
 fn parse_host_command(command: &Value) -> Result<HostCommand, String> {
     let command = command
         .as_object()
         .ok_or_else(|| "JavaScript command is not an object".to_owned())?;
-    match command.get("type").and_then(Value::as_str) {
-        Some("provide") => Ok(HostCommand::Provide {
+    let id = command
+        .get("commandId")
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .ok_or_else(|| "JavaScript command id is invalid".to_owned())?;
+    let action = match command.get("type").and_then(Value::as_str) {
+        Some("provide") => HostCommandAction::Provide {
             name: command
                 .get("name")
                 .and_then(Value::as_str)
@@ -1843,8 +2069,8 @@ fn parse_host_command(command: &Value) -> Result<HostCommand, String> {
                 .get("value")
                 .cloned()
                 .ok_or_else(|| "JavaScript provide value is not JSON-compatible".to_owned())?,
-        }),
-        Some("provideDynamic") => Ok(HostCommand::ProvideDynamic {
+        },
+        Some("provideDynamic") => HostCommandAction::ProvideDynamic {
             name: command
                 .get("name")
                 .and_then(Value::as_str)
@@ -1870,8 +2096,8 @@ fn parse_host_command(command: &Value) -> Result<HostCommand, String> {
                 .get("projection")
                 .cloned()
                 .ok_or_else(|| "JavaScript dynamic Service projection is missing".to_owned())?,
-        }),
-        Some("on") => Ok(HostCommand::On {
+        },
+        Some("on") => HostCommandAction::On {
             name: command
                 .get("name")
                 .and_then(Value::as_str)
@@ -1886,8 +2112,8 @@ fn parse_host_command(command: &Value) -> Result<HostCommand, String> {
                 .get("once")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
-        }),
-        Some("timer") => Ok(HostCommand::Timer {
+        },
+        Some("timer") => HostCommandAction::Timer {
             callback_id: command
                 .get("callbackId")
                 .and_then(Value::as_u64)
@@ -1902,12 +2128,20 @@ fn parse_host_command(command: &Value) -> Result<HostCommand, String> {
                 .get("repeat")
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
-        }),
-        Some("registerTool") => parse_dynamic_tool(command).map(HostCommand::RegisterTool),
-        Some("disposeRoot") => Ok(HostCommand::DisposeRoot),
-        Some(kind) => Err(format!("unknown JavaScript plugin command {kind:?}")),
-        None => Err("JavaScript plugin command has no type".to_owned()),
-    }
+        },
+        Some("registerTool") => HostCommandAction::RegisterTool(parse_dynamic_tool(command)?),
+        Some("disposeEffect") => HostCommandAction::DisposeEffect {
+            command_id: command
+                .get("targetCommandId")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| "JavaScript disposer target command id is invalid".to_owned())?,
+        },
+        Some("disposeRoot") => HostCommandAction::DisposeRoot,
+        Some(kind) => return Err(format!("unknown JavaScript plugin command {kind:?}")),
+        None => return Err("JavaScript plugin command has no type".to_owned()),
+    };
+    Ok(HostCommand { id, action })
 }
 
 fn parse_dynamic_tool(
@@ -1983,6 +2217,28 @@ fn prepare_activation_context(
   const commands = globalThis.__seekdeep_commands__ = [];
   const disposers = globalThis.__seekdeep_disposers__ = [];
   const callbacks = globalThis.__seekdeep_callbacks__ = [];
+  let nextCommandId = 0;
+  const pushCommand = command => {{
+    command.commandId = nextCommandId++;
+    if (!Object.hasOwn(command, 'active')) command.active = true;
+    commands.push(command);
+    return command;
+  }};
+  const disposeCommand = command => {{
+    if (!command.active) return;
+    command.active = false;
+    pushCommand({{ type: 'disposeEffect', targetCommandId: command.commandId }});
+  }};
+  const ownDisposer = disposer => {{
+    let active = true;
+    const owned = () => {{
+      if (!active) return;
+      active = false;
+      return disposer();
+    }};
+    disposers.push(owned);
+    return owned;
+  }};
   const cloneJson = globalThis.__seekdeep_clone_json__ ?? (value => value);
   for (const [name, descriptor] of Object.entries(dynamicServices)) {{
     const projection = descriptor.projection !== null && typeof descriptor.projection === 'object'
@@ -2002,9 +2258,8 @@ fn prepare_activation_context(
     if (typeof name !== 'string' || name.length === 0) throw new Error('ctx.on(event, callback) needs a non-empty string event name');
     if (typeof callback !== 'function') throw new Error(`ctx.${{once ? 'once' : 'on'}}("${{name}}") needs a callback function`);
     const callbackId = callbacks.push(callback) - 1;
-    const command = {{ type: 'on', name, callbackId, once, active: true }};
-    commands.push(command);
-    return () => {{ command.active = false; callbacks[callbackId] = undefined; }};
+    const command = pushCommand({{ type: 'on', name, callbackId, once }});
+    return () => {{ disposeCommand(command); callbacks[callbackId] = undefined; }};
   }};
   const schedule = (callback, delay, repeat) => {{
     if (!declared.has('timer')) throw new Error("service \"timer\" is not injected. Declare it: inject: ['timer', …] on your plugin, so cordis parks this dynamic package if the provider later goes away.");
@@ -2012,17 +2267,114 @@ fn prepare_activation_context(
     delay = Math.max(0, Math.floor(Number(delay)));
     if (!Number.isFinite(delay)) delay = 0;
     const callbackId = callbacks.push(callback) - 1;
-    const command = {{ type: 'timer', callbackId, delay, repeat, active: true }};
-    commands.push(command);
-    return () => {{ command.active = false; callbacks[callbackId] = undefined; }};
+    const command = pushCommand({{ type: 'timer', callbackId, delay, repeat }});
+    return () => {{ disposeCommand(command); callbacks[callbackId] = undefined; }};
+  }};
+  const timeout = (...args) => {{
+    if (typeof args[0] === 'function') return schedule(args[0], args[1], false);
+    const delay = args[0];
+    let settled = false;
+    let stopTimer;
+    let rejectDelay;
+    const promise = new Promise((resolve, reject) => {{
+      rejectDelay = reject;
+      stopTimer = schedule(() => {{
+        if (settled) return;
+        settled = true;
+        stopTimer();
+        resolve();
+      }}, delay, false);
+    }});
+    const cancel = ownDisposer(() => {{
+      if (settled) return;
+      settled = true;
+      stopTimer();
+      rejectDelay(new Error('Context has been disposed'));
+    }});
+    return promise.finally(cancel);
+  }};
+  const interval = (...args) => {{
+    if (typeof args[0] === 'function') return schedule(args[0], args[1], true);
+    const delay = args[0];
+    let done;
+    let nextTask;
+    const stopTimer = schedule(() => {{
+      nextTask?.resolve({{ done: false, value: undefined }});
+    }}, delay, true);
+    const dispose = ownDisposer(() => {{
+      stopTimer();
+      if (done) return;
+      const reason = new Error('Context has been disposed');
+      done = {{ kind: 'throw', reason }};
+      nextTask?.reject(reason);
+    }});
+    return {{
+      next() {{
+        if (done?.kind === 'return') return Promise.resolve({{ done: true, value: done.value }});
+        if (done?.kind === 'throw') return Promise.reject(done.reason);
+        const promise = new Promise((resolve, reject) => {{ nextTask = {{ resolve, reject }}; }});
+        return promise;
+      }},
+      return(value) {{
+        if (!done) done = {{ kind: 'return', value }};
+        nextTask?.resolve({{ done: true, value }});
+        dispose();
+        return Promise.resolve({{ done: true, value }});
+      }},
+      throw(reason) {{
+        if (!done) done = {{ kind: 'throw', reason }};
+        nextTask?.reject(reason);
+        dispose();
+        return Promise.resolve({{ done: true, value: undefined }});
+      }},
+      [Symbol.asyncIterator]() {{ return this; }},
+    }};
+  }};
+  const debounce = (callback, delay) => {{
+    if (typeof callback !== 'function') throw new Error('ctx.debounce() needs a callback function');
+    let pending;
+    let disposed = false;
+    const wrapper = (...args) => {{
+      pending?.();
+      pending = undefined;
+      if (disposed) return;
+      pending = schedule(() => {{ pending = undefined; callback(...args); }}, delay, false);
+    }};
+    wrapper.dispose = ownDisposer(() => {{
+      disposed = true;
+      pending?.();
+      pending = undefined;
+    }});
+    return wrapper;
+  }};
+  const throttle = (callback, delay, noTrailing = false) => {{
+    if (typeof callback !== 'function') throw new Error('ctx.throttle() needs a callback function');
+    let lastCall = -Infinity;
+    let pending;
+    let trailingDisabled = Boolean(noTrailing);
+    const execute = args => {{ lastCall = Date.now(); callback(...args); }};
+    const wrapper = (...args) => {{
+      pending?.();
+      pending = undefined;
+      const remaining = Number(delay) - Date.now() + lastCall;
+      if (remaining <= 0) execute(args);
+      else if (!trailingDisabled) {{
+        pending = schedule(() => {{ pending = undefined; execute(args); }}, remaining, false);
+      }}
+    }};
+    wrapper.dispose = ownDisposer(() => {{
+      trailingDisabled = true;
+      pending?.();
+      pending = undefined;
+    }});
+    return wrapper;
   }};
   const toolSchemas = Array.isArray(services.tools) ? services.tools : [];
   const tools = Object.freeze({{
     register(tool) {{
       const command = globalThis.__seekdeep_tool_command__(tool);
-      command.active = true;
-      commands.push(command);
-      return () => {{ command.active = false; }};
+      pushCommand(command);
+      return () => {{ disposeCommand(command); }};
     }},
     schemas: () => toolSchemas.map(schema => ({{ ...schema }})),
     get: name => toolSchemas.find(schema => schema.name === name),
@@ -2032,10 +2384,12 @@ fn prepare_activation_context(
     get: name => name === 'tools' ? tools : services[name],
     on: (name, callback) => listen(name, callback, false),
     once: (name, callback) => listen(name, callback, true),
-    timeout: (callback, delay) => schedule(callback, delay, false),
-    interval: (callback, delay) => schedule(callback, delay, true),
-    setTimeout: (callback, delay) => schedule(callback, delay, false),
-    setInterval: (callback, delay) => schedule(callback, delay, true),
+    timeout,
+    interval,
+    setTimeout: timeout,
+    setInterval: interval,
+    throttle,
+    debounce,
     provide: (name, value) => {{
       name = String(name);
       services[name] = value;
@@ -2053,19 +2407,19 @@ fn prepare_activation_context(
       }} else {{
         command = {{ type: 'provide', name, value: cloneJson(value, `ctx.provide("${{name}}")`), active: true }};
       }}
-      commands.push(command);
-      return () => {{ command.active = false; }};
+      pushCommand(command);
+      return () => {{ disposeCommand(command); }};
     }},
     effect: execute => {{
       const disposer = execute();
-      if (typeof disposer === 'function') disposers.push(disposer);
-      return () => undefined;
+      if (typeof disposer !== 'function') return () => undefined;
+      return ownDisposer(disposer);
     }},
   }};
   if (!sandboxed) {{
     target.reflect = {{ provide: target.provide }};
     target.fiber = {{
-      dispose: () => {{ commands.push({{ type: 'disposeRoot' }}); return Promise.resolve(); }},
+      dispose: () => {{ pushCommand({{ type: 'disposeRoot' }}); return Promise.resolve(); }},
     }};
   }}
   const denyRead = name => {{
@@ -2108,24 +2462,45 @@ fn prepare_activation_context(
 
 fn invoke_callback(
     javascript: &mut JavaScriptContext,
-    activation: Option<&mut ActivationEffects>,
+    effects: &mut HashMap<u64, ActivationEffects>,
+    activation_id: u64,
     callback_id: usize,
+    apply: &JsObject,
+    worker_commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
 ) -> Result<Vec<HostCommand>, String> {
-    let activation =
-        activation.ok_or_else(|| "dynamic Host event callback is no longer active".to_owned())?;
-    let _active_services = ActiveDynamicServices::enter(&activation.dynamic_services);
-    let callback = activation
-        .callbacks
-        .get(PropertyKey::from(callback_id as u64), javascript)
-        .map_err(|error| error.to_string())?
-        .as_object()
-        .filter(JsObject::is_callable)
-        .ok_or_else(|| "dynamic Host event callback is no longer active".to_owned())?;
+    let (callback, dynamic_services) = {
+        let activation = effects
+            .get(&activation_id)
+            .ok_or_else(|| "dynamic Host event callback is no longer active".to_owned())?;
+        let callback = activation
+            .callbacks
+            .get(PropertyKey::from(callback_id as u64), javascript)
+            .map_err(|error| error.to_string())?
+            .as_object()
+            .filter(JsObject::is_callable)
+            .ok_or_else(|| "dynamic Host event callback is no longer active".to_owned())?;
+        (callback, activation.dynamic_services.clone())
+    };
+    let _active_services = ActiveDynamicServices::enter(&dynamic_services);
     let returned = callback
         .call(&JsValue::undefined(), &[], javascript)
         .map_err(|error| error.to_string())?;
-    settle_returned(&returned, javascript)?;
-    read_commands(javascript, activation)
+    settle_returned_pumping(
+        &returned,
+        javascript,
+        apply,
+        effects,
+        worker_commands,
+        deferred,
+    )?;
+    flush_commands(
+        javascript,
+        effects
+            .get_mut(&activation_id)
+            .ok_or_else(|| "dynamic Host event callback is no longer active".to_owned())?,
+    )?;
+    Ok(Vec::new())
 }
 
 fn dynamic_tool(javascript: &mut JavaScriptContext, tool_id: usize) -> Result<JsObject, String> {
@@ -2163,11 +2538,20 @@ fn clone_sandbox_value(
         .map_err(|error| error.to_string())
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "service invocation needs the worker pump and exact activation identity"
+)]
 fn invoke_service(
     javascript: &mut JavaScriptContext,
+    effects: &mut HashMap<u64, ActivationEffects>,
+    activation_id: u64,
     service_id: usize,
     method: &str,
     args: &Value,
+    apply: &JsObject,
+    worker_commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
 ) -> Result<Value, String> {
     let services = javascript
         .global_object()
@@ -2195,29 +2579,48 @@ fn invoke_service(
     let returned = function
         .call(&service.clone().into(), &args, javascript)
         .map_err(|error| error.to_string())?;
-    let settled = settle_value(&returned, javascript)?;
+    let settled = settle_value_pumping(
+        &returned,
+        javascript,
+        apply,
+        effects,
+        worker_commands,
+        deferred,
+    )?;
     let settled = clone_sandbox_value(
         javascript,
         settled,
         &format!("dynamic Service {service_id}.{method} result"),
     )?;
-    let value = settled
-        .to_json(javascript)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("dynamic Service {service_id}.{method} returned non-JSON data"))?;
+    let value = js_value_to_json_iterative(settled, javascript)
+        .map_err(|_| format!("dynamic Service {service_id}.{method} returned non-JSON data"))?;
     if !is_lossless_json(&value) {
         return Err(format!(
             "dynamic Service {service_id}.{method} returned non-JSON data"
         ));
     }
+    flush_commands(
+        javascript,
+        effects
+            .get_mut(&activation_id)
+            .ok_or_else(|| "dynamic Service activation is no longer active".to_owned())?,
+    )?;
     Ok(value)
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "tool execution needs the worker pump and exact activation identity"
+)]
 fn invoke_tool_execute(
     javascript: &mut JavaScriptContext,
-    activation: Option<&mut ActivationEffects>,
+    effects: &mut HashMap<u64, ActivationEffects>,
+    activation_id: u64,
     tool_id: usize,
     args: &Value,
+    apply: &JsObject,
+    worker_commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
 ) -> Result<(Value, Vec<HostCommand>), String> {
     let tool = dynamic_tool(javascript, tool_id)?;
     let execute = tool
@@ -2230,18 +2633,27 @@ fn invoke_tool_execute(
     let returned = execute
         .call(&tool.clone().into(), &[args], javascript)
         .map_err(|error| error.to_string())?;
-    let settled = settle_value(&returned, javascript)?;
+    let settled = settle_value_pumping(
+        &returned,
+        javascript,
+        apply,
+        effects,
+        worker_commands,
+        deferred,
+    )?;
     let settled = clone_sandbox_value(javascript, settled, "harness.defineTool execute result")?;
-    let value = settled
-        .to_json(javascript)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| "dynamic Tool execute result must be lossless JSON".to_owned())?;
+    let value = js_value_to_json_iterative(settled, javascript)
+        .map_err(|_| "dynamic Tool execute result must be lossless JSON".to_owned())?;
     if !is_lossless_json(&value) {
         return Err("dynamic Tool execute result must be lossless JSON".to_owned());
     }
-    let activation =
-        activation.ok_or_else(|| "dynamic Tool activation is no longer active".to_owned())?;
-    Ok((value, read_commands(javascript, activation)?))
+    flush_commands(
+        javascript,
+        effects
+            .get_mut(&activation_id)
+            .ok_or_else(|| "dynamic Tool activation is no longer active".to_owned())?,
+    )?;
+    Ok((value, Vec::new()))
 }
 
 fn invoke_tool_render(
@@ -2273,10 +2685,8 @@ fn invoke_tool_render(
         settled,
         "harness.defineTool output.render result",
     )?;
-    settled
-        .to_json(javascript)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| "dynamic Tool output.render result must be lossless JSON".to_owned())
+    js_value_to_json_iterative(settled, javascript)
+        .map_err(|_| "dynamic Tool output.render result must be lossless JSON".to_owned())
 }
 
 fn invoke_tool_presentation(
@@ -2308,19 +2718,23 @@ fn invoke_tool_presentation(
         settled,
         "harness.defineTool output.presentationMeta result",
     )?;
-    settled
-        .to_json(javascript)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| {
-            "dynamic Tool output.presentationMeta result must be lossless JSON".to_owned()
-        })
+    js_value_to_json_iterative(settled, javascript)
+        .map_err(|_| "dynamic Tool output.presentationMeta result must be lossless JSON".to_owned())
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "handler invocation needs the worker pump and optional active generation"
+)]
 fn invoke_handler(
     javascript: &mut JavaScriptContext,
-    activation: Option<&mut ActivationEffects>,
+    effects: &mut HashMap<u64, ActivationEffects>,
+    activation_id: Option<u64>,
     method: &str,
     args: &Value,
+    apply: &JsObject,
+    worker_commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
 ) -> Result<(Value, Vec<HostCommand>), String> {
     let handlers = javascript
         .global_object()
@@ -2343,24 +2757,91 @@ fn invoke_handler(
     let returned = handler
         .call(&JsValue::undefined(), &[args], javascript)
         .map_err(|error| error.to_string())?;
-    let settled = settle_value(&returned, javascript)?;
-    let value = settled
-        .to_json(javascript)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("harness.handle(\"{method}\") result must be lossless JSON data"))?;
+    let settled = settle_value_pumping(
+        &returned,
+        javascript,
+        apply,
+        effects,
+        worker_commands,
+        deferred,
+    )?;
+    let value = js_value_to_json_iterative(settled, javascript)
+        .map_err(|_| format!("harness.handle(\"{method}\") result must be lossless JSON data"))?;
     if !is_lossless_json(&value) {
         return Err(format!(
             "harness.handle(\"{method}\") result must be lossless JSON data"
         ));
     }
-    let commands = activation.map_or(Ok(Vec::new()), |activation| {
-        read_commands(javascript, activation)
-    })?;
-    Ok((value, commands))
+    if let Some(activation_id) = activation_id {
+        flush_commands(
+            javascript,
+            effects
+                .get_mut(&activation_id)
+                .ok_or_else(|| "dynamic Host handler activation is no longer active".to_owned())?,
+        )?;
+    }
+    Ok((value, Vec::new()))
 }
 
 fn settle_returned(value: &JsValue, javascript: &mut JavaScriptContext) -> Result<(), String> {
     settle_value(value, javascript).map(|_| ())
+}
+
+fn settle_returned_pumping(
+    value: &JsValue,
+    javascript: &mut JavaScriptContext,
+    apply: &JsObject,
+    effects: &mut HashMap<u64, ActivationEffects>,
+    commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
+) -> Result<(), String> {
+    settle_value_pumping(value, javascript, apply, effects, commands, deferred).map(|_| ())
+}
+
+fn settle_value_pumping(
+    value: &JsValue,
+    javascript: &mut JavaScriptContext,
+    apply: &JsObject,
+    effects: &mut HashMap<u64, ActivationEffects>,
+    commands: &mpsc::Receiver<WorkerCommand>,
+    deferred: &mut VecDeque<WorkerCommand>,
+) -> Result<JsValue, String> {
+    let Some(object) = value.as_object() else {
+        return Ok(value.clone());
+    };
+    let Ok(promise) = boa_engine::object::builtins::JsPromise::from_object(object) else {
+        return Ok(value.clone());
+    };
+    loop {
+        javascript.run_jobs().map_err(|error| error.to_string())?;
+        match promise.state() {
+            PromiseState::Fulfilled(value) => return Ok(value),
+            PromiseState::Rejected(error) => return Err(render_value(&error, javascript)),
+            PromiseState::Pending => {}
+        }
+        for activation in effects.values_mut() {
+            flush_commands(javascript, activation)?;
+        }
+        loop {
+            let command = commands
+                .recv()
+                .map_err(|_| "JavaScript worker closed while async work was pending".to_owned())?;
+            let may_settle = matches!(
+                command,
+                WorkerCommand::InvokeCallback { .. }
+                    | WorkerCommand::Deactivate { .. }
+                    | WorkerCommand::Shutdown
+            );
+            if !may_settle {
+                deferred.push_back(command);
+                continue;
+            }
+            if !process_worker_command(javascript, apply, effects, commands, deferred, command) {
+                return Err("JavaScript worker shut down while async work was pending".to_owned());
+            }
+            break;
+        }
+    }
 }
 
 fn settle_value(value: &JsValue, javascript: &mut JavaScriptContext) -> Result<JsValue, String> {
@@ -2376,6 +2857,128 @@ fn settle_value(value: &JsValue, javascript: &mut JavaScriptContext) -> Result<J
         PromiseState::Rejected(error) => Err(render_value(&error, javascript)),
         PromiseState::Pending => Err("JavaScript plugin apply did not settle".to_owned()),
     }
+}
+
+enum JsonCloneTask {
+    Visit(JsValue),
+    BuildArray(usize),
+    BuildObject(Vec<String>),
+    Leave(JsObject),
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the non-recursive JSON traversal keeps every task state explicit"
+)]
+fn js_value_to_json_iterative(
+    root: JsValue,
+    javascript: &mut JavaScriptContext,
+) -> Result<Value, String> {
+    let mut tasks = vec![JsonCloneTask::Visit(root)];
+    let mut values = Vec::new();
+    let mut ancestors = HashSet::new();
+    while let Some(task) = tasks.pop() {
+        match task {
+            JsonCloneTask::Visit(value) => match value.variant() {
+                JsVariant::Null => values.push(Value::Null),
+                JsVariant::Undefined => {
+                    return Err("JavaScript value is undefined, not lossless JSON".to_owned());
+                }
+                JsVariant::Boolean(value) => values.push(Value::Bool(value)),
+                JsVariant::String(value) => {
+                    values.push(Value::String(value.to_std_string_escaped()));
+                }
+                JsVariant::Integer32(value) => values.push(Value::from(value)),
+                JsVariant::Float64(value) => {
+                    let number = serde_json::Number::from_f64(value)
+                        .ok_or_else(|| "JavaScript number is not finite JSON".to_owned())?;
+                    values.push(Value::Number(number));
+                }
+                JsVariant::BigInt(_) => {
+                    return Err("JavaScript bigint is not lossless JSON".to_owned());
+                }
+                JsVariant::Symbol(_) => {
+                    return Err("JavaScript symbol is not lossless JSON".to_owned());
+                }
+                JsVariant::Object(object) => {
+                    if !ancestors.insert(object.clone()) {
+                        return Err("JavaScript value is circular".to_owned());
+                    }
+                    if object.is_array() {
+                        let length = object
+                            .get(js_string!("length"), javascript)
+                            .map_err(|error| error.to_string())?
+                            .to_length(javascript)
+                            .map_err(|error| error.to_string())?;
+                        let length = usize::try_from(length)
+                            .map_err(|_| "JavaScript array is too large".to_owned())?;
+                        tasks.push(JsonCloneTask::Leave(object.clone()));
+                        tasks.push(JsonCloneTask::BuildArray(length));
+                        for index in (0..length).rev() {
+                            let item = object
+                                .get(PropertyKey::from(index as u64), javascript)
+                                .map_err(|error| error.to_string())?;
+                            tasks.push(JsonCloneTask::Visit(item));
+                        }
+                    } else {
+                        let mut entries = Vec::new();
+                        for key in object
+                            .own_property_keys(javascript)
+                            .map_err(|error| error.to_string())?
+                        {
+                            let name = match &key {
+                                PropertyKey::String(name) => name.to_std_string_escaped(),
+                                PropertyKey::Index(index) => index.get().to_string(),
+                                PropertyKey::Symbol(_) => {
+                                    return Err(
+                                        "JavaScript symbol key is not lossless JSON".to_owned()
+                                    );
+                                }
+                            };
+                            let value = object
+                                .get(key, javascript)
+                                .map_err(|error| error.to_string())?;
+                            entries.push((name, value));
+                        }
+                        let names = entries
+                            .iter()
+                            .map(|(name, _)| name.clone())
+                            .collect::<Vec<_>>();
+                        tasks.push(JsonCloneTask::Leave(object.clone()));
+                        tasks.push(JsonCloneTask::BuildObject(names));
+                        for (_, value) in entries.into_iter().rev() {
+                            tasks.push(JsonCloneTask::Visit(value));
+                        }
+                    }
+                }
+            },
+            JsonCloneTask::BuildArray(length) => {
+                let start = values
+                    .len()
+                    .checked_sub(length)
+                    .ok_or_else(|| "JavaScript array clone stack is inconsistent".to_owned())?;
+                let children = values.split_off(start);
+                values.push(Value::Array(children));
+            }
+            JsonCloneTask::BuildObject(names) => {
+                let start = values
+                    .len()
+                    .checked_sub(names.len())
+                    .ok_or_else(|| "JavaScript object clone stack is inconsistent".to_owned())?;
+                let children = values.split_off(start);
+                values.push(Value::Object(names.into_iter().zip(children).collect()));
+            }
+            JsonCloneTask::Leave(object) => {
+                ancestors.remove(&object);
+            }
+        }
+    }
+    if values.len() != 1 {
+        return Err("JavaScript clone produced an invalid value stack".to_owned());
+    }
+    values
+        .pop()
+        .ok_or_else(|| "JavaScript clone produced no value".to_owned())
 }
 
 fn is_lossless_json(value: &Value) -> bool {

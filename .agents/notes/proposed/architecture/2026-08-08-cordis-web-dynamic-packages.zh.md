@@ -155,6 +155,8 @@ Host 和 Client 都只执行 plain JavaScript 函数体，不经过 TypeScript�
 
 Host 与 Client 的 `timer` 都是同名 Cordis Service，使用一致接口，不是全局 Builtin。需要 timer 的插件必须声明 `inject: ['timer']`；React effect 中创建的 timer 把 disposer 作为 cleanup 返回。
 
+Rust Host 求值器为每条生命周期命令分配 activation 局部身份，并通过 generation 所有的命令泵发布命令。当 apply、handler、Tool、Service 或 callback 代码执行 await 时，worker 会先刷新注册再挂起，且只为 generation 所有的 callback 或资源释放重新进入；停止 generation 会拒绝待定的 timer Promise。disposer 只能移除自身精确发布的 effect。timer 门面保留 callback 与 Promise 两种 timeout、callback 与异步迭代器两种 interval，以及 throttle/debounce 包装函数的资源释放语义。无损 JSON 克隆和 Host 转换使用显式工作栈，因此深层嵌套的普通数据不会在 JavaScript 或 Rust 调用栈中递归。
+
 所有注册和可撤销副作用由当前 Fiber 拥有。Event listener、Service、Tool、handler、timer、Slot、样式和主题覆盖通过 `ctx.effect()`、`ctx.on()` 或返回 disposer 的官方 API 注册。停止、更新、失败回滚或 undefine 时撤销两端贡献。Theme override 必须按 source 分层并返回 disposer，使卸载后恢复此前主题值。
 
 宿主、SEEKDEEP、Cordis 及其 Service、Event payload、Slot props、Session/Conversation Snapshot、Tool 状态和其他运行时对象是内部 live data。动态代码不得对这些对象或其子对象执行 `JSON.stringify`、`structuredClone`、递归枚举、全量复制或整体展示；只能读取当前任务所需叶子字段，构造不含宿主引用的最小自有数据。
