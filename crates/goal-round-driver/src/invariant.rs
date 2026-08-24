@@ -20,7 +20,7 @@ use serde_json::Value;
 use crate::prompt::render_goal_round_prompt;
 
 /// Package name reserved by this companion.
-pub const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-goal-round-driver";
+pub const PACKAGE_NAME: &str = "seekdeep-goal-round-driver";
 
 /// Cordis companion plugin name.
 pub const NAME: &str = "goal-round-driver-invariant";

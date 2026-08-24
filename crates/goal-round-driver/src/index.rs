@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use seekdeep_agent::{
-    AGENTS, Agent, AgentEvent, AgentLifecycleEvent, AgentStatus, PreStepDecision,
+    AGENTS, Agent, AgentCancelCause, AgentEvent, AgentLifecycleEvent, AgentStatus, CancelOptions,
+    PreStepDecision,
 };
 use seekdeep_agent_loop::{
     AgentErrorEvent, AgentInboxClaimed, AgentInboxMessage, AgentPreStepEvent, AgentStatusChanged,
@@ -225,14 +226,14 @@ impl Driver {
         }
         if goal.rounds_started >= goal.max_goal_rounds {
             drop(guard);
-            let _ = self.goals.block(
+            self.goals.block(
                 &agent,
                 &goal_ref(&goal),
                 &serde_json::json!({
                     "code": "round-limit",
                     "message": format!("Goal reached its configured limit of {} rounds.", goal.max_goal_rounds),
                 }),
-            );
+            )?;
             return Ok(());
         }
         let round = goal.rounds_started + 1;
@@ -276,66 +277,78 @@ impl Driver {
                     && latest.phase == GoalPhase::Active
                     && latest.activation == GoalActivation::Armed
             }) {
-                let _ = self.goals.block(
+                self.goals.block(
                     &agent,
                     &goal_ref(latest.as_ref().expect("checked")),
                     &serde_json::json!({
                         "code": "queue-failed",
                         "message": format!("Could not queue goal round {round}: {error}"),
                     }),
-                );
+                )?;
             }
         }
         Ok(())
     }
 
     fn request_drive(self: &Arc<Self>, state: &Arc<Mutex<DriverState>>) {
-        {
-            let mut guard = state.lock();
-            if guard.stopping {
-                return;
-            }
-            guard.requested = true;
-            if guard.run.is_some() {
-                return;
-            }
+        let mut guard = state.lock();
+        if guard.stopping {
+            return;
         }
-        let driver = self.clone();
-        let state = state.clone();
+        guard.requested = true;
+        if guard.run.is_some() {
+            return;
+        }
+        let task_driver = self.clone();
+        let retire_driver = self.clone();
         let spawn_state = state.clone();
-        let run = match self.agents.without_initiator(|| ()) {
-            Ok(()) => tokio::spawn(async move {
-                loop {
-                    let should_run = {
-                        let mut guard = spawn_state.lock();
-                        if !guard.requested || guard.stopping {
+        let run = tokio::spawn(async move {
+            let scoped_driver = task_driver.clone();
+            let scoped_state = spawn_state.clone();
+            let result = task_driver
+                .agents
+                .scope_without_initiator(async move {
+                    let driver = scoped_driver;
+                    let state = scoped_state;
+                    loop {
+                        let should_run = {
+                            let mut guard = state.lock();
+                            if !guard.requested || guard.stopping {
+                                break;
+                            }
+                            guard.requested = false;
+                            true
+                        };
+                        if !should_run {
                             break;
                         }
-                        guard.requested = false;
-                        true
-                    };
-                    if !should_run {
-                        break;
+                        if let Err(error) = driver.drive(&state).await {
+                            tracing::warn!(
+                                "goal-round-driver: driver failed for agent {:?}: {error}",
+                                state.lock().agent.id()
+                            );
+                            driver.disarm(&state.lock());
+                        }
                     }
-                    if let Err(error) = driver.drive(&spawn_state).await {
-                        tracing::warn!(
-                            "goal-round-driver: driver failed for agent {:?}: {error}",
-                            spawn_state.lock().agent.id()
-                        );
-                        driver.disarm(&spawn_state.lock());
-                    }
-                }
-            }),
-            Err(error) => {
+                })
+                .await;
+            if let Err(error) = result {
                 tracing::warn!(
-                    "goal-round-driver: could not start driver for agent {:?}: {error}",
-                    state.lock().agent.id()
+                    "goal-round-driver: driver task rejected for agent {:?}: {error}",
+                    spawn_state.lock().agent.id()
                 );
-                self.disarm(&state.lock());
-                return;
+                task_driver.disarm(&spawn_state.lock());
             }
-        };
-        state.lock().run = Some(run);
+            let rearm = {
+                let mut guard = spawn_state.lock();
+                guard.run = None;
+                guard.requested && !guard.stopping
+            };
+            if rearm {
+                retire_driver.request_drive(&spawn_state);
+            }
+        });
+        guard.run = Some(run);
     }
 
     #[allow(clippy::too_many_lines)]
@@ -630,10 +643,12 @@ impl Driver {
                     let Some(submitted) = submitted else {
                         return next.run().await;
                     };
-                    let Some(source) = goal_source(submitted.source()) else {
-                        return next.run().await;
-                    };
                     let state = driver.state_for(&agent);
+                    let Some(source) = goal_source(submitted.source()) else {
+                        Driver::restore_other_claimed(&agent, &messages, submitted.id());
+                        driver.request_drive(&state);
+                        return Ok(EventReply::Value(Arc::new(PreStepDecision::Reject)));
+                    };
                     let mut valid =
                         driver.valid_reservation(&state.lock(), submitted.content(), &source);
                     if let Err(error) = valid {
@@ -689,14 +704,14 @@ impl Driver {
                                 && goal.phase == GoalPhase::Active
                                 && goal.activation == GoalActivation::Armed
                         }) {
-                            let _ = driver.goals.block(
+                            driver.goals.block(
                                 &agent,
                                 &goal_ref(goal.as_ref().expect("checked")),
                                 &serde_json::json!({
                                     "code": "prompt-rejected",
                                     "message": "Goal round was rejected before entering its step.",
                                 }),
-                            );
+                            )?;
                         }
                         return Ok(EventReply::Value(Arc::new(decision)));
                     }
@@ -802,22 +817,41 @@ pub fn apply(context: &Context) -> anyhow::Result<()> {
         "goal-round-driver lifecycle",
         move || {
             Box::pin(async move {
-                let mut waits = Vec::new();
+                let mut runs = Vec::new();
+                let mut idle_waits = Vec::new();
                 {
                     let states: Vec<_> = cleanup_driver.states.lock().values().cloned().collect();
                     for state in states {
                         let mut guard = state.lock();
                         guard.stopping = true;
                         cleanup_driver.disarm(&guard);
+                        let should_cancel = if let Some(attempt) = &mut guard.attempt {
+                            attempt.stale = true;
+                            guard.agent.status() == AgentStatus::Running
+                        } else {
+                            false
+                        };
+                        let agent = guard.agent.clone();
                         if let Some(run) = guard.run.take() {
-                            waits.push(run);
+                            runs.push(run);
+                        }
+                        drop(guard);
+                        if should_cancel {
+                            let _ =
+                                agent.cancel(AgentCancelCause::Parent, CancelOptions::default());
+                            if let Ok(wait) = agent.when_idle() {
+                                idle_waits.push(wait);
+                            }
                         }
                     }
-                    cleanup_driver.states.lock().clear();
                 }
-                for wait in waits {
-                    let _ = wait.await;
+                for run in runs {
+                    let _ = run.await;
                 }
+                for wait in idle_waits {
+                    wait.await;
+                }
+                cleanup_driver.states.lock().clear();
                 Ok(())
             })
         },

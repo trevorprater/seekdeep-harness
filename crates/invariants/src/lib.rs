@@ -135,8 +135,50 @@ struct RegistryState {
 #[derive(Clone, Debug)]
 enum StartupOutcome {
     Ready,
-    Failed(String),
+    Failed(StartupFailure),
     Disposed,
+}
+
+#[derive(Clone, Debug)]
+struct StartupFailure {
+    rendered: String,
+    invariant: Option<InvariantError>,
+}
+
+impl StartupFailure {
+    fn ordinary(rendered: String) -> Self {
+        Self {
+            rendered,
+            invariant: None,
+        }
+    }
+
+    fn installer(error: &anyhow::Error, cleanup: Option<&anyhow::Error>) -> Self {
+        let rendered = cleanup.map_or_else(
+            || format!("{error:#}"),
+            |cleanup| format!("{error:#}: cleanup failed: {cleanup:#}"),
+        );
+        let invariant = error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<InvariantError>())
+            .cloned()
+            .map(|mut invariant| {
+                if let Some(cleanup) = cleanup {
+                    invariant.message =
+                        format!("{}: cleanup failed: {cleanup:#}", invariant.message);
+                }
+                invariant
+            });
+        Self {
+            rendered,
+            invariant,
+        }
+    }
+
+    fn into_error(self) -> anyhow::Error {
+        self.invariant
+            .map_or_else(|| anyhow::anyhow!(self.rendered), anyhow::Error::new)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -326,18 +368,19 @@ impl InvariantRegistry {
                                     |cleanup| format!("{error}: cleanup failed: {cleanup:#}"),
                                     |()| error.to_string(),
                                 );
-                                startup.complete(StartupOutcome::Failed(message));
+                                startup.complete(StartupOutcome::Failed(StartupFailure::ordinary(
+                                    message,
+                                )));
                             } else {
                                 startup.complete(StartupOutcome::Ready);
                             }
                         }
                         Err(error) => {
                             let cleanup = fiber.dispose().await;
-                            let message = cleanup.map_or_else(
-                                |cleanup| format!("{error:#}: cleanup failed: {cleanup:#}"),
-                                |()| format!("{error:#}"),
-                            );
-                            startup.complete(StartupOutcome::Failed(message));
+                            let cleanup = cleanup.as_ref().err();
+                            startup.complete(StartupOutcome::Failed(StartupFailure::installer(
+                                &error, cleanup,
+                            )));
                         }
                     }
                     // The dependency wrapper stays active after publishing a
@@ -372,9 +415,9 @@ impl InvariantRegistration {
     pub async fn await_ready(&self) -> anyhow::Result<()> {
         match self.startup.wait().await {
             StartupOutcome::Ready => Ok(()),
-            StartupOutcome::Failed(rendered) => {
+            StartupOutcome::Failed(failure) => {
                 let _ = self.effect.dispose().await;
-                Err(anyhow::anyhow!(rendered))
+                Err(failure.into_error())
             }
             StartupOutcome::Disposed => anyhow::bail!("invariant registration was disposed"),
         }
@@ -630,9 +673,14 @@ mod tests {
             }
         });
         let failed = registry.register("seekdeep-session", installer).unwrap();
-        let error = failed.await_ready().await.unwrap_err().to_string();
+        let error = failed.await_ready().await.unwrap_err();
+        let invariant = error
+            .downcast_ref::<InvariantError>()
+            .expect("startup preserves the package-attributed error");
+        assert_eq!(invariant.code, "INVARIANT");
+        assert_eq!(invariant.package_name, "seekdeep-session");
         assert_eq!(
-            error,
+            error.to_string(),
             "invariant violated by \"seekdeep-session\": seq must strictly increase"
         );
         emit(&context).unwrap();

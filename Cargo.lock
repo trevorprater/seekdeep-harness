@@ -5265,14 +5265,18 @@ name = "seekdeep-goal-round-driver"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "futures",
  "parking_lot",
  "seekdeep-agent",
  "seekdeep-agent-loop",
+ "seekdeep-agent-loop-testkit",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-goal",
  "seekdeep-invariants",
  "seekdeep-llm",
+ "seekdeep-scope",
  "serde",
  "serde_json",
  "tokio",
