@@ -74818,7 +74818,7 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/workflow-worker-thread/tests/integration.spec.ts (2 passed)",
-        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (18 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (39 passed)",
         "cargo clippy --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
       ],
       "note": "real assembled Rust engine drives the spawn provider, structured-output attachment, invariant-wrapped AgentLoop, plain child text, schema child value, null-on-schema-failure path, publication-time child observation, and quiescent child disposal with only the LLM adapter scripted"
@@ -74833,7 +74833,7 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/workflow-worker-thread/tests/meta.spec.ts (7 passed)",
-        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (15 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (39 passed)",
         "cargo clippy --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
       ],
       "note": "Rust lossless-JSON compatibility boundary returns a detached typed copy and aggregates every source diagnostic for non-objects, unknown or missing fields, mistyped optionals, and malformed phase entries under META_INVALID"
@@ -74853,7 +74853,18 @@
     {
       "source": "packages/workflow/workflow-worker-thread/tests/session.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/tests/runtime_session_parity.rs",
+        "crates/workflow-worker-thread/tests/host_lifecycle_parity.rs",
+        "crates/workflow-worker-thread/tests/start_validation_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/workflow-worker-thread/tests/session.spec.ts (27 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (39 passed)",
+        "cargo clippy --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust-owned evaluator and typed child port cover every source script, hook, combinator, cap, error-identity, cancellation, stray, and value-boundary case; the host tests pin late-ready refusal and disposal moved across the direct Rust boundary, while closed enums and typed handles make unknown call ids and Node parentPort bootstrap misuse unrepresentable"
     },
     {
       "source": "packages/workflow/workflow-worker-thread/tests/source-worker.compat.spec.ts",
@@ -74864,7 +74875,7 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/workflow-worker-thread/tests/source-worker.compat.spec.ts (1 passed)",
-        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (16 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (39 passed)",
         "cargo clippy --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
       ],
       "note": "the compiled Rust engine with default config validates, starts, executes, settles 6 * 7 to JSON number 42 with zero agents, and disposes without invoking the registered child provider"
@@ -74877,7 +74888,19 @@
     {
       "source": "packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/workflow-worker-thread/tests/runtime_session_parity.rs",
+        "crates/workflow-worker-thread/tests/host_lifecycle_parity.rs",
+        "crates/workflow-worker-thread/tests/start_validation_parity.rs",
+        "crates/workflow-worker-thread/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.spec.ts (54 passed)",
+        "cargo test --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features (39 passed)",
+        "cargo clippy --locked --offline -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ],
+      "note": "grouped Rust mirrors cover start validation and overrides, nested async scheduling, host-authored fatal identity, caps and accounting, cancellation races and first-result precedence, late and stray child reaping, bounded idempotent disposal, synthesized lifecycle pairing on grace or worker death, external-signal detachment, unique ids, HMR holder ownership, and real AgentLoop composition. This row remains pending until the native Rust worker gains a hard kill boundary for a non-cooperative evaluator or injected provider; typed JSON and the absence of Node globals already make the source's non-cloneable payload and ambient-environment cases unrepresentable"
     },
     {
       "source": "packages/workflow/workflow-worker-thread/tsconfig.json",

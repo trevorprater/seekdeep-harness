@@ -1,12 +1,15 @@
 //! Per-run worker-side script hooks, child RPC, concurrency/caps,
 //! cancellation, and result serialization.
 
-use std::{cell::RefCell, sync::Arc};
+use std::{
+    cell::RefCell,
+    panic::{AssertUnwindSafe, catch_unwind},
+    sync::Arc,
+};
 
 use boa_engine::{
     Context, JsError, JsObject, JsResult, JsValue, NativeFunction, Source, context::ContextBuilder,
-    job::JobExecutor, js_string, object::builtins::JsFunction, object::builtins::JsPromise,
-    script::Script,
+    js_string, object::builtins::JsFunction, object::builtins::JsPromise, script::Script,
 };
 use parking_lot::Mutex;
 use seekdeep_llm::{AbortSignal, ContentBlock};
@@ -53,6 +56,22 @@ struct ExecutionShared {
 
 thread_local! {
     static EXECUTION: RefCell<Option<Arc<ExecutionShared>>> = const { RefCell::new(None) };
+    static FATAL_ERRORS: RefCell<Vec<JsObject>> = const { RefCell::new(Vec::new()) };
+}
+
+struct FatalErrorScope;
+
+impl FatalErrorScope {
+    fn enter() -> Self {
+        FATAL_ERRORS.with(|errors| errors.borrow_mut().clear());
+        Self
+    }
+}
+
+impl Drop for FatalErrorScope {
+    fn drop(&mut self) {
+        FATAL_ERRORS.with(|errors| errors.borrow_mut().clear());
+    }
 }
 
 fn with_shared<R>(function: impl FnOnce(&Arc<ExecutionShared>) -> R) -> R {
@@ -81,9 +100,59 @@ fn js_error(message: impl Into<String>) -> JsError {
         .into()
 }
 
+fn render_anyhow(error: &anyhow::Error) -> String {
+    catch_unwind(AssertUnwindSafe(|| format!("{error:#}")))
+        .unwrap_or_else(|_| "[unrenderable workflow boundary error]".to_owned())
+}
+
 #[allow(clippy::needless_pass_by_value)]
-fn to_js_error(error: WorkflowError) -> JsError {
-    js_error(error.message.clone())
+fn workflow_error_code(code: WorkflowErrorCode) -> &'static str {
+    match code {
+        WorkflowErrorCode::ScriptParse => "SCRIPT_PARSE",
+        WorkflowErrorCode::MetaInvalid => "META_INVALID",
+        WorkflowErrorCode::InvalidArgument => "INVALID_ARGUMENT",
+        WorkflowErrorCode::UnsupportedOption => "UNSUPPORTED_OPTION",
+        WorkflowErrorCode::UnsupportedSchema => "UNSUPPORTED_SCHEMA",
+        WorkflowErrorCode::AgentCap => "AGENT_CAP",
+        WorkflowErrorCode::ItemCap => "ITEM_CAP",
+        WorkflowErrorCode::AgentStart => "AGENT_START",
+        WorkflowErrorCode::AgentResult => "AGENT_RESULT",
+        WorkflowErrorCode::ResultUnserializable => "RESULT_UNSERIALIZABLE",
+        WorkflowErrorCode::Cancelled => "CANCELLED",
+    }
+}
+
+fn to_js_error(error: WorkflowError, context: &mut Context) -> JsError {
+    let message = error.message;
+    let code = error.code;
+    let fatal = error.fatal;
+    let native: JsError = boa_engine::JsNativeError::error()
+        .with_message(message)
+        .into();
+    let value = native.to_opaque(context);
+    if let Some(object) = value.as_object() {
+        let _ = object.set(
+            js_string!("name"),
+            js_string!("WorkflowError"),
+            false,
+            context,
+        );
+        let _ = object.set(
+            js_string!("code"),
+            js_string!(workflow_error_code(code)),
+            false,
+            context,
+        );
+        let _ = object.set(js_string!("fatal"), JsValue::from(fatal), false, context);
+        if fatal {
+            FATAL_ERRORS.with(|errors| errors.borrow_mut().push(object.clone()));
+        }
+    }
+    JsError::from_opaque(value)
+}
+
+fn to_js_error_in(error: WorkflowError, context: &RefCell<&mut Context>) -> JsError {
+    to_js_error(error, &mut context.borrow_mut())
 }
 
 /// Flatten a child's final output blocks to text.
@@ -221,8 +290,10 @@ impl WorkflowExecution {
         }
         match receive.await {
             Ok(Ok(result)) => result,
-            Ok(Err(error)) => error_result(&format!("{error:#}")),
-            Err(_) => error_result("workflow worker exited before completing"),
+            Ok(Err(error)) => execution_error_result(&self.shared, &render_anyhow(&error)),
+            Err(_) => {
+                execution_error_result(&self.shared, "workflow worker exited before completing")
+            }
         }
     }
 }
@@ -233,6 +304,15 @@ fn error_result(message: &str) -> WorkflowResult {
         stop_reason: WorkflowStopReason::Error,
         error: Some(message.to_owned()),
         agents_started: 0,
+    }
+}
+
+fn execution_error_result(shared: &ExecutionShared, message: &str) -> WorkflowResult {
+    WorkflowResult {
+        value: Value::Null,
+        stop_reason: WorkflowStopReason::Error,
+        error: Some(message.to_owned()),
+        agents_started: shared.state.lock().started,
     }
 }
 
@@ -313,6 +393,7 @@ async fn run_script(
     _meta_name: String,
     args: Option<Value>,
 ) -> anyhow::Result<WorkflowResult> {
+    let _fatal_scope = FatalErrorScope::enter();
     let executor = std::rc::Rc::new(WorkflowJobExecutor::new());
     let mut context = ContextBuilder::new()
         .job_executor(executor.clone())
@@ -352,10 +433,11 @@ async fn run_script(
         {
             Ok(Ok(value)) => value,
             Ok(Err(error)) => {
-                return Ok(error_result(&error.to_string()));
+                return Ok(execution_error_result(&shared, &error.to_string()));
             }
             Err(_) => {
-                return Ok(error_result(
+                return Ok(execution_error_result(
+                    &shared,
                     "workflow script exceeded its synchronous timeout",
                 ));
             }
@@ -366,54 +448,67 @@ async fn run_script(
         .as_object()
         .and_then(|object| JsPromise::from_object(object).ok())
     else {
-        return Ok(error_result("program wrapper did not return a promise"));
+        return Ok(execution_error_result(
+            &shared,
+            "program wrapper did not return a promise",
+        ));
     };
 
     let jobs = {
         let context = RefCell::new(&mut context);
-        executor.run_jobs_async(&context).await
+        executor
+            .run_jobs_until(&context, &promise, &shared.cancel)
+            .await
     };
     if let Err(error) = jobs {
-        return Ok(error_result(&format!("{error}")));
+        return Ok(execution_error_result(&shared, &format!("{error}")));
     }
 
+    Ok(promise_result(&shared, &promise, &mut context))
+}
+
+fn promise_result(
+    shared: &ExecutionShared,
+    promise: &JsPromise,
+    context: &mut Context,
+) -> WorkflowResult {
     match promise.state() {
         boa_engine::builtins::promise::PromiseState::Fulfilled(value) if value.is_undefined() => {
             if shared.cancel.is_aborted() {
-                return Ok(cancelled_result(&shared));
+                return cancelled_result(shared);
             }
-            Ok(WorkflowResult {
+            WorkflowResult {
                 value: Value::Null,
                 stop_reason: WorkflowStopReason::Completed,
                 error: None,
                 agents_started: shared.state.lock().started,
-            })
+            }
         }
         boa_engine::builtins::promise::PromiseState::Fulfilled(value) => {
             if shared.cancel.is_aborted() {
-                return Ok(cancelled_result(&shared));
+                return cancelled_result(shared);
             }
-            match materialize_result(&value, &mut context) {
-                Ok(value) => Ok(WorkflowResult {
+            match materialize_result(&value, context) {
+                Ok(value) => WorkflowResult {
                     value,
                     stop_reason: WorkflowStopReason::Completed,
                     error: None,
                     agents_started: shared.state.lock().started,
-                }),
-                Err(error) => Ok(error_result(&error.to_string())),
+                },
+                Err(error) => execution_error_result(shared, &error.to_string()),
             }
         }
         boa_engine::builtins::promise::PromiseState::Rejected(value) => {
             if shared.cancel.is_aborted() {
-                return Ok(cancelled_result(&shared));
+                return cancelled_result(shared);
             }
-            Ok(error_result(&render_thrown(&value, &mut context)))
+            execution_error_result(shared, &render_thrown(&value, context))
         }
         boa_engine::builtins::promise::PromiseState::Pending => {
             if shared.cancel.is_aborted() {
-                return Ok(cancelled_result(&shared));
+                return cancelled_result(shared);
             }
-            Ok(error_result("workflow script did not settle"))
+            execution_error_result(shared, "workflow script did not settle")
         }
     }
 }
@@ -440,7 +535,17 @@ fn array_length(array: &JsObject, _context: &mut Context) -> JsResult<usize> {
 
 /// Whether a rejection is a fatal workflow error (thrown by the native hooks).
 fn is_fatal(error: &JsError) -> bool {
-    error.as_native().is_some()
+    error
+        .as_opaque()
+        .and_then(JsValue::as_object)
+        .is_some_and(|error| {
+            FATAL_ERRORS.with(|errors| {
+                errors
+                    .borrow()
+                    .iter()
+                    .any(|known| JsObject::equals(known, &error))
+            })
+        })
 }
 
 /// Read and validate the `agent()` options bag.
@@ -557,26 +662,48 @@ async fn agent_hook(
 ) -> JsResult<JsValue> {
     let shared = with_shared(Arc::clone);
     if shared.cancel.is_aborted() {
-        return Err(to_js_error(cancelled_error(&cancelled_message(&shared))));
+        return Err(to_js_error_in(
+            cancelled_error(&cancelled_message(&shared)),
+            context,
+        ));
     }
     let prompt = args
         .first()
         .and_then(JsValue::as_string)
         .map(|text| text.to_std_string_escaped());
     let Some(prompt) = prompt else {
-        return Err(js_error("agent() requires a non-empty prompt string"));
+        return Err(to_js_error_in(
+            WorkflowError::new(
+                "agent() requires a non-empty prompt string",
+                WorkflowErrorCode::InvalidArgument,
+            ),
+            context,
+        ));
     };
     if prompt.is_empty() {
-        return Err(js_error("agent() requires a non-empty prompt string"));
+        return Err(to_js_error_in(
+            WorkflowError::new(
+                "agent() requires a non-empty prompt string",
+                WorkflowErrorCode::InvalidArgument,
+            ),
+            context,
+        ));
     }
-    let opts = read_agent_options(args.get(1), context).map_err(to_js_error)?;
+    let opts =
+        read_agent_options(args.get(1), context).map_err(|error| to_js_error_in(error, context))?;
     let (seq, label, phase) = {
         let mut state = shared.state.lock();
         if state.started >= shared.limits.max_total_agents {
-            return Err(js_error(format!(
-                "this run reached its total agent cap ({}) — a runaway-loop backstop; raise the applicable maxTotalAgents limit if the scale is intentional",
-                shared.limits.max_total_agents
-            )));
+            return Err(to_js_error_in(
+                WorkflowError::new(
+                    format!(
+                        "this run reached its total agent cap ({}) — a runaway-loop backstop; raise the applicable maxTotalAgents limit if the scale is intentional",
+                        shared.limits.max_total_agents
+                    ),
+                    WorkflowErrorCode::AgentCap,
+                ),
+                context,
+            ));
         }
         state.started += 1;
         let label = opts.label.clone().unwrap_or_else(|| default_label(&prompt));
@@ -586,7 +713,10 @@ async fn agent_hook(
     let permit = tokio::select! {
         permit = shared.slots.acquire() => permit.map_err(|_| js_error("concurrency slot closed"))?,
         () = shared.cancel.cancelled() => {
-            return Err(to_js_error(cancelled_error(&cancelled_message(&shared))));
+            return Err(to_js_error_in(
+                cancelled_error(&cancelled_message(&shared)),
+                context,
+            ));
         }
     };
     let result = run_agent(&shared, &prompt, &opts, seq, label, phase, context).await;
@@ -605,7 +735,10 @@ async fn run_agent(
     context: &RefCell<&mut Context>,
 ) -> JsResult<JsValue> {
     if shared.cancel.is_aborted() {
-        return Err(to_js_error(cancelled_error(&cancelled_message(shared))));
+        return Err(to_js_error_in(
+            cancelled_error(&cancelled_message(shared)),
+            context,
+        ));
     }
     let request = crate::types::ChildStartRequest {
         prompt: prompt.to_owned(),
@@ -617,17 +750,26 @@ async fn run_agent(
         Ok(run) => run,
         Err(error) => {
             if shared.cancel.is_aborted() {
-                return Err(to_js_error(cancelled_error(&cancelled_message(shared))));
+                return Err(to_js_error_in(
+                    cancelled_error(&cancelled_message(shared)),
+                    context,
+                ));
             }
-            return Err(to_js_error(WorkflowError::new(
-                format!("agent() could not start a child: {error}"),
-                WorkflowErrorCode::AgentStart,
-            )));
+            return Err(to_js_error_in(
+                WorkflowError::new(
+                    format!("agent() could not start a child: {}", render_anyhow(&error)),
+                    WorkflowErrorCode::AgentStart,
+                ),
+                context,
+            ));
         }
     };
     if shared.cancel.is_aborted() {
         let _ = run.dispose().await;
-        return Err(to_js_error(cancelled_error(&cancelled_message(shared))));
+        return Err(to_js_error_in(
+            cancelled_error(&cancelled_message(shared)),
+            context,
+        ));
     }
     let info = WorkflowAgentInfo {
         seq,
@@ -645,17 +787,23 @@ async fn run_agent(
                     outcome: WorkflowAgentOutcome::Cancelled,
                 });
                 let _ = run.dispose().await;
-                return Err(to_js_error(cancelled_error(&cancelled_message(shared))));
+                return Err(to_js_error_in(
+                    cancelled_error(&cancelled_message(shared)),
+                    context,
+                ));
             }
             shared.observer.agent_end(&WorkflowAgentEndInfo {
                 info,
                 outcome: WorkflowAgentOutcome::Failed,
             });
             let _ = run.dispose().await;
-            return Err(to_js_error(WorkflowError::new(
-                format!("child agent run failed: {error}"),
-                WorkflowErrorCode::AgentResult,
-            )));
+            return Err(to_js_error_in(
+                WorkflowError::new(
+                    format!("child agent run failed: {}", render_anyhow(&error)),
+                    WorkflowErrorCode::AgentResult,
+                ),
+                context,
+            ));
         }
     };
     let value = if settled.stop_reason == "completed" {
@@ -692,7 +840,10 @@ async fn run_agent(
             outcome: WorkflowAgentOutcome::Cancelled,
         });
         let _ = run.dispose().await;
-        return Err(to_js_error(cancelled_error(&cancelled_message(shared))));
+        return Err(to_js_error_in(
+            cancelled_error(&cancelled_message(shared)),
+            context,
+        ));
     } else {
         shared.observer.agent_end(&WorkflowAgentEndInfo {
             info,
@@ -729,15 +880,22 @@ async fn parallel_hook(
 ) -> JsResult<JsValue> {
     let shared = with_shared(Arc::clone);
     if shared.cancel.is_aborted() {
-        return Err(to_js_error(cancelled_error(&cancelled_message(&shared))));
+        return Err(to_js_error_in(
+            cancelled_error(&cancelled_message(&shared)),
+            context,
+        ));
     }
     let Some(array) = args
         .first()
         .and_then(JsValue::as_object)
         .filter(|object| object.is_array())
     else {
-        return Err(js_error(
-            "parallel() requires an array of zero-argument functions",
+        return Err(to_js_error_in(
+            WorkflowError::new(
+                "parallel() requires an array of zero-argument functions",
+                WorkflowErrorCode::InvalidArgument,
+            ),
+            context,
         ));
     };
     let length = {
@@ -745,10 +903,16 @@ async fn parallel_hook(
         array_length(&array, &mut ctx)?
     };
     if length > usize::try_from(shared.limits.max_items_per_call).unwrap_or(usize::MAX) {
-        return Err(js_error(format!(
-            "parallel() received {length} items — over the per-call cap ({}); split the work or raise maxItemsPerCall in the engine config",
-            shared.limits.max_items_per_call
-        )));
+        return Err(to_js_error_in(
+            WorkflowError::new(
+                format!(
+                    "parallel() received {length} items — over the per-call cap ({}); split the work or raise maxItemsPerCall in the engine config",
+                    shared.limits.max_items_per_call
+                ),
+                WorkflowErrorCode::ItemCap,
+            ),
+            context,
+        ));
     }
     let mut futures = Vec::with_capacity(length);
     for index in 0..length {
@@ -757,35 +921,53 @@ async fn parallel_hook(
         );
         let thunk = array.get(key, &mut context.borrow_mut())?;
         if !thunk.is_callable() {
-            return Err(js_error(format!(
-                "parallel() item {index} is not a function"
-            )));
+            return Err(to_js_error_in(
+                WorkflowError::new(
+                    format!("parallel() item {index} is not a function"),
+                    WorkflowErrorCode::InvalidArgument,
+                ),
+                context,
+            ));
         }
         let thunk_object = thunk
             .as_object()
             .ok_or_else(|| js_error("not a function"))?;
         let function = JsFunction::from_object(thunk_object.clone())
             .ok_or_else(|| js_error("not a function"))?;
-        let value: JsValue = function
+        let value = function
             .typed::<(JsValue,), JsValue>()
-            .call(&mut context.borrow_mut(), (JsValue::undefined(),))?;
-        futures.push(as_future(value, context));
+            .call(&mut context.borrow_mut(), (JsValue::undefined(),));
+        match value {
+            Ok(value) => futures.push(Some(as_future(value, context))),
+            Err(error) => {
+                if is_fatal(&error) {
+                    return Err(error);
+                }
+                futures.push(None);
+            }
+        }
     }
-    let mut out = Vec::with_capacity(futures.len());
-    for future in futures {
+    let out = futures::future::try_join_all(futures.into_iter().map(|future| async {
+        let Some(future) = future else {
+            return Ok(JsValue::null());
+        };
         match future.await {
-            Ok(value) => out.push(value),
+            Ok(value) => Ok(value),
             Err(error) => {
                 if shared.cancel.is_aborted() {
-                    return Err(to_js_error(cancelled_error(&cancelled_message(&shared))));
+                    return Err(to_js_error_in(
+                        cancelled_error(&cancelled_message(&shared)),
+                        context,
+                    ));
                 }
                 if is_fatal(&error) {
                     return Err(error);
                 }
-                out.push(JsValue::null());
+                Ok(JsValue::null())
             }
         }
-    }
+    }))
+    .await?;
     let array = boa_engine::object::builtins::JsArray::from_iter(out, &mut context.borrow_mut());
     Ok(array.into())
 }
@@ -798,34 +980,59 @@ async fn pipeline_hook(
 ) -> JsResult<JsValue> {
     let shared = with_shared(Arc::clone);
     if shared.cancel.is_aborted() {
-        return Err(to_js_error(cancelled_error(&cancelled_message(&shared))));
+        return Err(to_js_error_in(
+            cancelled_error(&cancelled_message(&shared)),
+            context,
+        ));
     }
     let Some(items) = args
         .first()
         .and_then(JsValue::as_object)
         .filter(|object| object.is_array())
     else {
-        return Err(js_error("pipeline() requires an items array"));
+        return Err(to_js_error_in(
+            WorkflowError::new(
+                "pipeline() requires an items array",
+                WorkflowErrorCode::InvalidArgument,
+            ),
+            context,
+        ));
     };
     let item_count = {
         let mut ctx = context.borrow_mut();
         array_length(&items, &mut ctx)?
     };
     if item_count > usize::try_from(shared.limits.max_items_per_call).unwrap_or(usize::MAX) {
-        return Err(js_error(format!(
-            "pipeline() received {item_count} items — over the per-call cap ({}); split the work or raise maxItemsPerCall in the engine config",
-            shared.limits.max_items_per_call
-        )));
+        return Err(to_js_error_in(
+            WorkflowError::new(
+                format!(
+                    "pipeline() received {item_count} items — over the per-call cap ({}); split the work or raise maxItemsPerCall in the engine config",
+                    shared.limits.max_items_per_call
+                ),
+                WorkflowErrorCode::ItemCap,
+            ),
+            context,
+        ));
     }
     if args.len() < 2 {
-        return Err(js_error("pipeline() requires at least one stage function"));
+        return Err(to_js_error_in(
+            WorkflowError::new(
+                "pipeline() requires at least one stage function",
+                WorkflowErrorCode::InvalidArgument,
+            ),
+            context,
+        ));
     }
     let stages = &args[1..];
     for (index, stage) in stages.iter().enumerate() {
         if !stage.is_callable() {
-            return Err(js_error(format!(
-                "pipeline() stage {index} is not a function"
-            )));
+            return Err(to_js_error_in(
+                WorkflowError::new(
+                    format!("pipeline() stage {index} is not a function"),
+                    WorkflowErrorCode::InvalidArgument,
+                ),
+                context,
+            ));
         }
     }
     let mut futures = Vec::with_capacity(item_count);
@@ -839,21 +1046,24 @@ async fn pipeline_hook(
             &shared, item, stages, item_index, context,
         ));
     }
-    let mut out = Vec::with_capacity(futures.len());
-    for future in futures {
+    let out = futures::future::try_join_all(futures.into_iter().map(|future| async {
         match future.await {
-            Ok(value) => out.push(value),
+            Ok(value) => Ok(value),
             Err(error) => {
                 if shared.cancel.is_aborted() {
-                    return Err(to_js_error(cancelled_error(&cancelled_message(&shared))));
+                    return Err(to_js_error_in(
+                        cancelled_error(&cancelled_message(&shared)),
+                        context,
+                    ));
                 }
                 if is_fatal(&error) {
                     return Err(error);
                 }
-                out.push(JsValue::null());
+                Ok(JsValue::null())
             }
         }
-    }
+    }))
+    .await?;
     let array = boa_engine::object::builtins::JsArray::from_iter(out, &mut context.borrow_mut());
     Ok(array.into())
 }
@@ -889,20 +1099,35 @@ async fn run_pipeline_item(
 }
 
 /// The phase(title) hook.
-fn phase_hook(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+fn phase_hook(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let shared = with_shared(Arc::clone);
     if shared.cancel.is_aborted() {
-        return Err(to_js_error(cancelled_error(&cancelled_message(&shared))));
+        return Err(to_js_error(
+            cancelled_error(&cancelled_message(&shared)),
+            context,
+        ));
     }
     let title = args
         .first()
         .and_then(JsValue::as_string)
         .map(|text| text.to_std_string_escaped());
     let Some(title) = title else {
-        return Err(js_error("phase() requires a non-empty title string"));
+        return Err(to_js_error(
+            WorkflowError::new(
+                "phase() requires a non-empty title string",
+                WorkflowErrorCode::InvalidArgument,
+            ),
+            context,
+        ));
     };
     if title.is_empty() {
-        return Err(js_error("phase() requires a non-empty title string"));
+        return Err(to_js_error(
+            WorkflowError::new(
+                "phase() requires a non-empty title string",
+                WorkflowErrorCode::InvalidArgument,
+            ),
+            context,
+        ));
     }
     shared.state.lock().current_phase = Some(title.clone());
     shared.observer.phase(&title);
@@ -910,17 +1135,26 @@ fn phase_hook(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsRe
 }
 
 /// The log(message) hook.
-fn log_hook(_this: &JsValue, args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+fn log_hook(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let shared = with_shared(Arc::clone);
     if shared.cancel.is_aborted() {
-        return Err(to_js_error(cancelled_error(&cancelled_message(&shared))));
+        return Err(to_js_error(
+            cancelled_error(&cancelled_message(&shared)),
+            context,
+        ));
     }
     let message = args
         .first()
         .and_then(JsValue::as_string)
         .map(|text| text.to_std_string_escaped());
     let Some(message) = message else {
-        return Err(js_error("log() requires a message string"));
+        return Err(to_js_error(
+            WorkflowError::new(
+                "log() requires a message string",
+                WorkflowErrorCode::InvalidArgument,
+            ),
+            context,
+        ));
     };
     shared.observer.log(&message);
     Ok(JsValue::undefined())

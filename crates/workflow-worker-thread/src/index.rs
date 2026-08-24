@@ -179,8 +179,9 @@ impl WorkerThreadWorkflowEngine {
     ///
     /// # Errors
     ///
-    /// Returns when the subagents service is not mounted.
+    /// Returns for invalid limits or when the subagents service is not mounted.
     pub fn new(context: &Context, config: Config) -> anyhow::Result<Arc<Self>> {
+        validate_config(&config)?;
         let subagents = context
             .get(SUBAGENTS)
             .ok_or_else(|| anyhow::anyhow!("workflow requires subagents"))?;
@@ -190,6 +191,27 @@ impl WorkerThreadWorkflowEngine {
             config,
         }))
     }
+}
+
+fn validate_config(config: &Config) -> anyhow::Result<()> {
+    for (name, value, allow_zero) in [
+        ("maxConcurrentAgents", config.max_concurrent_agents, true),
+        ("maxTotalAgents", config.max_total_agents, false),
+        ("maxItemsPerCall", config.max_items_per_call, false),
+        ("syncTimeoutMs", config.sync_timeout_ms, false),
+        ("disposeGraceMs", config.dispose_grace_ms, true),
+    ] {
+        anyhow::ensure!(
+            value <= MAX_SAFE_INTEGER && (allow_zero || value > 0),
+            "{name} must be {} safe integer",
+            if allow_zero {
+                "a non-negative"
+            } else {
+                "a positive"
+            }
+        );
+    }
+    Ok(())
 }
 
 impl WorkflowEngine for WorkerThreadWorkflowEngine {
@@ -220,6 +242,7 @@ impl WorkflowEngine for WorkerThreadWorkflowEngine {
             args: request.args.clone(),
             limits: limits.clone(),
         };
+        let input_signal = request.signal;
         let run = WorkerRun::new(
             &self.context,
             Arc::clone(&self.subagents),
@@ -231,13 +254,15 @@ impl WorkflowEngine for WorkerThreadWorkflowEngine {
             limits,
             provider,
             info.clone(),
-        );
+            self.config.dispose_grace_ms,
+        )?;
 
         let _ = emit_workflow_event(
             &self.context,
             seekdeep_workflow::WorkflowEventName::Start,
             &seekdeep_cordis::EventArgs::one(info.clone()),
         );
+        run.launch(input_signal);
 
         let context = self.context.clone();
         let run_end = Arc::clone(&run);

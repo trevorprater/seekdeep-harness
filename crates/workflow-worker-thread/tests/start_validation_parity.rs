@@ -151,6 +151,55 @@ fn rejects_every_prepublication_validation_failure_without_panicking_or_returnin
     assert!(error.to_string().contains("exceeds the engine ceiling"));
 }
 
+#[test]
+fn rejects_invalid_direct_config_before_resolving_injected_services() {
+    for (config, fragment) in [
+        (
+            Config {
+                max_total_agents: 0,
+                ..Config::default()
+            },
+            "maxTotalAgents must be a positive safe integer",
+        ),
+        (
+            Config {
+                max_items_per_call: 0,
+                ..Config::default()
+            },
+            "maxItemsPerCall must be a positive safe integer",
+        ),
+        (
+            Config {
+                sync_timeout_ms: 0,
+                ..Config::default()
+            },
+            "syncTimeoutMs must be a positive safe integer",
+        ),
+        (
+            Config {
+                max_concurrent_agents: 9_007_199_254_740_992,
+                ..Config::default()
+            },
+            "maxConcurrentAgents must be a non-negative safe integer",
+        ),
+        (
+            Config {
+                dispose_grace_ms: 9_007_199_254_740_992,
+                ..Config::default()
+            },
+            "disposeGraceMs must be a non-negative safe integer",
+        ),
+    ] {
+        let error = WorkerThreadWorkflowEngine::new(&Context::new(), config)
+            .err()
+            .expect("invalid config");
+        assert!(
+            error.to_string().contains(fragment),
+            "expected {fragment:?} in {error:?}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn compiled_default_engine_runs_a_keyless_source_compatibility_script() {
     let context = Context::new();
