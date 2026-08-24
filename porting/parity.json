@@ -62315,7 +62315,9 @@
     {
       "source": "packages/schedule/schedule/tests/domain.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/schedule/src/domain.rs", "crates/schedule/src/types.rs"],
+      "evidence": ["pinned-source Vitest: schedule 131 passed", "Rust tests pin record/change/error wire shapes, create/delete/reuse folds, readable collision-free IDs, escaped framing, and record/view construction", "cargo test -p seekdeep-schedule --all-features: 18 passed"]
     },
     {
       "source": "packages/schedule/schedule/tests/invariant.spec.ts",
@@ -62342,7 +62344,9 @@
     {
       "source": "packages/schedule/schedule/tests/recurrence.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/schedule/src/domain.rs"],
+      "evidence": ["Rust tests pin after/every recurrence, strict offsets, canonical IANA zones, and DST gap/overlap local-time resolution", "cargo test -p seekdeep-schedule --all-features: 18 passed"]
     },
     {
       "source": "packages/schedule/schedule/tests/runtime.spec.ts",
@@ -62352,7 +62356,9 @@
     {
       "source": "packages/schedule/schedule/tests/tools.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/schedule/src/tools.rs"],
+      "evidence": ["Rust tests pin selector validation and stable schedule-domain error to tool-error mapping", "cargo test -p seekdeep-schedule --all-features: 18 passed", "cargo clippy -p seekdeep-schedule --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/schedule/schedule/tsconfig.json",
