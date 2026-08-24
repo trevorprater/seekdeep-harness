@@ -36,7 +36,7 @@ AppContainer 令牌没有环境读访问：每个可读路径都必须预先通�
 
 ## 测试
 
-产品可见的 Windows 阵容切换仅存在于 win32，而必须在 macOS/Linux 上可重放的 keyless 快照无法覆盖它；替代证据是 bundle 组合 spec 加上 win32 真实 runner 套件，组装态信号由 CI 的 Windows lane 负责。`sandbox-local/tests/acl-grants.spec.ts` 在 mock Win32 的情况下钉住随机临时目录分配、按会话/工作区复用、fork/工作区分离、崩溃后恢复不冲突、成对 argv SID、失败清理，以及常驻/可回收生命周期。在 Windows 上，`workspace-sid.spec.ts` 钉住工作区/临时目录派生与域分离；`acl.spec.ts` 钉住真实 DACL 生命周期；`runner.spec.ts` 钉住成对 SID 验证、共享工作区 SID 时对同级会话临时目录的拒绝、无 agent 调用的逐调用临时目录创建/移除、TMP/TEMP 重写、模式降级、Public 拒绝、Everyone/硬链接部分边界、按模式区分的 PowerShell 语言行为与孙进程 stdio。ARM64 与模拟 x64 原生运行负责提供架构特定的验收证据。
+产品可见的 Windows 阵容切换仅存在于 win32，因此在 macOS/Linux 上重放的 keyless 快照无法覆盖它。`crates/sandbox-windows-acl/tests/` 下的可移植测试通过注入绑定钉住参数语法、SID 派生、DACL/令牌/spawn 失败所有权、回滚、清理聚合与子进程等待幂等性。`crates/sandbox-windows-acl-native/tests/` 下受平台门控的 `abi_probe_parity`、`native_acl_parity`、`native_probe_parity` 与 `native_runner_parity` 套件镜像固定源中的 ABI 探针及真实 Windows 套件：它们钉住 SDK 布局、精确 ACE 共存与生命周期、成对 SID 验证、同级会话临时目录拒绝、无 agent 临时目录创建/移除、TMP/TEMP 重写、模式降级、Public 拒绝、Everyone/硬链接部分边界、PowerShell 语言行为与孙进程 stdio。PR 的 `windows-native` job 与 master 的 `serial-windows` 备用 job 会在 Windows 内核上运行两个 Rust ACL crate；MSVC 交叉 clippy 提供非 Windows 编译信号。
 
 ## Related
 

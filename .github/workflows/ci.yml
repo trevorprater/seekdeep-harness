@@ -468,6 +468,8 @@ jobs:
           reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
           /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+
       - uses: pnpm/action-setup@v4
         with:
           dest: ${{ runner.temp }}/setup-pnpm
@@ -475,6 +477,14 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Run native Windows ACL conformance
+        shell: pwsh
+        run: >-
+          cargo test --locked
+          --package seekdeep-sandbox-windows-acl
+          --package seekdeep-sandbox-windows-acl-native
+          --all-targets --all-features
 
       # Extracting the many-file pnpm store cache is slower than a clean
       # install on hosted Windows runners, and saving it adds latency after
@@ -669,6 +679,8 @@ jobs:
           reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
           /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+
       - uses: pnpm/action-setup@v4
         with:
           dest: ${{ runner.temp }}/setup-pnpm
@@ -676,6 +688,14 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Run native Windows ACL conformance
+        shell: pwsh
+        run: >-
+          cargo test --locked
+          --package seekdeep-sandbox-windows-acl
+          --package seekdeep-sandbox-windows-acl-native
+          --all-targets --all-features
 
       - name: Configure persistent pnpm store
         shell: pwsh

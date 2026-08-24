@@ -33,3 +33,6 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_System_Threading",
   "Win32_System_WindowsProgramming",
 ] }
+
+[dev-dependencies]
+seekdeep-pwsh-local = { path = "../pwsh-local" }

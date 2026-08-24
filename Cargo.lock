@@ -6045,6 +6045,7 @@ dependencies = [
 name = "seekdeep-sandbox-windows-acl-native"
 version = "0.1.0-rc.5"
 dependencies = [
+ "seekdeep-pwsh-local",
  "seekdeep-sandbox-windows-acl",
  "tempfile",
  "tokio",

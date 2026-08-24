@@ -6,4 +6,4 @@
 
 同级的 `seekdeep-sandbox-windows-acl-native` crate 是唯一狭窄的 `unsafe` 边界。它通过 `windows-sys` 把上述状态机连接到 Win32；所有原始句柄和指针都会立刻转换成有类型的安全 newtype，所有由内核拥有的 ACL 或 SID 视图也会先复制到有边界的 Rust 缓冲区，再由安全代码检查。编译后的 `windows-acl-run` 二进制实现稳定的 seam runner：继承 stdio、忽略 runner 自身的 Ctrl+C、使用关闭即终止的 job、完整宽度地传播子进程退出码、管理 seam 提供或独立创建的私有临时目录，并以 `windows-acl-run:` 签名和退出码 127 报告 runner 失败。
 
-可移植的注入测试覆盖成功、回滚、清理聚合、幂等等待与选项顺序不变量。原生 crate 和 runner 已针对 `x86_64-pc-windows-msvc` 交叉编译并通过严格 clippy。真正的 Windows ACL 访问检查以及崩溃/job 世界效果仍需在 Windows 主机上执行，之后才能把该后端标记为端到端已验证。
+可移植的注入测试覆盖成功、回滚、清理聚合、幂等等待与选项顺序不变量。平台门控的原生测试会交叉检查 `windows-sys` ABI 布局，并检验真实 DACL 编辑、受限令牌访问检查与编译后 runner 的进程效果。PR 的 `windows-native` job 与 master 的 `serial-windows` 备用 job 会在 Windows 内核上运行两个 ACL crate；非 Windows 开发环境可对相同测试目标执行面向 `x86_64-pc-windows-msvc` 的交叉 clippy。

@@ -61900,7 +61900,16 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/acl.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sandbox-windows-acl-native/tests/native_acl_parity.rs",
+        "crates/sandbox-windows-acl/tests/acl_contract_parity.rs",
+        "crates/sandbox-windows-acl/tests/sandbox_lifecycle_parity.rs"
+      ],
+      "evidence": [
+        "real-Windows Rust tests cover exact-ACE idempotency, independent DACL coexistence and revoke, exclusive path locking, standing workspace grants, revocable private-temp grants, and pre-mutation overlap rejection",
+        "strict x86_64-pc-windows-msvc all-target clippy compiles the native suite; the native Windows CI jobs execute it"
+      ]
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/failure-paths.spec.ts",
@@ -61940,7 +61949,14 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/grant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sandbox-windows-acl-native/tests/native_acl_parity.rs",
+        "crates/sandbox-windows-acl/tests/acl_contract_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests preserve malformed-SID fail-closed behavior, grant-order reporting, exact-ACE idempotency, standing-versus-revocable disposal, and independent SID revocation through both injected and real Windows bindings"
+      ]
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/index-failure-paths.spec.ts",
@@ -61968,7 +61984,15 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/probe.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sandbox-windows-acl-native/tests/native_probe_parity.rs",
+        "crates/sandbox-windows-acl/tests/sandbox_lifecycle_parity.rs"
+      ],
+      "evidence": [
+        "the platform-gated Rust probe runs a real restricted PowerShell child and pins workspace/private-temp writes, escape denial, ambient reads, malformed-SID fail-closed behavior, and provisional-state rollback",
+        "strict x86_64-pc-windows-msvc all-target clippy compiles the native suite; the native Windows CI jobs execute it"
+      ]
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/provider-chain.spec.ts",
@@ -61996,7 +62020,15 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/runner.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sandbox-windows-acl-native/tests/native_runner_parity.rs",
+        "crates/sandbox-windows-acl/tests/pure_parity.rs"
+      ],
+      "evidence": [
+        "the compiled Rust runner matrix pins both modes, delete and rename rights, seam-managed grants, sibling temp isolation, fresh agentless temp cleanup, overlap rejection, grandchild stdio, mode downgrade and re-upgrade, Public denial, Everyone and hard-link partial boundaries, and stable failure signaling",
+        "the source oracle enumerates 29 real-Windows cases and skips them on this non-Windows host; strict MSVC cross-clippy compiles the Rust matrix and the native Windows CI jobs execute it"
+      ]
     },
     {
       "source": "packages/sandbox/sandbox-windows-acl/tests/token-failure-paths.spec.ts",
@@ -62051,7 +62083,16 @@
     {
       "source": "packages/sandbox/sandbox-windows-acl/verify/abi-probe.cpp",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sandbox-windows-acl-native/tests/abi_probe_parity.rs",
+        "crates/sandbox-windows-acl/src/abi.rs",
+        "crates/sandbox-windows-acl-native/src/windows.rs"
+      ],
+      "evidence": [
+        "the Rust ABI suite mirrors the pinned x64 C++ probe's SDK sizes, offsets, flags, error codes, access masks, token classes, SID limits, and job-object layout against windows-sys",
+        "cargo clippy -p seekdeep-sandbox-windows-acl-native --all-targets --target x86_64-pc-windows-msvc -- -D warnings"
+      ]
     },
     {
       "source": "packages/sandbox/sandbox/README.i18n.yaml",
