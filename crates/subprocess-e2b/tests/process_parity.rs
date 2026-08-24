@@ -38,6 +38,8 @@ struct FakeCommandHandle {
     closes: AtomicUsize,
     close_error: Mutex<Option<String>>,
     kills: AtomicUsize,
+    kill_error: Mutex<Option<String>>,
+    kill_stops: AtomicBool,
     disconnects: AtomicUsize,
     alive: Arc<AtomicBool>,
 }
@@ -53,6 +55,8 @@ impl FakeCommandHandle {
             closes: AtomicUsize::new(0),
             close_error: Mutex::new(None),
             kills: AtomicUsize::new(0),
+            kill_error: Mutex::new(None),
+            kill_stops: AtomicBool::new(true),
             disconnects: AtomicUsize::new(0),
             alive,
         })
@@ -150,10 +154,13 @@ impl E2bCommandHandle for FakeCommandHandle {
 
     async fn kill(&self) -> anyhow::Result<bool> {
         self.kills.fetch_add(1, Ordering::AcqRel);
-        if self.alive.swap(false, Ordering::AcqRel) {
+        if let Some(error) = self.kill_error.lock().take() {
+            anyhow::bail!(error);
+        }
+        if self.kill_stops.load(Ordering::Acquire) && self.alive.swap(false, Ordering::AcqRel) {
             self.finish(137).await;
         }
-        Ok(true)
+        Ok(self.kill_stops.load(Ordering::Acquire))
     }
 
     async fn disconnect(&self) -> anyhow::Result<()> {
@@ -255,6 +262,11 @@ struct FakeCommands {
     start_options: Mutex<Option<E2bCommandStartOptions>>,
     alive: Arc<AtomicBool>,
     probe_error: Mutex<Option<String>>,
+    probe_missing: AtomicBool,
+    signal_failures: AtomicUsize,
+    trap_term: AtomicBool,
+    zombie_only: AtomicBool,
+    published_pid: Mutex<String>,
 }
 
 impl FakeCommands {
@@ -323,11 +335,19 @@ impl E2bCommands for FakeCommands {
             });
         }
         if command.starts_with("set -o pipefail; ps -eo") {
+            if self.probe_missing.load(Ordering::Acquire) {
+                return Err(seekdeep_e2b::E2bSandboxNotFound {
+                    message: "sandbox expired".to_owned(),
+                }
+                .into());
+            }
             if let Some(error) = self.probe_error.lock().take() {
                 anyhow::bail!(error);
             }
             return Ok(E2bCommandResult {
-                stdout: if self.alive.load(Ordering::Acquire) {
+                stdout: if self.alive.load(Ordering::Acquire)
+                    && !self.zombie_only.load(Ordering::Acquire)
+                {
                     "live\n".to_owned()
                 } else {
                     String::new()
@@ -336,10 +356,15 @@ impl E2bCommands for FakeCommands {
             });
         }
         if command.starts_with("kill -TERM ") || command.starts_with("kill -KILL ") {
-            self.alive.store(false, Ordering::Release);
-            self.handle
-                .finish(if command.contains("TERM") { 143 } else { 137 })
-                .await;
+            if self.signal_failures.load(Ordering::Acquire) > 0 {
+                self.signal_failures.fetch_sub(1, Ordering::AcqRel);
+                anyhow::bail!("signal transport failed");
+            }
+            let term = command.contains("TERM");
+            if !term || !self.trap_term.load(Ordering::Acquire) {
+                self.alive.store(false, Ordering::Release);
+                self.handle.finish(if term { 143 } else { 137 }).await;
+            }
         }
         Ok(E2bCommandResult::default())
     }
@@ -352,7 +377,7 @@ impl E2bCommands for FakeCommands {
         self.commands.lock().push(command.to_owned());
         self.files.values.lock().insert(
             "/workspace/.seekdeep-e2b/processes/test/pid".to_owned(),
-            b"4242\n".to_vec(),
+            self.published_pid.lock().as_bytes().to_vec(),
         );
         self.files
             .values
@@ -411,6 +436,11 @@ impl Harness {
             start_options: Mutex::new(None),
             alive,
             probe_error: Mutex::new(None),
+            probe_missing: AtomicBool::new(false),
+            signal_failures: AtomicUsize::new(0),
+            trap_term: AtomicBool::new(false),
+            zombie_only: AtomicBool::new(false),
+            published_pid: Mutex::new("4242\n".to_owned()),
         });
         let sandbox: Arc<dyn E2bSandbox> = Arc::new(FakeSandbox {
             files: files.clone(),
@@ -721,4 +751,223 @@ async fn natural_completion_requires_transport_frames_and_bounded_drain_disconne
     draining.commands.publish_status(0);
     assert_eq!(process.done().await.unwrap().exit_code, Some(0));
     assert_eq!(draining.handle.disconnects.load(Ordering::Acquire), 1);
+}
+
+#[tokio::test]
+async fn consumer_close_and_termination_release_output_backpressure() {
+    let closed = Harness::new(4242);
+    let process = closed.spawn(spec(
+        SubprocessOutputMode::Pipe,
+        SubprocessStdinMode::Ignore,
+    ));
+    closed.commands.wait_started().await;
+    let producer = closed.handle.clone();
+    let blocked = tokio::spawn(async move { producer.output(true, &vec![b'x'; 256 * 1024]).await });
+    tokio::task::yield_now().await;
+    process.stdout().unwrap().close().await;
+    tokio::time::timeout(std::time::Duration::from_secs(1), blocked)
+        .await
+        .expect("consumer close releases callback")
+        .unwrap();
+    closed.commands.settle(0, b"", b"").await;
+    process.done().await.unwrap();
+
+    let terminated = Harness::new(4242);
+    let process = terminated.spawn(spec(
+        SubprocessOutputMode::Pipe,
+        SubprocessStdinMode::Ignore,
+    ));
+    terminated.commands.wait_started().await;
+    while process.pid().as_i64() <= 0 {
+        tokio::task::yield_now().await;
+    }
+    let producer = terminated.handle.clone();
+    let blocked = tokio::spawn(async move { producer.output(true, &vec![b'y'; 256 * 1024]).await });
+    tokio::task::yield_now().await;
+    process.terminate();
+    tokio::time::timeout(std::time::Duration::from_secs(1), blocked)
+        .await
+        .expect("termination releases callback")
+        .unwrap();
+    process.done().await.unwrap();
+}
+
+#[tokio::test]
+async fn provisional_cleanup_failures_remain_observable_until_retry() {
+    let invalid_pid = Harness::new(0);
+    *invalid_pid.handle.kill_error.lock() = Some("invalid handle kill failed".to_owned());
+    let process = invalid_pid.spawn(spec(
+        SubprocessOutputMode::Pipe,
+        SubprocessStdinMode::Ignore,
+    ));
+    assert!(
+        process
+            .done()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("rollback did not reach quiescence")
+    );
+    assert!(
+        process
+            .wait_for_exit(None)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("invalid handle kill failed")
+    );
+    process.terminate();
+    assert!(process.wait_for_exit(None).await.unwrap());
+
+    let publication = Harness::new(4242);
+    *publication.commands.published_pid.lock() = "not-a-pid\n".to_owned();
+    publication
+        .commands
+        .signal_failures
+        .store(1, Ordering::Release);
+    *publication.handle.kill_error.lock() = Some("SDK kill failed".to_owned());
+    publication
+        .handle
+        .kill_stops
+        .store(false, Ordering::Release);
+    let process = publication.spawn(spec(
+        SubprocessOutputMode::Pipe,
+        SubprocessStdinMode::Ignore,
+    ));
+    assert!(
+        process
+            .done()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("publication failed")
+    );
+    assert!(
+        process
+            .wait_for_exit(None)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("remained live")
+    );
+    publication.handle.kill_stops.store(true, Ordering::Release);
+    process.terminate();
+    assert!(process.wait_for_exit(None).await.unwrap());
+}
+
+#[tokio::test]
+async fn zombie_groups_are_quiescent_and_term_traps_escalate_to_kill() {
+    let zombie = Harness::new(4242);
+    zombie.commands.zombie_only.store(true, Ordering::Release);
+    let process = zombie.spawn(spec(
+        SubprocessOutputMode::Pipe,
+        SubprocessStdinMode::Ignore,
+    ));
+    zombie.commands.wait_started().await;
+    while process.pid().as_i64() <= 0 {
+        tokio::task::yield_now().await;
+    }
+    assert!(process.wait_for_exit(None).await.unwrap());
+
+    let trapped = Harness::new(4242);
+    trapped.commands.trap_term.store(true, Ordering::Release);
+    let mut request = spec(SubprocessOutputMode::Pipe, SubprocessStdinMode::Ignore);
+    request.grace_ms = 1.0;
+    let process = trapped.spawn(request);
+    trapped.commands.wait_started().await;
+    while process.pid().as_i64() <= 0 {
+        tokio::task::yield_now().await;
+    }
+    process.terminate();
+    assert!(process.wait_for_exit(None).await.unwrap());
+    assert_eq!(
+        process.done().await.unwrap().signal.unwrap().as_str(),
+        "SIGKILL"
+    );
+    assert!(
+        trapped
+            .commands
+            .commands
+            .lock()
+            .iter()
+            .any(|command| command == "kill -KILL -- -4242")
+    );
+}
+
+#[tokio::test]
+async fn invalid_status_tables_fail_and_sandbox_loss_proves_quiescence() {
+    for status in ["-1\n", "256\n", "1.5\n", "not-a-status\n"] {
+        let harness = Harness::new(4242);
+        let process = harness.spawn(spec(
+            SubprocessOutputMode::Collect(SubprocessCollect {
+                max_bytes: 4.0,
+                spill: None,
+            }),
+            SubprocessStdinMode::Ignore,
+        ));
+        harness.commands.wait_started().await;
+        harness.files.values.lock().insert(
+            "/workspace/.seekdeep-e2b/processes/test/exit-code".to_owned(),
+            status.as_bytes().to_vec(),
+        );
+        assert!(
+            process
+                .done()
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("invalid exit code")
+        );
+    }
+
+    let missing = Harness::new(4242);
+    let process = missing.spawn(spec(
+        SubprocessOutputMode::Pipe,
+        SubprocessStdinMode::Ignore,
+    ));
+    missing.commands.wait_started().await;
+    while process.pid().as_i64() <= 0 {
+        tokio::task::yield_now().await;
+    }
+    missing
+        .commands
+        .probe_missing
+        .store(true, Ordering::Release);
+    assert!(process.wait_for_exit(None).await.unwrap());
+
+    let acquisition = Harness::new(4242);
+    let calls = Arc::new(AtomicUsize::new(0));
+    let sandbox = acquisition.sandbox.clone();
+    let runtime = E2bService::new(
+        "/workspace",
+        Arc::new({
+            let calls = calls.clone();
+            move || {
+                let first = calls.fetch_add(1, Ordering::AcqRel) == 0;
+                let sandbox = sandbox.clone();
+                Box::pin(async move {
+                    if first {
+                        Ok(sandbox)
+                    } else {
+                        Err(seekdeep_e2b::E2bSandboxNotFound {
+                            message: "sandbox expired".to_owned(),
+                        }
+                        .into())
+                    }
+                })
+            }
+        }),
+    );
+    let process = E2bSubprocessHandle::spawn(
+        runtime,
+        spec(SubprocessOutputMode::Pipe, SubprocessStdinMode::Ignore),
+        "/workspace/.seekdeep-e2b/processes/test",
+        1,
+    )
+    .unwrap();
+    acquisition.commands.wait_started().await;
+    while process.pid().as_i64() <= 0 {
+        tokio::task::yield_now().await;
+    }
+    assert!(process.wait_for_exit(None).await.unwrap());
 }

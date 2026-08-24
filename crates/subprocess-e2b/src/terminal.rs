@@ -3,7 +3,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Write as _,
-    pin::Pin,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -24,7 +23,7 @@ use seekdeep_subprocess::{
     SubprocessTerminalForeground, SubprocessTerminalHandle, SubprocessTerminalSignal,
     SubprocessTerminalSpawnSpec,
 };
-use tokio::io::{AsyncRead, AsyncWriteExt as _};
+use tokio::io::AsyncWriteExt as _;
 
 use crate::{
     environment::{bootstrap_environment, read_remote_environment, serialize_remote_environment},

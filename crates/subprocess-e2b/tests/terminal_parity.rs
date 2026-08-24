@@ -38,6 +38,8 @@ struct FakeHandle {
     completion: tokio::sync::watch::Sender<Completion>,
     kills: AtomicUsize,
     disconnects: AtomicUsize,
+    kill_failures: AtomicUsize,
+    disconnect_failures: AtomicUsize,
 }
 
 impl FakeHandle {
@@ -48,6 +50,8 @@ impl FakeHandle {
             completion,
             kills: AtomicUsize::new(0),
             disconnects: AtomicUsize::new(0),
+            kill_failures: AtomicUsize::new(0),
+            disconnect_failures: AtomicUsize::new(0),
         })
     }
 
@@ -90,12 +94,20 @@ impl E2bCommandHandle for FakeHandle {
 
     async fn kill(&self) -> anyhow::Result<bool> {
         self.kills.fetch_add(1, Ordering::AcqRel);
+        if self.kill_failures.load(Ordering::Acquire) > 0 {
+            self.kill_failures.fetch_sub(1, Ordering::AcqRel);
+            anyhow::bail!("PTY kill failed");
+        }
         self.finish(137);
         Ok(true)
     }
 
     async fn disconnect(&self) -> anyhow::Result<()> {
         self.disconnects.fetch_add(1, Ordering::AcqRel);
+        if self.disconnect_failures.load(Ordering::Acquire) > 0 {
+            self.disconnect_failures.fetch_sub(1, Ordering::AcqRel);
+            anyhow::bail!("PTY disconnect failed");
+        }
         Ok(())
     }
 }
@@ -104,6 +116,7 @@ impl E2bCommandHandle for FakeHandle {
 struct FakeFiles {
     values: Mutex<BTreeMap<String, Vec<u8>>>,
     removed: Mutex<Vec<String>>,
+    remove_failures: AtomicUsize,
 }
 
 #[async_trait::async_trait]
@@ -178,6 +191,10 @@ impl E2bFiles for FakeFiles {
     }
 
     async fn remove(&self, path: &str) -> anyhow::Result<()> {
+        if self.remove_failures.load(Ordering::Acquire) > 0 {
+            self.remove_failures.fetch_sub(1, Ordering::AcqRel);
+            anyhow::bail!("state removal failed");
+        }
         self.values.lock().remove(path);
         self.removed.lock().push(path.to_owned());
         Ok(())
@@ -190,6 +207,13 @@ struct FakeCommands {
     commands: Mutex<Vec<String>>,
     groups: Mutex<Vec<i64>>,
     foreground: AtomicI64,
+    clear_on_term: AtomicBool,
+    clear_on_kill: AtomicBool,
+    signal_failures: AtomicUsize,
+    group_probe_failure: Mutex<Option<String>>,
+    group_probe_missing: AtomicBool,
+    foreground_failure: Mutex<Option<String>>,
+    group_output_override: Mutex<Option<String>>,
 }
 
 #[async_trait::async_trait]
@@ -219,6 +243,9 @@ impl E2bCommands for FakeCommands {
             });
         }
         if command.starts_with("ps -o tpgid=") {
+            if let Some(error) = self.foreground_failure.lock().take() {
+                anyhow::bail!(error);
+            }
             let foreground = self.foreground.load(Ordering::Acquire);
             if foreground <= 0 {
                 return Err(E2bCommandExit {
@@ -233,21 +260,46 @@ impl E2bCommands for FakeCommands {
             });
         }
         if command.starts_with("set -o pipefail; ps -eo sid=") {
+            if self.group_probe_missing.load(Ordering::Acquire) {
+                return Err(seekdeep_e2b::E2bSandboxNotFound {
+                    message: "sandbox gone".to_owned(),
+                }
+                .into());
+            }
+            if let Some(error) = self.group_probe_failure.lock().take() {
+                anyhow::bail!(error);
+            }
             return Ok(E2bCommandResult {
                 stdout: self
-                    .groups
+                    .group_output_override
                     .lock()
-                    .iter()
-                    .map(i64::to_string)
-                    .collect::<Vec<_>>()
-                    .join("\n"),
+                    .clone()
+                    .unwrap_or_else(|| {
+                        self.groups
+                            .lock()
+                            .iter()
+                            .map(i64::to_string)
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    }),
                 stderr: String::new(),
             });
         }
         if command.starts_with("kill -TERM ") || command.starts_with("kill -KILL ") {
-            self.groups.lock().clear();
-            self.handle
-                .finish(if command.contains("TERM") { 143 } else { 137 });
+            if self.signal_failures.load(Ordering::Acquire) > 0 {
+                self.signal_failures.fetch_sub(1, Ordering::AcqRel);
+                anyhow::bail!("group signal failed");
+            }
+            let term = command.contains("TERM");
+            let clears = if term {
+                self.clear_on_term.load(Ordering::Acquire)
+            } else {
+                self.clear_on_kill.load(Ordering::Acquire)
+            };
+            if clears {
+                self.groups.lock().clear();
+                self.handle.finish(if term { 143 } else { 137 });
+            }
         }
         Ok(E2bCommandResult::default())
     }
@@ -374,6 +426,13 @@ impl Harness {
             commands: Mutex::new(Vec::new()),
             groups: Mutex::new(vec![pid, 6000]),
             foreground: AtomicI64::new(6000),
+            clear_on_term: AtomicBool::new(true),
+            clear_on_kill: AtomicBool::new(true),
+            signal_failures: AtomicUsize::new(0),
+            group_probe_failure: Mutex::new(None),
+            group_probe_missing: AtomicBool::new(false),
+            foreground_failure: Mutex::new(None),
+            group_output_override: Mutex::new(None),
         });
         let pty = Arc::new(FakePty {
             files: files.clone(),
@@ -664,4 +723,180 @@ async fn runtime_disposal_owns_published_and_unpublished_terminal_sessions() {
     disposal.await.unwrap().unwrap();
     assert_eq!(runtime.terminal_setup_count(), 0);
     assert!(pending.commands.groups.lock().is_empty());
+}
+
+#[tokio::test]
+async fn terminal_cleanup_failures_are_observable_and_retryable() {
+    let survivors = Harness::new(4242);
+    survivors
+        .commands
+        .clear_on_term
+        .store(false, Ordering::Release);
+    survivors
+        .commands
+        .clear_on_kill
+        .store(false, Ordering::Release);
+    let terminal = survivors.spawn(Harness::spec()).await;
+    assert!(
+        terminal
+            .terminate()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("surviving process groups")
+    );
+    survivors.commands.groups.lock().clear();
+    terminal.terminate().await.unwrap();
+
+    let transport = Harness::new(4242);
+    transport
+        .commands
+        .signal_failures
+        .store(1, Ordering::Release);
+    let terminal = transport.spawn(Harness::spec()).await;
+    assert!(
+        terminal
+            .terminate()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("group signal failed")
+    );
+    terminal.terminate().await.unwrap();
+
+    let missing = Harness::new(4242);
+    missing
+        .commands
+        .group_probe_missing
+        .store(true, Ordering::Release);
+    let terminal = missing.spawn(Harness::spec()).await;
+    terminal.terminate().await.unwrap();
+}
+
+#[tokio::test]
+async fn foreground_absence_and_transport_failure_keep_distinct_results() {
+    let harness = Harness::new(4242);
+    let terminal = harness.spawn(Harness::spec()).await;
+    harness.commands.foreground.store(0, Ordering::Release);
+    assert!(terminal.inspect_foreground().await.unwrap().is_none());
+    assert!(
+        terminal
+            .signal_foreground(SubprocessTerminalSignal::Sigint)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("cannot resolve foreground")
+    );
+    *harness.commands.foreground_failure.lock() = Some("foreground transport failed".to_owned());
+    assert!(
+        terminal
+            .inspect_foreground()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("foreground transport failed")
+    );
+    terminal.terminate().await.unwrap();
+}
+
+#[tokio::test]
+async fn failed_automatic_terminal_release_is_retained_for_disposal_retry() {
+    let harness = Harness::new(4242);
+    harness
+        .commands
+        .clear_on_term
+        .store(false, Ordering::Release);
+    harness
+        .commands
+        .clear_on_kill
+        .store(false, Ordering::Release);
+    let context = Context::new();
+    context.provide(E2B, harness.runtime.clone()).unwrap();
+    let runtime = E2bSubprocessRuntime::install(&context, E2bSubprocessConfig::default()).unwrap();
+    let terminal = runtime.spawn_terminal(Harness::spec()).await.unwrap();
+    harness.handle.finish(0);
+    terminal.done().await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert_eq!(runtime.live_terminal_count(), 1);
+    harness.commands.groups.lock().clear();
+    context.root_fiber().dispose().await.unwrap();
+    assert_eq!(runtime.live_terminal_count(), 0);
+}
+
+#[tokio::test]
+async fn invalid_session_groups_and_handle_cleanup_failures_retry_exactly() {
+    for output in ["not-a-group\n", "1\n"] {
+        let harness = Harness::new(4242);
+        *harness.commands.group_output_override.lock() = Some(output.to_owned());
+        let terminal = harness.spawn(Harness::spec()).await;
+        let error = terminal.terminate().await.unwrap_err().to_string();
+        assert!(
+            error.contains("invalid process group") || error.contains("unsafe process group"),
+            "{error}"
+        );
+        harness.commands.group_output_override.lock().take();
+        harness.commands.groups.lock().clear();
+        terminal.terminate().await.unwrap();
+    }
+
+    let kill = Harness::new(4242);
+    kill.commands.groups.lock().clear();
+    kill.handle.kill_failures.store(1, Ordering::Release);
+    let terminal = kill.spawn(Harness::spec()).await;
+    assert!(
+        terminal
+            .terminate()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("PTY kill failed")
+    );
+    terminal.terminate().await.unwrap();
+
+    let disconnect = Harness::new(4242);
+    disconnect
+        .handle
+        .disconnect_failures
+        .store(1, Ordering::Release);
+    let terminal = disconnect.spawn(Harness::spec()).await;
+    assert!(
+        terminal
+            .terminate()
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("PTY disconnect failed")
+    );
+    terminal.terminate().await.unwrap();
+}
+
+#[tokio::test]
+async fn compound_setup_rollback_reports_group_and_private_state_failures() {
+    let harness = Harness::new(4242);
+    harness
+        .pty
+        .exit_before_marker
+        .store(true, Ordering::Release);
+    harness
+        .commands
+        .clear_on_term
+        .store(false, Ordering::Release);
+    harness
+        .commands
+        .clear_on_kill
+        .store(false, Ordering::Release);
+    harness.files.remove_failures.store(1, Ordering::Release);
+    let error = spawn_e2b_terminal(
+        harness.runtime.clone(),
+        Harness::spec(),
+        "/workspace/.seekdeep-e2b/terminals/test",
+        1,
+    )
+    .await
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("output boundary"), "{error}");
+    assert!(error.contains("cleanup did not complete"), "{error}");
+    assert!(error.contains("surviving process groups"), "{error}");
+    assert!(error.contains("state removal failed"), "{error}");
 }

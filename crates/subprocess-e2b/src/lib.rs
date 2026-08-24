@@ -66,7 +66,11 @@ impl E2bSubprocessTeardownError {
 
 impl std::fmt::Display for E2bSubprocessTeardownError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("subprocess-e2b: teardown failed")
+        formatter.write_str("subprocess-e2b: teardown failed")?;
+        for failure in &self.failures {
+            write!(formatter, "\n- {failure:#}")?;
+        }
+        Ok(())
     }
 }
 
@@ -182,12 +186,12 @@ impl E2bSubprocessRuntime {
         for process in processes {
             pending.push(
                 async move {
-                    let _ = process.done().await;
                     anyhow::ensure!(
                         process.wait_for_exit(None).await?,
                         "E2B process group {} did not exit",
                         process.pid().as_i64()
                     );
+                    let _ = process.done().await;
                     Ok(())
                 }
                 .boxed(),

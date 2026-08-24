@@ -328,18 +328,13 @@ impl SubprocessOutput {
     }
 
     /// Locks the current readable stream.
-    pub async fn lock(
-        &self,
-    ) -> tokio::sync::MutexGuard<'_, BoxedSubprocessOutput> {
+    pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, BoxedSubprocessOutput> {
         self.inner.lock().await
     }
 
     /// Closes the provider pipe for every clone and makes later reads return EOF.
     pub async fn close(&self) {
-        if self
-            .closed
-            .swap(true, std::sync::atomic::Ordering::AcqRel)
-        {
+        if self.closed.swap(true, std::sync::atomic::Ordering::AcqRel) {
             return;
         }
         let mut inner = self.inner.lock().await;

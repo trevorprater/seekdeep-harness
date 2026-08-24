@@ -27,7 +27,7 @@ use seekdeep_subprocess::{
     SubprocessOutcome, SubprocessOutput, SubprocessOutputMode, SubprocessOutputReaderHandle,
     SubprocessSpawnSpec, SubprocessStdinMode,
 };
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt as _};
+use tokio::io::{AsyncWrite, AsyncWriteExt as _};
 
 use crate::{
     environment::{bootstrap_environment, read_remote_environment, serialize_remote_environment},
@@ -557,6 +557,9 @@ impl ProcessCore {
                 match handle.kill().await {
                     Ok(_) => self.mark_quiescent(),
                     Err(cleanup) => {
+                        *self.termination_failure.lock() = Some(Arc::<str>::from(format!(
+                            "{cleanup:#}"
+                        )));
                         self.command_sender
                             .send_replace(CommandState::Published(handle.clone()));
                         anyhow::bail!(
@@ -579,6 +582,9 @@ impl ProcessCore {
                         .force_kill_group(opened.as_ref(), handle.as_ref(), handle.pid())
                         .await
                     {
+                        *self.termination_failure.lock() = Some(Arc::<str>::from(format!(
+                            "{cleanup:#}"
+                        )));
                         anyhow::bail!(
                             "{error:#}\nsubprocess-e2b: process-group publication failed and rollback did not reach quiescence: {cleanup:#}"
                         );
@@ -621,7 +627,9 @@ impl ProcessCore {
                         "{failure:#}\nsubprocess-e2b: command failed and private state cleanup failed: {cleanup:#}"
                     );
                 }
-                self.command_sender.send_replace(CommandState::Absent);
+                if matches!(*self.command.borrow(), CommandState::Pending) {
+                    self.command_sender.send_replace(CommandState::Absent);
+                }
                 self.ready_sender
                     .send_replace(ReadyState::Failed(Arc::<str>::from(format!("{failure:#}"))));
                 if canceled_preparation && !cleanup_failed {

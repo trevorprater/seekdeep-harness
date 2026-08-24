@@ -21,6 +21,7 @@ use seekdeep_subprocess::{
     SubprocessCollect, SubprocessOutputMode, SubprocessRuntime as _, SubprocessSpawnSpec,
     SubprocessStdinMode, SubprocessStdio,
 };
+use seekdeep_subprocess_e2b::output::E2B_OUTPUT_COMPLETE_FRAME;
 use seekdeep_subprocess_e2b::{E2bSubprocessConfig, E2bSubprocessRuntime, INJECT, NAME, plugin};
 
 #[derive(Clone, Copy, Debug)]
@@ -33,7 +34,9 @@ enum Completion {
 struct FakeHandle {
     completion: tokio::sync::watch::Sender<Completion>,
     kills: AtomicUsize,
+    kill_failures: AtomicUsize,
     alive: Arc<AtomicBool>,
+    options: Mutex<Option<E2bCommandStartOptions>>,
 }
 
 impl FakeHandle {
@@ -42,12 +45,34 @@ impl FakeHandle {
         Arc::new(Self {
             completion,
             kills: AtomicUsize::new(0),
+            kill_failures: AtomicUsize::new(0),
             alive,
+            options: Mutex::new(None),
         })
     }
 
     fn finish(&self, status: i32) {
         self.alive.store(false, Ordering::Release);
+        self.completion.send_replace(Completion::Exit(status));
+    }
+
+    async fn finish_clean(&self, status: i32, stop_group: bool) {
+        if stop_group {
+            self.alive.store(false, Ordering::Release);
+        }
+        let callbacks = self
+            .options
+            .lock()
+            .as_ref()
+            .map(|options| (options.on_stdout.clone(), options.on_stderr.clone()));
+        if let Some((stdout, stderr)) = callbacks {
+            stdout(format!("{E2B_OUTPUT_COMPLETE_FRAME}\n"))
+                .await
+                .unwrap();
+            stderr(format!("{E2B_OUTPUT_COMPLETE_FRAME}\n"))
+                .await
+                .unwrap();
+        }
         self.completion.send_replace(Completion::Exit(status));
     }
 }
@@ -86,6 +111,10 @@ impl E2bCommandHandle for FakeHandle {
 
     async fn kill(&self) -> anyhow::Result<bool> {
         self.kills.fetch_add(1, Ordering::AcqRel);
+        if self.kill_failures.load(Ordering::Acquire) > 0 {
+            self.kill_failures.fetch_sub(1, Ordering::AcqRel);
+            anyhow::bail!("SDK kill failed");
+        }
         self.finish(137);
         Ok(true)
     }
@@ -184,6 +213,8 @@ struct FakeCommands {
     alive: Arc<AtomicBool>,
     resolved: Mutex<String>,
     run_in_cwds: Mutex<Vec<String>>,
+    probe_failures: AtomicUsize,
+    signal_failures: AtomicUsize,
 }
 
 #[async_trait::async_trait]
@@ -205,6 +236,10 @@ impl E2bCommands for FakeCommands {
             });
         }
         if command.starts_with("set -o pipefail; ps -eo pgid=") {
+            if self.probe_failures.load(Ordering::Acquire) > 0 {
+                self.probe_failures.fetch_sub(1, Ordering::AcqRel);
+                anyhow::bail!("probe failed");
+            }
             return Ok(E2bCommandResult {
                 stdout: if self.alive.load(Ordering::Acquire) {
                     "live\n".to_owned()
@@ -215,6 +250,10 @@ impl E2bCommands for FakeCommands {
             });
         }
         if command.starts_with("kill -TERM ") || command.starts_with("kill -KILL ") {
+            if self.signal_failures.load(Ordering::Acquire) > 0 {
+                self.signal_failures.fetch_sub(1, Ordering::AcqRel);
+                anyhow::bail!("signal transport failed");
+            }
             self.handle
                 .finish(if command.contains("TERM") { 143 } else { 137 });
         }
@@ -238,17 +277,18 @@ impl E2bCommands for FakeCommands {
     async fn start(
         &self,
         _command: &str,
-        _options: E2bCommandStartOptions,
+        options: E2bCommandStartOptions,
     ) -> anyhow::Result<E2bCommandHandleRef> {
         let pid = self
             .files
             .values
             .lock()
-            .keys()
-            .find(|path| path.ends_with("/pid"))
-            .cloned()
+            .iter()
+            .find(|(path, value)| path.ends_with("/pid") && value.is_empty())
+            .map(|(path, _)| path.clone())
             .expect("pid file");
         self.files.values.lock().insert(pid, b"4242\n".to_vec());
+        *self.handle.options.lock() = Some(options);
         Ok(self.handle.clone())
     }
 }
@@ -288,6 +328,8 @@ fn harness() -> (Arc<E2bService>, Arc<FakeCommands>, Arc<FakeHandle>) {
         alive,
         resolved: Mutex::new("bin/tool\n".to_owned()),
         run_in_cwds: Mutex::new(Vec::new()),
+        probe_failures: AtomicUsize::new(0),
+        signal_failures: AtomicUsize::new(0),
     });
     let sandbox: Arc<dyn E2bSandbox> = Arc::new(FakeSandbox {
         files,
@@ -408,4 +450,54 @@ async fn cordis_disposal_terminates_and_joins_owned_remote_processes() {
     context.root_fiber().dispose().await.unwrap();
     assert_eq!(runtime.live_process_count(), 0);
     assert!(handle.kills.load(Ordering::Acquire) > 0 || !handle.alive.load(Ordering::Acquire));
+}
+
+#[tokio::test]
+async fn automatic_release_retains_liveness_failures_for_disposal_retry() {
+    let (service, commands, handle) = harness();
+    let context = Context::new();
+    context.provide(E2B, service).unwrap();
+    let runtime = E2bSubprocessRuntime::install(&context, E2bSubprocessConfig::default()).unwrap();
+    let process = runtime.spawn(spec()).unwrap();
+    while process.pid().as_i64() <= 0 {
+        tokio::task::yield_now().await;
+    }
+    commands.probe_failures.store(1, Ordering::Release);
+    handle.finish_clean(0, false).await;
+    process.done().await.unwrap();
+    for _ in 0..20 {
+        if commands.probe_failures.load(Ordering::Acquire) == 0 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(runtime.live_process_count(), 1);
+    context.root_fiber().dispose().await.unwrap();
+    assert_eq!(runtime.live_process_count(), 0);
+}
+
+#[tokio::test]
+async fn disposal_waits_for_and_reports_every_sibling_cleanup_failure() {
+    let (service, commands, handle) = harness();
+    let context = Context::new();
+    context.provide(E2B, service).unwrap();
+    let runtime = E2bSubprocessRuntime::install(&context, E2bSubprocessConfig::default()).unwrap();
+    let first = runtime.spawn(spec()).unwrap();
+    let second = runtime.spawn(spec()).unwrap();
+    while first.pid().as_i64() <= 0 || second.pid().as_i64() <= 0 {
+        tokio::task::yield_now().await;
+    }
+    commands.signal_failures.store(8, Ordering::Release);
+    handle.kill_failures.store(4, Ordering::Release);
+    let error = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        context.root_fiber().dispose(),
+    )
+    .await
+    .unwrap_or_else(|_| panic!("disposal timed out: {runtime:?}"))
+    .unwrap_err();
+    let message = format!("{error:#}");
+    assert!(message.contains("teardown failed"));
+    assert!(message.matches("remained live").count() >= 2, "{message}");
+    assert!(handle.kills.load(Ordering::Acquire) >= 2);
 }
