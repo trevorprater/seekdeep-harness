@@ -4,7 +4,7 @@ use seekdeep_core::session::{SessionId, SessionId as CoreSessionId};
 use seekdeep_session_query::{
     SessionAvailability, SessionEventSurface, SessionQueryError, SessionQueryErrorCode,
     SessionResultBound, SessionResultFilter, SessionSearchCursor,
-    materialize_session_result_filters,
+    materialize_session_result_filters, normalize_session_query_whitespace,
     types::{SessionEventMetadataFilter, SessionEventSearchRequest, SessionSearchRequest},
 };
 use serde_json::{Value, json};
@@ -344,7 +344,7 @@ pub fn make_snippet(marked_text: &str, max_chars: usize) -> String {
 }
 
 fn normalize_query(value: &str) -> anyhow::Result<String> {
-    let query = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let query = normalize_session_query_whitespace(value);
     if query.is_empty() {
         return Err(query_error(
             "session-search query must contain non-whitespace text",

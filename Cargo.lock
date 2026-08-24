@@ -7517,6 +7517,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-tool-session-query"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-schemastery",
+ "seekdeep-scope",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
+ "seekdeep-session-query",
+ "seekdeep-session-query-sqlite",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-tool-skill"
 version = "0.1.0-rc.5"
 dependencies = [

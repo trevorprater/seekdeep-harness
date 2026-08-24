@@ -17,7 +17,7 @@ pub mod types;
 
 pub use config::{
     Config, SESSION_QUERY_DEFAULT_PERSISTED_INSPECT_CONCURRENCY, SESSION_QUERY_READ_WINDOW_MAX,
-    SessionQueryError, SessionQueryErrorCode,
+    SessionQueryError, SessionQueryErrorCode, normalize_session_query_whitespace,
 };
 pub use corpus::{LogicalProjectionResult, LogicalSession, LogicalSessionSource, SessionCorpus};
 pub use cursor::SessionSearchCursor;

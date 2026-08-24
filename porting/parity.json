@@ -63518,7 +63518,7 @@
         "crates/session-query/src/config.rs"
       ],
       "evidence": [
-        "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed",
+        "cargo test --locked --offline -p seekdeep-session-query --all-features: 25 passed",
         "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63530,7 +63530,7 @@
         "crates/session-query/src/corpus.rs"
       ],
       "evidence": [
-        "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed",
+        "cargo test --locked --offline -p seekdeep-session-query --all-features: 25 passed",
         "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63578,7 +63578,7 @@
         "crates/session-query/src/filters.rs"
       ],
       "evidence": [
-        "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed, including negative and fractional range comparisons",
+        "cargo test --locked --offline -p seekdeep-session-query --all-features: 25 passed, including negative and fractional range comparisons",
         "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63637,7 +63637,7 @@
         "crates/session-query/src/types.rs"
       ],
       "evidence": [
-        "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed, including finite source-number wire bounds",
+        "cargo test --locked --offline -p seekdeep-session-query --all-features: 25 passed, including finite source-number wire bounds",
         "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"
       ]
     },
@@ -63646,14 +63646,14 @@
       "kind": "test",
       "status": "verified",
       "targets": ["crates/session-query/src/extraction.rs", "crates/session-query/src/filters.rs", "crates/session-query/src/documents.rs"],
-      "evidence": ["pinned-source Vitest: session-query 70 passed", "Rust tests pin text/tool extraction, structural omission, document classification, regex-safe filters, OR/AND clauses, and finite fractional/negative range validation", "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed"]
+      "evidence": ["pinned-source Vitest: session-query 70 passed", "Rust tests pin text/tool extraction, structural omission, document classification, regex-safe filters, OR/AND clauses, and finite fractional/negative range validation", "cargo test --locked --offline -p seekdeep-session-query --all-features: 25 passed"]
     },
     {
       "source": "packages/session-query/session-query/tests/session-query.spec.ts",
       "kind": "test",
       "status": "verified",
       "targets": ["crates/session-query/src/index.rs", "crates/session-query/src/corpus.rs", "crates/session-query/src/filters.rs", "crates/session-query/src/sources.rs"],
-      "evidence": ["Rust tests drive live and replayed session listing, event windows, titles, source compatibility, session/event filters, and config validation", "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed", "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"]
+      "evidence": ["Rust tests drive live and replayed session listing, event windows, titles, source compatibility, session/event filters, and config validation", "cargo test --locked --offline -p seekdeep-session-query --all-features: 25 passed", "cargo clippy -p seekdeep-session-query --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/session-query/session-query/tests/test-service.ts",
@@ -63667,7 +63667,7 @@
       "kind": "test",
       "status": "verified",
       "targets": ["crates/session-query/src/tracing.rs"],
-      "evidence": ["Rust tests pin complete/partial lineages, replacement chains, source relations, current surface cloning, cycles, missing targets, and deeply nested descendants without recursion", "cargo test --locked --offline -p seekdeep-session-query --all-features: 24 passed"]
+      "evidence": ["Rust tests pin complete/partial lineages, replacement chains, source relations, current surface cloning, cycles, missing targets, and deeply nested descendants without recursion", "cargo test --locked --offline -p seekdeep-session-query --all-features: 25 passed"]
     },
     {
       "source": "packages/session-query/session-query/tsconfig.json",
@@ -63727,12 +63727,27 @@
     {
       "source": "packages/session-query/tool-session-query/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-session-query/src/lib.rs",
+        "crates/tool-session-query/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: tool-session-query.spec.ts passed 100/100",
+        "Rust native Cordis plugin registers the exact five descriptions/schemas, prompt section, defaults, search timeouts, exclusive search classification, and parallel exact-read classification"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/src/input.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-session-query/src/input.rs",
+        "crates/tool-session-query/tests/input_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin query normalization, safe sequence bounds, empty-list refusal, parent deduplication, calendar/offset validation, exact sub-millisecond ordering, and adjacent-f64 inclusive bounds across positive and pre-epoch instants"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/src/invariant.ts",
@@ -63751,32 +63766,80 @@
     {
       "source": "packages/session-query/tool-session-query/src/operations.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-session-query/src/operations.rs",
+        "crates/tool-session-query/tests/authority_paging_parity.rs",
+        "crates/tool-session-query/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "Rust grouped tests drive all five workflows, parent preauthorization, hidden-page draining, authorized caps, repeated/stale cursor refusal, current-step exclusion, title isolation, exact trace/read calls, and real SQLite search"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/src/presentation.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-session-query/src/presentation.rs",
+        "crates/tool-session-query/tests/service_presentation_parity.rs",
+        "crates/tool-session-query/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin search/cap text, availability and hidden-parent labels, UTC timestamps, relationship lists, unabridged fenced target JSON, semantic/log-only neighbor summaries, and generic call policy"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/src/service-boundary.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-session-query/src/service_boundary.rs",
+        "crates/tool-session-query/tests/service_presentation_parity.rs"
+      ],
+      "evidence": [
+        "Rust exhaustively maps every closed SessionQueryErrorCode, logs full internal anyhow chains, preserves only fixed authorization, hides diagnostics, and gives cancellation precedence"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/src/workspace-access.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-session-query/src/workspace_access.rs",
+        "crates/tool-session-query/tests/authority_paging_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin missing-agent/null-cwd behavior, same-workspace target preflight, post-check observation fencing, parent oracle resistance, title authority, subtree redaction without hidden ids, and 10000-level iterative lineage projection"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/tests/sqlite-integration.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-session-query/tests/integration_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: sqlite-integration.spec.ts passed 2/2",
+        "Rust keyless integration drives real JSONL persistence, SQLite FTS, session-query service, tool runtime, live prior-step history, persisted history, and fractional/pre-epoch bounds"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/tests/tool-session-query.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-session-query/tests/authority_paging_parity.rs",
+        "crates/tool-session-query/tests/input_parity.rs",
+        "crates/tool-session-query/tests/integration_parity.rs",
+        "crates/tool-session-query/tests/service_presentation_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: tool-session-query.spec.ts passed 100/100",
+        "cargo test --locked --offline -p seekdeep-tool-session-query --all-features: 20 passed",
+        "cargo clippy --locked --offline -p seekdeep-tool-session-query --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/session-query/tool-session-query/tsconfig.json",
