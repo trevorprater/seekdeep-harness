@@ -55342,12 +55342,30 @@
     {
       "source": "packages/hooks/hooks-codex/src/config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-codex/src/config.rs",
+        "crates/hooks-codex/tests/config_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: hooks-codex suite passed 59/59",
+        "Rust parser pins the five-event allowlist, wrapper/bare maps, default command type, timeout aliases and fractional source numbers, malformed tolerance, skip reasons, subjectless matcher removal, and event-qualified regex failures"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-codex/src/bridge.rs",
+        "crates/hooks-codex/src/lib.rs",
+        "crates/hooks-codex/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust native Cordis bridge owns all five global interception points, exact Codex payloads, regex matching, serial shell execution, durable hook pairs, decision/context folding, SessionStart quiescence, config containment, and HMR-safe disposal",
+        "cargo test --locked --offline -p seekdeep-hook-protocol -p seekdeep-hooks-codex --all-features: 88 passed",
+        "cargo clippy --locked --offline -p seekdeep-hook-protocol -p seekdeep-hooks-codex --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/src/invariant.ts",
@@ -55366,32 +55384,76 @@
     {
       "source": "packages/hooks/hooks-codex/tests/bridge.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-codex/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "pinned source hooks-codex suite passed 59/59; Rust grouped bridge tests pin regex deny, Stop/SessionStart lifecycle substrate, prompt cancellation/context, config failure, listener disposal, and detached abort/drain"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/tests/config.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-codex/tests/config_parity.rs"
+      ],
+      "evidence": [
+        "Rust four grouped tests cover all eleven source parser cases"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/tests/coverage-cases.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/codec.rs",
+        "crates/hook-protocol/src/events.rs",
+        "crates/hook-protocol/src/matcher.rs",
+        "crates/hook-protocol/src/merge.rs",
+        "crates/hook-protocol/src/runner.rs",
+        "crates/hooks-codex/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "78 shared protocol/invariant tests plus ten bridge/parser groups pin the reusable coverage matrix for payload decoding, merge shapes, durable events, runner failures/timeouts, matchers, decisions, contexts, and lifecycle"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/tests/coverage-post-tool.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-codex/tests/bridge_parity.rs",
+        "crates/hook-protocol/src/merge.rs"
+      ],
+      "evidence": [
+        "Rust real ToolRuntime test pins post-tool additional context; exhaustive PostToolDecision folding is closed-enum code over the shared merge contract"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/tests/coverage-prompt.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hooks-codex/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust AgentEvents waterfall test pins prompt blocking, clean plain-stdout context, downstream delegation, ordering, and plugin attribution"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/tests/coverage-result-shape.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/hook-protocol/src/codec.rs",
+        "crates/hook-protocol/src/events.rs",
+        "crates/hooks-codex/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust protocol tests exhaust result-shape decoding and durable projection; bridge tests pin its real interception integration"
+      ]
     },
     {
       "source": "packages/hooks/hooks-codex/tsconfig.json",

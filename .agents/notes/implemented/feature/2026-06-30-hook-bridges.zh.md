@@ -12,10 +12,10 @@ harness 的扩展面是其类型化拦截点（见[拦截扩展点 Agent Note](2
 
 ## 决策
 
-`packages/hooks/` 组下两个独立插件，各为 function/namespace 插件（`name`/`inject`/`Config`/`apply`，无 default export——见[事故复盘（postmortem）0001](../../../../docs/postmortem/0001-acp-default-export-drops-inject.md)），仅注入 `bash`：
+两个独立兼容插件分别拥有两种方言。Rust 生产桥接是原生 Cordis 插件（`NAME`/`INJECT`/`Config`/`apply`，不存在 default export 歧义），仅注入提供方中立的 `shell` 能力；`packages/hooks/` 兼容入口投影同一 Loader 约定（见[事故复盘（postmortem）0001](../../../../docs/postmortem/0001-acp-default-export-drops-inject.md)）：
 
 - **`seekdeep-hooks-claude-code`**——CC 方言。Claude Code 当前钩子点中的七个：`SessionStart`、`UserPromptSubmit`、`PreToolUse`、`PostToolUse`、`Stop`、`SubagentStart` 和 `SubagentStop`。负责构建 CC 形态的逐事件 stdin payload（基础字段 `session_id`/`transcript_path`/`cwd`/`hook_event_name` 加每事件字段）、`CLAUDE_PROJECT_DIR` 环境变量加 `${CLAUDE_PLUGIN_ROOT}`/`${CLAUDE_PROJECT_DIR}` 替换，以及字面量或正则的匹配模式。`transcript_path` 是持久化定位器结果或 `''`；stdin 带有**尾部换行**。
-- **`seekdeep-hooks-codex`**——Codex 当前钩子点中的五个：`PreToolUse`、`PostToolUse`、`SessionStart`、`UserPromptSubmit` 和 `Stop`。它使用始终按正则解释的 matcher，输出 Codex 形态的 snake_case payload（含 `turn_id`/`model`/`permission_mode` 额外字段）且写入时不带尾部换行，不注入 Codex 插件环境变量，不做配置时占位符替换，也没有 pre-tool 审批或重写路径。`transcript_path` 是同一定位器结果或 `null`；工具 payload 在精简后的 `tool_input: { command }` 形态中携带真实的 `tool_name`。
+- **`seekdeep-hooks-codex`**——Codex 当前钩子点中的五个：`PreToolUse`、`PostToolUse`、`SessionStart`、`UserPromptSubmit` 和 `Stop`。其 Rust 桥接使用始终按正则解释的 matcher，输出 Codex 形态的 snake_case payload（含 `turn_id`/`model`/`permission_mode` 额外字段）且写入时不带尾部换行，不注入 Codex 插件环境变量，不做配置时占位符替换，也没有 pre-tool 审批或重写路径。`transcript_path` 是同一定位器结果或 `null`；工具 payload 在精简后的 `tool_input: { command }` 形态中携带真实的 `tool_name`。超时秒数与默认毫秒数以源数值形式穿过共享 shell 请求边界，包括小数值。
 
 ### Outcome → Decision 映射
 
@@ -69,4 +69,4 @@ Claude Code 始终导出 `CLAUDE_PROJECT_DIR`，常见的未修改钩子引用 `
 
 ## 后果
 
-匹配语义、退出码处理和合并优先级位于 `seekdeep-hook-protocol`；每个桥接只负责解析配置、构建方言 payload 和映射结果。逐文件覆盖率包含配置分支以及通过真实循环、`seekdeep-bash-local` 和 shell 脚本的端到端映射，同时一个真实 Loader 冒烟测试守护包的导出形态。原生插件绕过协议格式，直接返回类型化决策。
+匹配语义、退出码处理和合并优先级位于 `seekdeep-hook-protocol`；每个桥接只负责解析配置、构建方言 payload 和映射结果。固定的 Codex 源套件通过 59 个用例。Rust 验证另含 78 个共享协议／invariant 测试与十个桥接／解析器分组，覆盖五个事件注册、真实 ToolRuntime 决策、提示词与工具后上下文折叠、Stop steering、精确 payload／工作区／无尾部换行行为、持久 hook 对、容错配置失败、HMR 释放，以及 detached SessionStart 的取消／排空。原生插件在解析后绕过外部 hook wire，直接返回类型化决策。

@@ -5511,6 +5511,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-hooks-codex"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-hook-protocol",
+ "seekdeep-llm",
+ "seekdeep-schemastery",
+ "seekdeep-scope",
+ "seekdeep-session-persistence",
+ "seekdeep-shell",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-host-apiproxy"
 version = "0.1.0-rc.5"
 dependencies = [

@@ -37,6 +37,7 @@ members = [
   "crates/host-plugin-inventory",
   "crates/host-webserver",
   "crates/hook-protocol",
+  "crates/hooks-codex",
   "crates/headless",
   "crates/cordis",
   "crates/cordis-client-runner",

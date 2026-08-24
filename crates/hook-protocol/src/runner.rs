@@ -26,7 +26,7 @@ pub struct RunHookOptions {
     /// Whether to append a trailing newline to the stdin payload.
     pub trailing_newline: bool,
     /// Timeout applied when the hook's config sets none of its own.
-    pub default_timeout_ms: u64,
+    pub default_timeout_ms: f64,
     /// The event this hook fires for, guarding mismatched hookSpecificOutput blocks.
     pub expected_event_name: Option<String>,
 }
@@ -53,11 +53,11 @@ pub async fn run_hook(
     let started = now();
     let timeout_ms = hook
         .timeout_sec
-        .map_or(options.default_timeout_ms, |sec| sec.saturating_mul(1000));
+        .map_or(options.default_timeout_ms, |sec| sec * 1000.0);
     let stdin = options.payload.to_string() + if options.trailing_newline { "\n" } else { "" };
 
     let mut request = ShellExecRequest::new(hook.command.clone());
-    request.timeout_ms = Some(js_number(timeout_ms));
+    request.timeout_ms = Some(timeout_ms);
     request.stdin = Some(stdin);
     request.signal = Some(options.signal.clone());
     if let Some(cwd) = &options.cwd {
@@ -87,13 +87,6 @@ pub async fn run_hook(
             duration_ms,
         },
     }
-}
-
-#[allow(clippy::cast_precision_loss)]
-fn js_number(value: u64) -> f64 {
-    // The source boundary is a JavaScript number, including its rounding for
-    // integers above the exact-safe range.
-    value as f64
 }
 
 #[cfg(test)]
@@ -204,7 +197,7 @@ mod tests {
             cwd: None,
             signal: AbortSignal::default(),
             trailing_newline: true,
-            default_timeout_ms: 60_000,
+            default_timeout_ms: 60_000.0,
             expected_event_name: None,
         }
     }
@@ -266,7 +259,7 @@ mod tests {
     async fn per_hook_timeout_sec_overrides_default() {
         let bash = RecordingBash::ok(default_result());
         let mut hook = hook("h");
-        hook.timeout_sec = Some(3);
+        hook.timeout_sec = Some(3.0);
         run_hook(&bash, &hook, &options(), clock()).await;
         assert!((bash.specs()[0].timeout_ms - 3000.0).abs() < f64::EPSILON);
     }

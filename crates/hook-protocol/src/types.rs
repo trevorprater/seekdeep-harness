@@ -14,18 +14,18 @@ pub enum HookDialect {
 }
 
 /// One configured command hook.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommandHook {
     /// The shell command line to run.
     pub command: String,
     /// Per-hook timeout in seconds (the wire unit).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout_sec: Option<u64>,
+    pub timeout_sec: Option<f64>,
 }
 
 /// One matcher group: a pattern plus the command hooks that run when it matches.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatcherGroup {
     /// Absent / empty / * = match-all.
