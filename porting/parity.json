@@ -53443,7 +53443,7 @@
       "targets": ["crates/tool-fs-search/src/lib.rs"],
       "evidence": [
         "Rust post-execute middleware spills only accepted successful direct calls still owned by the live exact tool definition",
-        "cargo test -p seekdeep-tool-fs-search --all-features: 5 passed"
+        "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"
       ]
     },
     {
@@ -53486,26 +53486,28 @@
       "kind": "production-code",
       "status": "verified",
       "targets": ["crates/tool-fs-search/src/lib.rs"],
-      "evidence": ["Rust projections share retained pages with model rendering, preserve totals/truncation, cap serialized meta, and defensively narrow replay metadata", "cargo test -p seekdeep-tool-fs-search --all-features: 5 passed"]
+      "evidence": ["Rust projections share retained pages with model rendering, preserve totals/truncation, cap serialized meta, and defensively narrow replay metadata", "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/src/ripgrep.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs-search/src/lib.rs", "crates/tool-fs-search/Cargo.toml"],
+      "evidence": ["Rust needs no ambient TypeScript declaration: RgPathCache and the release-sibling resolver are compile-time typed native code", "cargo clippy -p seekdeep-tool-fs-search --all-targets --all-features -- -D warnings"]
     },
     {
       "source": "packages/fs/tool-fs-search/src/search-core.ts",
       "kind": "production-code",
       "status": "verified",
       "targets": ["crates/tool-fs-search/src/lib.rs"],
-      "evidence": ["Rust runtime memoizes binary resolution, spawns plain --no-config argv through ctx.subprocess, classifies exit/abort/overflow, relativizes paths, retains UTF-8, and saves formatted spill best-effort", "cargo test -p seekdeep-tool-fs-search --all-features: 5 passed"]
+      "evidence": ["Rust runtime memoizes binary resolution, spawns plain --no-config argv through ctx.subprocess, classifies exit/abort/overflow, relativizes paths, retains UTF-8, and saves formatted spill best-effort", "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/tests/integration.spec.ts",
       "kind": "test",
       "status": "verified",
       "targets": ["crates/tool-fs-search/tests/search_parity.rs"],
-      "evidence": ["Rust integration drives real ripgrep and the real tool/subprocess/spill registries from a session workspace", "cargo test -p seekdeep-tool-fs-search --all-features: 5 passed"]
+      "evidence": ["Rust integration drives real ripgrep and the real tool/subprocess/spill registries from a session workspace", "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/tests/load-path.spec.ts",
@@ -53524,7 +53526,9 @@
     {
       "source": "packages/fs/tool-fs-search/tests/rg-path.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": ["crates/tool-fs-search/tests/search_parity.rs"],
+      "evidence": ["Rust test proves missing packaged ripgrep fails lazily as typed SEARCH_FAILED and the rejection is memoized across subsequent calls", "cargo test -p seekdeep-tool-fs-search --all-features: 6 passed"]
     },
     {
       "source": "packages/fs/tool-fs-search/tests/tools.spec.ts",

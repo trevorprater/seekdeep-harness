@@ -12,9 +12,9 @@ use seekdeep_scope::ScopeKey;
 use seekdeep_spill::{SaveTextSpill, SpillBackend, SpillLocator, SpillRef, SpillStore};
 use seekdeep_subprocess_local::LocalSubprocessRuntime;
 use seekdeep_tool_fs_search::{
-    Config, GlobInput, GrepInput, SearchError, SearchErrorCode, apply, build_glob_command,
-    build_grep_command, parse_glob_args, parse_grep_args, parse_grep_matches, preview_line,
-    sample_across_top_level, to_workdir_relative,
+    Config, GlobInput, GrepInput, RgPathCache, SearchError, SearchErrorCode, apply,
+    build_glob_command, build_grep_command, parse_glob_args, parse_grep_args, parse_grep_matches,
+    preview_line, sample_across_top_level, to_workdir_relative,
 };
 use seekdeep_tools::{
     SearchResultView, ToolExecutionInput, ToolExecutionResult, ToolPresentationMode, ToolResult,
@@ -97,6 +97,29 @@ fn argument_argv_parsing_preview_sampling_and_relative_paths_match_source() {
         to_workdir_relative("relative", std::path::Path::new("/ws")),
         "relative"
     );
+}
+
+#[tokio::test]
+async fn missing_packaged_ripgrep_failure_is_lazy_typed_and_memoized() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let cache = RgPathCache::default();
+    let calls = Arc::new(AtomicUsize::new(0));
+    for _ in 0..2 {
+        let calls = calls.clone();
+        let error = cache
+            .resolve_with(move || async move {
+                calls.fetch_add(1, Ordering::Relaxed);
+                Err("platform package missing".to_owned())
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<SearchError>().unwrap().code(),
+            SearchErrorCode::Failed.as_str()
+        );
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
 }
 
 #[derive(Default)]

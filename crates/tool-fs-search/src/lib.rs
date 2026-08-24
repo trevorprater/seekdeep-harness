@@ -666,7 +666,31 @@ fn format_glob(
 
 struct SearchRuntime {
     subprocess: Arc<seekdeep_subprocess::SubprocessService>,
-    rg_path: tokio::sync::OnceCell<Result<String, String>>,
+    rg_path: RgPathCache,
+}
+
+/// Lazy, rejection-memoizing packaged-ripgrep path cache.
+#[derive(Debug, Default)]
+pub struct RgPathCache(tokio::sync::OnceCell<Result<String, String>>);
+
+impl RgPathCache {
+    /// Resolves once and memoizes both success and failure.
+    ///
+    /// # Errors
+    ///
+    /// Maps a missing or corrupt packaged binary to `SEARCH_FAILED` on every call.
+    pub async fn resolve_with<F, Fut>(&self, resolver: F) -> anyhow::Result<String>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<String, String>>,
+    {
+        self.0.get_or_init(resolver).await.clone().map_err(|_| {
+            anyhow::Error::new(SearchError::new(
+                "search could not start its search command (ripgrep launch failed)",
+                SearchErrorCode::Failed,
+            ))
+        })
+    }
 }
 
 impl SearchRuntime {
@@ -682,7 +706,7 @@ impl SearchRuntime {
 
     async fn rg_path(&self) -> anyhow::Result<String> {
         self.rg_path
-            .get_or_init(|| async {
+            .resolve_with(|| async {
                 if let Some(path) = Self::bundled_rg() {
                     return Ok(path);
                 }
@@ -703,13 +727,6 @@ impl SearchRuntime {
                 }
             })
             .await
-            .clone()
-            .map_err(|_| {
-                anyhow::Error::new(SearchError::new(
-                    "search could not start its search command (ripgrep launch failed)",
-                    SearchErrorCode::Failed,
-                ))
-            })
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1007,7 +1024,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("tool-fs-search requires subprocess"))?;
     let runtime = Arc::new(SearchRuntime {
         subprocess,
-        rg_path: tokio::sync::OnceCell::new(),
+        rg_path: RgPathCache::default(),
     });
     prompt.section(context, PromptSection::new("tool:glob", 103.0, seekdeep_system_prompt::PromptText::Static("Use the glob tool — not shell find — to discover files by path pattern. A pattern with no \"/\" matches basenames at any depth, so \"*\" matches every file in the tree rather than its top level. Results are files only, never directories, and include hidden and ignored files.".into())))?;
     prompt.section(context, PromptSection::new("tool:grep", 104.0, seekdeep_system_prompt::PromptText::Static("Use the grep tool — not shell grep or rg — to search file contents. Use read on a matched file when you need surrounding context.".into())))?;
