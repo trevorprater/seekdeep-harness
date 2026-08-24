@@ -15,7 +15,7 @@ use futures::{FutureExt as _, future::Shared};
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::{
-    invariant::validate_session_events,
+    invariant::validate_persisted_session_events,
     preparation::SessionPreparation,
     repair::interrupted_turn_closers,
     session::{Session, SessionEvent, SessionHeader, SessionId},
@@ -801,7 +801,7 @@ impl JsonlSessionPersistence {
             .chain(events.iter().cloned())
             .collect::<Vec<_>>();
         validate_normalized_events(&current.header, &combined)?;
-        validate_session_events(&combined)?;
+        validate_persisted_session_events(&combined)?;
         let path = log_path(
             &self.root,
             current.header.cwd.as_deref(),
@@ -838,7 +838,7 @@ impl JsonlSessionPersistence {
         let mut balanced = stored.scan.events.clone();
         let closers = interrupted_turn_closers(&balanced);
         balanced.extend(closers.clone());
-        validate_session_events(&balanced)?;
+        validate_persisted_session_events(&balanced)?;
         let meta = stored.scan.meta;
         let session = self.sessions.prepare(
             Some(id.clone()),
@@ -1115,7 +1115,7 @@ impl JsonlSessionPersistence {
             )
         })?;
         validate_normalized_events(&stored.scan.meta, &normalized)?;
-        validate_session_events(&normalized)?;
+        validate_persisted_session_events(&normalized)?;
         stored.scan.events = normalized;
         Ok(stored)
     }
@@ -1224,7 +1224,7 @@ impl JsonlSessionPersistence {
             }
         }
         events.extend(closers);
-        validate_session_events(&events)?;
+        validate_persisted_session_events(&events)?;
         if commit_repair {
             self.state.lock().insert(
                 id.clone(),
@@ -1599,7 +1599,7 @@ impl SessionPersistence for JsonlSessionPersistence {
         if let Some(live) = self.sessions.get(id) {
             let events = live.events();
             self.flush_existing(&live).await?;
-            let balance = validate_session_events(&events)?;
+            let balance = validate_persisted_session_events(&events)?;
             anyhow::ensure!(
                 balance.open_turn.is_none(),
                 "cannot crash-repair live session {id} with an open turn"
@@ -2002,7 +2002,7 @@ mod tests {
             .expect("artifact")
             .content;
         assert!(repaired.contains("turn/end"));
-        validate_session_events(&loaded.events).expect("balanced");
+        validate_persisted_session_events(&loaded.events).expect("balanced");
     }
 
     #[tokio::test]

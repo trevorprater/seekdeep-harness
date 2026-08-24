@@ -52810,9 +52810,11 @@
         "crates/message-feedback/src/lib.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-message-feedback --all-features"
+        "pinned source message-feedback suites: 20 passed",
+        "Rust message-feedback suites: 14 passed",
+        "cargo clippy -p seekdeep-message-feedback -p seekdeep-core -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"
       ],
-      "note": "list/put/delete with inspect-session, append-origin target check, durability barrier, per-session mutation serialization, note validation, and version reconciliation are ported; the Typert @Remote registration and the source spec tests await the typert registry seam"
+      "note": "list/put/delete, exact Typert Remote namespace and success/rejection envelopes, live/cold inspection, append-origin target checks, durability barriers, per-session mutation serialization, admission drain, note validation, and version reconciliation are ported"
     },
     {
       "source": "packages/feedback/message-feedback/src/invariant.ts",
@@ -52853,7 +52855,13 @@
     {
       "source": "packages/feedback/message-feedback/tests/helpers.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/message-feedback/tests/support/mod.rs"
+      ],
+      "evidence": [
+        "the Rust support harness mirrors controllable live/logical/physical persistence, snapshot and read hooks, real JSON storage-domain mounting, flush participation, and the append/replacement message fixture"
+      ]
     },
     {
       "source": "packages/feedback/message-feedback/tests/invariant.spec.ts",
@@ -52870,12 +52878,29 @@
     {
       "source": "packages/feedback/message-feedback/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/message-feedback/tests/loader_composition_parity.rs",
+        "crates/session-persistence-jsonl/src/backend.rs",
+        "crates/core/src/invariant.rs"
+      ],
+      "evidence": [
+        "a real Rust Loader composition mounts SessionStore, JSONL persistence, Storage, JSON backend, StorageDomain, and MessageFeedback; it checkpoints the target, commits the sidecar, cold-restarts, and reads the exact item",
+        "persistence validation admits already-validated assistant surface rewrites without weakening the optional live invariant"
+      ]
     },
     {
       "source": "packages/feedback/message-feedback/tests/message-feedback.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/message-feedback/tests/message_feedback_parity.rs",
+        "crates/message-feedback/src/lib.rs"
+      ],
+      "evidence": [
+        "Rust covers Remote markers/envelopes, definite absence and live races, note and target validation, create/no-op/update/conflict semantics, per-message CAS and ABA, per-session serialization, reused Session ids, checkpoint ordering and failure modes, detach mid-flush, and disposal drain",
+        "pinned source message-feedback suites: 20 passed; Rust message-feedback suites: 14 passed"
+      ]
     },
     {
       "source": "packages/feedback/message-feedback/tsconfig.json",

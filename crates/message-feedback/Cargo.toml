@@ -14,7 +14,9 @@ seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-storage-domain = { path = "../storage-domain" }
+seekdeep-typert-protocol = { path = "../typert-protocol" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -22,7 +24,14 @@ tokio.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-storage = { path = "../storage" }
+seekdeep-storage-json = { path = "../storage-json" }
+tempfile.workspace = true
 tokio.workspace = true
 
 [lints]

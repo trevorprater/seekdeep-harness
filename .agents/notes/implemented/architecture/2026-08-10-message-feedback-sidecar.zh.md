@@ -16,7 +16,7 @@ Status: implemented
 
 每条可用记录都绑定到经检查的 Session header 身份 `{createdAt, cwd}`，而不只是其 `SessionId`。生命周期不匹配按不存在处理：`list` 返回空条目，`put` 可以用绑定当前身份的新记录替换陈旧行。因此，以不同 header 身份复用的 id 不会继承陈旧反馈。fork 拥有自己的 Session 身份，且不复制伴随记录：即使 fork 种子包含相同的 assistant 消息，反馈仍只属于人类记录它的那个 Session。
 
-`put` 只接受由 `SessionPersistence.inspect()` 观测到的非空、append-origin `assistant/message`，且其 `MessageId` 必须与目标相同。replacement-origin 消息、仅承载 usage 的空 assistant 记录以及非 assistant 目标都会被拒绝。检查使用 cold-safe 权威路径：它不会仅为验证反馈而发布或恢复 Agent，也不会提交 cold 日志修复。cold 路径由 `listSnapshots()` 预检明确不存在；已进入目录的 Session 若检查失败，仍按基础设施故障处理。因此，请求若恰落在 live detach 到 header materialization 的极短窗口，可能返回 `session-not-found`，调用方在 retirement materialization 后重试。
+`put` 只接受当前逻辑观测——live Session 直接提供，否则由 `SessionPersistence.inspect()` 提供——中的非空、append-origin `assistant/message`，且其 `MessageId` 必须与目标相同。replacement-origin 消息、仅承载 usage 的空 assistant 记录以及非 assistant 目标都会被拒绝。cold 检查不会仅为验证反馈而发布或恢复 Agent，也不会提交日志修复。cold 路径由 `listSnapshots()` 预检明确不存在；已进入目录的 Session 若检查失败，仍按基础设施故障处理。因此，请求若恰落在 live detach 到 header materialization 的极短窗口，可能返回 `session-not-found`，调用方在 retirement materialization 后重试。
 
 `put` 提交伴随记录前，会先让目标日志通过 durability barrier。身份匹配的 live Session 经过权威 `ctx.sessions.flush` checkpoint，随后 live 与 cold 路径都会通过 `SessionPersistence.readFrom` 从序列零做物理复读。之后再次校验所得观测的 header 身份与目标。缺少 flush 参与方、身份变化、目标消失或物理读取失败都会阻止伴随记录写入，因此已提交反馈绝不会先于它引用的持久 assistant 消息。
 
@@ -27,6 +27,10 @@ Status: implemented
 `maxNoteBytes` 是必填的部署选择，用于限制可选备注的 UTF-8 字节长度；Web Host bundle 将其显式设为 `8192`。该包通过 `TypertRemoteService` 与 `@Remote` 直接发布 Host `messageFeedback.list`、`messageFeedback.put` 与 `messageFeedback.delete` 约定。客户端 Remote 聚合挂载与 UI 由各自边界负责并保持延后；后续适配层只是该 Host 约定的薄消费者。
 
 服务不伪造删除级联。`session/disposed` 与 `host/session-removed` 表示脱离 live ownership，而非持久删除，Session persistence 当前也没有删除接口。因此在带外移除日志后，伴随记录可能继续存在；不同的 `{createdAt, cwd}` 可阻止此类遗留记录变成后来复用该 id 的 Session 反馈。
+
+## 测试
+
+源套件与独立 Rust 套件会钉住 Remote namespace、精确业务信封、备注与目标校验、不可变条目快照、逐消息 CAS 与 ABA 围栏、按 Session 串行化、复用 id 的生命周期围栏、接纳排空、cold 目录竞态、物理 checkpoint 顺序、缺失/失败的 flush 路径，以及已接纳 checkpoint 期间的 detach。真实 Rust Loader 组装会结合 JSONL Session 持久化与 JSON 存储写入目标和伴随记录，拆除后冷启动同一组装并读回该条目。持久化校验与可选 live invariant 保持分离，因此先前已校验的 assistant surface replacement 可以在冷启动后存续，同时不削弱 live step 强制规则。
 
 ## 考虑过的替代方案
 

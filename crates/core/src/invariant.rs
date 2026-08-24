@@ -50,9 +50,33 @@ pub struct SessionEventBalance {
 pub fn validate_session_events(
     events: &[SessionEvent],
 ) -> Result<SessionEventBalance, SessionInvariantError> {
+    validate_session_events_with(events, false)
+}
+
+/// Validates persisted structure while admitting model-only assistant surface rewrites.
+///
+/// Runtime invariant registration remains stricter: a live assistant event
+/// must name its open step. Persistence accepts a replacement already
+/// validated by [`Session`](crate::session::Session), because model-only
+/// projection rewrites may be appended after their originating turn closes.
+///
+/// # Errors
+///
+/// Returns the same sequence, turn, step, and tool-call failures as
+/// [`validate_session_events`], except for that persisted replacement case.
+pub fn validate_persisted_session_events(
+    events: &[SessionEvent],
+) -> Result<SessionEventBalance, SessionInvariantError> {
+    validate_session_events_with(events, true)
+}
+
+fn validate_session_events_with(
+    events: &[SessionEvent],
+    allow_assistant_replacements: bool,
+) -> Result<SessionEventBalance, SessionInvariantError> {
     let mut trace = SessionTrace::default();
     for event in events {
-        trace = validate_event(&trace, event)?;
+        trace = validate_event(&trace, event, allow_assistant_replacements)?;
     }
     Ok(SessionEventBalance {
         open_turn: trace.open_turn,
@@ -136,7 +160,7 @@ pub fn install_session_invariants(
                 Some(trace) => trace,
                 None => seed_trace(&session)?,
             };
-            let next = validate_event(&trace, &event)?;
+            let next = validate_event(&trace, &event, false)?;
             validation_staged.lock().insert((key, event.seq), next);
             Ok(EventReply::Undefined)
         },
@@ -188,7 +212,7 @@ fn session_key(session: &Arc<Session>) -> usize {
 fn seed_trace(session: &Arc<Session>) -> anyhow::Result<SessionTrace> {
     let mut trace = SessionTrace::default();
     for event in session.events() {
-        trace = validate_event(&trace, &event)?;
+        trace = validate_event(&trace, &event, false)?;
     }
     Ok(trace)
 }
@@ -196,6 +220,7 @@ fn seed_trace(session: &Arc<Session>) -> anyhow::Result<SessionTrace> {
 fn validate_event(
     current: &SessionTrace,
     event: &SessionEvent,
+    allow_assistant_replacements: bool,
 ) -> Result<SessionTrace, SessionInvariantError> {
     if current.last_seq.is_some_and(|last| event.seq <= last) {
         return fail(format!(
@@ -211,9 +236,13 @@ fn validate_event(
         "turn/end" => validate_turn_end(&mut next, event)?,
         "step/start" => validate_step_start(&mut next, event)?,
         "step/end" => validate_step_end(&mut next, event)?,
-        "assistant/chunk" | "assistant/message" => {
+        "assistant/chunk" => {
             require_open_step(&next, &event.event_type, event)?;
         }
+        "assistant/message"
+            if allow_assistant_replacements
+                && matches!(event.surface_op, Some(SurfaceOp::Replace(_))) => {}
+        "assistant/message" => require_open_step(&next, &event.event_type, event)?,
         "tool/call" => validate_tool_call(&mut next, event)?,
         "tool/result" => validate_tool_result(&mut next, event)?,
         "todo/write" | "request/header" | "request/context" => {
@@ -613,6 +642,42 @@ mod tests {
         ])
         .expect_err("tool result without step");
         assert!(error.to_string().contains("open is turn 1/step null"));
+    }
+
+    #[test]
+    fn persistence_admits_a_validated_assistant_surface_rewrite_after_turn_close() {
+        let original = surface_event(
+            "assistant/message",
+            2,
+            json!({
+                "turn": 1,
+                "step": 1,
+                "message": {
+                    "id": "original",
+                    "role": "assistant",
+                    "source": {"kind": "model", "provider": "mock", "model": "mock"},
+                    "content": [{"type": "text", "text": "original"}]
+                }
+            }),
+        );
+        let mut replacement = original.clone();
+        replacement.seq = 5;
+        replacement.surface_op = Some(SurfaceOp::replace(2, 2));
+        replacement.source_event_seqs = Some(vec![2]);
+        let events = [
+            event("turn/start", 0, json!({"turn": 1})),
+            event("step/start", 1, json!({"turn": 1, "step": 1})),
+            original,
+            event("step/end", 3, json!({"turn": 1, "step": 1})),
+            event(
+                "turn/end",
+                4,
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+            ),
+            replacement,
+        ];
+        assert!(validate_session_events(&events).is_err());
+        validate_persisted_session_events(&events).expect("persisted surface rewrite");
     }
 
     #[test]

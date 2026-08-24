@@ -1,21 +1,62 @@
 //! Durable lifecycle-bound message feedback domain and its storage declaration.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
+};
 
 use indexmap::IndexMap;
 use parking_lot::Mutex;
-use seekdeep_cordis::Context;
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{
     SessionHeader, SessionId, derive_event_message, is_append_surface_event,
 };
 use seekdeep_core::session_store::{SESSIONS, SessionStore};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{MessageId, MessageRole};
+use seekdeep_schemastery::Schema;
 use seekdeep_session_persistence::{SESSION_PERSISTENCE, SessionInspection, SessionPersistence};
 use seekdeep_storage_domain::{
-    DomainFacility, DomainSpec, KvTable, STORAGE_DOMAIN, ValueSchema, define_domain, domain_table,
+    Domain, DomainFacility, DomainSpec, KvTable, STORAGE_DOMAIN, ValueSchema, define_domain,
+    domain_table,
+};
+use seekdeep_typert_protocol::{
+    RemoteMethodMarker, TypertBoundaryValue, TypertHostArgument, TypertInvocableService,
+    TypertInvocationFuture, TypertRemoteService, typert_remote_method,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+/// Typed Cordis seat corresponding to `ctx.messageFeedback`.
+pub const MESSAGE_FEEDBACK: ServiceKey<MessageFeedbackService> = ServiceKey::new("messageFeedback");
+/// Cordis plugin name.
+pub const NAME: &str = "message-feedback";
+/// Required storage and Session capabilities.
+pub const INJECT: &[&str] = &["storageDomain", "sessionPersistence", "sessions"];
+
+/// Loader configuration for the note-size policy.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Config {
+    /// Complete UTF-8 byte ceiling for one optional note.
+    pub max_note_bytes: usize,
+}
+
+/// Source-compatible admission schema.
+#[must_use]
+pub fn config_schema() -> Schema {
+    Schema::object([(
+        "maxNoteBytes",
+        Schema::number()
+            .min(1.0)
+            .max(9_007_199_254_740_991.0)
+            .step(1.0)
+            .required(),
+    )])
+}
 
 /// Closed rating vocabulary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -193,6 +234,14 @@ pub struct MessageFeedbackPutRequest {
     pub if_version: Option<MessageFeedbackVersion>,
 }
 
+/// Read all feedback for one persisted Session lifecycle.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageFeedbackListRequest {
+    /// Persisted Session whose sidecar should be read.
+    pub session_id: SessionId,
+}
+
 /// Delete feedback for one message after observing its current version.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -205,13 +254,66 @@ pub struct MessageFeedbackDeleteRequest {
     pub if_version: MessageFeedbackVersion,
 }
 
+#[derive(Default)]
+struct MutationActivity {
+    open: AtomicBool,
+    active: AtomicUsize,
+    changed: tokio::sync::Notify,
+}
+
+impl MutationActivity {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            open: AtomicBool::new(true),
+            ..Self::default()
+        })
+    }
+
+    fn begin(self: &Arc<Self>) -> Option<MutationGuard> {
+        if !self.open.load(Ordering::Acquire) {
+            return None;
+        }
+        self.active.fetch_add(1, Ordering::AcqRel);
+        if !self.open.load(Ordering::Acquire) {
+            if self.active.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.changed.notify_waiters();
+            }
+            return None;
+        }
+        Some(MutationGuard(self.clone()))
+    }
+
+    async fn close(&self) {
+        self.open.store(false, Ordering::Release);
+        loop {
+            let changed = self.changed.notified();
+            if self.active.load(Ordering::Acquire) == 0 {
+                return;
+            }
+            changed.await;
+        }
+    }
+}
+
+struct MutationGuard(Arc<MutationActivity>);
+
+impl Drop for MutationGuard {
+    fn drop(&mut self) {
+        if self.0.active.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.0.changed.notify_waiters();
+        }
+    }
+}
+
 /// Lifecycle-bound message feedback service.
 pub struct MessageFeedbackService {
+    domain: Arc<Domain>,
     table: Arc<KvTable>,
     sessions: Arc<SessionStore>,
     persistence: Arc<dyn SessionPersistence>,
     max_note_bytes: usize,
     locks: Mutex<HashMap<SessionId, Arc<tokio::sync::Mutex<()>>>>,
+    mutations: Arc<MutationActivity>,
 }
 
 impl std::fmt::Debug for MessageFeedbackService {
@@ -230,6 +332,10 @@ impl MessageFeedbackService {
     ///
     /// Returns missing-service or domain-open failures.
     pub async fn install(context: &Context, max_note_bytes: usize) -> anyhow::Result<Arc<Self>> {
+        anyhow::ensure!(
+            max_note_bytes > 0 && max_note_bytes <= 9_007_199_254_740_991,
+            "message-feedback: maxNoteBytes must be a positive safe integer, got {max_note_bytes}"
+        );
         let facility: Arc<DomainFacility> = context
             .get(STORAGE_DOMAIN)
             .ok_or_else(|| anyhow::anyhow!("message-feedback requires storageDomain"))?;
@@ -242,13 +348,27 @@ impl MessageFeedbackService {
             .get(SESSION_PERSISTENCE)
             .ok_or_else(|| anyhow::anyhow!("message-feedback requires sessionPersistence"))?
             .persistence();
-        Ok(Arc::new(Self {
+        let service = Arc::new(Self {
+            domain: domain.clone(),
             table,
             sessions,
             persistence,
             max_note_bytes,
             locks: Mutex::new(HashMap::new()),
-        }))
+            mutations: MutationActivity::new(),
+        });
+        context.provide(MESSAGE_FEEDBACK, service.clone())?;
+        let cleanup_service = service.clone();
+        context.own(EffectHandle::new(
+            "message-feedback.domain-close",
+            move || {
+                Box::pin(async move {
+                    cleanup_service.mutations.close().await;
+                    cleanup_service.domain.close().await
+                })
+            },
+        ))?;
+        Ok(service)
     }
 
     /// Reads feedback belonging to the current persisted Session lifecycle.
@@ -287,6 +407,10 @@ impl MessageFeedbackService {
             Ok(note) => note,
             Err(failure) => return Ok(Err(failure)),
         };
+        let _activity = self
+            .mutations
+            .begin()
+            .ok_or_else(|| anyhow::anyhow!("message-feedback: service is disposing"))?;
         let lock = self.lock_for(&request.session_id);
         let _guard = lock.lock().await;
 
@@ -377,6 +501,10 @@ impl MessageFeedbackService {
         &self,
         request: MessageFeedbackDeleteRequest,
     ) -> anyhow::Result<Result<(), MessageFeedbackFailure>> {
+        let _activity = self
+            .mutations
+            .begin()
+            .ok_or_else(|| anyhow::anyhow!("message-feedback: service is disposing"))?;
         let lock = self.lock_for(&request.session_id);
         let _guard = lock.lock().await;
 
@@ -421,6 +549,45 @@ impl MessageFeedbackService {
         Ok(Ok(()))
     }
 
+    /// Remote list result using the source success/rejection envelope.
+    ///
+    /// # Errors
+    ///
+    /// Returns persistence or storage failures; business failures remain in the envelope.
+    pub async fn list_remote(&self, request: MessageFeedbackListRequest) -> anyhow::Result<Value> {
+        Ok(match self.list(&request.session_id).await? {
+            Ok(items) => serde_json::json!({"ok": true, "value": {"items": items}}),
+            Err(error) => serde_json::json!({"ok": false, "error": error}),
+        })
+    }
+
+    /// Remote put result using the source success/rejection envelope.
+    ///
+    /// # Errors
+    ///
+    /// Returns persistence, checkpoint, or storage failures; business failures remain enveloped.
+    pub async fn put_remote(&self, request: MessageFeedbackPutRequest) -> anyhow::Result<Value> {
+        Ok(match self.put(request).await? {
+            Ok(item) => serde_json::json!({"ok": true, "value": item}),
+            Err(error) => serde_json::json!({"ok": false, "error": error}),
+        })
+    }
+
+    /// Remote delete result using the source success/rejection envelope.
+    ///
+    /// # Errors
+    ///
+    /// Returns persistence or storage failures; business failures remain in the envelope.
+    pub async fn delete_remote(
+        &self,
+        request: MessageFeedbackDeleteRequest,
+    ) -> anyhow::Result<Value> {
+        Ok(match self.delete(request).await? {
+            Ok(()) => serde_json::json!({"ok": true, "value": {"absent": true}}),
+            Err(error) => serde_json::json!({"ok": false, "error": error}),
+        })
+    }
+
     fn lock_for(&self, id: &SessionId) -> Arc<tokio::sync::Mutex<()>> {
         self.locks
             .lock()
@@ -433,17 +600,26 @@ impl MessageFeedbackService {
         &self,
         session_id: &SessionId,
     ) -> anyhow::Result<Result<SessionInspection, MessageFeedbackFailure>> {
-        if self.sessions.get(session_id).is_none() {
-            let snapshots = self.persistence.list_snapshots(None).await?;
-            if !snapshots
-                .iter()
-                .any(|snapshot| snapshot.header.id == *session_id)
-                && self.sessions.get(session_id).is_none()
-            {
-                return Ok(Err(MessageFeedbackFailure::SessionNotFound {
-                    session_id: session_id.clone(),
+        if let Some(live) = self.sessions.get(session_id) {
+            return Ok(Ok(SessionInspection {
+                meta: live.header().clone(),
+                events: live.events(),
+            }));
+        }
+        let snapshots = self.persistence.list_snapshots(None).await?;
+        if !snapshots
+            .iter()
+            .any(|snapshot| snapshot.header.id == *session_id)
+        {
+            if let Some(live) = self.sessions.get(session_id) {
+                return Ok(Ok(SessionInspection {
+                    meta: live.header().clone(),
+                    events: live.events(),
                 }));
             }
+            return Ok(Err(MessageFeedbackFailure::SessionNotFound {
+                session_id: session_id.clone(),
+            }));
         }
         Ok(Ok(self.persistence.inspect(session_id, None).await?))
     }
@@ -482,6 +658,100 @@ impl MessageFeedbackService {
         }
         Ok(Some(note.to_owned()))
     }
+}
+
+impl TypertRemoteService for MessageFeedbackService {
+    fn typert_service_key(&self) -> &'static str {
+        "messageFeedback"
+    }
+
+    fn remote_methods(&self) -> Vec<RemoteMethodMarker> {
+        vec![
+            typert_remote_method!(MessageFeedbackService, list_remote => "list"),
+            typert_remote_method!(MessageFeedbackService, put_remote => "put"),
+            typert_remote_method!(MessageFeedbackService, delete_remote => "delete"),
+        ]
+    }
+}
+
+impl TypertInvocableService for MessageFeedbackService {
+    fn service_key(&self) -> &'static str {
+        "messageFeedback"
+    }
+
+    fn namespace(&self) -> &'static str {
+        "messageFeedback"
+    }
+
+    fn remote_methods(&self) -> Vec<RemoteMethodMarker> {
+        <Self as TypertRemoteService>::remote_methods(self)
+    }
+
+    fn parameter_names(&self, implementation: &str) -> Option<Vec<String>> {
+        matches!(
+            implementation,
+            "list_remote" | "put_remote" | "delete_remote"
+        )
+        .then(|| vec!["request".to_owned()])
+    }
+
+    fn has_method(&self, implementation: &str) -> bool {
+        matches!(
+            implementation,
+            "list_remote" | "put_remote" | "delete_remote"
+        )
+    }
+
+    fn invoke(
+        self: Arc<Self>,
+        implementation: &str,
+        arguments: Vec<TypertHostArgument>,
+    ) -> TypertInvocationFuture {
+        let implementation = implementation.to_owned();
+        Box::pin(async move {
+            anyhow::ensure!(
+                arguments.len() == 1,
+                "messageFeedback/{implementation} expects one request argument"
+            );
+            let TypertHostArgument::Boundary(TypertBoundaryValue::Json(request)) = &arguments[0]
+            else {
+                anyhow::bail!("messageFeedback expected a JSON request argument");
+            };
+            let value = match implementation.as_str() {
+                "list_remote" => {
+                    self.list_remote(serde_json::from_value(request.clone())?)
+                        .await?
+                }
+                "put_remote" => {
+                    self.put_remote(serde_json::from_value(request.clone())?)
+                        .await?
+                }
+                "delete_remote" => {
+                    self.delete_remote(serde_json::from_value(request.clone())?)
+                        .await?
+                }
+                _ => anyhow::bail!("messageFeedback has no callable method {implementation:?}"),
+            };
+            Ok(TypertBoundaryValue::Json(value))
+        })
+    }
+}
+
+/// Builds the Loader-compatible message-feedback plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), move |context, config| {
+        Box::pin(async move {
+            let config: Config = serde_json::from_value(config)?;
+            MessageFeedbackService::install(&context, config.max_note_bytes).await?;
+            Ok(())
+        })
+    })
+    .with_config_validator(|value: &Value| {
+        config_schema()
+            .resolve(value)
+            .map_err(|error| anyhow::anyhow!("{error}"))
+    })
 }
 
 fn same_identity(
