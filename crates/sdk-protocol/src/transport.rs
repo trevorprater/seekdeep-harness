@@ -6,7 +6,7 @@ use std::{
     pin::Pin,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
 };
 
@@ -17,7 +17,7 @@ use serde_json::{Map, Value, json};
 use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt as _, AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader},
-    sync::oneshot,
+    sync::{Notify, oneshot},
     task::JoinHandle,
 };
 
@@ -34,6 +34,8 @@ pub type JsonRpcRequestHandler = Arc<
 pub type JsonRpcNotificationHandler = Arc<dyn Fn(String, Map<String, Value>) + Send + Sync>;
 /// External input failure observer used by protocol-specific owners.
 pub type JsonRpcTransportFailureHandler = Arc<dyn Fn(anyhow::Error) + Send + Sync>;
+/// Observer invoked after one incoming request response has reached the output stream.
+pub type JsonRpcResponseWrittenHandler = Arc<dyn Fn(String, bool) + Send + Sync>;
 
 type PendingSender = oneshot::Sender<anyhow::Result<Value>>;
 
@@ -60,6 +62,9 @@ pub struct JsonRpcLineTransport {
     request_handler: RwLock<Option<JsonRpcRequestHandler>>,
     notification_handler: RwLock<Option<JsonRpcNotificationHandler>>,
     failure_handler: RwLock<Option<JsonRpcTransportFailureHandler>>,
+    response_written_handler: RwLock<Option<JsonRpcResponseWrittenHandler>>,
+    incoming_requests: AtomicUsize,
+    incoming_idle: Notify,
 }
 
 impl std::fmt::Debug for JsonRpcLineTransport {
@@ -96,6 +101,9 @@ impl JsonRpcLineTransport {
             request_handler: RwLock::new(None),
             notification_handler: RwLock::new(None),
             failure_handler: RwLock::new(None),
+            response_written_handler: RwLock::new(None),
+            incoming_requests: AtomicUsize::new(0),
+            incoming_idle: Notify::new(),
         })
     }
 
@@ -112,6 +120,22 @@ impl JsonRpcLineTransport {
     /// Installs or replaces the external input-failure observer.
     pub fn on_input_failure(&self, handler: JsonRpcTransportFailureHandler) {
         *self.failure_handler.write() = Some(handler);
+    }
+
+    /// Installs or replaces the post-response-write observer.
+    pub fn on_response_written(&self, handler: JsonRpcResponseWrittenHandler) {
+        *self.response_written_handler.write() = Some(handler);
+    }
+
+    /// Waits until every request already accepted by the reader has written its response.
+    pub async fn when_incoming_idle(&self) {
+        loop {
+            let notified = self.incoming_idle.notified();
+            if self.incoming_requests.load(Ordering::Acquire) == 0 {
+                return;
+            }
+            notified.await;
+        }
     }
 
     /// Starts consuming input frames. Repeated calls are no-ops.
@@ -292,13 +316,17 @@ impl JsonRpcLineTransport {
         params: Map<String, Value>,
     ) {
         let transport = Arc::clone(self);
+        let method_for_observer = method.clone();
+        self.incoming_requests.fetch_add(1, Ordering::AcqRel);
         let handler = self.request_handler.read().clone();
         let operation: Pin<Box<dyn Future<Output = anyhow::Result<Value>> + Send>> = match handler {
             Some(handler) => handler(method, params),
             None => Box::pin(async move { Err(anyhow::anyhow!("method not found: {method}")) }),
         };
         tokio::spawn(async move {
-            let frame = match operation.await {
+            let response = operation.await;
+            let succeeded = response.is_ok();
+            let frame = match response {
                 Ok(result) => json!({"jsonrpc":"2.0", "id": id, "result": result}),
                 Err(error) => {
                     let code = if error.to_string().starts_with("method not found: ") {
@@ -309,8 +337,17 @@ impl JsonRpcLineTransport {
                     json!({"jsonrpc":"2.0", "id": id, "error": {"code":code, "message":error.to_string()}})
                 }
             };
-            if let Err(error) = transport.write_frame(frame).await {
-                transport.input_failed(error);
+            let write = transport.write_frame(frame).await;
+            if transport.incoming_requests.fetch_sub(1, Ordering::AcqRel) == 1 {
+                transport.incoming_idle.notify_waiters();
+            }
+            match write {
+                Ok(()) => {
+                    if let Some(handler) = transport.response_written_handler.read().clone() {
+                        handler(method_for_observer, succeeded);
+                    }
+                }
+                Err(error) => transport.input_failed(error),
             }
         });
     }

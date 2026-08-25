@@ -1,0 +1,33 @@
+[package]
+name = "seekdeep-sdk-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SDK-facing JSON-RPC runtime server for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+path-clean.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-llm-deepseek = { path = "../llm-deepseek" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-sdk-protocol = { path = "../sdk-protocol" }
+seekdeep-subagent = { path = "../subagent" }
+tokio.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

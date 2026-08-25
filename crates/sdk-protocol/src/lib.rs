@@ -5,7 +5,8 @@ mod types;
 
 pub use transport::{
     BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTransport, JsonRpcNotificationHandler,
-    JsonRpcRequestHandler, JsonRpcResponseError, JsonRpcTransportFailureHandler,
+    JsonRpcRequestHandler, JsonRpcResponseError, JsonRpcResponseWrittenHandler,
+    JsonRpcTransportFailureHandler,
 };
 pub use types::{
     HarnessSdkNotification, HarnessSdkRequest, InitializeParams, InitializeResult, SdkRunStatus,

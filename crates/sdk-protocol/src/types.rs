@@ -24,7 +24,7 @@ pub struct InitializeParams {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerInfo {
-    /// Stable runtime name (`deepseek-harness-sdk-runtime` for compatibility).
+    /// Stable runtime name (`seekdeep-harness-sdk-runtime`).
     pub name: String,
     /// Runtime version.
     pub version: String,
