@@ -51435,6 +51435,7 @@
       "status": "verified",
       "targets": [
         "crates/acp-demo/src/lib.rs",
+        "crates/acp-demo/tests/acp_composition_parity.rs",
         "crates/agent-spine-demo/src/lib.rs",
         "crates/acp/src/bridge.rs",
         "crates/acp/src/lib.rs"
@@ -51442,7 +51443,8 @@
       "evidence": [
         "pinned-source ACP demo composition passed 12/12 and its built/load-path E2E suites passed 4/4",
         "Rust app composes the verified spine, JSONL persistence, loop resume backend, semantic checkpoint policy, SQLite query index, and exact-agent ACP bridge in teardown-safe registration order with no stdout logger",
-        "Rust in-process real AgentLoop round trip emits committed ACP text and the compiled binary proves Loader and fresh-session behavior"
+        "Rust in-process real AgentLoop round trip emits committed ACP text and the compiled binary proves Loader and fresh-session behavior",
+        "Rust composition tests pin every forwarded default, opt-out, skill, job, tool, ordering, and plugin-shape branch from the source app suite"
       ]
     },
     {
@@ -51462,7 +51464,18 @@
     {
       "source": "packages/examples/acp-demo/tests/acp-agent.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/acp_composition_parity.rs",
+        "crates/acp-demo/tests/acp_demo_parity.rs",
+        "crates/acp-demo/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: acp-agent.spec.ts passed 12/12",
+        "Rust 8/8 package tests cover spine, persistence, checkpoint, query, ACP, default and omitted goals, default persistence root, workspace controls, default and custom skills, shared home, max parallelism, job admission, Bash and job-tool config, tool ordering, required config, and Loader plugin shape",
+        "cargo test -p seekdeep-acp-demo --all-features: 8 passed",
+        "cargo clippy -p seekdeep-acp-demo --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/examples/acp-demo/tests/built-bin.e2e.ts",

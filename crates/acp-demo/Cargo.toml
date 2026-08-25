@@ -40,6 +40,11 @@ tokio.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
+seekdeep-goal = { path = "../goal" }
+seekdeep-jobs = { path = "../jobs" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-skill = { path = "../skill" }
+seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-core = { path = "../core" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-sdk-protocol = { path = "../sdk-protocol" }

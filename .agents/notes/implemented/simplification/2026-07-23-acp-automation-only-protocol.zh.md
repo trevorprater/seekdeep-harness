@@ -26,7 +26,9 @@ ACP 仍有一个有用的职责：另一个 agent（智能体）或自动化控�
 
 保留一次性 `session/request_permission`。它是为桥接层拥有的 agent 提供的机器策略通道，而不是面向人类的审批 UI：应答者只接受桥接层当前会话映射中登记的同一 agent 对象；不属于桥接层当前 agent 的请求或未关联具体调用的请求会继续委派；RPC 失败则映射为故障时默认拒绝的 `unavailable` 结果。客户端可选择允许一次、拒绝一次或取消，桥接层绝不会将该响应转换为持久授权。询问策略仍归审批 seam 及其生产者所有；[`seekdeep-subagent-acp`](../../../../packages/subagent/subagent-acp/README.md) 会以程序化方式使用该通道。
 
-应用组装包含 agent 主干、持久化、检查点策略和 ACP 传输层。它不会为 ACP 挂载命令、会话查询、会话引用、plan mode、权限选择器或用户交互服务。
+应用组装包含 agent 主干、JSONL 持久化、检查点策略、供后端持久化使用的 SQLite 会话查询索引和 ACP 传输层。它不会为 ACP 挂载命令、会话引用、plan mode、权限选择器或用户交互服务，并且 ACP 协议不公开会话查询浏览方法。
+
+Rust 组装测试固定默认目标、显式省略目标、持久化默认值、workspace 控制、skill 配置与共享主目录、loop 并行度、job 准入、Bash 与 job 工具配置、工具排序和 Loader 插件形态。独立的已编译二进制验收会保持 stdout 协议纯净，并验证新会话协商与 EOF 资源清理。
 
 传输层调用 agent、会话和审批的接口服务，而不依赖具体的 agent loop（智能体循环）。工具执行仍留在 harness 内；ACP 绝不会把 shell 执行委派给编辑器。stdout 只承载分帧 JSON-RPC，因此 app 不挂载 stdout logger，桥接层也不会 monkey-patch 进程输出。
 

@@ -26,7 +26,9 @@ The bridge emits only committed `assistant/message` text. Reasoning, raw chunks,
 
 One-shot `session/request_permission` remains. It is a machine policy channel for bridge-owned agents, not a human approval UI: the answerer accepts only an exact agent object in the bridge's live session map, delegates foreign or call-less requests, and maps failed RPCs to the fail-closed unavailable outcome. The client chooses allow once, reject once, or cancel, and the bridge never turns that response into a durable grant. Asking policy stays in the approval seam and its producers; [`seekdeep-subagent-acp`](../../../../packages/subagent/subagent-acp/README.md) uses this channel programmatically.
 
-The app composition contains the agent spine, persistence, checkpoint policy, and ACP transport. It does not mount command, session-query, session-reference, plan-mode, permission-picker, or user-questions services for ACP.
+The app composition contains the agent spine, JSONL persistence, checkpoint policy, the SQLite session-query index used by backend persistence, and ACP transport. It does not mount command, session-reference, plan-mode, permission-picker, or user-questions services for ACP, and the ACP protocol exposes no session-query browsing methods.
+
+Rust composition tests pin default goals, explicit goal omission, persistence defaults, workspace controls, skill configuration and shared home, loop parallelism, job admission, Bash and job-tool configuration, tool ordering, and Loader plugin shape. The separate compiled-binary acceptance keeps stdout protocol-pure and verifies fresh-session negotiation and EOF teardown.
 
 The transport programs interface-level agent, session, and approval services rather than the concrete agent loop. Tool execution stays inside the harness; ACP never delegates shell execution to an editor. stdout carries framed JSON-RPC only, so the app mounts no stdout logger and the bridge does not monkey-patch process output.
 
