@@ -638,12 +638,12 @@ fn register_listeners(runtime: &Arc<InstructionRuntime>, context: &Context) -> a
                 let PreStepDecision::Enter { messages: entered } = decision else {
                     return Ok(EventReply::Value(Arc::new(PreStepDecision::Reject)));
                 };
-                let last_claimed_index = entered
+                let insertion_index = entered
                     .iter()
                     .rposition(|message| messages.contains(message))
-                    .unwrap_or(entered.len());
+                    .map_or(0, |index| index + 1);
                 let mut entered = entered;
-                entered.insert(last_claimed_index + 1, desired.expect("checked"));
+                entered.insert(insertion_index, desired.expect("checked"));
                 Ok(EventReply::Value(Arc::new(PreStepDecision::Enter {
                     messages: entered,
                 })))

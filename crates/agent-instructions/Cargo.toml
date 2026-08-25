@@ -28,5 +28,12 @@ sha1.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tool-fs = { path = "../tool-fs" }
+tempfile.workspace = true
+
 [lints]
 workspace = true

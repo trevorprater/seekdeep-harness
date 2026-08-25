@@ -4507,6 +4507,7 @@ name = "seekdeep-agent-instructions"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures",
  "parking_lot",
  "path-clean",
@@ -4515,14 +4516,18 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-fs",
+ "seekdeep-fs-local",
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-schemastery",
+ "seekdeep-system-prompt",
+ "seekdeep-tool-fs",
  "seekdeep-tools",
  "seekdeep-util",
  "serde",
  "serde_json",
  "sha1",
+ "tempfile",
  "tokio",
  "tracing",
 ]

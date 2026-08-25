@@ -64,6 +64,10 @@ There is intentionally no watcher. Detection occurs at the next successful struc
 
 `maxSourceBytes` is a positive per-file cap with a 1 MiB default. The loader checks reported size before reading and still consumes content through `streamText()` with a running UTF-8 byte count, so missing/stale metadata cannot force an unbounded allocation. An oversized winning candidate is unavailable rather than a reason to fall through to another same-directory name. The plugin deliberately keeps no process-wide cache and never retains instruction prose. It keeps only `{ path, version, digest }` per effective scope in a `WeakMap<Session, Map<scope, state>>`: a matching provider `FsVersion` plus matching effective prompt state skips the read, while a changed version triggers a bounded read and SHA-1 confirmation. SHA-1 remains the cross-provider content identity persisted in visible structured metadata; provider versions are only an in-memory invalidation fast path. Dynamic cache transitions occur while a serialized projection composes the one desired inbox context, and the next pre-step waits for that projection before deciding what enters the request.
 
+## Verification
+
+The real-model source e2e defines three key-gated cases. A deterministic Rust mirror runs all three unconditionally through the production durable driver, system prompt, tool runtime, local filesystem, real read tool, Session store, and instruction runtime. It proves baseline visibility, descendant discovery after a real read, and a changed baseline appended as a replacement transition without rewriting the frozen prefix. The nested case also pins insertion at index zero when a downstream pre-step supplies no claimed message, matching JavaScript `findLastIndex()` returning `-1`.
+
 ## Alternatives considered
 
 **Use a global `ctx.systemPrompt.section()`.** Rejected because one Cordis context can host sessions with different cwd values, while repository-owned text is lower-authority context rather than top-authority provider system content.

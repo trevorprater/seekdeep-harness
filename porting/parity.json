@@ -48406,7 +48406,19 @@
     {
       "source": "packages/context/agent-instructions/tests/agent-instructions.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-instructions/src/index.rs",
+        "crates/agent-instructions/tests/assembled_e2e.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: three real-model e2e cases declared and correctly skipped without DEEPSEEK_API_KEY under vitest.e2e.config.ts",
+        "Rust keyless assembled mirror passed 3/3 through DefaultAgentDriver, production SystemPrompt and ToolRuntime, LocalFileSystem, real read tool, event-sourced SessionStore, and agent-instructions",
+        "the mirror proves baseline visibility, descendant AGENTS.md discovery after a real read, and changed-baseline replacement after a real file touch without rewriting the frozen prefix",
+        "nested discovery caught and fixed the no-claimed-message insertion panic by preserving JavaScript findLastIndex(-1)+1 insertion-at-zero semantics",
+        "cargo test -p seekdeep-agent-instructions --all-features: 8 passed",
+        "cargo clippy -p seekdeep-agent-instructions --all-targets --all-features -- -D warnings: passed"
+      ]
     },
     {
       "source": "packages/context/agent-instructions/tests/agent-instructions.spec.ts",
