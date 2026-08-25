@@ -14,6 +14,11 @@ use std::{
     sync::Arc,
 };
 
+/// Profile dependency forwarding and bundle-list reconciliation.
+pub mod plugin_support;
+/// Profile preparation and boot-free configuration dumps.
+pub mod profile_support;
+
 use seekdeep_agent::{AgentFactoryRegistration, AgentRegistry};
 use seekdeep_agent_default_model::{
     AGENT_DEFAULT_MODEL, AgentDefaultModelConfig, install as install_default_model,

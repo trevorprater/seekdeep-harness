@@ -4362,10 +4362,12 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "parking_lot",
+ "path-clean",
  "portable-pty",
  "seekdeep-agent",
  "seekdeep-agent-default-model",
  "seekdeep-agent-loop",
+ "seekdeep-app-boot",
  "seekdeep-cmdline",
  "seekdeep-code-runtime-worker-thread",
  "seekdeep-cordis",

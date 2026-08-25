@@ -11,9 +11,11 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+path-clean.workspace = true
 seekdeep-agent = { path = "../../crates/agent" }
 seekdeep-agent-default-model = { path = "../../crates/agent-default-model" }
 seekdeep-agent-loop = { path = "../../crates/agent-loop" }
+seekdeep-app-boot = { path = "../../crates/app-boot" }
 seekdeep-code-runtime-worker-thread = { path = "../../crates/code-runtime-worker-thread" }
 seekdeep-cmdline = { path = "../../crates/cmdline" }
 seekdeep-cordis = { path = "../../crates/cordis" }
@@ -33,6 +35,7 @@ seekdeep-tool-todo = { path = "../../crates/tool-todo" }
 seekdeep-tools = { path = "../../crates/tools" }
 seekdeep-util = { path = "../../crates/util" }
 seekdeep-workflow-worker-thread = { path = "../../crates/workflow-worker-thread" }
+serde_json.workspace = true
 terminal_size.workspace = true
 tokio.workspace = true
 
@@ -40,7 +43,6 @@ tokio.workspace = true
 parking_lot.workspace = true
 portable-pty.workspace = true
 seekdeep-workflow = { path = "../../crates/workflow" }
-serde_json.workspace = true
 tempfile.workspace = true
 
 [lints]

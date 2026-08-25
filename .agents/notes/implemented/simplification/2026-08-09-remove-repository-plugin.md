@@ -41,4 +41,4 @@ This note consolidates the removed repository cache, static format, config-only 
 
 ## Testing
 
-Static gates reject stale package, config, documentation, graph, and workspace references. The existing `seekdeep plugin` built-CLI acceptance covers profile initialization, package-manager installation, bundle discovery, and layer reconciliation. Declarative package-relative Skill and MCP bundle resources remain a named coverage gap in this removal layer.
+Static gates reject stale package, config, documentation, graph, and workspace references. The `seekdeep plugin` built-CLI acceptance covers profile initialization, package-manager installation, bundle discovery, and layer reconciliation. The Rust launcher additionally pins pnpm exit propagation, invoking-directory path anchoring, missing-pnpm guidance, Git build-allowlist guidance, malformed installed manifests, and activation when an installed dependency gains or loses its bundle declaration. Declarative package-relative Skill and MCP bundle resources remain a named coverage gap in this removal layer.

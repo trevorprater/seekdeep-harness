@@ -23617,12 +23617,35 @@
     {
       "source": "apps/cli/src/dump-config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/profile_support.rs",
+        "apps/seekdeep/tests/dump_config_process.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/built-bin.e2e.ts -t 'prints the web profile bundle layers|prints the headless profile|composes the profile user layer|anchors a relative add spec|activates a dependency' (pinned source: 5 passed, including all 3 config-dump cases)",
+        "cargo test -p seekdeep --test dump_config_process --all-features (4 passed)",
+        "cargo test -p seekdeep --all-features",
+        "cargo clippy -p seekdeep -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep -p seekdeep-app-boot --all-features --no-deps"
+      ]
     },
     {
       "source": "apps/cli/src/plugin.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/plugin_support.rs",
+        "apps/seekdeep/tests/plugin_process.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/built-bin.e2e.ts -t 'prints the web profile bundle layers|prints the headless profile|composes the profile user layer|anchors a relative add spec|activates a dependency' (pinned source: 5 passed, including both plugin-management cases)",
+        "cargo test -p seekdeep --lib plugin_support --all-features (4 passed)",
+        "cargo test -p seekdeep --test plugin_process --all-features (4 passed)",
+        "cargo test -p seekdeep --all-features",
+        "cargo clippy -p seekdeep -p seekdeep-app-boot --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep -p seekdeep-app-boot --all-features --no-deps"
+      ]
     },
     {
       "source": "apps/cli/src/process-shutdown.ts",

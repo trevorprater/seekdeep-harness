@@ -78,8 +78,8 @@ fn dispatch(argv: &[OsString]) -> i32 {
 fn dispatch_invocation(invocation: SeekDeepInvocation) -> i32 {
     match invocation {
         SeekDeepInvocation::Profile(invocation) => dispatch_profile(invocation),
-        SeekDeepInvocation::DumpConfig(invocation) => dump_not_yet_available(&invocation),
-        SeekDeepInvocation::Plugin(invocation) => plugin_not_yet_available(&invocation),
+        SeekDeepInvocation::DumpConfig(invocation) => dispatch_dump_config(&invocation),
+        SeekDeepInvocation::Plugin(invocation) => dispatch_plugin(&invocation),
     }
 }
 
@@ -101,25 +101,27 @@ fn dispatch_profile(invocation: ProfileInvocation) -> i32 {
     run_headless(invocation.args)
 }
 
-fn dump_not_yet_available(invocation: &DumpConfigInvocation) -> i32 {
-    let mode = if invocation.default_only {
-        "--dump-default-config"
-    } else {
-        "--dump-config"
-    };
-    write_stderr(&format!(
-        "seekdeep: {mode} for profile {:?} is not available until Rust profile composition is complete\n",
-        invocation.profile.as_str()
-    ));
-    1
+fn dispatch_dump_config(invocation: &DumpConfigInvocation) -> i32 {
+    match seekdeep::profile_support::dump_profile_config(invocation) {
+        Ok(output) => {
+            write_stdout(&output);
+            0
+        }
+        Err(error) => {
+            write_stderr(&format!("{error:#}\n"));
+            1
+        }
+    }
 }
 
-fn plugin_not_yet_available(invocation: &PluginInvocation) -> i32 {
-    write_stderr(&format!(
-        "seekdeep: plugin management for profile {:?} is not available in the current Rust launcher\n",
-        invocation.profile.as_str()
-    ));
-    1
+fn dispatch_plugin(invocation: &PluginInvocation) -> i32 {
+    match seekdeep::plugin_support::run_plugin(invocation) {
+        Ok(code) => code,
+        Err(error) => {
+            write_stderr(&format!("{error:#}\n"));
+            1
+        }
+    }
 }
 
 fn run_headless(args: Vec<String>) -> i32 {
