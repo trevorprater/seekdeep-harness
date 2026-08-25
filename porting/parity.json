@@ -77909,32 +77909,79 @@
     {
       "source": "vendor/cosmokit/src/array.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cosmokit/src/array.rs",
+        "crates/cosmokit/tests/full_parity.rs"
+      ],
+      "evidence": [
+        "Rust array helpers pin contain, duplicate-retaining intersection and difference, first-occurrence union and deduplication, first-match removal, and nullish/scalar/already-array normalization",
+        "direct pinned-source aggregate oracle matches Rust array outputs exactly"
+      ]
     },
     {
       "source": "vendor/cosmokit/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cosmokit/src/lib.rs"
+      ],
+      "evidence": [
+        "Rust crate root exposes the array, misc, string, time, and types modules as one compiled utility surface",
+        "native strict Clippy and 18 Rust tests passed; wasm32-unknown-unknown compilation passed"
+      ]
     },
     {
       "source": "vendor/cosmokit/src/misc.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cosmokit/src/misc.rs",
+        "crates/cosmokit/tests/full_parity.rs"
+      ],
+      "evidence": [
+        "Rust misc helpers pin nullability, structural object truthiness, ordered filtering and mapping, no-key copies, requested-order picks, explicit undefined-presence forcing, omission, and no-op behavior",
+        "direct pinned-source aggregate oracle matches ordered-map results and presence semantics"
+      ]
     },
     {
       "source": "vendor/cosmokit/src/string.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cosmokit/src/string.rs",
+        "crates/cosmokit/tests/full_parity.rs"
+      ],
+      "evidence": [
+        "Rust string helpers pin capitalization, delimiter-limited camel case, acronym-aware parameter and snake tokenization, ASCII-only JavaScript property identifiers, JSON bracket notation, and single-slash path normalization",
+        "direct pinned-source string oracle matches all Rust outputs including non-ASCII property rejection"
+      ]
     },
     {
       "source": "vendor/cosmokit/src/time.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cosmokit/src/time.rs",
+        "crates/cosmokit/tests/full_parity.rs"
+      ],
+      "evidence": [
+        "Rust time helpers pin constants, timezone day arithmetic, ordered duration parsing, JavaScript rounding thresholds, digit and template formatting, and injected-now relative, clock-only, month-day, local datetime, RFC3339, and UTC date-only parsing",
+        "direct pinned-source fixed-clock parseDate and formatting oracles match Rust timestamps and strings"
+      ]
     },
     {
       "source": "vendor/cosmokit/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/cosmokit/src/types.rs",
+        "crates/cosmokit/tests/full_parity.rs"
+      ],
+      "evidence": [
+        "Rust binary helpers pin padded base64, Node-compatible invalid-character and URL-alphabet decoding, lowercase hex, odd-nibble truncation, native invalid-pair stopping, and browser compilation",
+        "Rust JSON cloning and strict versus nullish equality tests mirror the structural subset representable across the Rust boundary"
+      ]
     },
     {
       "source": "vendor/cosmokit/tsconfig.json",

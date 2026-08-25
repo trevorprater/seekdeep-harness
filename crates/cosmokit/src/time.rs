@@ -5,7 +5,10 @@ use std::sync::{
     atomic::{AtomicI32, Ordering},
 };
 
-use chrono::{DateTime, Datelike, Local, TimeZone, Timelike};
+use chrono::{
+    DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike,
+    Utc,
+};
 
 /// One millisecond.
 pub const MILLISECOND: f64 = 1.0;
@@ -84,6 +87,69 @@ pub fn parse_time(source: &str) -> f64 {
                 .map_or(0.0, |value| value * unit)
         })
         .sum()
+}
+
+/// Parses the source relative/date vocabulary against an injected local `now`.
+///
+/// Relative durations advance `now`; clock-only values use its local date;
+/// month-day clocks use its year; ordinary RFC3339 and common local forms are
+/// parsed directly. Empty input returns `now`.
+#[must_use]
+pub fn parse_date(source: &str, now: DateTime<Local>) -> Option<DateTime<Local>> {
+    if source.is_empty() {
+        return Some(now);
+    }
+    let relative = parse_time(source);
+    if relative != 0.0 {
+        return Some(now + Duration::milliseconds(truncated_milliseconds(relative)?));
+    }
+    if let Some(time) = parse_clock(source) {
+        return Local
+            .from_local_datetime(&now.date_naive().and_time(time))
+            .single();
+    }
+    if let Some((month, day, time)) = parse_month_day_clock(source) {
+        let date = NaiveDate::from_ymd_opt(now.year(), month, day)?;
+        return Local.from_local_datetime(&date.and_time(time)).single();
+    }
+    if let Ok(value) = DateTime::parse_from_rfc3339(source) {
+        return Some(value.with_timezone(&Local));
+    }
+    for format in [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+    ] {
+        if let Ok(value) = NaiveDateTime::parse_from_str(source, format)
+            && let Some(value) = Local.from_local_datetime(&value).single()
+        {
+            return Some(value);
+        }
+    }
+    NaiveDate::parse_from_str(source, "%Y-%m-%d")
+        .ok()
+        .and_then(|date| date.and_hms_opt(0, 0, 0))
+        .map(|date| DateTime::<Utc>::from_naive_utc_and_offset(date, Utc).with_timezone(&Local))
+}
+
+fn parse_clock(source: &str) -> Option<NaiveTime> {
+    for format in ["%H:%M", "%H:%M:%S"] {
+        if let Ok(time) = NaiveTime::parse_from_str(source, format) {
+            return Some(time);
+        }
+    }
+    None
+}
+
+fn parse_month_day_clock(source: &str) -> Option<(u32, u32, NaiveTime)> {
+    let (month, rest) = source.split_once('-')?;
+    let (day, clock) = rest.split_once('-')?;
+    Some((month.parse().ok()?, day.parse().ok()?, parse_clock(clock)?))
+}
+
+fn truncated_milliseconds(value: f64) -> Option<i64> {
+    format!("{:.0}", value.trunc()).parse().ok()
 }
 
 fn leading_number(value: &str) -> Option<f64> {
@@ -201,5 +267,26 @@ mod tests {
     fn date_number_uses_floor_for_negative_epochs() {
         assert_eq!(get_date_number(-1, Some(0)), -1);
         assert_eq!(from_date_number(-1, Some(0)), -86_400_000);
+    }
+
+    #[test]
+    fn parses_relative_clock_month_day_and_absolute_dates() {
+        let now = Local
+            .with_ymd_and_hms(2024, 1, 2, 3, 4, 5)
+            .single()
+            .unwrap();
+        assert_eq!(
+            parse_date("2h", now).unwrap().timestamp_millis(),
+            now.timestamp_millis() + 2 * 60 * 60 * 1_000
+        );
+        assert_eq!(parse_date("12:30", now).unwrap().hour(), 12);
+        assert_eq!(parse_date("8-25-12:30", now).unwrap().month(), 8);
+        assert_eq!(
+            parse_date("2025-04-03", now).unwrap().timestamp_millis(),
+            DateTime::parse_from_rfc3339("2025-04-03T00:00:00Z")
+                .unwrap()
+                .timestamp_millis()
+        );
+        assert!(parse_date("not a date", now).is_none());
     }
 }

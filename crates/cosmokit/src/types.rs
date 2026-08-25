@@ -19,9 +19,31 @@ pub mod binary {
     ///
     /// Returns a decoder error when the input cannot represent base64 bytes.
     pub fn from_base64(source: &str) -> Result<Vec<u8>, base64::DecodeError> {
-        general_purpose::STANDARD
-            .decode(source)
-            .or_else(|_| general_purpose::STANDARD_NO_PAD.decode(source))
+        #[cfg(target_arch = "wasm32")]
+        {
+            return general_purpose::STANDARD
+                .decode(source)
+                .or_else(|_| general_purpose::STANDARD_NO_PAD.decode(source));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let normalized = source
+                .bytes()
+                .filter_map(|byte| match byte {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'/' | b'=' => Some(byte),
+                    b'-' => Some(b'+'),
+                    b'_' => Some(b'/'),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            if normalized.len() == 1 {
+                return Ok(Vec::new());
+            }
+            let normalized = String::from_utf8_lossy(&normalized);
+            general_purpose::STANDARD_NO_PAD
+                .decode(normalized.trim_end_matches('='))
+                .or_else(|_| Ok(Vec::new()))
+        }
     }
 
     /// Encodes bytes as lowercase hexadecimal.
@@ -42,10 +64,24 @@ pub mod binary {
     /// Returns the first invalid complete pair.
     pub fn from_hex(source: &str) -> Result<Vec<u8>, std::num::ParseIntError> {
         let complete_length = source.len() - source.len() % 2;
-        (0..complete_length)
-            .step_by(2)
-            .map(|index| u8::from_str_radix(&source[index..index + 2], 16))
-            .collect()
+        #[cfg(target_arch = "wasm32")]
+        {
+            return Ok((0..complete_length)
+                .step_by(2)
+                .map(|index| u8::from_str_radix(&source[index..index + 2], 16).unwrap_or(0))
+                .collect());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut output = Vec::new();
+            for index in (0..complete_length).step_by(2) {
+                let Ok(value) = u8::from_str_radix(&source[index..index + 2], 16) else {
+                    break;
+                };
+                output.push(value);
+            }
+            Ok(output)
+        }
     }
 }
 
@@ -79,6 +115,8 @@ mod tests {
         );
         assert_eq!(binary::to_hex(&bytes), "0001feff");
         assert_eq!(binary::from_hex("0001f"), Ok(vec![0, 1]));
+        assert_eq!(binary::from_hex("01gg02"), Ok(vec![1]));
+        assert_eq!(binary::from_base64("a!Gk="), Ok(b"hi".to_vec()));
     }
 
     #[test]
