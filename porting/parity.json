@@ -63169,16 +63169,26 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/sdk/protocol/package.json"
+        "crates/sdk-protocol/Cargo.toml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "Cargo workspace metadata resolves seekdeep-sdk-protocol as the Rust 2024 package",
+        "cargo test --locked --offline -p seekdeep-sdk-protocol --all-features"
+      ],
+      "note": "Rust crate metadata replaces the Node package build boundary."
     },
     {
       "source": "packages/sdk/protocol/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-protocol/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: SDK transport plus Codex provider suites passed 54/54",
+        "cargo test --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-features",
+        "cargo clippy --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/sdk/protocol/src/invariant.ts",
@@ -63197,27 +63207,53 @@
     {
       "source": "packages/sdk/protocol/src/transport.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-protocol/src/transport.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: packages/sdk/protocol/tests/transport.spec.ts passed inside the 54/54 combined oracle run",
+        "cargo test --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-features",
+        "cargo clippy --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust owns newline framing, UTF-8 chunking, string request identities, bidirectional request/notification dispatch, typed response errors, cancellation abandonment, correlation cleanup, malformed-frame tolerance, flush, input failure, and close behavior."
     },
     {
       "source": "packages/sdk/protocol/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-protocol/src/types.rs"
+      ],
+      "evidence": [
+        "Rust wire tests pin exact method and camelCase field spellings",
+        "cargo test --locked --offline -p seekdeep-sdk-protocol --all-features",
+        "cargo clippy --locked --offline -p seekdeep-sdk-protocol --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Process-, session-, provider-, model-, and message-crossing identities use transparent Rust newtypes while preserving the source JSON spellings and wire-stable deepseek-harness-sdk-runtime server name."
     },
     {
       "source": "packages/sdk/protocol/tests/transport.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-protocol/tests/transport_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: SDK transport plus Codex provider suites passed 54/54",
+        "Rust SDK protocol suite passed 6 tests covering all transport branches in grouped scenarios",
+        "cargo clippy --locked --offline -p seekdeep-sdk-protocol --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/sdk/protocol/tsconfig.json",
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/sdk/protocol/tsconfig.json"
+        "crates/sdk-protocol/Cargo.toml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "Rust 2024 Cargo manifest and workspace lint configuration replace TypeScript compilation settings"
       ]
     },
     {
@@ -69083,16 +69119,28 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/subagent/subagent-codex/package.json"
+        "crates/subagent-codex/Cargo.toml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "Cargo workspace metadata resolves seekdeep-subagent-codex and its real app-server fixture binary",
+        "cargo test --locked --offline -p seekdeep-subagent-codex --all-features"
+      ],
+      "note": "Rust crate metadata replaces the Node package boundary; the official Codex executable remains a deployment-owned external product resolved from PATH."
     },
     {
       "source": "packages/subagent/subagent-codex/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: Codex package, real-product, and SDK suites passed in a 54/54 combined run",
+        "pinned-source Loader composition passed 1/1 under the e2e config",
+        "cargo test --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-features",
+        "cargo clippy --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust registers the fixed codex provider with no optional start capabilities, exact parent-workspace authority, explicit string-only environment overlay, bounded disposal grace, and deterministic HMR unregistration."
     },
     {
       "source": "packages/subagent/subagent-codex/src/invariant.ts",
@@ -69111,12 +69159,32 @@
     {
       "source": "packages/subagent/subagent-codex/src/run.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/src/run.rs",
+        "crates/subprocess/src/types.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: Codex package and real-product branches passed inside the 54/54 combined run",
+        "Rust uses both a deterministic real managed app-server fixture and installed official codex-cli 0.147.0",
+        "cargo test --locked --offline -p seekdeep-subagent-codex --all-features"
+      ],
+      "note": "Rust validates text-only tasks before spawn, publishes only after initialize and ephemeral thread creation, flattens post-publication failures, makes local cancellation authoritative, contains diagnostic failures, transfers pipe ownership exactly once, and disposes only after whole-tree exit."
     },
     {
       "source": "packages/subagent/subagent-codex/src/wire.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/src/wire.rs",
+        "crates/sdk-protocol/src/transport.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: Codex package and real-product branches passed inside the 54/54 combined run",
+        "cargo test --locked --offline -p seekdeep-subagent-codex --all-features",
+        "cargo clippy --locked --offline -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Rust preserves private thread and turn association, early-frame conflict detection, five unattended denial responses, unknown-request failure precedence, final-answer and nullable-phase selection, context-window mapping, best-effort interrupt, malformed-frame failures, and product-renamed clientInfo."
     },
     {
       "source": "packages/subagent/subagent-codex/tests/deepseek-responses-bridge.ts",
@@ -69126,7 +69194,15 @@
     {
       "source": "packages/subagent/subagent-codex/tests/loader-composition.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/tests/run_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest e2e config: Loader composition passed 1/1",
+        "Rust PluginCatalog YAML composition registers codex and foreground subagent_codex with exact parameters while a counting subprocess proves zero resolves and spawns",
+        "cargo test --locked --offline -p seekdeep-subagent-codex --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-codex/tests/real-deepseek.e2e.ts",
@@ -69136,27 +69212,53 @@
     {
       "source": "packages/subagent/subagent-codex/tests/real-product.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/tests/real_product.rs",
+        "crates/subagent-codex/tests/support/responses_fixture.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: real-product spec passed inside the 54/54 combined run",
+        "Rust required keyless tests drive installed official codex-cli 0.147.0 through the production provider",
+        "Rust observes exact Bearer auth and task, byte-exact output, denied command approval with no side effect, local cancellation, and zero live process trees"
+      ]
     },
     {
       "source": "packages/subagent/subagent-codex/tests/responses-fixture.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/tests/support/responses_fixture.rs"
+      ],
+      "evidence": [
+        "Rust loopback HTTP fixture emits the minimal complete and function-call Responses SSE lifecycles consumed by official Codex 0.147.0",
+        "cargo test --locked --offline -p seekdeep-subagent-codex --test real_product --all-features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-codex/tests/subagent-codex.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/tests/wire_parity.rs",
+        "crates/subagent-codex/tests/run_parity.rs",
+        "crates/subagent-codex/tests/fixtures/app_server.rs"
+      ],
+      "evidence": [
+        "pinned-source Vitest: Codex package plus SDK and real-product suites passed 54/54",
+        "Rust Codex suite passed 15 deterministic wire/run/Loader tests plus 3 official-product tests",
+        "cargo clippy --locked --offline -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent-codex/tsconfig.json",
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/subagent/subagent-codex/tsconfig.json"
+        "crates/subagent-codex/Cargo.toml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "Rust 2024 Cargo manifest and workspace lint configuration replace TypeScript compilation settings"
       ]
     },
     {

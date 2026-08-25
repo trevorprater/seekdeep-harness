@@ -6361,6 +6361,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-sdk-protocol"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-subagent",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-session-checkpoint-policy"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -7043,6 +7060,35 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-subagent-codex"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-loader",
+ "seekdeep-scope",
+ "seekdeep-sdk-protocol",
+ "seekdeep-subagent",
+ "seekdeep-subprocess",
+ "seekdeep-subprocess-local",
+ "seekdeep-system-prompt",
+ "seekdeep-tool-subagent",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

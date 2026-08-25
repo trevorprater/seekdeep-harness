@@ -289,6 +289,14 @@ impl SubprocessInput {
         Ok(())
     }
 
+    /// Transfers exclusive ownership of the still-open writer to a protocol adapter.
+    ///
+    /// Every clone observes the removal; a second transfer returns none. The new owner
+    /// must deliver EOF or otherwise tear down the child process.
+    pub async fn take_writer(&self) -> Option<Pin<Box<dyn AsyncWrite + Send + Unpin + 'static>>> {
+        self.inner.lock().await.take()
+    }
+
     /// Whether EOF has been delivered by closing this surface.
     pub async fn is_closed(&self) -> bool {
         self.inner.lock().await.is_none()
@@ -339,6 +347,17 @@ impl SubprocessOutput {
         }
         let mut inner = self.inner.lock().await;
         *inner = Box::pin(tokio::io::empty());
+    }
+
+    /// Transfers exclusive ownership of the readable pipe to a protocol adapter.
+    ///
+    /// Every clone becomes an explicitly closed, immediate-EOF surface. The returned
+    /// reader remains live until its new owner drops it or the child closes the pipe.
+    pub async fn take_reader(&self) -> Pin<Box<dyn AsyncRead + Send + Unpin + 'static>> {
+        self.closed
+            .store(true, std::sync::atomic::Ordering::Release);
+        let mut inner = self.inner.lock().await;
+        std::mem::replace(&mut *inner, Box::pin(tokio::io::empty()))
     }
 
     /// Whether a consumer explicitly closed this output surface.
