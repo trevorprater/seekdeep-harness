@@ -8,13 +8,13 @@ English | [中文](2026-06-22-acp-subagent-backend.zh.md)
 
 The subagent seam ([the seam Agent Note](2026-06-21-subagent-capability-seam.md)) was built so multiple backends coexist by name on `ctx.subagents`. The in-process backends (`-spawn`/`-fork`) run a child as a second `Agent` on the SAME cordis context — cheap, but the child shares the parent's process, model client, and tools. The seam's whole point was to also support an OUT-OF-PROCESS child reached over a protocol, proving the abstraction generalizes across a process boundary. This Agent Note adds the first such backend: an Agent Client Protocol (ACP) client.
 
-## Rust realization
+## Decision
 
 `seekdeep-subagent-acp` uses the shared Rust ACP client rather than embedding the JavaScript SDK. Each run spawns through `seekdeep-subprocess`, transfers the two protocol pipes into the client, completes `initialize` and `session/new` before publication, keeps the child session id private, folds only `agent_message_chunk` text, auto-answers permission requests, settles cancellation locally even when the child ignores `session/cancel`, and gives the child a distinct EOF flush window before managed termination escalation. The parent-visible run id is deterministic process-local state rather than ambient randomness.
 
 Real-process Rust fixtures cover all stop-reason mappings, message-versus-thought output, allow/reject policy, pre-abort, malformed startup, missing executables, ignored cancellation, EOF flush, configurable cwd, provider HMR, and error-sink containment. A Loader-composed parent `AgentLoop` delegates through the real foreground tool into a fresh child process and proves that process cwd, ACP `session/new` cwd, the parent tool result, and persisted parent JSONL all agree. The credentialed real-child model tier remains separate and pending without explicit key and quota authority.
 
-## Source decision
+### Source decision
 
 `@seekdeep-ai/seekdeep-subagent-acp` registers a `SubagentProvider` that runs each child agent in a SPAWNED SUBPROCESS, driven over ACP as the *client*. It is the direction-inverted twin of the existing server-side bridge `@seekdeep-ai/seekdeep-acp` (the ACP *agent*): the bridge ANSWERS `initialize`/`newSession`/`prompt`; this backend CALLS them and IMPLEMENTS the `Client` callbacks (`sessionUpdate`, `requestPermission`). Pointing the configured spawn command at the `acp-agent` example makes the harness talk to its own process.
 

@@ -12,13 +12,13 @@ ACP still has one useful role: another agent or automated controller can start a
 
 The snapshot suite complicates removal. Most ACP scenarios exercise the assembled agent backend rather than ACP presentation, so deleting the suite with the editor bridge would discard broad keyless behavioral coverage.
 
-## Rust realization
+## Decision
 
 `seekdeep-acp` owns both typed roles of the pinned ACP 0.25.1 baseline over the repository's shared line-delimited JSON-RPC transport. The agent role creates exact live Harness agents, correlates each accepted message with its claimed turn, streams only committed assistant text, keeps prompt settlement whole-agent-idle scoped, routes one-shot approvals by exact agent identity and call id, isolates concurrent sessions, drains continuable descendants, and joins every connection-owned agent on disconnect or plugin disposal. The client role is shared with `seekdeep-subagent-acp`, so method names, branded remote session ids, permission choices, stop reasons, and unknown future stop values have one Rust owner.
 
 Keyless Rust tests drive the bridge through real `AgentLoop` instances and a duplex JSON-RPC connection. They pin negotiation, baseline prompt validation and resource-link rendering, committed output, max-token prompt semantics, independent prompt slots, cancellation, approval ownership, multi-session isolation, retry and pre-step correlation, transport failure, descendant-drain ordering, and aggregate whole-connection teardown. The pinned source's 107 unit cases remain the differential oracle, including 39 focused approval, disposal, output-boundary, and turn-lifecycle cases mirrored by the Rust conformance suite.
 
-## Source decision
+### Source decision
 
 `@seekdeep-ai/seekdeep-acp` is an automation transport under [`packages/acp/acp`](../../../../packages/acp/acp/README.md), outside the `ui` package group. Its public protocol is intentionally small: version negotiation, fresh text sessions with one in-flight prompt each, committed assistant text updates, per-session cancellation, concurrent sessions, and connection-owned teardown. Prompts carry the spec-required baseline only — text plus resource links flattened to bracketed textual references; the bridge rejects additional directories, MCP servers, beyond-baseline prompt content (image, audio, embedded resources), empty prompts, unknown sessions, and overlapping prompts.
 

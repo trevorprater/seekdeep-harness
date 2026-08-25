@@ -1,5 +1,7 @@
 //! Dependency-light policies shared by Rust-owned repository commands.
 
+/// Agent Note tree discovery plus classification and format verification.
+pub mod agent_note_tree;
 /// Cordis Loader configuration discovery.
 pub mod cordis_config_files;
 /// Workspace source-alias to built-declaration path mapping.
