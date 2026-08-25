@@ -18,6 +18,15 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Generate or verify the plugin configuration catalog from the pinned source tree.
+    ConfigCatalog {
+        /// Pinned source checkout containing the TypeScript package declarations.
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Verify the tracked output without writing it.
+        #[arg(long)]
+        check: bool,
+    },
     /// Verify every exported Rust API has documentation and all prose-adjacent lints pass.
     Docs,
     /// Synchronize the tracked source-file inventory while preserving evidence.
@@ -83,6 +92,9 @@ enum Scope {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
+        Command::ConfigCatalog { source, check } => {
+            xtask::config_catalog::run(Path::new("."), &source, check)
+        }
         Command::Docs => docs(),
         Command::Inventory { source } => inventory(&source),
         Command::Parity { source, scope } => parity(&source, scope),

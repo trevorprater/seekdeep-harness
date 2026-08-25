@@ -1,5 +1,4 @@
-<!-- 英文源文件由 scripts/gen-config-catalog.ts 生成；本中文文件是通过双语配对维护的经评审对侧。
-     更新时先运行 `pnpm run gen-config-catalog` 更新英文，再更新本文件并运行 `pnpm run verify-translation-pairing --write docs/config-catalog.md` 重新记录配对。 -->
+<!-- 英文源文件由 `cargo xtask config-catalog` 生成；本中文文件是通过双语配对维护的经评审对侧。 -->
 
 # 插件配置目录
 
@@ -7,9 +6,9 @@
 
 每个 `config:` 块均可由 `cordis.yml` 条目设置：针对每个可加载的 harness 包，原样列出其 `apply` 函数或服务构造函数接收的配置声明（包括 JSDoc），并附上所有引用类型——包内类型直接粘贴，其他类型则提供链接。粘贴的内容是插件声明的完整配置类型——运行时 schema 有意排除的字段是仅供运行时使用的 seam（其自身的 JSDoc 会如此说明），不能通过 `cordis.yml` 设置。这是以**部署**为轴的参考文档——插件作者所依据的连接方式请参阅各[子系统页面](subsystems/core.md)中的生成 `cordis-surface` 区域，面向模型的工具 schema 请参阅[工具目录](tool-catalog.md)，而 [subsystems/](subsystems/core.md) 则记录了这些声明所引用的类型。
 
-英文源文件由源代码（`scripts/gen-config-catalog.ts`）生成，并通过 `pnpm run verify-config-catalog`（`doc-sync` 的一部分）验证新鲜度；本中文文件作为经评审对侧通过双语配对维护。声明块使用 `ts config-catalog` 围栏（doc-typecheck 会跳过它，因为单独引用导入项的声明无法独立编译）。英文生成器还会将运行时 schemastery schema 与粘贴的声明进行交叉核对——每个经 schema 验证的键（包括嵌套键）都必须能在声明的配置类型中找到——因此，粘贴内容无法隐藏加载器接受的字段。
+英文源文件通过 `cargo xtask config-catalog` 从钉住的源代码生成，并由 `cargo xtask config-catalog --check` 验证新鲜度；本中文文件作为经评审对侧通过双语配对维护。声明块使用 `ts config-catalog` 围栏。英文生成器会将每个可枚举的运行时 schema 路径与粘贴的声明进行交叉核对，包括嵌套路径，因此粘贴内容无法隐藏 Loader 接受的字段。
 
-`Requires:` 行列出插件通过 `inject` 注入的服务键：其 `cordis.yml` 树还必须加载这些服务的提供者。范围限定为 harness 层级（`packages/`）；配置树还可能加载的 vendored cordis 插件（`hmr`、控制台日志记录器等）固定为上游源代码（参见 [vendoring policy](../vendor/README.md)），未收录于此目录。
+`Requires:` 行列出插件通过 `inject` 注入的服务键：其 `cordis.yml` 树还必须加载这些服务的提供者。范围限定为 harness 层级（`packages/`）；配置树还可能加载的 vendored Cordis 插件（`hmr`、控制台日志记录器等）固定为上游源代码（参见 [vendoring policy](../vendor/README.md)），未收录于此目录。
 
 <a id="deepseek-aiseekdeep-acp"></a>
 
@@ -1213,8 +1212,8 @@ export interface LspLocalServerConfig {
 需要：`tools`
 
 ```ts config-catalog
-/** Configuration for one stdio or Streamable HTTP MCP server. */
-export type Config = StdioConfig | StreamableHttpConfig
+/** Configuration for one stdio, Streamable HTTP, or stateless Streamable HTTP MCP server. */
+export type Config = StdioConfig | StreamableHttpConfig | StatelessHttpConfig
 
 /** Config for connecting to an MCP server via a spawned child process over stdio. */
 export interface StdioConfig {
@@ -1264,6 +1263,30 @@ export interface StreamableHttpConfig {
   reconnect?: ReconnectConfig
 }
 
+/** Config for connecting to an MCP server over the stateless 2026-07-28 streamable HTTP protocol. */
+export interface StatelessHttpConfig {
+  /** Selects the sessionless Streamable HTTP transport (MCP 2026-07-28). */
+  transport: 'stateless-http'
+  /**
+   * Stable local namespace for this server's model-facing tool names
+   * (`mcp__<serverName>__<rawName>`). Must match `[A-Za-z0-9_-]{1,32}` and be
+   * unique across live mcp-client instances.
+   */
+  serverName: string
+  /** MCP endpoint URL. */
+  url: string
+  /** Additional headers attached to MCP requests. */
+  headers: Record<string, string>
+  /** Wire protocol version carried in every request's `_meta` envelope. */
+  protocolVersion: string
+  /** Per-tool-call timeout in milliseconds. */
+  toolCallTimeoutMs: number
+  /** Fail plugin activation when the initial connection or tool synchronization fails. */
+  failOnStartupError: boolean
+  /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
+  reconnect?: ReconnectConfig
+}
+
 /** Automatic reconnect policy for one MCP server connection. */
 export interface ReconnectConfig {
   /** Reconnect automatically after a lost connection (default true). */
@@ -1277,7 +1300,7 @@ export interface ReconnectConfig {
 }
 ```
 
-来源：[`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+来源：[`packages/mcp/mcp-client/src/index.ts:122`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aiseekdeep-message-feedback"></a>
 

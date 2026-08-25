@@ -25994,7 +25994,7 @@
         "docs/config-catalog.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "paired English and Simplified-Chinese catalog hashes were re-recorded after the Rust generator and pinned-source freshness update"
       ]
     },
     {
@@ -26002,10 +26002,12 @@
       "kind": "documentation",
       "status": "verified",
       "targets": [
-        "docs/config-catalog.md"
+        "docs/config-catalog.md",
+        "xtask/src/config_catalog.rs"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "Rust generator owns the English artifact and applies the approved SeekDeep product renames over verbatim pinned-source declarations",
+        "cargo xtask config-catalog --source /Users/trevor/ws/deepseek-harness --check"
       ]
     },
     {
@@ -26016,7 +26018,8 @@
         "docs/config-catalog.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "reviewed Chinese counterpart mirrors the Rust-owned generator and freshness commands while retaining byte-exact generated declaration fences",
+        "manual pairing hash and heading/fence structure verification"
       ]
     },
     {
@@ -51599,7 +51602,16 @@
     {
       "source": "packages/examples/agent-spine-demo/tests/gen-config-catalog.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/tests/config_catalog_parity.rs",
+        "xtask/src/config_catalog.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: gen-config-catalog.spec.ts passed 24/24",
+        "Rust 16/16 grouped tests mirror all 24 source cases across classification, JSDoc closure, transitive and external types, collisions, nested schema paths, workspace re-exports, utility wrappers, schema intersections, indexed access, and rendering",
+        "cargo test -p xtask --test config_catalog_parity --all-features"
+      ]
     },
     {
       "source": "packages/examples/agent-spine-demo/tests/multi-project-sandbox.e2e.ts",
@@ -77079,7 +77091,19 @@
     {
       "source": "scripts/gen-config-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/config_catalog.rs",
+        "xtask/src/main.rs",
+        "xtask/tests/config_catalog_parity.rs",
+        "docs/config-catalog.md"
+      ],
+      "evidence": [
+        "Rust OXC generator classifies every eligible two-level package in the pinned source, builds an owned transitive type graph, aggregates failures, cross-checks enumerable Schemastery paths, renders target-renamed Markdown, and provides write/check CLI modes without Node or TypeScript",
+        "pinned source gen-config-catalog.spec.ts passed 24/24; Rust grouped mirror passed 16/16",
+        "cargo xtask config-catalog --source /Users/trevor/ws/deepseek-harness --check",
+        "cargo clippy -p xtask --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/gen-cordis-api.ts",
