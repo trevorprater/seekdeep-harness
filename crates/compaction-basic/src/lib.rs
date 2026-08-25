@@ -11,7 +11,10 @@ pub use config::{
     TargetPressureConfigError, parse_config_value, resolve_compact_spec, resolve_config,
     resolve_target_policy,
 };
-pub use index::{BasicCompactionEngine, config_schema, plugin};
+pub use index::{
+    BasicCompactionEngine, BasicCompactionInternals, CompactionAbortError, ManualFlush,
+    config_schema, plugin,
+};
 pub use types::{
     BasicCompactionConfig, CompactionPolicyConfig, CompactionTarget, ModelCompactPolicyConfig,
     ResolvedCompactSpec, ResolvedConfig, ResolvedRetention, ResolvedTargetPolicy,

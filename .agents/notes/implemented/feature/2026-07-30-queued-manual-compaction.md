@@ -59,7 +59,7 @@ SEEKDEEP deliberately records `compaction/start` before calling the summarizer. 
 
 ### Markers are time points, not an event container
 
-`compaction/start` and `compaction/end` mean lock acquisition and release. They do not claim exclusive ownership of every event between their seqs. An idle `inject()` may append a `user/message` while a manual summary is pending, so that unrelated event can sit inside the marker interval.
+`compaction/start` and `compaction/end` mean lock acquisition and release. They do not claim exclusive ownership of every event between their seqs. An idle `inject()` may durably enqueue context while a manual summary is pending; its inbox splice can sit inside the marker interval, while the corresponding `user/message` is appended only when the next step claims it. Session append excludes reentrancy only through acceptance and commit. Once an event is committed, its observers may append the next ordered event, which lets marker listeners inject without corrupting sequence order.
 
 Manual stability checks only the selected span: it must remain present, contiguous, ordered, equally priced, and balanced. Append-only context outside it does not stale the summary. Positional replacement places the checkpoint at the old span's surface position and leaves injected context after it in derived model history, even though the injection's log seq precedes the later summary and replacement events.
 
@@ -99,7 +99,7 @@ That reference also carried client-side replacement-anchor machinery to preserve
 
 ## Verification
 
-Agent-loop tests cover same-tick right of way, preserved IDs and FIFO lifecycle, waking and quiet queued work, idempotent release, `whenIdle()`, cancellation, and teardown. Compact tests cover standalone and numbered invariant ownership, end-seed replay, live versus stale orphans, re-entrant listeners, selected-span drift, commit and close failures, flush ordering, exact cancellation causes, raw output and usage preservation, and automatic/manual mutual exclusion.
+Agent-loop tests cover same-tick right of way, preserved IDs and FIFO lifecycle, waking and quiet queued work, idempotent release, `whenIdle()`, cancellation, and teardown. The pinned manual-compaction source suite passes 31 cases; its 21-test grouped Rust mirror covers standalone and numbered invariant ownership, end-seed replay, live versus stale orphans, re-entrant listeners, selected-span and pricing drift, commit and close failures, flush ordering, exact cancellation causes, raw output and usage preservation, and automatic/manual mutual exclusion. Rust tests inject summary, append, measurement, and flush boundaries while production continues to use the concrete Session, token meter, and persistence services.
 
 The command package pins registration, Loader composition, argument rejection, exact success/failure text, cancellation, absence from model history, and disposal waiting across separate close and flush boundaries after an abort stops the executor from awaiting the handler. The client runtime projection test pins end-seed interruption followed by an independent completed attempt. The `queued-manual-compact` terminal snapshot drives real keystrokes through the assembled TUI: `/help` discovers the command, a held summary admits a queued prompt and immediate injection, `turn: null` markers and the flush precede the queued prompt turn, command lifecycle stays log-only, and the derived order is checkpoint → injection → queued prompt.
 

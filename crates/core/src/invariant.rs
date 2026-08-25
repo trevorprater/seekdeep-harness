@@ -57,7 +57,7 @@ pub fn validate_session_events(
 ///
 /// Runtime invariant registration remains stricter: a live assistant event
 /// must name its open step. Persistence accepts a replacement already
-/// validated by [`Session`](crate::session::Session), because model-only
+/// validated by [`Session`], because model-only
 /// projection rewrites may be appended after their originating turn closes.
 ///
 /// # Errors

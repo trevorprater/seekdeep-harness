@@ -1,7 +1,7 @@
 //! Compaction service-definition vocabulary: triggers, classified manual
 //! failures, the agent context backends consume, and the service seat.
 
-use std::{ops::Deref, sync::Arc};
+use std::{error::Error, ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -50,6 +50,9 @@ pub struct ManualCompactionError {
     pub code: ManualCompactionErrorCode,
     /// Backend diagnostic retained as the error message.
     pub message: String,
+    /// Underlying transaction, cancellation, commit, or persistence failure.
+    #[source]
+    pub cause: Option<Arc<dyn Error + Send + Sync>>,
 }
 
 impl ManualCompactionError {
@@ -59,7 +62,22 @@ impl ManualCompactionError {
         Self {
             code,
             message: message.into(),
+            cause: None,
         }
+    }
+
+    /// Attaches one owned underlying failure without changing classification.
+    #[must_use]
+    pub fn with_cause(mut self, cause: anyhow::Error) -> Self {
+        self.cause = Some(Arc::from(cause.into_boxed_dyn_error()));
+        self
+    }
+
+    /// Attaches one shared underlying failure without changing classification.
+    #[must_use]
+    pub fn with_shared_cause(mut self, cause: Arc<dyn Error + Send + Sync>) -> Self {
+        self.cause = Some(cause);
+        self
     }
 }
 

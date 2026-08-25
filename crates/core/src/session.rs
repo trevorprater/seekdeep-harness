@@ -257,7 +257,7 @@ pub enum SessionError {
     #[error("{0}")]
     InvalidEvent(String),
     /// Another append is inside its acceptance/publication section.
-    #[error("session append cannot reenter while another append is being published")]
+    #[error("session append cannot reenter while another append is being accepted")]
     ReentrantAppend,
 }
 
@@ -541,11 +541,11 @@ impl Session {
         let mut inner = self.inner.lock();
         inner.log.push(event.clone());
         inner.surface = next_surface;
+        inner.appending = false;
         drop(inner);
         if let Some(publication) = publication {
             publication.publish();
         }
-        self.inner.lock().appending = false;
         Ok(event)
     }
 

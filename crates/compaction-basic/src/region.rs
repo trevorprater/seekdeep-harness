@@ -31,6 +31,23 @@ pub type RegionSummarize = Arc<
         + Sync,
 >;
 
+/// Injectable append boundary for deterministic commit-failure tests.
+pub type CompactionAppend = Arc<
+    dyn Fn(
+            &Arc<Session>,
+            &str,
+            Value,
+            AppendOptions,
+        ) -> Result<SessionEvent, seekdeep_core::session::SessionError>
+        + Send
+        + Sync,
+>;
+
+/// Injectable token-measurement boundary for stability testing.
+pub type RegionMeasure = Arc<
+    dyn Fn(&Arc<Session>) -> anyhow::Result<seekdeep_token_meter::TokenMeasurement> + Send + Sync,
+>;
+
 /// Effective pricing and summarization dependencies for one region transaction.
 #[derive(Clone)]
 pub struct RegionDependencies {
@@ -38,6 +55,20 @@ pub struct RegionDependencies {
     pub meter: Arc<TokenMeter>,
     /// Dynamically dispatched summarizer.
     pub summarize: RegionSummarize,
+    /// Optional measurement carrier; production calls the concrete meter.
+    pub measure: Option<RegionMeasure>,
+}
+
+impl RegionDependencies {
+    fn measure(
+        &self,
+        session: &Arc<Session>,
+    ) -> anyhow::Result<seekdeep_token_meter::TokenMeasurement> {
+        self.measure.as_ref().map_or_else(
+            || self.meter.measure(session, None),
+            |measure| measure(session),
+        )
+    }
 }
 
 /// One validated inclusive span of current surface positions.
@@ -78,6 +109,8 @@ pub struct CompactionTransactionOptions {
     pub flush: Option<BoxFuture<'static, anyhow::Result<()>>>,
     /// Manual command that initiated this transaction, when present.
     pub source_command_id: Option<CommandId>,
+    /// Optional deterministic append boundary; production uses `Session::append`.
+    pub append: Option<CompactionAppend>,
 }
 
 /// Surface relationship that must survive asynchronous summarization.
@@ -179,10 +212,14 @@ pub async fn compact_surface_region(
         stability,
         flush,
         source_command_id,
+        append,
     } = options;
 
-    if owner_option.is_none() && signal.as_ref().is_some_and(AbortSignal::is_aborted) {
-        anyhow::bail!("compaction aborted");
+    if owner_option.is_none()
+        && let Some(signal) = signal.as_ref()
+        && signal.is_aborted()
+    {
+        return Err(crate::index::compaction_abort_error(signal));
     }
     let selection = validate_surface_region(session, start, end)?;
     let entry_state = inspect_compaction_entry_state(&session.events());
@@ -211,7 +248,9 @@ pub async fn compact_surface_region(
     };
 
     let compaction_id = CompactionId::new(uuid::Uuid::new_v4().to_string());
-    let start_event = session.append(
+    let start_event = append_event(
+        append.as_ref(),
+        session,
         "compaction/start",
         lifecycle_value(&compaction_id, source_command_id.as_ref(), owner),
         AppendOptions::default(),
@@ -236,8 +275,11 @@ pub async fn compact_surface_region(
             signal.clone(),
         )
         .await?;
-        if owner_option.is_none() && signal.as_ref().is_some_and(AbortSignal::is_aborted) {
-            anyhow::bail!("compaction aborted");
+        if owner_option.is_none()
+            && let Some(signal) = signal.as_ref()
+            && signal.is_aborted()
+        {
+            return Err(crate::index::compaction_abort_error(signal));
         }
         match stability {
             Stability::WholeSurface => {
@@ -248,9 +290,11 @@ pub async fn compact_surface_region(
             }
         }
         stage = Stage::Commit;
-        let pending = commit_compaction_body(session, &start_event, &summarized)?;
+        let pending = commit_compaction_body(append.as_ref(), session, &start_event, &summarized)?;
         closing = true;
-        let end_event = session.append(
+        let end_event = append_event(
+            append.as_ref(),
+            session,
             "compaction/end",
             lifecycle_value(&compaction_id, source_command_id.as_ref(), owner),
             AppendOptions::default(),
@@ -270,7 +314,13 @@ pub async fn compact_surface_region(
             if let Some((error, _)) = &failure {
                 close_lifecycle["error"] = json!(error_chain(error.as_ref()));
             }
-            match session.append("compaction/end", close_lifecycle, AppendOptions::default()) {
+            match append_event(
+                append.as_ref(),
+                session,
+                "compaction/end",
+                close_lifecycle,
+                AppendOptions::default(),
+            ) {
                 Ok(_) => closed = true,
                 Err(close_error) => {
                     failure = Some((close_error.into(), Stage::Commit));
@@ -286,20 +336,24 @@ pub async fn compact_surface_region(
         flush_failure = Some(error);
     }
 
-    if owner_option.is_none() && signal.as_ref().is_some_and(AbortSignal::is_aborted) {
-        anyhow::bail!("compaction aborted");
+    if owner_option.is_none()
+        && let Some(signal) = signal.as_ref()
+        && signal.is_aborted()
+    {
+        return Err(crate::index::compaction_abort_error(signal));
     }
     if let Some((error, stage_kind)) = failure {
         if owner_option.is_none() {
-            return Err(throw_manual_failure(stage_kind, &error));
+            return Err(throw_manual_failure(stage_kind, error));
         }
         return Err(error);
     }
-    if flush_failure.is_some() {
+    if let Some(error) = flush_failure {
         return Err(ManualCompactionError::new(
             ManualCompactionErrorCode::Persistence,
             "manual compaction durability checkpoint failed",
         )
+        .with_cause(error)
         .into());
     }
     result.ok_or_else(|| anyhow::anyhow!("compaction committed without a result"))
@@ -325,12 +379,13 @@ enum Stage {
     Commit,
 }
 
-fn throw_manual_failure(stage: Stage, error: &anyhow::Error) -> anyhow::Error {
+fn throw_manual_failure(stage: Stage, error: anyhow::Error) -> anyhow::Error {
     match stage {
         Stage::Commit => ManualCompactionError::new(
             ManualCompactionErrorCode::Commit,
             "manual compaction did not commit cleanly",
         )
+        .with_cause(error)
         .into(),
         Stage::Summary => {
             if error.downcast_ref::<SurfaceChangedError>().is_some() {
@@ -338,12 +393,14 @@ fn throw_manual_failure(stage: Stage, error: &anyhow::Error) -> anyhow::Error {
                     ManualCompactionErrorCode::Changed,
                     "the compacted history changed during manual compaction",
                 )
+                .with_cause(error)
                 .into()
             } else {
                 ManualCompactionError::new(
                     ManualCompactionErrorCode::Summary,
                     "manual compaction could not produce a smaller summary",
                 )
+                .with_cause(error)
                 .into()
             }
         }
@@ -413,7 +470,7 @@ fn prepare_compaction(
     session: &Arc<Session>,
     selection: &SurfaceSelection,
 ) -> anyhow::Result<PreparedCompaction> {
-    let measurement = dependencies.meter.measure(session, None)?;
+    let measurement = dependencies.measure(session)?;
     let selected_nodes = measurement.nodes[selection.start_idx..=selection.end_idx].to_vec();
     if selected_nodes.len() != selection.shadowed_seqs.len()
         || selected_nodes
@@ -470,7 +527,7 @@ fn assert_whole_surface_unchanged(
     session: &Arc<Session>,
     prepared: &PreparedCompaction,
 ) -> anyhow::Result<()> {
-    let current = dependencies.meter.measure(session, None)?;
+    let current = dependencies.measure(session)?;
     if current.nodes != prepared.measurement.nodes {
         return Err(SurfaceChangedError(
             "compaction: session surface changed during summarization".to_owned(),
@@ -498,9 +555,8 @@ fn assert_selected_span_stable(
         )
         .into());
     }
-    let measured = dependencies.meter.measure(session, None)?.nodes
-        [current.start_idx..=current.end_idx]
-        .to_vec();
+    let measured =
+        dependencies.measure(session)?.nodes[current.start_idx..=current.end_idx].to_vec();
     if measured != prepared.selected_nodes {
         return Err(SurfaceChangedError(
             "compaction: the selected span was rewritten during summarization".to_owned(),
@@ -511,6 +567,7 @@ fn assert_selected_span_stable(
 }
 
 fn commit_compaction_body(
+    append: Option<&CompactionAppend>,
     session: &Arc<Session>,
     start_event: &SessionEvent,
     summarized: &SummarizedCompaction,
@@ -541,11 +598,18 @@ fn commit_compaction_body(
     } else if !result.raw_output.is_empty() {
         summary_data["rawOutput"] = serde_json::to_value(&result.raw_output)?;
     }
-    let summary_event =
-        session.append("compaction/summary", summary_data, AppendOptions::default())?;
+    let summary_event = append_event(
+        append,
+        session,
+        "compaction/summary",
+        summary_data,
+        AppendOptions::default(),
+    )?;
 
     let checkpoint_data = serde_json::to_value(&summarized.checkpoint_message)?;
-    session.append(
+    append_event(
+        append,
+        session,
         "user/message",
         checkpoint_data,
         AppendOptions {
@@ -586,6 +650,19 @@ fn commit_compaction_body(
         shadowed_token_count: prepared.shadowed_token_count,
     };
     Ok(result_value)
+}
+
+fn append_event(
+    append: Option<&CompactionAppend>,
+    session: &Arc<Session>,
+    event_type: &str,
+    data: Value,
+    options: AppendOptions,
+) -> Result<SessionEvent, seekdeep_core::session::SessionError> {
+    match append {
+        Some(append) => append(session, event_type, data, options),
+        None => session.append(event_type, data, options),
+    }
 }
 
 fn complete_compaction(pending: &CompactionResult, end_event: &SessionEvent) -> CompactionResult {

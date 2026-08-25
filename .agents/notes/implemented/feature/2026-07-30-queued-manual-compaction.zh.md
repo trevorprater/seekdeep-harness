@@ -59,7 +59,7 @@ SEEKDEEP 有意在调用摘要器前记录 `compaction/start`。缓慢或崩溃�
 
 ### 标记是时间点，而不是事件容器
 
-`compaction/start` 和 `compaction/end` 表示获取与释放锁。它们不声称排他拥有二者 seq 之间的每个事件。手动摘要等待期间，空闲的 `inject()` 可以追加 `user/message`，因此该不相关事件可能位于标记区间内。
+`compaction/start` 和 `compaction/end` 表示获取与释放锁。它们不声称排他拥有二者 seq 之间的每个事件。手动摘要等待期间，空闲的 `inject()` 可以持久排入上下文；其 inbox splice 可以位于标记区间内，而对应的 `user/message` 只会在下一个 step 领取它时追加。Session append 只在接纳与提交期间排除重入。事件一旦提交，其观察器即可追加下一个有序事件，因此标记 listener 可以执行注入而不会破坏 seq 顺序。
 
 手动稳定性只检查所选区段：它必须仍然存在、连续、有序、计价相同且保持平衡。其外部的仅追加上下文不会使摘要陈旧。位置替换会把检查点放在旧 span 的表层位置，并使注入上下文在派生模型历史中位于其后，即使注入的日志 seq 早于后续摘要和替换事件。
 
@@ -99,7 +99,7 @@ SEEKDEEP 有意在调用摘要器前记录 `compaction/start`。缓慢或崩溃�
 
 ## 验证
 
-agent loop（智能体循环）测试覆盖同一 tick 内的优先权、保留 ID 与 FIFO 生命周期、会唤醒和静默的排队工作、幂等释放、`whenIdle()`、取消与 teardown。压缩测试覆盖独立与数字形式的不变量 owner、end-seed 回放、活动与陈旧未匹配标记、listener 重入、所选区段漂移、commit 与闭合失败、flush 顺序、原始取消原因、raw output 与 usage 保留，以及自动／手动互斥。
+agent loop（智能体循环）测试覆盖同一 tick 内的优先权、保留 ID 与 FIFO 生命周期、会唤醒和静默的排队工作、幂等释放、`whenIdle()`、取消与 teardown。固定源手动 compaction 套件通过 31 个案例；由 21 项分组测试构成的 Rust 镜像覆盖独立与数字形式的不变量 owner、end-seed 回放、活动与陈旧未匹配标记、listener 重入、所选区段与计价漂移、commit 与闭合失败、flush 顺序、原始取消原因、raw output 与 usage 保留，以及自动／手动互斥。Rust 测试注入摘要、append、计量与 flush 边界，生产实现仍使用具体的 Session、token meter 与持久化服务。
 
 命令包固定注册行为、Loader 组合、参数拒绝、精确的成功／失败文本、取消、不进入模型历史的保证，以及 dispose 在中止使执行器停止等待处理器后，仍会跨越相互独立的闭合与 flush 边界等待该处理器结算。客户端运行时投影测试固定 end-seed 中断，以及随后一次独立尝试的完成。`queued-manual-compact` 终端快照通过已组装 TUI 驱动真实按键：`/help` 可发现该命令；被暂停的摘要会接纳一个排队提示词和即时注入；`turn: null` 标记与 flush 先于排队提示词轮次；命令生命周期保持纯日志；派生顺序固定为检查点 → 注入 → 排队提示词。
 

@@ -725,6 +725,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn committed_event_observers_can_append_the_next_ordered_event() {
+        let context = Context::new();
+        let store = SessionStore::install(&context).unwrap();
+        context
+            .events()
+            .on_sync(
+                &context,
+                "session/event",
+                |_, args| {
+                    let session = args.get::<Session>(0).unwrap();
+                    let event = args.get::<SessionEvent>(1).unwrap();
+                    if event.event_type == "outer" {
+                        let nested = session.append(
+                            "nested",
+                            json!({"after": event.seq}),
+                            AppendOptions::default(),
+                        )?;
+                        assert_eq!(nested.seq, event.seq + 1);
+                    }
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )
+            .unwrap();
+        let session = store
+            .create(
+                &context,
+                Some(SessionId::new("reentrant-observer")),
+                CreateSessionOptions::default(),
+            )
+            .unwrap();
+        session
+            .append("outer", json!({}), AppendOptions::default())
+            .unwrap();
+        assert_eq!(
+            session
+                .events()
+                .iter()
+                .map(|event| event.event_type.as_str())
+                .collect::<Vec<_>>(),
+            ["outer", "nested"]
+        );
+    }
+
+    #[tokio::test]
     async fn lifecycle_edges_use_a_scope_carrier_for_the_generated_invariant() {
         let context = Context::new();
         let invariants = seekdeep_invariants::InvariantRegistry::install(

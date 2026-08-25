@@ -154,11 +154,7 @@ impl Harness {
                     anyhow::bail!(error);
                 }
                 let summary = state.summary.lock().clone();
-                let raw_output = state
-                    .raw_output
-                    .lock()
-                    .clone()
-                    .unwrap_or_else(|| summary.clone());
+                let raw_output = state.raw_output.lock().clone().unwrap_or_default();
                 Ok(SummaryResult {
                     raw_output,
                     summary,

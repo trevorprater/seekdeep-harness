@@ -33,8 +33,9 @@ use crate::config::{
     resolve_target_policy,
 };
 use crate::region::{
-    CompactionTransactionOptions, RegionDependencies, RegionSummarize, Stability,
-    assert_no_active_compaction, compact_surface_region, select_compactable_range,
+    CompactionAppend, CompactionTransactionOptions, RegionDependencies, RegionMeasure,
+    RegionSummarize, Stability, assert_no_active_compaction, compact_surface_region,
+    select_compactable_range,
 };
 use crate::summarizer::{
     SummarizationInput, SummaryConfig, SummaryResult, Target, summarize_with_llm,
@@ -46,6 +47,20 @@ pub const NAME: &str = "compaction-basic";
 
 /// Services required by the replay-aware backend.
 pub const INJECT: &[&str] = &["llm", "tokenMeter", "sessions"];
+
+/// Caller-cancellation error retaining the exact JSON-visible abort reason.
+#[derive(Clone, Debug, thiserror::Error, PartialEq)]
+#[error("compaction aborted: {reason}")]
+pub struct CompactionAbortError {
+    /// Chronologically first caller or fused-source reason.
+    pub reason: Value,
+}
+
+pub(crate) fn compaction_abort_error(signal: &AbortSignal) -> anyhow::Error {
+    anyhow::Error::new(CompactionAbortError {
+        reason: signal.reason().unwrap_or(Value::Null),
+    })
+}
 
 /// The source-compatible admission schema for `BasicCompactionConfig`.
 #[must_use]
@@ -87,9 +102,29 @@ pub struct BasicCompactionEngine {
     /// Resolved and validated compaction configuration.
     pub config: ResolvedConfig,
     summarize: Option<RegionSummarize>,
+    append: Option<CompactionAppend>,
+    manual_flush: Option<ManualFlush>,
+    measure: Option<RegionMeasure>,
     warned_pressure_targets: Mutex<HashSet<String>>,
     overflow_retries: Mutex<HashMap<usize, u64>>,
     overflow_agents: Mutex<HashMap<usize, Weak<Agent>>>,
+}
+
+/// Injectable manual-compaction durability checkpoint.
+pub type ManualFlush =
+    Arc<dyn Fn(Arc<Session>) -> BoxFuture<'static, anyhow::Result<()>> + Send + Sync + 'static>;
+
+/// Deterministic seams around summary, append, and durability boundaries.
+#[derive(Clone, Default)]
+pub struct BasicCompactionInternals {
+    /// Optional target-portable summary implementation.
+    pub summarize: Option<RegionSummarize>,
+    /// Optional append carrier used to inject commit failures.
+    pub append: Option<CompactionAppend>,
+    /// Optional manual durability checkpoint.
+    pub manual_flush: Option<ManualFlush>,
+    /// Optional token-measurement carrier used to inject stability changes.
+    pub measure: Option<RegionMeasure>,
 }
 
 impl BasicCompactionEngine {
@@ -100,7 +135,7 @@ impl BasicCompactionEngine {
     /// Returns invalid-configuration, duplicate-service, or inactive-owner
     /// failures.
     pub fn new(context: &Context, config: &BasicCompactionConfig) -> anyhow::Result<Arc<Self>> {
-        Self::new_with_optional_summarizer(context, config, None)
+        Self::new_with_internals(context, config, BasicCompactionInternals::default())
     }
 
     /// Builds the backend over an injected target-portable summarizer.
@@ -117,18 +152,34 @@ impl BasicCompactionEngine {
         config: &BasicCompactionConfig,
         summarize: RegionSummarize,
     ) -> anyhow::Result<Arc<Self>> {
-        Self::new_with_optional_summarizer(context, config, Some(summarize))
+        Self::new_with_internals(
+            context,
+            config,
+            BasicCompactionInternals {
+                summarize: Some(summarize),
+                ..BasicCompactionInternals::default()
+            },
+        )
     }
 
-    fn new_with_optional_summarizer(
+    /// Builds the backend over explicit deterministic boundary seams.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid-configuration, duplicate-service, or inactive-owner
+    /// failures.
+    pub fn new_with_internals(
         context: &Context,
         config: &BasicCompactionConfig,
-        summarize: Option<RegionSummarize>,
+        internals: BasicCompactionInternals,
     ) -> anyhow::Result<Arc<Self>> {
         let backend = Arc::new(Self {
             context: context.clone(),
             config: resolve_config(config)?,
-            summarize,
+            summarize: internals.summarize,
+            append: internals.append,
+            manual_flush: internals.manual_flush,
+            measure: internals.measure,
             warned_pressure_targets: Mutex::new(HashSet::new()),
             overflow_retries: Mutex::new(HashMap::new()),
             overflow_agents: Mutex::new(HashMap::new()),
@@ -273,6 +324,7 @@ impl BasicCompactionEngine {
             return RegionDependencies {
                 meter: meter.clone(),
                 summarize: summarize.clone(),
+                measure: self.measure.clone(),
             };
         }
         let ctx = self.context.clone();
@@ -287,6 +339,7 @@ impl BasicCompactionEngine {
         RegionDependencies {
             meter: meter.clone(),
             summarize,
+            measure: self.measure.clone(),
         }
     }
 }
@@ -393,12 +446,14 @@ impl CompactionEngine for BasicCompactionEngine {
         source_command_id: Option<&CommandId>,
     ) -> anyhow::Result<Option<CompactionResult>> {
         if signal.is_aborted() {
-            anyhow::bail!("compaction aborted");
+            return Err(compaction_abort_error(signal));
         }
         let session = agent.session.clone();
         let fallback = routing_target(&agent.options);
         let dependencies = self.region_dependencies();
         let sessions = self.context.get(SESSIONS);
+        let manual_flush = self.manual_flush.clone();
+        let append = self.append.clone();
         let caller_signal = signal.clone();
         let source_command_id = source_command_id.cloned();
         let runner = agent.run_maintenance.clone();
@@ -413,18 +468,21 @@ impl CompactionEngine for BasicCompactionEngine {
             Box::pin(async move {
                 let operation = async {
                     if operation_signal.is_aborted() {
-                        anyhow::bail!("compaction aborted");
+                        return Err(compaction_abort_error(&operation_signal));
                     }
                     let measurement = dependencies.meter.measure(&session, None)?;
                     let range = select_compactable_range(&session, &measurement, 0)?;
                     let Some(range) = range else {
                         return Ok(None);
                     };
-                    let flush: Option<BoxFuture<'static, anyhow::Result<()>>> =
-                        sessions.map(|sessions| {
-                            let session = session.clone();
-                            Box::pin(async move { sessions.flush(&session).await.map(|_| ()) })
-                                as BoxFuture<'static, anyhow::Result<()>>
+                    let flush: Option<BoxFuture<'static, anyhow::Result<()>>> = manual_flush
+                        .map(|flush| flush(session.clone()))
+                        .or_else(|| {
+                            sessions.map(|sessions| {
+                                let session = session.clone();
+                                Box::pin(async move { sessions.flush(&session).await.map(|_| ()) })
+                                    as BoxFuture<'static, anyhow::Result<()>>
+                            })
                         });
                     compact_surface_region(
                         &dependencies,
@@ -437,6 +495,7 @@ impl CompactionEngine for BasicCompactionEngine {
                             stability: Stability::SelectedSpan,
                             flush,
                             source_command_id,
+                            append,
                         },
                         Some(operation_signal.clone()),
                     )
@@ -452,12 +511,16 @@ impl CompactionEngine for BasicCompactionEngine {
                             && agent_signal.reason().is_some()
                             && operation_signal.reason() == agent_signal.reason()
                         {
-                            anyhow::Error::from(ManualCompactionError::new(
+                            let mut classified = ManualCompactionError::new(
                                 ManualCompactionErrorCode::Cancelled,
                                 "manual compaction was cancelled",
-                            ))
+                            );
+                            if let Some(cause) = agent_signal.error_reason() {
+                                classified = classified.with_shared_cause(cause);
+                            }
+                            anyhow::Error::from(classified)
                         } else if operation_signal.is_aborted() {
-                            anyhow::anyhow!("compaction aborted")
+                            compaction_abort_error(&operation_signal)
                         } else {
                             error
                         };
@@ -500,6 +563,7 @@ impl CompactionEngine for BasicCompactionEngine {
                 stability: Stability::WholeSurface,
                 flush: None,
                 source_command_id: None,
+                append: self.append.clone(),
             },
             signal.cloned(),
         )

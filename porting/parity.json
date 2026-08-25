@@ -47906,7 +47906,24 @@
     {
       "source": "packages/compaction/compaction-basic/tests/manual-compaction.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction/src/service.rs",
+        "crates/compaction-basic/src/index.rs",
+        "crates/compaction-basic/src/region.rs",
+        "crates/compaction-basic/tests/manual_compaction_parity.rs",
+        "crates/core/src/session.rs",
+        "crates/core/src/session_store.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: manual-compaction.spec.ts passed 31/31",
+        "Rust 21 grouped tests cover the same real-loop queueing and injection, standalone bracket, end-seed orphan, busy admission, selected-span and pricing drift, summary/commit/close/persistence failure, cancellation, raw-output/usage, duration, and automatic/manual exclusion partitions",
+        "Rust manual errors retain classified codes and underlying causes; caller cancellation retains the exact JSON-visible first reason",
+        "deterministic summarize, append, measure, and flush seams inject failures without replacing production Session, token-meter, or persistence behavior",
+        "committed session-event observers may append the next ordered event, allowing reentrant durable inbox injection without weakening pre-commit append exclusion",
+        "cargo test -p seekdeep-core -p seekdeep-compaction -p seekdeep-compaction-basic --all-features: core 72, compaction 17, compaction-basic 86 passed",
+        "cargo clippy -p seekdeep-core -p seekdeep-compaction -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings: passed"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/tsconfig.json",
