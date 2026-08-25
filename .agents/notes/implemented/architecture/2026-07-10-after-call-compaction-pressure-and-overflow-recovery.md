@@ -42,7 +42,7 @@ The default summarizer resolves explicit configuration, then the latest logged r
 
 ## Testing
 
-Unit tests cover the final-adapter normalization boundary, closed-turn retry numbering and reset, cancellation and disposal, step-boundary ordering, routed-envelope pressure, pressure-gated pruning, pruning-only relief, pruned-input summarization, balanced overflow reduction, durable prune progress before later failure, generation proof, caps, delegation, and auxiliary-call routing. Real-loop tests cover thrown and in-band overflow through pruning or summary compaction to a reconstructed retry request.
+Unit tests cover the final-adapter normalization boundary, closed-turn retry numbering and reset, cancellation and disposal, step-boundary ordering, routed-envelope pressure, pressure-gated pruning, pruning-only relief, pruned-input summarization, balanced overflow reduction, durable prune progress before later failure, generation proof, caps, delegation, and auxiliary-call routing. The pinned source real-loop suite passes 6 cases, and its five-test grouped Rust mirror covers the same six partitions through the production durable driver: routed post-step pressure, exact step-boundary placement, checkpoint balance, thrown and in-band overflow, reconstructed retry requests, and independent transient and context-overflow budgets.
 
 ## Alternatives considered
 

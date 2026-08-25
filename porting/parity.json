@@ -47858,10 +47858,10 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: compaction-basic.spec.ts passed 80/80",
-        "Rust 60-test package suite uses data-driven matrices to cover every untrusted config partition, target-policy merge, pressure and retention path, tool-pair boundary, optional prune path, region transaction state, summary route and output class, automatic lifecycle trigger, overflow recovery decision, retry budget, cancellation race, and disposal invariant",
+        "Rust 60-test core matrix within the 65-test package suite uses data-driven cases to cover every untrusted config partition, target-policy merge, pressure and retention path, tool-pair boundary, optional prune path, region transaction state, summary route and output class, automatic lifecycle trigger, overflow recovery decision, retry budget, cancellation race, and disposal invariant",
         "Rust region tests drive real event-sourced Sessions and the real token meter; automatic tests drive scoped AgentEvents and exact live Agent identities",
         "the LLM stream API now exposes a call-local final-dispatch trace so compaction summaries durably record the provider/model selected after middleware without a global observer",
-        "cargo test -p seekdeep-compaction-basic --all-features: 60 passed",
+        "cargo test -p seekdeep-compaction-basic --all-features: 65 passed",
         "cargo test -p seekdeep-llm --all-features: 72 passed",
         "cargo clippy -p seekdeep-llm -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings: passed"
       ]
@@ -47869,7 +47869,23 @@
     {
       "source": "packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-basic/tests/loop_repro_parity.rs",
+        "crates/compaction-basic/src/index.rs",
+        "crates/compaction-basic/src/region.rs",
+        "crates/compaction-basic/src/summarizer.rs",
+        "crates/agent-loop/src/driver.rs",
+        "crates/llm-retry/src/runtime.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: compaction-loop-repro.spec.ts passed 6/6",
+        "Rust 5 grouped real-loop tests cover six source cases: routed post-step pressure, exact step-end/compaction/next-step ordering, live checkpoint balance on both cuts, thrown and in-band overflow recovery, and independent transient/overflow budgets",
+        "the Rust mirror drives the production DefaultAgentDriver, AgentEvents, LLM stream, ToolRuntime, token meter, compaction backend, and llm-retry plugin over seeded event-sourced history",
+        "cargo test -p seekdeep-compaction-basic --test loop_repro_parity --all-features: 5 passed",
+        "cargo test -p seekdeep-compaction-basic --all-features: 65 passed",
+        "cargo clippy -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings: passed"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/tests/loader-composition.spec.ts",

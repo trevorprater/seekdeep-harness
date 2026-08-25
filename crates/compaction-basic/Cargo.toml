@@ -32,7 +32,10 @@ uuid.workspace = true
 [dev-dependencies]
 seekdeep-attachment = { path = "../attachment" }
 seekdeep-loader = { path = "../loader" }
+seekdeep-llm-retry = { path = "../llm-retry" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
 tempfile.workspace = true
 tokio.workspace = true
 
