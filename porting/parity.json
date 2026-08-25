@@ -77327,12 +77327,32 @@
     {
       "source": "scripts/cordis-config-files.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/cordis_config_files_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/cordis-config-files.spec.ts scripts/doc-typecheck-paths.spec.ts scripts/publication-payload.spec.ts scripts/paired-markdown-derivatives.spec.ts (pinned source: 24 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features (11 integration tests passed)",
+        "cargo test -p seekdeep-repository-tools --test cordis_config_files_parity --all-features (expanded filesystem semantics passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/cordis-config-files.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/cordis_config_files.rs",
+        "crates/repository-tools/Cargo.toml"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/cordis-config-files.spec.ts scripts/doc-typecheck-paths.spec.ts scripts/publication-payload.spec.ts scripts/paired-markdown-derivatives.spec.ts (pinned source: 24 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features (11 integration tests passed)",
+        "cargo test -p seekdeep-repository-tools --test cordis_config_files_parity --all-features (dot paths, root exclusions, nested package trees, directories, symlinks, platform case folding, and UTF-16 sorting passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/cordis-core-api.spec.ts",
@@ -77398,12 +77418,29 @@
     {
       "source": "scripts/doc-typecheck-paths.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/doc_typecheck_paths_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/cordis-config-files.spec.ts scripts/doc-typecheck-paths.spec.ts scripts/publication-payload.spec.ts scripts/paired-markdown-derivatives.spec.ts (pinned source: 24 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features (11 integration tests passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/doc-typecheck-paths.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/doc_typecheck_paths.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/cordis-config-files.spec.ts scripts/doc-typecheck-paths.spec.ts scripts/publication-payload.spec.ts scripts/paired-markdown-derivatives.spec.ts (pinned source: 24 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features (11 integration tests passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/doc-typecheck.ts",
@@ -77626,12 +77663,29 @@
     {
       "source": "scripts/paired-markdown-derivatives.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/paired_markdown_derivatives_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/cordis-config-files.spec.ts scripts/doc-typecheck-paths.spec.ts scripts/publication-payload.spec.ts scripts/paired-markdown-derivatives.spec.ts (pinned source: 24 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features (11 integration tests passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/paired-markdown-derivatives.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/paired_markdown_derivatives.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/cordis-config-files.spec.ts scripts/doc-typecheck-paths.spec.ts scripts/publication-payload.spec.ts scripts/paired-markdown-derivatives.spec.ts (pinned source: 24 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features (11 integration tests passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/prepare-ci-bubblewrap.sh",
@@ -77667,12 +77721,29 @@
     {
       "source": "scripts/publication-payload.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/publication_payload_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/cordis-config-files.spec.ts scripts/doc-typecheck-paths.spec.ts scripts/publication-payload.spec.ts scripts/paired-markdown-derivatives.spec.ts (pinned source: 24 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features (11 integration tests passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/publication-payload.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/publication_payload.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/cordis-config-files.spec.ts scripts/doc-typecheck-paths.spec.ts scripts/publication-payload.spec.ts scripts/paired-markdown-derivatives.spec.ts (pinned source: 24 passed)",
+        "cargo test -p seekdeep-repository-tools --all-features (11 integration tests passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/publint-all.spec.ts",

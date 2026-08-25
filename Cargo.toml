@@ -103,6 +103,7 @@ members = [
   "crates/pwsh-local",
   "crates/pwsh-sandbox",
   "crates/repeat-tool-reminder",
+  "crates/repository-tools",
   "crates/sandbox",
   "crates/sandbox-local",
   "crates/sandbox-policy",

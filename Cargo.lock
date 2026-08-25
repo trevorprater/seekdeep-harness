@@ -6453,6 +6453,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-repository-tools"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
 name = "seekdeep-sandbox"
 version = "0.1.0-rc.5"
 dependencies = [
