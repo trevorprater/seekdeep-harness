@@ -63187,7 +63187,8 @@
       "evidence": [
         "pinned-source Vitest: SDK transport plus Codex provider suites passed 54/54",
         "cargo test --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-features",
-        "cargo clippy --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings"
+        "cargo clippy --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings",
+        "cargo xtask docs"
       ]
     },
     {
@@ -69138,7 +69139,8 @@
         "pinned-source Vitest: Codex package, real-product, and SDK suites passed in a 54/54 combined run",
         "pinned-source Loader composition passed 1/1 under the e2e config",
         "cargo test --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-features",
-        "cargo clippy --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings"
+        "cargo clippy --locked --offline -p seekdeep-sdk-protocol -p seekdeep-subagent-codex --all-targets --all-features -- -D warnings",
+        "cargo xtask docs"
       ],
       "note": "Rust registers the fixed codex provider with no optional start capabilities, exact parent-workspace authority, explicit string-only environment overlay, bounded disposal grace, and deterministic HMR unregistration."
     },
