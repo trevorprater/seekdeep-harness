@@ -966,6 +966,7 @@ async fn transport_apply_answers_shutdown_before_dispose_and_exits_once() {
                 assert_eq!(code, 0);
                 exit_count.fetch_add(1, Ordering::AcqRel);
             }),
+            exit_on_input_failure: false,
         },
     )
     .unwrap();
@@ -1009,6 +1010,7 @@ async fn transport_apply_exits_after_flush_failure_but_bare_dispose_never_exits(
                 assert_eq!(code, 0);
                 exit_count.fetch_add(1, Ordering::AcqRel);
             }),
+            exit_on_input_failure: false,
         },
     )
     .unwrap();
@@ -1043,6 +1045,7 @@ async fn transport_apply_exits_after_flush_failure_but_bare_dispose_never_exits(
             exit: Arc::new(move |_| {
                 exit_count.fetch_add(1, Ordering::AcqRel);
             }),
+            exit_on_input_failure: false,
         },
     )
     .unwrap();
@@ -1051,4 +1054,46 @@ async fn transport_apply_exits_after_flush_failure_but_bare_dispose_never_exits(
     context.fiber().dispose().await.unwrap();
     assert_eq!(exits.load(Ordering::Acquire), 0);
     client.close();
+}
+
+#[tokio::test]
+async fn process_runtime_owns_input_eof_without_a_competing_reader() {
+    let context = runtime_context();
+    let (server_io, client_io) = tokio::io::duplex(64 * 1024);
+    let (server_read, server_write) = tokio::io::split(server_io);
+    let exits = Arc::new(AtomicUsize::new(0));
+    let exit_count = Arc::clone(&exits);
+    apply_with_runtime(
+        &context,
+        Config::default(),
+        ServerRuntime {
+            input: Box::pin(server_read),
+            output: Box::pin(server_write),
+            exit: Arc::new(move |code| {
+                assert_eq!(code, 0);
+                exit_count.fetch_add(1, Ordering::AcqRel);
+            }),
+            exit_on_input_failure: true,
+        },
+    )
+    .unwrap();
+    assert!(
+        context
+            .get(seekdeep_sdk_server::SDK_JSONRPC_SERVER)
+            .is_some()
+    );
+    drop(client_io);
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        while exits.load(Ordering::Acquire) == 0 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(exits.load(Ordering::Acquire), 1);
+    assert!(
+        context
+            .get(seekdeep_sdk_server::SDK_JSONRPC_SERVER)
+            .is_none()
+    );
 }

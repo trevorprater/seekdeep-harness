@@ -6451,6 +6451,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-sdk-jsonrpc-demo"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-app-boot",
+ "seekdeep-loader",
+ "seekdeep-sdk-server",
+ "seekdeep-util",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-sdk-protocol"
 version = "0.1.0-rc.5"
 dependencies = [

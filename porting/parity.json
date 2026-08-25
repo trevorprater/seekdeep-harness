@@ -51603,12 +51603,27 @@
     {
       "source": "packages/examples/jsonrpc-demo/src/bin.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jsonrpc-demo/src/bin/seekdeep-jsonrpc-agent.rs",
+        "crates/jsonrpc-demo/tests/launcher_parity.rs"
+      ],
+      "evidence": [
+        "Rust generic executable delegates to the shared external-config lifecycle and returns its exact exit status",
+        "process acceptance pins required config, usage failure, successful empty external composition, environment precedence, and stdin-EOF exit"
+      ]
     },
     {
       "source": "packages/examples/jsonrpc-demo/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jsonrpc-demo/src/lib.rs"
+      ],
+      "evidence": [
+        "Rust library remains a bin-focused package and exports only the shared runner surface and product name",
+        "strict JSON-RPC demo Clippy and tests passed"
+      ]
     },
     {
       "source": "packages/examples/jsonrpc-demo/src/invariant.ts",
@@ -51627,12 +51642,31 @@
     {
       "source": "packages/examples/jsonrpc-demo/src/packaged-bin.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jsonrpc-demo/src/bin/seekdeep-jsonrpc-agent-packaged.rs",
+        "crates/jsonrpc-demo/tests/launcher_parity.rs"
+      ],
+      "evidence": [
+        "Rust packaged executable anchors unknown bare compatibility plugins at its installed executable directory while relative plugins remain config-relative",
+        "packaged-binary acceptance passes the same required-config, environment precedence, boot, and EOF lifecycle"
+      ]
     },
     {
       "source": "packages/examples/jsonrpc-demo/src/runner.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jsonrpc-demo/src/runner.rs",
+        "crates/sdk-server/src/lib.rs",
+        "crates/sdk-server/tests/server_parity.rs",
+        "crates/jsonrpc-demo/tests/launcher_parity.rs"
+      ],
+      "evidence": [
+        "direct pinned-source process oracle returned the original usage text and exit 1; Rust returns the intentional seekdeep rename with the same selection and failure contract",
+        "Rust runner pins environment-over-argv selection, empty-as-absent handling, absolute config resolution, frozen layered dotenv expressions, transactional app boot, bare-module packaged anchoring, SIGTERM 0, SIGINT 130, and joined disposal",
+        "SDK server input-failure test proves the sole protocol reader owns EOF-triggered root disposal and exit exactly once"
+      ]
     },
     {
       "source": "packages/examples/jsonrpc-demo/tsconfig.json",
@@ -51648,7 +51682,16 @@
     {
       "source": "packages/examples/jsonrpc-demo/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jsonrpc-demo/Cargo.toml",
+        "crates/jsonrpc-demo/src/bin/seekdeep-jsonrpc-agent.rs",
+        "crates/jsonrpc-demo/src/bin/seekdeep-jsonrpc-agent-packaged.rs"
+      ],
+      "evidence": [
+        "Cargo builds the generic and packaged entries as independent native Rust executables with no JavaScript output chunks; the Rust Loader remains the external-config authority",
+        "both compiled executables pass plain-process acceptance"
+      ]
     },
     {
       "source": "packages/extensions/README.i18n.yaml",

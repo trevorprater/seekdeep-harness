@@ -1,0 +1,34 @@
+[package]
+name = "seekdeep-sdk-jsonrpc-demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "External-config JSON-RPC SeekDeep agent launcher"
+
+[[bin]]
+name = "seekdeep-jsonrpc-agent"
+path = "src/bin/seekdeep-jsonrpc-agent.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "seekdeep-jsonrpc-agent-packaged"
+path = "src/bin/seekdeep-jsonrpc-agent-packaged.rs"
+test = false
+bench = false
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-app-boot = { path = "../app-boot" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-sdk-server = { path = "../sdk-server" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

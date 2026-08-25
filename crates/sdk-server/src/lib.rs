@@ -7,7 +7,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_sdk_protocol::{BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTransport};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,6 +18,9 @@ pub use server::{HarnessSdkJsonRpcServer, HarnessSdkJsonRpcServerOptions, succes
 pub const NAME: &str = "sdk-jsonrpc-server";
 /// Only an Agent factory is required; initialize reads the optional LLM service.
 pub const INJECT: &[&str] = &["agents"];
+/// Exact live SDK server marker used by process runners to avoid competing for stdin.
+pub const SDK_JSONRPC_SERVER: ServiceKey<HarnessSdkJsonRpcServer> =
+    ServiceKey::new("sdkJsonrpcServer");
 
 /// Deployment-owned status mapping.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,6 +38,8 @@ pub struct ServerRuntime {
     pub output: BoxedJsonRpcOutput,
     /// Process exit boundary.
     pub exit: Arc<dyn Fn(i32) + Send + Sync>,
+    /// Whether transport input closure owns root disposal and process exit.
+    pub exit_on_input_failure: bool,
 }
 
 /// Serves SDK requests and lifecycle notifications on explicit streams.
@@ -55,6 +60,7 @@ pub fn apply_with_runtime(
             max_tokens_as_success: config.max_tokens_as_success,
         },
     )?;
+    let marker = context.provide(SDK_JSONRPC_SERVER, server.clone())?;
     let exit_started = Arc::new(AtomicBool::new(false));
     let exit_server = Arc::clone(&server);
     transport.on_request(Arc::new(move |method, params| {
@@ -63,13 +69,15 @@ pub fn apply_with_runtime(
     }));
     let root = Arc::clone(context.root_fiber());
     let exit = runtime.exit;
+    let response_exit = Arc::clone(&exit);
+    let response_started = Arc::clone(&exit_started);
     let exit_transport = Arc::clone(&transport);
     transport.on_response_written(Arc::new(move |method, succeeded| {
-        if method != "shutdown" || !succeeded || exit_started.swap(true, Ordering::AcqRel) {
+        if method != "shutdown" || !succeeded || response_started.swap(true, Ordering::AcqRel) {
             return;
         }
         let root = Arc::clone(&root);
-        let exit = Arc::clone(&exit);
+        let exit = Arc::clone(&response_exit);
         let transport = Arc::clone(&exit_transport);
         tokio::spawn(async move {
             tokio::task::yield_now().await;
@@ -79,6 +87,22 @@ pub fn apply_with_runtime(
             exit(0);
         });
     }));
+    if runtime.exit_on_input_failure {
+        let root = Arc::clone(context.root_fiber());
+        let exit = Arc::clone(&exit);
+        let exit_started = Arc::clone(&exit_started);
+        transport.on_input_failure(Arc::new(move |_| {
+            if exit_started.swap(true, Ordering::AcqRel) {
+                return;
+            }
+            let root = Arc::clone(&root);
+            let exit = Arc::clone(&exit);
+            tokio::spawn(async move {
+                let _ = root.dispose().await;
+                exit(0);
+            });
+        }));
+    }
     transport.start();
     let cleanup_server = Arc::clone(&server);
     let cleanup_transport = Arc::clone(&transport);
@@ -91,6 +115,7 @@ pub fn apply_with_runtime(
     });
     if let Err(error) = context.own(effect) {
         transport.close();
+        let _ = futures::executor::block_on(marker.dispose());
         return Err(error.into());
     }
     Ok(server)
@@ -111,6 +136,7 @@ pub fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<HarnessSdk
             exit: Arc::new(|code| {
                 std::process::exit(code);
             }),
+            exit_on_input_failure: true,
         },
     )
 }
