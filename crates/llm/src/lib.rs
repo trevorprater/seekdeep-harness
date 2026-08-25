@@ -56,8 +56,8 @@ pub use retry_policy::{
 };
 pub use runtime::{
     AdapterCleanup, AdapterRegistrationHandle, AdapterStream, BoxLlmChunkStream,
-    DirectoryRegistrationHandle, LLM, LlmAdapter, LlmRuntime, LlmStream, LlmStreamMiddleware,
-    LlmStreamNext, ModelDiscoveryHandle, PreparedLlmCall,
+    DirectoryRegistrationHandle, LLM, LlmAdapter, LlmDispatchRoute, LlmDispatchTrace, LlmRuntime,
+    LlmStream, LlmStreamMiddleware, LlmStreamNext, ModelDiscoveryHandle, PreparedLlmCall,
 };
 pub use types::{
     AbortSignal, ContentBlock, FinishReason, GenerateOptions, LlmCallConfig,

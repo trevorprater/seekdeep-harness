@@ -47844,7 +47844,27 @@
     {
       "source": "packages/compaction/compaction-basic/tests/compaction-basic.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-basic/src/config.rs",
+        "crates/compaction-basic/src/index.rs",
+        "crates/compaction-basic/src/region.rs",
+        "crates/compaction-basic/src/summarizer.rs",
+        "crates/compaction-basic/tests/config_parity.rs",
+        "crates/compaction-basic/tests/pressure_parity.rs",
+        "crates/compaction-basic/tests/summarizer_parity.rs",
+        "crates/compaction-basic/tests/summarizer_runtime_parity.rs",
+        "crates/llm/src/runtime.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: compaction-basic.spec.ts passed 80/80",
+        "Rust 60-test package suite uses data-driven matrices to cover every untrusted config partition, target-policy merge, pressure and retention path, tool-pair boundary, optional prune path, region transaction state, summary route and output class, automatic lifecycle trigger, overflow recovery decision, retry budget, cancellation race, and disposal invariant",
+        "Rust region tests drive real event-sourced Sessions and the real token meter; automatic tests drive scoped AgentEvents and exact live Agent identities",
+        "the LLM stream API now exposes a call-local final-dispatch trace so compaction summaries durably record the provider/model selected after middleware without a global observer",
+        "cargo test -p seekdeep-compaction-basic --all-features: 60 passed",
+        "cargo test -p seekdeep-llm --all-features: 72 passed",
+        "cargo clippy -p seekdeep-llm -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings: passed"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts",

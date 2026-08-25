@@ -30,7 +30,9 @@ tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+seekdeep-attachment = { path = "../attachment" }
 seekdeep-loader = { path = "../loader" }
+seekdeep-scope = { path = "../scope" }
 tempfile.workspace = true
 tokio.workspace = true
 

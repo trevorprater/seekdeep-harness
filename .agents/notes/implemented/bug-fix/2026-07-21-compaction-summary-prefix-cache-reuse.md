@@ -22,7 +22,7 @@ The summarization directive moves from the **front** of the request (a fresh `sy
 
 ### Cache reuse is best-effort, correctness is not
 
-Auto-compaction always anchors at the surface head, so the shadowed region is the head of the routed request and the replayed prefix matches it exactly — the guaranteed-hit case. Manual mid-range `compactRegion` still replays the true prefix and stays correct, but forgoes reuse because its shadowed region is not the request head. A configured `summarizationProvider`/`summarizationModel` that differs from the conversation's route also forgoes reuse; that is the deployment's explicit trade-off, not a defect. Target resolution (configured override → latest routed header → agent options, else throw) is unchanged.
+Auto-compaction always anchors at the surface head, so the shadowed region is the head of the routed request and the replayed prefix matches it exactly — the guaranteed-hit case. Manual mid-range `compactRegion` still replays the true prefix and stays correct, but forgoes reuse because its shadowed region is not the request head. A configured `summarizationProvider`/`summarizationModel` that differs from the conversation's route also forgoes reuse; that is the deployment's explicit trade-off, not a defect. Target resolution (configured override → latest routed header → agent options, else throw) is unchanged. The Rust LLM runtime returns a call-local dispatch trace populated only when that call delegates through the final middleware boundary; compaction reads it after stream completion so the durable summary records the provider and model actually dispatched, without registering a global observer or crossing concurrent calls.
 
 ## Alternatives considered
 
@@ -40,6 +40,6 @@ Auto-compaction always anchors at the surface head, so the shadowed region is th
 
 ## Testing
 
-- **Unit:** `compaction-basic.spec.ts` asserts the auxiliary call forwards `system`/`tools`/leading messages and appends the compaction instruction as the final message, and that `compactRegion` replays the latest routed header prefix. Existing content assertions read the summarizer input through the replayed messages rather than a transcript string.
+- **Unit:** `compaction-basic.spec.ts` asserts the auxiliary call forwards `system`/`tools`/leading messages and appends the compaction instruction as the final message, that `compactRegion` replays the latest routed header prefix, and that post-middleware dispatch attribution reaches the durable summary. Existing content assertions read the summarizer input through the replayed messages rather than a transcript string. The Rust mirror drives the same prefix, routing, terminal-failure, unsafe-content, and final-dispatch partitions through the production stream runtime.
 - **Loop:** `compact-loop-repro.spec.ts` classifies the summarization request by the compaction instruction in its trailing user message, and the overflow-recovery tests continue to pin conversation-vs-summary request counts across the real loop.
 - **Snapshot:** keyless replay reconstructs one canonical successful stream from a marked `compaction/summary`; the [compaction-seam note](../feature/2026-06-18-compaction-capability-seam.md) owns the durable marker contract.

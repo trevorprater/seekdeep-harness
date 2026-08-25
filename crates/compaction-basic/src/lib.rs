@@ -8,7 +8,8 @@ pub mod summarizer;
 pub mod types;
 
 pub use config::{
-    TargetPressureConfigError, resolve_compact_spec, resolve_config, resolve_target_policy,
+    TargetPressureConfigError, parse_config_value, resolve_compact_spec, resolve_config,
+    resolve_target_policy,
 };
 pub use index::{BasicCompactionEngine, config_schema, plugin};
 pub use types::{

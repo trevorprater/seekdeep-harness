@@ -29,7 +29,8 @@ use seekdeep_token_meter::TOKEN_METER;
 use serde_json::Value;
 
 use crate::config::{
-    TargetPressureConfigError, resolve_compact_spec, resolve_config, resolve_target_policy,
+    TargetPressureConfigError, parse_config_value, resolve_compact_spec, resolve_config,
+    resolve_target_policy,
 };
 use crate::region::{
     CompactionTransactionOptions, RegionDependencies, RegionSummarize, Stability,
@@ -79,62 +80,13 @@ fn model_policy_schema() -> Schema {
     ])
 }
 
-fn reject_unknown_config_keys(value: &Value) -> anyhow::Result<()> {
-    const CONFIG_KEYS: &[&str] = &[
-        "thresholdRatio",
-        "retainRatio",
-        "retainTokens",
-        "summarizationProvider",
-        "summarizationModel",
-        "maxTokens",
-        "compactionRetries",
-        "maxOverflowRetries",
-        "modelPolicies",
-        "auto",
-    ];
-    const MODEL_POLICY_KEYS: &[&str] = &[
-        "provider",
-        "model",
-        "thresholdRatio",
-        "retainRatio",
-        "retainTokens",
-        "summarizationProvider",
-        "summarizationModel",
-        "maxTokens",
-        "compactionRetries",
-        "maxOverflowRetries",
-    ];
-    let Some(config) = value.as_object() else {
-        return Ok(());
-    };
-    if let Some(key) = config
-        .keys()
-        .find(|key| !CONFIG_KEYS.contains(&key.as_str()))
-    {
-        anyhow::bail!("BasicCompactionConfig: unknown key {key:?}");
-    }
-    if let Some(policies) = config.get("modelPolicies").and_then(Value::as_array) {
-        for (index, policy) in policies.iter().enumerate() {
-            let Some(policy) = policy.as_object() else {
-                continue;
-            };
-            if let Some(key) = policy
-                .keys()
-                .find(|key| !MODEL_POLICY_KEYS.contains(&key.as_str()))
-            {
-                anyhow::bail!("BasicCompactionConfig: modelPolicies[{index}]: unknown key {key:?}");
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Dependency-light compaction backend using the singleton token meter for
 /// pressure, retention, cited source events, and summary-convergence pricing.
 pub struct BasicCompactionEngine {
     context: Context,
     /// Resolved and validated compaction configuration.
     pub config: ResolvedConfig,
+    summarize: Option<RegionSummarize>,
     warned_pressure_targets: Mutex<HashSet<String>>,
     overflow_retries: Mutex<HashMap<usize, u64>>,
     overflow_agents: Mutex<HashMap<usize, Weak<Agent>>>,
@@ -148,9 +100,35 @@ impl BasicCompactionEngine {
     /// Returns invalid-configuration, duplicate-service, or inactive-owner
     /// failures.
     pub fn new(context: &Context, config: &BasicCompactionConfig) -> anyhow::Result<Arc<Self>> {
+        Self::new_with_optional_summarizer(context, config, None)
+    }
+
+    /// Builds the backend over an injected target-portable summarizer.
+    ///
+    /// This seam lets deterministic conformance tests and portable Cordis
+    /// backends supply summary behavior without changing production routing.
+    ///
+    /// # Errors
+    ///
+    /// Returns invalid-configuration, duplicate-service, or inactive-owner
+    /// failures.
+    pub fn new_with_summarizer(
+        context: &Context,
+        config: &BasicCompactionConfig,
+        summarize: RegionSummarize,
+    ) -> anyhow::Result<Arc<Self>> {
+        Self::new_with_optional_summarizer(context, config, Some(summarize))
+    }
+
+    fn new_with_optional_summarizer(
+        context: &Context,
+        config: &BasicCompactionConfig,
+        summarize: Option<RegionSummarize>,
+    ) -> anyhow::Result<Arc<Self>> {
         let backend = Arc::new(Self {
             context: context.clone(),
             config: resolve_config(config)?,
+            summarize,
             warned_pressure_targets: Mutex::new(HashSet::new()),
             overflow_retries: Mutex::new(HashMap::new()),
             overflow_agents: Mutex::new(HashMap::new()),
@@ -291,6 +269,12 @@ impl BasicCompactionEngine {
     /// summarizer hook for one region transaction.
     fn region_dependencies(&self) -> RegionDependencies {
         let meter = self.context.get(TOKEN_METER).expect("token meter present");
+        if let Some(summarize) = &self.summarize {
+            return RegionDependencies {
+                meter: meter.clone(),
+                summarize: summarize.clone(),
+            };
+        }
         let ctx = self.context.clone();
         let config = self.config.clone();
         let summarize: RegionSummarize = Arc::new(move |input, session, fallback, signal| {
@@ -703,10 +687,5 @@ pub fn plugin() -> Plugin {
             Ok(())
         })
     })
-    .with_config_validator(|value: &Value| {
-        reject_unknown_config_keys(value)?;
-        config_schema()
-            .resolve(value)
-            .map_err(|error| anyhow::anyhow!("{error}"))
-    })
+    .with_config_validator(|value: &Value| Ok(serde_json::to_value(parse_config_value(value)?)?))
 }

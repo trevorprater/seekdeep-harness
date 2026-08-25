@@ -1,5 +1,6 @@
 //! Load-time validation and routed-model policy resolution for compaction-basic.
 
+use serde_json::{Map, Value};
 use thiserror::Error;
 
 use crate::types::{
@@ -17,6 +18,32 @@ const DEFAULT_MAX_TOKENS: u64 = 8192;
 const DEFAULT_COMPACTION_RETRIES: u64 = 1;
 const DEFAULT_MAX_OVERFLOW_RETRIES: u64 = 1;
 
+const BASIC_CONFIG_KEYS: &[&str] = &[
+    "thresholdRatio",
+    "retainRatio",
+    "retainTokens",
+    "summarizationProvider",
+    "summarizationModel",
+    "maxTokens",
+    "compactionRetries",
+    "maxOverflowRetries",
+    "modelPolicies",
+    "auto",
+];
+
+const MODEL_POLICY_KEYS: &[&str] = &[
+    "provider",
+    "model",
+    "thresholdRatio",
+    "retainRatio",
+    "retainTokens",
+    "summarizationProvider",
+    "summarizationModel",
+    "maxTokens",
+    "compactionRetries",
+    "maxOverflowRetries",
+];
+
 /// Target-specific pressure configuration failure eligible for warning
 /// suppression.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -26,6 +53,171 @@ pub struct TargetPressureConfigError {
     pub target_key: String,
     /// Actionable configuration failure detail.
     pub message: String,
+}
+
+/// Parses untrusted JSON configuration with source-compatible diagnostics.
+///
+/// # Errors
+///
+/// Returns named field, type, bounds, pairing, and duplicate-policy failures.
+pub fn parse_config_value(value: &Value) -> anyhow::Result<BasicCompactionConfig> {
+    let empty = Map::new();
+    let config = match value {
+        Value::Null => &empty,
+        Value::Object(config) => config,
+        _ => anyhow::bail!("BasicCompactionConfig must be an object"),
+    };
+    validate_keys(config, BASIC_CONFIG_KEYS, "BasicCompactionConfig")?;
+    validate_policy_value(config, "BasicCompactionConfig")?;
+    if let Some(value) = config.get("auto")
+        && !value.is_boolean()
+    {
+        anyhow::bail!("BasicCompactionConfig: auto must be a boolean");
+    }
+    if let Some(policies) = config.get("modelPolicies") {
+        let policies = policies.as_array().ok_or_else(|| {
+            anyhow::anyhow!("BasicCompactionConfig: modelPolicies must be an array")
+        })?;
+        for (index, source) in policies.iter().enumerate() {
+            let name = format!("BasicCompactionConfig: modelPolicies[{index}]");
+            let source = source
+                .as_object()
+                .ok_or_else(|| anyhow::anyhow!("{name} must be an object"))?;
+            validate_keys(source, MODEL_POLICY_KEYS, &name)?;
+            assert_non_empty_string_value(&format!("{name}.provider"), source.get("provider"))?;
+            assert_non_empty_string_value(&format!("{name}.model"), source.get("model"))?;
+            validate_policy_value(source, &name)?;
+        }
+    }
+    let normalized = if matches!(value, Value::Null) {
+        Value::Object(Map::new())
+    } else {
+        value.clone()
+    };
+    let parsed: BasicCompactionConfig = serde_json::from_value(normalized)?;
+    resolve_config(&parsed)?;
+    Ok(parsed)
+}
+
+fn validate_keys(config: &Map<String, Value>, allowed: &[&str], name: &str) -> anyhow::Result<()> {
+    if let Some(key) = config.keys().find(|key| !allowed.contains(&key.as_str())) {
+        anyhow::bail!("{name}: unknown key {key:?}");
+    }
+    Ok(())
+}
+
+fn validate_policy_value(config: &Map<String, Value>, name: &str) -> anyhow::Result<()> {
+    for (field, check) in [
+        (
+            "thresholdRatio",
+            assert_ratio_value as fn(&str, &Value) -> anyhow::Result<()>,
+        ),
+        ("retainRatio", assert_ratio_value),
+    ] {
+        if let Some(value) = config.get(field) {
+            check(&format!("{name}.{field}"), value)?;
+        }
+    }
+    if let Some(value) = config.get("retainTokens") {
+        assert_non_negative_integer_value(&format!("{name}.retainTokens"), value)?;
+    }
+    if config.contains_key("retainRatio") && config.contains_key("retainTokens") {
+        anyhow::bail!("{name}: retainRatio and retainTokens are mutually exclusive");
+    }
+    if let Some(value) = config.get("maxTokens") {
+        assert_positive_integer_value(&format!("{name}.maxTokens"), value)?;
+    }
+    for field in ["compactionRetries", "maxOverflowRetries"] {
+        if let Some(value) = config.get(field) {
+            assert_non_negative_integer_value(&format!("{name}.{field}"), value)?;
+        }
+    }
+    validate_summarization_pair_value(config, name)
+}
+
+fn validate_summarization_pair_value(
+    config: &Map<String, Value>,
+    name: &str,
+) -> anyhow::Result<()> {
+    let provider = optional_string_value(
+        &format!("{name}.summarizationProvider"),
+        config.get("summarizationProvider"),
+    )?;
+    let model = optional_string_value(
+        &format!("{name}.summarizationModel"),
+        config.get("summarizationModel"),
+    )?;
+    if provider.is_none() && model.is_none() {
+        return Ok(());
+    }
+    if provider.is_none()
+        || model.is_none()
+        || provider.is_some_and(str::is_empty) != model.is_some_and(str::is_empty)
+    {
+        anyhow::bail!(
+            "{name}: summarizationProvider and summarizationModel must be set together as an empty or non-empty pair"
+        );
+    }
+    Ok(())
+}
+
+fn optional_string_value<'a>(
+    name: &str,
+    value: Option<&'a Value>,
+) -> anyhow::Result<Option<&'a str>> {
+    value.map_or(Ok(None), |value| {
+        value
+            .as_str()
+            .map(Some)
+            .ok_or_else(|| anyhow::anyhow!("{name} must be a string"))
+    })
+}
+
+fn assert_non_empty_string_value(name: &str, value: Option<&Value>) -> anyhow::Result<()> {
+    if value.and_then(Value::as_str).is_none_or(str::is_empty) {
+        anyhow::bail!("{name} must be a non-empty string");
+    }
+    Ok(())
+}
+
+fn assert_positive_integer_value(name: &str, value: &Value) -> anyhow::Result<()> {
+    if value.as_u64().is_none_or(|value| value == 0) {
+        anyhow::bail!(
+            "{name} ({}) must be a positive integer",
+            display_value(value)
+        );
+    }
+    Ok(())
+}
+
+fn assert_non_negative_integer_value(name: &str, value: &Value) -> anyhow::Result<()> {
+    if value.as_u64().is_none() {
+        anyhow::bail!(
+            "{name} ({}) must be a non-negative integer",
+            display_value(value)
+        );
+    }
+    Ok(())
+}
+
+fn assert_ratio_value(name: &str, value: &Value) -> anyhow::Result<()> {
+    if value
+        .as_f64()
+        .is_none_or(|value| !value.is_finite() || value <= 0.0 || value > 1.0)
+    {
+        anyhow::bail!(
+            "{name} ({}) must be a number in (0, 1]",
+            display_value(value)
+        );
+    }
+    Ok(())
+}
+
+fn display_value(value: &Value) -> String {
+    match value {
+        Value::String(value) => value.clone(),
+        _ => value.to_string(),
+    }
 }
 
 /// Resolves and validates service defaults plus exact-target partial overrides.

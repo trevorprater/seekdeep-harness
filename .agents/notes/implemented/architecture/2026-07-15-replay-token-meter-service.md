@@ -40,7 +40,7 @@ Automatic pressure runs at `agent/pre-step` before request derivation and measur
 
 ## Testing
 
-Unit tests cover fixed estimation, envelope invalidation and anchor replacement, replay boundaries, immutable snapshots, routed pressure, convergence, overflow generation proof, and rollback. The pinned source Loader suite and its Rust mirror each pass five cases for dependency-order activation and load-time rejection, including the exact named diagnostic for a stale compaction key.
+Unit tests cover fixed estimation, envelope invalidation and anchor replacement, replay boundaries, immutable snapshots, routed pressure, convergence, overflow generation proof, and rollback. The pinned source Loader suite and its Rust mirror each pass five cases for dependency-order activation and load-time rejection, including the exact named diagnostic for a stale compaction key. The pinned core compaction suite passes 80 cases; the 60-test Rust package uses grouped invalid-value and terminal-state matrices plus real Session, token-meter, AgentEvent, middleware, pruning, transaction, retry, cancellation, and disposal paths to cover the same partitions.
 
 ## Alternatives considered
 

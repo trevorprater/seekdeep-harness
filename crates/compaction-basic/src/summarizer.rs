@@ -125,7 +125,7 @@ pub async fn summarize_with_llm(
     let llm = ctx
         .get(LLM)
         .ok_or_else(|| anyhow::anyhow!("compaction summarizer requires llm"))?;
-    let mut stream = llm.stream(options);
+    let (mut stream, dispatch) = llm.stream_with_dispatch_trace(options);
     while let Some(chunk) = stream.next().await {
         assembler.push(chunk?);
     }
@@ -141,12 +141,19 @@ pub async fn summarize_with_llm(
     {
         anyhow::bail!("summarization produced no text summary content");
     }
+    let dispatched = dispatch.route();
     Ok(SummaryResult {
         summary,
         raw_output,
         llm_stream_call: true,
-        provider: provider.as_str().to_owned(),
-        model: model.as_str().to_owned(),
+        provider: dispatched.as_ref().map_or_else(
+            || provider.as_str().to_owned(),
+            |route| route.provider.to_string(),
+        ),
+        model: dispatched.as_ref().map_or_else(
+            || model.as_str().to_owned(),
+            |route| route.model.to_string(),
+        ),
         max_tokens: Some(config.max_tokens),
         usage: assembler.usage().cloned(),
     })

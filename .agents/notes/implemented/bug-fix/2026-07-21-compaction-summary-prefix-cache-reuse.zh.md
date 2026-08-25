@@ -22,7 +22,7 @@ Status: implemented
 
 ### 缓存复用是尽力而为，正确性则有保证
 
-自动压缩总是锚定在表层头部，因此被遮蔽区域就是已路由请求的头部，回放的前缀与之完全匹配，这就是保证命中的情形。手动的中段 `compactRegion` 仍然回放真实的前缀并保持正确，但会放弃复用，因为它的被遮蔽区域不是请求头部。配置的 `summarizationProvider`/`summarizationModel` 若与对话的路由不同，也会放弃复用；这是部署方明确的权衡，而非缺陷。目标解析（配置的覆盖值 → 最新的已路由 header → agent（智能体）选项，否则抛出）保持不变。
+自动压缩总是锚定在表层头部，因此被遮蔽区域就是已路由请求的头部，回放的前缀与之完全匹配，这就是保证命中的情形。手动的中段 `compactRegion` 仍然回放真实的前缀并保持正确，但会放弃复用，因为它的被遮蔽区域不是请求头部。配置的 `summarizationProvider`/`summarizationModel` 若与对话的路由不同，也会放弃复用；这是部署方明确的权衡，而非缺陷。目标解析（配置的覆盖值 → 最新的已路由 header → agent（智能体）选项，否则抛出）保持不变。Rust LLM 运行时会返回逐调用 dispatch trace；只有该调用通过最后一层中间件边界继续委派时才填充它。Compaction 在流结束后读取该 trace，使持久摘要记录实际 dispatch 的提供方和模型，无需注册全局观察器，也不会串入并发调用。
 
 ## 考虑过的替代方案
 
@@ -40,6 +40,6 @@ Status: implemented
 
 ## 测试
 
-- **单元：** `compaction-basic.spec.ts` 断言辅助调用转发 `system`/`tools`/前导消息，并把压缩指令作为最后一条消息追加，且 `compactRegion` 回放最新的已路由 header 前缀。现有的内容断言通过回放的消息而非 transcript 字符串来读取摘要器输入。
+- **单元：** `compaction-basic.spec.ts` 断言辅助调用转发 `system`/`tools`/前导消息，并把压缩指令作为最后一条消息追加，且 `compactRegion` 回放最新的已路由 header 前缀，最后还会把中间件之后的 dispatch 归属写入持久摘要。现有的内容断言通过回放的消息而非 transcript 字符串来读取摘要器输入。Rust 镜像通过生产流运行时驱动相同的前缀、路由、终止失败、不安全内容与最终 dispatch 分区。
 - **循环：** `compact-loop-repro.spec.ts` 依据摘要请求尾部 user 消息中的压缩指令对其分类，溢出恢复测试则继续在真实循环中固定对话请求与摘要请求的数量。
 - **快照：** 无密钥回放会从带标记的 `compaction/summary` 重建一条规范成功流；[compaction-seam Agent Note](../feature/2026-06-18-compaction-capability-seam.md) 负责持久标记约定。

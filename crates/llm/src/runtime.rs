@@ -235,6 +235,36 @@ pub type LlmStreamNext = Box<dyn FnOnce(GenerateOptions) -> LlmStream + Send + '
 pub type LlmStreamMiddleware =
     Arc<dyn Fn(GenerateOptions, LlmStreamNext) -> LlmStream + Send + Sync + 'static>;
 
+/// Exact provider/model route that reached the adapter dispatch boundary.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LlmDispatchRoute {
+    /// Dispatched provider route.
+    pub provider: ProviderId,
+    /// Dispatched model id.
+    pub model: ModelId,
+}
+
+/// Per-call observation populated when middleware delegates to adapter dispatch.
+#[derive(Clone, Default)]
+pub struct LlmDispatchTrace(Arc<Mutex<Option<LlmDispatchRoute>>>);
+
+impl std::fmt::Debug for LlmDispatchTrace {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_tuple("LlmDispatchTrace")
+            .field(&self.route())
+            .finish()
+    }
+}
+
+impl LlmDispatchTrace {
+    /// Returns the last route admitted to this call's adapter boundary.
+    #[must_use]
+    pub fn route(&self) -> Option<LlmDispatchRoute> {
+        self.0.lock().clone()
+    }
+}
+
 /// Provider-wire adapter for `SeekDeep Harness`'s message and stream vocabulary.
 #[async_trait]
 pub trait LlmAdapter: Send + Sync + 'static {
@@ -1032,6 +1062,34 @@ impl LlmRuntime {
     #[must_use]
     pub fn stream(self: &Arc<Self>, options: GenerateOptions) -> LlmStream {
         self.stream_with_registration(options, None)
+    }
+
+    /// Streams one call and returns a call-local trace of the route that
+    /// middleware ultimately delegated to adapter dispatch.
+    #[must_use]
+    pub fn stream_with_dispatch_trace(
+        self: &Arc<Self>,
+        options: GenerateOptions,
+    ) -> (LlmStream, LlmDispatchTrace) {
+        let trace = LlmDispatchTrace::default();
+        let capture = trace.clone();
+        let tracer = StreamMiddlewareEntry {
+            id: Uuid::now_v7(),
+            middleware: Arc::new(move |options, next| {
+                *capture.0.lock() = Some(LlmDispatchRoute {
+                    provider: options.provider.clone(),
+                    model: options.model.clone(),
+                });
+                next(options)
+            }),
+        };
+        let mut middlewares = self.state.lock().stream_middlewares.clone();
+        middlewares.push(tracer);
+        let middlewares: Arc<[StreamMiddlewareEntry]> = middlewares.into();
+        (
+            build_middleware_chain(self, &middlewares, 0, options, None),
+            trace,
+        )
     }
 
     fn stream_with_registration(
