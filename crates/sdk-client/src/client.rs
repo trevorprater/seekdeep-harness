@@ -3,6 +3,7 @@
 use std::{
     any::Any,
     collections::{HashMap, VecDeque},
+    fmt::Write as _,
     sync::{
         Arc, Weak,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -735,7 +736,7 @@ async fn prepare_transport_or_cleanup(
             let process = child.done().await;
             let mut message = format!("SeekDeep Harness runtime failed to start\n{error}");
             if let Err(error) = process {
-                message.push_str(&format!("\nspawn error: {error}"));
+                write!(&mut message, "\nspawn error: {error}")?;
             }
             Err(anyhow::Error::new(TransportClosedError { message }))
         }

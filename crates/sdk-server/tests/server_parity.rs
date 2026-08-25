@@ -51,10 +51,7 @@ impl<W: AsyncWrite + Unpin> AsyncWrite for FailingFlush<W> {
         Pin::new(&mut self.inner).poll_write(context, buffer)
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        _context: &mut TaskContext<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _context: &mut TaskContext<'_>) -> Poll<io::Result<()>> {
         self.flushes.fetch_add(1, Ordering::AcqRel);
         Poll::Ready(Err(io::Error::other("injected flush failure")))
     }
@@ -393,6 +390,7 @@ async fn initializes_creates_coalesces_sessions_and_rejects_stale_agents() {
 }
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn forwards_session_status_lineage_and_local_subagent_terminal_notifications() {
     let harness = Harness::new(HarnessSdkJsonRpcServerOptions {
         max_tokens_as_success: true,
@@ -543,14 +541,17 @@ async fn shutdown_settles_every_agent_and_aggregates_all_disposal_failures() {
     harness.initialize(&cwd.path().to_string_lossy()).await;
     harness.server.prompt(prompt("one", "one")).await.unwrap();
     harness.server.prompt(prompt("two", "two")).await.unwrap();
-    harness
-        .factory
-        .dispose_failures
-        .store(2, Ordering::Release);
+    harness.factory.dispose_failures.store(2, Ordering::Release);
     let error = harness.server.shutdown().await.unwrap_err();
     let message = error.to_string();
-    assert!(message.starts_with("SDK server teardown failed:"), "{message}");
-    assert_eq!(message.matches("injected agent disposal failure").count(), 2);
+    assert!(
+        message.starts_with("SDK server teardown failed:"),
+        "{message}"
+    );
+    assert_eq!(
+        message.matches("injected agent disposal failure").count(),
+        2
+    );
     assert!(harness.agents.list().is_empty());
     assert_eq!(
         harness.server.shutdown().await.unwrap_err().to_string(),
@@ -646,25 +647,30 @@ async fn failed_initialize_keeps_the_attempted_route_and_absent_llm_reports_no_a
         .prompt(prompt("after-failed-initialize", "still configured"))
         .await
         .unwrap();
-    let options = harness.factory.options.lock();
-    let attempted = options.last().unwrap();
-    assert_eq!(
-        attempted.agent_options.provider.as_ref().map(ProviderId::as_str),
-        Some("private")
-    );
-    assert_eq!(
-        attempted.agent_options.model.as_ref().map(ModelId::as_str),
-        Some("attempted-model")
-    );
-    assert_eq!(attempted.agent_options.max_tokens, Some(77));
-    assert!(
-        attempted
-            .meta
-            .cwd
-            .as_deref()
-            .is_some_and(|cwd| cwd.ends_with("attempted/relative"))
-    );
-    drop(options);
+    {
+        let options = harness.factory.options.lock();
+        let attempted = options.last().unwrap();
+        assert_eq!(
+            attempted
+                .agent_options
+                .provider
+                .as_ref()
+                .map(ProviderId::as_str),
+            Some("private")
+        );
+        assert_eq!(
+            attempted.agent_options.model.as_ref().map(ModelId::as_str),
+            Some("attempted-model")
+        );
+        assert_eq!(attempted.agent_options.max_tokens, Some(77));
+        assert!(
+            attempted
+                .meta
+                .cwd
+                .as_deref()
+                .is_some_and(|cwd| cwd.ends_with("attempted/relative"))
+        );
+    }
     harness.server.shutdown().await.unwrap();
     harness.context.fiber().dispose().await.unwrap();
 

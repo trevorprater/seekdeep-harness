@@ -99,9 +99,18 @@ fn names_defaults_and_stop_reason_vocabulary_are_exact() {
     assert_eq!(config.provider_name, "seekdeep-sdk");
     assert_eq!(config.provider, "deepseek-official");
     assert_eq!(config.model, "deepseek-v4-flash");
-    assert_eq!(config.shutdown_timeout_ms, DEFAULT_SHUTDOWN_TIMEOUT_MS);
-    assert_eq!(config.dispose_eof_grace_ms, DEFAULT_DISPOSE_EOF_GRACE_MS);
-    assert_eq!(config.dispose_grace_ms, DEFAULT_DISPOSE_GRACE_MS);
+    assert_eq!(
+        config.shutdown_timeout_ms.to_bits(),
+        DEFAULT_SHUTDOWN_TIMEOUT_MS.to_bits()
+    );
+    assert_eq!(
+        config.dispose_eof_grace_ms.to_bits(),
+        DEFAULT_DISPOSE_EOF_GRACE_MS.to_bits()
+    );
+    assert_eq!(
+        config.dispose_grace_ms.to_bits(),
+        DEFAULT_DISPOSE_GRACE_MS.to_bits()
+    );
     for (reason, expected) in [
         (
             Some(json!({"kind":"completed"})),

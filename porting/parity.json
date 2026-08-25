@@ -63069,22 +63069,54 @@
     {
       "source": "packages/sdk/client/src/api.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-client/src/api.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust SDK protocol/client/server/subagent combined suite passed 34 tests",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/sdk/client/src/client.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-client/src/client.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust sdk-client suite passed 12 tests covering real subprocess lifecycle, typed failures, notification fan-out, retry, timeout, and cwd behavior",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/sdk/client/src/dispose.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-client/src/client.rs",
+        "crates/subprocess-local/src/spawn.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust sdk-client real-process close and idempotence scenarios passed",
+        "Rust subprocess-local spawn parity suite passed 20/20 including process-tree escalation"
+      ]
     },
     {
       "source": "packages/sdk/client/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-client/src/lib.rs"
+      ],
+      "evidence": [
+        "Rust crate root exports only the supported client layers, caller types, and protocol response error plus Rust-required input and observer types",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/sdk/client/src/invariant.ts",
@@ -63103,22 +63135,52 @@
     {
       "source": "packages/sdk/client/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-client/src/types.rs"
+      ],
+      "evidence": [
+        "Rust sdk-client tests pin launch defaults, complete environment replacement, route parameters, session ids, and owned activity results",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/sdk/client/tests/dispose.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-client/tests/client_parity.rs",
+        "crates/subprocess-local/tests/spawn_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust sdk-client suite passed 12/12 and subprocess-local spawn parity passed 20/20"
+      ]
     },
     {
       "source": "packages/sdk/client/tests/fake-runtime.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-client/tests/fixtures/fake_runtime.rs"
+      ],
+      "evidence": [
+        "Rust scripted runtime drives real stdio for handshake, retry, malformed wire, lineage, stderr, timeout, and shutdown scenarios",
+        "Rust sdk-client suite passed 12/12"
+      ]
     },
     {
       "source": "packages/sdk/client/tests/sdk-client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-client/tests/client_parity.rs",
+        "crates/sdk-client/src/api.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust sdk-client suite passed 12 tests covering the source client behavior groups"
+      ]
     },
     {
       "source": "packages/sdk/client/tsconfig.json",
@@ -63304,7 +63366,15 @@
     {
       "source": "packages/sdk/server/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-server/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129 and dedicated E2E suites passed 2/2",
+        "Rust sdk-server suite passed 9/9 including racing shutdown, flush failure, and bare disposal",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/sdk/server/src/invariant.ts",
@@ -63323,22 +63393,51 @@
     {
       "source": "packages/sdk/server/src/server.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-server/src/server.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129 and dedicated E2E suites passed 2/2",
+        "Rust sdk-server suite passed 9/9 covering route state, creation coalescing, lifecycle projection, locality, and aggregate teardown",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/sdk/server/tests/built-scope-carrier.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-server/tests/server_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source built-scope carrier and SDK-subagent Loader E2E suites passed 2/2",
+        "Rust scoped subagent terminal projection test passes after child-session creation and ignores colliding remote completion"
+      ]
     },
     {
       "source": "packages/sdk/server/tests/plugin-apply.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-server/tests/server_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust apply tests pin two-response shutdown drain, response-before-exit, flush-failure continuation, and no-exit bare disposal"
+      ]
     },
     {
       "source": "packages/sdk/server/tests/plugin-shape.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-server/tests/server_parity.rs"
+      ],
+      "evidence": [
+        "Rust plugin-shape test pins sdk-jsonrpc-server name and agents-only injection",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/sdk/server/tests/server.spec.ts",
@@ -69310,7 +69409,15 @@
     {
       "source": "packages/subagent/subagent-dsh-sdk/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-sdk/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust SDK-subagent suite passed 7 real-process and Loader scenarios",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-dsh-sdk/src/invariant.ts",
@@ -69329,7 +69436,15 @@
     {
       "source": "packages/subagent/subagent-dsh-sdk/src/run.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-sdk/src/run.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust SDK-subagent suite passed 7 scenarios covering stop reasons, partial output, prepublication rollback, cancellation, and idempotent disposal",
+        "strict four-crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-dsh-sdk/tests/loader-composition.e2e.ts",
@@ -69339,7 +69454,15 @@
     {
       "source": "packages/subagent/subagent-dsh-sdk/tests/subagent-dsh-sdk.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-sdk/tests/sdk_subagent_parity.rs",
+        "crates/subagent-sdk/tests/fixtures/fake_runtime.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust SDK-subagent suite passed 7 real-process grouped scenarios covering the source provider behavior matrix"
+      ]
     },
     {
       "source": "packages/subagent/subagent-dsh-sdk/tsconfig.json",

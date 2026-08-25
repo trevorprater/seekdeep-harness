@@ -4,10 +4,7 @@ mod api;
 mod client;
 mod types;
 
-pub use api::{
-    DeepSeekHarness, HarnessSession, NotificationObserver, RunInput, RunOptions, final_response,
-    normalize_input,
-};
+pub use api::{DeepSeekHarness, HarnessSession, NotificationObserver, RunInput, RunOptions};
 pub use client::{
     HarnessClient, NotificationSubscription, RequestTimeoutError, SdkProtocolError,
     TransportClosedError,

@@ -29,6 +29,7 @@ fn event(event_type: &str, seq: u64, data: Value) -> Value {
     json!({"type":event_type,"seq":seq,"time":seq,"data":data})
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn notify(session: &str, event: Value) -> anyhow::Result<()> {
     send(json!({
         "jsonrpc":"2.0",
@@ -37,6 +38,7 @@ fn notify(session: &str, event: Value) -> anyhow::Result<()> {
     }))
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn response(id: &Value, result: Value) -> anyhow::Result<()> {
     send(json!({"jsonrpc":"2.0","id":id,"result":result}))
 }

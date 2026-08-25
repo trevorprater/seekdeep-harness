@@ -2,12 +2,11 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use seekdeep_core::session::{SessionEvent, SessionId};
+use seekdeep_core::session::SessionId;
 use seekdeep_llm::ContentBlock;
 use seekdeep_sdk_client::{
     DeepSeekHarness, DeepSeekHarnessOptions, HarnessClient, HarnessClientOptions,
     JsonRpcResponseError, RequestTimeoutError, RunOptions, SdkProtocolError, TransportClosedError,
-    final_response, normalize_input,
 };
 use seekdeep_sdk_protocol::InitializeParams;
 use serde_json::{Map, Value, json};
@@ -504,37 +503,4 @@ async fn launch_and_exit_diagnostics_are_typed_complete_and_tail_bounded() {
     );
     assert!(error.to_string().contains("failed to start"), "{error}");
     missing.close().await.unwrap();
-}
-
-#[test]
-fn input_and_final_response_helpers_preserve_exact_block_and_last_message_rules() {
-    assert_eq!(
-        normalize_input("hello".into()),
-        [ContentBlock::Text {
-            text: "hello".to_owned()
-        }]
-    );
-    let blocks = vec![ContentBlock::Text { text: "x".into() }];
-    assert_eq!(normalize_input(blocks.clone().into()), blocks);
-    let events = vec![
-        SessionEvent {
-            event_type: "assistant/message".to_owned(),
-            seq: 1,
-            time: 1,
-            data: json!({"message":{"content":[{"type":"text","text":"first"}]}}),
-            source_event_seqs: None,
-            surface_op: None,
-            ignorable: None,
-        },
-        SessionEvent {
-            event_type: "assistant/message".to_owned(),
-            seq: 2,
-            time: 2,
-            data: json!({"message":{"content":[{"type":"reasoning","text":"hidden"},{"type":"text","text":"last"}]}}),
-            source_event_seqs: None,
-            surface_op: None,
-            ignorable: None,
-        },
-    ];
-    assert_eq!(final_response(&events), "last");
 }

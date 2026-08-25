@@ -325,18 +325,14 @@ impl HarnessSession {
     }
 }
 
-/// Normalizes a run input to content blocks.
-#[must_use]
-pub fn normalize_input(input: RunInput) -> Vec<ContentBlock> {
+fn normalize_input(input: RunInput) -> Vec<ContentBlock> {
     match input {
         RunInput::Text(text) => vec![ContentBlock::Text { text }],
         RunInput::Blocks(blocks) => blocks,
     }
 }
 
-/// Extracts text from the last assistant-message event.
-#[must_use]
-pub fn final_response(events: &[SessionEvent]) -> String {
+fn final_response(events: &[SessionEvent]) -> String {
     events
         .iter()
         .rev()
@@ -403,4 +399,44 @@ fn validated_session_event(value: &Value) -> anyhow::Result<SessionEvent> {
             message: format!("session.event carried no event envelope: {value}"),
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn input_and_final_response_helpers_preserve_exact_rules() {
+        assert_eq!(
+            normalize_input("hello".into()),
+            [ContentBlock::Text {
+                text: "hello".to_owned()
+            }]
+        );
+        let blocks = vec![ContentBlock::Text { text: "x".into() }];
+        assert_eq!(normalize_input(blocks.clone().into()), blocks);
+        let events = vec![
+            SessionEvent {
+                event_type: "assistant/message".to_owned(),
+                seq: 1,
+                time: 1,
+                data: json!({"message":{"content":[{"type":"text","text":"first"}]}}),
+                source_event_seqs: None,
+                surface_op: None,
+                ignorable: None,
+            },
+            SessionEvent {
+                event_type: "assistant/message".to_owned(),
+                seq: 2,
+                time: 2,
+                data: json!({"message":{"content":[{"type":"reasoning","text":"hidden"},{"type":"text","text":"last"}]}}),
+                source_event_seqs: None,
+                surface_op: None,
+                ignorable: None,
+            },
+        ];
+        assert_eq!(final_response(&events), "last");
+    }
 }
