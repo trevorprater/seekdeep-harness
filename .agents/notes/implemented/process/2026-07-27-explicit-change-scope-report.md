@@ -18,6 +18,8 @@ Committed paths compare the resolved merge base with the resolved head. Dirty pa
 
 The command never guesses or fetches a base, queries a hosting provider, or selects tests. Each calling workflow verifies current remote or stack state, supplies the base explicitly, and uses the factual report as input to semantic review or evidence selection.
 
+The root package script delegates to a dependency-light Rust binary. Workspace-level `verifyDepsBeforeRun` is disabled so Rust-owned repository commands remain runnable while legacy JavaScript packages are intentionally absent; a command that still needs JavaScript dependencies fails at its own executable boundary instead of triggering an implicit workspace install.
+
 Focused temporary-repository tests cover explicit and stacked refs, every dirty layer, legal path whitespace, strict path decoding, inert probes, invalid refs, the deterministic schema, and unchanged refs, index, config, and status after reporting.
 
 ## Alternatives considered

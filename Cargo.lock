@@ -4848,6 +4848,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-change-scope"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "seekdeep-client-connection"
 version = "0.1.0-rc.5"
 dependencies = [

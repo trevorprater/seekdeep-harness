@@ -18,6 +18,8 @@ Status: implemented
 
 该命令从不猜测或获取基准，不查询代码托管提供方，也不选择测试。调用该命令的每个工作流都会验证当前远端或堆叠状态、显式提供基准，并将这份事实报告作为语义评审或证据选择的输入。
 
+根 package script 委托给依赖精简的 Rust binary。workspace 级禁用 `verifyDepsBeforeRun`，使由 Rust 负责的仓库命令在 legacy JavaScript 包被有意省略时仍可运行；仍需要 JavaScript 依赖的命令会在自身 executable 边界失败，而不是触发隐式 workspace install。
+
 聚焦的临时仓库测试覆盖显式引用与堆叠引用、所有未提交改动层、合法路径空白、严格路径解码、无副作用的探测、无效引用、确定性 schema，以及报告前后不变的引用、索引、配置与状态。
 
 ## 考虑过的替代方案

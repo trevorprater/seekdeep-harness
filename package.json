@@ -23,7 +23,7 @@
     "build:lib:client": "tsc -b tsconfig.client.json && tsdown --env.SEEKDEEP_BUILD_FACE client",
     "build:web": "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run build",
     "clean": "tsx scripts/clean.ts",
-    "change-scope": "tsx scripts/change-scope.ts",
+    "change-scope": "cargo run --quiet --package seekdeep-change-scope --",
     "typecheck": "npm run build:lib:host && npm run typecheck:contracts-ready",
     "typecheck:contracts-ready": "tsc -b tsconfig.client.json",
     "lint": "npm run build:lib:host && npm run lint:contracts-ready",

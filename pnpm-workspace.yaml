@@ -24,6 +24,10 @@ packages:
 # builds must resolve those matching names to this workspace's pinned sources.
 linkWorkspacePackages: true
 
+# Repository commands are progressively Rust-owned and must remain runnable
+# while legacy JavaScript workspace dependencies are intentionally absent.
+verifyDepsBeforeRun: false
+
 overrides:
   '@seekdeep-ai/cosmokit': 'link:vendor/cosmokit'
   '@seekdeep-ai/schemastery': 'link:vendor/schemastery'

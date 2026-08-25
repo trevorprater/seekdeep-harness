@@ -36210,9 +36210,10 @@
       "evidence": [
         "mechanical rename port (dsh to seekdeep)",
         "gen-persistence-catalog and verify-persistence-catalog delegate directly to the verified Rust cargo xtask persistence-catalog command",
-        "gen-tool-catalog and verify-tool-catalog delegate directly to the verified Rust cargo xtask tool-catalog command"
+        "gen-tool-catalog and verify-tool-catalog delegate directly to the verified Rust cargo xtask tool-catalog command",
+        "pnpm --silent run change-scope --base origin/agent/rust-parity-port-progress (live Rust command emitted the versioned repository report)"
       ],
-      "note": "root package metadata preserves source command names while Rust owns persistence- and tool-catalog generation and freshness behavior"
+      "note": "root package metadata preserves source command names while Rust owns change-scope, persistence-catalog, and tool-catalog behavior"
     },
     {
       "source": "packages/AGENTS.md",
@@ -76894,8 +76895,9 @@
         "pnpm-workspace.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "pnpm --silent run change-scope --base origin/agent/rust-parity-port-progress (Rust-owned command ran while legacy workspace dependencies remained intentionally absent)"
+      ],
+      "note": "verifyDepsBeforeRun is intentionally disabled so Rust-owned repository commands do not trigger an implicit install of pending legacy JavaScript packages"
     },
     {
       "source": "pytest.ini",
@@ -77231,12 +77233,34 @@
     {
       "source": "scripts/change-scope.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/change-scope/tests/change_scope_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/change-scope.spec.ts (pinned source: 8 passed)",
+        "cargo test -p seekdeep-change-scope --all-features (2 unit and 8 integration tests passed)",
+        "cargo clippy -p seekdeep-change-scope --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/change-scope.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/change-scope/src/lib.rs",
+        "crates/change-scope/src/main.rs",
+        "crates/change-scope/Cargo.toml",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/change-scope.spec.ts (pinned source: 8 passed)",
+        "cargo test -p seekdeep-change-scope --all-features (2 unit and 8 integration tests passed)",
+        "pnpm --silent run change-scope --base origin/agent/rust-parity-port-progress (live root command emitted strict versioned JSON)",
+        "pnpm --silent run change-scope (exit 1 with the exact missing-base diagnostic)",
+        "cargo clippy -p seekdeep-change-scope --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-change-scope --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/check-expected-filenames.sh",
