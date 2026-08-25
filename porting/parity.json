@@ -35248,7 +35248,16 @@
     {
       "source": "examples/jsonrpc-agent/tests/fixtures/subagent/subagent-dsh-sdk/child-mock-llm.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-sdk/tests/fixtures/real_runtime.rs",
+        "crates/subagent-sdk/tests/sdk_subagent_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust CwdEchoAdapter returns the canonical child cwd with exact text block boundaries, usage, and stop finish",
+        "real child runtime persists its own user and assistant transcript in the inherited parent workspace",
+        "cargo test -p seekdeep-subagent-sdk --all-features"
+      ]
     },
     {
       "source": "examples/jsonrpc-agent/tests/fixtures/subagent/subagent-dsh-sdk/child.cordis.yml",
@@ -35275,12 +35284,28 @@
     {
       "source": "examples/jsonrpc-agent/tests/fixtures/subagent/subagent-dsh-sdk/driver.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-sdk/tests/sdk_subagent_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Loader composition e2e: 1/1",
+        "Rust Loader driver boots the SDK provider composition, executes one parent turn, awaits idle, disposes every owner, and inspects both persisted logs",
+        "cargo test -p seekdeep-subagent-sdk --all-features"
+      ]
     },
     {
       "source": "examples/jsonrpc-agent/tests/fixtures/subagent/subagent-dsh-sdk/mock-delegating-llm.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-sdk/tests/sdk_subagent_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust MockDelegatingAdapter emits the exact cwd-probe subagent call, then returns the child tool-result text with the canonical prefix",
+        "real Loader/SDK child composition proves cwd inheritance and parent/child transcript persistence",
+        "cargo test -p seekdeep-subagent-sdk --all-features"
+      ]
     },
     {
       "source": "examples/jsonrpc-agent/tests/keyless-smoke.e2e.ts",

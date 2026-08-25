@@ -6,22 +6,44 @@ use async_trait::async_trait;
 use futures::stream;
 use seekdeep_agent_loop::{AgentLoop, AgentLoopServices, DEFAULT_MAX_PARALLEL_TOOL_CALLS};
 use seekdeep_cordis::Context;
-use seekdeep_llm::{AdapterStream, FinishReason, GenerateOptions, LlmAdapter, StreamChunk};
+use seekdeep_llm::{
+    AdapterStream, ContentBlock, FinishReason, GenerateOptions, LlmAdapter, StreamChunk, TokenUsage,
+};
 use seekdeep_session_persistence::SESSION_PERSISTENCE;
 use seekdeep_session_persistence_jsonl::{JsonlCompression, JsonlConfig};
 
 #[derive(Debug)]
-struct ChildAnswerAdapter {
+struct CwdEchoAdapter {
     answer: String,
 }
 
 #[async_trait]
-impl LlmAdapter for ChildAnswerAdapter {
+impl LlmAdapter for CwdEchoAdapter {
     fn stream(&self, _options: GenerateOptions) -> AdapterStream {
         AdapterStream::new(stream::iter([
+            Ok(StreamChunk::BlockStart {
+                index: 0,
+                block_type: "text".to_owned(),
+            }),
             Ok(StreamChunk::TextDelta {
                 index: 0,
                 text: self.answer.clone(),
+            }),
+            Ok(StreamChunk::BlockEnd {
+                index: 0,
+                block: ContentBlock::Text {
+                    text: self.answer.clone(),
+                },
+            }),
+            Ok(StreamChunk::Usage {
+                usage: TokenUsage {
+                    input_tokens: 3,
+                    output_tokens: u64::try_from(self.answer.encode_utf16().count())
+                        .unwrap_or(u64::MAX),
+                    cache_read_tokens: None,
+                    cache_write_tokens: None,
+                    reasoning_tokens: None,
+                },
             }),
             Ok(StreamChunk::Finish {
                 reason: FinishReason::Stop,
@@ -46,8 +68,8 @@ async fn run() -> anyhow::Result<()> {
     )?;
     let cwd = std::fs::canonicalize(std::env::current_dir()?)?;
     dependencies.llm.register_adapter(
-        &["fixture-provider".to_owned()],
-        Arc::new(ChildAnswerAdapter {
+        &["mock".to_owned()],
+        Arc::new(CwdEchoAdapter {
             answer: format!("child cwd: {}", cwd.display()),
         }),
     )?;

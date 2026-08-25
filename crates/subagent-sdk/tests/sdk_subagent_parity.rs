@@ -569,10 +569,7 @@ async fn missing_cwd_fails_before_spawn_and_loader_composition_inherits_parent_w
 mod complete_runtime_e2e {
     use std::{
         path::{Path, PathBuf},
-        sync::{
-            Arc,
-            atomic::{AtomicBool, Ordering},
-        },
+        sync::Arc,
     };
 
     use async_trait::async_trait;
@@ -596,27 +593,61 @@ mod complete_runtime_e2e {
     const REAL_RUNTIME: &str = env!("CARGO_BIN_EXE_seekdeep-subagent-sdk-real-runtime");
 
     #[derive(Debug)]
-    struct DelegateThenFinishAdapter {
-        delegated: AtomicBool,
+    struct MockDelegatingAdapter {
         requests: Arc<Mutex<Vec<GenerateOptions>>>,
     }
 
     #[async_trait]
-    impl LlmAdapter for DelegateThenFinishAdapter {
+    impl LlmAdapter for MockDelegatingAdapter {
         fn stream(&self, options: GenerateOptions) -> AdapterStream {
+            let tool_result_text = options
+                .messages
+                .last()
+                .into_iter()
+                .flat_map(seekdeep_llm::Message::content)
+                .filter_map(|block| match block {
+                    ContentBlock::ToolResult { content, .. } => Some(content),
+                    _ => None,
+                })
+                .flatten()
+                .filter_map(|block| match block {
+                    ContentBlock::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<String>();
             self.requests.lock().push(options);
-            if !self.delegated.swap(true, Ordering::AcqRel) {
+            if tool_result_text.is_empty() {
+                let arguments = json!({
+                    "description":"cwd probe",
+                    "prompt":"report your workspace"
+                })
+                .to_string();
                 return AdapterStream::new(stream::iter([
+                    Ok(StreamChunk::BlockStart {
+                        index: 0,
+                        block_type: "tool-call".to_owned(),
+                    }),
+                    Ok(StreamChunk::ToolCallDelta {
+                        index: 0,
+                        id: CallId::new("call-delegate"),
+                        name: Some("subagent".to_owned()),
+                        arguments_delta: arguments.clone(),
+                    }),
                     Ok(StreamChunk::BlockEnd {
                         index: 0,
                         block: ContentBlock::ToolCall {
-                            id: CallId::new("delegate-child"),
+                            id: CallId::new("call-delegate"),
                             name: "subagent".to_owned(),
-                            arguments: json!({
-                                "description":"report child cwd",
-                                "prompt":"Report your working directory exactly."
-                            })
-                            .to_string(),
+                            arguments,
+                        },
+                    }),
+                    Ok(StreamChunk::Usage {
+                        usage: seekdeep_llm::TokenUsage {
+                            input_tokens: 10,
+                            output_tokens: 5,
+                            cache_read_tokens: None,
+                            cache_write_tokens: None,
+                            reasoning_tokens: None,
                         },
                     }),
                     Ok(StreamChunk::Finish {
@@ -625,10 +656,31 @@ mod complete_runtime_e2e {
                     }),
                 ]));
             }
+            let reply = format!("child reported:\n{tool_result_text}");
             AdapterStream::new(stream::iter([
+                Ok(StreamChunk::BlockStart {
+                    index: 0,
+                    block_type: "text".to_owned(),
+                }),
                 Ok(StreamChunk::TextDelta {
                     index: 0,
-                    text: "parent complete".to_owned(),
+                    text: reply.clone(),
+                }),
+                Ok(StreamChunk::BlockEnd {
+                    index: 0,
+                    block: ContentBlock::Text {
+                        text: reply.clone(),
+                    },
+                }),
+                Ok(StreamChunk::Usage {
+                    usage: seekdeep_llm::TokenUsage {
+                        input_tokens: 10,
+                        output_tokens: u64::try_from(reply.encode_utf16().count())
+                            .unwrap_or(u64::MAX),
+                        cache_read_tokens: None,
+                        cache_write_tokens: None,
+                        reasoning_tokens: None,
+                    },
                 }),
                 Ok(StreamChunk::Finish {
                     reason: FinishReason::Stop,
@@ -676,9 +728,8 @@ mod complete_runtime_e2e {
         dependencies
             .llm
             .register_adapter(
-                &["parent-provider".to_owned()],
-                Arc::new(DelegateThenFinishAdapter {
-                    delegated: AtomicBool::new(false),
+                &["mock".to_owned()],
+                Arc::new(MockDelegatingAdapter {
                     requests: Arc::clone(&parent_requests),
                 }),
             )
@@ -743,8 +794,8 @@ mod complete_runtime_e2e {
                         "  name: sdk\n",
                         "  config:\n",
                         "    command: {}\n",
-                        "    provider: fixture-provider\n",
-                        "    model: fixture-model\n",
+                        "    provider: mock\n",
+                        "    model: mock-echo\n",
                         "    shutdownTimeoutMs: 1000\n",
                         "    disposeEofGraceMs: 6000\n",
                         "    disposeGraceMs: 3000\n",
@@ -763,8 +814,8 @@ mod complete_runtime_e2e {
         let mut options = CreateAgentOptions::new(SessionId::new("loader-parent"));
         options.meta.cwd = Some(workspace.to_string_lossy().into_owned());
         options.agent_options = AgentOptions {
-            provider: Some(ProviderId::new("parent-provider")),
-            model: Some(ModelId::new("parent-model")),
+            provider: Some(ProviderId::new("mock")),
+            model: Some(ModelId::new("mock-delegate")),
             max_tokens: None,
             subagent_depth: None,
         };
@@ -786,6 +837,17 @@ mod complete_runtime_e2e {
         assert_eq!(parent_requests.lock().len(), 2);
         let expected = format!("child cwd: {}", workspace.display());
         let events = parent.agent.session().events();
+        let call = events
+            .iter()
+            .find(|event| event.event_type == "tool/call")
+            .expect("parent tool call");
+        assert_eq!(call.data["callId"], "call-delegate");
+        assert_eq!(call.data["name"], "subagent");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(call.data["arguments"].as_str().unwrap())
+                .unwrap(),
+            json!({"description":"cwd probe","prompt":"report your workspace"})
+        );
         let result = events
             .iter()
             .find(|event| event.event_type == "tool/result")
@@ -799,7 +861,8 @@ mod complete_runtime_e2e {
         );
         assert!(events.iter().any(|event| {
             event.event_type == "assistant/message"
-                && event.data.pointer("/message/content/0/text") == Some(&json!("parent complete"))
+                && event.data.pointer("/message/content/0/text")
+                    == Some(&json!(format!("child reported:\n{expected}")))
         }));
 
         parent.dispose().await.unwrap();
