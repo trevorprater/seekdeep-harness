@@ -47854,7 +47854,18 @@
     {
       "source": "packages/compaction/compaction-basic/tests/loader-composition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/compaction-basic/src/index.rs",
+        "crates/compaction-basic/tests/loader_composition_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: loader-composition.spec.ts passed 5/5",
+        "Rust real-Loader mirror passed 5/5 for dependency-order activation, token-meter and compaction service publication, exact raw config, stale token-meter and compaction keys, merged ratio conflict, and incomplete summarization route rejection",
+        "compaction-basic now rejects unknown top-level and model-policy keys at the named plugin validation boundary instead of leaking a generic Serde diagnostic",
+        "cargo test -p seekdeep-compaction-basic --all-features: 12 passed",
+        "cargo clippy -p seekdeep-compaction-basic --all-targets --all-features -- -D warnings: passed"
+      ]
     },
     {
       "source": "packages/compaction/compaction-basic/tests/manual-compaction.spec.ts",

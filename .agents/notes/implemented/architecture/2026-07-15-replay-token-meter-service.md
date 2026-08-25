@@ -40,7 +40,7 @@ Automatic pressure runs at `agent/pre-step` before request derivation and measur
 
 ## Testing
 
-Unit tests cover fixed estimation, envelope invalidation and anchor replacement, replay boundaries, immutable snapshots, routed pressure, convergence, overflow generation proof, and rollback. A real Loader/Include fixture verifies the zero-config token-meter and compaction-basic load path in dependency order.
+Unit tests cover fixed estimation, envelope invalidation and anchor replacement, replay boundaries, immutable snapshots, routed pressure, convergence, overflow generation proof, and rollback. The pinned source Loader suite and its Rust mirror each pass five cases for dependency-order activation and load-time rejection, including the exact named diagnostic for a stale compaction key.
 
 ## Alternatives considered
 

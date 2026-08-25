@@ -79,6 +79,56 @@ fn model_policy_schema() -> Schema {
     ])
 }
 
+fn reject_unknown_config_keys(value: &Value) -> anyhow::Result<()> {
+    const CONFIG_KEYS: &[&str] = &[
+        "thresholdRatio",
+        "retainRatio",
+        "retainTokens",
+        "summarizationProvider",
+        "summarizationModel",
+        "maxTokens",
+        "compactionRetries",
+        "maxOverflowRetries",
+        "modelPolicies",
+        "auto",
+    ];
+    const MODEL_POLICY_KEYS: &[&str] = &[
+        "provider",
+        "model",
+        "thresholdRatio",
+        "retainRatio",
+        "retainTokens",
+        "summarizationProvider",
+        "summarizationModel",
+        "maxTokens",
+        "compactionRetries",
+        "maxOverflowRetries",
+    ];
+    let Some(config) = value.as_object() else {
+        return Ok(());
+    };
+    if let Some(key) = config
+        .keys()
+        .find(|key| !CONFIG_KEYS.contains(&key.as_str()))
+    {
+        anyhow::bail!("BasicCompactionConfig: unknown key {key:?}");
+    }
+    if let Some(policies) = config.get("modelPolicies").and_then(Value::as_array) {
+        for (index, policy) in policies.iter().enumerate() {
+            let Some(policy) = policy.as_object() else {
+                continue;
+            };
+            if let Some(key) = policy
+                .keys()
+                .find(|key| !MODEL_POLICY_KEYS.contains(&key.as_str()))
+            {
+                anyhow::bail!("BasicCompactionConfig: modelPolicies[{index}]: unknown key {key:?}");
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Dependency-light compaction backend using the singleton token meter for
 /// pressure, retention, cited source events, and summary-convergence pricing.
 pub struct BasicCompactionEngine {
@@ -654,6 +704,7 @@ pub fn plugin() -> Plugin {
         })
     })
     .with_config_validator(|value: &Value| {
+        reject_unknown_config_keys(value)?;
         config_schema()
             .resolve(value)
             .map_err(|error| anyhow::anyhow!("{error}"))

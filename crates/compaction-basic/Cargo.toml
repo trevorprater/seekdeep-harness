@@ -29,5 +29,10 @@ thiserror.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 
+[dev-dependencies]
+seekdeep-loader = { path = "../loader" }
+tempfile.workspace = true
+tokio.workspace = true
+
 [lints]
 workspace = true
