@@ -59458,7 +59458,20 @@
     {
       "source": "packages/llm/llm-pi-ai/tests/adapter.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/adapter_parity.rs",
+        "crates/llm-pi-ai/tests/openai_responses_parity.rs",
+        "crates/llm-pi-ai/tests/anthropic_messages_parity.rs",
+        "crates/llm-pi-ai/tests/context_parity.rs",
+        "crates/llm-pi-ai/tests/replay_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: seven real-API adapter cases declared and correctly skipped without DEEPSEEK_API_KEY under vitest.e2e.config.ts",
+        "Rust local authenticated protocol suites cover provider-default and off/high/max reasoning shapes, text and tool-call assembly, replayed tool results, and cross-protocol StreamChunk structure without external keys",
+        "focused Rust adapter, OpenAI Responses, Anthropic Messages, context/image, and replay suites passed 28/28",
+        "cargo test -p seekdeep-llm-pi-ai --all-features --test adapter_parity --test openai_responses_parity --test anthropic_messages_parity --test replay_parity --test context_parity: 28 passed"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/adapter.spec.ts",
@@ -59645,7 +59658,20 @@
     {
       "source": "packages/llm/llm-pi-ai/tests/provider-apis.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-pi-ai/tests/openai_responses_parity.rs",
+        "crates/llm-pi-ai/tests/anthropic_messages_parity.rs",
+        "crates/llm-pi-ai/tests/adapter_parity.rs",
+        "crates/llm-pi-ai/tests/context_parity.rs",
+        "crates/llm-pi-ai/tests/replay_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: five key-gated OpenAI Responses and Anthropic Messages cases declared and correctly skipped without provider credentials",
+        "Rust loopback endpoints verify authenticated request headers and bodies, streamed text with usage, native replay metadata, tool-call identity and follow-up reconstruction, reasoning signatures, and terminal stop mapping",
+        "Rust attachment/context tests resolve durable images for the next request and verify Anthropic-capable image conversion plus every unsupported-image boundary",
+        "focused Rust adapter, OpenAI Responses, Anthropic Messages, context/image, and replay suites passed 28/28"
+      ]
     },
     {
       "source": "packages/llm/llm-pi-ai/tests/sdk-options.spec.ts",

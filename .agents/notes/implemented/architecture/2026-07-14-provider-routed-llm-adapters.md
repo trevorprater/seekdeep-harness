@@ -83,6 +83,7 @@ The on-disk session format remains the pre-release pinned version `0`, with no c
 ## Testing
 
 - Unit coverage exercises registry conflicts, request reconstruction, session validation, profile resolution, single-attempt option forwarding, native API selection including OpenAI Responses, conversion, replay validation, error mapping, caller cancellation, idle-timeout transport termination, content rewrites, and same-instance versus different-instance replay dispatch.
+- The two real-provider source e2e files declare 12 credential-gated cases. Rust runs their contracts keylessly against authenticated loopback OpenAI Responses and Anthropic Messages endpoints: text, usage, reasoning, tools and follow-up replay, native metadata, exact stop mapping, durable image resolution, and unsupported-image boundaries. The focused protocol set passes 28 tests without external network state.
 - Keyless loop/session tests and ACP snapshots exercise durable provider/model metadata, resume and fork propagation, workflow/subagent overrides, and unchanged user-visible transcripts; the key-gated DeepSeek e2e retains real provider streaming and tool follow-up coverage.
 - Public JSDoc, package READMEs, architecture and subsystem docs, generated catalogs, examples, session fixtures, and Python SDK pairs use provider/model targets consistently and are checked by the repository documentation and type-equivalence gates.
 
