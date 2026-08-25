@@ -51472,15 +51472,33 @@
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: acp-agent.spec.ts passed 12/12",
-        "Rust 8/8 package tests cover spine, persistence, checkpoint, query, ACP, default and omitted goals, default persistence root, workspace controls, default and custom skills, shared home, max parallelism, job admission, Bash and job-tool config, tool ordering, required config, and Loader plugin shape",
-        "cargo test -p seekdeep-acp-demo --all-features: 8 passed",
+        "Rust 11/11 package tests cover spine, persistence, checkpoint, query, ACP, default and omitted goals, default persistence root, workspace controls, default and custom skills, shared home, max parallelism, job admission, Bash and job-tool config, tool ordering, required config, Loader plugin shape, and compiled-binary acceptance",
+        "cargo test -p seekdeep-acp-demo --all-features: 11 passed",
         "cargo clippy -p seekdeep-acp-demo --all-targets --all-features -- -D warnings"
       ]
     },
     {
       "source": "packages/examples/acp-demo/tests/built-bin.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/Cargo.toml",
+        "crates/acp-demo/src/lib.rs",
+        "crates/acp-demo/tests/acp_demo_parity.rs",
+        "crates/app-boot/src/boot.rs",
+        "crates/cordis/src/plugin.rs",
+        "crates/loader/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: built-bin.e2e.ts passed 3/3",
+        "compiled Rust product binary drives the production DeepSeek adapter over loopback HTTP with provider-first config, completes a real ACP turn, emits only JSON-RPC on stdout, and verifies exact bearer auth and model selection",
+        "compiled Rust product binary writes the default Zstandard session log with the exact frame magic and session header, exits cleanly on EOF, and fails loud for missing files in both absent and existing directories",
+        "generation-based Cordis quiescence and Loader transaction settlement eliminate entry-order and executor-turn dependence for provider activation",
+        "cargo test -p seekdeep-acp-demo --all-features: 11 passed",
+        "cargo test -p seekdeep-cordis -p seekdeep-loader -p seekdeep-app-boot -p seekdeep-acp-demo --all-features: passed",
+        "cargo clippy -p seekdeep-cordis -p seekdeep-loader -p seekdeep-app-boot -p seekdeep-acp-demo --all-targets --all-features -- -D warnings: passed",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-cordis -p seekdeep-loader -p seekdeep-app-boot -p seekdeep-acp-demo --all-features --no-deps: passed"
+      ]
     },
     {
       "source": "packages/examples/acp-demo/tests/load-path.e2e.ts",

@@ -1033,44 +1033,22 @@ impl PluginCatalog {
             let _ = settlement_effect.dispose().await;
             return Err(error);
         }
-        let fibers = collect_fibers(&mounted);
-        for fiber in &fibers {
-            if let Err(error) = fiber.await_settled().await {
-                let (entry, plugin) = locate_fiber(&mounted, fiber).map_or_else(
-                    || {
-                        (
-                            fiber.plugin_name().to_owned(),
-                            fiber.plugin_name().to_owned(),
-                        )
-                    },
-                    |entry| {
-                        (
-                            entry.options.id.to_string(),
-                            entry.options.plugin.to_string(),
-                        )
-                    },
-                );
-                let error = LoaderError::PluginStartup {
-                    entry,
-                    plugin,
-                    message: format!("{error:#}"),
-                };
-                let mut failures = vec![error.to_string()];
-                if let Err(cleanup) = runtime.dispose_programmatic().await {
-                    failures.push(cleanup.to_string());
-                }
-                if let Err(cleanup) = dispose_entries(&mut mounted).await {
-                    failures.push(cleanup.to_string());
-                }
-                let error = if failures.len() == 1 {
-                    error
-                } else {
-                    LoaderError::Disposal(failures.join("; "))
-                };
-                completion.finish(Err(Arc::from(error.to_string())));
-                let _ = settlement_effect.dispose().await;
-                return Err(error);
+        if let Err(error) = await_entries_settled(&mounted).await {
+            let mut failures = vec![error.to_string()];
+            if let Err(cleanup) = runtime.dispose_programmatic().await {
+                failures.push(cleanup.to_string());
             }
+            if let Err(cleanup) = dispose_entries(&mut mounted).await {
+                failures.push(cleanup.to_string());
+            }
+            let error = if failures.len() == 1 {
+                error
+            } else {
+                LoaderError::Disposal(failures.join("; "))
+            };
+            completion.finish(Err(Arc::from(error.to_string())));
+            let _ = settlement_effect.dispose().await;
+            return Err(error);
         }
         runtime.finish_initial_mount(mounted);
         completion.finish(Ok(()));
@@ -2017,8 +1995,15 @@ fn reconcile_entries<'a>(
             .iter()
             .map(|entry| entry.options.clone())
             .collect::<Vec<_>>();
-        if let Err(error) = apply_entries(catalog, context, mounted, candidate).await {
-            let rollback = apply_entries(catalog, context, mounted, &previous).await;
+        let candidate = match apply_entries(catalog, context, mounted, candidate).await {
+            Ok(()) => await_entries_settled(mounted).await,
+            Err(error) => Err(error),
+        };
+        if let Err(error) = candidate {
+            let rollback = match apply_entries(catalog, context, mounted, &previous).await {
+                Ok(()) => await_entries_settled(mounted).await,
+                Err(error) => Err(error),
+            };
             return Err(with_rollback(error, rollback));
         }
         Ok(())
@@ -2099,6 +2084,35 @@ fn collect_fibers(entries: &[MountedEntry]) -> Vec<Arc<PluginFiber>> {
         visit(entry, &mut fibers);
     }
     fibers
+}
+
+async fn await_entries_settled(entries: &[MountedEntry]) -> Result<(), LoaderError> {
+    let fibers = collect_fibers(entries);
+    PluginFiber::await_all_quiescent(&fibers).await;
+    for fiber in fibers {
+        if let Err(error) = fiber.await_settled().await {
+            let (entry, plugin) = locate_fiber(entries, &fiber).map_or_else(
+                || {
+                    (
+                        fiber.plugin_name().to_owned(),
+                        fiber.plugin_name().to_owned(),
+                    )
+                },
+                |entry| {
+                    (
+                        entry.options.id.to_string(),
+                        entry.options.plugin.to_string(),
+                    )
+                },
+            );
+            return Err(LoaderError::PluginStartup {
+                entry,
+                plugin,
+                message: format!("{error:#}"),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn module_paths_in_order(entries: &[MountedEntry]) -> Vec<PathBuf> {
@@ -2328,6 +2342,18 @@ impl CompositionRuntime {
         ensure_unique_runtime_id(self, &entry.id)?;
         materialize_includes(&self.context, std::slice::from_mut(&mut entry))?;
         let mut mounted = Some(mount_entry(&self.catalog, &self.context, &entry).await?);
+        if let Err(error) = await_entries_settled(std::slice::from_ref(
+            mounted.as_ref().expect("mounted entry is available"),
+        ))
+        .await
+        {
+            let cleanup = mounted
+                .as_mut()
+                .expect("mounted entry is available")
+                .dispose_runtime()
+                .await;
+            return Err(with_rollback(error, cleanup));
+        }
         let inserted = {
             let declarative_duplicate = self
                 .entry_snapshot

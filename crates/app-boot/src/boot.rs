@@ -319,7 +319,18 @@ pub async fn boot(
         let primary = anyhow::anyhow!("{bin_name}: plugin tree failed to load: {error}");
         return Err(dispose_preserving(&context, primary).await);
     }
-    tokio::task::yield_now().await;
+    if let Some(loader) = context.get(LOADER)
+        && let Err(error) = loader.wait().await
+    {
+        if owner.state() == FiberState::Disposed {
+            return Ok(BootedApplication {
+                context,
+                composition: None,
+            });
+        }
+        let primary = anyhow::anyhow!("{bin_name}: plugin tree failed to load: {error:#}");
+        return Err(dispose_preserving(&context, primary).await);
+    }
     if matches!(owner.state(), FiberState::Unloading | FiberState::Disposed) {
         return Ok(BootedApplication {
             context,

@@ -31,7 +31,7 @@ pub struct UserPatchWatchOptions {
     pub failure: ConfigRefreshFailure,
 }
 
-/// Inputs for the root file carrier installed by [`crate::boot`].
+/// Inputs for the root file carrier installed by [`crate::boot()`].
 pub struct BootUserPatchWatchOptions {
     /// Diagnostic prefix.
     pub bin_name: String,

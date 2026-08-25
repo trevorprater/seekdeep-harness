@@ -207,6 +207,7 @@ impl PluginRegistry {
             updates: tokio::sync::Mutex::new(()),
             scheduled: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            lifecycle_generation: AtomicU64::new(0),
             disposed: AtomicBool::new(false),
             settled: Notify::new(),
             registry: Arc::downgrade(&self.inner),
@@ -407,6 +408,7 @@ pub struct PluginFiber {
     updates: tokio::sync::Mutex<()>,
     scheduled: AtomicBool,
     dirty: AtomicBool,
+    lifecycle_generation: AtomicU64,
     disposed: AtomicBool,
     settled: Notify,
     registry: Weak<RegistryInner>,
@@ -425,6 +427,32 @@ impl std::fmt::Debug for PluginFiber {
 }
 
 impl PluginFiber {
+    /// Waits until the selected fibers have finished all lifecycle work
+    /// causally admitted before quiescence is observed.
+    ///
+    /// A single pass over the fibers is insufficient: a later provider can
+    /// activate an earlier pending consumer after that consumer was already
+    /// observed as stable. Per-fiber generations make that dependency cascade
+    /// visible without waiting for unrelated plugins or relying on executor
+    /// turns or wall-clock delays.
+    pub async fn await_all_quiescent(fibers: &[Arc<Self>]) {
+        loop {
+            let generations = fibers
+                .iter()
+                .map(|fiber| fiber.lifecycle_generation.load(Ordering::Acquire))
+                .collect::<Vec<_>>();
+            for fiber in fibers {
+                let _ = fiber.await_settled().await;
+            }
+            if fibers.iter().zip(generations).all(|(fiber, generation)| {
+                fiber.lifecycle_generation.load(Ordering::Acquire) == generation
+                    && fiber.is_quiescent()
+            }) {
+                return;
+            }
+        }
+    }
+
     /// Monotonic runtime uid, absent after disposal.
     #[must_use]
     pub fn uid(&self) -> Option<u64> {
@@ -642,6 +670,7 @@ impl PluginFiber {
         if self.disposed.load(Ordering::Acquire) {
             return;
         }
+        self.lifecycle_generation.fetch_add(1, Ordering::AcqRel);
         self.dirty.store(true, Ordering::Release);
         if self.scheduled.swap(true, Ordering::AcqRel) {
             return;
@@ -662,6 +691,15 @@ impl PluginFiber {
             }
             fiber.settled.notify_waiters();
         });
+    }
+
+    fn is_quiescent(&self) -> bool {
+        !self.scheduled.load(Ordering::Acquire)
+            && !self.dirty.load(Ordering::Acquire)
+            && !matches!(
+                self.fiber.state(),
+                FiberState::Loading | FiberState::Unloading
+            )
     }
 
     fn resolve_config(&self, raw_config: &Value) -> anyhow::Result<Value> {
@@ -913,6 +951,61 @@ mod tests {
         let mounted = context.plugin(plugin, Value::Null).expect("mount");
         mounted.await_settled().await.expect("provider loads");
         assert!(context.get(PROVIDED).is_some());
+    }
+
+    #[tokio::test]
+    async fn registry_quiescence_follows_reverse_order_dependency_cascades() {
+        #[derive(Debug)]
+        struct Root;
+        #[derive(Debug)]
+        struct Middle;
+        #[derive(Debug)]
+        struct Leaf;
+        const ROOT: ServiceKey<Root> = ServiceKey::new("root");
+        const MIDDLE: ServiceKey<Middle> = ServiceKey::new("middle");
+        const LEAF: ServiceKey<Leaf> = ServiceKey::new("leaf");
+
+        let context = Context::new();
+        let leaf = context
+            .plugin(
+                Plugin::new("leaf", ["middle"], |context, _| {
+                    Box::pin(async move {
+                        context.provide(LEAF, Arc::new(Leaf))?;
+                        Ok(())
+                    })
+                }),
+                Value::Null,
+            )
+            .unwrap();
+        let middle = context
+            .plugin(
+                Plugin::new("middle", ["root"], |context, _| {
+                    Box::pin(async move {
+                        context.provide(MIDDLE, Arc::new(Middle))?;
+                        Ok(())
+                    })
+                }),
+                Value::Null,
+            )
+            .unwrap();
+        let root = context
+            .plugin(
+                Plugin::new("root", std::iter::empty::<&str>(), |context, _| {
+                    Box::pin(async move {
+                        context.provide(ROOT, Arc::new(Root))?;
+                        Ok(())
+                    })
+                }),
+                Value::Null,
+            )
+            .unwrap();
+
+        PluginFiber::await_all_quiescent(&[leaf.clone(), middle.clone(), root.clone()]).await;
+
+        assert_eq!(leaf.fiber().state(), FiberState::Active);
+        assert_eq!(middle.fiber().state(), FiberState::Active);
+        assert_eq!(root.fiber().state(), FiberState::Active);
+        assert!(context.get(LEAF).is_some());
     }
 
     #[tokio::test]

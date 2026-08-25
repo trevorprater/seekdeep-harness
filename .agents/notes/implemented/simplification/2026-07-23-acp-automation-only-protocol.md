@@ -28,7 +28,7 @@ One-shot `session/request_permission` remains. It is a machine policy channel fo
 
 The app composition contains the agent spine, JSONL persistence, checkpoint policy, the SQLite session-query index used by backend persistence, and ACP transport. It does not mount command, session-reference, plan-mode, permission-picker, or user-questions services for ACP, and the ACP protocol exposes no session-query browsing methods.
 
-Rust composition tests pin default goals, explicit goal omission, persistence defaults, workspace controls, skill configuration and shared home, loop parallelism, job admission, Bash and job-tool configuration, tool ordering, and Loader plugin shape. The separate compiled-binary acceptance keeps stdout protocol-pure and verifies fresh-session negotiation and EOF teardown.
+Rust composition tests pin default goals, explicit goal omission, persistence defaults, workspace controls, skill configuration and shared home, loop parallelism, job admission, Bash and job-tool configuration, tool ordering, and Loader plugin shape. The compiled-binary acceptance mounts the provider before the app to pin order-independent Loader settlement, drives the production Rust DeepSeek adapter over loopback HTTP, and verifies a committed turn, the exact Authorization bearer token and model, default Zstandard persistence, stdout protocol purity, EOF teardown, and fail-loud missing-config diagnostics.
 
 The transport programs interface-level agent, session, and approval services rather than the concrete agent loop. Tool execution stays inside the harness; ACP never delegates shell execution to an editor. stdout carries framed JSON-RPC only, so the app mounts no stdout logger and the bridge does not monkey-patch process output.
 

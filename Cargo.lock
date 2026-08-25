@@ -4437,6 +4437,7 @@ dependencies = [
  "seekdeep-jobs",
  "seekdeep-jobs-local",
  "seekdeep-llm",
+ "seekdeep-llm-deepseek",
  "seekdeep-loader",
  "seekdeep-sdk-protocol",
  "seekdeep-session-checkpoint-policy",
@@ -4456,6 +4457,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "zstd",
 ]
 
 [[package]]

@@ -289,6 +289,9 @@ async fn process_main_async() -> anyhow::Result<()> {
     let app = plugin();
     catalog.register_named("@seekdeep-ai/seekdeep-acp-demo", app.clone())?;
     catalog.register_named("seekdeep-acp-demo", app)?;
+    let deepseek = seekdeep_llm_deepseek::plugin();
+    catalog.register_named("@seekdeep-ai/seekdeep-llm-deepseek", deepseek.clone())?;
+    catalog.register_named("seekdeep-llm-deepseek", deepseek)?;
     let application = boot(NAME, &path, &catalog, BootOptions::default()).await?;
     let bridge = application
         .context()

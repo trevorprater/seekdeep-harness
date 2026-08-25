@@ -28,7 +28,7 @@ ACP 仍有一个有用的职责：另一个 agent（智能体）或自动化控�
 
 应用组装包含 agent 主干、JSONL 持久化、检查点策略、供后端持久化使用的 SQLite 会话查询索引和 ACP 传输层。它不会为 ACP 挂载命令、会话引用、plan mode、权限选择器或用户交互服务，并且 ACP 协议不公开会话查询浏览方法。
 
-Rust 组装测试固定默认目标、显式省略目标、持久化默认值、workspace 控制、skill 配置与共享主目录、loop 并行度、job 准入、Bash 与 job 工具配置、工具排序和 Loader 插件形态。独立的已编译二进制验收会保持 stdout 协议纯净，并验证新会话协商与 EOF 资源清理。
+Rust 组装测试固定默认目标、显式省略目标、持久化默认值、workspace 控制、skill 配置与共享主目录、loop 并行度、job 准入、Bash 与 job 工具配置、工具排序和 Loader 插件形态。已编译二进制验收会把 provider 排在 app 之前，以锁定与条目顺序无关的 Loader 结算；它通过回环 HTTP 驱动生产 Rust DeepSeek adapter，并验证已提交轮次、精确的 Authorization bearer token 与模型、默认 Zstandard 持久化、stdout 协议纯净、EOF 资源清理，以及配置缺失时的 fail-loud 诊断。
 
 传输层调用 agent、会话和审批的接口服务，而不依赖具体的 agent loop（智能体循环）。工具执行仍留在 harness 内；ACP 绝不会把 shell 执行委派给编辑器。stdout 只承载分帧 JSON-RPC，因此 app 不挂载 stdout logger，桥接层也不会 monkey-patch 进程输出。
 

@@ -23,6 +23,7 @@ seekdeep-agent-instructions = { path = "../agent-instructions" }
 seekdeep-app-boot = { path = "../app-boot" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-loader = { path = "../loader" }
+seekdeep-llm-deepseek = { path = "../llm-deepseek" }
 seekdeep-session-checkpoint-policy = { path = "../session-checkpoint-policy" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
@@ -49,6 +50,7 @@ seekdeep-core = { path = "../core" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-sdk-protocol = { path = "../sdk-protocol" }
 tempfile.workspace = true
+zstd.workspace = true
 
 [lints]
 workspace = true
