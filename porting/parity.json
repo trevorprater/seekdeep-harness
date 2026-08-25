@@ -69130,7 +69130,15 @@
     {
       "source": "packages/subagent/subagent-claude-code/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source Claude Code unit and real-product Vitest suites passed 26/26",
+        "Rust Claude Code provider and Loader suites passed 6 keyless tests plus one explicit native-product loopback test",
+        "strict Claude Code crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/src/invariant.ts",
@@ -69149,37 +69157,86 @@
     {
       "source": "packages/subagent/subagent-claude-code/src/process.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/src/process.rs",
+        "crates/subprocess-local/src/spawn.rs"
+      ],
+      "evidence": [
+        "Rust process tests pin the SDK 0.3.220 flag order, stdin envelope, compatibility environment, cwd, signals, stdio, and Windows batch shim",
+        "real managed-process fixtures and native Claude Code 2.1.233 loopback test reached whole-tree quiescence",
+        "strict Claude Code crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/src/run.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/src/run.rs"
+      ],
+      "evidence": [
+        "pinned-source Claude Code unit and real-product Vitest suites passed 26/26",
+        "Rust real-process suite covers text admission, latest strict success, every error class, non-JSON diagnostics, cancellation, rollback, and idempotent disposal",
+        "manual keyless native-product test passed against installed Claude Code 2.1.233 and loopback Messages"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "pinned-source Claude Code Loader E2E passed 1/1",
+        "Rust Loader composition mounts the fixed provider and foreground tool while proving zero executable resolutions and zero process spawns"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/tests/messages-fixture.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/tests/support/messages_fixture.rs"
+      ],
+      "evidence": [
+        "Rust loopback Messages SSE fixture records path, headers, and body and supports deterministic completion and cancellation hold",
+        "manual native Claude Code 2.1.233 loopback test passed"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/tests/real-deepseek.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "note": "Credentialed DeepSeek nonce evidence requires explicit secret and quota authority; keyless product evidence does not substitute for it."
     },
     {
       "source": "packages/subagent/subagent-claude-code/tests/real-product.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/tests/real_product.rs",
+        "crates/subagent-claude-code/tests/support/messages_fixture.rs"
+      ],
+      "evidence": [
+        "pinned-source Claude Code unit and real-product Vitest suites passed 26/26",
+        "manual Rust native-product test passed against installed Claude Code 2.1.233 with exact fake key, task, host settings model, result, cancellation, and quiescence"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/tests/subagent-claude-code.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/tests/claude_code_parity.rs",
+        "crates/subagent-claude-code/tests/fixtures/fake_claude.rs"
+      ],
+      "evidence": [
+        "pinned-source Claude Code unit and real-product Vitest suites passed 26/26",
+        "Rust keyless provider suite passed 5 grouped real-process scenarios covering the source behavior matrix",
+        "strict Claude Code crate Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-claude-code/tsconfig.json",

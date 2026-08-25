@@ -22,6 +22,12 @@ fixed tool → shared subagent service → product provider → official product
      → foreground disposal → shared process-tree termination → whole-tree exit
 ```
 
+## Rust 实现
+
+Rust 生产实现不能嵌入 TypeScript Agent SDK。因此，`seekdeep-subagent-claude-code` 负责此处固定的 `@anthropic-ai/claude-agent-sdk@0.3.220` 选项实际使用的精确原生子进程边界：它经 `seekdeep-subprocess` 解析 `claude`，按相同顺序发送 SDK 的固定 stream-json 参数，设置 SDK 兼容环境标记，写入相同的单消息 stdin 封套，忽略 stdout 中非 JSON 的诊断行，并应用相同的严格结果联合类型。本源配置没有提供回调、SDK MCP 服务器、hook、续接或其他双向控制，因此不存在属于本提供方可观察约定、却被 Rust 实现省略的 SDK 控制协议。
+
+这是对官方 SDK 有界 CLI 传输行为的 Rust 移植，不是直接模型客户端，也不是通用的替代 Claude 协议。共享子进程句柄继续作为进程树权威；本地取消与 dispose（资源释放）会终止并等待整棵树。免密钥伪进程测试覆盖完整的结果与回滚矩阵，Loader 组合证明加载不会启动产品；一项手动免密钥真实产品测试会驱动已安装的原生 Claude Code 2.1.233 连接回环 Messages 端点，并观测确切密钥、任务、继承的设置模型、回答、取消与完全停稳。固定源仓库的 SDK 0.3.220/CLI 2.1.220 套件继续作为差分 oracle。带密钥 DeepSeek 随机数层级保持独立，并要求显式的 secret 与配额授权。
+
 ### 归属与生命周期
 
 | 阶段 | 共享责任方 | 产品特定职责 | 可观察结果 |
@@ -63,6 +69,8 @@ Codex 0.147.0 使用 Responses 协议，而 DeepSeek 的公开 OpenAI 兼容端�
 
 Rust `seekdeep-subagent-codex` 证据锁定 `codex-cli 0.147.0`。其必跑的无密钥真实产品测试通过生产提供方驱动已安装的官方 app-server，并观测确切的 Bearer 密钥、原始任务、逐字节完全一致的最终回答、不会产生文件副作用的无人值守命令拒绝、本地取消以及整棵进程树退出。伪进程测试穷尽覆盖协议关联、失败与回滚分支；公开 Rust Loader 组合证明加载包不会启动产品进程。生产环境仍提供 `codex`，并通过 `PATH` 解析。
 
+Rust `seekdeep-subagent-claude-code` 证据锁定源 SDK 0.3.220 的传输约定，同时使用从 `PATH` 解析的原生产品。伪进程测试覆盖确切参数、stdin、环境、cwd、严格的最后成功结果选择、SDK 错误结果、格式错误的诊断行、进程失败、取消、启动回滚以及幂等且完全停稳的资源释放。公开 Loader 组合会挂载提供方与前台工具，但不会解析或启动 Claude。手动免密钥真实产品层级目前验证已安装的 Claude Code 2.1.233 与回环 Messages fixture；这是版本特定证据，而不是对每个已安装版本的兼容声明。
+
 带密钥 Codex e2e 会注册生产提供方，启动同样的真实 app-server，并通过上述测试专用桥接层请求一个随机数。该测试固定外部端点与模型，不存储任何凭据或请求载荷，要求上游恰好完成一次响应，将去除首尾空白后的产品答案与该随机数逐字节比较，并等待所有受管句柄退出。
 
 Claude Code 证据锁定 Agent SDK 0.3.220，并使用 SDK 按平台分发的 Claude Code 2.1.220 CLI 作为确定性兼容性 fixture（测试前置数据），且该 fixture 经生产环境所用的同一原生可执行文件解析路径运行。其真实产品测试会观测确切的 `x-api-key`、原始任务、逐字节完全一致的最终回答、继承的临时宿主设置标记、进程失败、本地取消、整棵进程树退出，以及位于同时含百分号、与号和感叹号路径中的真实 Windows batch shim。这项证据证明官方 SDK/CLI 集成路径，而不证明它与每个独立安装的产品版本兼容。Loader 与随附 profile 证据会按名称解析两个产品包且不启动产品，provider 测试则证明 SDK 收到由宿主 `PATH` 解析出的可执行文件。
@@ -73,7 +81,7 @@ Claude Code 证据锁定 Agent SDK 0.3.220，并使用 SDK 按平台分发的 Cl
 
 ## 曾考虑的替代方案
 
-**直接模型 HTTP、`codex exec` 或手写的 Claude CLI 协议。** 这些路径会绕过产品的官方可扩展集成接口，无法证明原生配置、工具、审批、结果语义或资源清理。每个提供方都改用相应的官方产品集成。
+**直接模型 HTTP、`codex exec` 或无关的临时 Claude CLI 协议。** 这些路径会绕过产品的官方可扩展集成接口，无法证明原生配置、工具、审批、结果语义或资源清理。Codex 使用官方 app-server；Rust Claude 提供方只移植本一次性配置所使用的固定官方 SDK 有界原生 CLI 传输，不会另造第二套产品协议。
 
 **共享产品进程辅助包。** 现有 subagent 与子进程 seam 已负责围绕任务、结果、环境和进程树的全部共享职责。新辅助包无法删除任一私有产品适配器，只会造成责任重复，因此每个适配器都会直接调用现有 seam。
 

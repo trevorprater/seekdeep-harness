@@ -7108,6 +7108,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-subagent-claude-code"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-loader",
+ "seekdeep-scope",
+ "seekdeep-subagent",
+ "seekdeep-subprocess",
+ "seekdeep-subprocess-local",
+ "seekdeep-system-prompt",
+ "seekdeep-tool-subagent",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "seekdeep-subagent-codex"
 version = "0.1.0-rc.5"
 dependencies = [

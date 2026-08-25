@@ -108,6 +108,7 @@ members = [
   "crates/skill-filesystem",
   "crates/subagent",
   "crates/subagent-codex",
+  "crates/subagent-claude-code",
   "crates/subagent-sdk",
   "crates/subagent-in-process-driver",
   "crates/subagent-fork-in-process",

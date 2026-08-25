@@ -22,6 +22,12 @@ fixed tool → shared subagent service → product provider → official product
      → foreground disposal → shared process-tree termination → whole-tree exit
 ```
 
+## Rust realization
+
+Rust production cannot embed the TypeScript Agent SDK. `seekdeep-subagent-claude-code` therefore owns the exact native child boundary exercised by the pinned `@anthropic-ai/claude-agent-sdk@0.3.220` options used here: it resolves `claude` through `seekdeep-subprocess`, sends the SDK's fixed stream-json flags in the same order, sets the SDK compatibility environment markers, writes the same one-message stdin envelope, ignores non-JSON diagnostic stdout, and applies the same strict result union. The source configuration supplies no callbacks, SDK MCP servers, hooks, continuation, or other bidirectional controls, so no omitted SDK-owned control protocol is part of this provider's observable contract.
+
+This is a Rust port of the official SDK's bounded CLI transport behavior, not a direct model client or a generic alternate Claude protocol. The shared subprocess handle remains the process-tree authority; local cancellation and disposal terminate and join that tree. Keyless fake-process tests cover the full result and rollback matrix, Loader composition proves loading starts no product, and a manual keyless real-product test drives the installed native Claude Code 2.1.233 against a loopback Messages endpoint while observing the exact key, task, inherited settings model, answer, cancellation, and quiescence. The pinned source's SDK 0.3.220/CLI 2.1.220 suites remain the differential oracle. The credentialed DeepSeek nonce tier remains separate and requires explicit secret and quota authority.
+
 ### Ownership and lifecycle
 
 | Phase | Shared owner | Product-specific responsibility | Observable result |
@@ -63,6 +69,8 @@ Each product owns branch-complete package tests, a required keyless real-product
 
 The Rust `seekdeep-subagent-codex` evidence pins `codex-cli 0.147.0`. Its required keyless real-product spec drives the installed official app-server through the production provider and observes the exact Bearer key, original task, byte-exact final answer, unattended command rejection with no file side effect, local cancellation, and whole-tree exit. Fake-process tests exhaust protocol association, failure, and rollback branches; public Rust Loader composition proves that package loading starts no product process. Production still supplies `codex` on `PATH`.
 
+The Rust `seekdeep-subagent-claude-code` evidence pins the source SDK 0.3.220 transport contract while using the native product resolved from `PATH`. Fake-process tests cover exact flags, stdin, environment, cwd, strict latest-success selection, SDK error results, malformed diagnostics, process failure, cancellation, startup rollback, and idempotent quiescent disposal. Public Loader composition mounts the provider and foreground tool without resolving or spawning Claude. The manual keyless real-product tier currently verifies installed Claude Code 2.1.233 against a loopback Messages fixture; it is version-specific evidence, not a claim about every installed release.
+
 The Codex credentialed e2e registers the production provider, starts the same real app-server, and requests one random nonce through the test-private bridge described above. It fixes the external endpoint and model, stores no credential or request payload, requires exactly one completed upstream response, compares the trimmed product answer byte-for-byte with the nonce, and waits for every managed handle to exit.
 
 The Claude Code evidence pins Agent SDK 0.3.220 and uses its platform-distributed Claude Code 2.1.220 CLI as the deterministic compatibility fixture, routed through the same native executable-resolution path production uses. Its real-product spec observes the exact `x-api-key`, original task, byte-exact final answer, inherited temporary host-setting marker, process failure, local cancellation, whole-tree exit, and a real Windows batch shim under a path containing percent, ampersand, and exclamation metacharacters. This evidence proves the official SDK/CLI integration path, not compatibility with every independently installed product version. The Loader and shipped-profile evidence resolve both product packages by name while starting neither product, and the provider suite proves that the SDK receives the executable resolved from the host `PATH`.
@@ -73,7 +81,7 @@ The project owner's distribution authorization is scoped to the official `@anthr
 
 ## Alternatives considered
 
-**Direct model HTTP, `codex exec`, or a hand-written Claude CLI protocol.** These paths bypass the products' official extensible integration surfaces and cannot prove native configuration, tools, approvals, result semantics, or teardown. Each provider uses its official product integration instead.
+**Direct model HTTP, `codex exec`, or an unrelated ad-hoc Claude CLI protocol.** These paths bypass the products' official extensible integration surfaces and cannot prove native configuration, tools, approvals, result semantics, or teardown. Codex uses its official app-server. The Rust Claude provider ports only the pinned official SDK's bounded native CLI transport used by this one-shot configuration; it does not invent a second product protocol.
 
 **A shared product-process helper package.** The existing subagent and subprocess seams already own every shared task, result, environment, and process-tree concern. A new helper would duplicate ownership without deleting either private product adapter, so each adapter calls the existing seams directly.
 
