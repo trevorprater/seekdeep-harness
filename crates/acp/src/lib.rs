@@ -12,7 +12,7 @@ use seekdeep_sdk_protocol::{BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTr
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use bridge::{AcpBridge, AcpBridgeConfig};
+pub use bridge::{AcpBridge, AcpBridgeConfig, AcpContinuableDrainHook};
 pub use client::{AcpClient, AcpUpdateObserver};
 pub use codec::{
     acp_content_text, acp_prompt_to_text, acp_stop_reason, prompt_has_unsupported_content,

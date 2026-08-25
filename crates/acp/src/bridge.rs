@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use futures::future::join_all;
+use futures::future::{BoxFuture, join_all};
 use parking_lot::Mutex;
 use seekdeep_agent::{
     AGENTS, AgentCancelCause, AgentEvent, AgentHandle, AgentOptions, AgentRegistry, CancelOptions,
@@ -31,6 +31,12 @@ use crate::{
 };
 
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
+
+/// Deterministic test seam for the connection-scoped continuable-descendant drain.
+#[doc(hidden)]
+pub type AcpContinuableDrainHook = Arc<
+    dyn Fn(Vec<Arc<seekdeep_agent::Agent>>) -> BoxFuture<'static, anyhow::Result<()>> + Send + Sync,
+>;
 
 /// Per-created-agent provider and model selection.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -61,6 +67,7 @@ pub struct AcpBridge {
     transport: Arc<JsonRpcLineTransport>,
     sessions: Mutex<HashMap<AcpSessionId, SessionRecord>>,
     effects: Mutex<Vec<EffectHandle>>,
+    continuable_drain_hook: Option<AcpContinuableDrainHook>,
     closed: AtomicBool,
     shutdown: OnceCell<Result<(), String>>,
 }
@@ -76,6 +83,29 @@ impl AcpBridge {
         transport: &Arc<JsonRpcLineTransport>,
         config: AcpBridgeConfig,
     ) -> anyhow::Result<Arc<Self>> {
+        Self::new_inner(context, transport, config, None)
+    }
+
+    /// Constructs the bridge with an explicit continuable-drain seam.
+    ///
+    /// Production callers use [`Self::new`]; conformance tests use this seam to
+    /// prove ordering and failure containment without fabricating descendant state.
+    #[doc(hidden)]
+    pub fn new_with_continuable_drain(
+        context: &Context,
+        transport: &Arc<JsonRpcLineTransport>,
+        config: AcpBridgeConfig,
+        drain: AcpContinuableDrainHook,
+    ) -> anyhow::Result<Arc<Self>> {
+        Self::new_inner(context, transport, config, Some(drain))
+    }
+
+    fn new_inner(
+        context: &Context,
+        transport: &Arc<JsonRpcLineTransport>,
+        config: AcpBridgeConfig,
+        continuable_drain_hook: Option<AcpContinuableDrainHook>,
+    ) -> anyhow::Result<Arc<Self>> {
         let agents = context
             .get(AGENTS)
             .ok_or_else(|| anyhow::anyhow!("acp requires agents"))?;
@@ -86,6 +116,7 @@ impl AcpBridge {
             transport: Arc::clone(transport),
             sessions: Mutex::new(HashMap::new()),
             effects: Mutex::new(Vec::new()),
+            continuable_drain_hook,
             closed: AtomicBool::new(false),
             shutdown: OnceCell::new(),
         });
@@ -392,14 +423,19 @@ impl AcpBridge {
         for sender in prompt_senders {
             let _ = sender.send(Ok(AcpStopReason::Cancelled));
         }
-        if let Some(subagents) = self.context.get(SUBAGENTS) {
-            let parents = records
-                .iter()
-                .map(|record| Arc::clone(&record.handle.agent))
-                .collect::<Vec<_>>();
-            if let Err(error) = subagents.drain_continuable_descendants(&parents).await {
-                tracing::warn!(%error, "ACP continuable subagent teardown failed");
-            }
+        let parents = records
+            .iter()
+            .map(|record| Arc::clone(&record.handle.agent))
+            .collect::<Vec<_>>();
+        let drain = if let Some(hook) = &self.continuable_drain_hook {
+            hook(parents).await
+        } else if let Some(subagents) = self.context.get(SUBAGENTS) {
+            subagents.drain_continuable_descendants(&parents).await
+        } else {
+            Ok(())
+        };
+        if let Err(error) = drain {
+            tracing::warn!(%error, "ACP continuable subagent teardown failed");
         }
         let effects = std::mem::take(&mut *self.effects.lock());
         for effect in effects.into_iter().rev() {
@@ -417,7 +453,6 @@ impl AcpBridge {
         .filter_map(Result::err)
         .map(|error| format!("{error:#}"))
         .collect::<Vec<_>>();
-        self.transport.close();
         if failures.is_empty() {
             Ok(())
         } else {
@@ -621,7 +656,7 @@ impl AcpBridge {
             if record
                 .inflight
                 .as_ref()
-                .is_some_and(|inflight| inflight.turn == Some(event.payload.turn))
+                .is_some_and(|inflight| inflight.turn != Some(event.payload.turn))
             {
                 record
                     .inflight

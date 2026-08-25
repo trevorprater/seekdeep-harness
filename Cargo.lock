@@ -4403,6 +4403,7 @@ dependencies = [
  "seekdeep-agent",
  "seekdeep-agent-loop",
  "seekdeep-agent-loop-testkit",
+ "seekdeep-attachment",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-llm",

@@ -36310,7 +36310,14 @@
     {
       "source": "packages/acp/acp/tests/approval.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP approval, disposal, edge, and turn suites passed 39/39",
+        "Rust duplex-protocol tests pin exact one-shot option payloads, allow and reject selection, cancellation, unknown selection, client failure, call-id presence, and exact owned-agent identity"
+      ]
     },
     {
       "source": "packages/acp/acp/tests/bridge.spec.ts",
@@ -36339,12 +36346,26 @@
     {
       "source": "packages/acp/acp/tests/dispose.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP approval, disposal, edge, and turn suites passed 39/39",
+        "Rust lifecycle tests pin cancel-before-drain ordering, prompt settlement during a blocked drain, drain-failure containment, parallel disposal, aggregate diagnostics, ACP-only reload rejection, client-EOF teardown, root-context survival, and idempotent shared quiescence"
+      ]
     },
     {
       "source": "packages/acp/acp/tests/edges.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP approval, disposal, edge, and turn suites passed 39/39",
+        "Rust real-AgentLoop tests publish only committed text and image placeholders while excluding reasoning, tool calls and results, trace chunks, terminal, plan, title, and foreign-agent events; notification consumers cannot fail prompt settlement"
+      ]
     },
     {
       "source": "packages/acp/acp/tests/harness.ts",
@@ -36371,7 +36392,14 @@
     {
       "source": "packages/acp/acp/tests/turns.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP approval, disposal, edge, and turn suites passed 39/39",
+        "Rust real-AgentLoop tests pin max-token and image commits, partial-error suppression, pre-step rewrite/reject/failure, pre-claim failure, peer-listener containment, synchronous injection, autonomous-work isolation, one-slot recovery, user versus hook cancellation, idle and late cancellation, retry adoption, and terminal failure"
+      ]
     },
     {
       "source": "packages/acp/acp/tsconfig.json",

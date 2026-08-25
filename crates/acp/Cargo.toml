@@ -28,6 +28,7 @@ tracing.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-attachment = { path = "../attachment" }
 seekdeep-tools = { path = "../tools" }
 tempfile.workspace = true
 
