@@ -73,6 +73,7 @@ members = [
   "crates/shell",
   "crates/shell-env",
   "crates/loader",
+  "crates/loader-smoke",
   "crates/lsp",
   "crates/lsp-stdio",
   "crates/message-feedback",

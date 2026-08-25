@@ -12,9 +12,9 @@ Status: implemented
 
 ## 决策
 
-彻底删除 `@seekdeep-ai/seekdeep-cli-demo`：包括它的包、bin、解析器、应用插件、输出格式、测试、workspace 引用、生成目录条目和现行文档。不保留别名或兼容包。源码用户通过 `pnpm seekdeep --profile headless` 调用产品命令；stdout 上的最终文本、stderr 上的失败诊断、持久化、退出状态和关闭行为均由该命令负责。
+彻底删除 `@seekdeep-ai/seekdeep-cli-demo`：包括它的包、bin、解析器、应用插件、输出格式、测试、workspace 引用、生成目录条目和现行文档。不保留别名或兼容包。用户通过 `seekdeep --profile headless` 调用产品命令；stdout 上的最终文本、stderr 上的失败诊断、持久化、退出状态和关闭行为均由该命令负责。
 
-`examples/headless-agent` 成为显式测试组装。其 Loader 配置把 `@seekdeep-ai/seekdeep-agent-spine-demo`、一个根 agent（智能体）、JSONL 持久化和检查点策略挂载为独立配置行，不再将其隐藏在应用组合包之后。支持层的 `@seekdeep-ai/seekdeep-loader-smoke` 包负责共享的直接 agent 轮次 helper；未导出的示例本地 driver 选择各自的 Loader 配置，并将规范事件渲染为 JSONL。这些 driver 只由测试启动，不提供 bin，也不定义受支持的产品输出格式。
+`examples/headless-agent` 是显式测试组装。其 Loader 配置把 agent（智能体）主干、一个根 agent、JSONL 持久化和检查点策略挂载为独立配置行，不将其隐藏在应用组合包之后。支持层的 `seekdeep-loader-smoke` Rust crate 负责共享的直接 Agent 轮次辅助函数和隔离的子进程运行器。其 `src` 与 `lib` 兼容值分别选择开发产物和发布形态的已编译 Rust 产物；两种模式都不会启动 Node 或 tsx。三个 fixture 可执行文件仅通过该 crate 的 `fixture-bins` 功能启用。示例本地 driver 仍仅供测试使用，并且不定义受支持的产品输出格式。
 
 ## 考虑过的替代方案
 
@@ -31,4 +31,4 @@ Status: implemented
 
 ## 验证
 
-聚焦的 Loader 冒烟测试在源码模式和由普通 Node 启动的构建模式下覆盖显式组装，快照测试对比其规范 JSONL 和持久化日志，产品验收覆盖 `seekdeep --profile headless`，文档检查及生成图谱／目录门禁则拒绝对已移除包的活跃引用。冻结的 Agent Note 归档保留为历史证据，不会被重写。
+聚焦的 Loader 冒烟测试通过开发产物和发布形态的 Rust 产物覆盖显式组装。共享轮次辅助函数会驱动真实的 Agent 与 Session 事件路径；子进程运行器使用已编译 fixture 固定 stdin 关闭、输出捕获、精确退出状态、截止时间终止、准备／检查顺序和隔离目录清理。快照测试对比规范 JSONL 和持久化日志，产品验收覆盖 `seekdeep --profile headless`，文档检查及生成图谱／目录门禁则拒绝对已移除包的活跃引用。冻结的 Agent Note 归档保留为历史证据，不会被重写。

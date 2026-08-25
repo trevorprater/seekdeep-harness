@@ -12,9 +12,9 @@ The replay suites still need canonical session events to pin assembled backend b
 
 ## Decision
 
-Delete `@seekdeep-ai/seekdeep-cli-demo` completely: its package, bin, parser, app plugin, output formats, tests, workspace references, generated-catalog entries, and active documentation. No alias or compatibility package remains. Source users invoke the product command through `pnpm seekdeep --profile headless`; it owns final-text stdout, failure diagnostics on stderr, persistence, exit status, and shutdown.
+Delete `@seekdeep-ai/seekdeep-cli-demo` completely: its package, bin, parser, app plugin, output formats, tests, workspace references, generated-catalog entries, and active documentation. No alias or compatibility package remains. Users invoke the product command through `seekdeep --profile headless`; it owns final-text stdout, failure diagnostics on stderr, persistence, exit status, and shutdown.
 
-`examples/headless-agent` becomes an explicit test composition. Its Loader configs mount `@seekdeep-ai/seekdeep-agent-spine-demo`, one root agent, JSONL persistence, and checkpoint policy as separate rows instead of hiding them behind an app bundle. The support-tier `@seekdeep-ai/seekdeep-loader-smoke` package owns the shared direct-agent turn helper; unexported example-local drivers select their Loader configuration and render canonical events as JSONL. They are launched only by tests, have no bin, and do not define a supported product output format.
+`examples/headless-agent` is an explicit test composition. Its Loader configs mount the agent spine, one root agent, JSONL persistence, and checkpoint policy as separate rows instead of hiding them behind an app bundle. The support-tier `seekdeep-loader-smoke` Rust crate owns the shared direct-Agent turn helper and isolated subprocess runner. Its `src` and `lib` compatibility values select development and publish-shaped compiled Rust artifacts; neither mode starts Node or tsx. Three fixture executables are available only through the crate's `fixture-bins` feature. Example-local drivers remain test-only and do not define a supported product output format.
 
 ## Alternatives considered
 
@@ -31,4 +31,4 @@ The repository retains backend replay coverage through test-only infrastructure,
 
 ## Verification
 
-Focused Loader smokes cover the explicit composition in source and plain-Node built modes, snapshot tests diff its canonical JSONL and persisted logs, product acceptance covers `seekdeep --profile headless`, and documentation plus generated graph/catalog gates reject live references to the removed package. The frozen Agent Note archive remains historical evidence and is not rewritten.
+Focused Loader smokes cover the explicit composition through development and publish-shaped Rust artifacts. The shared turn helper drives a real Agent and Session event path; the subprocess runner proves stdin closure, output capture, exact exit status, deadline termination, setup/inspection ordering, and isolated-directory cleanup with compiled fixtures. Snapshot tests diff canonical JSONL and persisted logs, product acceptance covers `seekdeep --profile headless`, and documentation plus generated graph/catalog checks reject live references to the removed package. The frozen Agent Note archive remains historical evidence and is not rewritten.

@@ -72931,12 +72931,33 @@
     {
       "source": "packages/test-support/loader-smoke/src/agent-turn.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/src/agent_turn.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: loader-smoke suites passed 22/22",
+        "Rust turn driver requires exactly one root Agent, gates the observed interval on the exact durable inbox receipt, filters foreign Sessions, preserves final text, deduplicates usage per turn/step, always removes its listener, waits for idle, and flushes durability",
+        "cargo test -p seekdeep-loader-smoke --all-features: 8 passed",
+        "cargo clippy -p seekdeep-loader-smoke --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/src/lib.rs",
+        "crates/loader-smoke/src/process.rs",
+        "crates/loader-smoke/Cargo.toml"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: loader-smoke suites passed 22/22",
+        "Approved Rust architecture preserves strict src/lib mode wires as development/publish-shaped compiled Rust artifacts and requires the lib artifact explicitly instead of invoking Node, tsx, or TypeScript",
+        "Rust runner creates an isolated cwd, layers renamed SeekDeep homes and caller environment, closes stdin, captures both streams without pipe deadlock, owns timeout kill/join, enforces the exact exit contract, runs setup/inspection in order, and removes the cwd on every path",
+        "cargo test -p seekdeep-loader-smoke --all-features: 8 passed",
+        "cargo clippy -p seekdeep-loader-smoke --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/src/invariant.ts",
@@ -72955,32 +72976,82 @@
     {
       "source": "packages/test-support/loader-smoke/tests/agent-turn.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/tests/agent_turn_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: loader-smoke suites passed 22/22",
+        "Rust tests drive real Agent, AgentRegistry, SessionStore, EventBus, Session append validation, and flush paths for absent/ambiguous roots, owned interval gating, foreign filtering, final output, usage overwrite/aggregation, usage omission, and failure cleanup",
+        "cargo test -p seekdeep-loader-smoke --test agent_turn_parity --all-features: 4 passed"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/tests/example-launch.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/src/process.rs",
+        "crates/loader-smoke/tests/process_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: loader-smoke suites passed 22/22",
+        "Rust tests preserve strict empty/src/lib mode parsing, fail loud on every other wire value, forward exact argv/environment, choose the development artifact for src, and require/select an explicit publish-shaped Rust artifact for lib",
+        "cargo test -p seekdeep-loader-smoke --test process_parity --all-features: 4 passed"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/tests/fixtures/fail.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/src/bin/fail.rs",
+        "crates/loader-smoke/tests/process_parity.rs"
+      ],
+      "evidence": [
+        "Compiled Rust fixture writes the exact failure diagnostic to stderr and exits with code 7",
+        "cargo test -p seekdeep-loader-smoke --test process_parity --all-features"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/tests/fixtures/hang.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/src/bin/hang.rs",
+        "crates/loader-smoke/tests/process_parity.rs"
+      ],
+      "evidence": [
+        "Compiled Rust fixture flushes its hanging marker and remains live until the runner's hard deadline kills and joins it",
+        "cargo test -p seekdeep-loader-smoke --test process_parity --all-features"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/tests/fixtures/success.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/src/bin/success.rs",
+        "crates/loader-smoke/tests/process_parity.rs"
+      ],
+      "evidence": [
+        "Compiled Rust fixture reads stdin through EOF and emits the exact config argv, complete argv, cwd, renamed SeekDeep homes, marker, input, and stderr facts consumed by the runner acceptance test",
+        "cargo test -p seekdeep-loader-smoke --test process_parity --all-features"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/tests/loader-smoke.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/src/process.rs",
+        "crates/loader-smoke/tests/process_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: loader-smoke suites passed 22/22",
+        "Rust tests use three real compiled child binaries to prove isolation, stdin EOF, stdout/stderr capture, arbitrary argv, setup/inspection ordering, cleanup, exact declared failure codes, rejection of an unexpectedly clean exit, and deadline termination",
+        "cargo test -p seekdeep-loader-smoke --test process_parity --all-features: 4 passed"
+      ]
     },
     {
       "source": "packages/test-support/loader-smoke/tsconfig.json",

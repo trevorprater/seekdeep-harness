@@ -6092,6 +6092,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-loader-smoke"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-logger-console"
 version = "0.1.0-rc.5"
 dependencies = [
