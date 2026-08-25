@@ -76422,7 +76422,18 @@
     {
       "source": "packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/workflow-worker-thread/tests/integration_parity.rs",
+        "crates/workflow-worker-thread/tests/built_worker_e2e.rs"
+      ],
+      "evidence": [
+        "pinned source credential gate observed: 1/1 skipped without DEEPSEEK_API_KEY",
+        "Hermetic Rust real-stack e2e runs the exact two-phase prose/structured script through the compiled worker, real spawn children, structured-output runtime, lifecycle events, and child quiescence",
+        "DeepSeek adapter HTTP/SSE behavior is independently verified by the seekdeep-llm-deepseek suites",
+        "cargo test -p seekdeep-workflow-worker-thread --all-targets --all-features: 41 passed",
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/workflow/workflow-worker-thread/tests/workflow-worker-thread.spec.ts",

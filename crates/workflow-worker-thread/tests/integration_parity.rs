@@ -151,11 +151,12 @@ impl Harness {
             script: script.to_owned(),
             meta: WorkflowMeta {
                 name: name.to_owned(),
-                description: "real plain and structured child composition".to_owned(),
+                description: "two real children through a worker thread: one prose, one structured"
+                    .to_owned(),
                 when_to_use: None,
                 phases: Some(vec![
                     WorkflowPhase {
-                        title: "Read".to_owned(),
+                        title: "Ask".to_owned(),
                         detail: None,
                         provider: None,
                         model: None,
@@ -189,51 +190,68 @@ impl Harness {
 #[tokio::test]
 async fn plain_then_schema_child_crosses_the_real_spawn_and_structured_runtime() {
     let harness = Harness::new([
-        Reply::Text("the file list is a.rs".to_owned()),
-        Reply::Structured(json!({"verdict": "real", "confidence": 0.9})),
+        Reply::Text("The answer is 4.".to_owned()),
+        Reply::Structured(json!({"containsFour": true, "confidence": 0.99})),
     ])
     .await;
     let child_ids = Arc::new(Mutex::new(Vec::<SessionId>::new()));
-    let seen = child_ids.clone();
-    let agents = harness.dependencies.agents.clone();
-    harness
-        .context
-        .events()
-        .on_sync(
-            &harness.context,
-            "workflow/agent-start",
-            move |_, args| {
-                let info = args
-                    .get::<WorkflowAgentInfo>(1)
-                    .ok_or_else(|| anyhow::anyhow!("missing agent info"))?;
-                anyhow::ensure!(
-                    agents.get(&info.child_id).is_some(),
-                    "workflow announced an unpublished child"
-                );
-                seen.lock().push(info.child_id.clone());
-                Ok(EventReply::Undefined)
-            },
-            EventOptions::default(),
-        )
-        .expect("observer");
+    let events = Arc::new(Mutex::new(Vec::<String>::new()));
+    for name in [
+        "workflow/start",
+        "workflow/phase",
+        "workflow/log",
+        "workflow/agent-start",
+        "workflow/agent-end",
+        "workflow/end",
+    ] {
+        let seen_ids = child_ids.clone();
+        let seen_events = events.clone();
+        let agents = harness.dependencies.agents.clone();
+        harness
+            .context
+            .events()
+            .on_sync(
+                &harness.context,
+                name,
+                move |_, args| {
+                    seen_events.lock().push(name.to_owned());
+                    if name == "workflow/agent-start" {
+                        let info = args
+                            .get::<WorkflowAgentInfo>(1)
+                            .ok_or_else(|| anyhow::anyhow!("missing agent info"))?;
+                        anyhow::ensure!(
+                            agents.get(&info.child_id).is_some(),
+                            "workflow announced an unpublished child"
+                        );
+                        seen_ids.lock().push(info.child_id.clone());
+                    }
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )
+            .expect("observer");
+    }
     let run = harness
         .engine
         .start(harness.request(
             "integration",
-            r"phase('Read')
-const prose = await agent('read the repo')
+            r#"phase('Ask')
+log('asking the prose child')
+const prose = await agent('Reply with exactly one short sentence: what is 2 + 2?')
 phase('Judge')
-const judged = await agent('judge: ' + prose, {
-  schema: { type: 'object', properties: { verdict: { type: 'string', enum: ['real', 'bogus'] }, confidence: { type: 'number' } }, required: ['verdict'] },
-})
-return { prose, verdict: judged.verdict, confidence: judged.confidence }",
+const judged = await agent(
+  'Here is an answer to the question "what is 2+2": ' + prose
+  + ' — report whether it contains the number 4 and your confidence between 0 and 1.',
+  { schema: { type: 'object', properties: { containsFour: { type: 'boolean' }, confidence: { type: 'number' } }, required: ['containsFour'] } },
+)
+return { prose, containsFour: judged === null ? null : judged.containsFour }"#,
         ))
         .expect("start");
     let result = run.result().await;
     assert_eq!(result.stop_reason, WorkflowStopReason::Completed);
     assert_eq!(
         result.value,
-        json!({"prose": "the file list is a.rs", "verdict": "real", "confidence": 0.9})
+        json!({"prose": "The answer is 4.", "containsFour": true})
     );
     assert_eq!(result.agents_started, 2);
     run.dispose().await;
@@ -243,6 +261,25 @@ return { prose, verdict: judged.verdict, confidence: judged.confidence }",
         ids.iter()
             .all(|id| harness.dependencies.agents.get(id).is_none())
     );
+    {
+        let events = events.lock();
+        assert_eq!(events.first().map(String::as_str), Some("workflow/start"));
+        assert_eq!(events.last().map(String::as_str), Some("workflow/end"));
+        assert_eq!(
+            events
+                .iter()
+                .filter(|name| name.as_str() == "workflow/phase")
+                .count(),
+            2
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|name| name.as_str() == "workflow/agent-start")
+                .count(),
+            2
+        );
+    }
     assert_eq!(harness.adapter.requests.lock().len(), 2);
     harness.dispose().await;
 }
