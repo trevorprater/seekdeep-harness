@@ -564,3 +564,260 @@ async fn missing_cwd_fails_before_spawn_and_loader_composition_inherits_parent_w
     composition.dispose().await.unwrap();
     context.fiber().dispose().await.unwrap();
 }
+
+#[cfg(feature = "test-runtime-fixture")]
+mod complete_runtime_e2e {
+    use std::{
+        path::{Path, PathBuf},
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+    };
+
+    use async_trait::async_trait;
+    use futures::stream;
+    use parking_lot::Mutex;
+    use seekdeep_agent::{AgentOptions, CreateAgentOptions};
+    use seekdeep_agent_loop::{
+        AgentLoop, AgentLoopServices, DEFAULT_MAX_PARALLEL_TOOL_CALLS, install_request_invariant,
+    };
+    use seekdeep_cordis::Context;
+    use seekdeep_core::session::SessionId;
+    use seekdeep_llm::{
+        AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LlmAdapter,
+        MessageSource, ModelId, ProviderId, StreamChunk, UserMessage,
+    };
+    use seekdeep_loader::PluginCatalog;
+    use seekdeep_session_persistence::SESSION_PERSISTENCE;
+    use seekdeep_session_persistence_jsonl::{JsonlCompression, JsonlConfig};
+    use serde_json::{Map, json};
+
+    const REAL_RUNTIME: &str = env!("CARGO_BIN_EXE_seekdeep-subagent-sdk-real-runtime");
+
+    #[derive(Debug)]
+    struct DelegateThenFinishAdapter {
+        delegated: AtomicBool,
+        requests: Arc<Mutex<Vec<GenerateOptions>>>,
+    }
+
+    #[async_trait]
+    impl LlmAdapter for DelegateThenFinishAdapter {
+        fn stream(&self, options: GenerateOptions) -> AdapterStream {
+            self.requests.lock().push(options);
+            if !self.delegated.swap(true, Ordering::AcqRel) {
+                return AdapterStream::new(stream::iter([
+                    Ok(StreamChunk::BlockEnd {
+                        index: 0,
+                        block: ContentBlock::ToolCall {
+                            id: CallId::new("delegate-child"),
+                            name: "subagent".to_owned(),
+                            arguments: json!({
+                                "description":"report child cwd",
+                                "prompt":"Report your working directory exactly."
+                            })
+                            .to_string(),
+                        },
+                    }),
+                    Ok(StreamChunk::Finish {
+                        reason: FinishReason::ToolCalls,
+                        replay_state: None,
+                    }),
+                ]));
+            }
+            AdapterStream::new(stream::iter([
+                Ok(StreamChunk::TextDelta {
+                    index: 0,
+                    text: "parent complete".to_owned(),
+                }),
+                Ok(StreamChunk::Finish {
+                    reason: FinishReason::Stop,
+                    replay_state: None,
+                }),
+            ]))
+        }
+    }
+
+    fn jsonl_files(root: &Path) -> Vec<PathBuf> {
+        fn visit(path: &Path, files: &mut Vec<PathBuf>) {
+            let Ok(entries) = std::fs::read_dir(path) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    visit(&path, files);
+                } else if path.extension().and_then(|extension| extension.to_str()) == Some("jsonl")
+                {
+                    files.push(path);
+                }
+            }
+        }
+        let mut files = Vec::new();
+        visit(root, &mut files);
+        files.sort();
+        files
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn loader_drives_a_complete_persisted_child_harness_in_the_parent_workspace() {
+        let temporary = tempfile::tempdir().unwrap();
+        let workspace = temporary.path().join("workspace");
+        std::fs::create_dir(&workspace).unwrap();
+        let workspace = std::fs::canonicalize(workspace).unwrap();
+        let context = Context::new();
+        let dependencies = seekdeep_agent_loop_testkit::mount_agent_loop_test_dependencies(
+            &context,
+            seekdeep_agent_loop_testkit::AgentLoopTestDependenciesOptions::default(),
+        )
+        .unwrap();
+        let parent_requests = Arc::new(Mutex::new(Vec::new()));
+        dependencies
+            .llm
+            .register_adapter(
+                &["parent-provider".to_owned()],
+                Arc::new(DelegateThenFinishAdapter {
+                    delegated: AtomicBool::new(false),
+                    requests: Arc::clone(&parent_requests),
+                }),
+            )
+            .unwrap();
+        let persistence = seekdeep_session_persistence_jsonl::install(
+            &context,
+            JsonlConfig {
+                root: workspace.join(".sessions"),
+                pack_chunks: false,
+                compression: JsonlCompression::None,
+                write_batch_max_delay_ms: 1,
+                prepared_session_cache_size: 5,
+            },
+        )
+        .unwrap();
+        persistence.await_settled().await.unwrap();
+        install_request_invariant(
+            &context,
+            &dependencies.llm,
+            Arc::clone(&dependencies.sessions),
+        )
+        .unwrap();
+        let loop_ = AgentLoop::new(
+            context.clone(),
+            Arc::clone(&dependencies.sessions),
+            (*dependencies.agents).clone(),
+            AgentLoopServices {
+                llm: Arc::clone(&dependencies.llm),
+                system_prompt: Arc::clone(&dependencies.system_prompt),
+                tools: Arc::clone(&dependencies.tools),
+                max_parallel_tool_calls: DEFAULT_MAX_PARALLEL_TOOL_CALLS,
+            },
+        )
+        .unwrap();
+        let persistence_service = context.get(SESSION_PERSISTENCE).unwrap();
+        loop_
+            .set_persistence(persistence_service.persistence())
+            .unwrap();
+        dependencies
+            .agents
+            .set_factory(Arc::new(loop_.clone()))
+            .unwrap();
+
+        let catalog = PluginCatalog::new();
+        catalog
+            .register_named("subagents", seekdeep_subagent::plugin())
+            .unwrap();
+        catalog
+            .register_named("sdk", seekdeep_subagent_sdk::plugin())
+            .unwrap();
+        catalog
+            .register_named("tool", seekdeep_tool_subagent::plugin())
+            .unwrap();
+        let composition = catalog
+            .load_yaml(
+                &context,
+                &format!(
+                    concat!(
+                        "- id: subagents\n",
+                        "  name: subagents\n",
+                        "- id: sdk\n",
+                        "  name: sdk\n",
+                        "  config:\n",
+                        "    command: {}\n",
+                        "    provider: fixture-provider\n",
+                        "    model: fixture-model\n",
+                        "    shutdownTimeoutMs: 1000\n",
+                        "    disposeEofGraceMs: 6000\n",
+                        "    disposeGraceMs: 3000\n",
+                        "- id: tool\n",
+                        "  name: tool\n",
+                        "  config:\n",
+                        "    provider: seekdeep-sdk\n",
+                        "    enableRunInBackground: false\n",
+                        "    maxDepth: provider-managed\n",
+                    ),
+                    serde_json::to_string(REAL_RUNTIME).unwrap()
+                ),
+            )
+            .await
+            .unwrap();
+        let mut options = CreateAgentOptions::new(SessionId::new("loader-parent"));
+        options.meta.cwd = Some(workspace.to_string_lossy().into_owned());
+        options.agent_options = AgentOptions {
+            provider: Some(ProviderId::new("parent-provider")),
+            model: Some(ModelId::new("parent-model")),
+            max_tokens: None,
+            subagent_depth: None,
+        };
+        let parent = dependencies.agents.create(options).await.unwrap();
+        parent
+            .agent
+            .followup(UserMessage::new(
+                vec![ContentBlock::Text {
+                    text: "Delegate once.".to_owned(),
+                }],
+                MessageSource {
+                    kind: "user".to_owned(),
+                    fields: Map::new(),
+                },
+            ))
+            .unwrap();
+        parent.agent.when_idle().unwrap().await.unwrap();
+
+        assert_eq!(parent_requests.lock().len(), 2);
+        let expected = format!("child cwd: {}", workspace.display());
+        let events = parent.agent.session().events();
+        let result = events
+            .iter()
+            .find(|event| event.event_type == "tool/result")
+            .expect("parent tool result");
+        assert_eq!(
+            result
+                .data
+                .pointer("/message/content/0/content/0/text")
+                .and_then(|value| value.as_str()),
+            Some(expected.as_str())
+        );
+        assert!(events.iter().any(|event| {
+            event.event_type == "assistant/message"
+                && event.data.pointer("/message/content/0/text") == Some(&json!("parent complete"))
+        }));
+
+        parent.dispose().await.unwrap();
+        composition.dispose().await.unwrap();
+        loop_.dispose().await.unwrap();
+        persistence.dispose().await.unwrap();
+        context.fiber().dispose().await.unwrap();
+
+        let parent_files = jsonl_files(&workspace.join(".sessions"));
+        let child_files = jsonl_files(&workspace.join(".child-sessions"));
+        assert_eq!(parent_files.len(), 1);
+        assert_eq!(child_files.len(), 1);
+        let parent_log = std::fs::read_to_string(&parent_files[0]).unwrap();
+        assert!(parent_log.contains("\"type\":\"tool/result\""));
+        assert!(parent_log.contains(&expected));
+        let child_log = std::fs::read_to_string(&child_files[0]).unwrap();
+        assert!(child_log.contains("\"type\":\"user/message\""));
+        assert!(child_log.contains("\"type\":\"assistant/message\""));
+        assert!(child_log.contains(&expected));
+    }
+}

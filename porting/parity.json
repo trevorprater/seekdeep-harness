@@ -63442,7 +63442,18 @@
     {
       "source": "packages/sdk/server/tests/server.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/sdk-server/tests/server_parity.rs",
+        "crates/llm-deepseek/tests/adapter_parity.rs",
+        "crates/agent-loop/src/factory.rs"
+      ],
+      "evidence": [
+        "pinned-source SDK and SDK-subagent Vitest unit suites passed 129/129",
+        "Rust sdk-server suite passed 11/11 including a real assembled AgentLoop turn and reused-id parent-scope locality matrix",
+        "Rust DeepSeek loopback HTTP/SSE adapter suite passed 10/10",
+        "strict sdk-server Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/sdk/server/tsconfig.json",
@@ -69449,7 +69460,16 @@
     {
       "source": "packages/subagent/subagent-dsh-sdk/tests/loader-composition.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-sdk/tests/sdk_subagent_parity.rs",
+        "crates/subagent-sdk/tests/fixtures/real_runtime.rs"
+      ],
+      "evidence": [
+        "pinned-source built-scope carrier and SDK-subagent Loader E2E suites passed 2/2",
+        "Rust Loader E2E drove a parent AgentLoop through the SDK subagent tool into a complete child SDK server and AgentLoop process",
+        "Rust E2E verified the exact inherited workspace in the parent tool result and both uncompressed parent and child JSONL session logs"
+      ]
     },
     {
       "source": "packages/subagent/subagent-dsh-sdk/tests/subagent-dsh-sdk.spec.ts",

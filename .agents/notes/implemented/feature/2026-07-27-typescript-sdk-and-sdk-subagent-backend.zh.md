@@ -17,7 +17,7 @@ stdio JSON-RPC 对外服务接口（`@seekdeep-ai/seekdeep-sdk-jsonrpc-server`�
 - `seekdeep-sdk-server` 负责创建 agent、配置路由、投影生命周期通知、严格筛选本地 subagent、汇总拆除失败，以及「写入响应、flush、释放根运行时、退出」的顺序。仅释放插件会停止服务，但不会退出宿主进程。
 - `seekdeep-subagent-sdk` 负责 `seekdeep-sdk` 提供方。它只在握手成功后发布完整且隔离的 SeekDeep Harness 子进程，转发清理后的环境与显式覆盖，继承或校验子工作区，保留部分 assistant 输出，将发布后的失败归一化，并在发布前回滚和 dispose（资源释放）的每条路径上回收进程。
 
-Rust 套件会驱动真实子进程 fixture（测试前置数据）与 Loader 组合。固定源仓库中的 SDK 和 SDK-subagent 单元/E2E 套件继续作为差分 oracle；Rust 测试另行钉住语言特有的所有权、类型、取消与完全停稳不变量。
+Rust 套件会驱动真实子进程 fixture（测试前置数据），并由 Loader 组合父 AgentLoop、完整的子 SDK 服务器、子 AgentLoop 与 JSONL 持久化运行时；父工具结果和两份持久日志必须对继承工作区达成一致。固定源仓库中的 SDK 和 SDK-subagent 单元/E2E 套件继续作为差分 oracle；Rust 测试另行钉住语言特有的所有权、类型、取消与完全停稳不变量。
 
 ## 决策
 

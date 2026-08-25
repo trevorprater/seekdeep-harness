@@ -18,14 +18,15 @@ use seekdeep_agent::{
     AgentHandle, AgentRegistry, AgentStatus, AgentStatusChanged, CancelOptions, CreateAgentOptions,
     Inbox, InboxTarget, MaintenanceReservation, NoopInboxNotifications, ResumeAgentOptions,
 };
+use seekdeep_agent_loop::{AgentLoop, AgentLoopServices, DEFAULT_MAX_PARALLEL_TOOL_CALLS};
 use seekdeep_cordis::{Context, EventArgs};
 use seekdeep_core::{
     session::{AppendOptions, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_llm::{
-    AbortSignal, AdapterStream, GenerateOptions, LlmAdapter, LlmRuntime, ModelId, ProviderId,
-    UserMessage,
+    AbortSignal, AdapterStream, FinishReason, GenerateOptions, LlmAdapter, LlmRuntime, ModelId,
+    ProviderId, StreamChunk, UserMessage,
 };
 use seekdeep_scope::{ScopeKey, create_scope, scope_target};
 use seekdeep_sdk_protocol::{InitializeParams, JsonRpcLineTransport, SessionPromptParams};
@@ -196,6 +197,28 @@ struct EmptyAdapter;
 impl LlmAdapter for EmptyAdapter {
     fn stream(&self, _options: GenerateOptions) -> AdapterStream {
         AdapterStream::new(stream::empty())
+    }
+}
+
+#[derive(Debug)]
+struct AnswerAdapter {
+    requests: Arc<Mutex<Vec<GenerateOptions>>>,
+}
+
+#[async_trait]
+impl LlmAdapter for AnswerAdapter {
+    fn stream(&self, options: GenerateOptions) -> AdapterStream {
+        self.requests.lock().push(options);
+        AdapterStream::new(stream::iter([
+            Ok(StreamChunk::TextDelta {
+                index: 0,
+                text: "assembled SDK answer".to_owned(),
+            }),
+            Ok(StreamChunk::Finish {
+                reason: FinishReason::Stop,
+                replay_state: None,
+            }),
+        ]))
     }
 }
 
@@ -391,6 +414,120 @@ async fn initializes_creates_coalesces_sessions_and_rejects_stale_agents() {
 
 #[tokio::test]
 #[allow(clippy::too_many_lines)]
+async fn real_agent_loop_executes_the_configured_model_and_streams_durable_notifications() {
+    let context = Context::new();
+    let dependencies = seekdeep_agent_loop_testkit::mount_agent_loop_test_dependencies(
+        &context,
+        seekdeep_agent_loop_testkit::AgentLoopTestDependenciesOptions::default(),
+    )
+    .unwrap();
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    dependencies
+        .llm
+        .register_adapter(
+            &["mock".to_owned()],
+            Arc::new(AnswerAdapter {
+                requests: Arc::clone(&requests),
+            }),
+        )
+        .unwrap();
+    let loop_ = AgentLoop::new(
+        context.clone(),
+        Arc::clone(&dependencies.sessions),
+        (*dependencies.agents).clone(),
+        AgentLoopServices {
+            llm: Arc::clone(&dependencies.llm),
+            system_prompt: Arc::clone(&dependencies.system_prompt),
+            tools: Arc::clone(&dependencies.tools),
+            max_parallel_tool_calls: DEFAULT_MAX_PARALLEL_TOOL_CALLS,
+        },
+    )
+    .unwrap();
+    dependencies
+        .agents
+        .set_factory(Arc::new(loop_.clone()))
+        .unwrap();
+    let (server_io, client_io) = tokio::io::duplex(256 * 1024);
+    let (server_read, server_write) = tokio::io::split(server_io);
+    let (client_read, client_write) = tokio::io::split(client_io);
+    let server_transport = JsonRpcLineTransport::new(server_read, server_write);
+    let client = JsonRpcLineTransport::new(client_read, client_write);
+    let notifications = Arc::new(Mutex::new(Vec::new()));
+    let observed = Arc::clone(&notifications);
+    client.on_notification(Arc::new(move |method, params| {
+        observed.lock().push((method, params));
+    }));
+    client.start();
+    let server = HarnessSdkJsonRpcServer::new(
+        &context,
+        &server_transport,
+        HarnessSdkJsonRpcServerOptions::default(),
+    )
+    .unwrap();
+    server_transport.on_request({
+        let server = Arc::clone(&server);
+        Arc::new(move |method, params| {
+            let server = Arc::clone(&server);
+            Box::pin(async move { server.handle_request(&method, params).await })
+        })
+    });
+    server_transport.start();
+    let workspace = tempfile::tempdir().unwrap();
+    server
+        .initialize(InitializeParams {
+            cwd: workspace.path().to_string_lossy().into_owned(),
+            provider: ProviderId::new("mock"),
+            model: ModelId::new("sdk-model"),
+            max_tokens: Some(321),
+        })
+        .await
+        .unwrap();
+    let accepted = server.prompt(prompt("assembled", "fix it")).await.unwrap();
+    assert!(!accepted.message_id.as_str().is_empty());
+    let agent = dependencies
+        .agents
+        .get(&SessionId::new("assembled"))
+        .unwrap();
+    agent.when_idle().unwrap().await.unwrap();
+
+    {
+        let captured = requests.lock();
+        assert_eq!(captured.len(), 1);
+        assert_eq!(captured[0].provider.as_str(), "mock");
+        assert_eq!(captured[0].model.as_str(), "sdk-model");
+        assert_eq!(captured[0].max_tokens, Some(321));
+        assert!(
+            captured[0]
+                .messages
+                .last()
+                .is_some_and(|message| message.source().kind == "user")
+        );
+    }
+    let events = agent.session().events();
+    assert!(events.iter().any(|event| {
+        event.event_type == "assistant/message"
+            && event.data.pointer("/message/content/0/text") == Some(&json!("assembled SDK answer"))
+    }));
+    for _ in 0..100 {
+        if notifications.lock().iter().any(|(method, params)| {
+            method == "session.status"
+                && params.get("sessionId") == Some(&json!("assembled"))
+                && params.get("status") == Some(&json!("idle"))
+        }) {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert!(notifications.lock().iter().any(|(method, params)| {
+        method == "session.status" && params.get("status") == Some(&json!("idle"))
+    }));
+    server.shutdown().await.unwrap();
+    loop_.dispose().await.unwrap();
+    context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn forwards_session_status_lineage_and_local_subagent_terminal_notifications() {
     let harness = Harness::new(HarnessSdkJsonRpcServerOptions {
         max_tokens_as_success: true,
@@ -498,6 +635,110 @@ async fn forwards_session_status_lineage_and_local_subagent_terminal_notificatio
             1
         );
     }
+    harness.server.shutdown().await.unwrap();
+    harness.context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn correlates_reused_child_ids_by_parent_scope_and_immutable_run_snapshot() {
+    let harness = Harness::new(HarnessSdkJsonRpcServerOptions::default());
+    let cwd = tempfile::tempdir().unwrap();
+    harness.initialize(&cwd.path().to_string_lossy()).await;
+    for parent in ["parent-a", "parent-b"] {
+        harness
+            .server
+            .prompt(prompt(parent, "create parent"))
+            .await
+            .unwrap();
+    }
+    let parent_a = harness.agents.get(&SessionId::new("parent-a")).unwrap();
+    let parent_b = harness.agents.get(&SessionId::new("parent-b")).unwrap();
+    let routed_a = scope_target(&harness.context, Some(parent_a.scope_key()));
+    let routed_b = scope_target(&harness.context, Some(parent_b.scope_key()));
+    let emit = |context: &Context,
+                run_id: &str,
+                provider: &str,
+                local: bool,
+                stop_reason: SubagentStopReason| {
+        context
+            .events()
+            .emit(
+                context,
+                "subagent/end",
+                &EventArgs::one(SubagentRunEndInfo {
+                    run_id: SubagentRunId::new(run_id),
+                    provider: provider.to_owned(),
+                    id: SessionId::new("reused-child"),
+                    local,
+                    stop_reason,
+                    last_assistant_message: Some(vec![seekdeep_llm::ContentBlock::Text {
+                        text: run_id.to_owned(),
+                    }]),
+                }),
+            )
+            .unwrap();
+    };
+    emit(
+        &routed_a,
+        "remote-collision",
+        "remote-provider",
+        false,
+        SubagentStopReason::Completed,
+    );
+    emit(
+        &routed_b,
+        "b-first",
+        "provider-after-reregister",
+        true,
+        SubagentStopReason::Error,
+    );
+    emit(
+        &routed_a,
+        "a-second",
+        "provider-before-reregister",
+        true,
+        SubagentStopReason::Completed,
+    );
+    emit(
+        &routed_a,
+        "a-continuation",
+        "provider-before-reregister",
+        true,
+        SubagentStopReason::MaxTokens,
+    );
+    for _ in 0..100 {
+        if harness
+            .notifications
+            .lock()
+            .iter()
+            .filter(|(method, _)| method == "subagent.finished")
+            .count()
+            == 3
+        {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    let terminal = harness
+        .notifications
+        .lock()
+        .iter()
+        .filter(|(method, _)| method == "subagent.finished")
+        .map(|(_, params)| params.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(terminal.len(), 3);
+    assert_eq!(terminal[0]["parentSessionId"], json!("parent-b"));
+    assert_eq!(terminal[0]["provider"], json!("provider-after-reregister"));
+    assert_eq!(terminal[0]["status"], json!("error"));
+    assert_eq!(terminal[1]["parentSessionId"], json!("parent-a"));
+    assert_eq!(terminal[1]["provider"], json!("provider-before-reregister"));
+    assert_eq!(terminal[1]["status"], json!("ok"));
+    assert_eq!(terminal[2]["parentSessionId"], json!("parent-a"));
+    assert_eq!(terminal[2]["stopReason"], json!("max-tokens"));
+    assert!(terminal.iter().all(|params| {
+        params["childSessionId"] == json!("reused-child")
+            && params["agentId"] == json!("reused-child")
+    }));
     harness.server.shutdown().await.unwrap();
     harness.context.fiber().dispose().await.unwrap();
 }

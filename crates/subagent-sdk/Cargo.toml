@@ -13,6 +13,23 @@ path = "tests/fixtures/fake_runtime.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "seekdeep-subagent-sdk-real-runtime"
+path = "tests/fixtures/real_runtime.rs"
+test = false
+bench = false
+required-features = ["test-runtime-fixture"]
+
+[features]
+default = []
+test-runtime-fixture = [
+  "dep:seekdeep-agent-loop",
+  "dep:seekdeep-agent-loop-testkit",
+  "dep:seekdeep-sdk-server",
+  "dep:seekdeep-session-persistence",
+  "dep:seekdeep-session-persistence-jsonl",
+]
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -21,10 +38,15 @@ parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop", optional = true }
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit", optional = true }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-sdk-client = { path = "../sdk-client" }
+seekdeep-sdk-server = { path = "../sdk-server", optional = true }
+seekdeep-session-persistence = { path = "../session-persistence", optional = true }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl", optional = true }
 seekdeep-subagent = { path = "../subagent" }
 seekdeep-subprocess = { path = "../subprocess" }
 seekdeep-util = { path = "../util" }
@@ -35,6 +57,7 @@ tracing.workspace = true
 seekdeep-loader = { path = "../loader" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-tool-subagent = { path = "../tool-subagent" }
 tempfile.workspace = true
 
 [lints]

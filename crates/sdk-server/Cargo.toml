@@ -26,6 +26,7 @@ tokio.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
 tempfile.workspace = true
 

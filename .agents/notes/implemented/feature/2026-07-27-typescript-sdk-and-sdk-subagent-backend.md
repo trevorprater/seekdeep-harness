@@ -17,7 +17,7 @@ The TypeScript packages below remain the pinned behavioral specification and com
 - `seekdeep-sdk-server` owns agent creation, route configuration, lifecycle notification projection, exact local-subagent filtering, teardown aggregation, and response-before-flush-before-root-disposal-before-exit ordering. A bare plugin disposal stops the service without exiting the host.
 - `seekdeep-subagent-sdk` owns the `seekdeep-sdk` provider. It starts a complete isolated SeekDeep Harness process only after a successful handshake, forwards a scrubbed environment plus explicit overrides, inherits or validates the child workspace, preserves partial assistant output, flattens post-publication failures, and reaps every pre-publication rollback and disposal path.
 
-The Rust suites drive real subprocess fixtures and Loader composition. The pinned source SDK and SDK-subagent unit and E2E suites remain differential oracles; Rust tests separately pin the language-specific ownership, type, cancellation, and quiescence invariants.
+The Rust suites drive real subprocess fixtures and a Loader-composed parent AgentLoop into a complete child SDK server, AgentLoop, and JSONL persistence runtime; the parent tool result and both persisted logs must agree on the inherited workspace. The pinned source SDK and SDK-subagent unit and E2E suites remain differential oracles; Rust tests separately pin the language-specific ownership, type, cancellation, and quiescence invariants.
 
 ## Decision
 
