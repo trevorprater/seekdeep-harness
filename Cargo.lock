@@ -6022,6 +6022,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-logger-console"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "js-sys",
+ "parking_lot",
+ "seekdeep-cordis",
+ "seekdeep-cosmokit",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tokio",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "seekdeep-lsp"
 version = "0.1.0-rc.5"
 dependencies = [

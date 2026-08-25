@@ -78242,17 +78242,42 @@
     {
       "source": "vendor/logger-console/src/browser.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/logger-console/src/browser.rs",
+        "crates/logger-console/src/lib.rs",
+        "crates/logger-console/tests/console_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM browser entry compiles for wasm32-unknown-unknown and dispatches error, warn, info, and debug records to the matching native console methods with original structural arguments",
+        "host conformance sink pins exact browser method, severity/name prefix, argument preservation, and reversible exporter disposal"
+      ]
     },
     {
       "source": "vendor/logger-console/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/logger-console/src/lib.rs",
+        "crates/logger-console/tests/console_parity.rs"
+      ],
+      "evidence": [
+        "Rust native exporter uses terminal capability defaults, Node-compatible compact JSON inspection for percent-o and percent-O, stdout delivery, and exact Cordis effect ownership",
+        "six direct pinned-source render oracles match Rust byte-for-byte for basic, right-aligned multiline, elapsed, object, 16-color, and 256-color cases"
+      ]
     },
     {
       "source": "vendor/logger-console/src/shared.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/logger-console/src/lib.rs",
+        "crates/logger-console/tests/console_parity.rs"
+      ],
+      "evidence": [
+        "Rust shared renderer pins config defaults and validation, local time templates, severity prefixes, UTF-16 label padding, left and right alignment, multiline indentation, logger formatting, ANSI color, elapsed-time updates, thresholds, and lifecycle registration",
+        "strict logger-console tests passed 4/4"
+      ]
     },
     {
       "source": "vendor/logger-console/tsconfig.json",
@@ -78268,7 +78293,16 @@
     {
       "source": "vendor/logger-console/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/logger-console/Cargo.toml",
+        "crates/logger-console/src/browser.rs",
+        "crates/logger-console/src/lib.rs"
+      ],
+      "evidence": [
+        "Cargo target selection provides distinct native and browser Rust entries without JavaScript chunks",
+        "native all-target strict Clippy and tests passed; browser entry passed wasm32-unknown-unknown compilation"
+      ]
     },
     {
       "source": "vendor/schemastery/LICENSE",

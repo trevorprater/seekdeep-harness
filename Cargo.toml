@@ -77,6 +77,7 @@ members = [
   "crates/lsp-stdio",
   "crates/message-feedback",
   "crates/mcp-client",
+  "crates/logger-console",
     "crates/llm",
     "crates/llm-deepseek",
   "crates/llm-pi-ai",
