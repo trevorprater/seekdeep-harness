@@ -8,7 +8,13 @@ Status: implemented
 
 subagent seam（[seam Agent Note](2026-06-21-subagent-capability-seam.md)）的设计使多个后端可以按名称共存于 `ctx.subagents`。进程内后端（`-spawn`/`-fork`）将子 agent（智能体）作为第二个 `Agent` 运行在同一个 Cordis 上下文中：开销低，但子 agent 与父 agent 共享进程、模型客户端和工具。seam 的核心意义在于同时支持通过协议到达的进程外子 agent，以证明该抽象可跨进程边界适用。本 Agent Note 添加第一个此类后端：一个 ACP（Agent Client Protocol）客户端。
 
-## 决策
+## Rust 实现
+
+`seekdeep-subagent-acp` 使用共享 Rust ACP 客户端，而不嵌入 JavaScript SDK。每次运行都经 `seekdeep-subprocess` spawn，将两条协议管道移交给客户端，在发布前完成 `initialize` 与 `session/new`，保持子会话 id 私有，只折叠 `agent_message_chunk` 文本，自动应答权限请求，即使子进程忽略 `session/cancel` 也会在本地结算取消，并在受管终止升级前给子进程一段独立的 EOF flush 窗口。父级可见的运行 id 来自确定性的进程内状态，而不是环境随机数。
+
+真实进程 Rust fixture（测试前置数据）覆盖所有停止原因映射、消息与思考输出区分、允许／拒绝策略、pre-abort、格式错误的启动、命令缺失、忽略取消、EOF flush、可配置 cwd、提供方 HMR 以及错误 sink 的异常隔离。一项由 Loader 组合的父 `AgentLoop` 会通过真实前台工具委派到全新子进程，并证明进程 cwd、ACP `session/new` cwd、父工具结果和持久化父 JSONL 全部一致。带凭据的真实子模型层级保持独立；没有显式密钥与配额授权时仍为 pending。
+
+## 源决策
 
 `@seekdeep-ai/seekdeep-subagent-acp` 注册一个 `SubagentProvider`，将每个子 agent 运行在一个通过 spawn 启动的子进程中，并以 ACP *客户端*身份驱动它。它是现有服务端桥接 `@seekdeep-ai/seekdeep-acp`（ACP *agent*）的方向反转孪生体：桥接应答 `initialize`/`newSession`/`prompt`；本后端调用它们并实现 `Client` 回调（`sessionUpdate`、`requestPermission`）。将配置的 spawn 命令指向 `acp-agent` 示例，即可让 harness 与自身进程通信。
 

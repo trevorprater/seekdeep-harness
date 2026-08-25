@@ -329,12 +329,29 @@ impl JsonRpcLineTransport {
             let frame = match response {
                 Ok(result) => json!({"jsonrpc":"2.0", "id": id, "result": result}),
                 Err(error) => {
-                    let code = if error.to_string().starts_with("method not found: ") {
-                        -32601
+                    if let Some(response) = error.downcast_ref::<JsonRpcResponseError>() {
+                        let mut wire = Map::from_iter([
+                            (
+                                "code".to_owned(),
+                                Value::from(response.code.unwrap_or(-32603)),
+                            ),
+                            (
+                                "message".to_owned(),
+                                Value::String(response.message.clone()),
+                            ),
+                        ]);
+                        if let Some(data) = &response.data {
+                            wire.insert("data".to_owned(), data.clone());
+                        }
+                        json!({"jsonrpc":"2.0", "id":id, "error":wire})
                     } else {
-                        -32603
-                    };
-                    json!({"jsonrpc":"2.0", "id": id, "error": {"code":code, "message":error.to_string()}})
+                        let code = if error.to_string().starts_with("method not found: ") {
+                            -32601
+                        } else {
+                            -32603
+                        };
+                        json!({"jsonrpc":"2.0", "id": id, "error": {"code":code, "message":error.to_string()}})
+                    }
                 }
             };
             let write = transport.write_frame(frame).await;

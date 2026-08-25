@@ -4393,6 +4393,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-acp"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-agent-loop-testkit",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-scope",
+ "seekdeep-sdk-protocol",
+ "seekdeep-subagent",
+ "seekdeep-tools",
+ "seekdeep-user-approval",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "seekdeep-agent"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -7105,6 +7131,37 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-subagent-acp"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-acp",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-agent-loop-testkit",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "seekdeep-loader",
+ "seekdeep-scope",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
+ "seekdeep-subagent",
+ "seekdeep-subprocess",
+ "seekdeep-subprocess-local",
+ "seekdeep-tool-subagent",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

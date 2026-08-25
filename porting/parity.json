@@ -36267,12 +36267,31 @@
     {
       "source": "packages/acp/acp/src/codec.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/src/codec.rs",
+        "crates/acp/src/types.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP and subagent-ACP unit suites passed 107/107",
+        "Rust ACP codec tests pin every Harness and ACP stop reason, unknown values, baseline text, resource links, unsupported content, and subagent mapping",
+        "strict ACP and subagent-ACP Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/acp/acp/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/src/bridge.rs",
+        "crates/acp/src/client.rs",
+        "crates/acp/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP and subagent-ACP unit suites passed 107/107",
+        "Rust bridge tests drive real AgentLoop sessions over duplex JSON-RPC with committed output, cancellation, approvals, multi-session isolation, and quiescent teardown",
+        "strict ACP and subagent-ACP Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/acp/acp/src/invariant.ts",
@@ -36296,12 +36315,26 @@
     {
       "source": "packages/acp/acp/tests/bridge.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP and subagent-ACP unit suites passed 107/107",
+        "Rust real-AgentLoop bridge test pins negotiation, absolute workspace validation, fresh sessions, text concatenation, committed updates, and max-token prompt settlement"
+      ]
     },
     {
       "source": "packages/acp/acp/tests/codec.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust codec test exhaustively pins source turn-ending mappings and baseline content conversion",
+        "strict ACP and subagent-ACP Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/acp/acp/tests/dispose.spec.ts",
@@ -36316,12 +36349,24 @@
     {
       "source": "packages/acp/acp/tests/harness.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust bridge harness assembles LLM, sessions, system prompt, tools, AgentRegistry, AgentLoop, approval service, ACP server, and ACP client over a real duplex transport"
+      ]
     },
     {
       "source": "packages/acp/acp/tests/multi-session.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp/tests/bridge_parity.rs"
+      ],
+      "evidence": [
+        "Rust multi-session tests pin independent prompt slots, one-session cancellation, unaffected sibling completion, update demultiplexing, and whole-connection drain"
+      ]
     },
     {
       "source": "packages/acp/acp/tests/turns.spec.ts",
@@ -69031,7 +69076,15 @@
     {
       "source": "packages/subagent/subagent-acp/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-acp/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP and subagent-ACP unit suites passed 107/107",
+        "Rust provider tests pin config defaults and limits, cwd override and inheritance, fixed capabilities, registration, HMR unwind, and missing-workspace failure",
+        "strict ACP and subagent-ACP Clippy passed with all targets and all features"
+      ]
     },
     {
       "source": "packages/subagent/subagent-acp/src/invariant.ts",
@@ -69050,27 +69103,60 @@
     {
       "source": "packages/subagent/subagent-acp/src/run.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-acp/src/run.rs",
+        "crates/acp/src/client.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP and subagent-ACP unit suites passed 107/107",
+        "Rust real-process tests cover initialize and session publication, all stop reasons, text-only output folding, permissions, cancellation including ignored cancel, EOF flush, startup rollback, and whole-tree exit"
+      ]
     },
     {
       "source": "packages/subagent/subagent-acp/tests/loader-composition.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-acp/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP subagent Loader E2E passed 1/1",
+        "Rust Loader E2E drives a real parent AgentLoop and foreground tool into a fresh ACP child and proves process cwd, session/new cwd, tool result, and persisted parent JSONL agree"
+      ]
     },
     {
       "source": "packages/subagent/subagent-acp/tests/mock-acp-server.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-acp/tests/fixtures/fake_acp.rs"
+      ],
+      "evidence": [
+        "Rust scripted child speaks real ACP JSON-RPC stdio and covers session publication, updates, permissions, every stop reason, hang, ignored cancel, crash, missing session id, cwd echo, and EOF flush"
+      ]
     },
     {
       "source": "packages/subagent/subagent-acp/tests/subagent-acp.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "note": "Credentialed real child model and filesystem-effect evidence requires explicit DeepSeek secret and quota authority."
     },
     {
       "source": "packages/subagent/subagent-acp/tests/subagent-acp.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-acp/tests/run_parity.rs",
+        "crates/subagent-acp/tests/fixtures/fake_acp.rs",
+        "crates/subprocess-local/tests/spawn_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP and subagent-ACP unit suites passed 107/107",
+        "Rust subagent-ACP suite passed 6 grouped real-process scenarios plus the Loader E2E",
+        "Rust tests pin pre-session cancellation rollback, all stop reasons, allow and reject policies, ignored cancel, EOF flush, missing session and executable, post-publication failure, throwing error sink, config graces, cwd, HMR, and process quiescence",
+        "subprocess-local spawn parity pins platform termination and signal-trapping escalation"
+      ]
     },
     {
       "source": "packages/subagent/subagent-acp/tsconfig.json",
