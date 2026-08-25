@@ -70796,7 +70796,17 @@
     {
       "source": "packages/subagent/subagent/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/src/invariant.rs",
+        "crates/subagent/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "pinned source differential: 4/4 subagent invariant cases",
+        "Rust real-registry suite pins valid and historical provider lifecycles plus empty, duplicate, unknown, unpaired, and divergent transitions",
+        "cargo test -p seekdeep-subagent --all-features",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/subagent/subagent/tests/list-children.spec.ts",
