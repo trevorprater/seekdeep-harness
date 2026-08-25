@@ -73004,46 +73004,98 @@
     {
       "source": "packages/test-support/llm-mock-server/src/bin.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-mock-server/src/bin/seekdeep-llm-mock-server.rs",
+        "crates/llm-mock-server/tests/cli_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "compiled Rust process emits unavailable/ready/request/result JSONL, flushes each record, serves the configured script, and exits 143 on SIGTERM",
+        "root mock:llm script targets the compiled Cargo binary; direct Cargo help and process E2E pass"
+      ]
     },
     {
       "source": "packages/test-support/llm-mock-server/src/cli.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-mock-server/src/cli.rs",
+        "crates/llm-mock-server/tests/cli_parity.rs"
+      ],
+      "evidence": [
+        "Rust parser preserves every option, default, connection-refused constraint, numeric bound, weighted profile, help path, and stable renamed diagnostic family",
+        "cargo test -p seekdeep-llm-mock-server --all-targets --all-features"
+      ]
     },
     {
       "source": "packages/test-support/llm-mock-server/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-mock-server/src/server.rs",
+        "crates/llm-mock-server/src/lib.rs",
+        "crates/llm-mock-server/Cargo.toml"
+      ],
+      "evidence": [
+        "Rust Tokio server implements all 24 scripted behaviors, arrival-order exhaustion/repetition, deterministic weighted selection, capture/telemetry, strict validation, chunked UTF-8 requests, client closure, and idempotent teardown",
+        "no ambient randomness: omitted seeds use an exposed process-local monotonic source",
+        "cargo test -p seekdeep-llm-mock-server --all-targets --all-features: 16 passed",
+        "cargo clippy -p seekdeep-llm-mock-server --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/llm-mock-server/src/invariant.ts",
       "kind": "production-code",
       "status": "verified",
       "targets": [
+        "crates/llm-mock-server/src/invariant.rs",
+        "crates/llm-mock-server/tests/invariant_parity.rs",
         "crates/invariants/src/noop.rs",
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
         "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "direct Rust companion reserves, releases, and replaces the package-owned invariant",
         "cargo test -p seekdeep-invariants --all-features",
-        "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-llm-mock-server --all-targets --all-features"
       ]
     },
     {
       "source": "packages/test-support/llm-mock-server/tests/cli.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-mock-server/tests/cli_parity.rs"
+      ],
+      "evidence": [
+        "pinned source differential: llm-mock-server cli/invariant/server suites passed 72/72",
+        "four grouped Rust cases cover complete parsing, invalid argv, defaults, and the real compiled process lifecycle"
+      ]
     },
     {
       "source": "packages/test-support/llm-mock-server/tests/invariant.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-mock-server/tests/invariant_parity.rs"
+      ],
+      "evidence": [
+        "pinned source differential: llm-mock-server cli/invariant/server suites passed 72/72",
+        "Rust real-registry test proves duplicate ownership, disposal, and replacement"
+      ]
     },
     {
       "source": "packages/test-support/llm-mock-server/tests/server.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-mock-server/tests/server_parity.rs"
+      ],
+      "evidence": [
+        "pinned source differential: llm-mock-server cli/invariant/server suites passed 72/72",
+        "11 grouped Rust wire cases cover every behavior and validation family, incomplete transports, client abort, HTTP errors, UTF-8 chunking, IPv6, random reproducibility, and camel-case event JSON"
+      ]
     },
     {
       "source": "packages/test-support/llm-mock-server/tsconfig.json",
@@ -73059,7 +73111,14 @@
     {
       "source": "packages/test-support/llm-mock-server/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-mock-server/Cargo.toml"
+      ],
+      "evidence": [
+        "Cargo library plus seekdeep-llm-mock-server binary replace the source library/CLI build outputs",
+        "cargo test -p seekdeep-llm-mock-server --all-targets --all-features"
+      ]
     },
     {
       "source": "packages/test-support/llm-replay/README.i18n.yaml",

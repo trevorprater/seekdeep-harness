@@ -4,14 +4,14 @@ English | [中文](README.zh.md)
 
 A scriptable OpenAI-compatible HTTP/SSE server for exercising real LLM adapters, the agent loop, and recovery policy without a provider key. It accepts `POST /chat/completions` and `POST /v1/chat/completions`; each accepted request consumes one configured behavior in arrival order. Invalid methods, paths, bearer tokens, and JSON do not consume the script.
 
-The library entry exports `startMockLlmServer(options)`, behavior and telemetry types, the default random stress weights, the accepted Node timer bound, and a running handle with the bound `baseURL`, generated or configured `randomSeed`, captured requests, and idempotent `close()`. Closing force-terminates stalled connections.
+The Rust library exports `start_mock_llm_server(options)`, behavior and telemetry types, the default random stress weights, the accepted timer bound, and a running handle with `base_url`, `random_seed`, captured `requests()`, and idempotent `close()`. Closing force-terminates stalled connections.
 
 ## Standalone use
 
-Run the source entry from this repository:
+Run the compiled workspace entry from this repository:
 
 ```sh
-pnpm run mock:llm -- \
+cargo run --quiet -p seekdeep-llm-mock-server -- \
   --port 8000 \
   --api-key mock-key \
   --sequence partial_disconnect,success \
@@ -26,7 +26,7 @@ DEEPSEEK_API_KEY=mock-key \
 pnpm seekdeep --profile headless "test provider recovery"
 ```
 
-The repository script writes JSONL to stdout: a `ready` record carries the `/v1` base URL and random seed, followed by request/result records that name both the scripted behavior and the concrete selected behavior. The private support package exposes no installable binary.
+The repository script writes JSONL to stdout: a `ready` record carries the `/v1` base URL and random seed, followed by request/result records that name both the scripted behavior and the concrete selected behavior. The compiled binary remains a private test-support target rather than a product command.
 
 ## Behavior script
 
@@ -55,7 +55,7 @@ The repository script writes JSONL to stdout: a `ready` record carries the `/v1`
 Use a repeating `random` entry for an open-ended mixed run:
 
 ```sh
-pnpm run mock:llm -- \
+cargo run --quiet -p seekdeep-llm-mock-server -- \
   --port 8000 \
   --sequence random \
   --repeat-last \
@@ -63,13 +63,13 @@ pnpm run mock:llm -- \
   --random-weights 'success=60,slow_success=10,connection_reset=5,stream_disconnect=5,partial_disconnect=10,empty=5,server_error=5'
 ```
 
-Omitting `--seed` generates one and prints it in the `ready` record. `--random-weights` accepts non-negative relative `behavior=weight` entries and requires at least one positive concrete behavior. The exported default is a success-heavy stress profile containing reset, disconnect, partial output, empty completion, stall, 429/5xx, clean truncation, and malformed JSON; it is test pressure, not an estimate of production incident frequency. `connection_refused` is excluded because a bound request handler cannot produce a true refusal.
+Omitting `--seed` mints a process-local monotonic seed without ambient randomness and prints it in the `ready` record. `--random-weights` accepts non-negative relative `behavior=weight` entries and requires at least one positive concrete behavior. The exported default is a success-heavy stress profile containing reset, disconnect, partial output, empty completion, stall, 429/5xx, clean truncation, and malformed JSON; it is test pressure, not an estimate of production incident frequency. `connection_refused` is excluded because a bound request handler cannot produce a true refusal.
 
 When random weights include `stall`, configure the client under test with a short stream-idle timeout so the scenario terminates promptly.
 
 ## Timing and content controls
 
-The CLI exposes `--success-text`, `--partial-text`, `--reasoning-text`, `--chunk-size`, `--chunk-delay-ms`, `--disconnect-delay-ms`, `--retry-after-ms`, `--request-id`, `--tool-name`, and `--tool-arguments`. Millisecond delays are bounded integers within Node's timer range; `retryAfterMs` must also be positive. The library accepts the same camel-case options. An optional exact `apiKey` validates `Authorization: Bearer <token>`; omission accepts any token.
+The CLI exposes `--success-text`, `--partial-text`, `--reasoning-text`, `--chunk-size`, `--chunk-delay-ms`, `--disconnect-delay-ms`, `--retry-after-ms`, `--request-id`, `--tool-name`, and `--tool-arguments`. Millisecond delays are bounded integers within the cross-platform timer range; `retry_after_ms` must also be positive. The Rust options use snake-case field names. An optional exact `api_key` validates `Authorization: Bearer <token>`; omission accepts any token.
 
 ## Model Experience
 

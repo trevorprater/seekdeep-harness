@@ -84,6 +84,7 @@ members = [
   "crates/acp-demo",
   "crates/llm",
   "crates/llm-deepseek",
+  "crates/llm-mock-server",
   "crates/llm-replay",
   "crates/llm-pi-ai",
   "crates/llm-retry",

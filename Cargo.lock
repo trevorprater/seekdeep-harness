@@ -6019,6 +6019,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-llm-mock-server"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.0",
+ "nix 0.30.1",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "seekdeep-cordis",
+ "seekdeep-invariants",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "seekdeep-llm-pi-ai"
 version = "0.1.0-rc.5"
 dependencies = [

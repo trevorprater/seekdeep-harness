@@ -4,14 +4,14 @@
 
 可编脚本的 OpenAI 兼容 HTTP／SSE（Server-Sent Events）服务器，用于在无提供方密钥的情况下测试真实 LLM（大语言模型）适配器、agent loop（智能体循环）和恢复策略。它接受 `POST /chat/completions` 和 `POST /v1/chat/completions`；每个已接受请求按到达顺序消费一个已配置行为。无效的请求方法、路径、Bearer token 和 JSON 不会消费脚本条目。
 
-库入口导出 `startMockLlmServer(options)`、行为类型和遥测（telemetry）类型、默认随机压力权重、Node 定时器允许的上限，以及带有绑定 `baseURL`、自动生成或显式配置 `randomSeed`、已捕获请求和幂等 `close()` 的运行句柄。关闭会强制终止停滞连接。
+Rust 库导出 `start_mock_llm_server(options)`、行为类型和遥测（telemetry）类型、默认随机压力权重、允许的定时器上限，以及带有 `base_url`、`random_seed`、已捕获 `requests()` 和幂等 `close()` 的运行句柄。关闭会强制终止停滞连接。
 
 ## 独立使用
 
-从本仓库运行源入口：
+从本仓库运行已编译 workspace 入口：
 
 ```sh
-pnpm run mock:llm -- \
+cargo run --quiet -p seekdeep-llm-mock-server -- \
   --port 8000 \
   --api-key mock-key \
   --sequence partial_disconnect,success \
@@ -26,7 +26,7 @@ DEEPSEEK_API_KEY=mock-key \
 pnpm seekdeep --profile headless "test provider recovery"
 ```
 
-仓库脚本将 JSONL 写入 stdout：`ready` 记录携带以 `/v1` 结尾的基础 URL 和随机种子，后续请求/结果记录同时命名脚本行为和实际选中的具体行为。这个私有支持包不公开可安装的二进制命令。
+仓库脚本将 JSONL 写入 stdout：`ready` 记录携带以 `/v1` 结尾的基础 URL 和随机种子，后续请求/结果记录同时命名脚本行为和实际选中的具体行为。已编译二进制程序仍是私有测试支持目标，而非产品命令。
 
 ## 行为脚本
 
@@ -55,7 +55,7 @@ pnpm seekdeep --profile headless "test provider recovery"
 使用重复 `random` 条目执行开放式混合运行：
 
 ```sh
-pnpm run mock:llm -- \
+cargo run --quiet -p seekdeep-llm-mock-server -- \
   --port 8000 \
   --sequence random \
   --repeat-last \
@@ -63,13 +63,13 @@ pnpm run mock:llm -- \
   --random-weights 'success=60,slow_success=10,connection_reset=5,stream_disconnect=5,partial_disconnect=10,empty=5,server_error=5'
 ```
 
-省略 `--seed` 会生成种子，并在 `ready` 记录中打印。`--random-weights` 接受非负的相对 `behavior=weight` 条目，并要求至少一个正权重具体行为。导出默认值是一个成功占主导的压力分布，包含 reset、disconnect、部分输出、空完成、stall、429/5xx、干净截断和格式错误的 JSON；它用于施加测试压力，而非估计生产事故频率。`connection_refused` 被排除，因为已绑定的请求处理器无法产生真实拒绝。
+省略 `--seed` 会在不读取环境随机源的情况下铸造进程内单调 seed，并在 `ready` 记录中打印。`--random-weights` 接受非负的相对 `behavior=weight` 条目，并要求至少一个正权重具体行为。导出默认值是一个成功占主导的压力分布，包含 reset、disconnect、部分输出、空完成、stall、429/5xx、干净截断和格式错误的 JSON；它用于施加测试压力，而非估计生产事故频率。`connection_refused` 被排除，因为已绑定的请求处理器无法产生真实拒绝。
 
 随机权重包含 `stall` 时，为待测客户端配置较短的流空闲超时，使场景及时结束。
 
 ## 时序与内容控制
 
-CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-size`、`--chunk-delay-ms`、`--disconnect-delay-ms`、`--retry-after-ms`、`--request-id`、`--tool-name` 和 `--tool-arguments`。毫秒延迟是 Node timer 范围内的有界整数；`retryAfterMs` 还必须为正数。库接受相同的 camel-case 选项。可选的 `apiKey` 会精确验证 `Authorization: Bearer <token>`；省略时接受任何 token。
+CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-size`、`--chunk-delay-ms`、`--disconnect-delay-ms`、`--retry-after-ms`、`--request-id`、`--tool-name` 和 `--tool-arguments`。毫秒延迟是跨平台 timer 范围内的有界整数；`retry_after_ms` 还必须为正数。Rust 选项使用 snake-case 字段名。可选的 `api_key` 会精确验证 `Authorization: Bearer <token>`；省略时接受任何 token。
 
 ## 模型体验
 
