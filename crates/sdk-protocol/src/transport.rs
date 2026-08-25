@@ -54,7 +54,7 @@ pub struct JsonRpcResponseError {
 /// One bidirectional line-delimited endpoint.
 pub struct JsonRpcLineTransport {
     input: Mutex<Option<BoxedJsonRpcInput>>,
-    output: tokio::sync::Mutex<BoxedJsonRpcOutput>,
+    output: tokio::sync::Mutex<Option<BoxedJsonRpcOutput>>,
     started: AtomicBool,
     reader: Mutex<Option<JoinHandle<()>>>,
     next_request: AtomicU64,
@@ -93,7 +93,7 @@ impl JsonRpcLineTransport {
     pub fn from_boxed(input: BoxedJsonRpcInput, output: BoxedJsonRpcOutput) -> Arc<Self> {
         Arc::new(Self {
             input: Mutex::new(Some(input)),
-            output: tokio::sync::Mutex::new(output),
+            output: tokio::sync::Mutex::new(Some(output)),
             started: AtomicBool::new(false),
             reader: Mutex::new(None),
             next_request: AtomicU64::new(1),
@@ -279,7 +279,11 @@ impl JsonRpcLineTransport {
     ///
     /// Returns the underlying flush failure.
     pub async fn flush(&self) -> anyhow::Result<()> {
-        self.output.lock().await.flush().await?;
+        let mut output = self.output.lock().await;
+        let output = output
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("JSON-RPC output closed"))?;
+        output.flush().await?;
         Ok(())
     }
 
@@ -298,7 +302,11 @@ impl JsonRpcLineTransport {
     ///
     /// Returns the underlying shutdown failure.
     pub async fn shutdown_output(&self) -> anyhow::Result<()> {
-        self.output.lock().await.shutdown().await?;
+        let output = self.output.lock().await.take();
+        let Some(mut output) = output else {
+            return Ok(());
+        };
+        output.shutdown().await?;
         Ok(())
     }
 
@@ -443,7 +451,11 @@ impl JsonRpcLineTransport {
     async fn write_frame(&self, frame: Value) -> anyhow::Result<()> {
         let mut bytes = serde_json::to_vec(&frame)?;
         bytes.push(b'\n');
-        self.output.lock().await.write_all(&bytes).await?;
+        let mut output = self.output.lock().await;
+        let output = output
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("JSON-RPC output closed"))?;
+        output.write_all(&bytes).await?;
         Ok(())
     }
 

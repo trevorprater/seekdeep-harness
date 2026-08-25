@@ -68,6 +68,7 @@ pub struct AcpBridge {
     sessions: Mutex<HashMap<AcpSessionId, SessionRecord>>,
     effects: Mutex<Vec<EffectHandle>>,
     continuable_drain_hook: Option<AcpContinuableDrainHook>,
+    connection_closed: seekdeep_llm::AbortSignal,
     closed: AtomicBool,
     shutdown: OnceCell<Result<(), String>>,
 }
@@ -83,7 +84,18 @@ impl AcpBridge {
         transport: &Arc<JsonRpcLineTransport>,
         config: AcpBridgeConfig,
     ) -> anyhow::Result<Arc<Self>> {
-        Self::new_inner(context, transport, config, None)
+        Self::new_inner(context, transport, config, None, None)
+    }
+
+    /// Constructs the bridge with the exact assembled Agent registry.
+    #[doc(hidden)]
+    pub fn new_with_agents(
+        context: &Context,
+        transport: &Arc<JsonRpcLineTransport>,
+        config: AcpBridgeConfig,
+        agents: Arc<AgentRegistry>,
+    ) -> anyhow::Result<Arc<Self>> {
+        Self::new_inner(context, transport, config, Some(agents), None)
     }
 
     /// Constructs the bridge with an explicit continuable-drain seam.
@@ -97,17 +109,18 @@ impl AcpBridge {
         config: AcpBridgeConfig,
         drain: AcpContinuableDrainHook,
     ) -> anyhow::Result<Arc<Self>> {
-        Self::new_inner(context, transport, config, Some(drain))
+        Self::new_inner(context, transport, config, None, Some(drain))
     }
 
     fn new_inner(
         context: &Context,
         transport: &Arc<JsonRpcLineTransport>,
         config: AcpBridgeConfig,
+        explicit_agents: Option<Arc<AgentRegistry>>,
         continuable_drain_hook: Option<AcpContinuableDrainHook>,
     ) -> anyhow::Result<Arc<Self>> {
-        let agents = context
-            .get(AGENTS)
+        let agents = explicit_agents
+            .or_else(|| context.get(AGENTS))
             .ok_or_else(|| anyhow::anyhow!("acp requires agents"))?;
         let bridge = Arc::new(Self {
             context: context.clone(),
@@ -117,6 +130,7 @@ impl AcpBridge {
             sessions: Mutex::new(HashMap::new()),
             effects: Mutex::new(Vec::new()),
             continuable_drain_hook,
+            connection_closed: seekdeep_llm::AbortSignal::default(),
             closed: AtomicBool::new(false),
             shutdown: OnceCell::new(),
         });
@@ -143,6 +157,9 @@ impl AcpBridge {
         transport.on_input_failure(Arc::new(move |error| {
             tracing::warn!(%error, "ACP connection closed with an error");
             if let Some(bridge) = weak.upgrade() {
+                bridge
+                    .connection_closed
+                    .abort_with_reason(Value::String("ACP connection input closed".to_owned()));
                 tokio::spawn(async move {
                     if let Err(error) = bridge.shutdown().await {
                         tracing::warn!(%error, "ACP connection-close teardown failed");
@@ -156,6 +173,12 @@ impl AcpBridge {
     /// Starts reading protocol frames.
     pub fn start(&self) {
         self.transport.start();
+    }
+
+    /// Signal that aborts when the peer input ends or fails.
+    #[must_use]
+    pub fn connection_closed_signal(&self) -> seekdeep_llm::AbortSignal {
+        self.connection_closed.clone()
     }
 
     /// Dispatches one ACP request.

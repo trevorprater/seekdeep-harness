@@ -30,3 +30,7 @@ pub use seekdeep_agent::factory::{
     ResumeAgentOptions,
 };
 pub use tool_calls::{ToolCall, ToolCallBatch, ToolCallBatchOutcome, execute_tool_calls};
+
+/// Typed Cordis slot for the concrete agent-loop factory.
+pub const AGENT_LOOP: seekdeep_cordis::ServiceKey<AgentLoop> =
+    seekdeep_cordis::ServiceKey::new("agentLoop");

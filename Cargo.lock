@@ -4420,6 +4420,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-acp-demo"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "seekdeep-acp",
+ "seekdeep-agent-instructions",
+ "seekdeep-agent-spine-demo",
+ "seekdeep-app-boot",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-jobs-local",
+ "seekdeep-llm",
+ "seekdeep-loader",
+ "seekdeep-sdk-protocol",
+ "seekdeep-session-checkpoint-policy",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
+ "seekdeep-session-query",
+ "seekdeep-session-query-sqlite",
+ "seekdeep-session-title",
+ "seekdeep-tool-bash",
+ "seekdeep-tool-jobs",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-agent"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -4554,6 +4588,42 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "seekdeep-agent-spine-demo"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-agent",
+ "seekdeep-agent-instructions",
+ "seekdeep-agent-loop",
+ "seekdeep-cordis",
+ "seekdeep-cordis-timer",
+ "seekdeep-core",
+ "seekdeep-goal",
+ "seekdeep-goal-round-driver",
+ "seekdeep-invariants",
+ "seekdeep-jobs",
+ "seekdeep-jobs-local",
+ "seekdeep-llm",
+ "seekdeep-llm-retry",
+ "seekdeep-scope",
+ "seekdeep-session-title",
+ "seekdeep-shell-env",
+ "seekdeep-skill",
+ "seekdeep-skill-filesystem",
+ "seekdeep-system-prompt",
+ "seekdeep-tool-bash",
+ "seekdeep-tool-goal",
+ "seekdeep-tool-jobs",
+ "seekdeep-tool-skill",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

@@ -51415,12 +51415,32 @@
     {
       "source": "packages/examples/acp-demo/src/bin.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/bin/seekdeep-acp-demo.rs",
+        "crates/acp-demo/src/lib.rs",
+        "crates/acp-demo/tests/acp_demo_parity.rs"
+      ],
+      "evidence": [
+        "Rust binary parses strict --config and -c arguments, defaults to cordis.yml, applies snapshot config selection, freezes layered env outside replay, boots through Rust app-boot and Loader, reserves stdout for ACP, observes bridge EOF without a competing stdin reader, and joins disposal",
+        "compiled-binary acceptance negotiates ACP, creates a fresh session, and exits successfully on EOF"
+      ]
     },
     {
       "source": "packages/examples/acp-demo/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/lib.rs",
+        "crates/agent-spine-demo/src/lib.rs",
+        "crates/acp/src/bridge.rs",
+        "crates/acp/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP demo composition passed 12/12 and its built/load-path E2E suites passed 4/4",
+        "Rust app composes the verified spine, JSONL persistence, loop resume backend, semantic checkpoint policy, SQLite query index, and exact-agent ACP bridge in teardown-safe registration order with no stdout logger",
+        "Rust in-process real AgentLoop round trip emits committed ACP text and the compiled binary proves Loader and fresh-session behavior"
+      ]
     },
     {
       "source": "packages/examples/acp-demo/src/invariant.ts",
@@ -51449,7 +51469,14 @@
     {
       "source": "packages/examples/acp-demo/tests/load-path.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/acp_demo_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ACP demo built/load-path E2E suites passed 4/4",
+        "compiled Rust bin boots the real Loader namespace path, negotiates baseline capabilities, creates a fresh session without a model call, and exits on protocol EOF"
+      ]
     },
     {
       "source": "packages/examples/acp-demo/tsconfig.json",
@@ -51465,7 +51492,16 @@
     {
       "source": "packages/examples/acp-demo/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/Cargo.toml",
+        "crates/acp-demo/src/bin/seekdeep-acp-demo.rs",
+        "crates/acp-demo/src/lib.rs"
+      ],
+      "evidence": [
+        "Cargo builds the plugin library and ACP executable as native Rust artifacts with no JavaScript output chunks",
+        "strict all-target Clippy, library tests, and compiled-binary acceptance pass"
+      ]
     },
     {
       "source": "packages/examples/agent-spine-demo/README.i18n.yaml",
@@ -51514,7 +51550,18 @@
     {
       "source": "packages/examples/agent-spine-demo/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-spine-demo/src/lib.rs",
+        "crates/agent-loop/src/factory.rs",
+        "crates/agent-loop/src/lib.rs",
+        "crates/goal/src/index.rs"
+      ],
+      "evidence": [
+        "pinned-source agent-spine unit and catalog suites passed 54/54 and its keyless multi-project E2E passed 4/4",
+        "Rust bundle constructs timer, LLM, sessions, title, prompt, tools, optional skills, agents, retry, optional goals, jobs, filtered package invariants, shell environment, optional instructions and model tools, the concrete loop, and configured agents under one reversible context",
+        "Rust composition tests pin minimal and goal-enabled rosters, invariant companions, exact configured identity, scheduler forwarding, skill home agreement, skill enablement, tool ordering, namespace shape, and required false-or-config fields"
+      ]
     },
     {
       "source": "packages/examples/agent-spine-demo/src/invariant.ts",

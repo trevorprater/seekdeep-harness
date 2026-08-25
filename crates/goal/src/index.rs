@@ -73,7 +73,7 @@ impl GoalEnvironment for SystemGoalEnvironment {
 }
 
 /// Deployment defaults for goal creation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Config {
     /// Total rounds used when a create request omits its own cap.

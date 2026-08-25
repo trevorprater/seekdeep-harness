@@ -79,6 +79,8 @@ members = [
   "crates/mcp-client",
   "crates/logger-console",
   "crates/jsonrpc-demo",
+  "crates/agent-spine-demo",
+  "crates/acp-demo",
     "crates/llm",
     "crates/llm-deepseek",
   "crates/llm-pi-ai",

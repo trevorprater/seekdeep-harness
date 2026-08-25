@@ -153,6 +153,12 @@ impl AgentLoop {
         })
     }
 
+    /// Configured maximum parallel-safe tool calls per step.
+    #[must_use]
+    pub fn max_parallel_tool_calls(&self) -> usize {
+        self.inner.services.max_parallel_tool_calls
+    }
+
     /// Creates, composes, and publishes one exact agent/session lifecycle.
     ///
     /// # Errors

@@ -7,7 +7,7 @@ pub mod types;
 
 use std::sync::Arc;
 
-use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_sdk_protocol::{BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTransport};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -26,6 +26,8 @@ pub use types::{
 pub const NAME: &str = "acp";
 /// The bridge requires the shared agent factory.
 pub const INJECT: &[&str] = &["agents"];
+/// Exact live bridge marker for process runners and assembled apps.
+pub const ACP_BRIDGE: ServiceKey<AcpBridge> = ServiceKey::new("acpBridge");
 
 /// Provider/model selection for each ACP-created agent.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,21 +57,45 @@ pub fn apply_with_runtime(
     config: Config,
     runtime: AcpRuntime,
 ) -> anyhow::Result<Arc<AcpBridge>> {
+    apply_with_runtime_inner(context, config, runtime, None)
+}
+
+/// Applies the ACP bridge with an exact assembled Agent registry.
+#[doc(hidden)]
+pub fn apply_with_runtime_and_agents(
+    context: &Context,
+    config: Config,
+    runtime: AcpRuntime,
+    agents: Arc<seekdeep_agent::AgentRegistry>,
+) -> anyhow::Result<Arc<AcpBridge>> {
+    apply_with_runtime_inner(context, config, runtime, Some(agents))
+}
+
+fn apply_with_runtime_inner(
+    context: &Context,
+    config: Config,
+    runtime: AcpRuntime,
+    agents: Option<Arc<seekdeep_agent::AgentRegistry>>,
+) -> anyhow::Result<Arc<AcpBridge>> {
     let transport = JsonRpcLineTransport::from_boxed(runtime.input, runtime.output);
-    let bridge = AcpBridge::new(
-        context,
-        &transport,
-        AcpBridgeConfig {
-            provider: config.provider,
-            model: config.model,
-        },
-    )?;
+    let config = AcpBridgeConfig {
+        provider: config.provider,
+        model: config.model,
+    };
+    let bridge = match agents {
+        Some(agents) => AcpBridge::new_with_agents(context, &transport, config, agents)?,
+        None => AcpBridge::new(context, &transport, config)?,
+    };
+    let marker = context.provide(ACP_BRIDGE, bridge.clone())?;
     bridge.start();
     let cleanup = Arc::clone(&bridge);
     let effect = EffectHandle::new("acp.connection", move || {
         Box::pin(async move { cleanup.shutdown().await })
     });
-    context.own(effect)?;
+    if let Err(error) = context.own(effect) {
+        let _ = futures::executor::block_on(marker.dispose());
+        return Err(error.into());
+    }
     Ok(bridge)
 }
 
