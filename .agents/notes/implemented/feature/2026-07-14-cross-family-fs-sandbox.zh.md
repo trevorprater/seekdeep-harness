@@ -94,5 +94,5 @@ Status: implemented
 ## 测试
 
 - 单元：`seekdeep-sandbox` 钉住升级阶梯、标记构造器、参数配对校验，以及 `approveEscalation` 的有序 fail-closed 序列（非加宽、无 approval、无 agent、各结果），外加 `writableRoots`/`canonicalPath`。`seekdeep-sandbox-policy` 钉住部署回退、会话模式/根目录解析、显式模式优先级、折叠/setter、加载期模式拒绝，以及 HMR（热模块替换）安全。`seekdeep-fs-sandbox` 在真实文件系统上钉住按策略执行的围栏与包含矩阵（内部、临时目录、绝对路径-外部、`..`、指向外部的符号链接目录、其下的新建文件、路径等于根、文件系统根、以分隔符结尾的根、等价别名形式），外加 per-call 覆盖与 HMR 安全。`seekdeep-tool-fs` 钉住宣告门控、完整策略解析、拒绝标记映射，以及完整的升级矩阵（授权、拒绝、无服务、无 agent、配对、非受限守卫）。`seekdeep-tool-bash`、`seekdeep-bash-sandbox` 与 `seekdeep-permission-presets` 使用同一套策略工具集。
-- 无密钥 e2e：一个真实 Cordis 上下文创建两个 agent，其会话的 cwd 根目录各不相同；系统并发运行正式发布的 bash 与 fs 工具，再通过外部可观察结果验证各自在所属项目中的写入成功，而两次跨项目写入都被拒绝。
+- 无密钥 Rust e2e：一个真实 Cordis 上下文创建两个 agent，其会话的 cwd 根目录各不相同；系统并发运行正式发布的 bash 与 fs 工具，再通过外部可观察结果验证各自在所属项目中的写入成功，而两次跨项目写入都被拒绝。另有两个 symlink-cwd 用例证明，bash 执行、fs 解析与策略根目录对物理 `symlink/..` 身份和父级遍历保持一致，同时不会向词法父级授权。
 - 快照：acp-agent 示例组合 `seekdeep-sandbox-policy` + `seekdeep-fs-sandbox`；被钉住的 header 携带 fs 升级字段与 `sandbox/mode` 事件名，一次性重录。

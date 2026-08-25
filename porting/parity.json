@@ -51554,6 +51554,7 @@
       "targets": [
         "crates/agent-spine-demo/src/lib.rs",
         "crates/agent-spine-demo/tests/agent_core_parity.rs",
+        "crates/agent-spine-demo/tests/multi_project_sandbox_parity.rs",
         "crates/agent-loop/src/factory.rs",
         "crates/agent-loop/src/lib.rs",
         "crates/goal/src/index.rs"
@@ -51603,7 +51604,19 @@
     {
       "source": "packages/examples/agent-spine-demo/tests/multi-project-sandbox.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-spine-demo/tests/multi_project_sandbox_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: multi-project-sandbox.e2e.ts passed 4/4 with vitest.e2e.config.ts",
+        "Rust 4/4 assembled tests mount the local process sandbox, per-Session policy, sandboxed Bash and filesystem providers, Agent Spine, Bash and fs tools, and two live Agents in one Cordis context",
+        "Real concurrent Bash and filesystem calls prove each Session writes only inside its own cwd and both cross-project writes retain the exact workspace-write denial marker",
+        "Unix symlink cases prove session cwd identity, policy roots, Bash workdir, filesystem resolution, and parent traversal agree on the physical workspace without granting the lexical parent",
+        "cargo test -p seekdeep-agent-spine-demo --test multi_project_sandbox_parity --all-features: 4 passed",
+        "cargo clippy -p seekdeep-agent-spine-demo --all-targets --all-features -- -D warnings",
+        "cargo check --target x86_64-pc-windows-msvc -p seekdeep-agent-spine-demo --tests --all-features"
+      ]
     },
     {
       "source": "packages/examples/agent-spine-demo/tsconfig.json",

@@ -42,7 +42,14 @@ async-trait.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
 seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-fs-sandbox = { path = "../fs-sandbox" }
+seekdeep-landlock-run = { path = "../landlock-run" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-shell = { path = "../shell" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-bash-sandbox = { path = "../bash-sandbox" }
 seekdeep-tool-fs = { path = "../tool-fs" }
 tempfile.workspace = true
 tokio.workspace = true
