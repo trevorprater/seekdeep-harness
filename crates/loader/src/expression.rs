@@ -140,6 +140,11 @@ impl ExpressionEnvironment {
       : root.replace(/[^/]*$/, '') + input;
     return Object.freeze({{ href, toString: () => href }});
   }}
+  const __jsonParse = JSON.parse.bind(JSON);
+  Object.defineProperty(JSON, 'parse', {{ value: input => {{
+    try {{ return __jsonParse(input); }}
+    catch (error) {{ throw new SyntaxError(`${{error.message}}: ${{String(input)}}`); }}
+  }} }});
   const __fileURLToPath = value => {{
     const href = String(value && value.href !== undefined ? value.href : value);
     if (!href.startsWith('file:')) throw new TypeError('The URL must be of scheme file');

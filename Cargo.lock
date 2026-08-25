@@ -6069,6 +6069,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-llm-replay"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "futures",
+ "indexmap 2.14.0",
+ "parking_lot",
+ "regress 0.11.1",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-llm",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-llm-retry"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -6579,12 +6599,42 @@ name = "seekdeep-sdk-jsonrpc-demo"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "clap",
+ "parking_lot",
+ "seekdeep-agent-spine-demo",
  "seekdeep-app-boot",
+ "seekdeep-bash-local",
+ "seekdeep-compaction-basic",
+ "seekdeep-cordis",
+ "seekdeep-core",
+ "seekdeep-fs-local",
+ "seekdeep-fs-observation-policy",
+ "seekdeep-llm",
+ "seekdeep-llm-deepseek",
+ "seekdeep-llm-replay",
  "seekdeep-loader",
+ "seekdeep-sandbox-local",
+ "seekdeep-sandbox-policy",
+ "seekdeep-sdk-client",
  "seekdeep-sdk-server",
+ "seekdeep-session-checkpoint-policy",
+ "seekdeep-session-persistence-jsonl",
+ "seekdeep-subagent",
+ "seekdeep-subagent-spawn-in-process",
+ "seekdeep-subprocess-local",
+ "seekdeep-terminal",
+ "seekdeep-terminal-bash",
+ "seekdeep-token-meter",
+ "seekdeep-tool-bash-persistent",
+ "seekdeep-tool-fs",
+ "seekdeep-tool-str-replace-editor",
+ "seekdeep-tool-subagent",
+ "seekdeep-tool-todo",
  "seekdeep-util",
+ "serde_json",
  "tempfile",
  "tokio",
+ "zstd",
 ]
 
 [[package]]

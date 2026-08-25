@@ -35210,7 +35210,18 @@
     {
       "source": "examples/jsonrpc-agent/minimal.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jsonrpc-demo/src/bin/seekdeep-jsonrpc-minimal.rs",
+        "crates/jsonrpc-demo/tests/keyless_smoke_parity.rs",
+        "examples/jsonrpc-agent/README.md",
+        "examples/jsonrpc-agent/README.zh.md"
+      ],
+      "evidence": [
+        "live compiled Rust client/runtime loopback: exact final stdout, default model, prompt, session root, named session, and owned subprocess cleanup",
+        "cargo test -p seekdeep-sdk-jsonrpc-demo --all-features",
+        "cargo clippy -p seekdeep-sdk-jsonrpc-demo --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "examples/jsonrpc-agent/minimal.snapshot.cordis.yml",
@@ -35274,12 +35285,32 @@
     {
       "source": "examples/jsonrpc-agent/tests/keyless-smoke.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jsonrpc-demo/tests/keyless_smoke_parity.rs",
+        "crates/jsonrpc-demo/src/runner.rs",
+        "crates/sdk-server/src/server.rs"
+      ],
+      "evidence": [
+        "pinned source differential: 4/4 keyless smoke cases",
+        "compiled Rust loopback matrix: default/true/false max-token mapping, exact six-tool request, maxTokens=1234, max-tokens event, Zstandard session header, and invalid-env stdout purity",
+        "cargo test -p seekdeep-sdk-jsonrpc-demo --all-features"
+      ]
     },
     {
       "source": "examples/jsonrpc-agent/tests/sdk.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/jsonrpc-demo/tests/sdk_snapshot_parity.rs",
+        "crates/jsonrpc-demo/src/runner.rs",
+        "crates/llm-replay/src/lib.rs"
+      ],
+      "evidence": [
+        "pinned source differential: 4/4 SDK replay scenarios",
+        "compiled Rust differential: text, Bash, in-process subagent, and persistent-tool scenarios through the real Loader, SDK subprocess, tools, persistence, and committed fixtures",
+        "cargo test -p seekdeep-sdk-jsonrpc-demo --all-features"
+      ]
     },
     {
       "source": "examples/jsonrpc-agent/tests/snapshots/bash-tool/notifications.expected.jsonl",
@@ -73042,7 +73073,17 @@
     {
       "source": "packages/test-support/llm-replay/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-replay/src/lib.rs",
+        "crates/llm-replay/Cargo.toml"
+      ],
+      "evidence": [
+        "pinned source differential: 84/84 llm-replay cases",
+        "Rust implementation preserves packed-log decoding, call derivation, compaction calls, strict overrides, request substitutions, per-session binding, provider metadata/retry policy, pacing/cancellation, lifecycle disposal, and consumption audit",
+        "cargo test -p seekdeep-llm-replay --all-features",
+        "cargo clippy -p seekdeep-llm-replay --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/test-support/llm-replay/src/invariant.ts",
@@ -73061,7 +73102,16 @@
     {
       "source": "packages/test-support/llm-replay/tests/llm-replay.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-replay/src/lib.rs",
+        "crates/jsonrpc-demo/tests/sdk_snapshot_parity.rs"
+      ],
+      "evidence": [
+        "pinned source differential: 84/84 cases",
+        "10 grouped Rust conformance cases plus four real compiled-runtime replay scenarios",
+        "cargo test -p seekdeep-llm-replay -p seekdeep-sdk-jsonrpc-demo --all-features"
+      ]
     },
     {
       "source": "packages/test-support/llm-replay/tsconfig.json",

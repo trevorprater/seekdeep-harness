@@ -11,6 +11,7 @@ use std::{
 use seekdeep_app_boot::{
     BootOptions, BootedApplication, boot, load_layered_env, resolve_config_path,
 };
+use seekdeep_cordis::Plugin;
 use seekdeep_loader::{ExpressionEnvironment, PluginCatalog};
 use seekdeep_util::home_paths::{SEEKDEEP_HOME_ENV, resolve_process_seekdeep_home};
 use tokio::io::AsyncReadExt as _;
@@ -82,13 +83,116 @@ pub fn catalog(
         seekdeep_home,
     );
     let mut catalog = PluginCatalog::new().with_expression_environment(expressions);
-    let server = seekdeep_sdk_server::plugin();
-    catalog.register_named("@seekdeep-ai/seekdeep-sdk-jsonrpc-server", server.clone())?;
-    catalog.register_named("seekdeep-sdk-jsonrpc-server", server)?;
+    register_plugins(&catalog)?;
     if let Some(base) = bare_module_base {
         catalog = catalog.with_bare_module_base(base);
     }
     Ok(catalog)
+}
+
+fn register_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> {
+    register(
+        catalog,
+        "seekdeep-sdk-jsonrpc-server",
+        seekdeep_sdk_server::deferred_plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-llm-deepseek",
+        seekdeep_llm_deepseek::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-llm-replay",
+        seekdeep_llm_replay::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-subprocess-local",
+        seekdeep_subprocess_local::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-bash-local",
+        seekdeep_bash_local::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-agent-spine-demo",
+        seekdeep_agent_spine_demo::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-session-persistence-jsonl",
+        seekdeep_session_persistence_jsonl::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-session-checkpoint-policy",
+        seekdeep_session_checkpoint_policy::plugin(),
+    )?;
+    register(catalog, "seekdeep-subagent", seekdeep_subagent::plugin())?;
+    register(
+        catalog,
+        "seekdeep-subagent-spawn-in-process",
+        seekdeep_subagent_spawn_in_process::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-tool-subagent",
+        seekdeep_tool_subagent::plugin(),
+    )?;
+    register(catalog, "seekdeep-tool-todo", seekdeep_tool_todo::plugin())?;
+    register(catalog, "seekdeep-fs-local", seekdeep_fs_local::plugin())?;
+    register(
+        catalog,
+        "seekdeep-fs-observation-policy",
+        seekdeep_fs_observation_policy::plugin(),
+    )?;
+    register(catalog, "seekdeep-tool-fs", seekdeep_tool_fs::plugin())?;
+    register(
+        catalog,
+        "seekdeep-token-meter",
+        seekdeep_token_meter::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-compaction-basic",
+        seekdeep_compaction_basic::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-sandbox-local",
+        seekdeep_sandbox_local::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-sandbox-policy",
+        seekdeep_sandbox_policy::plugin(),
+    )?;
+    register(catalog, "seekdeep-terminal", seekdeep_terminal::plugin())?;
+    register(
+        catalog,
+        "seekdeep-terminal-bash",
+        seekdeep_terminal_bash::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-tool-bash-persistent",
+        seekdeep_tool_bash_persistent::plugin(),
+    )?;
+    register(
+        catalog,
+        "seekdeep-tool-str-replace-editor",
+        seekdeep_tool_str_replace_editor::plugin(),
+    )?;
+    Ok(())
+}
+
+fn register(catalog: &PluginCatalog, name: &str, plugin: Plugin) -> anyhow::Result<()> {
+    catalog.register_named(name, plugin.clone())?;
+    catalog.register_named(&format!("@seekdeep-ai/{name}"), plugin)?;
+    Ok(())
 }
 
 /// Boots the selected external configuration transactionally.
@@ -140,6 +244,12 @@ async fn process_main_async(packaged: bool) -> anyhow::Result<i32> {
         .and_then(|path| path.parent().map(Path::to_owned));
     let application =
         boot_selected(&environment, &arguments, &cwd, bare_module_base.as_deref()).await?;
+    if let Some(server) = application
+        .context()
+        .get(seekdeep_sdk_server::SDK_JSONRPC_SERVER)
+    {
+        server.mark_ready();
+    }
     let server_owns_stdin = application
         .context()
         .get(seekdeep_sdk_server::SDK_JSONRPC_SERVER)

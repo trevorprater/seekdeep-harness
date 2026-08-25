@@ -7,7 +7,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, ReentrantMutex};
 pub use seekdeep_llm::SessionId;
 use seekdeep_llm::{ContentBlock, Message, MessageRole, ModelId, ProviderId};
 use serde::{Deserialize, Serialize};
@@ -370,6 +370,7 @@ pub struct Session {
     header: SessionHeader,
     first_live_seq: u64,
     inner: Mutex<SessionInner>,
+    append_gate: ReentrantMutex<()>,
     publisher: Mutex<Option<Weak<dyn SessionPublisher>>>,
 }
 
@@ -439,6 +440,7 @@ impl Session {
             header,
             first_live_seq,
             inner: Mutex::new(inner),
+            append_gate: ReentrantMutex::new(()),
             publisher: Mutex::new(None),
         }))
     }
@@ -497,6 +499,12 @@ impl Session {
         options: AppendOptions,
     ) -> Result<SessionEvent, SessionError> {
         validate_lossless_json(&data)?;
+        // A synchronous nested append on this thread remains an invariant
+        // violation, while independent executor threads queue in commit order.
+        // JavaScript serialized these callers on one event loop; the Rust
+        // runtime must not turn harmless task interleaving into a false
+        // reentrancy failure while publication temporarily releases `inner`.
+        let _append_gate = self.append_gate.lock();
         let mut inner = self.inner.lock();
         if inner.appending {
             return Err(SessionError::ReentrantAppend);

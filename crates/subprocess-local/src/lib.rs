@@ -12,7 +12,7 @@ use std::{
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use path_clean::PathClean as _;
-use seekdeep_cordis::{Context, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
 use seekdeep_llm::AbortSignal;
 use seekdeep_process_exit_hook::{ProcessExitTarget, register as register_process_exit};
 use seekdeep_subprocess::{
@@ -37,6 +37,22 @@ pub use spawn::{
     taskkill_process_tree,
 };
 pub use terminal::LocalTerminalHandle;
+
+/// Loader plugin name.
+pub const NAME: &str = "subprocess-local";
+/// The local runtime has no service dependencies.
+pub const INJECT: &[&str] = &[];
+
+/// Builds the Loader-compatible local subprocess provider.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            LocalSubprocessRuntime::install(&context)?;
+            Ok(())
+        })
+    })
+}
 
 /// Aggregated normal-disposal failures when more than one managed target cannot quiesce.
 #[derive(Debug)]

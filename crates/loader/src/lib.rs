@@ -1571,7 +1571,10 @@ fn profile_entry_to_runtime(entry: &profile_patch::ProfileEntry) -> Result<Entry
         .config()
         .cloned()
         .unwrap_or_else(|| ProfileNode::Mapping(IndexMap::new()));
-    let include = if plugin.as_str() == "cordis:include" {
+    let include = if matches!(
+        plugin.as_str(),
+        "cordis:include" | "cordis-plugin-include" | "@seekdeep-ai/cordis-plugin-include"
+    ) {
         Some(parse_include_options(&config_node)?)
     } else {
         None

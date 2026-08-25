@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-面向 Python SDK 内置 JSON-RPC 运行时的无人值守编码 agent（智能体）组合。它有意不加载终端 UI、控制台日志记录器、批准界面或用户交互工具，因为 stdout 属于 SDK 协议，轮次由 SDK 驱动。
+面向已编译 Rust JSON-RPC 运行时及其 SDK 客户端的无人值守编码 agent（智能体）组合。它有意不加载终端 UI、控制台日志记录器、批准界面或用户交互工具，因为 stdout 属于 SDK 协议，轮次由客户端驱动。
 
 面向模型的工具为：
 
@@ -22,11 +22,11 @@
 | `SEEKDEEP_CWD` | bash 和文件系统工具使用的 agent workspace |
 | `SEEKDEEP_CONTEXT_WINDOW` | 极简变体中为 `SEEKDEEP_MODEL` 目录项记录的上下文容量 |
 | `SEEKDEEP_MAX_TOKENS_AS_SUCCESS` | `true`（默认）接受受 token 上限限制的结果；`false` 将其报告为错误 |
-| `SEEKDEEP_MODEL` | `minimal.py` 使用的默认模型；`--model` 优先 |
+| `SEEKDEEP_MODEL` | `seekdeep-jsonrpc-minimal` 使用的默认模型；`--model` 优先 |
 | `SEEKDEEP_SESSION_ROOT` | JSONL 会话目录 |
 | `SEEKDEEP_SYSTEM_PROMPT` | 由部署提供的编码人格 |
 
-通过 Python SDK 的 `cordis` 选项或 `SEEKDEEP_CORDIS_CONFIG` 传入配置路径。内置可执行文件已携带此文件中指定的每个插件；目标机器无需 Node.js。
+通过 SDK 启动配置或 `SEEKDEEP_CORDIS_CONFIG` 传入配置路径。内置可执行文件已携带此文件中指定的每个插件；目标机器无需 Node.js。
 
 ## 极简变体
 
@@ -37,4 +37,10 @@
 
 它组合了内置运行时所需的本地 PTY、裸 `fs-local` 后端、供持久 Bash 使用的 danger-full-access 策略，以及未压缩的 JSONL 持久化。Bash 和编辑器绝对路径可以修改运行时进程有权访问的任何路径，因此只能针对可丢弃的 checkout 或容器运行该变体。持久 PTY 需要 POSIX 终端环境，因此不适用于 Windows agent 接口。
 
-[`minimal.py`](minimal.py)通过 Python SDK 运行该组合，并把 `SEEKDEEP_MODEL` 作为默认模型。[Python SDK 教程](../../docs/user/guide/python-sdk.md)介绍安装、运行、workspace 选择与 session 标识；[SDK 参考](../../python/sdk/README.md)归属运行时生命周期与结果语义。
+[`seekdeep-jsonrpc-minimal` Rust 入口](../../crates/jsonrpc-demo/src/bin/seekdeep-jsonrpc-minimal.rs)通过同一个已编译运行时执行一个轮次，把 `SEEKDEEP_MODEL` 作为默认模型，并始终回收其拥有的子进程。请从仓库根目录运行：
+
+```bash
+cargo run --quiet -p seekdeep-sdk-jsonrpc-demo --bin seekdeep-jsonrpc-minimal -- "Describe this workspace" --workspace .
+```
+
+Python 与 TypeScript 兼容客户端使用同一 JSON-RPC 协议，并把运行时行为委托给已编译 Rust 可执行文件。[Python SDK 教程](../../docs/user/guide/python-sdk.md)介绍安装、workspace 选择与 session 标识；[SDK 参考](../../python/sdk/README.md)归属客户端生命周期与结果语义。

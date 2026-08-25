@@ -656,6 +656,40 @@ async fn include_subtree_uses_a_separate_entry_id_namespace() {
 }
 
 #[tokio::test]
+async fn include_accepts_the_source_package_specifier() {
+    let catalog = PluginCatalog::new();
+    catalog
+        .register_named(
+            "noop",
+            Plugin::new("noop", std::iter::empty::<&str>(), |_, _| {
+                Box::pin(async { Ok(()) })
+            }),
+        )
+        .unwrap();
+    let temporary = tempfile::tempdir().unwrap();
+    let root_path = temporary.path().join("cordis.yml");
+    std::fs::write(
+        temporary.path().join("nested.yml"),
+        "- id: nested\n  name: noop\n",
+    )
+    .unwrap();
+    let composition = catalog
+        .load_yaml_at(
+            &Context::new(),
+            concat!(
+                "- id: include\n",
+                "  name: '@seekdeep-ai/cordis-plugin-include'\n",
+                "  config: { path: ./nested.yml }\n",
+            ),
+            root_path,
+        )
+        .await
+        .unwrap();
+    assert_eq!(composition.fibers().len(), 1);
+    composition.dispose().await.unwrap();
+}
+
+#[tokio::test]
 async fn interpolation_waits_for_injections_and_repeats_after_provider_replacement() {
     let catalog = PluginCatalog::new().with_expression_environment(deterministic_expressions());
     catalog
@@ -774,6 +808,7 @@ async fn disabled_group_stops_descendants_and_invalid_expression_rolls_back_prio
         .await
         .unwrap_err();
     assert!(error.to_string().contains("failed"));
+    assert!(error.to_string().contains("invalid"));
     assert_eq!(&*events.lock(), &["start:noop:{}", "stop:noop"]);
 }
 

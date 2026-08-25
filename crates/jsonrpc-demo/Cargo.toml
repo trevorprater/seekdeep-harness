@@ -19,16 +19,52 @@ path = "src/bin/seekdeep-jsonrpc-agent-packaged.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "seekdeep-jsonrpc-minimal"
+path = "src/bin/seekdeep-jsonrpc-minimal.rs"
+test = false
+bench = false
+
 [dependencies]
 anyhow.workspace = true
+clap.workspace = true
 seekdeep-app-boot = { path = "../app-boot" }
+seekdeep-agent-spine-demo = { path = "../agent-spine-demo" }
+seekdeep-bash-local = { path = "../bash-local" }
+seekdeep-compaction-basic = { path = "../compaction-basic" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-fs-observation-policy = { path = "../fs-observation-policy" }
 seekdeep-loader = { path = "../loader" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-llm-deepseek = { path = "../llm-deepseek" }
+seekdeep-llm-replay = { path = "../llm-replay" }
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-sdk-server = { path = "../sdk-server" }
+seekdeep-sdk-client = { path = "../sdk-client" }
+seekdeep-session-checkpoint-policy = { path = "../session-checkpoint-policy" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-terminal = { path = "../terminal" }
+seekdeep-terminal-bash = { path = "../terminal-bash" }
+seekdeep-token-meter = { path = "../token-meter" }
+seekdeep-tool-bash-persistent = { path = "../tool-bash-persistent" }
+seekdeep-tool-fs = { path = "../tool-fs" }
+seekdeep-tool-str-replace-editor = { path = "../tool-str-replace-editor" }
+seekdeep-tool-subagent = { path = "../tool-subagent" }
+seekdeep-tool-todo = { path = "../tool-todo" }
 seekdeep-util = { path = "../util" }
 tokio.workspace = true
 
 [dev-dependencies]
+parking_lot.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true
+zstd.workspace = true
 
 [lints]
 workspace = true

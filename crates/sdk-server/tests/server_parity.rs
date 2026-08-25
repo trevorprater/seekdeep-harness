@@ -32,7 +32,7 @@ use seekdeep_scope::{ScopeKey, create_scope, scope_target};
 use seekdeep_sdk_protocol::{InitializeParams, JsonRpcLineTransport, SessionPromptParams};
 use seekdeep_sdk_server::{
     Config, HarnessSdkJsonRpcServer, HarnessSdkJsonRpcServerOptions, INJECT, NAME, ServerRuntime,
-    apply_with_runtime, plugin, success_status,
+    apply_with_runtime, deferred_plugin, plugin, success_status,
 };
 use seekdeep_subagent::{SubagentRunEndInfo, SubagentRunId, SubagentStopReason};
 use serde_json::{Map, Value, json};
@@ -340,6 +340,7 @@ fn plugin_shape_is_namespace_safe_and_requires_only_agents() {
     let definition = plugin();
     assert_eq!(definition.name(), NAME);
     assert_eq!(definition.inject(), INJECT);
+    assert_eq!(deferred_plugin().inject(), INJECT);
     assert_eq!(NAME, "sdk-jsonrpc-server");
     assert_eq!(INJECT, ["agents"]);
     assert_eq!(
@@ -369,6 +370,62 @@ fn plugin_shape_is_namespace_safe_and_requires_only_agents() {
         ),
         seekdeep_sdk_protocol::SdkRunStatus::Ok
     );
+}
+
+#[tokio::test]
+async fn deferred_server_releases_queued_requests_only_after_launcher_readiness() {
+    let context = runtime_context();
+    let (server_io, _client_io) = tokio::io::duplex(64 * 1024);
+    let (server_read, server_write) = tokio::io::split(server_io);
+    let transport = JsonRpcLineTransport::new(server_read, server_write);
+    let server = HarnessSdkJsonRpcServer::new_deferred(
+        &context,
+        &transport,
+        HarnessSdkJsonRpcServerOptions::default(),
+    )
+    .unwrap();
+    let waiting = {
+        let server = Arc::clone(&server);
+        tokio::spawn(async move {
+            server
+                .handle_request(
+                    "initialize",
+                    serde_json::from_value::<Map<String, Value>>(json!({
+                        "cwd":".","provider":"mock","model":"model"
+                    }))
+                    .unwrap(),
+                )
+                .await
+        })
+    };
+    tokio::task::yield_now().await;
+    assert!(!waiting.is_finished());
+    server.mark_ready();
+    let initialized = waiting.await.unwrap().unwrap();
+    assert_eq!(
+        initialized["serverInfo"]["name"],
+        "seekdeep-harness-sdk-runtime"
+    );
+    server.shutdown().await.unwrap();
+    context.fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn deepseek_fallback_uses_the_provider_default_config_object() {
+    let harness = Harness::new(HarnessSdkJsonRpcServerOptions::default());
+    harness
+        .server
+        .initialize(InitializeParams {
+            cwd: ".".to_owned(),
+            provider: ProviderId::new("deepseek-official"),
+            model: ModelId::new("deepseek-v4-flash"),
+            max_tokens: None,
+        })
+        .await
+        .unwrap();
+    assert!(harness.server.has_adapter_for("deepseek-official"));
+    harness.server.shutdown().await.unwrap();
+    harness.context.fiber().dispose().await.unwrap();
 }
 
 #[tokio::test]

@@ -6,14 +6,39 @@ use async_stream::try_stream;
 use futures::StreamExt;
 use seekdeep_agent::{AgentEvent, PreStepDecision};
 use seekdeep_agent_loop::AgentPreStepEvent;
-use seekdeep_cordis::{Context, EventOptions, Fiber, fiber::EffectHandle};
-use seekdeep_core::session_store::SessionStore;
+use seekdeep_cordis::{Context, EventOptions, Fiber, Plugin, fiber::EffectHandle};
+use seekdeep_core::session_store::{SESSIONS, SessionStore};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{ContentBlock, LlmRuntime};
 use seekdeep_tools::{
-    TOOL_ABORTED_BEFORE_DISPATCH, ToolErrorInfo, ToolExecutionFailure, ToolExecutionResult,
+    TOOL_ABORTED_BEFORE_DISPATCH, TOOLS, ToolErrorInfo, ToolExecutionFailure, ToolExecutionResult,
     ToolFailure, ToolRuntime,
 };
+
+/// Loader plugin name.
+pub const NAME: &str = "session-checkpoint-policy";
+/// Services whose persistence boundaries are joined by the policy.
+pub const INJECT: &[&str] = &["llm", "sessionPersistence", "sessions", "tools"];
+
+/// Builds the Loader-compatible checkpoint policy.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            let llm = context
+                .get(seekdeep_llm::LLM)
+                .ok_or_else(|| anyhow::anyhow!("session-checkpoint-policy requires llm"))?;
+            let sessions = context
+                .get(SESSIONS)
+                .ok_or_else(|| anyhow::anyhow!("session-checkpoint-policy requires sessions"))?;
+            let tools = context
+                .get(TOOLS)
+                .ok_or_else(|| anyhow::anyhow!("session-checkpoint-policy requires tools"))?;
+            install(&context, &llm, &sessions, &tools).await?;
+            Ok(())
+        })
+    })
+}
 
 /// Installs all three semantic durability boundaries transactionally.
 ///

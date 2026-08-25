@@ -52,14 +52,24 @@ pub fn apply_with_runtime(
     config: Config,
     runtime: ServerRuntime,
 ) -> anyhow::Result<Arc<HarnessSdkJsonRpcServer>> {
+    apply_with_runtime_readiness(context, config, runtime, true)
+}
+
+fn apply_with_runtime_readiness(
+    context: &Context,
+    config: Config,
+    runtime: ServerRuntime,
+    ready: bool,
+) -> anyhow::Result<Arc<HarnessSdkJsonRpcServer>> {
     let transport = JsonRpcLineTransport::from_boxed(runtime.input, runtime.output);
-    let server = HarnessSdkJsonRpcServer::new(
-        context,
-        &transport,
-        HarnessSdkJsonRpcServerOptions {
-            max_tokens_as_success: config.max_tokens_as_success,
-        },
-    )?;
+    let options = HarnessSdkJsonRpcServerOptions {
+        max_tokens_as_success: config.max_tokens_as_success,
+    };
+    let server = if ready {
+        HarnessSdkJsonRpcServer::new(context, &transport, options)?
+    } else {
+        HarnessSdkJsonRpcServer::new_deferred(context, &transport, options)?
+    };
     let marker = context.provide(SDK_JSONRPC_SERVER, server.clone())?;
     let exit_started = Arc::new(AtomicBool::new(false));
     let exit_server = Arc::clone(&server);
@@ -141,6 +151,25 @@ pub fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<HarnessSdk
     )
 }
 
+fn apply_deferred(
+    context: &Context,
+    config: Config,
+) -> anyhow::Result<Arc<HarnessSdkJsonRpcServer>> {
+    apply_with_runtime_readiness(
+        context,
+        config,
+        ServerRuntime {
+            input: Box::pin(tokio::io::stdin()),
+            output: Box::pin(tokio::io::stdout()),
+            exit: Arc::new(|code| {
+                std::process::exit(code);
+            }),
+            exit_on_input_failure: true,
+        },
+        false,
+    )
+}
+
 fn normalize_config(value: &Value) -> anyhow::Result<Value> {
     if value.is_null() {
         return Ok(serde_json::to_value(Config::default())?);
@@ -157,6 +186,19 @@ pub fn plugin() -> Plugin {
         Box::pin(async move {
             let config: Config = serde_json::from_value(config)?;
             apply(&context, config)?;
+            Ok(())
+        })
+    })
+    .with_config_validator(normalize_config)
+}
+
+/// Builds the process-launcher plugin whose wire stays gated until boot commits.
+#[must_use]
+pub fn deferred_plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
+        Box::pin(async move {
+            let config: Config = serde_json::from_value(config)?;
+            apply_deferred(&context, config)?;
             Ok(())
         })
     })

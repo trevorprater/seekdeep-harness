@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-The unattended coding-agent composition for the Python SDK's bundled JSON-RPC runtime. It intentionally loads no terminal UI, console logger, approval UI, or user-questions tool because stdout belongs to the SDK protocol and turns are driven by the SDK.
+The unattended coding-agent composition for the compiled Rust JSON-RPC runtime and its SDK clients. It intentionally loads no terminal UI, console logger, approval UI, or user-questions tool because stdout belongs to the SDK protocol and turns are driven by the client.
 
 The model-facing tools are:
 
@@ -22,11 +22,11 @@ The surrounding runtime also loads JSONL session persistence and automatic conte
 | `SEEKDEEP_CWD` | Agent workspace for bash and filesystem tools |
 | `SEEKDEEP_CONTEXT_WINDOW` | Context capacity recorded for the `SEEKDEEP_MODEL` catalog entry in the minimal variant |
 | `SEEKDEEP_MAX_TOKENS_AS_SUCCESS` | `true` (default) accepts token-limited results; `false` reports them as errors |
-| `SEEKDEEP_MODEL` | Default model used by `minimal.py`; `--model` takes precedence |
+| `SEEKDEEP_MODEL` | Default model used by `seekdeep-jsonrpc-minimal`; `--model` takes precedence |
 | `SEEKDEEP_SESSION_ROOT` | JSONL session directory |
 | `SEEKDEEP_SYSTEM_PROMPT` | Deployment-provided coding persona |
 
-Pass the config path through the Python SDK's `cordis` option or `SEEKDEEP_CORDIS_CONFIG`. The bundled executable already carries every plugin named by this file; the target machine does not need Node.js.
+Pass the config path through the SDK launch configuration or `SEEKDEEP_CORDIS_CONFIG`. The bundled executable already carries every plugin named by this file; the target machine does not need Node.js.
 
 ## Minimal variant
 
@@ -37,4 +37,10 @@ Pass the config path through the Python SDK's `cordis` option or `SEEKDEEP_CORDI
 
 It composes the local PTY, bare `fs-local` backend, danger-full-access policy for persistent Bash, and uncompressed JSONL persistence needed by the bundled runtime. Bash and absolute editor paths can modify any path available to the runtime process, so run this variant only against a disposable checkout or container. The persistent PTY requires a POSIX terminal environment and is not a Windows agent interface.
 
-[`minimal.py`](minimal.py) runs the composition through the Python SDK and uses `SEEKDEEP_MODEL` as its default model. The [Python SDK tutorial](../../docs/user/guide/python-sdk.md) covers installation, execution, workspace selection, and session identity; the [SDK reference](../../python/sdk/README.md) owns runtime lifecycle and result semantics.
+The [`seekdeep-jsonrpc-minimal` Rust entry point](../../crates/jsonrpc-demo/src/bin/seekdeep-jsonrpc-minimal.rs) runs one turn through the same compiled runtime, uses `SEEKDEEP_MODEL` as its default model, and always reaps the owned subprocess. Run it from the repository root:
+
+```bash
+cargo run --quiet -p seekdeep-sdk-jsonrpc-demo --bin seekdeep-jsonrpc-minimal -- "Describe this workspace" --workspace .
+```
+
+Python and TypeScript compatibility clients use the same JSON-RPC protocol and delegate runtime behavior to the compiled Rust executable. The [Python SDK tutorial](../../docs/user/guide/python-sdk.md) covers installation, workspace selection, and session identity; the [SDK reference](../../python/sdk/README.md) owns client lifecycle and result semantics.

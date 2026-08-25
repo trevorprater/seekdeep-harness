@@ -118,6 +118,8 @@ pub struct HarnessSdkJsonRpcServer {
     notifications: tokio::sync::mpsc::UnboundedSender<(String, Map<String, Value>)>,
     notification_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     shutdown: Arc<ShutdownState>,
+    ready: std::sync::atomic::AtomicBool,
+    ready_changed: Notify,
 }
 
 impl HarnessSdkJsonRpcServer {
@@ -130,6 +132,28 @@ impl HarnessSdkJsonRpcServer {
         context: &Context,
         transport: &Arc<JsonRpcLineTransport>,
         options: HarnessSdkJsonRpcServerOptions,
+    ) -> anyhow::Result<Arc<Self>> {
+        Self::new_with_readiness(context, transport, options, true)
+    }
+
+    /// Constructs a server whose request dispatch waits for launcher readiness.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same failures as [`Self::new`].
+    pub fn new_deferred(
+        context: &Context,
+        transport: &Arc<JsonRpcLineTransport>,
+        options: HarnessSdkJsonRpcServerOptions,
+    ) -> anyhow::Result<Arc<Self>> {
+        Self::new_with_readiness(context, transport, options, false)
+    }
+
+    fn new_with_readiness(
+        context: &Context,
+        transport: &Arc<JsonRpcLineTransport>,
+        options: HarnessSdkJsonRpcServerOptions,
+        ready: bool,
     ) -> anyhow::Result<Arc<Self>> {
         let agents = context
             .get(AGENTS)
@@ -156,9 +180,28 @@ impl HarnessSdkJsonRpcServer {
             notifications,
             notification_task: Mutex::new(Some(notification_task)),
             shutdown: Arc::new(ShutdownState::default()),
+            ready: std::sync::atomic::AtomicBool::new(ready),
+            ready_changed: Notify::new(),
         });
         server.register_notifications(context)?;
         Ok(server)
+    }
+
+    /// Publishes that the complete launcher composition is active.
+    pub fn mark_ready(&self) {
+        if !self.ready.swap(true, std::sync::atomic::Ordering::AcqRel) {
+            self.ready_changed.notify_waiters();
+        }
+    }
+
+    async fn wait_until_ready(&self) {
+        loop {
+            let notified = self.ready_changed.notified();
+            if self.ready.load(std::sync::atomic::Ordering::Acquire) {
+                return;
+            }
+            notified.await;
+        }
     }
 
     /// Whether a live LLM adapter owns the provider id.
@@ -200,7 +243,7 @@ impl HarnessSdkJsonRpcServer {
             );
             let fiber = self
                 .context
-                .plugin(seekdeep_llm_deepseek::plugin(), Value::Null)?;
+                .plugin(seekdeep_llm_deepseek::plugin(), Value::Object(Map::new()))?;
             fiber.await_settled().await?;
             self.state.lock().llm_fiber = Some(fiber);
         }
@@ -250,6 +293,7 @@ impl HarnessSdkJsonRpcServer {
         method: &str,
         params: Map<String, Value>,
     ) -> anyhow::Result<Value> {
+        self.wait_until_ready().await;
         match method {
             "initialize" => {
                 validate_max_tokens(&params)?;

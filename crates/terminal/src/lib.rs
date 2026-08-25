@@ -10,7 +10,7 @@ use futures::{FutureExt as _, future::Shared};
 use indexmap::IndexMap;
 use parking_lot::Mutex;
 use seekdeep_agent::{AGENTS, Agent};
-use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_llm::AbortSignal;
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -31,6 +31,23 @@ pub use types::{
 
 /// Typed Cordis seat corresponding to `ctx.terminals`.
 pub const TERMINALS: ServiceKey<TerminalSessionService> = ServiceKey::new("terminals");
+/// Loader plugin name.
+pub const NAME: &str = "terminal";
+/// The registry resolves agent ownership lazily when a session is spawned.
+pub const INJECT: &[&str] = &[];
+
+/// Builds the Loader-compatible persistent terminal registry.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            TerminalSessionService::install(&context)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            Ok(())
+        })
+    })
+}
 
 /// Machine-routable PTY service failure codes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
