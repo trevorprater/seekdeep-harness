@@ -60955,12 +60955,27 @@
     {
       "source": "packages/mcp/mcp-client/src/connection.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/src/connection.rs"
+      ],
+      "evidence": [
+        "Rust supervisor owns one sequential exact-generation loop with injected monotonic timing, bounded close barriers, outage budgets, stable-window resets, serialized synchronization, disabled recovery, and deterministic disposal",
+        "real Rust stdio process test proves post-reply crash detection, respawn, re-discovery, exact generation replacement, and recovered calls"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/src/config.rs",
+        "crates/mcp-client/src/lib.rs"
+      ],
+      "evidence": [
+        "Rust namespace plugin preserves name, tools injection, discriminated transport config, defaults, fail-on-startup behavior, root-scoped serverName reservations, effect ownership, and HMR-safe release",
+        "real Loader composition mounts, calls, disposes, and remounts the same server namespace"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/src/invariant.ts",
@@ -60979,47 +60994,116 @@
     {
       "source": "packages/mcp/mcp-client/src/tools.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/src/tools.rs"
+      ],
+      "evidence": [
+        "Rust UTF-16-compatible normalization reproduces pinned SHA-256 public names and preserves raw wire names",
+        "Rust tool tests pin pagination, duplicate rejection, fetch retention, atomic swaps and rollback, canonical blocks, structured and legacy output, task rejection, cancellation, and every Native placeholder"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/src/transport.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/src/protocol.rs",
+        "crates/mcp-client/src/transport.rs",
+        "crates/sdk-protocol/src/transport.rs"
+      ],
+      "evidence": [
+        "Rust transports implement MCP initialize, initialized, list, call, cancellation, stdio process reaping, Streamable HTTP session headers and SSE list changes, and stateless per-request metadata without forwarding initialization",
+        "Rust transport tests pin stateless schema completion, inline JSON, Streamable HTTP negotiation, configured headers, session deletion, split LF and CRLF SSE notifications, and correlated cancellation frames"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/tests/apply.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/tests/apply_loader_parity.rs",
+        "crates/mcp-client/tests/config_transport_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source MCP unit and load-path suites passed 103/103",
+        "Rust lifecycle tests pin startup readiness, optional and strict failure, strict conflict rollback, duplicate and cross-root namespaces, config defaults, and current-generation disposal"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/tests/fixture-server.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/tests/fixtures/mcp_server.rs"
+      ],
+      "evidence": [
+        "Rust fixture is a real stdio MCP server with add, greet, failure, image, dotted-name, and post-reply crash behaviors",
+        "real-process bridge and Loader tests execute the compiled fixture binary"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/tests/load-path.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/tests/apply_loader_parity.rs",
+        "crates/mcp-client/tests/real_process_parity.rs"
+      ],
+      "evidence": [
+        "Rust plugin export test pins namespace name and tools injection",
+        "real declarative Loader composition activates discovery before return, calls the server, disposes all effects, and remounts the same namespace"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/tests/mcp-client.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/tests/config_transport_parity.rs",
+        "crates/mcp-client/tests/real_process_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source keyless MCP E2E suite passed 22/22 against fixture, official Everything and Filesystem servers, and Streamable HTTP",
+        "Rust real-process and HTTP tests prove namespaced discovery, dotted names, successful and error calls, multimedia projection, crash recovery, configured headers, session protocol, and disposal"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/tests/mcp-client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/tests/tools_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source MCP unit and load-path suites passed 103/103",
+        "Rust conformance tests pin naming, multi-server isolation, pagination, atomic registry behavior, raw calls, complete result mapping, output schemas, legacy replies, non-object arguments, errors, tasks, cancellation, descriptions, and trust-boundary fallbacks"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/tests/reconnect.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/tests/connection_parity.rs",
+        "crates/mcp-client/tests/real_process_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source MCP unit and load-path suites passed 103/103",
+        "Rust injected-time tests pin recovery, diagnostics, exact caps, stable reset, crash-loop exhaustion, failed re-sync retention, stale-source inertness, disabled mode, abortable backoff, in-flight-sync disposal, and non-overlap on hung close; real crash recovery passes"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/tests/stateless-http.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/mcp-client/tests/config_transport_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source MCP unit and load-path suites passed 103/103",
+        "Rust HTTP fixture proves no forwarded initialize or notifications, metadata on parameterless and parameterized requests, configured headers, inline replies, omitted-root schema completion, and closed-client rejection"
+      ]
     },
     {
       "source": "packages/mcp/mcp-client/tsconfig.json",

@@ -164,6 +164,40 @@ impl JsonRpcLineTransport {
         params: Map<String, Value>,
         signal: Option<AbortSignal>,
     ) -> anyhow::Result<Value> {
+        self.request_inner(method.into(), params, signal, None)
+            .await
+    }
+
+    /// Sends one request and emits a correlated protocol cancellation notification
+    /// when the caller signal wins.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same failures as [`Self::request`]. Cancellation-notification
+    /// write failure is deliberately secondary to the caller's abort outcome.
+    pub async fn request_with_cancellation(
+        self: &Arc<Self>,
+        method: impl Into<String>,
+        params: Map<String, Value>,
+        signal: AbortSignal,
+        cancellation_method: impl Into<String>,
+    ) -> anyhow::Result<Value> {
+        self.request_inner(
+            method.into(),
+            params,
+            Some(signal),
+            Some(cancellation_method.into()),
+        )
+        .await
+    }
+
+    async fn request_inner(
+        self: &Arc<Self>,
+        method: String,
+        params: Map<String, Value>,
+        signal: Option<AbortSignal>,
+        cancellation_method: Option<String>,
+    ) -> anyhow::Result<Value> {
         if let Some(signal) = signal.as_ref()
             && signal.is_aborted()
         {
@@ -173,7 +207,6 @@ impl JsonRpcLineTransport {
             "req_{:016x}",
             self.next_request.fetch_add(1, Ordering::AcqRel)
         );
-        let method = method.into();
         let (sender, receiver) = oneshot::channel();
         self.pending.lock().insert(id.clone(), sender);
         if let Err(error) = self
@@ -201,6 +234,22 @@ impl JsonRpcLineTransport {
             result = response => result,
             () = signal.cancelled() => {
                 self.pending.lock().remove(&id);
+                if let Some(cancellation_method) = cancellation_method {
+                    let _ = tokio::time::timeout(
+                        std::time::Duration::from_secs(1),
+                        self.notify(
+                            cancellation_method,
+                            Some(Map::from_iter([
+                                ("requestId".to_owned(), Value::String(id)),
+                                (
+                                    "reason".to_owned(),
+                                    Value::String("request cancelled".to_owned()),
+                                ),
+                            ])),
+                        ),
+                    )
+                    .await;
+                }
                 Err(abort_error(&signal))
             }
         }

@@ -8,6 +8,12 @@ English | [中文](2026-08-06-mcp-client-auto-reconnect.zh.md)
 
 The [MCP client](2026-07-07-mcp-client-plugin.md) connected once at plugin load. When a stdio server crashed or was killed, its registered tools stayed visible but every call failed with `Not connected` until a human edited the config (HMR) or restarted the Host — v1 explicitly deferred reconnection. Long-running hosts (ACP automation, web) cannot be bounced because a child process died, and for stdio the harness composition is the only party that can respawn it. External feedback escalated this as a real operational gap (issue #1746).
 
+## Rust realization
+
+The Rust supervisor expresses the same generation protocol as one sequential async owner rather than a callback graph and Promise queue. Each fresh `McpClient` generation completes connect and full discovery before publication; only the current generation can receive list-change work, and every re-sync is inherently serialized by the owner loop. An injected monotonic clock and sleeper drive backoff, stability-window resets, and close barriers in conformance tests. The native timing adapter is confined to the boundary, so no ambient executor ordering or wall clock decides retry policy in the core.
+
+Close signals mean the stdio child has exited, not merely that stdout ended. A failed generation must finish its bounded close before the loop can sleep or construct a replacement; timeout stops the outage to prevent overlapping children. Cancellation interrupts connect, discovery, notification re-sync, and backoff, then joins the current close and tool-effect disposal. The real-process suite proves post-reply child death, bounded respawn, exact tool-generation replacement, recovered calls, and immediate unload during backoff; deterministic fake generations prove caps, stable resets, crash-loop exhaustion, stale notification inertness, disabled recovery, failed-sync retention, and disposal during an in-flight sync.
+
 ## Decision
 
 `packages/mcp/mcp-client/src/connection.ts` owns a per-instance connection supervisor; `apply()` shrinks to config resolution plus two effects (the `serverName` reservation and the supervisor's lifecycle). The supervisor owns the client/transport generations, the live tool registrations, and the reconnect loop.

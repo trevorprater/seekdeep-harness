@@ -6065,6 +6065,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-mcp-client"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "parking_lot",
+ "reqwest 0.12.28",
+ "seekdeep-cordis",
+ "seekdeep-llm",
+ "seekdeep-loader",
+ "seekdeep-sdk-protocol",
+ "seekdeep-subprocess",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-util",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "seekdeep-message-feedback"
 version = "0.1.0-rc.5"
 dependencies = [

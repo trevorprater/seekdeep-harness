@@ -135,6 +135,44 @@ async fn preabort_and_pending_abort_remove_all_correlation_state() {
 }
 
 #[tokio::test]
+async fn correlated_abort_emits_the_requested_protocol_cancellation_frame() {
+    let (transport, peer) = transport_and_peer();
+    transport.start();
+    let signal = seekdeep_llm::AbortSignal::default();
+    let request_signal = signal.clone();
+    let request = {
+        let transport = Arc::clone(&transport);
+        tokio::spawn(async move {
+            transport
+                .request_with_cancellation(
+                    "tools/call",
+                    object(json!({"name":"slow","arguments":{}})),
+                    request_signal,
+                    "notifications/cancelled",
+                )
+                .await
+        })
+    };
+    let mut peer = BufReader::new(peer);
+    let sent = peer_frame(&mut peer).await;
+    signal.abort_with_reason(json!("user"));
+    let cancelled = peer_frame(&mut peer).await;
+    assert_eq!(cancelled["method"], "notifications/cancelled");
+    assert_eq!(cancelled["params"]["requestId"], sent["id"]);
+    assert_eq!(cancelled["params"]["reason"], "request cancelled");
+    assert!(
+        request
+            .await
+            .unwrap()
+            .unwrap_err()
+            .to_string()
+            .contains("aborted")
+    );
+    assert_eq!(transport.pending_len(), 0);
+    transport.close();
+}
+
+#[tokio::test]
 async fn preserves_structured_error_data_and_fallback_error_message() {
     let (transport, peer) = transport_and_peer();
     transport.start();

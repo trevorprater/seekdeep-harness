@@ -10,6 +10,14 @@ The harness had no way to consume tools from the MCP (Model Context Protocol) ec
 
 The `ToolRuntime` already accepts raw JSON Schema tool definitions (documented in `seekdeep-tools` README: "Raw JSON-Schema tool definitions (from MCP servers) are still accepted by `ToolRuntime.register()` directly"), and the extension cookbook sketches the intended pattern ("MCP | one plugin per server: discover tools → `ctx.tools.register()`"). The infrastructure was ready; the bridge plugin was missing.
 
+## Rust realization
+
+`seekdeep-mcp-client` preserves this contract without a JavaScript runtime or SDK in production. It implements negotiated MCP JSON-RPC in Rust over an owned child-process stdio boundary, sessionful Streamable HTTP, and the sessionless 2026-07-28 HTTP envelope. The stdio path uses the shared line transport, emits correlated cancellation notifications, scrubs ambient credentials, and reaps each process generation before replacement. The HTTP path preserves configured headers and session/protocol headers, parses JSON or inline SSE responses, and recovers sessionful `tools/list_changed` SSE streams without treating per-request HTTP failures as process crashes. Parameterless initialize and discovery requests retain the SDK-equivalent 60-second bound; configured tool-call timeouts and caller cancellation flow through `ToolRuntime` into the protocol request.
+
+Discovery drains pagination before touching the live registry. Rust effects own each complete generation, so fetch failure retains the prior tools, replacement is all-or-nothing, a foreign namespace conflict rolls back the candidate, and final disposal joins every unregister operation. Canonical MCP content and `structuredContent` remain lossless execution values; model rendering keeps the source text and placeholder projection, supported output schemas validate structured data, unsupported vocabulary falls back to unconstrained JSON, and task-required tools fail before a wire call. UTF-16-compatible normalization plus SHA-256 reproduces the source public names exactly, including non-BMP input.
+
+The pinned source's 103 unit and load-path cases plus 22 keyless E2E cases remain the differential oracle. Rust conformance tests cover pure contracts, all transports, lifecycle and Loader composition, an owned real stdio server, raw-name calls, structured and legacy results, protocol cancellation, and a real crash/reconnect/re-discovery round trip.
+
 ## Decision
 
 ### Package

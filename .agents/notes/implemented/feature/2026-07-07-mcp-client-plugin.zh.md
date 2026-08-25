@@ -10,6 +10,14 @@ harness 此前无法消费 MCP（Model Context Protocol）生态中的工具。M
 
 `ToolRuntime` 已经接受原始 JSON Schema 工具定义（`seekdeep-tools` README 中有记录：「Raw JSON-Schema tool definitions (from MCP servers) are still accepted by `ToolRuntime.register()` directly」），扩展实操手册（cookbook）也勾勒了预期模式（「MCP | one plugin per server: discover tools → `ctx.tools.register()`」）。基础设施已就绪，缺的是桥接插件。
 
+## Rust 实现
+
+`seekdeep-mcp-client` 在生产环境中无需 JavaScript 运行时或 SDK，即可保留这套约定。它使用 Rust 在自有子进程 stdio 边界、带会话的 Streamable HTTP，以及无会话的 2026-07-28 HTTP 信封上实现经协商的 MCP JSON-RPC。stdio 路径复用共享行传输层，发出带关联 id 的取消通知，清理环境中的凭据，并在替换前回收每一个进程代。HTTP 路径保留配置的请求头以及会话／协议请求头，解析 JSON 或内联 SSE 响应，并恢复带会话的 `tools/list_changed` SSE 流，同时不会把逐请求 HTTP 失败误判为进程崩溃。无参数的初始化和发现请求保留与 SDK 相同的 60 秒上限；配置的工具调用超时与调用方取消会通过 `ToolRuntime` 传入协议请求。
+
+发现流程会在触碰在线注册表之前排空分页。Rust effect 拥有每个完整代，因此抓取失败会保留上一代工具，替换要么全成要么全不成，外部命名空间冲突会回滚候选代，最终 dispose 会等待所有注销操作。规范 MCP content 与 `structuredContent` 仍是无损的执行值；模型渲染保留源实现的文本与占位符投影，受支持的输出 schema 会校验结构化数据，不受支持的词汇会回退为不受约束的 JSON，而要求 task 的工具会在发起线协议调用前失败。兼容 UTF-16 的规范化和 SHA-256 会精确复现源公开名称，包括非 BMP 输入。
+
+固定源仓库的 103 个单元／加载路径案例和 22 个免密钥 E2E 案例继续作为差分 oracle。Rust 一致性测试覆盖纯约定、全部传输、生命周期与 Loader 组合、自有真实 stdio 服务器、原始名称调用、结构化与旧版结果、协议取消，以及真实崩溃、重连和重新发现往返。
+
 ## 决策
 
 ### 包
