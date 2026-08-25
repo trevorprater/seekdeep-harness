@@ -51553,6 +51553,7 @@
       "status": "verified",
       "targets": [
         "crates/agent-spine-demo/src/lib.rs",
+        "crates/agent-spine-demo/tests/agent_core_parity.rs",
         "crates/agent-loop/src/factory.rs",
         "crates/agent-loop/src/lib.rs",
         "crates/goal/src/index.rs"
@@ -51560,7 +51561,8 @@
       "evidence": [
         "pinned-source agent-spine unit and catalog suites passed 54/54 and its keyless multi-project E2E passed 4/4",
         "Rust bundle constructs timer, LLM, sessions, title, prompt, tools, optional skills, agents, retry, optional goals, jobs, filtered package invariants, shell environment, optional instructions and model tools, the concrete loop, and configured agents under one reversible context",
-        "Rust composition tests pin minimal and goal-enabled rosters, invariant companions, exact configured identity, scheduler forwarding, skill home agreement, skill enablement, tool ordering, namespace shape, and required false-or-config fields"
+        "Rust composition tests pin minimal and goal-enabled rosters, invariant companions, exact configured identity, scheduler forwarding, skill home agreement, skill enablement, tool ordering, namespace shape, and required false-or-config fields",
+        "Broad real-loop composition coverage pins default services and model tools, session-title and goal policy, generated id shape, ready-before-return invariants, retry, workspace and skill ordering, dynamic skill refresh through write and skill tools, shared shell home, job limits and waits, and feature omission behavior"
       ]
     },
     {
@@ -51580,7 +51582,18 @@
     {
       "source": "packages/examples/agent-spine-demo/tests/agent-core.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-spine-demo/tests/agent_core_parity.rs",
+        "crates/agent-spine-demo/tests/spine_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: agent-core.spec.ts passed 30/30",
+        "Rust 16/16 grouped composition tests cover every source branch: full defaults, title/goal/job/invariant config, generated and exact agents, direct fallbacks, bounded retry, workspace instructions, custom and hot-added skills, model-facing catalog/load progression, shared home, tool configs, omissions, pickSpineConfig, validation, tool order, and Loader plugin shape",
+        "Rust dynamic-skill acceptance drives a real AgentLoop through write and skill tool calls and proves the refreshed catalog and loaded instructions reach later model requests",
+        "cargo test -p seekdeep-agent-spine-demo -p seekdeep-acp-demo --all-features: agent spine 16 passed; ACP demo 3 passed",
+        "cargo clippy -p seekdeep-agent-spine-demo --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/examples/agent-spine-demo/tests/gen-config-catalog.spec.ts",

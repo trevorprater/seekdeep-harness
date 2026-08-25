@@ -245,32 +245,39 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Spin
         context,
         &config.invariants.unwrap_or_default(),
     )?;
-    seekdeep_agent::register_invariant(&invariants)?;
-    seekdeep_scope::invariant::register_invariant(&invariants)?;
+    seekdeep_agent::register_invariant(&invariants)?
+        .await_ready()
+        .await?;
+    seekdeep_scope::invariant::register_invariant(&invariants)?
+        .await_ready()
+        .await?;
     let invariant_sessions = Arc::clone(&sessions);
-    invariants.register(
-        "@seekdeep-ai/seekdeep-session",
-        seekdeep_invariants::InvariantInstaller::new(
-            std::iter::empty::<String>(),
-            move |context, _| {
-                let sessions = Arc::clone(&invariant_sessions);
-                async move {
-                    seekdeep_core::invariant::install_session_invariants(&context, &sessions)?;
-                    Ok(())
-                }
-            },
-        ),
-    )?;
+    invariants
+        .register(
+            "@seekdeep-ai/seekdeep-session",
+            seekdeep_invariants::InvariantInstaller::new(
+                std::iter::empty::<String>(),
+                move |context, _| {
+                    let sessions = Arc::clone(&invariant_sessions);
+                    async move {
+                        seekdeep_core::invariant::install_session_invariants(&context, &sessions)?;
+                        Ok(())
+                    }
+                },
+            ),
+        )?
+        .await_ready()
+        .await?;
 
-    let shell_env = seekdeep_shell_env::ShellEnvConfig {
-        seekdeep_home: Some(resolved_home.to_string_lossy().into_owned()),
-    };
-    seekdeep_shell_env::apply(context, &shell_env)?;
     let tool_bash = match config.tool_bash.clone() {
         Some(feature) => feature.resolved("toolBash")?,
         None => Some(seekdeep_tool_bash::Config::default()),
     };
     if let Some(tool_bash) = tool_bash {
+        let shell_env = seekdeep_shell_env::ShellEnvConfig {
+            seekdeep_home: Some(resolved_home.to_string_lossy().into_owned()),
+        };
+        seekdeep_shell_env::apply(context, &shell_env)?;
         context.plugin(
             seekdeep_tool_bash::plugin(),
             serde_json::to_value(tool_bash)?,
@@ -314,20 +321,23 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Spin
     agents.set_factory(agent_loop.clone())?;
     let invariant_llm = Arc::clone(&llm);
     let invariant_sessions = Arc::clone(&sessions);
-    invariants.register(
-        "@seekdeep-ai/seekdeep-agent-loop",
-        seekdeep_invariants::InvariantInstaller::new(
-            std::iter::empty::<String>(),
-            move |context, _| {
-                let llm = Arc::clone(&invariant_llm);
-                let sessions = Arc::clone(&invariant_sessions);
-                async move {
-                    seekdeep_agent_loop::install_request_invariant(&context, &llm, sessions)?;
-                    Ok(())
-                }
-            },
-        ),
-    )?;
+    invariants
+        .register(
+            "@seekdeep-ai/seekdeep-agent-loop",
+            seekdeep_invariants::InvariantInstaller::new(
+                std::iter::empty::<String>(),
+                move |context, _| {
+                    let llm = Arc::clone(&invariant_llm);
+                    let sessions = Arc::clone(&invariant_sessions);
+                    async move {
+                        seekdeep_agent_loop::install_request_invariant(&context, &llm, sessions)?;
+                        Ok(())
+                    }
+                },
+            ),
+        )?
+        .await_ready()
+        .await?;
     let cleanup = Arc::clone(&agent_loop);
     context.own(EffectHandle::new(
         "agent-spine-demo agent loop",
@@ -430,7 +440,7 @@ async fn create_configured_agents(
         } else {
             let id = configured.session_id.clone().unwrap_or_else(|| {
                 format!(
-                    "{}-{:016x}",
+                    "{}-session-{:016x}",
                     configured.id,
                     NEXT_CONFIGURED_AGENT.fetch_add(1, Ordering::AcqRel)
                 )

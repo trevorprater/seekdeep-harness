@@ -38,6 +38,12 @@ seekdeep-tools = { path = "../tools" }
 seekdeep-util = { path = "../util" }
 
 [dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-tool-fs = { path = "../tool-fs" }
 tempfile.workspace = true
 tokio.workspace = true
 
