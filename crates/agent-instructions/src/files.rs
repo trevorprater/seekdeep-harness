@@ -171,7 +171,10 @@ async fn fs_stat_file(
     match file_system.resolve(path, None, signal).await {
         Ok(target) => {
             ensure_not_aborted(signal)?;
-            let info = file_system.stat(&target, signal).await?;
+            let Ok(info) = file_system.stat(&target, signal).await else {
+                ensure_not_aborted(signal)?;
+                return Ok(StatFileProbe::Unavailable);
+            };
             ensure_not_aborted(signal)?;
             match info {
                 Some(info) if info.kind == FsKind::File => Ok(StatFileProbe::Present {
@@ -209,7 +212,13 @@ async fn exists_as_marker(
 ) -> anyhow::Result<bool> {
     match file_system {
         Some(file_system) => match file_system.resolve(path, None, signal).await {
-            Ok(target) => Ok(file_system.stat(&target, signal).await?.is_some()),
+            Ok(target) => match file_system.stat(&target, signal).await {
+                Ok(info) => Ok(info.is_some()),
+                Err(_) => {
+                    ensure_not_aborted(signal)?;
+                    Ok(false)
+                }
+            },
             Err(_) => {
                 ensure_not_aborted(signal)?;
                 Ok(false)
@@ -593,10 +602,13 @@ pub async fn probe_scope_instruction(
     let absolute_path = join_path(&dir, &candidate_name);
     let (target, info): (FsTarget, Option<FsInfo>) =
         match file_system.resolve(&absolute_path, None, signal).await {
-            Ok(target) => {
-                let info = file_system.stat(&target, signal).await?;
-                (target, info)
-            }
+            Ok(target) => match file_system.stat(&target, signal).await {
+                Ok(info) => (target, info),
+                Err(_) => {
+                    ensure_not_aborted(signal)?;
+                    return Ok(ScopeInstructionProbe::Unavailable);
+                }
+            },
             Err(_) => {
                 ensure_not_aborted(signal)?;
                 return Ok(ScopeInstructionProbe::Unavailable);

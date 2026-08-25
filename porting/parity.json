@@ -48423,7 +48423,26 @@
     {
       "source": "packages/context/agent-instructions/tests/agent-instructions.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/agent-instructions/src/config.rs",
+        "crates/agent-instructions/src/files.rs",
+        "crates/agent-instructions/src/index.rs",
+        "crates/agent-instructions/src/render.rs",
+        "crates/agent-instructions/src/state.rs",
+        "crates/agent-instructions/tests/discovery_render_parity.rs",
+        "crates/agent-instructions/tests/plugin_lifecycle_parity.rs",
+        "crates/agent-instructions/tests/provider_filesystem_parity.rs",
+        "crates/agent-instructions/tests/state_reconcile_parity.rs"
+      ],
+      "evidence": [
+        "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: agent-instructions.spec.ts passed 152/152",
+        "Rust package passes 33 tests total: 30 unit tests plus 3 assembled e2e tests",
+        "unit slices cover config, discovery and precedence, overlays, symlinks, dedup, byte budgets, provider-only and bounded reads, cancellation/unavailable probes, plugin lifecycle and isolation, dynamic reconciliation, replay suppression, compaction re-arming, and version-update retention",
+        "cargo test -p seekdeep-agent-instructions --all-features: 33 passed",
+        "cargo clippy -p seekdeep-agent-instructions --all-targets --all-features -- -D warnings: passed"
+      ],
+      "note": "still pending: exhaustive request/inbox synchronization, tool-result parent/step staging and blocked-result matrices, baseline resume/remount/offline permutations, provider version-cache refresh permutations, concurrent projection serialization, and remaining malformed/spoofed-history cases from the 152-case oracle"
     },
     {
       "source": "packages/context/agent-instructions/tsconfig.json",

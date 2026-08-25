@@ -21,7 +21,7 @@ pub use files::{
     discover_baseline_instruction_files, find_project_root, load_baseline_instruction_set,
     load_baseline_instructions, probe_scope_instruction, read_scope_instruction, relative_display,
 };
-pub use index::{apply, plugin};
+pub use index::{INJECT, NAME, apply, plugin};
 pub use render::{
     AgentInstructionAction, AgentInstructionChange, ChangeRenderItem, InstructionFile,
     LoadedInstructionFile, RenderedWorkspaceContext, TruncatedInstruction, USER_GLOBAL_DIRECTORY,

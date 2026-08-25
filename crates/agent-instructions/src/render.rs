@@ -368,7 +368,10 @@ fn truncate_to_fit(
             best = candidate;
             low = mid + 1;
         } else {
-            high = mid.saturating_sub(1);
+            if mid == 0 {
+                break;
+            }
+            high = mid - 1;
         }
     }
     best
