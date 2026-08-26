@@ -80129,7 +80129,19 @@
     {
       "source": "scripts/gen-module-graph.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/module_graph.rs",
+        "crates/repository-tools/src/bin/gen-module-graph.rs",
+        "crates/repository-tools/tests/module_graph_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pinned source gen-module-graph --check executes and reports the current source docs/module-graph.md artifact stale",
+        "cargo test -p seekdeep-repository-tools --test module_graph_parity --all-features (group order, Mermaid edges, package links, unknown dependency fallback, product scope, and trailing newline passed)",
+        "cargo clippy -p seekdeep-repository-tools --test module_graph_parity --all-features -- -D warnings"
+      ],
+      "note": "generator banner and package scope apply the seekdeep Rust/product identity; target live generation remains fail-closed until missing compatibility peer packages are restored, so no graph-freshness claim is made"
     },
     {
       "source": "scripts/gen-persistence-catalog.ts",

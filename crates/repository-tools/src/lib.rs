@@ -23,6 +23,7 @@ pub mod markdown_util;
 pub mod md_links;
 pub mod md_wrap;
 pub mod mermaid;
+pub mod module_graph;
 pub mod node_next_types;
 pub mod package_graph;
 pub mod package_invariants;
