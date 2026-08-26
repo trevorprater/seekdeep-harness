@@ -40,6 +40,10 @@
     "@types/react": "~18.3.1",
     "@seekdeep-ai/cordis": "workspace:^"
   },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-web-react --artifact seekdeep_client_web_react --module-id @seekdeep-ai/seekdeep-client-web-react --out-dir packages/client/web-react/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-web-react --artifact seekdeep_client_web_react --module-id @seekdeep-ai/seekdeep-client-web-react --out-dir packages/client/web-react/lib --watch"
+  },
   "files": [
     "lib/index.js",
     "lib/invariant.js",

@@ -48430,12 +48430,30 @@
     {
       "source": "packages/client/web-react/src/bind.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/src/wasm.rs",
+        "crates/client-web-react/tests/wasm_bind_invoke_parity.rs"
+      ],
+      "evidence": [
+        "pinned source client-web-react suite passed 63/63",
+        "compiled Rust/WASM selector bridge captures this-safe subscribe/getSnapshot closures once per source, preserves optional equality and selected-result memoization, and binds through React useSyncExternalStore",
+        "live Node/WASM cases pin method receivers, selector output, custom equality, stable hook identity, and absent-source behavior"
+      ]
     },
     {
       "source": "packages/client/web-react/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/src/lib.rs",
+        "crates/client-web-react/src/wasm.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "optimized Rust/WASM module exports bindSnapshotSelector, createSlotRenderer, stable SessionProvider, useInvoke, and identity-matched public error constructors",
+        "generated declarations retain UseSession, selector/renderer/store types, error classes, and SessionProviderProps"
+      ]
     },
     {
       "source": "packages/client/web-react/src/invariant.ts",
@@ -48454,57 +48472,150 @@
     {
       "source": "packages/client/web-react/src/scoped-slots.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/src/renderer.rs",
+        "crates/client-web-react/src/session.rs",
+        "crates/client-web-react/src/wasm.rs",
+        "crates/client-web-react/tests/renderer_parity.rs",
+        "crates/client-web-react/tests/wasm_renderer_parity.rs"
+      ],
+      "evidence": [
+        "portable Rust decisions and live WASM renderer cover root boot order, single/keyed/list/chain dispatch, fallbacks, dry cells, chain election and overlay, entry error containment and abdication, stable entry keys, stale-before-ownership authorization, and owner-wins composition",
+        "standard kit synthesizes stable global/session/projection/store hooks, locale seats by face/namespace/revision, child render bindings, SessionProvider, cached inject faces, and contextual slot hooks",
+        "session-maybe adoption uses an epoch-keyed child while strict sessions key their error boundary by entry plus Session id"
+      ]
     },
     {
       "source": "packages/client/web-react/src/session-provider.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/src/session.rs",
+        "crates/client-web-react/src/wasm.rs",
+        "crates/client-web-react/tests/renderer_parity.rs",
+        "crates/client-web-react/tests/wasm_session_parity.rs",
+        "crates/client-web-react/tests/wasm_renderer_parity.rs"
+      ],
+      "evidence": [
+        "live WASM providers pin empty/body branching, key by Session id, binding delivery, fail-loud context readers, strict absence, optional hooks, projection faces and missing capabilities",
+        "pure adoption state pins blank-to-first identity preservation, switch/loss remounts, same-session stability, and adopt-again behavior"
+      ]
     },
     {
       "source": "packages/client/web-react/src/use-invoke.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/src/invoke.rs",
+        "crates/client-web-react/src/wasm.rs",
+        "crates/client-web-react/tests/invoke_parity.rs",
+        "crates/client-web-react/tests/wasm_bind_invoke_parity.rs"
+      ],
+      "evidence": [
+        "Rust pending counter and live WASM hook preserve stable invoke identity, latest action adoption, concurrent in-flight counting, zero-boundary notifications, Promise rejection logging, and guaranteed finally reset"
+      ]
     },
     {
       "source": "packages/client/web-react/src/use-sync-external-store.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/src/wasm.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "compiled Rust createSelectorShim replaces the untyped dependency shim and preserves subscribe, snapshot, no-server-snapshot, selector and optional equality positions",
+        "generated SnapshotSelectorHook declaration remains the public typed compatibility face"
+      ]
     },
     {
       "source": "packages/client/web-react/tests/bind.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/tests/wasm_bind_invoke_parity.rs"
+      ],
+      "evidence": [
+        "live Node/WASM cases cover selected changes, custom equality, stable source bindings, method receivers, identity caching and selector memoization"
+      ]
     },
     {
       "source": "packages/client/web-react/tests/scoped-slots-real-core.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/tests/wasm_real_core_parity.rs",
+        "crates/client-web-react/tests/wasm_renderer_parity.rs",
+        "crates/client-ui-slots/tests/wasm_core_parity.rs"
+      ],
+      "evidence": [
+        "assembled live WASM case installs this compiled renderer into the actual Rust WasmClientSlotRegistry host, registers the root and declared child through the real ledger, renders fallback then owner-prop content, disposes idempotently back to fallback, and proves the retained binding becomes StaleAuthorizationError",
+        "Rust SlotCore and renderer-focused suites additionally pin microtask batching, entry identity stability, kind dispatch and error containment"
+      ]
     },
     {
       "source": "packages/client/web-react/tests/scoped-slots.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/tests/renderer_parity.rs",
+        "crates/client-web-react/tests/wasm_renderer_parity.rs",
+        "crates/client-web-react/tests/wasm_session_parity.rs"
+      ],
+      "evidence": [
+        "pure and live WASM cases cover every slot kind, fallback/crash outcomes, chain ordering and election, list ordering, liveness and authorization, entry containment, global/session/store/projection kit assembly, inject caching, owner precedence, and session incarnation rules"
+      ]
     },
     {
       "source": "packages/client/web-react/tests/session-provider.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/tests/renderer_parity.rs",
+        "crates/client-web-react/tests/wasm_session_parity.rs",
+        "crates/client-web-react/tests/wasm_renderer_parity.rs"
+      ],
+      "evidence": [
+        "live providers and renderer cover empty/null branches, selected body and key, fail-loud detached use, strict slot delivery, and same-id bundle updates; pure state pins remount versus adoption"
+      ]
     },
     {
       "source": "packages/client/web-react/tests/stale-authorization.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/src/wasm.rs",
+        "crates/client-web-react/tests/wasm_renderer_parity.rs"
+      ],
+      "evidence": [
+        "live retained binding succeeds while live, throws the exported StaleAuthorizationError before ownership after disposal, and remains dead when a fresh registration receives a new cached binding"
+      ]
     },
     {
       "source": "packages/client/web-react/tests/use-invoke.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/tests/invoke_parity.rs",
+        "crates/client-web-react/tests/wasm_bind_invoke_parity.rs"
+      ],
+      "evidence": [
+        "native and live WASM cases cover lifecycle pending, concurrent settlement, stable trigger with latest fn, rejection logging, and reset"
+      ]
     },
     {
       "source": "packages/client/web-react/tests/use-projection.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web-react/tests/wasm_bind_invoke_parity.rs",
+        "crates/client-web-react/tests/wasm_session_parity.rs",
+        "crates/client-web-react/tests/wasm_renderer_parity.rs"
+      ],
+      "evidence": [
+        "live keyed projection hook preserves identity per provide bundle, whole-value and selector overloads, missing-key undefined, no-face capability absence, and delivery through the session standard kit"
+      ]
     },
     {
       "source": "packages/client/web-react/tsconfig.json",
@@ -48520,7 +48631,15 @@
     {
       "source": "packages/client/web-react/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/web-react/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask bundle test pins React materialization, compiled selector shim, renderer and SessionProvider exports, stable public error constructors, hook exports and declarations",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-web-react bundle emitted the optimized self-contained Rust/WASM module"
+      ]
     },
     {
       "source": "packages/client/web/README.i18n.yaml",

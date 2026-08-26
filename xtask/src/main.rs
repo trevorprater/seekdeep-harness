@@ -463,6 +463,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiTheme(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiTheme, inject: ['slots', 'locale', 'connection', 'remote', 'settingsScope'], SETTINGS_NS: 'settings.theme' }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-web-react" {
+        return format!(
+            "require => {{ const React = require('react'); {global}.configureClientWebReact(React, {global}.createSelectorShim(React)); const errors = {global}.webReactErrorClasses(); Object.assign({global}, errors, {{ createSlotRenderer: {global}.createSlotRenderer, SessionProvider: {global}.sessionProviderComponent(), bindSnapshotSelector: {global}.bindSnapshotSelector, useInvoke: {global}.useInvoke }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-sidebar" {
         return format!(
             "require => {{ {global}.configureClientUiSidebar(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSidebar, inject: ['slots', 'layout', 'sessions', 'workspaces', 'locale'] }}); return {global}; }}"
@@ -555,6 +560,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-theme" {
         return ui_theme_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-web-react" {
+        return client_web_react_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-sidebar" {
         return ui_sidebar_declarations();
@@ -710,6 +718,29 @@ declare module '@seekdeep-ai/cordis' {
 }
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { 'settings.theme': ThemeKey }
+}
+"
+    .to_owned()
+}
+
+fn client_web_react_declarations() -> String {
+    r"
+import type { SnapshotSelectorHook } from '@seekdeep-ai/seekdeep-client-ui-slots';
+export const bindSnapshotSelector: typeof wasm_bindgen.bindSnapshotSelector;
+export const createSlotRenderer: typeof wasm_bindgen.createSlotRenderer;
+export const SessionProvider: (props: SessionProviderProps) => unknown;
+export const useInvoke: typeof wasm_bindgen.useInvoke;
+export class SlotAssemblyError extends Error {}
+export class StaleAuthorizationError extends Error {}
+export class SlotOwnershipError extends Error {}
+export type UseSession<Snap extends object = object> = SnapshotSelectorHook<Snap>;
+export type {
+  ChainRenderOpts, HostObservable, RenderOpts, SessionProvideInfo, SnapshotSelectorHook,
+  SlotRenderer, SlotRendererHost, StoreInstanceLike,
+} from '@seekdeep-ai/seekdeep-client-ui-slots';
+export interface SessionProviderProps {
+  empty?: (() => unknown) | undefined;
+  children(sessionId: string): unknown;
 }
 "
     .to_owned()
@@ -1285,6 +1316,41 @@ mod tests {
             "body {}\n"
         );
         assert!(!output.join("styles/stale.css").exists());
+    }
+
+    #[test]
+    fn client_web_react_bundle_exposes_compiled_hooks_renderer_and_error_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_web_react_wasm",
+            "@seekdeep-ai/seekdeep-client-web-react",
+        )
+        .unwrap();
+        for expected in [
+            "const React = require('react')",
+            "configureClientWebReact(React",
+            "createSelectorShim(React)",
+            "webReactErrorClasses()",
+            "createSlotRenderer: __seekdeep_client_web_react_wasm.createSlotRenderer",
+            "SessionProvider: __seekdeep_client_web_react_wasm.sessionProviderComponent()",
+            "bindSnapshotSelector: __seekdeep_client_web_react_wasm.bindSnapshotSelector",
+            "useInvoke: __seekdeep_client_web_react_wasm.useInvoke",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-web-react");
+        for expected in [
+            "import type { SnapshotSelectorHook }",
+            "const createSlotRenderer",
+            "const SessionProvider",
+            "class SlotAssemblyError",
+            "class StaleAuthorizationError",
+            "type UseSession",
+            "interface SessionProviderProps",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
     }
 
     #[test]

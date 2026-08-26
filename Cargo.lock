@@ -5154,6 +5154,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-web-react"
+version = "0.1.0-rc.5"
+dependencies = [
+ "js-sys",
+ "seekdeep-client-runtime",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-cmdline"
 version = "0.1.0-rc.5"
 dependencies = [
