@@ -5132,6 +5132,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-ui-theme"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "indexmap 2.14.0",
+ "js-sys",
+ "regex",
+ "seekdeep-client-runtime",
+ "seekdeep-cordis",
+ "seekdeep-host-webserver",
+ "seekdeep-schemastery",
+ "seekdeep-settings",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-cmdline"
 version = "0.1.0-rc.5"
 dependencies = [

@@ -198,14 +198,23 @@ fn wasm_package(
         eprintln!("Rust/WASM initial watch build failed: {error:#}");
     }
     let package_root = cargo_package_root(package)?;
-    let mut previous = watch_snapshot(&package_root)?;
+    let asset_root = if module_id == "@seekdeep-ai/seekdeep-client-ui-theme" {
+        Some(
+            cargo_metadata()?
+                .workspace_root
+                .join("packages/client/ui-theme/src/styles"),
+        )
+    } else {
+        None
+    };
+    let mut previous = wasm_watch_snapshot(&package_root, asset_root.as_deref())?;
     println!(
         "watching {} for Rust/WASM bundle changes",
         package_root.display()
     );
     loop {
         std::thread::sleep(Duration::from_millis(250));
-        let current = watch_snapshot(&package_root)?;
+        let current = wasm_watch_snapshot(&package_root, asset_root.as_deref())?;
         if current == previous {
             continue;
         }
@@ -284,10 +293,50 @@ fn wasm_package_once(
     let mut declarations = std::fs::read_to_string(staging.join("client.d.ts"))?;
     declarations.push_str(&compatibility_declarations(module_id));
     std::fs::write(type_dir.join("index.d.ts"), declarations)?;
+    copy_wasm_package_assets(&metadata.workspace_root, module_id, &out_dir)?;
     println!(
         "built {module_id} Rust/WASM classic bundle at {}",
         out_dir.join("client.js").display()
     );
+    Ok(())
+}
+
+fn wasm_watch_snapshot(
+    package_root: &Path,
+    asset_root: Option<&Path>,
+) -> anyhow::Result<BTreeMap<PathBuf, (u64, u128)>> {
+    let mut snapshot = watch_snapshot(package_root)?;
+    if let Some(asset_root) = asset_root {
+        snapshot.extend(watch_snapshot(asset_root)?);
+    }
+    Ok(snapshot)
+}
+
+fn copy_wasm_package_assets(
+    workspace: &Path,
+    module_id: &str,
+    out_dir: &Path,
+) -> anyhow::Result<()> {
+    if module_id != "@seekdeep-ai/seekdeep-client-ui-theme" {
+        return Ok(());
+    }
+    let source = workspace.join("packages/client/ui-theme/src/styles");
+    let destination = out_dir.join("styles");
+    if destination.exists() {
+        std::fs::remove_dir_all(&destination)?;
+    }
+    std::fs::create_dir_all(&destination)?;
+    let mut assets = std::fs::read_dir(&source)?.collect::<Result<Vec<_>, _>>()?;
+    assets.sort_by_key(std::fs::DirEntry::file_name);
+    for asset in assets {
+        let path = asset.path();
+        anyhow::ensure!(
+            path.extension().and_then(std::ffi::OsStr::to_str) == Some("css"),
+            "theme style directory contains a non-CSS asset: {}",
+            path.display()
+        );
+        std::fs::copy(&path, destination.join(asset.file_name()))?;
+    }
     Ok(())
 }
 
@@ -409,6 +458,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiLayout(require('react'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiLayout, inject: ['slots', 'theme'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-theme" {
+        return format!(
+            "require => {{ {global}.configureClientUiTheme(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiTheme, inject: ['slots', 'locale', 'connection', 'remote', 'settingsScope'], SETTINGS_NS: 'settings.theme' }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-sidebar" {
         return format!(
             "require => {{ {global}.configureClientUiSidebar(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSidebar, inject: ['slots', 'layout', 'sessions', 'workspaces', 'locale'] }}); return {global}; }}"
@@ -498,6 +552,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return ui_layout_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-theme" {
+        return ui_theme_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-sidebar" {
         return ui_sidebar_declarations();
@@ -596,6 +653,7 @@ export interface ILayout {
   openDetails(): void;
   closeDetails(): void;
 }
+
 export interface SidebarOwnerProps { collapsed: boolean; width: number }
 export interface ConvOwnerProps {}
 export interface DetailsOwnerProps {}
@@ -609,6 +667,49 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
     details: { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps };
     'shell.overlay': { kind: 'list'; scope: 'root' };
   }
+}
+"
+    .to_owned()
+}
+
+fn ui_theme_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiTheme;
+export const inject: readonly ['slots', 'locale', 'connection', 'remote', 'settingsScope'];
+export const SETTINGS_NS: 'settings.theme';
+export const ThemeRuntime: typeof wasm_bindgen.ThemeRuntime;
+export type ThemePreference = 'light' | 'dark' | 'system';
+export interface ThemeSettings { preference: ThemePreference }
+export type ThemeKey = 'appearance.title' | 'appearance.light' | 'appearance.dark' | 'appearance.system';
+export interface AppearanceRowState { preference: ThemePreference; revision: number }
+export interface AppearanceRowInjected { setTheme(id: ThemePreference): void }
+export interface AppearanceRowComponentProps extends AppearanceRowInjected {
+  useStore(selector: Function): unknown;
+  t(key: ThemeKey | string): string;
+}
+export type ThemeTokens = Record<string, string>;
+export interface ThemeTokenModes { light: string; dark: string }
+export type ThemeTokenOverrides = Record<string, ThemeTokenModes>;
+export interface ThemeDefinition { id: string; colorScheme: 'light' | 'dark'; tokens: ThemeTokens }
+export interface ThemeSnapshot {
+  preference: ThemePreference;
+  active: ThemeDefinition;
+  themes: readonly ThemeDefinition[];
+  revision: number;
+}
+export interface ThemeTokenInspection {
+  name: string;
+  description: string;
+  valueType: string;
+  requiresLightAndDark: boolean;
+  cssVariable?: string;
+}
+declare module '@seekdeep-ai/cordis' {
+  interface Context { theme: InstanceType<typeof ThemeRuntime> }
+  interface Events { 'theme/change'(snapshot: ThemeSnapshot): void }
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { 'settings.theme': ThemeKey }
 }
 "
     .to_owned()
@@ -945,8 +1046,8 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        classic_module_bundle, compatibility_declarations, default_macos_platform_tag,
-        is_generated_package_output, is_localization, watch_snapshot,
+        classic_module_bundle, compatibility_declarations, copy_wasm_package_assets,
+        default_macos_platform_tag, is_generated_package_output, is_localization, watch_snapshot,
     };
 
     #[test]
@@ -1127,6 +1228,63 @@ mod tests {
         ] {
             assert!(declarations.contains(expected), "missing {expected:?}");
         }
+    }
+
+    #[test]
+    fn ui_theme_bundle_configures_runtime_public_contract_and_style_assets() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_theme_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-theme",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiTheme(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "require('@seekdeep-ai/seekdeep-client-runtime/client')",
+            "apply: __seekdeep_client_ui_theme_wasm.applyClientUiTheme",
+            "inject: ['slots', 'locale', 'connection', 'remote', 'settingsScope']",
+            "SETTINGS_NS: 'settings.theme'",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-theme");
+        for expected in [
+            "ThemeRuntime: typeof wasm_bindgen.ThemeRuntime",
+            "type ThemePreference = 'light' | 'dark' | 'system'",
+            "interface AppearanceRowInjected",
+            "interface ThemeSnapshot",
+            "interface ThemeTokenInspection",
+            "'theme/change'(snapshot: ThemeSnapshot)",
+            "'settings.theme': ThemeKey",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+
+        let workspace = tempfile::tempdir().unwrap();
+        let source = workspace.path().join("packages/client/ui-theme/src/styles");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("base.css"), "body {}\n").unwrap();
+        std::fs::write(source.join("scrollbar.css"), "body {}\n").unwrap();
+        let output = workspace.path().join("lib");
+        std::fs::create_dir_all(output.join("styles")).unwrap();
+        std::fs::write(output.join("styles/stale.css"), "stale\n").unwrap();
+        copy_wasm_package_assets(
+            workspace.path(),
+            "@seekdeep-ai/seekdeep-client-ui-theme",
+            &output,
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(output.join("styles/base.css")).unwrap(),
+            "body {}\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(output.join("styles/scrollbar.css")).unwrap(),
+            "body {}\n"
+        );
+        assert!(!output.join("styles/stale.css").exists());
     }
 
     #[test]

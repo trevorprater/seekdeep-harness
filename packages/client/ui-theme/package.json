@@ -79,8 +79,8 @@
     "lib/types/**/*.d.ts"
   ],
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-theme --artifact seekdeep_client_ui_theme --module-id @seekdeep-ai/seekdeep-client-ui-theme --out-dir packages/client/ui-theme/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-theme --artifact seekdeep_client_ui_theme --module-id @seekdeep-ai/seekdeep-client-ui-theme --out-dir packages/client/ui-theme/lib --watch"
   },
   "dependencies": {
     "@seekdeep-ai/seekdeep-settings": "workspace:^",

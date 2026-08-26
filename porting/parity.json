@@ -46949,7 +46949,18 @@
     {
       "source": "packages/client/ui-theme/src/boot-theme.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/src/boot.rs",
+        "crates/client-ui-theme/src/host.rs",
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/client-ui-theme/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-theme suite passed 62/62",
+        "Rust bootstrap preserves exact built-in JSON, system resolution script, case-insensitive body insertion point, immediate pre-mount order, and body-less append fallback",
+        "live Host test reads each current durable preference at transform time and retracts the transform with its fiber"
+      ]
     },
     {
       "source": "packages/client/ui-theme/src/client/AppearanceRow.module.css",
@@ -46965,32 +46976,87 @@
     {
       "source": "packages/client/ui-theme/src/client/AppearanceRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/data/appearance.css",
+        "crates/client-ui-theme/src/wasm.rs",
+        "crates/client-ui-theme/tests/wasm_theme_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM component renders the exact title and Light, Dark, System cube order with source icons, persisted-preference selection, aria-pressed state, CSS classes, and click delegation",
+        "compiled stylesheet preserves the source padding, separator, wrapping cube geometry, hover exclusion, and selected palette"
+      ]
     },
     {
       "source": "packages/client/ui-theme/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/src/core.rs",
+        "crates/client-ui-theme/src/wasm.rs",
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/client-ui-theme/tests/wasm_theme_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "portable Rust registry and live WASM service preserve stable frozen snapshots, system media resolution, durable adoption, built-in persistence, custom themes, monotonic revisions, reversible ordered overrides, sorted inspection, and teaching failures",
+        "WASM apply provides ctx.theme, binds ui-theme settings, owns media and scope listeners, registers dictionaries, mirrors snapshots into the real Rust Store, and declaration-aware registers the Appearance row",
+        "synchronous Host-scope and theme/change reentry is explicitly tested without holding a Rust RefCell borrow"
+      ]
     },
     {
       "source": "packages/client/ui-theme/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/src/lib.rs",
+        "crates/client-ui-theme/src/wasm.rs",
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/client-ui-theme/tests/wasm_theme_parity.rs"
+      ],
+      "evidence": [
+        "native tests pin identical four-key dictionaries and live WASM observes exact settings.theme zh/en registration and teardown"
+      ]
     },
     {
       "source": "packages/client/ui-theme/src/client/settings-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/src/appearance.rs",
+        "crates/client-ui-theme/src/wasm.rs",
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/client-ui-theme/tests/wasm_theme_parity.rs"
+      ],
+      "evidence": [
+        "native mirror and compiled real Rust defineStore handle preserve the system and -1 initial state, strict-newer revision guard, exact preference projection, and stale or duplicate suppression"
+      ]
     },
     {
       "source": "packages/client/ui-theme/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/data/appearance.css",
+        "crates/client-ui-theme/src/wasm.rs"
+      ],
+      "evidence": [
+        "CSS-module locals are compiled into explicit seekdeep-theme class names owned by the Rust/WASM component",
+        "native and wasm32 strict Clippy compile every class-bearing render path without a TypeScript CSS-module shim"
+      ]
     },
     {
       "source": "packages/client/ui-theme/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/src/host.rs",
+        "crates/client-ui-theme/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "Rust Host plugin has no hard dependencies and dynamically attaches the schema to settings and the live bootstrap transform to webServer",
+        "real SettingsService and WebServer tests pin defaults, validation, current-value reads, either-edge-only composition, and complete namespace/transform teardown"
+      ]
     },
     {
       "source": "packages/client/ui-theme/src/invariant.ts",
@@ -47064,47 +47130,111 @@
     {
       "source": "packages/client/ui-theme/src/theme-settings.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/src/core.rs",
+        "crates/client-ui-theme/src/host.rs",
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/client-ui-theme/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "Rust closed preference enum and Host schema preserve light, dark, system, ui-theme, preference, the system default, exact wire spellings, and invalid-value rejection"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tests/appearance-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/tests/wasm_theme_parity.rs"
+      ],
+      "evidence": [
+        "live Node/WASM row case pins copy, cube order, icons, persisted selection, aria state, click routing, and service-event-driven Store convergence"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/tests/wasm_theme_parity.rs"
+      ],
+      "evidence": [
+        "live apply case uses the real Rust Store and covers exact inject order, service provision, settings binding, dictionaries, declaration-aware registration and collapse recovery, inject-time resync, face writes, and all owned teardown"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tests/boot-theme.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/client-ui-theme/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "Rust tests pin script placement, explicit palette override, system media branches, unavailable-media light fallback, default system preference, and body-less append behavior"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tests/host.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "real Rust SettingsService and WebServer integration covers durable default/update/validation/disposal, current-value bootstrap, transform disposal, and web-only defaulting"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/src/lib.rs",
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/invariants/src/noop.rs"
+      ],
+      "evidence": [
+        "target pins client-ui-theme-invariant in the shared no-op catalog, the optional Host root, and the exact five-edge browser service provision"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tests/scrollbar-styles.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/tests/scrollbar_parity.rs",
+        "packages/client/ui-theme/src/styles/design-platform.css",
+        "packages/client/ui-theme/src/styles/scrollbar.css"
+      ],
+      "evidence": [
+        "Rust repository-wide CSS gate pins identical light/dark token sets, direct static-scale resolution, complete consumers, l1 base indirection, Firefox/WebKit mutually exclusive paths, hover path, exact width mirror and consumer, and complete transparent-or-l2 rebind pairs across every package stylesheet"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tests/settings-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/client-ui-theme/tests/wasm_theme_parity.rs"
+      ],
+      "evidence": [
+        "native and live real-Store cases pin exact init, advancing sync, and stale or duplicate revision guards"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tests/theme.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-theme/tests/core_parity.rs",
+        "crates/client-ui-theme/tests/wasm_theme_parity.rs"
+      ],
+      "evidence": [
+        "portable and live WASM cases cover all source registry scenarios: defaults, stable snapshots, settings adoption and writes, unknown/duplicate/reserved ids, custom lifecycle, monotonic revisions, system media, ordered palette overrides, exact-generation stale disposal, malformed teaching errors, sorted defensive inspection, and listener cleanup"
+      ]
     },
     {
       "source": "packages/client/ui-theme/tsconfig.json",
@@ -47120,7 +47250,15 @@
     {
       "source": "packages/client/ui-theme/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-theme/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask bundle test pins React, primitive, and client-runtime externals, synchronous WASM materialization, public declarations, and exact global-style copying",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-theme bundle emitted the optimized Rust/WASM client package plus byte-identical base, design-platform, gradient-shadow-text, scrollbar, and shiki CSS assets"
+      ]
     },
     {
       "source": "packages/client/ui-tool/README.i18n.yaml",

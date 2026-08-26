@@ -29,6 +29,7 @@ members = [
   "crates/client-ui-settings",
   "crates/client-ui-settings-general",
   "crates/client-ui-sidebar",
+  "crates/client-ui-theme",
   "crates/client-ui-slots",
   "crates/client-runtime",
   "crates/client-settings-contract",
