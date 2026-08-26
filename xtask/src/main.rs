@@ -327,6 +327,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientLocale(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-runtime/client')); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-settings" {
+        return format!(
+            "require => {{ const {{ Service }} = require('@seekdeep-ai/cordis'); class SettingsScopeBinder extends Service {{ constructor(ctx) {{ super(ctx, 'settingsScope'); }} bind(spec) {{ return {global}.bindSettingsScope(this.ctx, spec); }} }} {global}.configureClientUiSettings(SettingsScopeBinder); Object.assign({global}, {{ apply: {global}.applyClientUiSettings, inject: [], SettingsScopeBinder, SettingsScopeController: {global}.__SettingsScopeController }}); return {global}; }}"
+        );
+    }
     format!("() => {global}")
 }
 
@@ -334,10 +339,74 @@ fn compatibility_declarations(module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-locale" {
         return "\nexport const apply: typeof wasm_bindgen.applyClientLocale;\nexport const inject: readonly ['slots', 'connection', 'remote', 'settingsScope'];\n".to_owned();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-settings" {
+        return r"
+import type { SettingsScope, SettingsScopeSpec } from '@seekdeep-ai/seekdeep-client-runtime/client';
+export const apply: typeof wasm_bindgen.applyClientUiSettings;
+export const inject: readonly [];
+export const SettingsScopeController: {
+  new <T>(api: unknown, spec: SettingsScopeSpec<T>, persistence?: 'host' | 'memory'): SettingsScope<T> & {
+    load(): Promise<void>;
+    dispose(): Promise<void>;
+  };
+};
+export class SettingsScopeBinder {
+  constructor(ctx: unknown);
+  bind<T>(spec: SettingsScopeSpec<T>): SettingsScope<T>;
+}
+export interface SettingsGeneralItemOwnerProps { children?: never }
+export interface SettingsPluginsTabOwnerProps { children?: never }
+export interface SettingsTriggerOwnerProps { wide: boolean }
+export interface SettingsHeaderOwnerProps { children?: never }
+export interface SettingsSectionOwnerProps { close: () => void }
+export interface SettingsOnboardingOwnerProps {
+  stepId: string;
+  complete: () => void;
+  openSection: (id: string) => void;
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface SlotMap {
+    'settings.trigger': { kind: 'single'; scope: 'root'; owner: SettingsTriggerOwnerProps };
+    'settings.header': { kind: 'single'; scope: 'root'; owner: SettingsHeaderOwnerProps };
+    'settings.action': { kind: 'list'; scope: 'root'; owner: SettingsHeaderOwnerProps };
+    'settings.close': { kind: 'single'; scope: 'root'; owner: SettingsHeaderOwnerProps };
+    'settings.section': { kind: 'list'; scope: 'root'; owner: SettingsSectionOwnerProps };
+    'settings.plugins.tab': { kind: 'list'; scope: 'root'; owner: SettingsPluginsTabOwnerProps };
+    'settings.onboarding': { kind: 'list'; scope: 'root'; owner: SettingsOnboardingOwnerProps };
+    'settings.general.item': { kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps };
+  }
+}
+"
+        .to_owned();
+    }
     if module_id != "@seekdeep-ai/seekdeep-client-runtime" {
         return String::new();
     }
     "\nexport const apply: typeof wasm_bindgen.applyClientRuntime;\nexport const isAppendSurfaceEvent: typeof wasm_bindgen.isAppendSurfaceEvent;\nexport const isReplacementSurfaceEvent: typeof wasm_bindgen.isReplacementSurfaceEvent;\nexport const SlotRegistry: typeof wasm_bindgen.ClientSlotRegistry;\nexport const ConversationEventRegistry: typeof wasm_bindgen.ConversationEventRegistry;\nexport const ConversationViewRegistry: typeof wasm_bindgen.ConversationViewRegistry;\nexport const ConversationNodeAssembler: typeof wasm_bindgen.ConversationNodeAssembler;\nexport const ConversationLocationIndex: typeof wasm_bindgen.ConversationLocationIndex;\nexport const conversationContextKey: typeof wasm_bindgen.conversationContextKey;\nexport const SessionRuntime: typeof wasm_bindgen.SessionRuntime;\nexport const scopeOf: typeof wasm_bindgen.scopeOf;\nexport const workspaceTitleOf: typeof wasm_bindgen.workspaceTitleOf;\nexport const indexSubagentDescendants: typeof wasm_bindgen.indexSubagentDescendants;\nexport const SessionProvideChannel: typeof wasm_bindgen.SessionProvideChannel;\nexport const createScope: typeof wasm_bindgen.createScope;\nexport const WorkspaceRuntime: typeof wasm_bindgen.WorkspaceRuntime;\nexport const resolveWorkspacePath: typeof wasm_bindgen.resolveWorkspacePath;\nexport const createSnapshotStore: typeof wasm_bindgen.createSnapshotStore;\nexport const defineStore: typeof wasm_bindgen.defineStore;\nexport const shallowEqual: typeof wasm_bindgen.shallowEqual;\nexport const toAssistantBlock: typeof wasm_bindgen.toAssistantBlock;\nexport const toAssistantBlocks: typeof wasm_bindgen.toAssistantBlocks;\nexport const emptyAssistantBlock: typeof wasm_bindgen.emptyAssistantBlock;\nexport const isTokenDelta: typeof wasm_bindgen.isTokenDelta;\nexport const contextForm: typeof wasm_bindgen.contextForm;\nexport const contextProvenance: typeof wasm_bindgen.contextProvenance;\nexport const displayFailureMessage: typeof wasm_bindgen.displayFailureMessage;\nexport const PendingWait: typeof wasm_bindgen.PendingWait;\nexport class SessionCreateError extends Error { constructor(rpcError: any, requestedSessionId: string | undefined); readonly rpcError: any; readonly requestedSessionId: string | undefined; }\nexport class SessionForkError extends Error { constructor(rpcError: any, sourceSessionId: string); readonly rpcError: any; readonly sourceSessionId: string; }\nexport class WorkspaceCreateError extends Error { constructor(rpcError: any); readonly rpcError: any; }\nexport class DirectoryBrowseError extends Error { constructor(rpcError: any); readonly rpcError: any; }\nexport const EMPTY_CHAT_SNAPSHOT: ReturnType<typeof wasm_bindgen.emptyChatSnapshot>;\nexport const EMPTY_CONVERSATION_VIEWS: ReturnType<typeof wasm_bindgen.emptyConversationViews>;\n".to_owned()
+        + runtime_settings_contract_declarations()
+}
+
+fn runtime_settings_contract_declarations() -> &'static str {
+    r"export interface SettingsScopeSnapshot<T> {
+  status: 'loading' | 'ready' | 'unavailable';
+  value: T | undefined;
+  base: unknown;
+  user: unknown;
+  revision: number | undefined;
+  writable: boolean;
+  mode: 'host' | 'memory';
+}
+export interface SettingsScopeSpec<T> {
+  namespace: string;
+  decode?: (section: unknown) => T | undefined;
+}
+export interface SettingsScope<T> {
+  getSnapshot(): SettingsScopeSnapshot<T>;
+  subscribe(listener: () => void): () => void;
+  set(field: string, value: unknown): Promise<void>;
+  unset(field: string): Promise<void>;
+}
+"
 }
 
 fn is_javascript_identifier(value: &str) -> bool {
@@ -706,6 +775,40 @@ mod tests {
     }
 
     #[test]
+    fn ui_settings_bundle_materializes_a_traced_cordis_binder_and_exact_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_settings_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-settings",
+        )
+        .unwrap();
+        for expected in [
+            "require('@seekdeep-ai/cordis')",
+            "class SettingsScopeBinder extends Service",
+            "super(ctx, 'settingsScope')",
+            ".bindSettingsScope(this.ctx, spec)",
+            ".configureClientUiSettings(SettingsScopeBinder)",
+            "apply: __seekdeep_client_ui_settings_wasm.applyClientUiSettings",
+            "inject: []",
+            "SettingsScopeController: __seekdeep_client_ui_settings_wasm.__SettingsScopeController",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-settings");
+        for expected in [
+            "new <T>",
+            "class SettingsScopeBinder",
+            "readonly []",
+            "'settings.plugins.tab'",
+            "'settings.general.item'",
+            "openSection: (id: string) => void",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+    }
+
+    #[test]
     fn wasm_watch_snapshot_changes_with_package_input_bytes() {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(root.path().join("src")).unwrap();
@@ -739,6 +842,9 @@ mod tests {
             "class SessionCreateError extends Error",
             "class WorkspaceCreateError extends Error",
             "EMPTY_CHAT_SNAPSHOT",
+            "interface SettingsScopeSnapshot<T>",
+            "interface SettingsScopeSpec<T>",
+            "interface SettingsScope<T>",
         ] {
             assert!(declarations.contains(expected));
         }

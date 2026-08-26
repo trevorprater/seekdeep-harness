@@ -39669,12 +39669,16 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
+        "crates/client-settings-contract/src/lib.rs",
         "crates/client-runtime/src/settings_scope.rs",
-        "crates/client-runtime/tests/settings_scope_contract.rs"
+        "crates/client-runtime/tests/settings_scope_contract.rs",
+        "xtask/src/main.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-client-runtime --test settings_scope_contract --all-features (1 contract case passed)",
-        "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-client-settings-contract -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
+        "client-runtime Rust/WASM bundle regenerated with exact SettingsScopeSnapshot, SettingsScopeSpec, and SettingsScope declarations",
+        "strict generated-declaration type smoke consumed the generic settings contracts from ui-settings with skipLibCheck disabled"
       ],
       "note": "The target-portable Rust contract preserves loading/ready/unavailable status, optional accepted value, independent composition-base and raw-user presence layers, optional revision, writability, Host/memory mode, a domain decoder spec, reference-stable snapshot subscription, and ordered revision-fenced set/unset future signatures; implementation and Host transport remain owned by the Settings surface"
     },
@@ -45666,36 +45670,83 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-settings/package.json"
+        "packages/client/ui-settings/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings bundle (optimized synchronous Rust/WASM classic bundle built)",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings watch (initial build plus touched-input rebuild observed)",
+        "release-bundle Node smoke with pinned Cordis: empty inject list, SettingsScopeBinder provision, caller-owned memory scope, caller teardown, and provider-fiber retirement"
       ]
     },
     {
       "source": "packages/client/ui-settings/src/client/contract/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings/src/slots.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-settings --all-features (canonical eight-name, kind, root-scope contract passed)",
+        "strict generated-declaration type smoke covered every owner currency and generic controller/Binder signature"
+      ]
     },
     {
       "source": "packages/client/ui-settings/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings/src/lib.rs",
+        "crates/client-ui-settings/src/wasm.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner via cargo test -p seekdeep-client-ui-settings --target wasm32-unknown-unknown --test wasm_settings_parity --all-features (3 live WASM cases passed)",
+        "release-bundle Node smoke with pinned Cordis proved SettingsScopeBinder class provision and exact fiber retirement",
+        "cargo clippy -p seekdeep-client-ui-settings --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-settings/src/client/settings-scope.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-settings-contract/src/lib.rs",
+        "crates/client-ui-settings/src/core.rs",
+        "crates/client-ui-settings/src/wasm.rs"
+      ],
+      "evidence": [
+        "pinned source oracle: pnpm exec vitest run packages/client/ui-settings/tests/settings-scope.client.spec.ts packages/client/ui-settings/tests/plugin.client.spec.ts packages/client/ui-settings/tests/invariant.client.spec.ts (22/22 passed)",
+        "cargo test -p seekdeep-client-ui-settings --all-features (16 controller and 3 contract/Host cases passed)",
+        "live WASM controller/Binder suite (3/3 passed): frozen reference-stable snapshots, plain-object wire requests, invalidation convergence, memory mode, and quiescent teardown",
+        "strict native and wasm32 Clippy plus rustdoc -D warnings passed"
+      ]
     },
     {
       "source": "packages/client/ui-settings/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-settings/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM package contains no CSS-module imports; optimized package bundle completed without a TypeScript CSS ambient dependency",
+        "strict generated-declaration type smoke passed with skipLibCheck disabled"
+      ]
     },
     {
       "source": "packages/client/ui-settings/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings/src/lib.rs",
+        "crates/client-ui-settings/tests/contracts_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-client-ui-settings --all-features (dependency-free no-op Host plugin activated and disposed)"
+      ]
     },
     {
       "source": "packages/client/ui-settings/src/invariant.ts",
@@ -45714,17 +45765,44 @@
     {
       "source": "packages/client/ui-settings/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings/tests/contracts_parity.rs",
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned source oracle ui-settings suite (22/22 passed)",
+        "cargo test -p seekdeep-client-ui-settings --all-features (exact invariant identity and no-op Host half passed)",
+        "pinned-source invariant catalog differential retains the exact @seekdeep-ai/seekdeep-client-ui-settings no-op registration"
+      ]
     },
     {
       "source": "packages/client/ui-settings/tests/plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings/tests/wasm_settings_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source oracle ui-settings suite (22/22 passed)",
+        "live WASM apply case and release-bundle pinned-Cordis smoke proved SettingsScopeBinder provision, instanceof identity, and provider-fiber retirement"
+      ]
     },
     {
       "source": "packages/client/ui-settings/tests/settings-scope.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings/tests/settings_scope_parity.rs",
+        "crates/client-ui-settings/tests/wasm_settings_parity.rs"
+      ],
+      "evidence": [
+        "pinned source oracle ui-settings suite (22/22 passed)",
+        "cargo test -p seekdeep-client-ui-settings --all-features (all 16 source controller cases passed)",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner via cargo test -p seekdeep-client-ui-settings --target wasm32-unknown-unknown --test wasm_settings_parity --all-features (3 live JS boundary cases passed)"
+      ]
     },
     {
       "source": "packages/client/ui-settings/tsconfig.json",
@@ -45740,7 +45818,16 @@
     {
       "source": "packages/client/ui-settings/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-settings/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo test -p xtask --bin xtask (ui-settings classic module factory and declaration contract passed)",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings bundle (optimized synchronous classic module emitted)",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings watch (initial build plus package-input rebuild observed)"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/README.i18n.yaml",

@@ -4977,6 +4977,7 @@ dependencies = [
  "futures",
  "indexmap 2.14.0",
  "js-sys",
+ "seekdeep-client-settings-contract",
  "seekdeep-client-ui-slots",
  "seekdeep-cordis",
  "seekdeep-failure-display",
@@ -5008,6 +5009,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-settings-contract"
+version = "0.1.0-rc.5"
+dependencies = [
+ "futures",
+ "serde_json",
+]
+
+[[package]]
 name = "seekdeep-client-ui-cordis"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5026,6 +5035,26 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
+]
+
+[[package]]
+name = "seekdeep-client-ui-settings"
+version = "0.1.0-rc.5"
+dependencies = [
+ "futures",
+ "js-sys",
+ "seekdeep-client-settings-contract",
+ "seekdeep-client-ui-slots",
+ "seekdeep-cordis",
+ "seekdeep-schemastery",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

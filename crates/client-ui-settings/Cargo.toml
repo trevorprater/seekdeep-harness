@@ -1,27 +1,26 @@
 [package]
-name = "seekdeep-client-runtime"
+name = "seekdeep-client-ui-settings"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "React-free Rust/WASM Client object layer and runtime services"
+description = "Portable Rust/WASM settings namespace scope service and settings Slot contracts"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-base64.workspace = true
-indexmap.workspace = true
 futures.workspace = true
-seekdeep-client-ui-slots = { path = "../client-ui-slots" }
 seekdeep-client-settings-contract = { path = "../client-settings-contract" }
-seekdeep-cordis = { path = "../cordis" }
-seekdeep-identity = { path = "../identity" }
-seekdeep-failure-display = { path = "../failure-display" }
-serde_json.workspace = true
+seekdeep-client-ui-slots = { path = "../client-ui-slots", default-features = false }
+seekdeep-schemastery = { path = "../schemastery" }
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys.workspace = true
@@ -29,11 +28,12 @@ serde-wasm-bindgen.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio.workspace = true
+
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3.77"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tokio.workspace = true
 
 [lints]
 workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "seekdeep-client-settings-contract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Target-portable Client settings scope contract without browser bindings"
+
+[dependencies]
+futures.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
