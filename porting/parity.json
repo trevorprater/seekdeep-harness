@@ -41322,7 +41322,16 @@
     {
       "source": "packages/client/ui-attachment/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/ui-attachment/tests/invariant.client.spec.ts packages/test-support/client-runtime/tests/invariant.client.spec.ts (pinned source: 2 passed)",
+        "cargo test -p seekdeep-invariants --all-features (7 passed, including unique no-op catalog metadata and exact reservation unwind)",
+        "pinned-source no-op catalog includes the exact @seekdeep-ai/seekdeep-client-ui-attachment package registration"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/tests/message-image.client.spec.tsx",
@@ -75404,7 +75413,16 @@
     {
       "source": "packages/test-support/client-runtime/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/ui-attachment/tests/invariant.client.spec.ts packages/test-support/client-runtime/tests/invariant.client.spec.ts (pinned source: 2 passed)",
+        "cargo test -p seekdeep-invariants --all-features (7 passed, including unique no-op catalog metadata and exact reservation unwind)",
+        "pinned-source no-op catalog includes the exact @seekdeep-ai/seekdeep-client-test-runtime package registration"
+      ]
     },
     {
       "source": "packages/test-support/client-runtime/tests/remote.client.spec.ts",
