@@ -44409,7 +44409,17 @@
     {
       "source": "packages/client/ui-primitives/src/Tooltip.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_tooltip.rs",
+        "crates/client-ui-primitives/tests/wasm_tooltip_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Tooltip suite: 17 tests passed",
+        "compiled WASM tests pin clone-without-wrapper identity, object/callback ref forwarding, child-handler-first chaining, lazy labels, delayed hover and immediate focus, timer cancellation, independent hover/focus state, immediate mouse-leave hide, disabled suppression/mid-hover teardown, max width, horizontal clamps/reclamps, requested top/bottom/right placement, conditional vertical flips, resize listener cleanup, and no-fit stability",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_tooltip_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/WebBlock.module.css",
@@ -45352,7 +45362,14 @@
     {
       "source": "packages/client/ui-primitives/tests/tooltip.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_tooltip_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Tooltip suite: 17 tests passed",
+        "three grouped live WASM tests cover the complete source timing, trigger, ref, disabled, fitting, flip, handler, and cleanup model"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/web-block.client.spec.tsx",

@@ -8,6 +8,8 @@ mod browser_dialogs;
 #[cfg(target_arch = "wasm32")]
 mod browser_icons;
 #[cfg(target_arch = "wasm32")]
+mod browser_tooltip;
+#[cfg(target_arch = "wasm32")]
 mod browser_util;
 mod head_tail_cap;
 #[allow(clippy::needless_raw_string_hashes, clippy::unreadable_literal)]
@@ -21,6 +23,8 @@ pub use browser_atoms::*;
 pub use browser_dialogs::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_icons::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_tooltip::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_util::*;
 pub use head_tail_cap::*;
