@@ -79881,12 +79881,29 @@
     {
       "source": "scripts/coverage-exempt.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/coverage_exempt_parity.rs"
+      ],
+      "evidence": [
+        "pinned source coverage-exempt suite: 5 tests passed",
+        "Rust verification scans the pinned spec inventory and pins non-empty filter/exclude equivalence, disjoint membership, and fail-closed empty selection",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test coverage_exempt_parity --all-features"
+      ]
     },
     {
       "source": "scripts/coverage-exempt.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/coverage_exempt.rs",
+        "crates/repository-tools/src/bin/verify-coverage-exempt.rs"
+      ],
+      "evidence": [
+        "compiled Rust catalog preserves all four filter/exclude pairs and intentionally renames the target coverage flag to SEEKDEEP_COVERAGE_EXEMPT_HEAVY",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test coverage_exempt_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/coverage-uncovered-locations.cjs",
