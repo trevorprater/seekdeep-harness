@@ -81070,7 +81070,20 @@
     {
       "source": "scripts/verify-runtime-closure.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/runtime_closure.rs",
+        "crates/repository-tools/src/bin/verify-runtime-closure.rs",
+        "crates/repository-tools/tests/runtime_closure_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-runtime-closure.ts (pinned source: 110 workspace packages form a closed runtime dependency graph)",
+        "cargo test -p seekdeep-repository-tools --test runtime_closure_parity --all-features (4 passed for supplied peers, breadth-first missing-peer chains, optional/external peers, optional dependencies, and cycle deduplication)",
+        "pnpm --silent run verify-runtime-closure (Rust target: 66 workspace packages form a closed runtime dependency graph)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/verify-skill-invocation-metadata.spec.ts",

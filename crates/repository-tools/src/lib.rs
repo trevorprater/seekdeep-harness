@@ -37,6 +37,7 @@ pub mod release_tarball;
 /// Shared repository glob discovery and line-oriented reference scanning.
 pub mod repo_files;
 pub mod run_oxlint;
+pub mod runtime_closure;
 /// Cross-product Skill invocation metadata policy.
 pub mod skill_invocation_metadata;
 /// Vendored package lockfile link-integrity policy.
