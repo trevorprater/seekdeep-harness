@@ -450,6 +450,11 @@ pub const NOOP_INVARIANTS: &[NoopInvariantDescriptor] = &[
         "@seekdeep-ai/seekdeep-tool-terminal",
     ),
     NoopInvariantDescriptor::new(
+        "packages/test-support/acp-snapshot/src/invariant.ts",
+        "acp-snapshot-invariant",
+        "@seekdeep-ai/seekdeep-acp-snapshot",
+    ),
+    NoopInvariantDescriptor::new(
         "packages/test-support/agent-loop-testkit/src/invariant.ts",
         "agent-loop-testkit-invariant",
         "@seekdeep-ai/seekdeep-agent-loop-testkit",

@@ -36866,7 +36866,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -37785,7 +37785,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -38140,7 +38140,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -38390,7 +38390,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -39211,7 +39211,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -40879,7 +40879,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -41116,7 +41116,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -41299,7 +41299,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -41463,7 +41463,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -42141,7 +42141,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -42401,7 +42401,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -42521,7 +42521,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -42620,7 +42620,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -42761,7 +42761,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -42921,7 +42921,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -43061,7 +43061,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -43267,7 +43267,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -43528,7 +43528,7 @@
         "xtask/src/main.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "optimized package build emits and executes the exact product-renamed invariant compatibility entry and disposer",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
@@ -43701,7 +43701,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -43838,7 +43838,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -43963,7 +43963,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -44582,7 +44582,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -45718,7 +45718,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -46007,7 +46007,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -46172,7 +46172,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -46374,7 +46374,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -46545,7 +46545,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -46769,7 +46769,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -46988,7 +46988,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -47089,7 +47089,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -47316,7 +47316,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -47512,7 +47512,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -47922,7 +47922,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -48299,7 +48299,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -48470,7 +48470,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -48605,7 +48605,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -48767,7 +48767,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -48909,7 +48909,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -49260,7 +49260,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -53452,7 +53452,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -53556,7 +53556,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -53669,7 +53669,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -53894,7 +53894,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -54047,7 +54047,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -54188,7 +54188,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -54535,7 +54535,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -54749,7 +54749,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -55060,7 +55060,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -55454,7 +55454,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -56182,7 +56182,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -56445,7 +56445,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -56933,7 +56933,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -58121,7 +58121,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -58304,7 +58304,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -59371,7 +59371,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -59510,7 +59510,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -59620,7 +59620,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -60072,7 +60072,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -63148,7 +63148,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -63411,7 +63411,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -63524,7 +63524,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -63730,7 +63730,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -66072,7 +66072,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -66207,7 +66207,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -66330,7 +66330,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -66567,7 +66567,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -66714,7 +66714,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -67120,7 +67120,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -68293,7 +68293,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -69432,7 +69432,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -69555,7 +69555,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -69710,7 +69710,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -69847,7 +69847,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -70175,7 +70175,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -70299,7 +70299,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -70439,7 +70439,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -70632,7 +70632,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -70729,7 +70729,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -72027,7 +72027,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -72167,7 +72167,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -72338,7 +72338,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -72514,7 +72514,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -72637,7 +72637,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -72747,7 +72747,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -72926,7 +72926,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -73430,7 +73430,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -73565,7 +73565,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -73664,7 +73664,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -74467,7 +74467,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -74625,7 +74625,16 @@
     {
       "source": "packages/test-support/acp-snapshot/src/invariant.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned source companion is an explained empty installer for @deepseek-ai/dsh-acp-snapshot",
+        "Rust no-op catalog registers acp-snapshot-invariant under @seekdeep-ai/seekdeep-acp-snapshot",
+        "cargo test -p seekdeep-invariants noop::tests::catalog_metadata_is_unique_and_every_plugin_unwinds_its_exact_reservation --all-features (98 unique descriptors reserve and unwind exactly)"
+      ]
     },
     {
       "source": "packages/test-support/acp-snapshot/src/launcher.ts",
@@ -75267,7 +75276,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -75359,7 +75368,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -75548,7 +75557,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "direct Rust companion reserves, releases, and replaces the package-owned invariant",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo test -p seekdeep-llm-mock-server --all-targets --all-features"
@@ -75681,7 +75690,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -75795,7 +75804,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -76199,7 +76208,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -76625,7 +76634,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -77736,7 +77745,7 @@
         "crates/invariants/src/noop/catalog.rs"
       ],
       "evidence": [
-        "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "pinned-source catalog differential: 98 exact no-op invariant descriptors",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -80265,12 +80274,37 @@
     {
       "source": "scripts/package-invariants.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/package_invariants_parity.rs",
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/package-invariants.spec.ts (pinned source: 9 passed)",
+        "cargo test -p seekdeep-repository-tools --test package_invariants_parity --all-features (4 adapted Rust ownership/publication cases passed, including live target)",
+        "cargo test -p seekdeep-invariants noop::tests::catalog_metadata_is_unique_and_every_plugin_unwinds_its_exact_reservation --all-features (98 exact no-op descriptors passed)",
+        "cargo clippy -p seekdeep-repository-tools --test package_invariants_parity --all-features -- -D warnings"
+      ],
+      "note": "TypeScript AST installer-shape assertions become verified parity-to-hand-owned-Rust ownership, generated-marker rejection, and exact no-op catalog identity under the approved Rust architecture"
     },
     {
       "source": "scripts/package-invariants.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/package_invariants.rs",
+        "crates/repository-tools/tests/package_invariants_parity.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned source package-invariants.spec.ts: 9 passed and source live gate reports 219 hand-owned companions",
+        "cargo test -p seekdeep-repository-tools --test package_invariants_parity --all-features (manifest metadata, parity status/target, generated marker, and live corpus passed)",
+        "cargo run --quiet --package seekdeep-repository-tools --bin verify-package-invariants (Rust target: 151 hand-owned package companions conform)",
+        "cargo clippy -p seekdeep-repository-tools --test package_invariants_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the target audit preserves package-local invariant ownership and publication exhaustiveness while replacing source TypeScript AST/build-reference checks with verified Rust target ownership; emitted compatibility artifacts are checked separately by the built-package gate"
     },
     {
       "source": "scripts/paired-markdown-derivatives.spec.ts",
@@ -81219,7 +81253,18 @@
     {
       "source": "scripts/verify-package-invariants.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/bin/verify-package-invariants.rs",
+        "crates/repository-tools/src/package_invariants.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-package-invariants.ts (pinned source: 219 hand-owned package companions conform)",
+        "cargo run --quiet --package seekdeep-repository-tools --bin verify-package-invariants (Rust target: 151 hand-owned package companions conform)",
+        "cargo test -p seekdeep-repository-tools --test package_invariants_parity --all-features (4 passed)",
+        "cargo clippy -p seekdeep-repository-tools --test package_invariants_parity --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/verify-package-paths.ts",

@@ -116,7 +116,7 @@ mod tests {
 
     #[tokio::test]
     async fn catalog_metadata_is_unique_and_every_plugin_unwinds_its_exact_reservation() {
-        assert_eq!(NOOP_INVARIANTS.len(), 97);
+        assert_eq!(NOOP_INVARIANTS.len(), 98);
         let mut sources = HashSet::new();
         let mut plugins = HashSet::new();
         let mut packages = HashSet::new();

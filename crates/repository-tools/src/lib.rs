@@ -22,6 +22,7 @@ pub mod md_links;
 pub mod md_wrap;
 pub mod node_next_types;
 pub mod package_graph;
+pub mod package_invariants;
 /// First-party SeekDeep package license policy.
 pub mod package_licenses;
 pub mod package_paths;
