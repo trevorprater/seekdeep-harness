@@ -6799,6 +6799,7 @@ dependencies = [
  "hex",
  "indexmap 2.14.0",
  "markdown",
+ "nix 0.30.1",
  "percent-encoding",
  "regex",
  "scraper",

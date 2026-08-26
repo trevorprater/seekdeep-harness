@@ -80399,12 +80399,35 @@
     {
       "source": "scripts/run-oxlint.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/run_oxlint_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/run-oxlint.spec.ts (pinned source: 7 passed)",
+        "cargo test -p seekdeep-repository-tools --test run_oxlint_parity --all-features (6 passed, including all source argument branches plus real Node child-process single-pass, bounded worker, successful-fix, and failed-first-fix retry behavior)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/run-oxlint.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/run_oxlint.rs",
+        "crates/repository-tools/src/bin/run-oxlint.rs",
+        "crates/repository-tools/tests/run_oxlint_parity.rs",
+        "package.json",
+        "lefthook.yml"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/run-oxlint.ts --version (pinned source executes Oxlint 1.76.0)",
+        "cargo test -p seekdeep-repository-tools --test run_oxlint_parity --all-features (6 passed for canonical thread bounds, direct-bound rejection, inherited checks, captured successful fixes, one discarded failed pass, and exact one-retry completion)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps",
+        "target documentation gates: verify-md-wrap, Agent Note format/classification, doc budgets, and affected-link checks passed"
+      ],
+      "note": "the product-owned runner is Rust, the worker setting is intentionally renamed DSH_OXLINT_THREADS to SEEKDEEP_OXLINT_THREADS, and compatibility JavaScript/TypeScript remains linted by the pinned Oxlint child; the target checkout currently lacks node_modules/oxlint/bin/oxlint, so no live whole-repository Oxlint pass is claimed"
     },
     {
       "source": "scripts/session-fixture-layout.snapshot.ts",

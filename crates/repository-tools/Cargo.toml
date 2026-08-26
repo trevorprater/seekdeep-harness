@@ -11,6 +11,7 @@ chrono.workspace = true
 hex.workspace = true
 indexmap.workspace = true
 markdown = "1.0.0"
+nix.workspace = true
 percent-encoding.workspace = true
 regex.workspace = true
 scraper.workspace = true
