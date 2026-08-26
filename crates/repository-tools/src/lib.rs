@@ -49,6 +49,7 @@ pub mod release_verify;
 pub mod release_verify_packed_install;
 /// Shared repository glob discovery and line-oriented reference scanning.
 pub mod repo_files;
+pub mod rescope_exact_edit;
 pub mod run_oxlint;
 pub mod runtime_closure;
 /// Cross-product Skill invocation metadata policy.

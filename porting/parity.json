@@ -80630,7 +80630,16 @@
     {
       "source": "scripts/rescope-vendor.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/rescope_exact_edit.rs",
+        "crates/repository-tools/tests/rescope_exact_edit_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/rescope-vendor.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-repository-tools --test rescope_exact_edit_parity --all-features (3 passed for insertion, deletion, replacement, duplicates, and moved sites)",
+        "cargo clippy -p seekdeep-repository-tools --test rescope_exact_edit_parity --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/rescope-vendor.ts",
