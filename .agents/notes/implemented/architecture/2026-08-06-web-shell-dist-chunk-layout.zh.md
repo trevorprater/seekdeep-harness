@@ -40,7 +40,7 @@ apps/web 的壳此前打成单一约 1.2 MB（minified）的 index 分片，其�
 
 ## Verification
 
-审计工具随库：`node scripts/attribute-chunk-bytes.mjs <chunk.js>`（零依赖 sourcemap VLQ 字节归属，按 npm 包/workspace 目录聚合）。以其复核：vendor 不含任何 workspace 字节、react 族（含 react/jsx-runtime）全量位于 index、index 的 npm 侧仅剩 react 族与 anser/clsx；懒语法 chunk 数量与 `LAZY_GRAMMARS` 表一一对应；浏览器 keyless replay 用例与改动前基线逐字一致（特定于本机环境的报红除外），双分片壳装载渲染无回归。
+审计工具以 Rust 随库提供：`cargo run --quiet -p seekdeep-chunk-attribution --bin seekdeep-attribute-chunk-bytes -- <chunk.js>` 执行 source map VLQ 归属分析，并按 npm 包和 workspace 目录聚合。以其复核：vendor 不含任何 workspace 字节、react 族（含 react/jsx-runtime）全量位于 index、index 的 npm 侧仅剩 react 族与 anser/clsx；懒语法 chunk 数量与 `LAZY_GRAMMARS` 表一一对应；浏览器 keyless replay 用例与改动前基线逐字一致（特定于本机环境的报红除外），双分片壳装载渲染无回归。
 
 ## Consequences
 

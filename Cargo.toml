@@ -38,6 +38,7 @@ members = [
   "crates/client-runtime",
   "crates/client-settings-contract",
   "crates/change-scope",
+  "crates/chunk-attribution",
   "crates/win32-durable-namespace",
   "crates/win32-directory-dialog",
   "crates/cmdline",

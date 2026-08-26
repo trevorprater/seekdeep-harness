@@ -40,7 +40,7 @@ All cross-directory references (index's dynamic imports into `langs/`, same-dire
 
 ## Verification
 
-The audit tool ships with the repository: `node scripts/attribute-chunk-bytes.mjs <chunk.js>` (zero-dependency sourcemap VLQ byte attribution, aggregated by npm package / workspace directory). It verifies that vendor contains no workspace bytes, that the react family (including react/jsx-runtime) sits entirely in index, and that the npm side of index retains only the react family plus anser/clsx; the lazy grammar chunk count matches the `LAZY_GRAMMARS` table one to one; the browser keyless replay case is verbatim-identical to the pre-change baseline (apart from environment-specific local reds), so the two-chunk shell loads and renders with no regression.
+The audit tool ships as Rust: `cargo run --quiet -p seekdeep-chunk-attribution --bin seekdeep-attribute-chunk-bytes -- <chunk.js>` performs source-map VLQ attribution aggregated by npm package and workspace directory. It verifies that vendor contains no workspace bytes, that the react family (including react/jsx-runtime) sits entirely in index, and that the npm side of index retains only the react family plus anser/clsx; the lazy grammar chunk count matches the `LAZY_GRAMMARS` table one to one; the browser keyless replay case is verbatim-identical to the pre-change baseline (apart from environment-specific local reds), so the two-chunk shell loads and renders with no regression.
 
 ## Consequences
 

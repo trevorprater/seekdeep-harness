@@ -79603,7 +79603,18 @@
     {
       "source": "scripts/attribute-chunk-bytes.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/chunk-attribution/src/lib.rs",
+        "crates/chunk-attribution/src/main.rs",
+        "crates/chunk-attribution/tests/attribution_parity.rs"
+      ],
+      "evidence": [
+        "pinned Node script and compiled Rust binary produce byte-identical output for the tracked source-map fixture",
+        "Rust fixtures pin VLQ deltas, mapped/unmapped spans, nested npm/workspace/vendor/virtual/web buckets, stable size ordering, --top truncation, exact report formatting, and JavaScript UTF-16 length semantics",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-chunk-attribution --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-chunk-attribution --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/build-exe-for-python-sdk.ts",

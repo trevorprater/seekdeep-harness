@@ -4878,6 +4878,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-chunk-attribution"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "clap",
+ "indexmap 2.14.0",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "seekdeep-client-connection"
 version = "0.1.0-rc.5"
 dependencies = [
