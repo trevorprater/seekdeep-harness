@@ -66,7 +66,7 @@
     "doc-typecheck:contracts-ready": "tsx scripts/doc-typecheck.ts",
     "verify-md-wrap": "cargo run --quiet --package seekdeep-repository-tools --bin verify-md-wrap",
     "verify-md-links": "cargo run --quiet --package seekdeep-repository-tools --bin verify-md-links",
-    "verify-doc-site-fragments": "tsx scripts/verify-doc-site-fragments.ts",
+    "verify-doc-site-fragments": "cargo run --quiet --package seekdeep-repository-tools --bin verify-doc-site-fragments",
     "verify-public-repository-links": "cargo run --quiet --package seekdeep-repository-tools --bin verify-public-repository-links",
     "verify-doc-refs": "cargo run --quiet --package seekdeep-repository-tools --bin verify-doc-refs",
     "verify-package-paths": "tsx scripts/verify-package-paths.ts",

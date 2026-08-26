@@ -80754,12 +80754,34 @@
     {
       "source": "scripts/verify-doc-site-fragments.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/doc_site_fragments_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/verify-doc-site-fragments.spec.ts (pinned source: 5 passed)",
+        "cargo test -p seekdeep-repository-tools --test doc_site_fragments_parity --all-features (5 passed for absent output, clean/encoded/same-page routes, route ambiguity, malformed hrefs, missing IDs, and missing routes)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/verify-doc-site-fragments.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/doc_site_fragments.rs",
+        "crates/repository-tools/src/bin/verify-doc-site-fragments.rs",
+        "crates/repository-tools/tests/doc_site_fragments_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-doc-site-fragments.ts (pinned source built site: 2314 internal fragment references resolve)",
+        "cargo test -p seekdeep-repository-tools --test doc_site_fragments_parity --all-features (5 passed against the complete source fixture contract using browser-grade HTML5 parsing)",
+        "pnpm --silent run verify-doc-site-fragments (Rust target fails with the source-compatible no-HTML-files diagnostic because website/.dist is not yet emitted)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the verifier is source-faithful and verified; the live target build artifact remains unavailable until the pending documentation projection and website build surfaces are ported, so no built-site fragment-conformance claim is made"
     },
     {
       "source": "scripts/verify-dsh-package-licenses.spec.ts",
