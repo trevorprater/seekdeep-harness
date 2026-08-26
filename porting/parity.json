@@ -36658,9 +36658,10 @@
         "gen-tool-catalog and verify-tool-catalog delegate directly to the verified Rust cargo xtask tool-catalog command",
         "pnpm --silent run change-scope --base origin/agent/rust-parity-port-progress (live Rust command emitted the versioned repository report)",
         "pnpm --silent run verify-agent-note-classification and verify-agent-note-format delegate to verified Rust binaries",
-        "pnpm --silent run verify-archived-agent-notes delegates to the verified append-only Rust verifier"
+        "pnpm --silent run verify-archived-agent-notes delegates to the verified append-only Rust verifier",
+        "pnpm --silent run verify-doc-refs delegates to the verified Rust repository scanner"
       ],
-      "note": "root package metadata preserves source command names while Rust owns change-scope, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
+      "note": "root package metadata preserves source command names while Rust owns change-scope, documentation references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
     {
       "source": "packages/AGENTS.md",
@@ -78681,7 +78682,19 @@
     {
       "source": "scripts/repo-files.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/repo_files.rs",
+        "crates/repository-tools/tests/repo_files_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --test repo_files_parity --all-features (2 passed: pattern order, dot paths, exclusions, symlink canonicalization, deduplication, and line diagnostics)",
+        "pnpm run verify-doc-refs (pinned source: 2001 files checked, all references resolve)",
+        "pnpm --silent run verify-doc-refs (Rust target: 0 legacy TypeScript files, all references resolve)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "Rust implements the complete glob subset used by every current repository-file consumer, including explicit dot roots and JavaScript-compatible UTF-16 ordering"
     },
     {
       "source": "scripts/rescope-vendor.spec.ts",
@@ -78985,7 +78998,20 @@
     {
       "source": "scripts/verify-doc-refs.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/bin/verify-doc-refs.rs",
+        "crates/repository-tools/src/repo_files.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm run verify-doc-refs (pinned source: 2001 files checked, all documentation references resolve)",
+        "cargo test -p seekdeep-repository-tools --test repo_files_parity --all-features (2 passed)",
+        "pnpm --silent run verify-doc-refs (Rust target: 0 legacy TypeScript files, all documentation references resolve)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the source scans TypeScript comments; the Rust-only target has no TypeScript production/source files, so the live target inventory is intentionally empty rather than emulated"
     },
     {
       "source": "scripts/verify-doc-site-fragments.spec.ts",
