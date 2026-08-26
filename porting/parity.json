@@ -81274,7 +81274,20 @@
     {
       "source": "scripts/verify-mermaid.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/mermaid.rs",
+        "crates/repository-tools/src/bin/verify-mermaid.rs",
+        "crates/repository-tools/tests/mermaid_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-mermaid.ts (pinned source: 20 Mermaid blocks parsed across 1895 files)",
+        "cargo test -p seekdeep-repository-tools --test mermaid_parity --all-features (2 passed for live-scope extraction, archived exclusion, ordering, cardinality, location, and normalized errors)",
+        "cargo clippy -p seekdeep-repository-tools --test mermaid_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "Rust owns discovery, Markdown extraction, ordering, diagnostics, and process lifecycle while a minimal Node bridge calls Mermaid's own parser with the source maxEdges=2000 configuration; the live target remains red until pending jsdom/mermaid compatibility dependencies are installed"
     },
     {
       "source": "scripts/verify-node-next-types.ts",
