@@ -80366,7 +80366,24 @@
     {
       "source": "scripts/release/bump.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/release_bump.rs",
+        "crates/repository-tools/src/release_bump_command.rs",
+        "crates/repository-tools/src/bin/release-bump.rs",
+        "crates/repository-tools/tests/release_bump_parity.rs",
+        "crates/repository-tools/tests/release_bump_command_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/release/bump.ts --family dsh patch --dry-run (pinned source planned 0.1.0-rc.5 to 0.1.1 across root and 221 family members without writes)",
+        "cargo run --quiet --package seekdeep-repository-tools --bin release-bump -- --family seekdeep patch --dry-run (Rust target planned 0.1.0-rc.5 to 0.1.1 across root and 153 members without writes)",
+        "cargo test -p seekdeep-repository-tools --test release_bump_command_parity --all-features (3 passed for shared dry-run, temp manifest rewrite plus injected pnpm/Git calls, and vendor newest-tag baseline)",
+        "cargo test -p seekdeep-repository-tools --test release_bump_parity --all-features (4 pure version/payload cases passed)",
+        "cargo clippy -p seekdeep-repository-tools --test release_bump_command_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "family ids, usage, tags, commit messages, and script names apply the dsh to seekdeep rename; only dry-runs and temporary injected-command fixtures were executed, so no real version, commit, or tag changed"
     },
     {
       "source": "scripts/release/families.spec.ts",
