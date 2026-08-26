@@ -44101,7 +44101,17 @@
     {
       "source": "packages/client/ui-primitives/src/DiffBlock.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_blocks.rs",
+        "crates/client-ui-primitives/tests/wasm_diff_block_parity.rs"
+      ],
+      "evidence": [
+        "pinned source DiffBlock suite: 15 tests passed",
+        "compiled WASM tests pin create/edit/delete rows, trailing-terminator and interior-blank semantics, same-path gaps, new-file headers, distinct-file/add/remove footer totals, empty null output, class forwarding, head/tail/default cap expansion/collapse, prefixed full-copy text, accepted/refused clipboard settlement, duplicate-click suppression, and one-second feedback reset",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_diff_block_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/DisclosureRow.module.css",
@@ -44741,7 +44751,14 @@
     {
       "source": "packages/client/ui-primitives/tests/diff-block.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_diff_block_parity.rs"
+      ],
+      "evidence": [
+        "pinned source DiffBlock suite: 15 tests passed",
+        "three grouped live WASM tests cover every source row/count/cap/copy/feedback assertion"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/fixtures/markdown-dom/blockquote-nested.settled.txt",
