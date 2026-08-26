@@ -41,8 +41,8 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-message-feedback --artifact seekdeep_client_ui_message_feedback --module-id @seekdeep-ai/seekdeep-client-ui-message-feedback --out-dir packages/client/ui-message-feedback/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-message-feedback --artifact seekdeep_client_ui_message_feedback --module-id @seekdeep-ai/seekdeep-client-ui-message-feedback --out-dir packages/client/ui-message-feedback/lib --watch"
   },
   "license": "MIT",
   "peerDependencies": {

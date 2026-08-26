@@ -301,6 +301,7 @@ fn wasm_package_once(
     declarations.push_str(&compatibility_declarations(module_id));
     std::fs::write(type_dir.join("index.d.ts"), declarations)?;
     copy_wasm_package_assets(&metadata.workspace_root, module_id, &out_dir)?;
+    write_wasm_package_compatibility_entries(module_id, &out_dir)?;
     println!(
         "built {module_id} Rust/WASM classic bundle at {}",
         out_dir.join("client.js").display()
@@ -461,6 +462,37 @@ fn copy_wasm_package_assets(
     Ok(())
 }
 
+fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> anyhow::Result<()> {
+    if module_id != "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
+        return Ok(());
+    }
+    std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
+    std::fs::write(
+        out_dir.join("invariant.js"),
+        r#"const PACKAGE_NAME = '@seekdeep-ai/seekdeep-client-ui-message-feedback';
+export const name = 'client-ui-feedback-invariant';
+export const inject = ['invariants'];
+const install = () => {};
+export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install));
+"#,
+    )?;
+    let type_dir = out_dir.join("types");
+    std::fs::create_dir_all(&type_dir)?;
+    std::fs::write(
+        type_dir.join("index.d.ts"),
+        "export declare function apply(): void;\n",
+    )?;
+    std::fs::write(
+        type_dir.join("invariant.d.ts"),
+        r#"import type { Context } from '@seekdeep-ai/cordis';
+export declare const name = "client-ui-feedback-invariant";
+export declare const inject: string[];
+export declare const apply: (ctx: Context) => Promise<() => void>;
+"#,
+    )?;
+    Ok(())
+}
+
 #[derive(Deserialize)]
 struct CargoMetadata {
     packages: Vec<CargoMetadataPackage>,
@@ -574,6 +606,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiSettingsGeneral(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-web-react')); Object.assign({global}, {{ apply: {global}.applyClientUiSettingsGeneral, inject: ['slots', 'locale', 'connection'], SettingsDocumentStore: {global}.__SettingsDocumentStore }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
+        return format!(
+            "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return format!(
             "require => {{ {global}.configureClientUiLayout(require('react'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiLayout, inject: ['slots', 'theme'] }}); return {global}; }}"
@@ -676,6 +713,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
 "
         .to_owned();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
+        return ui_message_feedback_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return ui_layout_declarations();
     }
@@ -693,6 +733,48 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     "\nexport const apply: typeof wasm_bindgen.applyClientRuntime;\nexport const isAppendSurfaceEvent: typeof wasm_bindgen.isAppendSurfaceEvent;\nexport const isReplacementSurfaceEvent: typeof wasm_bindgen.isReplacementSurfaceEvent;\nexport const SlotRegistry: typeof wasm_bindgen.ClientSlotRegistry;\nexport const ConversationEventRegistry: typeof wasm_bindgen.ConversationEventRegistry;\nexport const ConversationViewRegistry: typeof wasm_bindgen.ConversationViewRegistry;\nexport const ConversationNodeAssembler: typeof wasm_bindgen.ConversationNodeAssembler;\nexport const ConversationLocationIndex: typeof wasm_bindgen.ConversationLocationIndex;\nexport const conversationContextKey: typeof wasm_bindgen.conversationContextKey;\nexport const SessionRuntime: typeof wasm_bindgen.SessionRuntime;\nexport const scopeOf: typeof wasm_bindgen.scopeOf;\nexport const workspaceTitleOf: typeof wasm_bindgen.workspaceTitleOf;\nexport const indexSubagentDescendants: typeof wasm_bindgen.indexSubagentDescendants;\nexport const SessionProvideChannel: typeof wasm_bindgen.SessionProvideChannel;\nexport const createScope: typeof wasm_bindgen.createScope;\nexport const WorkspaceRuntime: typeof wasm_bindgen.WorkspaceRuntime;\nexport const resolveWorkspacePath: typeof wasm_bindgen.resolveWorkspacePath;\nexport const createSnapshotStore: typeof wasm_bindgen.createSnapshotStore;\nexport const defineStore: typeof wasm_bindgen.defineStore;\nexport const shallowEqual: typeof wasm_bindgen.shallowEqual;\nexport const toAssistantBlock: typeof wasm_bindgen.toAssistantBlock;\nexport const toAssistantBlocks: typeof wasm_bindgen.toAssistantBlocks;\nexport const emptyAssistantBlock: typeof wasm_bindgen.emptyAssistantBlock;\nexport const isTokenDelta: typeof wasm_bindgen.isTokenDelta;\nexport const contextForm: typeof wasm_bindgen.contextForm;\nexport const contextProvenance: typeof wasm_bindgen.contextProvenance;\nexport const displayFailureMessage: typeof wasm_bindgen.displayFailureMessage;\nexport const PendingWait: typeof wasm_bindgen.PendingWait;\nexport class SessionCreateError extends Error { constructor(rpcError: any, requestedSessionId: string | undefined); readonly rpcError: any; readonly requestedSessionId: string | undefined; }\nexport class SessionForkError extends Error { constructor(rpcError: any, sourceSessionId: string); readonly rpcError: any; readonly sourceSessionId: string; }\nexport class WorkspaceCreateError extends Error { constructor(rpcError: any); readonly rpcError: any; }\nexport class DirectoryBrowseError extends Error { constructor(rpcError: any); readonly rpcError: any; }\nexport const EMPTY_CHAT_SNAPSHOT: ReturnType<typeof wasm_bindgen.emptyChatSnapshot>;\nexport const EMPTY_CONVERSATION_VIEWS: ReturnType<typeof wasm_bindgen.emptyConversationViews>;\n".to_owned()
         + runtime_settings_contract_declarations()
+}
+
+fn ui_message_feedback_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiMessageFeedback;
+export const inject: readonly ['slots', 'remote', 'remote.messageFeedback', 'locale'];
+export type MessageFeedbackStatus = 'cold' | 'loading' | 'ready' | 'error';
+export type MessageFeedbackRating = 'positive' | 'negative';
+export interface MessageFeedbackItem {
+  messageId: string;
+  rating: MessageFeedbackRating;
+  note?: string;
+  version: string;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface MessageFeedbackView {
+  status: MessageFeedbackStatus;
+  items: ReadonlyMap<string, MessageFeedbackItem>;
+  error: string | null;
+}
+export type MessageFeedbackActionResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } };
+export interface MessageFeedbackObservable {
+  getSnapshot(): MessageFeedbackView;
+  subscribe(listener: () => void): () => void;
+}
+export interface MessageFeedbackInjected {
+  hooks: { feedback: MessageFeedbackObservable };
+  ensure(): Promise<MessageFeedbackActionResult>;
+  rate(messageId: string, rating: MessageFeedbackRating, note?: string): Promise<MessageFeedbackActionResult>;
+  toggle(messageId: string, rating: MessageFeedbackRating): Promise<MessageFeedbackActionResult>;
+  clearNote(messageId: string): Promise<MessageFeedbackActionResult>;
+  clear(messageId: string): Promise<MessageFeedbackActionResult>;
+}
+export type MessageFeedbackKey =
+  | 'action.like' | 'action.likeActive' | 'action.dislike' | 'action.dislikeActive'
+  | 'note.open' | 'note.placeholder' | 'note.save' | 'note.cancel' | 'note.aria'
+  | 'error.conflict' | 'error.load' | 'error.generic';
+"
+    .to_owned()
 }
 
 fn api_remotes_declarations() -> String {
@@ -1201,6 +1283,7 @@ mod tests {
         classic_module_bundle, client_web_esm_declarations, client_web_esm_wrapper,
         compatibility_declarations, copy_wasm_package_assets, default_macos_platform_tag,
         is_generated_package_output, is_localization, watch_snapshot,
+        write_wasm_package_compatibility_entries,
     };
 
     #[test]
@@ -1320,6 +1403,56 @@ mod tests {
             "interface SettingsSectionRow",
         ] {
             assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+    }
+
+    #[test]
+    fn ui_message_feedback_bundle_configures_controls_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_message_feedback_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-message-feedback",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiMessageFeedback(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_message_feedback_wasm.applyClientUiMessageFeedback",
+            "inject: ['slots', 'remote', 'remote.messageFeedback', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-message-feedback");
+        for expected in [
+            "type MessageFeedbackStatus",
+            "type MessageFeedbackRating",
+            "interface MessageFeedbackView",
+            "interface MessageFeedbackInjected",
+            "type MessageFeedbackActionResult",
+            "readonly ['slots', 'remote', 'remote.messageFeedback', 'locale']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-message-feedback",
+            output.path(),
+        )
+        .unwrap();
+        for (path, expected) in [
+            ("index.js", "export function apply() {}"),
+            ("invariant.js", "client-ui-feedback-invariant"),
+            (
+                "invariant.js",
+                "@seekdeep-ai/seekdeep-client-ui-message-feedback",
+            ),
+            ("types/index.d.ts", "function apply(): void"),
+            ("types/invariant.d.ts", "Promise<() => void>"),
+        ] {
+            let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
+            assert!(artifact.contains(expected), "{path} omitted {expected:?}");
         }
     }
 

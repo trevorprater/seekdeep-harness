@@ -43416,37 +43416,96 @@
     {
       "source": "packages/client/ui-message-feedback/src/client/MessageFeedbackActions.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/src/browser.rs",
+        "crates/client-ui-message-feedback/data/styles.css"
+      ],
+      "evidence": [
+        "pinned source ui-message-feedback Vitest suite: 65 passed",
+        "compiled WASM controls exercise lazy seeding, rating state, note trim/clear/failure behavior, and load/action error precedence",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --target wasm32-unknown-unknown --all-features --test wasm_browser_parity"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/src/client/controller.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/src/controller.rs",
+        "crates/client-ui-message-feedback/src/wasm.rs"
+      ],
+      "evidence": [
+        "pinned source ui-message-feedback Vitest suite: 65 passed",
+        "native controller parity covers shared retryable loads, serialized CAS mutation, note preservation, authoritative conflict reconciliation, resync, transport settlement, and disposal",
+        "compiled WASM boundary covers frozen stable snapshots, nested Remote envelopes, carrier failures, unknown business codes, conflicts, and non-Error rejection fallbacks",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/src/browser.rs"
+      ],
+      "evidence": [
+        "compiled WASM plugin verifies exact injection list, declaration-aware assistant-actions registration, one controller per Session, warm-only reconnect resync, verb routing, and deterministic disposal/reload ownership",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --target wasm32-unknown-unknown --all-features --test wasm_browser_parity"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/src/lib.rs",
+        "crates/client-ui-message-feedback/src/browser.rs"
+      ],
+      "evidence": [
+        "native oracle assertion pins all 12 exact zh/en keys and values",
+        "compiled WASM plugin owns the feedback namespace dictionary registration and disposer",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/src/client/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/src/browser.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "compiled WASM plugin exercises the feedback HostObservable hook and ensure/rate/toggle/clearNote/clear injected face",
+        "xtask compatibility declarations preserve MessageFeedbackInjected, observable view, action result, rating, and locale-key contracts",
+        "CARGO_INCREMENTAL=0 cargo test -p xtask ui_message_feedback_bundle_configures_controls_and_public_contract"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/src/browser.rs",
+        "crates/client-ui-message-feedback/data/styles.css"
+      ],
+      "evidence": [
+        "Rust/WASM control code compiles against explicit package-owned class names without a foreign CSS-module runtime",
+        "optimized classic-module bundle embeds and injects the compiled stylesheet"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/src/lib.rs"
+      ],
+      "evidence": [
+        "native parity test invokes the intentionally effect-free Host half",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/src/invariant.ts",
@@ -43465,17 +43524,39 @@
     {
       "source": "packages/client/ui-message-feedback/tests/browser-plugin.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/tests/wasm_browser_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-message-feedback Vitest suite: 65 passed",
+        "compiled WASM plugin test drives registration, Session sharing/isolation, reset, Remote routing, teardown, and disposed-controller refusal"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/tests/controller.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/tests/controller_parity.rs",
+        "crates/client-ui-message-feedback/tests/wasm_browser_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-message-feedback Vitest suite: 65 passed",
+        "14 native controller tests plus compiled WASM Remote-envelope coverage"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/tests/message-feedback-actions.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-message-feedback/tests/wasm_browser_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-message-feedback Vitest suite: 65 passed",
+        "compiled WASM React harness drives labels, pressed state, first-interaction seed, notes, pending actions, and localized failure precedence"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/tsconfig.json",
@@ -43491,7 +43572,16 @@
     {
       "source": "packages/client/ui-message-feedback/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-message-feedback/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle/watch commands target the Rust cdylib and synchronous Client module table",
+        "CARGO_INCREMENTAL=0 pnpm --filter @seekdeep-ai/seekdeep-client-ui-message-feedback run bundle",
+        "xtask factory/declaration contract test passed"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/README.i18n.yaml",

@@ -5063,6 +5063,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-ui-message-feedback"
+version = "0.1.0-rc.5"
+dependencies = [
+ "futures",
+ "indexmap 2.14.0",
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-client-ui-settings"
 version = "0.1.0-rc.5"
 dependencies = [
