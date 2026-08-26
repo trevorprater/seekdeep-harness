@@ -80514,7 +80514,18 @@
     {
       "source": "scripts/test-fixture-cleanup.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/fixture_cleanup.rs",
+        "crates/repository-tools/tests/fixture_cleanup_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/install-lefthook.spec.ts (pinned source consumer suite: 38 passed, including fixture link cleanup)",
+        "cargo test -p seekdeep-repository-tools --test fixture_cleanup_parity --all-features (5 passed for missing paths, unlink-only preservation, nested links, outside-target preservation, regular-file roots, and whole-tree removal)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the Rust helper preserves junction/symlink targets, accepts concurrent disappearance, and retains the source's bounded linear retry policy for retryable recursive-removal failures; pending Rust ports of the installer/merge suites will consume this module directly"
     },
     {
       "source": "scripts/test-invariants.spec.ts",
