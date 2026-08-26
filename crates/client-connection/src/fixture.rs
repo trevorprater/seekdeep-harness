@@ -137,12 +137,14 @@ struct FixtureState {
     default_preset: String,
     skills: Value,
     credentials: BTreeSet<String>,
+    attachments: HashMap<String, Value>,
     pending_approval: Option<(RpcId, Value)>,
     pending_question: Option<(RpcId, Value)>,
     next_session: u64,
     next_workspace: u64,
     next_turn: HashMap<String, u64>,
     next_goal: u64,
+    next_attachment: u64,
     replays: HashMap<String, Replay>,
     history_delay_ms: u64,
     fail_next_history: bool,
@@ -287,12 +289,17 @@ impl FixtureApi {
                     .cloned()
                     .unwrap_or_else(|| json!({ "skills": [] })),
                 credentials: BTreeSet::from(["DEEPSEEK_API_KEY".to_owned()]),
+                attachments: HashMap::from([(
+                    "fixture:image".to_owned(),
+                    fixture_image_response(),
+                )]),
                 pending_approval,
                 pending_question,
                 next_session: 1,
                 next_workspace: 1,
                 next_turn: HashMap::from([("fx-alpha".to_owned(), 75)]),
                 next_goal: 1,
+                next_attachment: 1,
                 replays: HashMap::new(),
                 history_delay_ms: 0,
                 fail_next_history: false,
@@ -632,11 +639,7 @@ impl FixtureApi {
             "session.rename" => Ok(self.session_rename(&payload)),
             "session.fork" => Ok(self.session_fork(&payload)),
             "session.prompt" => Ok(self.session_prompt(&payload)),
-            "session.attachment" => Ok(failure(
-                "attachment-error",
-                "fixture attachment missing",
-                json!({"reason":"ATTACHMENT_NOT_FOUND"}),
-            )),
+            "session.attachment" => Ok(self.session_attachment(&payload)),
             "session.updateQueue" => Ok(failure(
                 "queue-item-not-found",
                 "fixture has no pending queue item",
@@ -1039,6 +1042,31 @@ impl FixtureApi {
         success(json!({"sessionId":child_id}))
     }
 
+    fn session_attachment(&self, payload: &Value) -> RpcResult<Value> {
+        let id = string_at(payload, "attachmentId").unwrap_or_default();
+        let session_id = string_at(payload, "sessionId").unwrap_or_default();
+        let state = self.state.lock();
+        let Some(stored) = state.attachments.get(&id).cloned() else {
+            return failure(
+                "attachment-error",
+                "fixture attachment missing",
+                json!({"reason":"ATTACHMENT_NOT_FOUND"}),
+            );
+        };
+        let referenced = state
+            .logs
+            .get(&session_id)
+            .is_some_and(|log| log.iter().any(|entry| entry.to_string().contains(&id)));
+        if !referenced {
+            return failure(
+                "attachment-error",
+                "fixture attachment is not referenced by this session",
+                json!({"reason":"ATTACHMENT_NOT_REFERENCED"}),
+            );
+        }
+        success(stored)
+    }
+
     fn session_prompt(&self, payload: &Value) -> RpcResult<Value> {
         let id = string_at(payload, "sessionId").unwrap_or_default();
         if !self.has_session(&id) {
@@ -1065,8 +1093,40 @@ impl FixtureApi {
                     .flatten()
             })
             .collect::<String>();
+        let durable = {
+            let mut state = self.state.lock();
+            content
+                .iter()
+                .map(|block| {
+                    if block.get("type").and_then(Value::as_str) == Some("text") {
+                        return block.clone();
+                    }
+                    let data = block.get("data").and_then(Value::as_str).unwrap_or_default();
+                    let attachment_id = format!("fixture:upload-{}", state.next_attachment);
+                    state.next_attachment += 1;
+                    let padding = usize::from(data.ends_with('='))
+                        + usize::from(data.ends_with("=="));
+                    let bytes = (data.len() * 3 / 4).saturating_sub(padding).max(1);
+                    let mut attachment = json!({
+                        "attachmentId":attachment_id,
+                        "mediaType":block.get("mediaType").cloned().unwrap_or_else(||json!("image/png")),
+                        "bytes":bytes,
+                        "width":160,
+                        "height":90,
+                    });
+                    if let Some(name) = block.get("name") {
+                        attachment["name"] = name.clone();
+                    }
+                    state.attachments.insert(
+                        attachment_id,
+                        json!({"attachment":attachment,"data":data}),
+                    );
+                    json!({"type":"image","attachment":attachment})
+                })
+                .collect::<Vec<_>>()
+        };
         if mode == "steer" && self.state.lock().replays.contains_key(&id) {
-            self.append_event(&id, user_message_event(&text));
+            self.append_event(&id, user_content_event(&durable));
             return success(json!({"accepted":true}));
         }
         let turn = {
@@ -1078,7 +1138,7 @@ impl FixtureApi {
         };
         self.set_running(&id, true);
         self.append_event(&id, json!({"type":"turn/start","data":{"turn":turn}}));
-        self.append_event(&id, user_message_event(&text));
+        self.append_event(&id, user_content_event(&durable));
         let reply = if text == "render markdown" {
             "# Markdown fixture\n\nAssistant output renders **strong text**, *emphasis*, and `inline code`.".to_owned()
         } else if text == "report model" {
@@ -2044,6 +2104,27 @@ fn message_value(text: &str) -> Value {
 }
 fn user_message_event(text: &str) -> Value {
     json!({"type":"user/message","surfaceOp":"append","data":message_value(text)})
+}
+fn user_content_event(content: &[Value]) -> Value {
+    json!({
+        "type":"user/message",
+        "surfaceOp":"append",
+        "data":{"content":content,"source":{"kind":"user"},"role":"user","id":"fixture-message"},
+    })
+}
+
+fn fixture_image_response() -> Value {
+    json!({
+        "attachment":{
+            "attachmentId":"fixture:image",
+            "mediaType":"image/png",
+            "bytes":247,
+            "width":160,
+            "height":90,
+            "name":"fixture-image.png",
+        },
+        "data":"iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAYAAAA/xl1SAAAAvklEQVR42u3SMQ0AAAjAMIyhELM4AAe8PD1qYFlk9cCXEAEDYkAwIAYEA2JAMCAGBANiQDAgBgQDYkAwIAYEA2JAMCAGBANiQDAgBgQDYkAwIAYEA2JAMCAGxIBCYEAMCAbEgGBADAgGxIBgQAwIBsSAYEAMCAbEgGBADAgGxIBgQAwIBsSAYEAMCAbEgGBADAgGxIAYEAyIAcGAGBAMiAHBgBgQDIgBwYAYEAyIAcGAGBAMiAHBgBgQDIgB4bYWLb6pnOb1xAAAAABJRU5ErkJggg==",
+    })
 }
 
 fn page_of(log: &[Value], before: Option<i64>, max_messages: usize) -> Value {

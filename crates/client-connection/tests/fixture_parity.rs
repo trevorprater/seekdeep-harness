@@ -79,6 +79,26 @@ async fn serves_seeded_sessions_history_models_settings_and_credentials() {
     let models = value(call(&api, "session.models", json!({"sessionId":"fx-alpha"})).await);
     assert_eq!(models["groups"][0]["name"], "DeepSeek");
     assert_eq!(models["groups"][1]["name"], "OpenAI");
+    let attachment = value(
+        call(
+            &api,
+            "session.attachment",
+            json!({"sessionId":"fx-alpha","attachmentId":"fixture:image"}),
+        )
+        .await,
+    );
+    assert_eq!(attachment["attachment"]["name"], "fixture-image.png");
+    assert_eq!(
+        failure_code(
+            call(
+                &api,
+                "session.attachment",
+                json!({"sessionId":"fx-gamma","attachmentId":"fixture:image"}),
+            )
+            .await
+        ),
+        "attachment-error"
+    );
     let settings = value(call(&api, "settings.describe", json!({})).await);
     assert_eq!(settings["namespaces"][0]["ns"], "llm-deepseek");
     assert_eq!(
