@@ -80138,7 +80138,17 @@
     {
       "source": "scripts/lint-rule-fingerprint.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/lint_rule_fingerprint_parity.rs",
+        "crates/repository-tools/src/clean.rs"
+      ],
+      "evidence": [
+        "pinned source lint-rule fingerprint suite: 4 tests passed",
+        "Rust test parses target JSONC through the shared repository parser, pins all eight overrides, and reproduces the exact source/example/test normalized rule counts and SHA-256 fingerprints",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test lint_rule_fingerprint_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/markdown.ts",

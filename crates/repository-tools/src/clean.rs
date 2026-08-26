@@ -194,7 +194,7 @@ fn parse_config(path: &Path, stack: &mut HashSet<PathBuf>) -> anyhow::Result<Par
     }
     let contents = std::fs::read_to_string(&path)
         .with_context(|| format!("clean: read TypeScript config {}", path.display()))?;
-    let value: Value = serde_json::from_str(&jsonc_to_json(&contents))
+    let value = parse_jsonc_value(&contents)
         .with_context(|| format!("clean: cannot parse TypeScript config {}", path.display()))?;
     let directory = path
         .parent()
@@ -231,6 +231,15 @@ fn resolve_config(directory: &Path, value: &str) -> PathBuf {
     } else {
         path.join("tsconfig.json")
     }
+}
+
+/// Parses JSON with JavaScript-style comments and trailing object/array commas.
+///
+/// # Errors
+///
+/// Returns malformed JSONC after comments and trailing commas are normalized.
+pub fn parse_jsonc_value(source: &str) -> anyhow::Result<Value> {
+    Ok(serde_json::from_str(&jsonc_to_json(source))?)
 }
 
 fn jsonc_to_json(source: &str) -> String {
