@@ -36663,7 +36663,8 @@
         "pnpm --silent run verify-public-repository-links delegates to the verified Rust tracked-file policy",
         "pnpm --silent run verify-config-source-ownership delegates to the verified Rust shipped-config policy",
         "pnpm --silent run verify-seekdeep-package-licenses delegates to the verified product-renamed Rust policy",
-        "pnpm --silent run verify-skill-invocation-metadata delegates to the verified Rust cross-product policy"
+        "pnpm --silent run verify-skill-invocation-metadata delegates to the verified Rust cross-product policy",
+        "pnpm --silent run verify-doc-budgets delegates to the verified Rust documentation policy"
       ],
       "note": "root package metadata preserves source command names while Rust owns change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
@@ -79017,7 +79018,20 @@
     {
       "source": "scripts/verify-doc-budgets.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/document_budgets.rs",
+        "crates/repository-tools/src/bin/verify-doc-budgets.rs",
+        "crates/repository-tools/tests/document_budgets_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm run verify-doc-budgets and verify-doc-budgets --list (pinned source: 9 budgeted docs within ceiling with ordered usage rows)",
+        "cargo test -p seekdeep-repository-tools --test document_budgets_parity --all-features (1 passed: ordered ok/missing/invalid/over rows)",
+        "pnpm --silent run verify-doc-budgets and verify-doc-budgets --list (Rust target: 9 budgeted docs within ceiling with ordered usage rows)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/verify-doc-refs.ts",

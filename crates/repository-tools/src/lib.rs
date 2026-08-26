@@ -10,6 +10,8 @@ pub mod config_source_ownership;
 pub mod cordis_config_files;
 /// Workspace source-alias to built-declaration path mapping.
 pub mod doc_typecheck_paths;
+/// Standing-document word-budget policy.
+pub mod document_budgets;
 /// First-party SeekDeep package license policy.
 pub mod package_licenses;
 /// Byte-identical bilingual Markdown derivative partitioning.

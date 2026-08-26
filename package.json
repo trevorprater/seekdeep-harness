@@ -85,7 +85,7 @@
     "verify-translation-pairing": "tsx scripts/verify-translation-pairing.ts",
     "resolve-translation-pairing-conflicts": "tsx scripts/merge-translation-pairing.ts --resolve",
     "gen-translation-brief": "tsx scripts/gen-translation-brief.ts",
-    "verify-doc-budgets": "tsx scripts/verify-doc-budgets.ts",
+    "verify-doc-budgets": "cargo run --quiet --package seekdeep-repository-tools --bin verify-doc-budgets --",
     "docs:dev": "pnpm --filter @seekdeep-ai/website run dev",
     "docs:build": "pnpm --filter @seekdeep-ai/website run build && pnpm run verify-doc-site-fragments",
     "docs:build:mpa": "pnpm --filter @seekdeep-ai/website exec vitepress build . --mpa && pnpm run verify-doc-site-fragments",
