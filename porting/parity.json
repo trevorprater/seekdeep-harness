@@ -45326,7 +45326,16 @@
     {
       "source": "packages/client/ui-primitives/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/ui-primitives/tests/invariant.client.spec.ts (pinned source: 1 passed)",
+        "cargo test -p seekdeep-invariants --all-features (7 passed, including unique no-op catalog metadata and exact reservation unwind)",
+        "pinned-source 97-entry invariant catalog differential includes @seekdeep-ai/seekdeep-client-ui-primitives with its empty installer"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/json-tree.client.spec.tsx",
