@@ -21,6 +21,7 @@ pub mod md_wrap;
 /// First-party SeekDeep package license policy.
 pub mod package_licenses;
 pub mod package_paths;
+pub mod package_readme_limitations;
 /// Byte-identical bilingual Markdown derivative partitioning.
 pub mod paired_markdown_derivatives;
 /// Unavailable public-repository reference detection across tracked files.

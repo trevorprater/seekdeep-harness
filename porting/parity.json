@@ -80917,7 +80917,20 @@
     {
       "source": "scripts/verify-package-readme-limitations.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/package_readme_limitations.rs",
+        "crates/repository-tools/src/bin/verify-package-readme-limitations.rs",
+        "crates/repository-tools/tests/package_readme_limitations_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-package-readme-limitations.ts (pinned source: 219 package READMEs checked, 1 whitelisted, all conform)",
+        "cargo test -p seekdeep-repository-tools --test package_readme_limitations_parity --all-features (5 passed for canonical sections, audited omission, missing README/section, duplicate/variant headings, section bounds, bullet shape, and whitelist exclusion)",
+        "pnpm --silent run verify-package-readme-limitations (Rust target: 151 package READMEs checked, 1 whitelisted, all conform)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/verify-package-readme-model-experience.ts",
