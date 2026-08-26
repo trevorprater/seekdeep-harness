@@ -44391,7 +44391,17 @@
     {
       "source": "packages/client/ui-primitives/src/TerminalBlock.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_blocks.rs",
+        "crates/client-ui-primitives/tests/wasm_terminal_block_parity.rs"
+      ],
+      "evidence": [
+        "pinned source TerminalBlock suite: 52 tests passed",
+        "compiled WASM tests pin slash/backslash/home prompt labels, multiline command rows and trailing terminators, one whole-call StateDot, running/clean/error states, signal-over-exit status, parsed invisibility/whitespace emptiness, ANSI styled-vs-bare runs, output terminators after resets, genuine blank lines, class/data attributes, localized partial labels/functions, head/tail/default/Infinity/NaN caps, raw full-output copy, accepted/refused feedback, duplicate suppression, and one-second reset",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_terminal_block_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/Toast.module.css",
@@ -45389,7 +45399,14 @@
     {
       "source": "packages/client/ui-primitives/tests/terminal-block.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_terminal_block_parity.rs"
+      ],
+      "evidence": [
+        "pinned source TerminalBlock suite: 52 tests passed",
+        "four grouped live WASM tests cover every source prompt, state, status, output, ANSI, empty, terminator, cap, copy, refusal, feedback, class, data, and localization assertion"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/toast.client.spec.tsx",

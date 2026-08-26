@@ -156,7 +156,7 @@ fn match_groups_paths_summaries_empty_and_file_collapse_are_exact() {
     configure_client_ui_primitive_blocks(property(&bench, "React")).unwrap();
     configure_client_ui_primitive_blocks(property(&bench, "React")).unwrap();
     let styles = Array::from(&property(&bench, "styles"));
-    assert_eq!(styles.length(), 2);
+    assert_eq!(styles.length(), 5);
     assert_eq!(
         property(&property(&styles.get(0), "attributes"), "data-plugin")
             .as_string()

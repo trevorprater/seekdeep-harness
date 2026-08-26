@@ -5,14 +5,20 @@ use std::cell::RefCell;
 use js_sys::{Array, Function, Object, Reflect, Set};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
-use crate::write_clipboard;
+use crate::{AnsiLine, AnsiStyle, parse_ansi_lines, write_clipboard};
 
 const DIFF_CSS: &str =
     include_str!("../../../packages/client/ui-primitives/src/DiffBlock.module.css");
 const SEARCH_CSS: &str =
     include_str!("../../../packages/client/ui-primitives/src/SearchBlock.module.css");
+const TERMINAL_CSS: &str =
+    include_str!("../../../packages/client/ui-primitives/src/TerminalBlock.module.css");
+const PILL_CSS: &str = include_str!("../../../packages/client/ui-primitives/src/Pill.module.css");
+const STATE_DOT_CSS: &str =
+    include_str!("../../../packages/client/ui-primitives/src/StateDot.module.css");
 const DEFAULT_DIFF_MAX_LINES: f64 = 16.0;
 const DEFAULT_SEARCH_MAX_LINES: f64 = 16.0;
+const DEFAULT_TERMINAL_MAX_LINES: f64 = 16.0;
 
 thread_local! {
     static REACT: RefCell<Option<JsValue>> = const { RefCell::new(None) };
@@ -109,7 +115,29 @@ pub fn configure_client_ui_primitive_blocks(react: JsValue) -> Result<(), JsValu
             "fileCount",
             "expand",
         ],
-    )
+    )?;
+    inject_style(
+        "TerminalBlock",
+        TERMINAL_CSS,
+        &[
+            "block",
+            "header",
+            "prompt",
+            "promptLine",
+            "runState",
+            "runStateLabel",
+            "cwd",
+            "command",
+            "status",
+            "copyButton",
+            "empty",
+            "output",
+            "line",
+            "expand",
+        ],
+    )?;
+    inject_style("Pill", PILL_CSS, &["pill", "interactive", "active"])?;
+    inject_style("StateDot", STATE_DOT_CSS, &["dot", "matrix", "cell"])
 }
 
 /// Returns the compiled `DiffBlock` component.
@@ -137,6 +165,21 @@ pub fn search_block_component() -> Result<JsValue, JsValue> {
     let react = configured_react()?;
     Ok(Closure::wrap(
         Box::new(move |props: JsValue| render_search(&react, &props))
+            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>,
+    )
+    .into_js_value())
+}
+
+/// Returns the compiled `TerminalBlock` component.
+///
+/// # Errors
+///
+/// Returns missing React configuration.
+#[wasm_bindgen(js_name = terminalBlockComponent)]
+pub fn terminal_block_component() -> Result<JsValue, JsValue> {
+    let react = configured_react()?;
+    Ok(Closure::wrap(
+        Box::new(move |props: JsValue| render_terminal(&react, &props))
             as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>,
     )
     .into_js_value())
@@ -486,6 +529,552 @@ fn render_search(react: &JsValue, props: &JsValue) -> Result<JsValue, JsValue> {
         ])?),
         &[header, result],
     )
+}
+
+#[allow(clippy::too_many_lines)]
+fn render_terminal(react: &JsValue, props: &JsValue) -> Result<JsValue, JsValue> {
+    let command = required_string(props, "command", "TerminalBlock props")?;
+    let cwd = optional_string(props, "cwd")?;
+    let home = optional_string(props, "home")?;
+    let text = optional_string(props, "output")?.unwrap_or_default();
+    let exit_code = optional_number(props, "exitCode")?;
+    let signal = optional_string(props, "signal")?;
+    let running = Reflect::get(props, &JsValue::from_str("running"))?
+        .as_bool()
+        .unwrap_or(false);
+    let max_lines = optional_number(props, "maxLines")?.unwrap_or(DEFAULT_TERMINAL_MAX_LINES);
+    let class_name = optional_string(props, "className")?;
+    let labels = Reflect::get(props, &JsValue::from_str("labels"))?;
+
+    let mut lines = parse_ansi_lines(&text);
+    if lines.len() > 1
+        && lines
+            .last()
+            .is_some_and(|line| line.iter().all(|span| span.text.is_empty()))
+    {
+        lines.pop();
+    }
+    let empty = lines
+        .iter()
+        .all(|line| line.iter().all(|span| span.text.trim().is_empty()));
+    let (expanded, set_expanded) = use_state(react, &JsValue::FALSE)?;
+    let expanded = expanded.as_bool().unwrap_or(false);
+    let (copied, set_copied) = use_state(react, &JsValue::FALSE)?;
+    let copied = copied.as_bool().unwrap_or(false);
+    let status = terminal_status(&labels, exit_code, signal.as_deref())?;
+    let (state, state_label) = terminal_state(&labels, running, status.is_some())?;
+
+    let prompt_body = command.strip_suffix('\n').unwrap_or(&command);
+    let command_lines = prompt_body.split('\n').collect::<Vec<_>>();
+    let mut prompt_rows = Vec::new();
+    for (index, line) in command_lines.iter().enumerate() {
+        let mut children = Vec::new();
+        if index == 0 {
+            children.push(render_terminal_state_dot(
+                react,
+                state,
+                &class_name_for("TerminalBlock", "runState"),
+            )?);
+        }
+        let prompt = if index > 0 || cwd.is_none() {
+            "$".to_owned()
+        } else {
+            prompt_label(cwd.as_deref().unwrap_or_default(), home.as_deref())
+        };
+        children.push(create_element(
+            react,
+            "span",
+            Some(&class_props(&class_name_for("TerminalBlock", "cwd"))?),
+            &[JsValue::from_str(&prompt)],
+        )?);
+        children.push(create_element(
+            react,
+            "span",
+            Some(&class_props(&class_name_for("TerminalBlock", "command"))?),
+            &[JsValue::from_str(line)],
+        )?);
+        prompt_rows.push(create_element(
+            react,
+            "div",
+            Some(&object(&[
+                ("key", JsValue::from_f64(index_to_f64(index))),
+                (
+                    "className",
+                    JsValue::from_str(&class_name_for("TerminalBlock", "promptLine")),
+                ),
+            ])?),
+            &children,
+        )?);
+    }
+    let mut prompt_children = vec![create_element(
+        react,
+        "span",
+        Some(&class_props(&class_name_for(
+            "TerminalBlock",
+            "runStateLabel",
+        ))?),
+        &[JsValue::from_str(&state_label)],
+    )?];
+    prompt_children.extend(prompt_rows);
+    let prompt = create_element(
+        react,
+        "div",
+        Some(&class_props(&class_name_for("TerminalBlock", "prompt"))?),
+        &prompt_children,
+    )?;
+    let mut header_children = vec![prompt];
+    if let Some(status) = status {
+        header_children.push(create_element(
+            react,
+            "span",
+            Some(&class_props(&join_classes([
+                class_name_for("Pill", "pill"),
+                class_name_for("TerminalBlock", "status"),
+            ]))?),
+            &[JsValue::from_str(&status)],
+        )?);
+    }
+    if !running && !empty {
+        let copy_text = text.clone();
+        let copy_setter = set_copied;
+        let copy = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
+            if copied {
+                return Ok(());
+            }
+            let pending = write_clipboard(copy_text.clone());
+            let setter = copy_setter.clone();
+            let settled = Closure::wrap(Box::new(move |accepted: JsValue| -> Result<(), JsValue> {
+                if accepted.as_bool() != Some(true) {
+                    return Ok(());
+                }
+                set_state(&setter, &JsValue::TRUE)?;
+                let reset = setter.clone();
+                let callback = Closure::wrap(Box::new(move || set_state(&reset, &JsValue::FALSE))
+                    as Box<dyn FnMut() -> Result<(), JsValue>>);
+                let window = required_property(&js_sys::global(), "window", "global")?;
+                function(&window, "setTimeout")?.call2(
+                    &window,
+                    &callback.into_js_value(),
+                    &JsValue::from_f64(1_000.0),
+                )?;
+                Ok(())
+            })
+                as Box<dyn FnMut(JsValue) -> Result<(), JsValue>>);
+            call_method(&pending, "then", &[settled.into_js_value()])?;
+            Ok(())
+        }) as Box<dyn FnMut() -> Result<(), JsValue>>);
+        header_children.push(create_element(
+            react,
+            "button",
+            Some(&object(&[
+                ("type", JsValue::from_str("button")),
+                (
+                    "className",
+                    JsValue::from_str(&class_name_for("TerminalBlock", "copyButton")),
+                ),
+                ("onClick", copy.into_js_value()),
+            ])?),
+            &[JsValue::from_str(&terminal_label(
+                &labels,
+                if copied { "copied" } else { "copy" },
+                if copied { "复制成功" } else { "复制" },
+            )?)],
+        )?);
+    }
+    let header = create_element(
+        react,
+        "div",
+        Some(&class_props(&class_name_for("TerminalBlock", "header"))?),
+        &header_children,
+    )?;
+    let mut root_children = vec![header];
+    if !running {
+        if empty {
+            root_children.push(create_element(
+                react,
+                "div",
+                Some(&class_props(&class_name_for("TerminalBlock", "empty"))?),
+                &[JsValue::from_str(&terminal_label(
+                    &labels,
+                    "noOutput",
+                    "无输出",
+                )?)],
+            )?);
+        } else {
+            root_children.push(render_terminal_output(
+                react,
+                &lines,
+                max_lines,
+                expanded,
+                set_expanded,
+                &labels,
+            )?);
+        }
+    }
+    create_element(
+        react,
+        "div",
+        Some(&object(&[
+            (
+                "className",
+                JsValue::from_str(&join_classes(
+                    [Some(class_name_for("TerminalBlock", "block")), class_name]
+                        .into_iter()
+                        .flatten(),
+                )),
+            ),
+            ("data-terminal", JsValue::from_str("")),
+            (
+                "data-running",
+                if running {
+                    JsValue::from_str("")
+                } else {
+                    JsValue::UNDEFINED
+                },
+            ),
+        ])?),
+        &root_children,
+    )
+}
+
+fn render_terminal_output(
+    react: &JsValue,
+    lines: &[AnsiLine],
+    max_lines: f64,
+    expanded: bool,
+    set_expanded: Function,
+    labels: &JsValue,
+) -> Result<JsValue, JsValue> {
+    let (head_count, tail_count) = cap_counts(max_lines, lines.len());
+    let hidden = lines.len().saturating_sub(head_count + tail_count);
+    let capped = hidden > 0 && !expanded;
+    let head = if capped { &lines[..head_count] } else { lines };
+    let tail = if capped && tail_count > 0 {
+        &lines[lines.len() - tail_count..]
+    } else {
+        &[]
+    };
+    let mut rows = Vec::new();
+    for (index, line) in head.iter().enumerate() {
+        rows.push(render_terminal_line(react, line, index)?);
+    }
+    if hidden > 0 {
+        let setter = set_expanded;
+        let toggle = Closure::wrap(Box::new(move || {
+            let invert = Function::new_with_args("value", "return !value");
+            setter.call1(&JsValue::UNDEFINED, &invert)
+        }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
+        let aria = if expanded {
+            terminal_label(labels, "collapseAria", "收起输出")?
+        } else {
+            terminal_count_label(
+                labels,
+                "expandAria",
+                hidden,
+                &format!("展开其余 {hidden} 行输出"),
+            )?
+        };
+        let text = if expanded {
+            terminal_label(labels, "collapse", "收起")?
+        } else {
+            terminal_count_label(labels, "expand", hidden, &format!("… 其余 {hidden} 行"))?
+        };
+        rows.push(create_element(
+            react,
+            "button",
+            Some(&object(&[
+                ("type", JsValue::from_str("button")),
+                (
+                    "className",
+                    JsValue::from_str(&class_name_for("TerminalBlock", "expand")),
+                ),
+                ("aria-expanded", JsValue::from_bool(expanded)),
+                ("aria-label", JsValue::from_str(&aria)),
+                ("onClick", toggle.into_js_value()),
+            ])?),
+            &[JsValue::from_str(&text)],
+        )?);
+    }
+    for (index, line) in tail.iter().enumerate() {
+        rows.push(render_terminal_line(react, line, index)?);
+    }
+    create_element(
+        react,
+        "div",
+        Some(&class_props(&class_name_for("TerminalBlock", "output"))?),
+        &rows,
+    )
+}
+
+fn render_terminal_line(react: &JsValue, line: &AnsiLine, key: usize) -> Result<JsValue, JsValue> {
+    let mut children = Vec::new();
+    for (index, span) in line.iter().enumerate() {
+        if let Some(style) = &span.style {
+            children.push(create_element(
+                react,
+                "span",
+                Some(&object(&[
+                    ("key", JsValue::from_f64(index_to_f64(index))),
+                    ("style", ansi_style(style)?.into()),
+                ])?),
+                &[JsValue::from_str(&span.text)],
+            )?);
+        } else {
+            children.push(JsValue::from_str(&span.text));
+        }
+    }
+    create_element(
+        react,
+        "div",
+        Some(&object(&[
+            ("key", JsValue::from_f64(index_to_f64(key))),
+            (
+                "className",
+                JsValue::from_str(&class_name_for("TerminalBlock", "line")),
+            ),
+        ])?),
+        &children,
+    )
+}
+
+fn ansi_style(style: &AnsiStyle) -> Result<Object, JsValue> {
+    let object = Object::new();
+    for (key, value) in [
+        ("color", style.color.as_deref().map(JsValue::from_str)),
+        (
+            "backgroundColor",
+            style.background_color.as_deref().map(JsValue::from_str),
+        ),
+        (
+            "fontWeight",
+            style
+                .font_weight
+                .map(|value| JsValue::from_f64(f64::from(value))),
+        ),
+        ("opacity", style.opacity.map(JsValue::from_f64)),
+        (
+            "fontStyle",
+            style.font_style.as_deref().map(JsValue::from_str),
+        ),
+        (
+            "textDecoration",
+            style.text_decoration.as_deref().map(JsValue::from_str),
+        ),
+        (
+            "visibility",
+            style.visibility.as_deref().map(JsValue::from_str),
+        ),
+    ] {
+        if let Some(value) = value {
+            Reflect::set(&object, &JsValue::from_str(key), &value)?;
+        }
+    }
+    Ok(object)
+}
+
+fn render_terminal_state_dot(
+    react: &JsValue,
+    state: &str,
+    class_name: &str,
+) -> Result<JsValue, JsValue> {
+    if state == "ongoing" {
+        let mut cells = Vec::new();
+        for (index, (x, y)) in [
+            (0, 0),
+            (4, 0),
+            (8, 0),
+            (8, 4),
+            (8, 8),
+            (4, 8),
+            (0, 8),
+            (0, 4),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let delay = (i32::try_from(index).expect("eight cells") - 8) * 125;
+            cells.push(create_element(
+                react,
+                "rect",
+                Some(&object(&[
+                    ("key", JsValue::from_str(&format!("{x}-{y}"))),
+                    (
+                        "className",
+                        JsValue::from_str(&class_name_for("StateDot", "cell")),
+                    ),
+                    ("x", JsValue::from_f64(f64::from(x))),
+                    ("y", JsValue::from_f64(f64::from(y))),
+                    ("width", JsValue::from_str("2")),
+                    ("height", JsValue::from_str("2")),
+                    (
+                        "style",
+                        object(&[("animationDelay", JsValue::from_str(&format!("{delay}ms")))])?
+                            .into(),
+                    ),
+                ])?),
+                &[],
+            )?);
+        }
+        return create_element(
+            react,
+            "svg",
+            Some(&object(&[
+                (
+                    "className",
+                    JsValue::from_str(&join_classes([
+                        class_name_for("StateDot", "matrix"),
+                        class_name.to_owned(),
+                    ])),
+                ),
+                ("data-state", JsValue::from_str("ongoing")),
+                ("width", JsValue::from_f64(10.0)),
+                ("height", JsValue::from_f64(10.0)),
+                ("viewBox", JsValue::from_str("0 0 10 10")),
+                ("shapeRendering", JsValue::from_str("crispEdges")),
+                ("aria-hidden", JsValue::TRUE),
+            ])?),
+            &cells,
+        );
+    }
+    create_element(
+        react,
+        "span",
+        Some(&object(&[
+            (
+                "className",
+                JsValue::from_str(&join_classes([
+                    class_name_for("StateDot", "dot"),
+                    class_name.to_owned(),
+                ])),
+            ),
+            ("data-state", JsValue::from_str(state)),
+            (
+                "style",
+                object(&[
+                    ("width", JsValue::from_f64(10.0)),
+                    ("height", JsValue::from_f64(10.0)),
+                ])?
+                .into(),
+            ),
+            ("aria-hidden", JsValue::TRUE),
+        ])?),
+        &[],
+    )
+}
+
+fn prompt_label(cwd: &str, home: Option<&str>) -> String {
+    let trimmed = cwd.trim_end_matches(['/', '\\']);
+    if home.is_some_and(|home| trimmed == home.trim_end_matches(['/', '\\'])) {
+        return "~".to_owned();
+    }
+    trimmed
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|segment| !segment.is_empty())
+        .unwrap_or(cwd)
+        .to_owned()
+}
+
+fn terminal_status(
+    labels: &JsValue,
+    exit_code: Option<f64>,
+    signal: Option<&str>,
+) -> Result<Option<String>, JsValue> {
+    if let Some(signal) = signal {
+        return terminal_dynamic_label(
+            labels,
+            "signal",
+            &JsValue::from_str(signal),
+            &format!("信号 {signal}"),
+        )
+        .map(Some);
+    }
+    if let Some(exit_code) = exit_code.filter(|exit_code| *exit_code != 0.0) {
+        return terminal_dynamic_label(
+            labels,
+            "exitCode",
+            &JsValue::from_f64(exit_code),
+            &format!("退出码 {}", javascript_number(exit_code)),
+        )
+        .map(Some);
+    }
+    Ok(None)
+}
+
+fn terminal_state(
+    labels: &JsValue,
+    running: bool,
+    failed: bool,
+) -> Result<(&'static str, String), JsValue> {
+    if running {
+        Ok(("ongoing", terminal_label(labels, "running", "运行中")?))
+    } else if failed {
+        Ok(("error", terminal_label(labels, "failed", "失败")?))
+    } else {
+        Ok(("done", terminal_label(labels, "done", "已完成")?))
+    }
+}
+
+fn terminal_label(labels: &JsValue, key: &str, fallback: &str) -> Result<String, JsValue> {
+    if labels.is_null() || labels.is_undefined() {
+        return Ok(fallback.to_owned());
+    }
+    let value = Reflect::get(labels, &JsValue::from_str(key))?;
+    if value.is_undefined() {
+        Ok(fallback.to_owned())
+    } else {
+        value
+            .as_string()
+            .ok_or_else(|| js_error(&format!("TerminalBlock label {key} must be a string")))
+    }
+}
+
+fn terminal_dynamic_label(
+    labels: &JsValue,
+    key: &str,
+    argument: &JsValue,
+    fallback: &str,
+) -> Result<String, JsValue> {
+    if labels.is_null() || labels.is_undefined() {
+        return Ok(fallback.to_owned());
+    }
+    let value = Reflect::get(labels, &JsValue::from_str(key))?;
+    if value.is_undefined() {
+        return Ok(fallback.to_owned());
+    }
+    value
+        .dyn_into::<Function>()?
+        .call1(&JsValue::UNDEFINED, argument)?
+        .as_string()
+        .ok_or_else(|| js_error(&format!("TerminalBlock label {key} must return a string")))
+}
+
+fn terminal_count_label(
+    labels: &JsValue,
+    key: &str,
+    hidden: usize,
+    fallback: &str,
+) -> Result<String, JsValue> {
+    terminal_dynamic_label(
+        labels,
+        key,
+        &JsValue::from_f64(index_to_f64(hidden)),
+        fallback,
+    )
+}
+
+fn javascript_number(value: f64) -> String {
+    if value.is_nan() {
+        "NaN".to_owned()
+    } else if value == f64::INFINITY {
+        "Infinity".to_owned()
+    } else if value == f64::NEG_INFINITY {
+        "-Infinity".to_owned()
+    } else if value.fract() == 0.0 {
+        format!("{value:.0}")
+    } else {
+        value.to_string()
+    }
 }
 
 fn build_search_model(props: &JsValue, collapsed: &Set) -> Result<SearchModel, JsValue> {
