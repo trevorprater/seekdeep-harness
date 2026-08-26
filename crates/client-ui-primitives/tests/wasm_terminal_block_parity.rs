@@ -318,6 +318,19 @@ fn head_tail_cap_expand_collapse_default_and_nan_are_exact() {
         ],
     );
     assert_eq!(texts(&uncapped, "terminalblock-line").len(), 20);
+    let infinite = render(
+        &component,
+        &[
+            ("command", JsValue::from_str("lines")),
+            ("output", JsValue::from_str(&output)),
+            ("maxLines", JsValue::from_f64(f64::INFINITY)),
+        ],
+    );
+    assert_eq!(texts(&infinite, "terminalblock-line").len(), 20);
+    assert_eq!(
+        terminalFindClass(&infinite, "terminalblock-expand").length(),
+        0
+    );
 }
 
 #[wasm_bindgen_test(async)]
