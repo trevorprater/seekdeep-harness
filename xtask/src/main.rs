@@ -198,14 +198,18 @@ fn wasm_package(
         eprintln!("Rust/WASM initial watch build failed: {error:#}");
     }
     let package_root = cargo_package_root(package)?;
-    let asset_root = if module_id == "@seekdeep-ai/seekdeep-client-ui-theme" {
-        Some(
+    let asset_root = match module_id {
+        "@seekdeep-ai/seekdeep-client-ui-theme" => Some(
             cargo_metadata()?
                 .workspace_root
                 .join("packages/client/ui-theme/src/styles"),
-        )
-    } else {
-        None
+        ),
+        "@seekdeep-ai/seekdeep-client-web" => Some(
+            cargo_metadata()?
+                .workspace_root
+                .join("packages/client/web/src/base.css"),
+        ),
+        _ => None,
     };
     let mut previous = wasm_watch_snapshot(&package_root, asset_root.as_deref())?;
     println!(
@@ -255,6 +259,9 @@ fn wasm_package_once(
         "Rust/WASM artifact is missing: {}",
         wasm.display()
     );
+    if module_id == "@seekdeep-ai/seekdeep-client-web" {
+        return wasm_web_shell_package(&metadata, artifact, out_dir, &wasm);
+    }
     let staging = metadata
         .target_directory
         .join("xtask/wasm-package")
@@ -299,6 +306,120 @@ fn wasm_package_once(
         out_dir.join("client.js").display()
     );
     Ok(())
+}
+
+fn wasm_web_shell_package(
+    metadata: &CargoMetadata,
+    artifact: &str,
+    out_dir: &Path,
+    wasm: &Path,
+) -> anyhow::Result<()> {
+    let staging = metadata
+        .target_directory
+        .join("xtask/wasm-package")
+        .join(artifact);
+    if staging.exists() {
+        std::fs::remove_dir_all(&staging)?;
+    }
+    std::fs::create_dir_all(&staging)?;
+    let status = ProcessCommand::new("wasm-bindgen")
+        .args(["--target", "web", "--out-name", "client", "--out-dir"])
+        .arg(&staging)
+        .arg(wasm)
+        .status()?;
+    anyhow::ensure!(status.success(), "wasm-bindgen failed for client web shell");
+    let out_dir = if out_dir.is_absolute() {
+        out_dir.to_owned()
+    } else {
+        metadata.workspace_root.join(out_dir)
+    };
+    std::fs::create_dir_all(&out_dir)?;
+    for name in ["client.js", "client.d.ts", "client_bg.wasm"] {
+        std::fs::copy(staging.join(name), out_dir.join(name))?;
+    }
+    std::fs::copy(
+        metadata
+            .workspace_root
+            .join("packages/client/web/src/base.css"),
+        out_dir.join("base.css"),
+    )?;
+    std::fs::write(out_dir.join("index.js"), client_web_esm_wrapper())?;
+    let type_dir = out_dir.join("types");
+    std::fs::create_dir_all(&type_dir)?;
+    std::fs::write(type_dir.join("index.d.ts"), client_web_esm_declarations())?;
+    println!(
+        "built @seekdeep-ai/seekdeep-client-web Rust/WASM ESM shell at {}",
+        out_dir.join("index.js").display()
+    );
+    Ok(())
+}
+
+fn client_web_esm_wrapper() -> &'static str {
+    r#"import init, * as wasm from './client.js';
+import * as React from 'react';
+import * as ReactJsxRuntime from 'react/jsx-runtime';
+import * as ReactDom from 'react-dom';
+import * as ReactDomClient from 'react-dom/client';
+import * as Cordis from '@seekdeep-ai/cordis';
+import Loader from '@seekdeep-ai/cordis-plugin-loader';
+import * as ClientModules from '@seekdeep-ai/seekdeep-client-modules/client';
+import * as ModulesClient from '@seekdeep-ai/seekdeep-client-modules/client';
+import * as WebReact from '@seekdeep-ai/seekdeep-client-web-react';
+import * as UiSlots from '@seekdeep-ai/seekdeep-client-ui-slots';
+import * as UiPrimitives from '@seekdeep-ai/seekdeep-client-ui-primitives';
+import * as UiAttachment from '@seekdeep-ai/seekdeep-client-ui-attachment';
+import * as SchemaForm from '@seekdeep-ai/seekdeep-client-schema-form';
+import './base.css';
+
+await init(new URL('./client_bg.wasm', import.meta.url));
+const staticModules = {
+  'react': React,
+  'react/jsx-runtime': ReactJsxRuntime,
+  'react-dom': ReactDom,
+  'react-dom/client': ReactDomClient,
+  '@seekdeep-ai/cordis': Cordis,
+  '@seekdeep-ai/seekdeep-client-ui-slots': UiSlots,
+  '@seekdeep-ai/seekdeep-client-web-react': WebReact,
+  '@seekdeep-ai/seekdeep-client-ui-primitives': UiPrimitives,
+  '@seekdeep-ai/seekdeep-client-ui-attachment': UiAttachment,
+  '@seekdeep-ai/seekdeep-client-schema-form': SchemaForm,
+};
+wasm.configureClientWeb(React, ReactDomClient, Cordis, Loader, ClientModules, ModulesClient, WebReact, staticModules);
+
+export const AppWebEntry = wasm.AppWebEntry;
+export const AppRoot = wasm.appRootComponent();
+export const DocumentTitle = wasm.documentTitleComponent();
+export const buildRenderApp = wasm.buildRenderApp;
+export const APP_SHELL_ID = wasm.appShellId();
+export const getStaticModules = wasm.getStaticModules;
+export const PLATFORM_MODULES = Object.freeze(Array.from(wasm.platformModules()));
+export const createSignal = wasm.createSignal;
+export const createLoaderStatusStore = wasm.createLoaderStatusStore;
+export const FIBER_STATE = Object.freeze({ PENDING: 0, LOADING: 1, ACTIVE: 2, FAILED: 3, DISPOSED: 4, UNLOADING: 5 });
+export const STATE_LABELS = Object.freeze({ 0: 'pending', 1: 'loading', 2: 'active', 3: 'failed', 4: 'disposed', 5: 'unloading' });
+"#
+}
+
+fn client_web_esm_declarations() -> &'static str {
+    r#"export { AppWebEntry } from '../client.js';
+export const AppRoot: Function;
+export const DocumentTitle: Function;
+export const buildRenderApp: typeof import('../client.js').buildRenderApp;
+export const APP_SHELL_ID: '@seekdeep-ai/seekdeep-client-app-shell';
+export const getStaticModules: typeof import('../client.js').getStaticModules;
+export const PLATFORM_MODULES: readonly string[];
+export const createSignal: typeof import('../client.js').createSignal;
+export const createLoaderStatusStore: typeof import('../client.js').createLoaderStatusStore;
+export const FIBER_STATE: Readonly<{ PENDING: 0; LOADING: 1; ACTIVE: 2; FAILED: 3; DISPOSED: 4; UNLOADING: 5 }>;
+export const STATE_LABELS: Readonly<Record<number, 'pending' | 'loading' | 'active' | 'failed' | 'disposed' | 'unloading'>>;
+export interface AppRootProps { settled: object; status: object; error: object; renderApp(): unknown }
+export interface DocumentTitleProps { title?: string }
+export interface AssemblyDeps { ctx: unknown }
+export interface AppShellService { renderApp(): unknown }
+export type BootSeams = { loadBundle?: Function };
+export type LoaderEntryState = 'pending' | 'loading' | 'active' | 'failed' | 'disposed' | 'unloading';
+export type LoaderStatus = Record<string, LoaderEntryState>;
+"#
 }
 
 fn wasm_watch_snapshot(
@@ -1077,8 +1198,9 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        classic_module_bundle, compatibility_declarations, copy_wasm_package_assets,
-        default_macos_platform_tag, is_generated_package_output, is_localization, watch_snapshot,
+        classic_module_bundle, client_web_esm_declarations, client_web_esm_wrapper,
+        compatibility_declarations, copy_wasm_package_assets, default_macos_platform_tag,
+        is_generated_package_output, is_localization, watch_snapshot,
     };
 
     #[test]
@@ -1348,6 +1470,35 @@ mod tests {
             "class StaleAuthorizationError",
             "type UseSession",
             "interface SessionProviderProps",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+    }
+
+    #[test]
+    fn client_web_esm_shell_bootstraps_before_the_module_table_and_exports_public_contract() {
+        let wrapper = client_web_esm_wrapper();
+        for expected in [
+            "import init, * as wasm from './client.js'",
+            "import * as React from 'react'",
+            "import Loader from '@seekdeep-ai/cordis-plugin-loader'",
+            "import './base.css'",
+            "await init(new URL('./client_bg.wasm', import.meta.url))",
+            "'@seekdeep-ai/seekdeep-client-web-react': WebReact",
+            "wasm.configureClientWeb(",
+            "export const AppWebEntry = wasm.AppWebEntry",
+            "export const PLATFORM_MODULES = Object.freeze",
+        ] {
+            assert!(wrapper.contains(expected), "missing {expected:?}");
+        }
+        let declarations = client_web_esm_declarations();
+        for expected in [
+            "export { AppWebEntry } from '../client.js'",
+            "interface AppRootProps",
+            "interface DocumentTitleProps",
+            "interface AppShellService",
+            "type LoaderEntryState",
+            "const FIBER_STATE",
         ] {
             assert!(declarations.contains(expected), "missing {expected:?}");
         }

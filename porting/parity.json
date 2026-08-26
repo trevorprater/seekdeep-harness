@@ -48699,22 +48699,59 @@
     {
       "source": "packages/client/web/src/AppRoot.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/boot.rs",
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/data/app-root.css",
+        "crates/client-web/tests/kernel_parity.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs"
+      ],
+      "evidence": [
+        "pinned source client-web suite passed 16/16",
+        "live Rust/WASM AppRoot cases pin loading copy, zero pre-settle renderApp calls, status-only non-settlement, failed-entry and sweep-report presentation, and one-pass settled real UI",
+        "portable AppRoot projection and byte-exact renamed stylesheet preserve the source branch and self-contained fallback styling"
+      ]
     },
     {
       "source": "packages/client/web/src/DocumentTitle.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM effect preserves the original product title, projects durable Session titles with the source separator, clears on absent title, and restores on change/unmount"
+      ]
     },
     {
       "source": "packages/client/web/src/app-shell.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/lib.rs",
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs",
+        "crates/client-web/tests/wasm_boot_parity.rs"
+      ],
+      "evidence": [
+        "live WASM pins the exact pseudo id, plugin name and three-service inject list, installs the compiled renderer only after services exist, provides appShell through reflect, and lazily caches buildRenderApp",
+        "two-stage boot test materializes the same static app-shell module and reaches one installed renderer before settlement"
+      ]
     },
     {
       "source": "packages/client/web/src/app.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs"
+      ],
+      "evidence": [
+        "compiled buildRenderApp fails loud without Sessions, binds the Session list once, projects the current durable title, and emits the one ctx-level root Slot render beside DocumentTitle",
+        "live app-shell case renders the root surface through the lazy cached factory"
+      ]
     },
     {
       "source": "packages/client/web/src/base.css",
@@ -48730,17 +48767,44 @@
     {
       "source": "packages/client/web/src/boot.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/boot.rs",
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/tests/kernel_parity.rs",
+        "crates/client-web/tests/wasm_boot_parity.rs"
+      ],
+      "evidence": [
+        "live AppWebEntry success case parses the Host manifest, constructs the module system, registers modules and app-shell statics, mounts AppRoot, observes the immediately barrier, creates/settles entries, audits ACTIVE state, and flips settled",
+        "live failure case resolves onto the fail-loud error signal while malformed manifest rejects before mount; portable audit pins import, pending-service, failed-state, count and plural diagnostics",
+        "context remains instance-owned and fiberless entries are projected failed after create"
+      ]
     },
     {
       "source": "packages/client/web/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/data/app-root.css",
+        "crates/client-web/src/wasm.rs"
+      ],
+      "evidence": [
+        "CSS-module locals are explicit seekdeep-web classes compiled into the Rust/WASM component and strict wasm32 Clippy covers every render path without a TypeScript shim"
+      ]
     },
     {
       "source": "packages/client/web/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/lib.rs",
+        "crates/client-web/src/wasm.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "generated ESM wrapper exports AppWebEntry, AppRoot, DocumentTitle, buildRenderApp, app-shell id, static seed, platform words, fiber labels and signal constructors over compiled Rust/WASM",
+        "strict generated declaration resolution passed without skipLibCheck"
+      ]
     },
     {
       "source": "packages/client/web/src/invariant.ts",
@@ -48759,42 +48823,106 @@
     {
       "source": "packages/client/web/src/loader-status.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/signal.rs",
+        "crates/client-web/src/boot.rs",
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/tests/kernel_parity.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs"
+      ],
+      "evidence": [
+        "portable signals pin stable snapshots, synchronous copied listener notification and exact-generation disposal; status writes are copy-on-write",
+        "numeric Cordis states 0 through 5 and lower-case labels are exact; live JS faces drive React useSyncExternalStore"
+      ]
     },
     {
       "source": "packages/client/web/src/platform.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/lib.rs",
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/tests/kernel_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust constant, WASM export, and ESM static imports preserve all ten platform words in exact order with SeekDeep product identities"
+      ]
     },
     {
       "source": "packages/client/web/src/seed.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/src/wasm.rs",
+        "xtask/src/main.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs"
+      ],
+      "evidence": [
+        "ESM bootstrap statically imports one singleton per platform word, passes the exact table into Rust before boot, and getStaticModules returns that table by identity"
+      ]
     },
     {
       "source": "packages/client/web/tests/app-root.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/tests/kernel_parity.rs",
+        "crates/client-web/tests/wasm_shell_parity.rs"
+      ],
+      "evidence": [
+        "native projection and live WASM cases cover all five source AppRoot scenarios"
+      ]
     },
     {
       "source": "packages/client/web/tests/app-shell.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/tests/wasm_shell_parity.rs",
+        "crates/client-web/tests/wasm_boot_parity.rs",
+        "crates/client-web-react/tests/wasm_real_core_parity.rs"
+      ],
+      "evidence": [
+        "live shell and assembled real-registry cases cover renderer installation, appShell provision, repeated cached renderApp, real root rendering and lifecycle-owned service/renderer effects"
+      ]
     },
     {
       "source": "packages/client/web/tests/app.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/tests/wasm_shell_parity.rs"
+      ],
+      "evidence": [
+        "live WASM covers missing Sessions, one root Slot render, current title selection, absent or unresolved current id fallback, and product-title restoration"
+      ]
     },
     {
       "source": "packages/client/web/tests/base-styles.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/tests/kernel_parity.rs",
+        "packages/client/web/src/base.css",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "native test pins all five theme style imports and design-platform before scrollbar ordering",
+        "ESM wrapper imports a byte-identical copied base.css so Vite resolves package CSS rather than leaving runtime style-tag imports unresolved"
+      ]
     },
     {
       "source": "packages/client/web/tests/document-title.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-web/tests/wasm_shell_parity.rs"
+      ],
+      "evidence": [
+        "live WASM covers absent, first, revised, cleared and unmounted title branches against the original product title"
+      ]
     },
     {
       "source": "packages/client/web/tsconfig.json",
@@ -48810,7 +48938,15 @@
     {
       "source": "packages/client/web/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/web/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "client-web uses a dedicated bootstrap-safe ESM artifact rather than the post-boot classic module table: wasm-bindgen web bindings, valid client_bg.wasm, static index.js wrapper, base.css and strict declarations",
+        "focused xtask contract, JavaScript parse checks, byte-exact base asset comparison, optimized package build and base.css-aware watch rebuild passed"
+      ]
     },
     {
       "source": "packages/code-runtime/README.i18n.yaml",

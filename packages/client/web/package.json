@@ -52,8 +52,16 @@
     "@seekdeep-ai/seekdeep-invariants": "workspace:^",
     "@seekdeep-ai/cordis": "workspace:^"
   },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-web --artifact seekdeep_client_web --module-id @seekdeep-ai/seekdeep-client-web --out-dir packages/client/web/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-web --artifact seekdeep_client_web --module-id @seekdeep-ai/seekdeep-client-web --out-dir packages/client/web/lib --watch"
+  },
   "files": [
     "lib/index.js",
+    "lib/client.js",
+    "lib/client.d.ts",
+    "lib/client_bg.wasm",
+    "lib/base.css",
     "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ]

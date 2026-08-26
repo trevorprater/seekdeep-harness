@@ -5154,6 +5154,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-web"
+version = "0.1.0-rc.5"
+dependencies = [
+ "indexmap 2.14.0",
+ "js-sys",
+ "thiserror 2.0.20",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-client-web-react"
 version = "0.1.0-rc.5"
 dependencies = [
