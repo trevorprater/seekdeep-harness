@@ -420,6 +420,14 @@ fn inject_style() -> Result<(), JsValue> {
         "setAttribute",
         &[JsValue::from_str("data-plugin-css"), JsValue::from_str(tag)],
     )?;
+    call_method(
+        &style,
+        "setAttribute",
+        &[
+            JsValue::from_str("data-plugin"),
+            JsValue::from_str("@seekdeep-ai/seekdeep-client-ui-primitives"),
+        ],
+    )?;
     Reflect::set(
         &style,
         &JsValue::from_str("textContent"),

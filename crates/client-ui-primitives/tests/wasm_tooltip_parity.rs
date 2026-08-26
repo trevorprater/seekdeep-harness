@@ -203,6 +203,15 @@ fn setup() -> (JsValue, JsValue) {
 fn lazy_delay_focus_cancel_handler_chaining_and_ref_forwarding_are_exact() {
     let (_bench, component) = setup();
     assert_eq!(tooltipStyles().length(), 1);
+    assert_eq!(
+        property(
+            &property(&tooltipStyles().get(0), "attributes"),
+            "data-plugin"
+        )
+        .as_string()
+        .as_deref(),
+        Some("@seekdeep-ai/seekdeep-client-ui-primitives")
+    );
     let labels = Rc::new(Cell::new(0_u32));
     let label_count = labels.clone();
     let label = Closure::wrap(Box::new(move || {
