@@ -1,0 +1,18 @@
+[package]
+name = "seekdeep-client-ui-primitives"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Portable models and Rust/WASM React primitives for the SeekDeep browser UI"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde.workspace = true
+unicode-width = "0.2.2"
+
+[lints]
+workspace = true

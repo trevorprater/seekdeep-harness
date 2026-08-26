@@ -27,6 +27,7 @@ members = [
   "crates/client-ui-cordis",
   "crates/client-ui-layout",
   "crates/client-ui-message-feedback",
+  "crates/client-ui-primitives",
   "crates/client-ui-settings",
   "crates/client-ui-settings-general",
   "crates/client-ui-sidebar",

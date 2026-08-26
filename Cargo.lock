@@ -5078,6 +5078,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-ui-primitives"
+version = "0.1.0-rc.5"
+dependencies = [
+ "serde",
+ "unicode-width",
+]
+
+[[package]]
 name = "seekdeep-client-ui-settings"
 version = "0.1.0-rc.5"
 dependencies = [

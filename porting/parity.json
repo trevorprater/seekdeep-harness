@@ -44346,7 +44346,16 @@
     {
       "source": "packages/client/ui-primitives/src/ansi.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/ansi.rs"
+      ],
+      "evidence": [
+        "pinned source ui-primitives Vitest suite: 21 files and 498 tests passed; focused ANSI suite: 75 tests passed",
+        "Rust fixtures cover exact theme-token/literal colors, decorations, control sanitization, CR/backspace/erase replay, SGR state, tab/CJK/emoji/combining widths, wide-cell damage, and bounded canonical state",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/clipboard.ts",
@@ -44361,7 +44370,14 @@
     {
       "source": "packages/client/ui-primitives/src/head-tail-cap.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/head_tail_cap.rs"
+      ],
+      "evidence": [
+        "Rust parity fixtures pin odd/even ceilings, hidden/capped state, expansion, within-cap behavior, and Infinity",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/icons/index.tsx",
@@ -44514,7 +44530,14 @@
     {
       "source": "packages/client/ui-primitives/tests/ansi.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/ansi_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ANSI suite: 75 tests passed",
+        "11 grouped Rust parity tests exercise the complete ANSI state, cursor, control, color, decoration, Unicode-width, and head/tail-cap model"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/atoms.client.spec.tsx",
