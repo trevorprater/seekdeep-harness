@@ -44048,7 +44048,14 @@
     {
       "source": "packages/client/ui-primitives/src/Button.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_atoms.rs"
+      ],
+      "evidence": [
+        "pinned source atom/state/onboarding/toast focus: 39 tests passed",
+        "live WASM atom test preserves default and overriding native button type, variant/size/icon/class chrome, children, disabled state, and event forwarding"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/ConnectionBanner.module.css",
@@ -44064,7 +44071,13 @@
     {
       "source": "packages/client/ui-primitives/src/ConnectionBanner.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_atoms.rs"
+      ],
+      "evidence": [
+        "live WASM atom test pins connected null rendering and exact default/custom reconnect copy"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/DiffBlock.module.css",
@@ -44133,7 +44146,13 @@
     {
       "source": "packages/client/ui-primitives/src/Input.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_atoms.rs"
+      ],
+      "evidence": [
+        "live WASM atom test preserves wrapper/input class ownership, optional leading icon, value, change handler, and native input prop forwarding"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/JsonTree.module.css",
@@ -44197,7 +44216,13 @@
     {
       "source": "packages/client/ui-primitives/src/OnboardingSurface.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_atoms.rs"
+      ],
+      "evidence": [
+        "live WASM portal test pins body ownership, mask/stage structure, exact #root inert lifetime, and rendering when #root is absent"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/Pill.module.css",
@@ -44213,7 +44238,13 @@
     {
       "source": "packages/client/ui-primitives/src/Pill.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_atoms.rs"
+      ],
+      "evidence": [
+        "live WASM atom test distinguishes static span from interactive button, active/class chrome, ignored static native props, and interactive disabled/event forwarding"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/ReadBlock.module.css",
@@ -44277,7 +44308,13 @@
     {
       "source": "packages/client/ui-primitives/src/StateDot.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_atoms.rs"
+      ],
+      "evidence": [
+        "live WASM test pins solid span states, ongoing eight-cell SVG matrix, all negative chase phases, size in both shapes, data-state, and aria-hidden"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/TerminalBlock.module.css",
@@ -44309,7 +44346,13 @@
     {
       "source": "packages/client/ui-primitives/src/Toast.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_atoms.rs"
+      ],
+      "evidence": [
+        "live WASM portal test pins alert/icon/text structure, 4-second hold-plus-fade timer, viewport and anchor-centered placement, resize remeasurement, listener cleanup, and unmount timer cancellation"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/Tooltip.module.css",
@@ -44568,17 +44611,43 @@
     {
       "source": "packages/client/ui-primitives/src/pointer-grace.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_util.rs",
+        "crates/client-ui-primitives/tests/wasm_clipboard_parity.rs"
+      ],
+      "evidence": [
+        "live WASM React harness pins the exact 200ms boundary, replacement arm, cancellation, latest-close ref, stable callbacks, and unmount cleanup",
+        "pinned source ui-primitives suite: 21 files and 498 tests passed",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_clipboard_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/use-copy-feedback.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_util.rs",
+        "crates/client-ui-primitives/tests/wasm_clipboard_parity.rs"
+      ],
+      "evidence": [
+        "live WASM React harness pins refused-write silence, exact text, accepted-write state, duplicate-click suppression, and the 1000ms reset",
+        "compiled hook delegates clipboard behavior to the compiled Rust/WASM writeClipboard boundary",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_clipboard_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/useAnchoredMaxHeight.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_util.rs",
+        "crates/client-ui-primitives/tests/wasm_clipboard_parity.rs"
+      ],
+      "evidence": [
+        "live WASM React harness pins initial cap state, bottom-minus-12 measurement, zero/design-cap clamps, null-ref skip, resize and capture-scroll remeasurement, and exact listener disposal",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_clipboard_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/ansi.client.spec.ts",
@@ -45168,7 +45237,14 @@
     {
       "source": "packages/client/ui-primitives/tests/onboarding-surface.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_atoms_parity.rs"
+      ],
+      "evidence": [
+        "pinned source onboarding suite passed in the 39-test focused run",
+        "compiled WASM test covers all three portal/inert/no-root cases"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/read-block.client.spec.tsx",
@@ -45183,7 +45259,14 @@
     {
       "source": "packages/client/ui-primitives/tests/state-dot.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_atoms_parity.rs"
+      ],
+      "evidence": [
+        "pinned source StateDot suite passed in the 39-test focused run",
+        "compiled WASM test covers semantic state, shape, matrix cells/phases, sizing, and accessibility attributes"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/terminal-block.client.spec.tsx",
@@ -45193,7 +45276,14 @@
     {
       "source": "packages/client/ui-primitives/tests/toast.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_atoms_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Toast suite passed in the 39-test focused run",
+        "compiled WASM test covers all source timer, iconless, anchor, resize, portal, and cleanup cases"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/tooltip.client.spec.tsx",
