@@ -80337,7 +80337,18 @@
     {
       "source": "scripts/release/process.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/release_process.rs",
+        "crates/repository-tools/tests/release_process_parity.rs"
+      ],
+      "evidence": [
+        "pinned source process helper inspected for captured, judged, and inherited child-process planes",
+        "cargo test -p seekdeep-repository-tools --test release_process_parity --all-features (4 passed for captured streams/status, Unicode trimming, exact nonzero diagnostics, complete environment replacement, and inherited zero/nonzero execution)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "Rust release binaries have explicit main functions and imported Rust modules have no executable top-level body, so the source-only isEntry import guard is satisfied by construction rather than emulated"
     },
     {
       "source": "scripts/release/publish.ts",
@@ -80347,7 +80358,18 @@
     {
       "source": "scripts/release/tarball.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/release_tarball.rs",
+        "crates/repository-tools/tests/release_tarball_parity.rs"
+      ],
+      "evidence": [
+        "pinned source real-tar differential: package member inventory, @deepseek-ai/probe@1.2.3 packed identity, and [first.tgz, second.tgz\\r] order output",
+        "cargo test -p seekdeep-repository-tools --test release_tarball_parity --all-features (3 passed against real gzip tarballs for members, renamed packed identity, invalid identity shape, blank filtering, CRLF, and lossy UTF-8 order decoding)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "packed package identities apply the required @deepseek-ai to @seekdeep-ai product rename; tar member and order-file behavior is otherwise unchanged"
     },
     {
       "source": "scripts/release/verify-packed-install.ts",

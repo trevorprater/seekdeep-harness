@@ -30,6 +30,8 @@ pub mod paired_markdown_derivatives;
 pub mod public_repository_links;
 /// Static and packed publication-payload policy.
 pub mod publication_payload;
+pub mod release_process;
+pub mod release_tarball;
 /// Shared repository glob discovery and line-oriented reference scanning.
 pub mod repo_files;
 pub mod run_oxlint;
