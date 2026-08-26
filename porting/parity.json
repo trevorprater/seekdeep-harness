@@ -44455,7 +44455,17 @@
     {
       "source": "packages/client/ui-primitives/src/WebBlock.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_web.rs",
+        "crates/client-ui-primitives/tests/wasm_web_block_parity.rs"
+      ],
+      "evidence": [
+        "pinned source WebBlock suite: 17 tests passed",
+        "compiled WASM tests pin answer-before-citations ordering, empty/answer-only/source-only search arms, Markdown delegation, title/hostname/raw labels, HTTP(S)-only external anchors, unsafe/unparseable plain text, snippet/date omission, explicit one-based citation values, source truncation, fetch final URL/status/truncation, class forwarding, and non-200 status",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_web_block_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/ansi.ts",
@@ -45408,7 +45418,14 @@
     {
       "source": "packages/client/ui-primitives/tests/web-block.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_web_block_parity.rs"
+      ],
+      "evidence": [
+        "pinned source WebBlock suite: 17 tests passed",
+        "three grouped live WASM tests cover every source search/fetch, safe-link, label, metadata, truncation, empty, ordering, citation, status, and class assertion"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tsconfig.json",
