@@ -332,6 +332,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ const {{ Service }} = require('@seekdeep-ai/cordis'); class SettingsScopeBinder extends Service {{ constructor(ctx) {{ super(ctx, 'settingsScope'); }} bind(spec) {{ return {global}.bindSettingsScope(this.ctx, spec); }} }} {global}.configureClientUiSettings(SettingsScopeBinder); Object.assign({global}, {{ apply: {global}.applyClientUiSettings, inject: [], SettingsScopeBinder, SettingsScopeController: {global}.__SettingsScopeController }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-general" {
+        return format!(
+            "require => {{ {global}.configureClientUiSettingsGeneral(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-web-react')); Object.assign({global}, {{ apply: {global}.applyClientUiSettingsGeneral, inject: ['slots', 'locale', 'connection'], SettingsDocumentStore: {global}.__SettingsDocumentStore }}); return {global}; }}"
+        );
+    }
     format!("() => {global}")
 }
 
@@ -376,6 +381,38 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
     'settings.general.item': { kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps };
   }
 }
+"
+        .to_owned();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-general" {
+        return r"
+export const apply: typeof wasm_bindgen.applyClientUiSettingsGeneral;
+export const inject: readonly ['slots', 'locale', 'connection'];
+export type SettingsKey = 'trigger' | 'title' | 'close' | 'openDocument' | 'openDocument.error' | 'general.nav';
+export interface SettingsDocumentState {
+  status: 'idle' | 'loading' | 'ready' | 'unavailable';
+  opening: boolean;
+  error: string | null;
+}
+export interface SettingsDocumentSnapshotStore {
+  getSnapshot(): SettingsDocumentState;
+  subscribe(listener: () => void): () => void;
+}
+export const SettingsDocumentStore: {
+  new (api: unknown): {
+    readonly store: SettingsDocumentSnapshotStore;
+    load(): Promise<void>;
+    open(): Promise<void>;
+  };
+};
+export interface SettingsSectionRow { id: string; order: number; label: string }
+export interface SettingsOnboardingStep { id: string; order: number }
+export interface TriggerContentProps { wide: boolean; t(key: string): string }
+export interface HeaderContentProps { t(key: string): string }
+export interface CloseLabelProps { t(key: string): string }
+export interface GeneralSectionComponentProps { renderSlot: Function; close(): void }
+export interface SettingsDocumentActionInjected { controller: InstanceType<typeof SettingsDocumentStore>; useSnapshot: Function }
+export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(key: string): string };
 "
         .to_owned();
     }
@@ -803,6 +840,38 @@ mod tests {
             "'settings.plugins.tab'",
             "'settings.general.item'",
             "openSection: (id: string) => void",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+    }
+
+    #[test]
+    fn ui_settings_general_bundle_configures_shell_modules_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_settings_general_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-settings-general",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiSettingsGeneral(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "require('@seekdeep-ai/seekdeep-client-web-react')",
+            "apply: __seekdeep_client_ui_settings_general_wasm.applyClientUiSettingsGeneral",
+            "inject: ['slots', 'locale', 'connection']",
+            "SettingsDocumentStore: __seekdeep_client_ui_settings_general_wasm.__SettingsDocumentStore",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-settings-general");
+        for expected in [
+            "type SettingsKey",
+            "interface SettingsDocumentState",
+            "const SettingsDocumentStore",
+            "readonly ['slots', 'locale', 'connection']",
+            "interface SettingsSectionRow",
         ] {
             assert!(declarations.contains(expected), "missing {expected:?}");
         }

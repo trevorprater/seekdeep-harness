@@ -5058,6 +5058,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-ui-settings-general"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "js-sys",
+ "seekdeep-cordis",
+ "seekdeep-schemastery",
+ "seekdeep-settings",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-client-ui-slots"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -7054,11 +7075,23 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "parking_lot",
+ "regex",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
+ "seekdeep-agent-spine-demo",
  "seekdeep-anonymous-user-id",
+ "seekdeep-app-boot",
+ "seekdeep-bash-local",
+ "seekdeep-command-feedback",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-llm",
+ "seekdeep-loader",
+ "seekdeep-loader-smoke",
+ "seekdeep-session-checkpoint-policy",
+ "seekdeep-session-persistence-jsonl",
  "seekdeep-session-telemetry",
+ "seekdeep-subprocess-local",
  "serde",
  "serde_json",
  "tempfile",

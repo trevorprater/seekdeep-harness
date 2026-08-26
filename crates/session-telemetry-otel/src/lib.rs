@@ -29,7 +29,8 @@ pub const NAME: &str = "session-telemetry-otel";
 /// Required source services.
 pub const INJECT: &[&str] = &["sessions"];
 
-const DISABLED_FEEDBACK_WARNING: &str =
+/// Stable disclosure emitted when feedback remains local under disabled sharing.
+pub const DISABLED_FEEDBACK_WARNING: &str =
     "session telemetry is DISABLED; nothing will be shared and this feedback remains local";
 const NON_CANONICAL_FEEDBACK_WARNING: &str =
     "session telemetry ignored a feedback event absent from the canonical session log";

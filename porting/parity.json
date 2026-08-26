@@ -34884,7 +34884,14 @@
     {
       "source": "examples/headless-agent/tests/fixtures/cli-mock-llm.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry-otel/tests/loader_composition_e2e.rs"
+      ],
+      "evidence": [
+        "compiled Rust CliMockAdapter preserves model metadata, the real Bash call and result round trip, token usage, stable failure, and step-two reasoning override",
+        "cargo test -p seekdeep-session-telemetry-otel --test loader_composition_e2e --all-features (3 passed)"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/cli.cordis.yml",
@@ -34974,7 +34981,14 @@
     {
       "source": "examples/headless-agent/tests/fixtures/session-telemetry-otel-driver.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry-otel/tests/loader_composition_e2e.rs"
+      ],
+      "evidence": [
+        "Rust fixture starts a real OTLP HTTP collector, boots a file-backed Loader composition, drives the configured root Agent through Bash, records feedback, disposes the application, and inspects canonical JSONL plus captured wire payloads",
+        "cargo test -p seekdeep-session-telemetry-otel --test loader_composition_e2e --all-features (3 passed)"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/session-telemetry-otel.cordis.yml",
@@ -35021,7 +35035,14 @@
     {
       "source": "examples/headless-agent/tests/fixtures/telemetry-redact-rule.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-telemetry-otel/tests/loader_composition_e2e.rs"
+      ],
+      "evidence": [
+        "compiled Rust global telemetry-record waterfall recursively replaces the fixture credential only in the exported copy",
+        "real Loader composition proves the OTLP wire is redacted while canonical JSONL retains the original bytes"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/time-context-driver.ts",
@@ -44897,7 +44918,15 @@
     {
       "source": "packages/client/ui-settings-general/src/client/GeneralSection.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/wasm.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-settings-general suite: 44/44",
+        "live Rust/WASM component renders the settings.general.item seat inside the exact section shell"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/client/SettingsDocumentAction.module.css",
@@ -44913,7 +44942,17 @@
     {
       "source": "packages/client/ui-settings-general/src/client/SettingsDocumentAction.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/document.rs",
+        "crates/client-ui-settings-general/src/wasm.rs",
+        "crates/client-ui-settings-general/tests/document_projection_parity.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "native controller preserves idle/loading/ready/unavailable, stale-read fencing, collapsed opens, diagnostics, reconnect refresh, and stable snapshots",
+        "live Rust/WASM action loads metadata through useEffect, withholds absent documents, renders localized action state, and invokes the Host-owned open operation"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/client/SettingsRoot.module.css",
@@ -44929,7 +44968,16 @@
     {
       "source": "packages/client/ui-settings-general/src/client/SettingsRoot.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/projection.rs",
+        "crates/client-ui-settings-general/src/wasm.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM shell covers trigger/rail state, accessible dialog chrome, ordered navigation, active-section switching, close paths, icons, onboarding order/completion/openSection, and empty-ledger behavior",
+        "reference-stable Rust projections preserve Slot and locale revision boundaries"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/client/chrome.module.css",
@@ -44945,37 +44993,90 @@
     {
       "source": "packages/client/ui-settings-general/src/client/chrome.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/wasm.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM trigger selects the exact wide/rail icons and label visibility; header and close seats render active-locale text"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/wasm.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM apply registers the shell plus five ownerless seats, six child declarations, zh/en dictionaries, loopback-only document action, connection reset refresh, and exact inject list"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/lib.rs",
+        "crates/client-ui-settings-general/tests/document_projection_parity.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "Rust pins the exact balanced six-key Chinese and English dictionaries and registers them through the live browser locale boundary"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/client/settings-document-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/document.rs",
+        "crates/client-ui-settings-general/src/wasm.rs",
+        "crates/client-ui-settings-general/tests/document_projection_parity.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "five native controller cases plus live JS-bound store coverage preserve metadata/open response mapping, subscription identity, cancellation generations, and reconnect laziness"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/client/shell-contract.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/projection.rs",
+        "crates/client-ui-settings-general/src/wasm.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM and generated declarations preserve exact section/onboarding row fields, injected hook sources, shell render seats, and root owner share"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/data/styles.css",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM embeds the renamed compiled stylesheet directly; no CSS-module ambient runtime remains"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/host.rs",
+        "crates/client-ui-settings-general/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "two Rust Host cases preserve optional settings injection, ui-onboarding schema registration, validation, and fiber-scoped teardown"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/src/invariant.ts",
@@ -44994,37 +45095,84 @@
     {
       "source": "packages/client/ui-settings-general/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source suite: 44/44",
+        "three live Node/WASM cases cover exact seats, dictionaries, loopback document action, projection sources, and the compiled Slot injection shape; the Slot core independently pins stale-disposer HMR recovery"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/tests/components.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM component trees pin wide/rail chrome, translated labels, General item rendering, document availability, open action, and failure-capable state owner"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/tests/host.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "Rust Host plugin registers and disposes the durable ui-onboarding namespace with the exact optional-string schema"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned-source invariant catalog differential retains the exact @seekdeep-ai/seekdeep-client-ui-settings-general no-op registration"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/tests/settings-document-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/tests/document_projection_parity.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "five native async controller cases plus live WASM store/action cover every source metadata, stale settlement, collapsed-open, and reconnect branch"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/tests/settings-root.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "live WASM interaction harness drives trigger, modal, active nav, header close, onboarding completion/openSection, and Escape teardown against the compiled component functions"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/tests/shell.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-general/src/projection.rs",
+        "crates/client-ui-settings-general/tests/document_projection_parity.rs",
+        "crates/client-ui-settings-general/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "native projections and live WASM apply preserve child declaration specs, ordered section/onboarding ledgers, reference-stable snapshots, and shell registration lifecycle"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/tsconfig.json",
@@ -45040,7 +45188,15 @@
     {
       "source": "packages/client/ui-settings-general/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-settings-general/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask tests pin module materialization externals and public declarations",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings-general bundle emits the optimized synchronous Rust/WASM classic package"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/README.i18n.yaml",
@@ -66999,15 +67155,16 @@
     {
       "source": "packages/session/session-telemetry-otel/tests/loader-composition.e2e.ts",
       "kind": "test",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        "crates/session-telemetry-otel/tests/native_otlp.rs"
+        "crates/session-telemetry-otel/tests/native_otlp.rs",
+        "crates/session-telemetry-otel/tests/loader_composition_e2e.rs"
       ],
       "evidence": [
         "pinned source 37200a934324dd7167ec8a8d3ac1fd01e2239909: ./node_modules/.bin/vitest run --config vitest.e2e.config.ts packages/session/session-telemetry-otel/tests/loader-composition.e2e.ts (3 passed)",
-        "cargo test --locked --offline -p seekdeep-session-telemetry-otel --all-features --test native_otlp (3 passed)"
-      ],
-      "note": "the native backend and real OTLP wire are covered, but the target still needs the assembled Rust headless config path with a mounted redaction rule, mocked-model/tool turn, canonical JSONL comparison, feedback-only suffix, and disabled warning"
+        "Rust assembled Loader differential: FULL, FEEDBACK_ONLY, and DISABLED modes through the native OTLP collector (3 passed)",
+        "the Rust e2e pins real Bash tool events, deployment redaction versus canonical JSONL, feedback-bounded prefixes, private suffix exclusion, and the stable disabled warning"
+      ]
     },
     {
       "source": "packages/session/session-telemetry-otel/tests/otel.spec.ts",

@@ -29,6 +29,18 @@ flate2.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
+regex.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-spine-demo = { path = "../agent-spine-demo" }
+seekdeep-app-boot = { path = "../app-boot" }
+seekdeep-bash-local = { path = "../bash-local" }
+seekdeep-command-feedback = { path = "../command-feedback" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-loader-smoke = { path = "../loader-smoke" }
+seekdeep-session-checkpoint-policy = { path = "../session-checkpoint-policy" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
 tempfile.workspace = true
 
 [lints]
