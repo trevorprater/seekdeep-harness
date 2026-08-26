@@ -80811,12 +80811,34 @@
     {
       "source": "scripts/verify-md-links.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/md_links_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/verify-md-links.spec.ts (pinned source: 10 passed)",
+        "cargo test -p seekdeep-repository-tools --test md_links_parity --all-features (11 passed, including all 10 source acceptance paths plus malformed-percent whole-component fallback)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/verify-md-links.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/md_links.rs",
+        "crates/repository-tools/src/bin/verify-md-links.rs",
+        "crates/repository-tools/tests/md_links_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-md-links.ts (pinned source: 1895 files checked, all relative cross-links and fragments resolve)",
+        "cargo test -p seekdeep-repository-tools --test md_links_parity --all-features (11 passed for GitHub slugs, occupied duplicate suffixes, explicit anchors, AST scope, exact case, target precedence, query handling, and decodeURIComponent behavior)",
+        "pnpm --silent run verify-md-links (Rust target fails closed with 2310 current target-corpus violations rather than hiding links to not-yet-ported files)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the checker implementation is source-faithful and verified; its live target corpus remains intentionally red until the linked pending source surfaces and Rust-path documentation replacements are completed, so no repository-wide link-conformance claim is made"
     },
     {
       "source": "scripts/verify-md-wrap.ts",

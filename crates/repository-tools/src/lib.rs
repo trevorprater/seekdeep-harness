@@ -15,6 +15,7 @@ pub mod doc_typecheck_paths;
 /// Standing-document word-budget policy.
 pub mod document_budgets;
 pub mod markdown_util;
+pub mod md_links;
 pub mod md_wrap;
 /// First-party SeekDeep package license policy.
 pub mod package_licenses;

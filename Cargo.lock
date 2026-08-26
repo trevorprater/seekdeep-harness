@@ -6667,6 +6667,7 @@ dependencies = [
  "hex",
  "indexmap 2.14.0",
  "markdown",
+ "percent-encoding",
  "regex",
  "serde_json",
  "serde_yml",
