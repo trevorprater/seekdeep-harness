@@ -80376,7 +80376,18 @@
     {
       "source": "scripts/release/families.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/release_families.rs",
+        "crates/repository-tools/tests/release_families_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/release/families.spec.ts -t 'release families' (pinned source family model: 8 passed)",
+        "cargo test -p seekdeep-repository-tools --test release_families_parity --all-features (7 passed for tags, versions, dependency order, cycles, payloads, installed entry, family ids, tarball names, and live target discovery/order)",
+        "cargo clippy -p seekdeep-repository-tools --test release_families_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the workflow-facing family id, tag prefix, workspace root identity, package scope, installed entry, and diagnostics apply the required dsh to seekdeep rename; vendor family semantics remain unchanged"
     },
     {
       "source": "scripts/release/pack.ts",
