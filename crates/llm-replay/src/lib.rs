@@ -207,8 +207,10 @@ pub fn parse_session_header(text: &str) -> anyhow::Result<(String, f64, usize)> 
             .unwrap_or(0.0),
         facts
             .get("seedLength")
-            .and_then(Value::as_u64)
-            .and_then(|value| usize::try_from(value).ok())
+            .and_then(Value::as_f64)
+            .filter(|value| value.is_finite() && *value > 0.0)
+            .map(f64::trunc)
+            .and_then(|value| format!("{value:.0}").parse::<usize>().ok())
             .unwrap_or(0),
     ))
 }
@@ -1127,6 +1129,14 @@ mod tests {
             ("s".to_owned(), 7.0, 2)
         );
         assert_eq!(parse_session_header("").unwrap(), (String::new(), 0.0, 0));
+        assert_eq!(
+            parse_session_header(r#"{"seedLength":2.9}"#).unwrap(),
+            (String::new(), 0.0, 2)
+        );
+        assert_eq!(
+            parse_session_header(r#"{"seedLength":-1}"#).unwrap(),
+            (String::new(), 0.0, 0)
+        );
     }
 
     #[test]
