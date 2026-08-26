@@ -133,6 +133,12 @@ pub fn archived_agent_note_path(path: &str) -> bool {
     is_archived_agent_note_path(path)
 }
 
+/// Matches one repository glob against one slash-separated path.
+#[must_use]
+pub fn repository_glob_matches(pattern: &str, candidate: &str) -> bool {
+    glob_matches(pattern, candidate)
+}
+
 fn glob_matches(pattern: &str, candidate: &str) -> bool {
     let (pattern, candidate) = if cfg!(any(target_os = "macos", windows)) {
         (pattern.to_ascii_lowercase(), candidate.to_ascii_lowercase())

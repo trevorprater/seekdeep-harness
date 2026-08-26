@@ -80371,7 +80371,19 @@
     {
       "source": "scripts/release/families.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/release_families_parity.rs",
+        "crates/repository-tools/tests/release_bump_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/release/families.spec.ts -t 'release families' (8 passed)",
+        "pnpm exec vitest run scripts/release/families.spec.ts -t 'vendored version baseline|version precedence|payload change judgement' (9 passed)",
+        "cargo test -p seekdeep-repository-tools --test release_families_parity --all-features (7 consolidated family cases passed)",
+        "cargo test -p seekdeep-repository-tools --test release_bump_parity --all-features (4 consolidated version/payload cases passed)",
+        "cargo clippy -p seekdeep-repository-tools --test release_bump_parity --all-features -- -D warnings"
+      ],
+      "note": "source dsh identities in family fixtures are intentionally asserted as seekdeep identities in the Rust target; vendor semantics are unchanged"
     },
     {
       "source": "scripts/release/families.ts",

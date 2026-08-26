@@ -33,6 +33,7 @@ pub mod project_reference_faces;
 pub mod public_repository_links;
 /// Static and packed publication-payload policy.
 pub mod publication_payload;
+pub mod release_bump;
 pub mod release_families;
 pub mod release_pack;
 pub mod release_process;
