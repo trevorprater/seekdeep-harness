@@ -81,7 +81,7 @@
     "verify-archived-agent-notes": "cargo run --quiet --package seekdeep-repository-tools --bin verify-archived-agent-notes --",
     "verify-type-equiv": "tsx scripts/verify-type-equiv.ts",
     "verify-skill-invocation-metadata": "cargo run --quiet --package seekdeep-repository-tools --bin verify-skill-invocation-metadata",
-    "verify-translation-prompt": "tsx scripts/verify-translation-prompt.ts",
+    "verify-translation-prompt": "cargo run --quiet --package seekdeep-repository-tools --bin verify-translation-prompt --",
     "verify-translation-pairing": "cargo run --quiet --package seekdeep-repository-tools --bin verify-translation-pairing --",
     "resolve-translation-pairing-conflicts": "tsx scripts/merge-translation-pairing.ts --resolve",
     "gen-translation-brief": "tsx scripts/gen-translation-brief.ts",

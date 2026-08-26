@@ -45,5 +45,7 @@ pub mod translation_pairing;
 pub mod translation_pairing_command;
 pub mod translation_pairing_git;
 pub mod translation_pairing_record;
+pub mod translation_prompt;
+pub mod translation_prompt_verifier;
 /// Vendored package lockfile link-integrity policy.
 pub mod vendored_links;

@@ -25,7 +25,7 @@
         ".agents/notes/README.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "target/debug/verify-translation-pairing (current English/Chinese hashes and structure consistent)"
       ]
     },
     {
@@ -80583,7 +80583,8 @@
         "scripts/snapshots/translation-prompt-v4/request-response.expected.json"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "SEEKDEEP_SNAPSHOT=record cargo test -p seekdeep-repository-tools --test translation_prompt_verifier_parity --all-features regenerated the target request/response snapshot from the Rust verifier",
+        "cargo test -p seekdeep-repository-tools --test translation_prompt_verifier_parity --all-features rechecked the committed bytes without record mode"
       ]
     },
     {
@@ -80712,17 +80713,43 @@
     {
       "source": "scripts/translation-prompt.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/translation_prompt_verifier_parity.rs",
+        "scripts/snapshots/translation-prompt-v4/request-response.expected.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-translation-prompt.ts --snapshot | cmp - scripts/snapshots/translation-prompt-v4/request-response.expected.json (pinned source byte-exact snapshot passed)",
+        "cargo test -p seekdeep-repository-tools --test translation_prompt_verifier_parity --all-features (target runnable snapshot and live verifier: 2 passed)"
+      ]
     },
     {
       "source": "scripts/translation-prompt.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/translation_prompt_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/translation-prompt.spec.ts (pinned source: 17 passed)",
+        "cargo test -p seekdeep-repository-tools --test translation_prompt_parity --all-features (9 consolidated cases passed across every source behavior family)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/translation-prompt.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/translation_prompt.rs",
+        "crates/repository-tools/tests/translation_prompt_parity.rs"
+      ],
+      "evidence": [
+        "pinned source translation-prompt.spec.ts: 17 passed for direction, placeholders, examples, response grammar, switchers, frontmatter, and filename failures",
+        "cargo test -p seekdeep-repository-tools --test translation_prompt_parity --all-features (9 consolidated Rust cases passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/ts-project.ts",
@@ -81197,7 +81224,21 @@
     {
       "source": "scripts/verify-translation-prompt.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/translation_prompt_verifier.rs",
+        "crates/repository-tools/src/bin/verify-translation-prompt.rs",
+        "crates/repository-tools/tests/translation_prompt_verifier_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-translation-prompt.ts (pinned source live verifier passed)",
+        "pnpm exec tsx scripts/verify-translation-prompt.ts --snapshot | cmp - scripts/snapshots/translation-prompt-v4/request-response.expected.json (pinned source snapshot exact)",
+        "pnpm --silent run verify-translation-prompt (live Rust target verifier passed)",
+        "cargo test -p seekdeep-repository-tools --test translation_prompt_verifier_parity --all-features (2 passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/verify-type-equiv.ts",
