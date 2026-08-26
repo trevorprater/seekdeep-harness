@@ -80759,7 +80759,21 @@
     {
       "source": "scripts/verify-client-domain-graph.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/client_domain_graph.rs",
+        "crates/repository-tools/src/bin/verify-client-domain-graph.rs",
+        "crates/repository-tools/tests/client_domain_graph_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-client-domain-graph.ts (pinned source detector reports 27 current source-corpus violations with exact file/import/reason diagnostics)",
+        "cargo test -p seekdeep-repository-tools --test client_domain_graph_parity --all-features (5 passed for contract/same/top/outside allowances, sibling and nonassembly failures, assembly files, legacy/import-form scope, and live target)",
+        "pnpm --silent run verify-client-domain-graph (Rust target: client domain layering clean)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the Rust gate preserves the source detector for any retained TypeScript compatibility client trees; Rust/WASM production domains are additionally isolated by crate/module visibility rather than fabricated src/client TypeScript directories, and no claim is made that the pinned source corpus itself passes its newer gate"
     },
     {
       "source": "scripts/verify-config-source-ownership.spec.ts",

@@ -5,6 +5,7 @@ pub mod agent_note_tree;
 /// Frozen Agent Note archive triplets, seals, and append-only verification.
 pub mod archived_agent_notes;
 pub mod clean;
+pub mod client_domain_graph;
 /// Shipped configuration credential/endpoint source-ownership policy.
 pub mod config_source_ownership;
 /// Cordis Loader configuration discovery.

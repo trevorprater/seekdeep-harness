@@ -100,7 +100,7 @@
     "verify-cordis-config": "tsx scripts/verify-cordis-config.ts",
     "rescope-vendor": "tsx scripts/rescope-vendor.ts",
     "rescope-vendor:check": "tsx scripts/rescope-vendor.ts --check",
-    "verify-client-domain-graph": "tsx scripts/verify-client-domain-graph.ts",
+    "verify-client-domain-graph": "cargo run --quiet --package seekdeep-repository-tools --bin verify-client-domain-graph",
     "gen-cordis-catalog": "tsx scripts/gen-cordis-catalog.ts",
     "verify-cordis-catalog": "tsx scripts/gen-cordis-catalog.ts --check",
     "gen-cordis-api": "tsx scripts/gen-cordis-api.ts",
