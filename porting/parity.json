@@ -80821,7 +80821,20 @@
     {
       "source": "scripts/verify-md-wrap.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/md_wrap.rs",
+        "crates/repository-tools/src/bin/verify-md-wrap.rs",
+        "crates/repository-tools/tests/md_wrap_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-md-wrap.ts (pinned source: 1858 files checked, no hard-wrapped prose paragraphs)",
+        "cargo test -p seekdeep-repository-tools --all-features (repository-tools suite passed, including 3 md_wrap_parity fixtures for paragraph/list structure, VitePress masking, exact diagnostics, and JavaScript UTF-16 truncation)",
+        "pnpm --silent run verify-md-wrap (Rust target: 1799 files checked, no hard-wrapped prose paragraphs)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/verify-mermaid.ts",
