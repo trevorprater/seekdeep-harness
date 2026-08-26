@@ -41,13 +41,13 @@ pub struct ToolCallRunData {
     pub step: Value,
     /// Stream block index.
     pub index: Value,
+    /// Timestamp gaps between members.
+    pub dt: Vec<i64>,
     /// Provider call identity.
     pub id: String,
     /// Uniform optional tool name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Timestamp gaps between members.
-    pub dt: Vec<i64>,
     /// Exact raw argument fragments.
     pub args: Vec<String>,
 }
@@ -518,6 +518,37 @@ mod tests {
             .map(|event| serde_json::to_value(event).expect("event JSON"))
             .collect::<Vec<_>>();
         assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn tool_call_row_serializes_in_the_source_canonical_field_order() {
+        let events = ["a", "b", "c"]
+            .into_iter()
+            .enumerate()
+            .map(|(offset, arguments_delta)| SessionEvent {
+                event_type: "assistant/chunk".to_owned(),
+                seq: u64::try_from(offset).unwrap(),
+                time: 10 + i64::try_from(offset).unwrap(),
+                data: json!({
+                    "turn": 1,
+                    "step": 1,
+                    "chunk": {
+                        "type": "tool-call-delta",
+                        "index": 0,
+                        "id": "call",
+                        "name": "bash",
+                        "argumentsDelta": arguments_delta
+                    }
+                }),
+                source_event_seqs: None,
+                surface_op: None,
+                ignorable: None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            serde_json::to_string(&pack_chunk_runs(&events)[0]).unwrap(),
+            r#"{"type":"tool-call-chunks","seq0":0,"time0":10,"data":{"turn":1,"step":1,"index":0,"dt":[1,1],"id":"call","name":"bash","args":["a","b","c"]}}"#
+        );
     }
 
     #[test]

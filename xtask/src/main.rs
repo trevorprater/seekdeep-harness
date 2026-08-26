@@ -36,6 +36,24 @@ enum Command {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
     },
+    /// Verify Mach-O deployment targets do not exceed the runtime wheel's macOS claim.
+    MacosDeploymentTarget {
+        /// Runtime executable and any required native helper sidecars.
+        #[arg(required = true)]
+        executables: Vec<PathBuf>,
+        /// Wheel platform tag; defaults from the checked-in platform manifest.
+        #[arg(long)]
+        platform_tag: Option<String>,
+    },
+    /// Check or rewrite canonical packed-row Session JSONL fixtures.
+    SessionFixtureLayout {
+        /// Rewrite noncanonical fixtures in place.
+        #[arg(long)]
+        rewrite: bool,
+        /// Repository root; defaults to this workspace.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
     /// Verify that every source surface has explicit parity evidence.
     Parity {
         /// Source checkout recorded in `SOURCE_SNAPSHOT`.
@@ -101,6 +119,19 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Docs => docs(),
         Command::Inventory { source } => inventory(&source),
+        Command::MacosDeploymentTarget {
+            executables,
+            platform_tag,
+        } => macos_deployment_target(&executables, platform_tag.as_deref()),
+        Command::SessionFixtureLayout { rewrite, root } => {
+            let root = root.unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .expect("xtask has a workspace parent")
+                    .to_owned()
+            });
+            xtask::session_fixture_layout::run(&root, rewrite)
+        }
         Command::Parity { source, scope } => parity(&source, scope),
         Command::PersistenceCatalog { source, check } => {
             xtask::persistence_catalog::run(Path::new("."), &source, check)
@@ -120,6 +151,37 @@ fn main() -> anyhow::Result<()> {
             watch,
         } => wasm_package(&package, &artifact, &module_id, &out_dir, watch),
     }
+}
+
+fn macos_deployment_target(
+    executables: &[PathBuf],
+    platform_tag: Option<&str>,
+) -> anyhow::Result<()> {
+    let platform_tag = match platform_tag {
+        Some(platform_tag) => platform_tag.to_owned(),
+        None => default_macos_platform_tag()?,
+    };
+    for (path, version) in
+        xtask::macos_deployment::validate_deployment_targets(executables, &platform_tag)?
+    {
+        println!(
+            "{}: macOS {} <= {platform_tag}",
+            path.display(),
+            version.render()
+        );
+    }
+    Ok(())
+}
+
+fn default_macos_platform_tag() -> anyhow::Result<String> {
+    let manifest_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../python/sdk-runtime/platforms.json");
+    let manifest: serde_json::Value = serde_json::from_slice(&std::fs::read(manifest_path)?)?;
+    manifest
+        .pointer("/macos-arm64/tag")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow::anyhow!("python runtime platform manifest has no macos-arm64 tag"))
 }
 
 fn wasm_package(
@@ -753,8 +815,8 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        classic_module_bundle, compatibility_declarations, is_generated_package_output,
-        is_localization, watch_snapshot,
+        classic_module_bundle, compatibility_declarations, default_macos_platform_tag,
+        is_generated_package_output, is_localization, watch_snapshot,
     };
 
     #[test]
@@ -918,5 +980,10 @@ mod tests {
             assert!(declarations.contains(expected));
         }
         assert!(compatibility_declarations("other").is_empty());
+    }
+
+    #[test]
+    fn macos_deployment_default_comes_from_the_runtime_platform_manifest() {
+        assert_eq!(default_macos_platform_tag().unwrap(), "macosx_14_0_arm64");
     }
 }

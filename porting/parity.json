@@ -78479,7 +78479,14 @@
     {
       "source": "python/sdk/tests/test_macos_deployment_target.py",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/macos_deployment.rs"
+      ],
+      "evidence": [
+        "pinned source: uv run --project python/sdk --group test pytest python/sdk/tests/test_macos_deployment_target.py -q (3 passed)",
+        "cargo test -p xtask --lib macos_deployment (4 passed, including the three source cases plus malformed version/tag and padded comparison coverage)"
+      ]
     },
     {
       "source": "python/sdk/tests/test_release_version.py",
@@ -78625,7 +78632,16 @@
     {
       "source": "scripts/check-macos-deployment-target.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/macos_deployment.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust xtask macos-deployment-target owns exact version/tag parsing, newest Mach-O slice selection, otool process errors, zero-padded compatibility comparison, measured output order, and the checked-in platform-manifest default",
+        "cargo clippy -p xtask --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p xtask --no-deps"
+      ]
     },
     {
       "source": "scripts/check-vendor-manifest.sh",
@@ -78987,7 +79003,15 @@
     {
       "source": "scripts/migrate-packed-session-fixtures.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/session_fixture_layout.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask session-fixture-layout --rewrite owns the explicit no-argument mechanical rewrite workflow, prints every changed path, and reports rewritten/inspected counts",
+        "Rust temp-repository test rewrites tracked and unignored-untracked Session fixtures while leaving non-Session JSONL untouched"
+      ]
     },
     {
       "source": "scripts/oxlint-contract.spec.ts",
@@ -79204,17 +79228,42 @@
     {
       "source": "scripts/session-fixture-layout.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/session_fixture_layout.rs"
+      ],
+      "evidence": [
+        "pinned source snapshot config: repository canonical-layout check passed 1/1",
+        "cargo xtask session-fixture-layout: 0 rewrites required, 162 Session fixtures inspected"
+      ]
     },
     {
       "source": "scripts/session-fixture-layout.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/session_fixture_layout.rs",
+        "crates/core/src/chunk_rows.rs"
+      ],
+      "evidence": [
+        "pinned source unit differential: 5/5",
+        "cargo test -p xtask --lib session_fixture_layout (6/6: source matrix plus Git discovery/rewrite)",
+        "cargo test -p seekdeep-core chunk_rows --lib (5/5, including source-canonical tool-call row byte order)"
+      ]
     },
     {
       "source": "scripts/session-fixture-layout.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/session_fixture_layout.rs",
+        "xtask/src/main.rs",
+        "crates/core/src/chunk_rows.rs"
+      ],
+      "evidence": [
+        "Rust preserves the header line byte-for-byte, labels physical-line JSON/storage failures, decodes and losslessly repacks logical events, preserves verbatim nonpacked numeric bytes, proves idempotence, and discovers stable Git JSONL paths",
+        "repository-wide Rust check matches the pinned source snapshot with 162/162 canonical fixtures"
+      ]
     },
     {
       "source": "scripts/slot-walk.ts",
