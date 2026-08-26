@@ -43424,7 +43424,7 @@
       "evidence": [
         "pinned source ui-message-feedback Vitest suite: 65 passed",
         "compiled WASM controls exercise lazy seeding, rating state, note trim/clear/failure behavior, and load/action error precedence",
-        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --target wasm32-unknown-unknown --all-features --test wasm_browser_parity"
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --target wasm32-unknown-unknown --all-features --test wasm_browser_parity"
       ]
     },
     {
@@ -43451,7 +43451,7 @@
       ],
       "evidence": [
         "compiled WASM plugin verifies exact injection list, declaration-aware assistant-actions registration, one controller per Session, warm-only reconnect resync, verb routing, and deterministic disposal/reload ownership",
-        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --target wasm32-unknown-unknown --all-features --test wasm_browser_parity"
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --target wasm32-unknown-unknown --all-features --test wasm_browser_parity"
       ]
     },
     {
@@ -43500,10 +43500,12 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/client-ui-message-feedback/src/lib.rs"
+        "crates/client-ui-message-feedback/src/lib.rs",
+        "xtask/src/main.rs"
       ],
       "evidence": [
         "native parity test invokes the intentionally effect-free Host half",
+        "optimized package build emits and executes the declared effect-free lib/index.js compatibility entry",
         "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-message-feedback --all-features"
       ]
     },
@@ -43513,10 +43515,12 @@
       "status": "verified",
       "targets": [
         "crates/invariants/src/noop.rs",
-        "crates/invariants/src/noop/catalog.rs"
+        "crates/invariants/src/noop/catalog.rs",
+        "xtask/src/main.rs"
       ],
       "evidence": [
         "pinned-source catalog differential: 97 exact no-op invariant descriptors",
+        "optimized package build emits and executes the exact product-renamed invariant compatibility entry and disposer",
         "cargo test -p seekdeep-invariants --all-features",
         "cargo clippy -p seekdeep-invariants --all-targets --all-features -- -D warnings"
       ]
@@ -43579,6 +43583,7 @@
       ],
       "evidence": [
         "package bundle/watch commands target the Rust cdylib and synchronous Client module table",
+        "bundle emits every package.json runtime/type export; Node executes root, invariant, and embedded-WASM Client smokes; strict tsc accepts all declarations without foreign source dependencies",
         "CARGO_INCREMENTAL=0 pnpm --filter @seekdeep-ai/seekdeep-client-ui-message-feedback run bundle",
         "xtask factory/declaration contract test passed"
       ]

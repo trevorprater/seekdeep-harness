@@ -297,7 +297,8 @@ fn wasm_package_once(
     std::fs::write(out_dir.join("client.js"), bundle)?;
     let type_dir = out_dir.join("types/client");
     std::fs::create_dir_all(&type_dir)?;
-    let mut declarations = std::fs::read_to_string(staging.join("client.d.ts"))?;
+    let mut declarations = std::fs::read_to_string(staging.join("client.d.ts"))?
+        .replace("        [Symbol.dispose](): void;\n", "");
     declarations.push_str(&compatibility_declarations(module_id));
     std::fs::write(type_dir.join("index.d.ts"), declarations)?;
     copy_wasm_package_assets(&metadata.workspace_root, module_id, &out_dir)?;
@@ -356,7 +357,7 @@ fn wasm_web_shell_package(
 }
 
 fn client_web_esm_wrapper() -> &'static str {
-    r#"import init, * as wasm from './client.js';
+    r"import init, * as wasm from './client.js';
 import * as React from 'react';
 import * as ReactJsxRuntime from 'react/jsx-runtime';
 import * as ReactDom from 'react-dom';
@@ -398,11 +399,11 @@ export const createSignal = wasm.createSignal;
 export const createLoaderStatusStore = wasm.createLoaderStatusStore;
 export const FIBER_STATE = Object.freeze({ PENDING: 0, LOADING: 1, ACTIVE: 2, FAILED: 3, DISPOSED: 4, UNLOADING: 5 });
 export const STATE_LABELS = Object.freeze({ 0: 'pending', 1: 'loading', 2: 'active', 3: 'failed', 4: 'disposed', 5: 'unloading' });
-"#
+"
 }
 
 fn client_web_esm_declarations() -> &'static str {
-    r#"export { AppWebEntry } from '../client.js';
+    r"export { AppWebEntry } from '../client.js';
 export const AppRoot: Function;
 export const DocumentTitle: Function;
 export const buildRenderApp: typeof import('../client.js').buildRenderApp;
@@ -420,7 +421,7 @@ export interface AppShellService { renderApp(): unknown }
 export type BootSeams = { loadBundle?: Function };
 export type LoaderEntryState = 'pending' | 'loading' | 'active' | 'failed' | 'disposed' | 'unloading';
 export type LoaderStatus = Record<string, LoaderEntryState>;
-"#
+"
 }
 
 fn wasm_watch_snapshot(
@@ -469,12 +470,12 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
     std::fs::write(
         out_dir.join("invariant.js"),
-        r#"const PACKAGE_NAME = '@seekdeep-ai/seekdeep-client-ui-message-feedback';
+        r"const PACKAGE_NAME = '@seekdeep-ai/seekdeep-client-ui-message-feedback';
 export const name = 'client-ui-feedback-invariant';
 export const inject = ['invariants'];
 const install = () => {};
 export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install));
-"#,
+",
     )?;
     let type_dir = out_dir.join("types");
     std::fs::create_dir_all(&type_dir)?;
@@ -484,10 +485,12 @@ export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME
     )?;
     std::fs::write(
         type_dir.join("invariant.d.ts"),
-        r#"import type { Context } from '@seekdeep-ai/cordis';
+        r#"export interface InvariantContext {
+  invariants: { register(packageName: string, install: () => void): () => void };
+}
 export declare const name = "client-ui-feedback-invariant";
 export declare const inject: string[];
-export declare const apply: (ctx: Context) => Promise<() => void>;
+export declare const apply: (ctx: InvariantContext) => Promise<() => void>;
 "#,
     )?;
     Ok(())
@@ -1449,6 +1452,7 @@ mod tests {
                 "@seekdeep-ai/seekdeep-client-ui-message-feedback",
             ),
             ("types/index.d.ts", "function apply(): void"),
+            ("types/invariant.d.ts", "interface InvariantContext"),
             ("types/invariant.d.ts", "Promise<() => void>"),
         ] {
             let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
