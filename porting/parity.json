@@ -44343,7 +44343,17 @@
     {
       "source": "packages/client/ui-primitives/src/SearchBlock.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_blocks.rs",
+        "crates/client-ui-primitives/tests/wasm_search_block_parity.rs"
+      ],
+      "evidence": [
+        "pinned source SearchBlock suite: 17 tests passed",
+        "compiled WASM tests pin grouped matches and flat paths, retained/pre-cap summaries, empty placeholders, per-file controlled collapse, header-as-row cap arithmetic, head/tail/default caps, restored tail ownership headers without exceeding the cap, full structured copy independent of collapse/cap, path copy, accepted/refused feedback, duplicate suppression/reset, class forwarding, and data-search kind",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_search_block_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/StateDot.module.css",
@@ -45345,7 +45355,14 @@
     {
       "source": "packages/client/ui-primitives/tests/search-block.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_search_block_parity.rs"
+      ],
+      "evidence": [
+        "pinned source SearchBlock suite: 17 tests passed",
+        "three grouped live WASM tests cover every source shape, summary, empty, collapse, cap, tail attribution, copy, refusal, class, and kind assertion"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/state-dot.client.spec.tsx",
