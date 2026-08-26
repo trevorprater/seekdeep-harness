@@ -80392,7 +80392,20 @@
     {
       "source": "scripts/release/pack.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/release_pack.rs",
+        "crates/repository-tools/src/bin/release-pack.rs",
+        "crates/repository-tools/tests/release_pack_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/release/pack.ts --family vendor --out <temporary directory> (pinned source: 9 real vendor tarballs packed and ordered; temporary output moved to Trash)",
+        "cargo test -p seekdeep-repository-tools --test release_pack_parity --all-features (2 passed with real gzip tarballs for dependency order, destination cleanup, payload validation, order file, and missing output)",
+        "cargo clippy -p seekdeep-repository-tools --test release_pack_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "family identity and usage apply the required dsh to seekdeep rename; this is a credential-free pack boundary and no registry or publish operation was performed"
     },
     {
       "source": "scripts/release/process.ts",
