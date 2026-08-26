@@ -38,6 +38,7 @@ pub mod release_pack;
 pub mod release_process;
 pub mod release_tarball;
 pub mod release_verify;
+pub mod release_verify_packed_install;
 /// Shared repository glob discovery and line-oriented reference scanning.
 pub mod repo_files;
 pub mod run_oxlint;

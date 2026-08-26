@@ -131,7 +131,7 @@
     "release:vendor": "tsx scripts/release/bump.ts --family vendor",
     "release:verify": "cargo run --quiet --package seekdeep-repository-tools --bin release-verify --",
     "release:pack": "cargo run --quiet --package seekdeep-repository-tools --bin release-pack --",
-    "release:verify-packed-install": "tsx scripts/release/verify-packed-install.ts",
+    "release:verify-packed-install": "cargo run --quiet --package seekdeep-repository-tools --bin release-verify-packed-install --",
     "release:publish": "tsx scripts/release/publish.ts",
     "seekdeep": "cargo run --quiet --package seekdeep --",
     "demo:code-mode": "node scripts/demo-code-mode.mjs",

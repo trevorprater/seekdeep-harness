@@ -80447,7 +80447,20 @@
     {
       "source": "scripts/release/verify-packed-install.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/release_verify_packed_install.rs",
+        "crates/repository-tools/src/bin/release-verify-packed-install.rs",
+        "crates/repository-tools/tests/release_verify_packed_install_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/release/verify-packed-install.ts --family vendor --from /does/not/exist (pinned source confirms no-executable short-circuit before directory access)",
+        "cargo test -p seekdeep-repository-tools --test release_verify_packed_install_parity --all-features (5 passed for no-entry, empty/missing tarballs, sanitized environment, installed version, and mismatch)",
+        "cargo clippy -p seekdeep-repository-tools --test release_verify_packed_install_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "consumer package/home identities apply the required dsh to seekdeep rename; tests inject the process runner, no npm install or registry access was performed, and the real command remains available for packed release artifacts"
     },
     {
       "source": "scripts/release/verify.ts",
