@@ -80995,12 +80995,33 @@
     {
       "source": "scripts/verify-built-package-invariants.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/built_package_invariants.rs",
+        "crates/repository-tools/src/bin/verify-built-package-invariants.rs",
+        "crates/repository-tools/tests/built_package_invariants_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/verify-built-package-invariants.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-repository-tools --test built_package_invariants_parity --all-features (3 passed with plain Node for self-reference, default/broken export, and unstaged chunk behavior)",
+        "cargo clippy -p seekdeep-repository-tools --test built_package_invariants_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "Rust owns manifest discovery and the staged publication view; the tiny generated probe uses plain Node only to observe JavaScript self-reference and Loader namespace behavior. The live target remains red because vendor/loader/lib/index.js is not yet emitted"
     },
     {
       "source": "scripts/verify-built-package-invariants.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/built_package_invariants_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/verify-built-package-invariants.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-repository-tools --test built_package_invariants_parity --all-features (Rust target: 3 passed against real staged packages and plain Node)",
+        "cargo clippy -p seekdeep-repository-tools --test built_package_invariants_parity --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/verify-client-domain-graph.ts",
