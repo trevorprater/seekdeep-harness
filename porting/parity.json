@@ -36659,9 +36659,10 @@
         "pnpm --silent run change-scope --base origin/agent/rust-parity-port-progress (live Rust command emitted the versioned repository report)",
         "pnpm --silent run verify-agent-note-classification and verify-agent-note-format delegate to verified Rust binaries",
         "pnpm --silent run verify-archived-agent-notes delegates to the verified append-only Rust verifier",
-        "pnpm --silent run verify-doc-refs delegates to the verified Rust repository scanner"
+        "pnpm --silent run verify-doc-refs delegates to the verified Rust repository scanner",
+        "pnpm --silent run verify-public-repository-links delegates to the verified Rust tracked-file policy"
       ],
-      "note": "root package metadata preserves source command names while Rust owns change-scope, documentation references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
+      "note": "root package metadata preserves source command names while Rust owns change-scope, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
     {
       "source": "packages/AGENTS.md",
@@ -79097,12 +79098,32 @@
     {
       "source": "scripts/verify-public-repository-links.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/public_repository_links_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/verify-public-repository-links.spec.ts (pinned source: 2 passed)",
+        "cargo test -p seekdeep-repository-tools --test public_repository_links_parity --all-features (2 passed, including NFKC fullwidth coverage)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/verify-public-repository-links.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/public_repository_links.rs",
+        "crates/repository-tools/src/bin/verify-public-repository-links.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm run verify-public-repository-links (pinned source: tracked files reference no unavailable repository)",
+        "cargo test -p seekdeep-repository-tools --test public_repository_links_parity --all-features (2 passed)",
+        "pnpm --silent run verify-public-repository-links (Rust target: tracked files reference no unavailable repository)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/verify-runtime-closure.ts",
