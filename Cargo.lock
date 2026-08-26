@@ -5049,6 +5049,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-ui-layout"
+version = "0.1.0-rc.5"
+dependencies = [
+ "js-sys",
+ "seekdeep-client-runtime",
+ "seekdeep-cordis",
+ "serde",
+ "serde_json",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-client-ui-settings"
 version = "0.1.0-rc.5"
 dependencies = [

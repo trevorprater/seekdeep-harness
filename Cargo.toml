@@ -25,6 +25,7 @@ members = [
   "crates/client-locale",
   "crates/client-schema-form",
   "crates/client-ui-cordis",
+  "crates/client-ui-layout",
   "crates/client-ui-settings",
   "crates/client-ui-settings-general",
   "crates/client-ui-sidebar",

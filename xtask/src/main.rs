@@ -404,6 +404,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiSettingsGeneral(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-web-react')); Object.assign({global}, {{ apply: {global}.applyClientUiSettingsGeneral, inject: ['slots', 'locale', 'connection'], SettingsDocumentStore: {global}.__SettingsDocumentStore }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
+        return format!(
+            "require => {{ {global}.configureClientUiLayout(require('react'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiLayout, inject: ['slots', 'theme'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-sidebar" {
         return format!(
             "require => {{ {global}.configureClientUiSidebar(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSidebar, inject: ['slots', 'layout', 'sessions', 'workspaces', 'locale'] }}); return {global}; }}"
@@ -491,6 +496,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
 "
         .to_owned();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
+        return ui_layout_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-sidebar" {
         return ui_sidebar_declarations();
     }
@@ -572,6 +580,34 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps };
     'sidebar.settings': { kind: 'single'; scope: 'root'; owner: SidebarSettingsOwnerProps };
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps };
+  }
+}
+"
+    .to_owned()
+}
+
+fn ui_layout_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiLayout;
+export const inject: readonly ['slots', 'theme'];
+export const LayoutController: typeof wasm_bindgen.LayoutController;
+export interface ILayout {
+  toggleSidebar(): void;
+  openDetails(): void;
+  closeDetails(): void;
+}
+export interface SidebarOwnerProps { collapsed: boolean; width: number }
+export interface ConvOwnerProps {}
+export interface DetailsOwnerProps {}
+declare module '@seekdeep-ai/cordis' {
+  interface Context { layout: ILayout }
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface SlotMap {
+    sidebar: { kind: 'single'; scope: 'root'; owner: SidebarOwnerProps };
+    conversation: { kind: 'single'; scope: 'session-maybe'; owner: ConvOwnerProps };
+    details: { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps };
+    'shell.overlay': { kind: 'list'; scope: 'root' };
   }
 }
 "
@@ -1058,6 +1094,36 @@ mod tests {
             "'sidebar.workspaces'",
             "'sidebar.settings'",
             "'sidebar.footer.action'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+    }
+
+    #[test]
+    fn ui_layout_bundle_configures_runtime_and_public_shell_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_layout_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-layout",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiLayout(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-runtime/client')",
+            "apply: __seekdeep_client_ui_layout_wasm.applyClientUiLayout",
+            "inject: ['slots', 'theme']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-layout");
+        for expected in [
+            "LayoutController: typeof wasm_bindgen.LayoutController",
+            "interface ILayout",
+            "interface SidebarOwnerProps",
+            "interface Context { layout: ILayout }",
+            "scope: 'session-maybe'",
+            "'shell.overlay'",
         ] {
             assert!(declarations.contains(expected), "missing {expected:?}");
         }

@@ -43141,42 +43141,113 @@
     {
       "source": "packages/client/ui-layout/src/client/AppFrame.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/src/wasm.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "pinned source layout suite passed 58/58",
+        "live Rust/WASM AppFrame keeps every column and child slot mounted, applies exact track strings and collapsed attributes, closes details on real Session changes, preserves hidden preferences for blank or absent Sessions, and restores concessions after widening",
+        "live pointer cases pin capture guards, rendered-width drag bases, leftward details growth, one-frame move coalescing, pending-frame cancellation, final commit, and drag-state attributes"
+      ]
     },
     {
       "source": "packages/client/ui-layout/src/client/columns.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/src/columns.rs",
+        "crates/client-ui-layout/tests/layout_parity.rs"
+      ],
+      "evidence": [
+        "pure Rust cases pin JavaScript rounding, every contract constant, preferred-fit and seam behavior, details shrink and auto-close, sidebar non-concession, degenerate viewports, and pure recovery"
+      ]
     },
     {
       "source": "packages/client/ui-layout/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/src/lib.rs",
+        "crates/client-ui-layout/src/wasm.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM apply provides ctx.layout and atomically registers root, its four child declarations, the exclusive transient store, and the action injection hook",
+        "theme presentation is a separately reversible effect; registration failure rolls back the provided service",
+        "generated declarations retain LayoutController, ILayout, Cordis Context, owner shares, and exact SlotMap scopes"
+      ]
     },
     {
       "source": "packages/client/ui-layout/src/client/service.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/src/service.rs",
+        "crates/client-ui-layout/src/wasm.rs",
+        "crates/client-ui-layout/tests/layout_parity.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "native and live WASM controllers fail with the exact unwired diagnostic, forward only the three public actions, and replace stale root-entry action sets on reattachment"
+      ]
     },
     {
       "source": "packages/client/ui-layout/src/client/stores.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/src/state.rs",
+        "crates/client-ui-layout/src/wasm.rs",
+        "crates/client-ui-layout/tests/layout_parity.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "Rust LayoutState and the compiled defineStore declaration preserve the exact initial shape and complete action set",
+        "tests pin independent transient instances, clamped drag writes, forgotten wide close widths, narrow override semantics, breakpoint reset, details default/open preservation, and absence of persistence"
+      ]
     },
     {
       "source": "packages/client/ui-layout/src/client/theme-presenter.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/src/service.rs",
+        "crates/client-ui-layout/src/wasm.rs",
+        "crates/client-ui-layout/tests/layout_parity.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM theme cases pin root color-scheme, dark-body selection by resolved colorScheme, exact token replacement, one stable computed-background meta node, event following, owned-only retraction, listener removal, and disposal",
+        "native token-ledger cases prove prior-name replacement and final draining without touching foreign styles"
+      ]
     },
     {
       "source": "packages/client/ui-layout/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/data/styles.css",
+        "crates/client-ui-layout/src/wasm.rs"
+      ],
+      "evidence": [
+        "CSS-module locals are compiled into explicit seekdeep-layout class names owned by the Rust/WASM component",
+        "native and wasm32 strict Clippy compile every class-bearing render path without a TypeScript CSS-module shim"
+      ]
     },
     {
       "source": "packages/client/ui-layout/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/src/lib.rs",
+        "crates/client-ui-layout/tests/layout_parity.rs"
+      ],
+      "evidence": [
+        "native Rust Host half is an inject-free no-op plugin and a live Cordis case activates and disposes it without effects"
+      ]
     },
     {
       "source": "packages/client/ui-layout/src/invariant.ts",
@@ -43195,32 +43266,73 @@
     {
       "source": "packages/client/ui-layout/tests/app-frame.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "live Node/WASM frame cases cover fixed slot positions, no loading gate, Session transitions, compact rail, breakpoint override, ResizeObserver throttling, concessions, restoration, drag handles and all pointer/rAF guard branches"
+      ]
     },
     {
       "source": "packages/client/ui-layout/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/tests/layout_parity.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "live apply case pins exact inject order, one root registration, all four child declarations, service provision, store/action attachment, theme lifecycle, and complete teardown",
+        "native test pins the behaviorless Host half and invariant identity"
+      ]
     },
     {
       "source": "packages/client/ui-layout/tests/columns.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/tests/layout_parity.rs"
+      ],
+      "evidence": [
+        "pure Rust differential cases cover every source solver scenario and boundary"
+      ]
     },
     {
       "source": "packages/client/ui-layout/tests/layout-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/tests/layout_parity.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "native state cases and the live compiled store declaration cover exact initialization, independence, clamps, wide and narrow toggles, breakpoint resets, details transitions, and non-persistence"
+      ]
     },
     {
       "source": "packages/client/ui-layout/tests/service.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/tests/layout_parity.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "native and live WASM cases cover exact forwarding, fail-loud boot order, and stale-action replacement"
+      ]
     },
     {
       "source": "packages/client/ui-layout/tests/theme-presenter.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-layout/tests/layout_parity.rs",
+        "crates/client-ui-layout/tests/wasm_layout_parity.rs"
+      ],
+      "evidence": [
+        "live DOM cases cover light/dark switches, single-node theme metadata, token replacement and cleanup; the native ledger pins owned-only retraction order"
+      ]
     },
     {
       "source": "packages/client/ui-layout/tsconfig.json",
@@ -43236,7 +43348,15 @@
     {
       "source": "packages/client/ui-layout/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-layout/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask bundle test pins React and client-runtime externals, synchronous WASM materialization, apply/inject exports, and public declarations",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-layout bundle emitted the optimized Rust/WASM classic client package"
+      ]
     },
     {
       "source": "packages/client/ui-message-feedback/README.i18n.yaml",
