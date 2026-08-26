@@ -80202,7 +80202,19 @@
     {
       "source": "scripts/package-graph.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/package_graph.rs",
+        "crates/repository-tools/tests/package_graph_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/gen-doc-graphs.spec.ts (pinned source graph consumer suite: 3 passed)",
+        "cargo test -p seekdeep-repository-tools --test package_graph_parity --all-features (4 passed for scoped discovery, foreign filtering, peer edges, dependency layers, caller group order, stable cycle keys, UTF-16 Mermaid IDs, and label escaping)",
+        "pinned source current group and short-name localeCompare order is byte-identical to UTF-16 order for the repository's closed ASCII package-name set",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the package scope applies the required @deepseek-ai/dsh- to @seekdeep-ai/seekdeep- rename; the live target graph still fails closed because 151 compatibility manifests reference 534 in-scope peer packages absent from the incomplete target package tree, so no target graph-completeness claim is made"
     },
     {
       "source": "scripts/package-invariants.spec.ts",
