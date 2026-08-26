@@ -44032,7 +44032,15 @@
     {
       "source": "packages/client/ui-primitives/src/BrandWordmark.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/icon_data.rs",
+        "crates/client-ui-primitives/src/browser_icons.rs"
+      ],
+      "evidence": [
+        "intentional product rename: compiled Rust/WASM preserves the 182:24 root contract and fish identity while rendering seekdeep plus the HARNESS badge with currentColor/inverted-token ink",
+        "live WASM icon test pins the renamed visible identity, absence of DeepSeek/dsh identifiers, default dimensions, and decorative aria-hidden behavior"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/Button.module.css",
@@ -44114,7 +44122,15 @@
     {
       "source": "packages/client/ui-primitives/src/FishLogo.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/icon_data.rs",
+        "crates/client-ui-primitives/src/browser_icons.rs"
+      ],
+      "evidence": [
+        "generated Rust catalog preserves the exact fish path, 23.16:17.04 ratio, currentColor fill, default width, and decorative aria-hidden behavior",
+        "live WASM icon test pins default dimensions and root attributes"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/HoverCard.module.css",
@@ -44435,12 +44451,28 @@
     {
       "source": "packages/client/ui-primitives/src/icons/index.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/icon_data.rs",
+        "crates/client-ui-primitives/src/browser_icons.rs"
+      ],
+      "evidence": [
+        "pinned source icon suite: 75 tests passed",
+        "mechanical oracle extraction emitted all 70 source icon definitions; rustfmt-normalized regeneration was byte-identical before the Rust-only gate removed the temporary generator",
+        "live WASM tests render every component as trusted SVG, reject hardcoded hex palettes, preserve per-glyph defaults, custom size/class, non-square connector ratio, and reusable id-free Goal glyph",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_icons_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/icons/props.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_icons.rs"
+      ],
+      "evidence": [
+        "compiled icon components preserve optional size/default and className root forwarding for every glyph"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/index.ts",
@@ -45190,7 +45222,14 @@
     {
       "source": "packages/client/ui-primitives/tests/icons.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_icons_parity.rs"
+      ],
+      "evidence": [
+        "pinned source icon suite: 75 tests passed",
+        "two compiled WASM tests cover the full generated catalog and every source count/color/size/ratio/reuse/product-glyph assertion"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/invariant.client.spec.ts",
