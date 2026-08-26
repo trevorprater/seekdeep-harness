@@ -37,3 +37,26 @@ fn compiled_client_tree_has_no_typescript_css_module_inputs() {
         "include_str!(\"../../../packages/client/ui-primitives/src/DiffBlock.module.css\")"
     ));
 }
+
+#[test]
+fn every_compiled_stylesheet_is_a_rustc_dependency_with_owned_dom_metadata() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let source_root = root.join("crates/client-ui-primitives/src");
+    let pattern = regex::Regex::new(r#"include_str!\("([^"]+\.module\.css)"\)"#).unwrap();
+    let mut stylesheets = 0;
+    for entry in std::fs::read_dir(&source_root).unwrap() {
+        let entry = entry.unwrap();
+        if entry.path().extension().and_then(std::ffi::OsStr::to_str) != Some("rs") {
+            continue;
+        }
+        let source = std::fs::read_to_string(entry.path()).unwrap();
+        for capture in pattern.captures_iter(&source) {
+            stylesheets += 1;
+            assert!(source_root.join(&capture[1]).canonicalize().is_ok());
+        }
+        if source.contains("include_str!") {
+            assert!(source.contains("data-plugin-css"));
+        }
+    }
+    assert!(stylesheets >= 17);
+}

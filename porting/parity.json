@@ -79867,7 +79867,21 @@
     {
       "source": "scripts/client-bundle-css.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/client_css_declaration_boundary.rs",
+        "crates/client-ui-primitives/src/browser_atoms.rs",
+        "crates/client-ui-primitives/src/browser_blocks.rs",
+        "crates/client-ui-primitives/src/browser_dialogs.rs",
+        "crates/client-ui-primitives/src/browser_tooltip.rs",
+        "crates/client-ui-primitives/src/browser_web.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/client-bundle-css.spec.ts (pinned source: 1 passed, CSS source registered as watch dependency)",
+        "cargo test -p seekdeep-repository-tools --test client_css_declaration_boundary --all-features (2 passed: every compiled stylesheet resolves through include_str! and every owning browser module retains data-plugin-css metadata)",
+        "Rust include_str! inputs are tracked rebuild dependencies at the compiler boundary, replacing the source bundler addWatchFile call"
+      ],
+      "note": "intentional Rust/WASM architecture mapping: rustc owns CSS change tracking and compiled modules inject idempotent data-plugin-css style ownership; no TypeScript virtual CSS module remains"
     },
     {
       "source": "scripts/client-bundle-purity.spec.ts",
