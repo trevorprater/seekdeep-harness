@@ -1,5 +1,7 @@
 # seekdeep-command-feedback
 
+English | [中文](README.zh.md)
+
 Model-agnostic `/feedback` command recording human remarks on a session.
 
 - Records an append-only, log-only `feedback/record` session event carrying the trimmed free-text remark. The event is authoritative; it never enters model context, the ordered surface, or derived history, and carries no `surfaceOp`.

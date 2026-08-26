@@ -1,5 +1,7 @@
 # seekdeep-tool-todo
 
+English | [中文](README.zh.md)
+
 Model-facing whole-list `todo_write` tool and `todos` session projection.
 
 - Every call appends a `todo/write` snapshot to the calling agent's session; replay is last-write-wins. The item shape is `{ content, status }` with statuses `pending`, `in_progress`, `completed`. A non-agent caller is rejected.
