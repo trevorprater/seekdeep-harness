@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-07-24-empty-model-response-is-retryable.md
-2026-07-24-empty-model-response-is-retryable.md: 021c368a25ce8dd277ba431fa905c0621b752fd0
-2026-07-24-empty-model-response-is-retryable.zh.md: 67809931f959086a4525cec4c879af190e653d4a
+2026-07-24-empty-model-response-is-retryable.md: 3ab812e7760bacb369976438cc7a392779fa6b34
+2026-07-24-empty-model-response-is-retryable.zh.md: aa9869ad7164d60e80724b5a995b5f368582c0aa

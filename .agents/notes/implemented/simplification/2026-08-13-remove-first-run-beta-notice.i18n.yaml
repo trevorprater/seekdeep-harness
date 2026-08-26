@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-13-remove-first-run-beta-notice.md
-2026-08-13-remove-first-run-beta-notice.md: 21396eb9cc3e0e766238115967e354abe1032bd2
-2026-08-13-remove-first-run-beta-notice.zh.md: 2818343804e88e7114f5a6298393780b0fdcaf24
+2026-08-13-remove-first-run-beta-notice.md: 2efc68cd059ddfee6d2815fc7948f6bac071e51f
+2026-08-13-remove-first-run-beta-notice.zh.md: 894460885001935740861f6ff0151b213e0bf86f

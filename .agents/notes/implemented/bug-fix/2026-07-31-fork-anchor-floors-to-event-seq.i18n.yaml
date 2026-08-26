@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-07-31-fork-anchor-floors-to-event-seq.md
-2026-07-31-fork-anchor-floors-to-event-seq.md: 760e73266570b149966be6af8264cd3699ffb7e0
-2026-07-31-fork-anchor-floors-to-event-seq.zh.md: c25a69462b7cbff4a6194d24793982479cae24e4
+2026-07-31-fork-anchor-floors-to-event-seq.md: a79efcbb07c6f41c64f72c0b8f61fd7da31ccb35
+2026-07-31-fork-anchor-floors-to-event-seq.zh.md: 7816501b3922d33c7d5c2f2f2ed1fbbb0c44514b

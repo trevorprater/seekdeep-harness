@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-21-cross-session-references.md
-2026-07-21-cross-session-references.md: f49c75a9d4e3304b44d12a3df85430ffb494b8a9
-2026-07-21-cross-session-references.zh.md: 81a1970497bf175948a70bb1982f336f19d4d19e
+2026-07-21-cross-session-references.md: 8f454ec6df095c3701b192abde9b0c5a5858884f
+2026-07-21-cross-session-references.zh.md: 73196e1791b9aa4a0f1430d65b7258d9b704981d

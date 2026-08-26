@@ -1,6 +1,6 @@
-# Bilingual-pair consistency record. Both languages carry equal authority.
-# After editing either side, update both values with:
-#   git hash-object crates/settings-file/README.md crates/settings-file/README.zh.md
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write crates/settings-file/README.md
 README.md: 7dd6b6e7b36cf53ffd0daab037f3e5d698558f9c
 README.zh.md: a18581b0185206e5ee0e4b36dbf7d614e48295cc
-
