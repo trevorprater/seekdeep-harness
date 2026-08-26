@@ -36661,9 +36661,10 @@
         "pnpm --silent run verify-archived-agent-notes delegates to the verified append-only Rust verifier",
         "pnpm --silent run verify-doc-refs delegates to the verified Rust repository scanner",
         "pnpm --silent run verify-public-repository-links delegates to the verified Rust tracked-file policy",
-        "pnpm --silent run verify-config-source-ownership delegates to the verified Rust shipped-config policy"
+        "pnpm --silent run verify-config-source-ownership delegates to the verified Rust shipped-config policy",
+        "pnpm --silent run verify-seekdeep-package-licenses delegates to the verified product-renamed Rust policy"
       ],
-      "note": "root package metadata preserves source command names while Rust owns change-scope, configuration ownership, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
+      "note": "root package metadata preserves source command names while Rust owns change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
     {
       "source": "packages/AGENTS.md",
@@ -79048,12 +79049,33 @@
     {
       "source": "scripts/verify-dsh-package-licenses.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/package_licenses_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/verify-dsh-package-licenses.spec.ts (pinned source: 2 passed)",
+        "cargo test -p seekdeep-repository-tools --test package_licenses_parity --all-features (2 passed under required product rename)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/verify-dsh-package-licenses.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/package_licenses.rs",
+        "crates/repository-tools/src/bin/verify-seekdeep-package-licenses.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm run verify-dsh-package-licenses (pinned source: 222 DSH packages checked; all MIT)",
+        "cargo test -p seekdeep-repository-tools --test package_licenses_parity --all-features (2 passed)",
+        "pnpm --silent run verify-seekdeep-package-licenses (Rust target: 154 present SeekDeep packages checked; all MIT)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "package identity and diagnostics apply the required @deepseek-ai/dsh to @seekdeep-ai/seekdeep product rename; pending legacy package manifests are not fabricated into the target count"
     },
     {
       "source": "scripts/verify-export-jsdoc.ts",
