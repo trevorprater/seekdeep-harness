@@ -38542,7 +38542,17 @@
     {
       "source": "packages/client/connection/src/client/fixture.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-connection/src/fixture.rs",
+        "crates/client-connection/data/fixture-seed.json",
+        "crates/client-connection/tests/fixture_parity.rs"
+      ],
+      "evidence": [
+        "pinned source connection fixture suites: 43/43",
+        "12 grouped Rust cases drive the deterministic seeded Host, complete unary dispatch, literal Unicode search, turn-boundary pagination, model selection, prompt/steer/cancel replay, pending interactions, Workspace/Session mutations, commands/skills/goals/presets/LLM, timing hooks, stream failure, and all four carrier envelopes",
+        "seed generation fixes time, UUIDs, and randomness; checked-in seed copy carries SeekDeep product/package identities while provider identities remain compatible"
+      ]
     },
     {
       "source": "packages/client/connection/src/client/index.ts",
@@ -38745,17 +38755,43 @@
     {
       "source": "packages/client/connection/tests/fake-api.client.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/tests/support/fake_api.rs",
+        "crates/client-runtime/tests/fake_api_contract.rs"
+      ],
+      "evidence": [
+        "Rust programmable fake preserves method roster/defaults, chronological calls, deferred unary settlement, hand-pumped mux/Host streams, readiness hold/suppression, push/end/fail controls, and stable full-envelope shapes",
+        "cargo test -p seekdeep-client-runtime --test fake_api_contract --all-features (2 passed)"
+      ]
     },
     {
       "source": "packages/client/connection/tests/fixture-commands.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-connection/src/fixture.rs",
+        "crates/client-connection/tests/fixture_parity.rs"
+      ],
+      "evidence": [
+        "pinned source connection fixture suites: 43/43",
+        "Rust grouped command/skill/goal/preset/LLM case pins addressed catalogs, missing sessions, command lifecycle broadcasts, unknown lines/names, Remote dispatch, and shared mutable state"
+      ]
     },
     {
       "source": "packages/client/connection/tests/fixture.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-connection/src/fixture.rs",
+        "crates/client-connection/data/fixture-seed.json",
+        "crates/client-connection/tests/fixture_parity.rs"
+      ],
+      "evidence": [
+        "pinned source connection fixture suites: 43/43",
+        "cargo test -p seekdeep-client-connection --test fixture_parity --all-features (12 passed)",
+        "Rust tests cover every query-switch scenario, response reconciliation, frame ordering, stable resident rpcIds, current-log search, projection baselines, create/fork/rename/archive, attachment and directory/workspace behavior, replay pacing, cancellation, and envelope taps"
+      ]
     },
     {
       "source": "packages/client/connection/tests/http-bridge.host.spec.ts",

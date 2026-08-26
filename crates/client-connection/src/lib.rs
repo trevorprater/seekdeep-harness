@@ -1,6 +1,7 @@
 //! HTTP-up/WebSocket-down Connection transport shared by `SeekDeep` Host and Client.
 
 mod controller;
+mod fixture;
 mod host;
 mod invariant;
 mod rpc;
@@ -11,6 +12,10 @@ mod websocket_downlink;
 pub use controller::{
     ConnectionConfig, ConnectionController, ConnectionSinks, ConnectionState, EventFrame,
     HostDescription, StreamApi,
+};
+pub use fixture::{
+    FixtureApi, FixtureCreateFrameOrder, FixtureEnvelopeSubscription, FixtureOptions,
+    FixtureTimingState, fixture_connection, install_fixture_client,
 };
 pub use host::{
     ConnectionApiProxy, ConnectionFallback, ConnectionFallbackFuture, ConnectionHostConfig,
