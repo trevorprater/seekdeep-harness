@@ -18,6 +18,7 @@ pub mod document_budgets;
 pub mod markdown_util;
 pub mod md_links;
 pub mod md_wrap;
+pub mod node_next_types;
 /// First-party SeekDeep package license policy.
 pub mod package_licenses;
 pub mod package_paths;

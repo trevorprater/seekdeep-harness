@@ -94,7 +94,7 @@
     "website:dev": "pnpm run docs:dev",
     "website:build": "pnpm run docs:build",
     "verify-package-readme-limitations": "cargo run --quiet --package seekdeep-repository-tools --bin verify-package-readme-limitations",
-    "verify-node-next-types": "tsx scripts/verify-node-next-types.ts",
+    "verify-node-next-types": "cargo run --quiet --package seekdeep-repository-tools --bin verify-node-next-types",
     "verify-runtime-closure": "tsx scripts/verify-runtime-closure.ts",
     "verify-vendored-links": "cargo run --quiet --package seekdeep-repository-tools --bin verify-vendored-links",
     "verify-cordis-config": "tsx scripts/verify-cordis-config.ts",

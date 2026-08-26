@@ -80888,7 +80888,21 @@
     {
       "source": "scripts/verify-node-next-types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/node_next_types.rs",
+        "crates/repository-tools/src/bin/verify-node-next-types.rs",
+        "crates/repository-tools/tests/node_next_types_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-node-next-types.ts (pinned source: 228 workspace package declaration APIs compile under NodeNext)",
+        "cargo test -p seekdeep-repository-tools --test node_next_types_parity --all-features (4 passed for all declaration import forms, explicit extensions, manifest discovery, typed public exports, failure ordering, and missing-output ordering)",
+        "pnpm --silent run verify-node-next-types (Rust target fails at the source-compatible preflight on 158 missing generated declaration outputs before attempting the external consumer)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the verifier itself is Rust and retains the source's generated-declaration scan plus external NodeNext tsc consumer; the target cannot exercise the final consumer until pending Rust compatibility builds emit all declared lib/types outputs, so no target-wide declaration-closure claim is made"
     },
     {
       "source": "scripts/verify-package-invariants.ts",
