@@ -36664,7 +36664,8 @@
         "pnpm --silent run verify-config-source-ownership delegates to the verified Rust shipped-config policy",
         "pnpm --silent run verify-seekdeep-package-licenses delegates to the verified product-renamed Rust policy",
         "pnpm --silent run verify-skill-invocation-metadata delegates to the verified Rust cross-product policy",
-        "pnpm --silent run verify-doc-budgets delegates to the verified Rust documentation policy"
+        "pnpm --silent run verify-doc-budgets delegates to the verified Rust documentation policy",
+        "pnpm --silent run verify-vendored-links delegates to the verified Rust lockfile policy"
       ],
       "note": "root package metadata preserves source command names while Rust owns change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
@@ -79236,7 +79237,20 @@
     {
       "source": "scripts/verify-vendored-links.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/vendored_links.rs",
+        "crates/repository-tools/src/bin/verify-vendored-links.rs",
+        "crates/repository-tools/tests/vendored_links_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm run verify-vendored-links (pinned source: all 9 vendored package names resolve to workspace links)",
+        "cargo test -p seekdeep-repository-tools --test vendored_links_parity --all-features (1 passed: importer and packages/snapshots violations)",
+        "pnpm --silent run verify-vendored-links (Rust target: the same 9 vendored package names resolve to workspace links)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/vitest-environment.compat.spec.ts",

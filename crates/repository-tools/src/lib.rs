@@ -24,3 +24,5 @@ pub mod publication_payload;
 pub mod repo_files;
 /// Cross-product Skill invocation metadata policy.
 pub mod skill_invocation_metadata;
+/// Vendored package lockfile link-integrity policy.
+pub mod vendored_links;
