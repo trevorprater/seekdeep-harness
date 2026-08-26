@@ -69,7 +69,7 @@
     "verify-doc-site-fragments": "cargo run --quiet --package seekdeep-repository-tools --bin verify-doc-site-fragments",
     "verify-public-repository-links": "cargo run --quiet --package seekdeep-repository-tools --bin verify-public-repository-links",
     "verify-doc-refs": "cargo run --quiet --package seekdeep-repository-tools --bin verify-doc-refs",
-    "verify-package-paths": "tsx scripts/verify-package-paths.ts",
+    "verify-package-paths": "cargo run --quiet --package seekdeep-repository-tools --bin verify-package-paths",
     "verify-seekdeep-package-licenses": "cargo run --quiet --package seekdeep-repository-tools --bin verify-seekdeep-package-licenses",
     "verify-config-source-ownership": "cargo run --quiet --package seekdeep-repository-tools --bin verify-config-source-ownership",
     "verify-package-invariants": "tsx scripts/verify-package-invariants.ts",

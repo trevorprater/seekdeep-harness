@@ -80898,7 +80898,21 @@
     {
       "source": "scripts/verify-package-paths.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/package_paths.rs",
+        "crates/repository-tools/src/bin/verify-package-paths.rs",
+        "crates/repository-tools/tests/package_paths_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-package-paths.ts (pinned source: 3844 files checked, all packages/* references resolve)",
+        "cargo test -p seekdeep-repository-tools --test package_paths_parity --all-features (3 passed for existing, moved, hypothetical, group-explained, unbuilt-lib, pattern-token, punctuation, multi-reference, and line-order behavior)",
+        "pnpm --silent run verify-package-paths (Rust target fails closed on 2154 current stale TypeScript-oriented references while the linked Rust surfaces and documentation replacements remain pending)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the drift detector is source-faithful and verified; its target corpus remains red because many documents still cite not-yet-replaced TypeScript source paths, so no package-reference corpus-conformance claim is made"
     },
     {
       "source": "scripts/verify-package-readme-limitations.ts",
