@@ -79741,12 +79741,31 @@
     {
       "source": "scripts/clean.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/clean_parity.rs"
+      ],
+      "evidence": [
+        "pinned source clean suite: 4 tests passed",
+        "five Rust temporary-repository fixtures pin JSONC project-output discovery, safe orphan residue, all-or-nothing unknown-file refusal, Landlock output, source preservation, and ancestor-symlink escape refusal",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test clean_parity --all-features"
+      ]
     },
     {
       "source": "scripts/clean.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/clean.rs",
+        "crates/repository-tools/src/bin/clean.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "Rust cleaner preserves fail-before-delete planning, JSONC TypeScript reference/outDir discovery, repository-relative sorted results, known-residue rules, canonical-parent symlink defense, and exact already-clean/removed/error CLI outcomes",
+        "pnpm clean delegates directly to the Rust binary",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test clean_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/client-bundle-css.spec.ts",
