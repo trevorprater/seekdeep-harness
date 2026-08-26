@@ -80277,12 +80277,30 @@
     {
       "source": "scripts/project-reference-faces.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/project_reference_faces_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/project-reference-faces.spec.ts (pinned source: 3 passed)",
+        "cargo test -p seekdeep-repository-tools --test project_reference_faces_parity --all-features (5 passed: all 3 source cases, JSONC/trailing commas, and live target graph)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/project-reference-faces.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/project_reference_faces.rs",
+        "crates/repository-tools/tests/project_reference_faces_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/project-reference-faces.spec.ts (pinned source: matching/neutral, opposite/solution-root, and inherited-face cases passed)",
+        "cargo test -p seekdeep-repository-tools --test project_reference_faces_parity --all-features (5 passed with exact source diagnostics, JSONC parsing, and a green live compatibility Project Reference graph)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/publication-payload.spec.ts",

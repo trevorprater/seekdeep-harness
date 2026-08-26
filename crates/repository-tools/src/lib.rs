@@ -27,6 +27,7 @@ pub mod package_paths;
 pub mod package_readme_limitations;
 /// Byte-identical bilingual Markdown derivative partitioning.
 pub mod paired_markdown_derivatives;
+pub mod project_reference_faces;
 /// Unavailable public-repository reference detection across tracked files.
 pub mod public_repository_links;
 /// Static and packed publication-payload policy.
