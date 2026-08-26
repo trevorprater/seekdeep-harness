@@ -132,7 +132,7 @@
     "release:verify": "cargo run --quiet --package seekdeep-repository-tools --bin release-verify --",
     "release:pack": "cargo run --quiet --package seekdeep-repository-tools --bin release-pack --",
     "release:verify-packed-install": "cargo run --quiet --package seekdeep-repository-tools --bin release-verify-packed-install --",
-    "release:publish": "tsx scripts/release/publish.ts",
+    "release:publish": "cargo run --quiet --package seekdeep-repository-tools --bin release-publish --",
     "seekdeep": "cargo run --quiet --package seekdeep --",
     "demo:code-mode": "node scripts/demo-code-mode.mjs",
     "demo:cordis": "node scripts/demo-cordis.mjs",

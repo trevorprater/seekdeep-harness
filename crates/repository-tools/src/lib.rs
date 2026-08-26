@@ -36,6 +36,7 @@ pub mod publication_payload;
 pub mod release_families;
 pub mod release_pack;
 pub mod release_process;
+pub mod release_publish;
 pub mod release_tarball;
 pub mod release_verify;
 pub mod release_verify_packed_install;

@@ -80426,7 +80426,20 @@
     {
       "source": "scripts/release/publish.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/release_publish.rs",
+        "crates/repository-tools/src/bin/release-publish.rs",
+        "crates/repository-tools/tests/release_publish_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pinned source publish decision implementation inspected for registry state, sha512 integrity, idempotent skip, content mismatch, transient codes, landed failures, spacing, backoff, and prerelease tag selection",
+        "cargo test -p seekdeep-repository-tools --test release_publish_parity --all-features (4 passed for absent publish, identical skip, different-content refusal, and transient retry/backoff using injected npm and delay boundaries)",
+        "cargo clippy -p seekdeep-repository-tools --test release_publish_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "family and package identities apply the required seekdeep rename; no npm registry call or publish operation was performed, and the command remains an explicit release-only external mutation boundary"
     },
     {
       "source": "scripts/release/tarball.ts",
