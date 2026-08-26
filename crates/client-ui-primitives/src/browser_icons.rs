@@ -45,7 +45,7 @@ pub fn icon_components() -> Result<Object, JsValue> {
     Ok(output)
 }
 
-fn render_icon(
+pub(crate) fn render_icon(
     react: &JsValue,
     definition: IconDefinition,
     props: &JsValue,

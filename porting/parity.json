@@ -44117,7 +44117,15 @@
     {
       "source": "packages/client/ui-primitives/src/DisclosureRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_dialogs.rs",
+        "crates/client-ui-primitives/tests/wasm_dialogs_parity.rs"
+      ],
+      "evidence": [
+        "compiled WASM test pins controlled open/closed content, row-vs-leading interaction policy, preview/active chevrons, collapsed-content retention, Enter/Space handling, preventDefault, propagation stop, aria/data/tab semantics, class forwarding, and toggle calls",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_dialogs_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/FishLogo.tsx",
@@ -44216,7 +44224,16 @@
     {
       "source": "packages/client/ui-primitives/src/Modal.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_dialogs.rs",
+        "crates/client-ui-primitives/tests/wasm_dialogs_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Modal focus: 1 test passed",
+        "compiled WASM test covers closed null state, body portal, mask/Escape close, non-Escape ignore, listener disposal, title/description/body/footer/close-label/class chrome, compiled close icon, aria dialog attributes, and headless children",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/OnboardingSurface.module.css",
@@ -44292,7 +44309,15 @@
     {
       "source": "packages/client/ui-primitives/src/RiskConfirmation.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_dialogs.rs",
+        "crates/client-ui-primitives/tests/wasm_dialogs_parity.rs"
+      ],
+      "evidence": [
+        "compiled WASM test pins controlled acknowledgement checkbox, autoFocus/disabled state, checked change payload, warning icon/copy, cancel-as-close, outline/primary actions, and confirm gating by acknowledgement plus disabled",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_dialogs_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/SearchBlock.module.css",
