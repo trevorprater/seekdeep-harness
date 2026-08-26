@@ -21,6 +21,7 @@ members = [
   "crates/client-connection",
   "crates/client-modules",
   "crates/client-hmr",
+  "crates/client-locale",
   "crates/client-schema-form",
   "crates/client-ui-cordis",
   "crates/client-ui-slots",

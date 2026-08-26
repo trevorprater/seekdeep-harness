@@ -75,7 +75,7 @@
     "lib/types/**/*.d.ts"
   ],
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-locale --artifact seekdeep_client_locale --module-id @seekdeep-ai/seekdeep-client-locale --out-dir packages/client/locale/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-locale --artifact seekdeep_client_locale --module-id @seekdeep-ai/seekdeep-client-locale --out-dir packages/client/locale/lib --watch"
   }
 }

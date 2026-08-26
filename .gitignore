@@ -1,5 +1,5 @@
 /target/
-/packages/client/runtime/lib/
+/packages/client/*/lib/
 /.seekdeep/
 *.profraw
 *.profdata

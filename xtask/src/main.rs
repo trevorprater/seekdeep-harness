@@ -4,6 +4,7 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
     process::Command as ProcessCommand,
+    time::{Duration, UNIX_EPOCH},
 };
 
 use base64::Engine as _;
@@ -77,6 +78,9 @@ enum Command {
         /// Package output directory.
         #[arg(long, default_value = "packages/client/runtime/lib")]
         out_dir: PathBuf,
+        /// Rebuild whenever package-owned Rust/CSS/manifest inputs change.
+        #[arg(long)]
+        watch: bool,
     },
 }
 
@@ -113,7 +117,8 @@ fn main() -> anyhow::Result<()> {
             artifact,
             module_id,
             out_dir,
-        } => wasm_package(&package, &artifact, &module_id, &out_dir),
+            watch,
+        } => wasm_package(&package, &artifact, &module_id, &out_dir, watch),
     }
 }
 
@@ -122,7 +127,40 @@ fn wasm_package(
     artifact: &str,
     module_id: &str,
     out_dir: &Path,
+    watch: bool,
 ) -> anyhow::Result<()> {
+    if !watch {
+        return wasm_package_once(package, artifact, module_id, out_dir);
+    }
+    if let Err(error) = wasm_package_once(package, artifact, module_id, out_dir) {
+        eprintln!("Rust/WASM initial watch build failed: {error:#}");
+    }
+    let package_root = cargo_package_root(package)?;
+    let mut previous = watch_snapshot(&package_root)?;
+    println!(
+        "watching {} for Rust/WASM bundle changes",
+        package_root.display()
+    );
+    loop {
+        std::thread::sleep(Duration::from_millis(250));
+        let current = watch_snapshot(&package_root)?;
+        if current == previous {
+            continue;
+        }
+        previous = current;
+        if let Err(error) = wasm_package_once(package, artifact, module_id, out_dir) {
+            eprintln!("Rust/WASM watch rebuild failed: {error:#}");
+        }
+    }
+}
+
+fn wasm_package_once(
+    package: &str,
+    artifact: &str,
+    module_id: &str,
+    out_dir: &Path,
+) -> anyhow::Result<()> {
+    let metadata = cargo_metadata()?;
     let status = ProcessCommand::new("cargo")
         .args([
             "build",
@@ -137,14 +175,19 @@ fn wasm_package(
         status.success(),
         "Rust/WASM release build failed for {package}"
     );
-    let wasm =
-        PathBuf::from("target/wasm32-unknown-unknown/release").join(format!("{artifact}.wasm"));
+    let wasm = metadata
+        .target_directory
+        .join("wasm32-unknown-unknown/release")
+        .join(format!("{artifact}.wasm"));
     anyhow::ensure!(
         wasm.is_file(),
         "Rust/WASM artifact is missing: {}",
         wasm.display()
     );
-    let staging = PathBuf::from("target/xtask/wasm-package").join(artifact);
+    let staging = metadata
+        .target_directory
+        .join("xtask/wasm-package")
+        .join(artifact);
     if staging.exists() {
         std::fs::remove_dir_all(&staging)?;
     }
@@ -167,7 +210,12 @@ fn wasm_package(
     let bindings = std::fs::read_to_string(staging.join("client.js"))?;
     let bytes = std::fs::read(staging.join("client_bg.wasm"))?;
     let bundle = classic_module_bundle(&bindings, &bytes, &global, module_id)?;
-    std::fs::create_dir_all(out_dir)?;
+    let out_dir = if out_dir.is_absolute() {
+        out_dir.to_owned()
+    } else {
+        metadata.workspace_root.join(out_dir)
+    };
+    std::fs::create_dir_all(&out_dir)?;
     std::fs::write(out_dir.join("client.js"), bundle)?;
     let type_dir = out_dir.join("types/client");
     std::fs::create_dir_all(&type_dir)?;
@@ -179,6 +227,55 @@ fn wasm_package(
         out_dir.join("client.js").display()
     );
     Ok(())
+}
+
+#[derive(Deserialize)]
+struct CargoMetadata {
+    packages: Vec<CargoMetadataPackage>,
+    target_directory: PathBuf,
+    workspace_root: PathBuf,
+}
+
+#[derive(Deserialize)]
+struct CargoMetadataPackage {
+    name: String,
+    manifest_path: PathBuf,
+}
+
+fn cargo_package_root(package: &str) -> anyhow::Result<PathBuf> {
+    let metadata = cargo_metadata()?;
+    metadata
+        .packages
+        .into_iter()
+        .find(|candidate| candidate.name == package)
+        .and_then(|candidate| candidate.manifest_path.parent().map(Path::to_path_buf))
+        .ok_or_else(|| anyhow::anyhow!("Cargo package {package:?} is not in this workspace"))
+}
+
+fn cargo_metadata() -> anyhow::Result<CargoMetadata> {
+    let output = ProcessCommand::new("cargo")
+        .args(["metadata", "--no-deps", "--format-version", "1"])
+        .output()?;
+    anyhow::ensure!(output.status.success(), "cargo metadata failed");
+    Ok(serde_json::from_slice(&output.stdout)?)
+}
+
+fn watch_snapshot(root: &Path) -> anyhow::Result<BTreeMap<PathBuf, (u64, u128)>> {
+    let mut snapshot = BTreeMap::new();
+    for entry in walkdir::WalkDir::new(root) {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let metadata = entry.metadata()?;
+        let modified = metadata
+            .modified()?
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        snapshot.insert(entry.path().to_owned(), (metadata.len(), modified));
+    }
+    Ok(snapshot)
 }
 
 fn classic_module_bundle(
@@ -202,14 +299,20 @@ fn classic_module_bundle(
         bindings.to_owned()
     };
     let compatibility = compatibility_prelude(global, module_id);
+    let factory = module_factory(global, module_id);
     let module_id = serde_json::to_string(module_id)?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(wasm);
     Ok(format!(
-        "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n{compatibility}  window.__ModuleLoader__.load({{ id: {module_id}, factory: () => {global} }});\n}})();\n"
+        "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n{compatibility}  window.__ModuleLoader__.load({{ id: {module_id}, factory: {factory} }});\n}})();\n"
     ))
 }
 
 fn compatibility_prelude(global: &str, module_id: &str) -> String {
+    if module_id == "@seekdeep-ai/seekdeep-client-locale" {
+        return format!(
+            "  Object.assign({global}, {{ apply: {global}.applyClientLocale, inject: ['slots', 'connection', 'remote', 'settingsScope'] }});\n"
+        );
+    }
     if module_id != "@seekdeep-ai/seekdeep-client-runtime" {
         return String::new();
     }
@@ -218,7 +321,19 @@ fn compatibility_prelude(global: &str, module_id: &str) -> String {
     )
 }
 
+fn module_factory(global: &str, module_id: &str) -> String {
+    if module_id == "@seekdeep-ai/seekdeep-client-locale" {
+        return format!(
+            "require => {{ {global}.configureClientLocale(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-runtime/client')); return {global}; }}"
+        );
+    }
+    format!("() => {global}")
+}
+
 fn compatibility_declarations(module_id: &str) -> String {
+    if module_id == "@seekdeep-ai/seekdeep-client-locale" {
+        return "\nexport const apply: typeof wasm_bindgen.applyClientLocale;\nexport const inject: readonly ['slots', 'connection', 'remote', 'settingsScope'];\n".to_owned();
+    }
     if module_id != "@seekdeep-ai/seekdeep-client-runtime" {
         return String::new();
     }
@@ -533,7 +648,7 @@ mod tests {
 
     use super::{
         classic_module_bundle, compatibility_declarations, is_generated_package_output,
-        is_localization,
+        is_localization, watch_snapshot,
     };
 
     #[test]
@@ -569,6 +684,37 @@ mod tests {
     fn classic_bundle_rejects_an_unsafe_global_identifier() {
         let error = classic_module_bundle("", &[], "not-valid", "probe").unwrap_err();
         assert!(error.to_string().contains("JavaScript identifier"));
+    }
+
+    #[test]
+    fn locale_bundle_configures_shell_modules_inside_its_materialization_factory() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_locale_wasm",
+            "@seekdeep-ai/seekdeep-client-locale",
+        )
+        .unwrap();
+        assert!(bundle.contains("apply: __seekdeep_client_locale_wasm.applyClientLocale"));
+        assert!(bundle.contains("factory: require =>"));
+        assert!(bundle.contains("require('react')"));
+        assert!(bundle.contains("require('@seekdeep-ai/seekdeep-client-ui-primitives')"));
+        assert!(bundle.contains("require('@seekdeep-ai/seekdeep-client-runtime/client')"));
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-locale");
+        assert!(declarations.contains("applyClientLocale"));
+        assert!(declarations.contains("settingsScope"));
+    }
+
+    #[test]
+    fn wasm_watch_snapshot_changes_with_package_input_bytes() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join("src")).unwrap();
+        let source = root.path().join("src/lib.rs");
+        std::fs::write(&source, "one\n").unwrap();
+        let before = watch_snapshot(root.path()).unwrap();
+        std::fs::write(&source, "one two\n").unwrap();
+        let after = watch_snapshot(root.path()).unwrap();
+        assert_ne!(before, after);
     }
 
     #[test]

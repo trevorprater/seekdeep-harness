@@ -7825,8 +7825,9 @@
         ".agents/notes/implemented/architecture/2026-07-30-client-locale-full-rollout.i18n.yaml"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "git hash-object confirms the recorded English and Chinese blobs after the Rust/WASM realization update"
+      ],
+      "note": "paired target preserves source locale decisions and records the portable/native/WASM split"
     },
     {
       "source": ".agents/notes/implemented/architecture/2026-07-30-client-locale-full-rollout.md",
@@ -7836,8 +7837,10 @@
         ".agents/notes/implemented/architecture/2026-07-30-client-locale-full-rollout.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
-      ]
+        "pnpm --silent run verify-agent-note-format (Rust target: 546 active Agent Notes conform)",
+        "paired English and Chinese blob hashes re-recorded after documenting the Rust/WASM locale realization"
+      ],
+      "note": "preserves source rollout decisions and documents the verified Rust/WASM locale implementation"
     },
     {
       "source": ".agents/notes/implemented/architecture/2026-07-30-client-locale-full-rollout.zh.md",
@@ -7847,8 +7850,10 @@
         ".agents/notes/implemented/architecture/2026-07-30-client-locale-full-rollout.zh.md"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "pnpm --silent run verify-agent-note-format (Rust target: 546 active Agent Notes conform)",
+        "paired English and Chinese blob hashes re-recorded after documenting the Rust/WASM locale realization"
+      ],
+      "note": "reviewed Chinese counterpart preserves source decisions and Rust/WASM realization"
     },
     {
       "source": ".agents/notes/implemented/architecture/2026-07-30-command-row-copy-contract.i18n.yaml",
@@ -23662,8 +23667,9 @@
         ".gitignore"
       ],
       "evidence": [
-        "SeekDeep Harness Rust-port repository file"
-      ]
+        "generated Rust/WASM Client package lib directories are ignored uniformly; release/build commands regenerate them"
+      ],
+      "note": "one wildcard covers Client Runtime, locale, and future Rust/WASM packages"
     },
     {
       "source": ".gitlab-ci.yml",
@@ -39005,8 +39011,11 @@
         "packages/client/locale/package.json"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "cargo xtask wasm-package built the seekdeep-client-locale release bundle from this manifest command",
+        "Node executed the generated classic handoff and verified exact module id, inject list, factory requires, apply export and style injection",
+        "filtered package watch command rebuilt the Rust/WASM artifact after a package input change"
+      ],
+      "note": "package identity and graph metadata are product-renamed while bundle/watch behavior is Rust-owned"
     },
     {
       "source": "packages/client/locale/src/client/LanguageRow.module.css",
@@ -39022,27 +39031,92 @@
     {
       "source": "packages/client/locale/src/client/LanguageRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/wasm.rs",
+        "crates/client-locale/data/styles.css",
+        "crates/client-locale/tests/wasm_locale_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "Rust/WASM returns the ordinary React element tree and delegates outside-pointer behavior to the existing Menu primitive"
     },
     {
       "source": "packages/client/locale/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/core.rs",
+        "crates/client-locale/src/wasm.rs",
+        "crates/client-locale/tests/locale_core_parity.rs",
+        "crates/client-locale/tests/wasm_locale_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "one portable locale authority backs the JavaScript-compatible Client Service face"
     },
     {
       "source": "packages/client/locale/src/client/settings-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/row_store.rs",
+        "crates/client-locale/src/wasm.rs",
+        "crates/client-locale/tests/locale_core_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "portable revision semantics plus Client Runtime defineStore preserve the source Store contract"
     },
     {
       "source": "packages/client/locale/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/wasm.rs",
+        "crates/client-locale/data/styles.css",
+        "crates/client-locale/Cargo.toml"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "TypeScript CSS declarations are intentionally eliminated; compiled WASM injects package-owned prefixed CSS"
     },
     {
       "source": "packages/client/locale/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/host.rs",
+        "crates/client-locale/tests/host_settings_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "native-only Host settings registration remains dynamically optional and does not enter wasm32"
     },
     {
       "source": "packages/client/locale/src/invariant.ts",
@@ -39061,57 +39135,188 @@
     {
       "source": "packages/client/locale/src/locale-settings.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/core.rs",
+        "crates/client-locale/src/host.rs",
+        "crates/client-locale/tests/host_settings_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "Rust enum/settings/schema preserve the locale namespace, field, and zh/en wire values"
     },
     {
       "source": "packages/client/locale/src/locales/en.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/core.rs",
+        "crates/client-locale/tests/locale_core_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "24-key English common dictionary is balanced against Chinese"
     },
     {
       "source": "packages/client/locale/src/locales/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/core.rs",
+        "crates/client-locale/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "Rust public dictionary functions replace the TypeScript barrel"
     },
     {
       "source": "packages/client/locale/src/locales/settings.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/core.rs",
+        "crates/client-locale/tests/locale_core_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "settings.locale dictionaries preserve exact bilingual Language copy"
     },
     {
       "source": "packages/client/locale/src/locales/zh.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/src/core.rs",
+        "crates/client-locale/tests/locale_core_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "24-key Chinese common dictionary remains the ordered key authority"
     },
     {
       "source": "packages/client/locale/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/tests/wasm_locale_parity.rs",
+        "crates/client-runtime/tests/slots_service_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "live WASM assembly covers service, dictionaries, Store sync, face writes and registration; Client Runtime covers late declaration and stale disposer recovery"
     },
     {
       "source": "packages/client/locale/tests/host.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/tests/host_settings_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "native Host tests cover optional provider, schema validation and teardown"
     },
     {
       "source": "packages/client/locale/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop/catalog.rs",
+        "crates/client-locale/tests/host_settings_parity.rs",
+        "crates/client-locale/tests/wasm_locale_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "existing no-op invariant catalog plus Host and Client execution cover the companion contract"
     },
     {
       "source": "packages/client/locale/tests/language-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/tests/wasm_locale_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "live WASM component test covers title, active/unknown label, open, close, selection and callback"
     },
     {
       "source": "packages/client/locale/tests/locale.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/tests/locale_core_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "native core tests cover lookup chain, interpolation, stable bind, revisions, subscribers, Host adoption, browser detection and locale definitions"
     },
     {
       "source": "packages/client/locale/tests/settings-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-locale/tests/locale_core_parity.rs",
+        "crates/client-locale/src/row_store.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command"
+      ],
+      "note": "row Store tests cover init, newer sync and stale/duplicate guard"
     },
     {
       "source": "packages/client/locale/tsconfig.json",
@@ -39127,7 +39332,23 @@
     {
       "source": "packages/client/locale/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/main.rs",
+        "crates/client-locale/Cargo.toml",
+        "packages/client/locale/package.json"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/locale/tests (pinned source: 6 files, 35 tests passed)",
+        "cargo test -p seekdeep-client-locale --all-features (12 native Host/core tests passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-locale --target wasm32-unknown-unknown --test wasm_locale_parity --all-features (1 live WASM test passed)",
+        "cargo clippy -p seekdeep-client-locale --all-targets --all-features -- -D warnings and the equivalent wasm32 target command",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-client-locale --all-features --no-deps and the equivalent wasm32 target command",
+        "cargo xtask wasm-package --package seekdeep-client-locale --artifact seekdeep_client_locale --module-id @seekdeep-ai/seekdeep-client-locale --out-dir packages/client/locale/lib (release bundle built and Node handoff smoke passed)",
+        "cargo test -p xtask locale_bundle_configures_shell_modules_inside_its_materialization_factory --all-features (1 passed)",
+        "pnpm --silent --filter @seekdeep-ai/seekdeep-client-locale run watch (package-cwd initial build, readiness, input-change rebuild, and clean termination passed)"
+      ],
+      "note": "Rust xtask emits the classic synchronous module-table bundle; tsdown is intentionally replaced"
     },
     {
       "source": "packages/client/modules/README.i18n.yaml",

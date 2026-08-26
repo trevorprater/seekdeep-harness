@@ -4915,6 +4915,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-locale"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "indexmap 2.14.0",
+ "js-sys",
+ "regex",
+ "seekdeep-cordis",
+ "seekdeep-schemastery",
+ "seekdeep-settings",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+ "web-sys",
+]
+
+[[package]]
 name = "seekdeep-client-modules"
 version = "0.1.0-rc.5"
 dependencies = [
