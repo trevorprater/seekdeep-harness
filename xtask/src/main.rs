@@ -384,6 +384,11 @@ fn compatibility_prelude(global: &str, module_id: &str) -> String {
 }
 
 fn module_factory(global: &str, module_id: &str) -> String {
+    if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
+        return format!(
+            "require => {{ {global}.configureApiRemotes([require('@seekdeep-ai/seekdeep-commands/remote'), require('@seekdeep-ai/seekdeep-goal/remote'), require('@seekdeep-ai/seekdeep-cordis-host-runner/remote'), require('@seekdeep-ai/seekdeep-host-plugin-inventory/remote'), require('@seekdeep-ai/seekdeep-message-feedback/remote')]); Object.assign({global}, {{ apply: {global}.applyApiRemotes, inject: ['remote'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-locale" {
         return format!(
             "require => {{ {global}.configureClientLocale(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-runtime/client')); return {global}; }}"
@@ -399,10 +404,18 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiSettingsGeneral(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-web-react')); Object.assign({global}, {{ apply: {global}.applyClientUiSettingsGeneral, inject: ['slots', 'locale', 'connection'], SettingsDocumentStore: {global}.__SettingsDocumentStore }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-sidebar" {
+        return format!(
+            "require => {{ {global}.configureClientUiSidebar(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSidebar, inject: ['slots', 'layout', 'sessions', 'workspaces', 'locale'] }}); return {global}; }}"
+        );
+    }
     format!("() => {global}")
 }
 
 fn compatibility_declarations(module_id: &str) -> String {
+    if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
+        return api_remotes_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-locale" {
         return "\nexport const apply: typeof wasm_bindgen.applyClientLocale;\nexport const inject: readonly ['slots', 'connection', 'remote', 'settingsScope'];\n".to_owned();
     }
@@ -478,6 +491,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
 "
         .to_owned();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-sidebar" {
+        return ui_sidebar_declarations();
+    }
     if module_id != "@seekdeep-ai/seekdeep-client-runtime" {
         return String::new();
     }
@@ -485,8 +501,86 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
         + runtime_settings_contract_declarations()
 }
 
+fn api_remotes_declarations() -> String {
+    r"
+import type { TypertClientRemote } from '@seekdeep-ai/seekdeep-typert-protocol';
+export const apply: typeof wasm_bindgen.applyApiRemotes;
+export const inject: readonly ['remote'];
+export type { TypertClientRemote as ClientRemote } from '@seekdeep-ai/seekdeep-typert-protocol';
+export type { PluginInventorySnapshot } from '@seekdeep-ai/seekdeep-host-plugin-inventory/types';
+export type { ApiRemoteForwardedEvent } from '@seekdeep-ai/seekdeep-api-remotes/types';
+export type {} from '@seekdeep-ai/seekdeep-commands/remote';
+export type {} from '@seekdeep-ai/seekdeep-goal/remote';
+export type {} from '@seekdeep-ai/seekdeep-host-plugin-inventory/remote';
+export type {} from '@seekdeep-ai/seekdeep-message-feedback/remote';
+export type {} from '@seekdeep-ai/seekdeep-commands/types';
+export type {} from '@seekdeep-ai/seekdeep-credentials/types';
+export type {} from '@seekdeep-ai/seekdeep-llm/types';
+export type {} from '@seekdeep-ai/seekdeep-agent-presets/types';
+export type {} from '@seekdeep-ai/seekdeep-settings/types';
+export type {} from '@seekdeep-ai/seekdeep-api-gateway/client';
+export type {} from '@seekdeep-ai/seekdeep-cordis-host-runner/remote';
+export type {
+  ClientResponse, ConfigurableProviderView, ConnectionHandle, ConnectionSinks, ContentBlock,
+  CredentialView, DirectoryListing, DiscoveredModelView, HistoryEntry, HostFrame, IApiClient,
+  MessageId, ModelCatalogFailure, ModelProviderGroup, ModelReasoningEffort, ModelSelection,
+  MuxFrame, PromptContentPart, QuestionResponsePayload, QueueAction, RpcError, RpcId, RpcReceipt,
+  RpcRequest, RpcResponse, RpcResult, SessionId, SessionModels, SessionSearchItem, SessionSummary,
+  SettingsNamespaceView, SettingsPathOpView, SkillEntry, StreamChunk, SubagentAddress,
+  SubagentCatalog, JobView, ToolCallView, ToolEventView, ToolResultView, WorkspaceId, WorkspaceView,
+} from '@seekdeep-ai/seekdeep-client-connection/client';
+export type {
+  ApprovalRequestId, CordisHalfState, CordisDynamicPackageId, CordisDynamicPluginId,
+  CordisDynamicPluginRunId, CordisDynamicRunMode, CordisInspectMethodManifest,
+  CordisInspectPlatform, CordisInspectProviderManifest, CordisInspectProviderView,
+  CordisInspectQueryRequest, CordisInspectQueryResolution, CordisInspectQueryResolved,
+  CordisInspectRequestId, CordisInspectResolveAck, CordisRunDiagnostic, CordisRunStatus,
+  DynamicCordisClientSource, DynamicCordisHostHalfResult, DynamicCordisInventoryRow,
+  DynamicCordisInvokeResult, DynamicCordisPackage, DynamicCordisRequestResolved,
+  DynamicCordisResolveAck, DynamicCordisRetracted, DynamicCordisRunRequest,
+  DynamicCordisRunResolution, DynamicCordisRunAttempt, DynamicCordisRunResponse,
+  DynamicCordisStopResponse, DynamicCordisUndefineReceipt, RequestRunOutcome,
+} from '@seekdeep-ai/seekdeep-cordis-host-runner/types';
+export type { JsonValue } from '@seekdeep-ai/seekdeep-session/types';
+declare module '@seekdeep-ai/cordis' {
+  interface Context { remote: TypertClientRemote }
+}
+"
+    .to_owned()
+}
+
+fn ui_sidebar_declarations() -> String {
+    r"
+import type { WorkspaceId } from '@seekdeep-ai/seekdeep-client-runtime/client';
+export const apply: typeof wasm_bindgen.applyClientUiSidebar;
+export const inject: readonly ['slots', 'layout', 'sessions', 'workspaces', 'locale'];
+export type SidebarKey = 'session.new' | 'session.new.label' | 'toggle.open' | 'toggle.collapse';
+export interface SidebarSectionOwnerProps { wide: boolean; expandSidebar(): void }
+export interface SidebarSettingsOwnerProps { wide: boolean }
+export interface SidebarFooterActionOwnerProps { wide: boolean }
+export interface SidebarRootInjected { startSession(workspaceId?: WorkspaceId): void; toggleSidebar(): void }
+export interface SidebarRootComponentProps extends SidebarRootInjected {
+  collapsed: boolean;
+  width: number;
+  useSessions: Function;
+  useWorkspaces: Function;
+  t(key: SidebarKey | string): string;
+  renderSlot(name: string, owner: unknown): unknown;
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface SlotMap {
+    'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps };
+    'sidebar.settings': { kind: 'single'; scope: 'root'; owner: SidebarSettingsOwnerProps };
+    'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps };
+  }
+}
+"
+    .to_owned()
+}
+
 fn runtime_settings_contract_declarations() -> &'static str {
-    r"export interface SettingsScopeSnapshot<T> {
+    r"export type WorkspaceId = string & { readonly __brand: 'WorkspaceId' };
+export interface SettingsScopeSnapshot<T> {
   status: 'loading' | 'ready' | 'unavailable';
   value: T | undefined;
   base: unknown;
@@ -940,6 +1034,72 @@ mod tests {
     }
 
     #[test]
+    fn ui_sidebar_bundle_configures_shell_modules_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_sidebar_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-sidebar",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiSidebar(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_sidebar_wasm.applyClientUiSidebar",
+            "inject: ['slots', 'layout', 'sessions', 'workspaces', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-sidebar");
+        for expected in [
+            "type SidebarKey",
+            "interface SidebarRootInjected",
+            "interface SidebarRootComponentProps",
+            "'sidebar.workspaces'",
+            "'sidebar.settings'",
+            "'sidebar.footer.action'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+    }
+
+    #[test]
+    fn api_remotes_bundle_mounts_the_exact_generated_contribution_set() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_api_remotes_client_wasm",
+            "@seekdeep-ai/seekdeep-api-remotes",
+        )
+        .unwrap();
+        for expected in [
+            "configureApiRemotes([require('@seekdeep-ai/seekdeep-commands/remote')",
+            "require('@seekdeep-ai/seekdeep-goal/remote')",
+            "require('@seekdeep-ai/seekdeep-cordis-host-runner/remote')",
+            "require('@seekdeep-ai/seekdeep-host-plugin-inventory/remote')",
+            "require('@seekdeep-ai/seekdeep-message-feedback/remote')",
+            "apply: __seekdeep_api_remotes_client_wasm.applyApiRemotes",
+            "inject: ['remote']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-api-remotes");
+        for expected in [
+            "TypertClientRemote as ClientRemote",
+            "PluginInventorySnapshot",
+            "ApiRemoteForwardedEvent",
+            "@seekdeep-ai/seekdeep-commands/remote",
+            "@seekdeep-ai/seekdeep-settings/types",
+            "QuestionResponsePayload",
+            "DynamicCordisRunResponse",
+            "JsonValue",
+            "interface Context { remote: TypertClientRemote }",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+    }
+
+    #[test]
     fn wasm_watch_snapshot_changes_with_package_input_bytes() {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(root.path().join("src")).unwrap();
@@ -976,6 +1136,7 @@ mod tests {
             "interface SettingsScopeSnapshot<T>",
             "interface SettingsScopeSpec<T>",
             "interface SettingsScope<T>",
+            "type WorkspaceId = string &",
         ] {
             assert!(declarations.contains(expected));
         }

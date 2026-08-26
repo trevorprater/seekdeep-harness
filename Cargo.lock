@@ -4734,6 +4734,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-api-remotes-client"
+version = "0.1.0-rc.5"
+dependencies = [
+ "futures",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-app-boot"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5075,6 +5086,18 @@ dependencies = [
  "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
+name = "seekdeep-client-ui-sidebar"
+version = "0.1.0-rc.5"
+dependencies = [
+ "js-sys",
+ "seekdeep-cordis",
+ "serde_json",
+ "tokio",
+ "wasm-bindgen",
  "wasm-bindgen-test",
 ]
 

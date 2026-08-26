@@ -40,8 +40,8 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-sidebar --artifact seekdeep_client_ui_sidebar --module-id @seekdeep-ai/seekdeep-client-ui-sidebar --out-dir packages/client/ui-sidebar/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-sidebar --artifact seekdeep_client_ui_sidebar --module-id @seekdeep-ai/seekdeep-client-ui-sidebar --out-dir packages/client/ui-sidebar/lib --watch"
   },
   "license": "MIT",
   "dependencies": {

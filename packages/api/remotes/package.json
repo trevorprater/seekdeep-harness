@@ -43,8 +43,8 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-api-remotes-client --artifact seekdeep_api_remotes_client --module-id @seekdeep-ai/seekdeep-api-remotes --out-dir packages/api/remotes/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-api-remotes-client --artifact seekdeep_api_remotes_client --module-id @seekdeep-ai/seekdeep-api-remotes --out-dir packages/api/remotes/lib --watch"
   },
   "license": "MIT",
   "files": [

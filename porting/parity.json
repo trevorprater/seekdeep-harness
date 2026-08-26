@@ -37245,7 +37245,18 @@
     {
       "source": "packages/api/remotes/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/api-remotes-client/src/lib.rs",
+        "crates/api-remotes-client/src/wasm.rs",
+        "crates/api-remotes-client/tests/wasm_mount_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source built-library e2e passed 1/1",
+        "live Rust/WASM cases mount commands, goals, dynamic Cordis, plugin inventory, and message feedback in exact declaration order; failures roll back committed predecessors and normal disposal unwinds in reverse",
+        "generated declarations retain the ClientRemote, connection, plugin-inventory, dynamic-Cordis, and JsonValue type surfaces"
+      ]
     },
     {
       "source": "packages/api/remotes/src/index.ts",
@@ -37311,7 +37322,15 @@
     {
       "source": "packages/api/remotes/tests/built-lib.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/api-remotes-client/tests/wasm_mount_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run --config vitest.e2e.config.ts packages/api/remotes/tests/built-lib.e2e.ts (1 passed)",
+        "Rust/WASM mount lifecycle is live, but target evidence does not yet cross the complete generated Goal Remote through a built browser bundle and real /api HTTP route"
+      ],
+      "note": "Keep pending until the target built-package chain drives root and Agent-scoped generated calls over the actual Rust Host gateway; mount-only evidence cannot substitute for that integration"
     },
     {
       "source": "packages/api/remotes/tsconfig.client.json",
@@ -37349,7 +37368,15 @@
     {
       "source": "packages/api/remotes/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/api/remotes/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask bundle test pins the exact five require() externals, synchronous WASM materialization, apply/inject exports, and client declaration contract",
+        "pnpm --filter @seekdeep-ai/seekdeep-api-remotes bundle emits the optimized Rust/WASM classic client package"
+      ]
     },
     {
       "source": "packages/attachment/README.i18n.yaml",
@@ -46083,32 +46110,90 @@
     {
       "source": "packages/client/ui-sidebar/src/client/SidebarRoot.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/src/state.rs",
+        "crates/client-ui-sidebar/src/wasm.rs",
+        "crates/client-ui-sidebar/tests/state_parity.rs",
+        "crates/client-ui-sidebar/tests/wasm_sidebar_parity.rs"
+      ],
+      "evidence": [
+        "pinned source sidebar suite passed 25/25",
+        "live Rust/WASM component preserves the 150 ms fold crossfade, frozen expanded width, cold-versus-live rail entry, exact shell tree, injected actions, slot owners, and 2000 ms geometry-aware scrollbar linger",
+        "target native state cases passed 5/5 and Node/WASM component cases passed 3/3"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/src/client/contract/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/src/wasm.rs",
+        "crates/client-ui-sidebar/tests/wasm_sidebar_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM registration declares sidebar.workspaces and sidebar.settings as root single slots and sidebar.footer.action as a root list slot",
+        "generated compatibility declarations preserve the owner, injected, component, WorkspaceId, and SlotMap contracts",
+        "cargo test -p xtask ui_sidebar_bundle_configures_shell_modules_and_public_contract"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/src/lib.rs",
+        "crates/client-ui-sidebar/src/wasm.rs",
+        "crates/client-ui-sidebar/tests/wasm_sidebar_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM exports the exact five-service inject list and registers dictionaries plus the sidebar component through ctx.effect",
+        "live tests assert exact registration metadata, service delegation, child-slot declarations, and reversible effect installation",
+        "optimized classic Rust/WASM package bundle completed"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/src/lib.rs",
+        "crates/client-ui-sidebar/src/wasm.rs",
+        "crates/client-ui-sidebar/tests/state_parity.rs",
+        "crates/client-ui-sidebar/tests/wasm_sidebar_parity.rs"
+      ],
+      "evidence": [
+        "native tests pin identical zh/en key sets and exact source copy",
+        "live Rust/WASM test observes one sidebar namespace registration containing the exact four-entry zh and en dictionaries"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/data/styles.css",
+        "crates/client-ui-sidebar/src/wasm.rs"
+      ],
+      "evidence": [
+        "CSS-module locals are compiled into explicit seekdeep-sidebar class names owned by the Rust/WASM component",
+        "native and wasm32 strict Clippy compile every class-bearing render path without a TypeScript CSS-module shim"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/src/lib.rs",
+        "crates/client-ui-sidebar/tests/state_parity.rs"
+      ],
+      "evidence": [
+        "native Rust Host half is an inject-free no-op plugin",
+        "live Cordis test activates and disposes the placeholder without registering behavior"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/src/invariant.ts",
@@ -46138,37 +46223,92 @@
     {
       "source": "packages/client/ui-sidebar/tests/apply.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/tests/wasm_sidebar_parity.rs"
+      ],
+      "evidence": [
+        "live Node/WASM apply case pins dictionaries, inject order, exact child declarations, action delegation, and effect-owned registration",
+        "pinned source sidebar suite passed 25/25; target Node/WASM cases passed 3/3"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/src/lib.rs",
+        "crates/client-ui-sidebar/tests/state_parity.rs",
+        "crates/invariants/src/noop.rs"
+      ],
+      "evidence": [
+        "target pins client-ui-sidebar-invariant identity in the shared no-op invariant catalog",
+        "native live Cordis case proves the Host half activates and disposes without dependencies or effects"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/tests/pointer-scrollbars.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/src/state.rs",
+        "crates/client-ui-sidebar/src/wasm.rs",
+        "crates/client-ui-sidebar/tests/state_parity.rs",
+        "crates/client-ui-sidebar/tests/wasm_sidebar_parity.rs"
+      ],
+      "evidence": [
+        "pure Rust cases pin half-open column geometry, idempotent linger arming, re-entry cancellation, and elapsed hiding",
+        "live Node/WASM case drives pointer enter, leave, inside/outside document moves, and the exact 1999 plus 1 ms linger boundary"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/tests/scrollbar-quiet-styles.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/data/styles.css",
+        "crates/client-ui-sidebar/tests/state_parity.rs"
+      ],
+      "evidence": [
+        "Rust stylesheet test pins transparent normal and hover scrollbar tokens, the SeekDeep variable rename, and absence of a shell scrollbar-gutter declaration"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/tests/state_parity.rs",
+        "crates/client-ui-sidebar/tests/wasm_sidebar_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM cases cover both expanded New Session controls, fold toggle, wide shares for all three children, collapsed-only expansion, cold collapse, fade settle, icon sizing, and persistent region mounting"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/tests/sidebar-snapshot.client.spec.tsx",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/tests/wasm_sidebar_parity.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM semantic snapshots pin every expanded and settled-collapsed node, class, accessible label, icon size, width, child-slot order, and wide owner share",
+        "dictionary registration is checked exactly for both source locales"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/tests/sidebar-styles.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-sidebar/data/styles.css",
+        "crates/client-ui-sidebar/tests/state_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust stylesheet retains the source geometry, collapse phases, rail offset, timings, scrollbar token indirection, hover states, and reduced-motion overrides",
+        "native test pins key tokens and animation declarations; the pinned source style suite passed"
+      ]
     },
     {
       "source": "packages/client/ui-sidebar/tsconfig.json",
@@ -46184,7 +46324,15 @@
     {
       "source": "packages/client/ui-sidebar/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-sidebar/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask bundle test pins React and primitive externals, synchronous WASM materialization, apply/inject exports, and compatibility declarations",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-sidebar bundle emitted the optimized Rust/WASM classic client package"
+      ]
     },
     {
       "source": "packages/client/ui-skill/README.i18n.yaml",
