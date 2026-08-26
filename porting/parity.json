@@ -44475,7 +44475,15 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/cjkFriendlyStrong.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/markdown.rs"
+      ],
+      "evidence": [
+        "Rust GFM parser applies the punctuation-close exception only for double-asterisk strong followed by Han, Hiragana, Katakana, Hangul, or Bopomofo script-extension characters",
+        "Rust fixtures pin all eight CJK/ASCII punctuation examples and exclude escaped, code, ASCII-followed, single-marker, and ordinary upstream emphasis contexts",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/highlight.ts",
@@ -44485,7 +44493,16 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/incremental.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/markdown.rs"
+      ],
+      "evidence": [
+        "pinned source incremental/plain-text suites: 30 tests passed",
+        "Rust incremental fixtures cover two-block frontier retention, monotonic frozen identity, identical-input cache identity, reset generations, parser-owned cuts, positionless fallback keys, bounded tail parsing, unclosed fences, blank-line list extension, and absolute UTF-16 keys across astral content",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/katex.tsx",
@@ -44505,7 +44522,14 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/plain-text.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/markdown.rs"
+      ],
+      "evidence": [
+        "Rust projection fixtures pin complete, first-line, and first-semantic-paragraph modes over GFM headings, emphasis, links, images, lists, code, raw HTML, tables, references, hard breaks, and thematic blocks",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/render.tsx",
@@ -45093,7 +45117,14 @@
     {
       "source": "packages/client/ui-primitives/tests/markdown-plain-text.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/markdown_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Markdown plain-text suite passed in the focused 30-test run",
+        "Rust fixtures reproduce all four source projection scenarios"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/markdown-render-units.client.spec.tsx",

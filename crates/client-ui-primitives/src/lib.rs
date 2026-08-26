@@ -2,6 +2,8 @@
 
 mod ansi;
 mod head_tail_cap;
+mod markdown;
 
 pub use ansi::*;
 pub use head_tail_cap::*;
+pub use markdown::*;
