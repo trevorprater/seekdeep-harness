@@ -81188,11 +81188,11 @@
       "evidence": [
         "pnpm exec tsx scripts/verify-translation-pairing.ts (pinned source: 937 pairs checked across the complete in-scope corpus, all consistent)",
         "cargo test -p seekdeep-repository-tools --test translation_pairing_command_parity --all-features (6 passed for corpus/named checks, missing/list state, real Git-backed write, drift ordering, staged-index isolation, and structural/switcher errors)",
-        "target/debug/verify-translation-pairing --list (live Rust target: 341 ok, 598 out-of-sync, 4 missing, 943 in scope)",
+        "target/debug/verify-translation-pairing (live Rust target: 945 pairs checked across all in-scope documentation, all consistent after isolated write-then-structure audit)",
         "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
         "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
       ],
-      "note": "the Rust command preserves worktree/index planes, scoped and corpus writes, recovery refs, pair states, generated regions, switchers, and structural diagnostics; Rust target/ build output is intentionally excluded from source-doc discovery, and no target corpus-conformance claim is made until the 598 stale records and 4 missing pair artifacts are reviewed and repaired"
+      "note": "the Rust command preserves worktree/index planes, scoped and corpus writes, recovery refs, pair states, generated regions, switchers, and structural diagnostics; Rust target/ build output is intentionally excluded from source-doc discovery, and all current target pairs pass the complete corpus gate"
     },
     {
       "source": "scripts/verify-translation-prompt.ts",
