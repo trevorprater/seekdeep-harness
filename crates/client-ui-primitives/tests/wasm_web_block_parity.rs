@@ -14,6 +14,10 @@ export function installWebBench() {
   globalThis.document = {
     head: { appendChild(node) { styles.push(node) } },
     createElement(kind) { return { kind, attributes: {}, setAttribute(k, v) { this.attributes[k] = v } } },
+    querySelector(selector) {
+      const match = selector.match(/data-plugin-css="([^"]+)"/)
+      return match === null ? null : styles.find(style => style.attributes['data-plugin-css'] === match[1]) ?? null
+    },
   }
   const React = { createElement(kind, props, ...children) { return { kind, props: props ?? {}, children } } }
   return { React, Markdown: 'MarkdownText', styles }
@@ -81,6 +85,19 @@ fn setup() -> (JsValue, JsValue) {
 #[wasm_bindgen_test]
 fn search_renders_answer_before_safe_labeled_citations_and_optional_metadata() {
     let (_bench, component) = setup();
+    let bench = installWebBench();
+    configure_client_ui_primitive_web(property(&bench, "React"), property(&bench, "Markdown"))
+        .unwrap();
+    configure_client_ui_primitive_web(property(&bench, "React"), property(&bench, "Markdown"))
+        .unwrap();
+    let styles = Array::from(&property(&bench, "styles"));
+    assert_eq!(styles.length(), 1);
+    assert_eq!(
+        property(&property(&styles.get(0), "attributes"), "data-plugin")
+            .as_string()
+            .as_deref(),
+        Some("@seekdeep-ai/seekdeep-client-ui-primitives")
+    );
     let sources = [
         source(&[
             ("url", JsValue::from_str("https://example.com/a")),

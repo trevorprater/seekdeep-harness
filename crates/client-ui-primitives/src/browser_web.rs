@@ -280,6 +280,17 @@ fn inject_style() -> Result<(), JsValue> {
         return Ok(());
     }
     let tag = "@seekdeep-ai/seekdeep-client-ui-primitives/WebBlock.module.css";
+    if let Ok(query) = Reflect::get(&document, &JsValue::from_str("querySelector"))
+        .and_then(wasm_bindgen::JsCast::dyn_into::<Function>)
+        && !query
+            .call1(
+                &document,
+                &JsValue::from_str(&format!("style[data-plugin-css=\"{tag}\"]")),
+            )?
+            .is_null()
+    {
+        return Ok(());
+    }
     let mut css = WEB_CSS.to_owned();
     for local in [
         "sourceLink",
@@ -303,6 +314,14 @@ fn inject_style() -> Result<(), JsValue> {
         &style,
         "setAttribute",
         &[JsValue::from_str("data-plugin-css"), JsValue::from_str(tag)],
+    )?;
+    call_method(
+        &style,
+        "setAttribute",
+        &[
+            JsValue::from_str("data-plugin"),
+            JsValue::from_str("@seekdeep-ai/seekdeep-client-ui-primitives"),
+        ],
     )?;
     Reflect::set(
         &style,
