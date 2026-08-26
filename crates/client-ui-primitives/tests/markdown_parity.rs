@@ -1,10 +1,11 @@
 //! Source fixtures for GFM plain-text projection and incremental block freezing.
 
-use std::{cell::RefCell, fmt::Write as _, rc::Rc};
+use std::{cell::RefCell, fmt::Write as _, rc::Rc, time::Instant};
 
-use markdown::mdast::Node;
+use markdown::{Constructs, ParseOptions, mdast::Node, to_mdast};
 use seekdeep_client_ui_primitives::{
     IncrementalMarkdownParser, MarkdownPlainTextMode, extract_markdown_plain_text, parse_gfm,
+    parse_gfm_with_math,
 };
 
 const MARKDOWN: &str = "# Release notes\n\nFirst **paragraph** with [a link](https://example.com) and ![diagram](diagram.png).\n\n- shipped\n- `verified`\n\n```ts\nconst ready = true\n```";
@@ -42,6 +43,44 @@ fn strip_positions(node: &mut Node) {
             strip_positions(child);
         }
     }
+}
+
+fn collect_math(node: &Node, output: &mut Vec<(String, bool)>) {
+    match node {
+        Node::InlineMath(math) => output.push((math.value.clone(), false)),
+        Node::Math(math) => output.push((math.value.clone(), true)),
+        _ => {}
+    }
+    if let Some(children) = node.children() {
+        for child in children {
+            collect_math(child, output);
+        }
+    }
+}
+
+fn math(source: &str) -> Vec<(String, bool)> {
+    let root = parse_gfm_with_math(source).unwrap();
+    let mut output = Vec::new();
+    collect_math(&root, &mut output);
+    output
+}
+
+#[test]
+fn markdown_dependency_enables_flow_and_text_math_together() {
+    let mut options = ParseOptions::gfm();
+    options.constructs = Constructs {
+        math_flow: true,
+        math_text: true,
+        ..options.constructs
+    };
+    let root = to_mdast("$$\n\\theta\n$$\n\ninline $x$", &options).unwrap();
+    let mut values = Vec::new();
+    collect_math(&root, &mut values);
+    assert_eq!(
+        values,
+        [("\\theta".to_owned(), true), ("x".to_owned(), false)],
+        "{root:#?}"
+    );
 }
 
 fn collect_strong_text(node: &Node, output: &mut Vec<String>) {
@@ -161,6 +200,94 @@ fn cjk_friendly_strong_closes_after_punctuation_without_changing_other_contexts(
     let mut strong = Vec::new();
     collect_strong_text(&root, &mut strong);
     assert_eq!(strong, ["普通"]);
+}
+
+#[test]
+fn settled_math_supports_dollars_backslash_delimiters_and_same_line_display() {
+    let source = "Inline dollar $\\theta$ and backslash \\(\\frac{1}{5}\\).\n\n\\[\\frac{\\pi}{4} < \\theta < \\frac{\\pi}{2}\\]\n\n$$\\theta \\in \\left(\\frac{\\pi}{4}, \\frac{\\pi}{2}\\right). \\tag{1}$$\n\n| Symbol | Value |\n| --- | --- |\n| $\\theta$ | \\(\\frac{1}{5}\\) |";
+    let values = math(source);
+    assert_eq!(values.len(), 6, "{values:?}");
+    assert_eq!(values.iter().filter(|(_, display)| *display).count(), 2);
+    assert_eq!(values[0], ("\\theta".to_owned(), false));
+    assert_eq!(values[1], ("\\frac{1}{5}".to_owned(), false));
+    assert!(values[2].0.contains("\\frac{\\pi}{4}"));
+    assert!(values[3].0.contains("\\tag{1}"));
+}
+
+#[test]
+fn math_delimiters_cross_lines_and_markdown_containers_but_reject_malformed_candidates() {
+    for (source, value, display) in [
+        ("\\(\\alpha \\, \\beta\\)", "\\alpha \\, \\beta", false),
+        ("\\\\\\(x\\)", "x", false),
+        (
+            "\\(\\frac{1}{5}\n+\\frac{1}{7}\\)",
+            "\\frac{1}{5}\n+\\frac{1}{7}",
+            false,
+        ),
+        ("\\[a\\\\\nb\\]", "a\\\\\nb", true),
+        ("> \\[\n> \\frac{1}{5}\n> \\]", "\\frac{1}{5}", true),
+        ("- \\[\n  \\frac{1}{5}\n  \\]", "\\frac{1}{5}", true),
+    ] {
+        assert_eq!(math(source), vec![(value.to_owned(), display)], "{source}");
+    }
+    for literal in [
+        "\\\\(x\\)",
+        "\\[x",
+        "\\(\\theta",
+        "\\(a\\\\)",
+        "\\[\n\\[",
+        "> \\[\nnot a quoted continuation\n\\]",
+        "```tex\n\\[\\frac{1}{5}\\]\n$$x \\tag{1}$$\n```",
+    ] {
+        assert!(math(literal).is_empty(), "{literal}");
+    }
+}
+
+#[test]
+fn ordinary_dollar_fences_keep_upstream_inline_and_flow_distinctions() {
+    assert_eq!(math("$$\n\\theta\n$$"), vec![("\\theta".to_owned(), true)]);
+    assert_eq!(math("$$$\\theta$$$").len(), 1);
+    assert!(math("$$a$b\nc").is_empty());
+    assert_eq!(
+        math("  \\[\n  \\theta\n  \\]"),
+        vec![("\\theta".to_owned(), true)]
+    );
+    assert_eq!(
+        math("Prose line\n\\[x\\]")
+            .iter()
+            .filter(|(_, d)| *d)
+            .count(),
+        1
+    );
+    assert_eq!(
+        math("Prose line\n$$x$$").iter().filter(|(_, d)| *d).count(),
+        1
+    );
+    assert_eq!(math("$$x$$ trailing"), vec![("x".to_owned(), false)]);
+    assert_eq!(
+        math("$$100\\$$$\n\n\\(a\\\\\\)\n\n\\[b\\\\\\]"),
+        vec![
+            ("100\\$".to_owned(), true),
+            ("a\\\\".to_owned(), false),
+            ("b\\\\".to_owned(), true),
+        ]
+    );
+}
+
+#[test]
+fn streaming_gfm_never_promotes_tex_delimiters() {
+    let root = parse_gfm("$\\theta$\n\n\\(x\\)\n\n\\[y\\]\n\n$$z$$").unwrap();
+    let mut values = Vec::new();
+    collect_math(&root, &mut values);
+    assert!(values.is_empty());
+}
+
+#[test]
+fn repeated_unclosed_backslash_delimiters_have_bounded_fallback_work() {
+    let source = "\\(x ".repeat(6_400);
+    let started = Instant::now();
+    assert!(math(&source).is_empty());
+    assert!(started.elapsed().as_secs_f64() < 3.0);
 }
 
 #[test]

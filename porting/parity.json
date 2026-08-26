@@ -44360,7 +44360,17 @@
     {
       "source": "packages/client/ui-primitives/src/clipboard.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_util.rs",
+        "crates/client-ui-primitives/tests/wasm_clipboard_parity.rs"
+      ],
+      "evidence": [
+        "pinned source writeClipboard focus: 7 tests passed",
+        "three live WASM cases preserve exact async write text, rejection settlement, missing-method fallback, textarea selection/removal, execCommand acceptance/refusal/throw behavior, and no-path false result",
+        "WASM_BINDGEN_TEST_ONLY_NODE=1 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --test wasm_clipboard_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/css-modules.d.ts",
@@ -44512,12 +44522,31 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/mathCompatibility.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/markdown.rs",
+        "crates/client-ui-primitives/tests/markdown_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Markdown suite: 30 tests passed",
+        "Rust compatibility parser pins inline/double-dollar math, TeX parenthesis and bracket delimiters, same-line tagged display, table/container contexts, escaped and even/odd backslash runs, paragraph interruption, malformed/lazy candidates, fenced-code exclusion, and linear fallback over 6,400 unclosed delimiters",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --test markdown_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/parse.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/markdown.rs",
+        "crates/client-ui-primitives/tests/markdown_parity.rs"
+      ],
+      "evidence": [
+        "streaming parse_gfm uses position-aware GFM plus the exact CJK-friendly strong exception and never promotes TeX delimiters",
+        "settled parse_gfm_with_math adds dollar, backslash inline/display, same-line display interruption, container continuation, escaped-close, table, and malformed-delimiter behavior without rewriting code, HTML, or link destinations",
+        "pinned source math/TeX/display focus: 7 tests passed; pinned source incremental/plain-text focus: 30 tests passed",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-primitives --test markdown_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/plain-text.ts",
