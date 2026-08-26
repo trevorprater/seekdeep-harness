@@ -42,6 +42,7 @@ pub mod runtime_closure;
 /// Cross-product Skill invocation metadata policy.
 pub mod skill_invocation_metadata;
 pub mod translation_pairing;
+pub mod translation_pairing_command;
 pub mod translation_pairing_git;
 pub mod translation_pairing_record;
 /// Vendored package lockfile link-integrity policy.

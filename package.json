@@ -82,7 +82,7 @@
     "verify-type-equiv": "tsx scripts/verify-type-equiv.ts",
     "verify-skill-invocation-metadata": "cargo run --quiet --package seekdeep-repository-tools --bin verify-skill-invocation-metadata",
     "verify-translation-prompt": "tsx scripts/verify-translation-prompt.ts",
-    "verify-translation-pairing": "tsx scripts/verify-translation-pairing.ts",
+    "verify-translation-pairing": "cargo run --quiet --package seekdeep-repository-tools --bin verify-translation-pairing --",
     "resolve-translation-pairing-conflicts": "tsx scripts/merge-translation-pairing.ts --resolve",
     "gen-translation-brief": "tsx scripts/gen-translation-brief.ts",
     "verify-doc-budgets": "cargo run --quiet --package seekdeep-repository-tools --bin verify-doc-budgets --",

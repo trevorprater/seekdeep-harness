@@ -553,6 +553,7 @@ fn translation_source_excluded(file: &str) -> bool {
         ".pytest_cache",
         ".artifacts",
         "vendor",
+        "target",
     ];
     file.split('/').any(|segment| {
         DIRECTORIES.contains(&segment)
