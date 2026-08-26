@@ -16,6 +16,7 @@ path-clean.workspace = true
 percent-encoding.workspace = true
 regex.workspace = true
 scraper.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 serde_yml.workspace = true
 sha1.workspace = true

@@ -75,3 +75,47 @@ fn storing_outside_a_repository_fails_before_a_record_can_reference_it() {
         .to_string();
     assert!(error.contains("git hash-object -w --stdin failed"));
 }
+
+#[test]
+fn git_cannot_start_failure_is_clear() {
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "git_cannot_start_helper"])
+        .env("SEEKDEEP_TEST_GIT_CANNOT_START", "1")
+        .env("PATH", "")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn git_cannot_start_helper() {
+    if std::env::var_os("SEEKDEEP_TEST_GIT_CANNOT_START").is_none() {
+        return;
+    }
+    let error = store_git_blob(std::path::Path::new("."), b"snapshot")
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("git hash-object -w --stdin failed"));
+}
+
+#[test]
+fn non_sha1_object_format_is_rejected_when_supported() {
+    let root = tempfile::tempdir().unwrap();
+    let status = Command::new("git")
+        .args(["init", "--quiet", "--object-format=sha256"])
+        .arg(root.path())
+        .status()
+        .unwrap();
+    if !status.success() {
+        return;
+    }
+    let error = store_git_blob(root.path(), b"snapshot")
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("returned unexpected object ID"));
+}

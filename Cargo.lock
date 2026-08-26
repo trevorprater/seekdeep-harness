@@ -6804,6 +6804,7 @@ dependencies = [
  "percent-encoding",
  "regex",
  "scraper",
+ "serde",
  "serde_json",
  "serde_yml",
  "sha1",

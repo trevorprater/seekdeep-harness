@@ -80677,12 +80677,37 @@
     {
       "source": "scripts/translation-pairing.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/translation_pairing_core_parity.rs",
+        "crates/repository-tools/tests/translation_pairing_git_parity.rs",
+        "crates/repository-tools/tests/translation_pairing_record_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/translation-pairing.spec.ts -t 'translation pairing snapshots|translation pairing records' (7 passed)",
+        "pnpm exec vitest run scripts/translation-pairing.spec.ts -t 'translation pairing manifest|translation pairing switchers|translation scope discovery|translation structural signature|pair CLI arguments|generated regions' (43 passed)",
+        "Rust pairing suites: 19 passed across core (10), Git (6), and canonical record (3), consolidating all 50 source cases including Git-unavailable and optional SHA-256 object-format branches",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/translation-pairing.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/translation_pairing.rs",
+        "crates/repository-tools/src/translation_pairing_git.rs",
+        "crates/repository-tools/src/translation_pairing_record.rs",
+        "crates/repository-tools/tests/translation_pairing_core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source complete translation-pairing.spec.ts suite: 50 passed across snapshots, records, manifest, switchers, scope, structures, CLI, and generated regions",
+        "cargo test -p seekdeep-repository-tools --test translation_pairing_core_parity --all-features (10 consolidated core cases passed)",
+        "cargo test -p seekdeep-repository-tools --test translation_pairing_git_parity --test translation_pairing_record_parity --all-features (Git and record primitives passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "public repository switchers, generated runtime path exclusions, snapshot refs, and product-facing examples apply the approved seekdeep rename while the pairing contract and Git SHA-1 sidecar format remain unchanged"
     },
     {
       "source": "scripts/translation-prompt.snapshot.ts",
