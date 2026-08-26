@@ -44509,7 +44509,17 @@
     {
       "source": "packages/client/ui-primitives/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/client_css_declaration_boundary.rs",
+        "crates/client-ui-primitives/src/browser_blocks.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --test client_css_declaration_boundary --all-features (target client/extensions production tree has zero TypeScript sources and zero ambient CSS-module declarations)",
+        "compiled Rust/WASM primitives embed owned .module.css assets with include_str! at the Rust compilation boundary",
+        "cargo clippy -p seekdeep-repository-tools --test client_css_declaration_boundary --all-features -- -D warnings"
+      ],
+      "note": "intentional 105% architecture difference: browser production code is Rust/WASM and imports no CSS modules through TypeScript, so an ambient foreign-language declaration would be unused compatibility residue rather than a ported behavior"
     },
     {
       "source": "packages/client/ui-primitives/src/head-tail-cap.ts",
@@ -79831,7 +79841,16 @@
     {
       "source": "scripts/client-tsconfig.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/client_css_declaration_boundary.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/client-tsconfig.spec.ts (pinned source: 1 passed, loading every source CSS declaration)",
+        "cargo test -p seekdeep-repository-tools --test client_css_declaration_boundary --all-features (Rust target: the corresponding compiled-client declaration set is exactly empty because all production client sources are Rust/WASM)",
+        "cargo clippy -p seekdeep-repository-tools --test client_css_declaration_boundary --all-features -- -D warnings"
+      ],
+      "note": "the source aggregate guarded workspace-link discovery of TypeScript CSS declarations; the approved target architecture removes that foreign source plane entirely and the Rust test fails if either TypeScript production sources or ambient src/css-modules.d.ts files reappear"
     },
     {
       "source": "scripts/cordis-config-files.spec.ts",
