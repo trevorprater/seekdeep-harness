@@ -44898,10 +44898,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-settings-general/package.json"
+        "packages/client/ui-settings-general/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings-general bundle emitted the optimized synchronous Rust/WASM classic package",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings-general watch observed the initial build and a package-input rebuild",
+        "release-bundle Node smoke proved exact inject metadata, five remote-safe registrations, withheld loopback action, and compiled trigger copy"
       ]
     },
     {
@@ -45195,7 +45198,8 @@
       ],
       "evidence": [
         "cargo xtask tests pin module materialization externals and public declarations",
-        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings-general bundle emits the optimized synchronous Rust/WASM classic package"
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings-general bundle emits the optimized synchronous Rust/WASM classic package",
+        "pnpm --filter @seekdeep-ai/seekdeep-client-ui-settings-general watch observed the initial build and a package-input rebuild"
       ]
     },
     {
