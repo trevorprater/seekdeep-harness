@@ -2,6 +2,8 @@
 
 /// Agent Note tree discovery plus classification and format verification.
 pub mod agent_note_tree;
+/// Frozen Agent Note archive triplets, seals, and append-only verification.
+pub mod archived_agent_notes;
 /// Cordis Loader configuration discovery.
 pub mod cordis_config_files;
 /// Workspace source-alias to built-declaration path mapping.

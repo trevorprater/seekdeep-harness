@@ -73,6 +73,13 @@ pub fn compiled_repository_root() -> &'static Path {
     &COMPILED_REPOSITORY_ROOT
 }
 
+/// Whether a repository path is frozen Agent Note history.
+#[must_use]
+pub fn is_archived_agent_note_path(path: &str) -> bool {
+    path.replace('\\', "/")
+        .starts_with(".agents/notes/archived/")
+}
+
 /// Walks the active Agent Note tree and enforces lifecycle/class/path rules.
 ///
 /// # Errors

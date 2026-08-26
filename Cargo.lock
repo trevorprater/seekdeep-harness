@@ -6457,8 +6457,13 @@ name = "seekdeep-repository-tools"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "chrono",
+ "hex",
+ "indexmap 2.14.0",
  "regex",
  "serde_json",
+ "sha1",
+ "sha2 0.10.9",
  "tempfile",
  "walkdir",
 ]

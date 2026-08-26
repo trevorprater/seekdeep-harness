@@ -78,7 +78,7 @@
     "verify-mermaid": "tsx scripts/verify-mermaid.ts",
     "verify-agent-note-classification": "cargo run --quiet --package seekdeep-repository-tools --bin verify-agent-note-classification",
     "verify-agent-note-format": "cargo run --quiet --package seekdeep-repository-tools --bin verify-agent-note-format",
-    "verify-archived-agent-notes": "tsx scripts/verify-archived-agent-notes.ts",
+    "verify-archived-agent-notes": "cargo run --quiet --package seekdeep-repository-tools --bin verify-archived-agent-notes --",
     "verify-type-equiv": "tsx scripts/verify-type-equiv.ts",
     "verify-skill-invocation-metadata": "tsx scripts/verify-skill-invocation-metadata.ts",
     "verify-translation-prompt": "tsx scripts/verify-translation-prompt.ts",
