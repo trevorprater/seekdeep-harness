@@ -36660,9 +36660,10 @@
         "pnpm --silent run verify-agent-note-classification and verify-agent-note-format delegate to verified Rust binaries",
         "pnpm --silent run verify-archived-agent-notes delegates to the verified append-only Rust verifier",
         "pnpm --silent run verify-doc-refs delegates to the verified Rust repository scanner",
-        "pnpm --silent run verify-public-repository-links delegates to the verified Rust tracked-file policy"
+        "pnpm --silent run verify-public-repository-links delegates to the verified Rust tracked-file policy",
+        "pnpm --silent run verify-config-source-ownership delegates to the verified Rust shipped-config policy"
       ],
-      "note": "root package metadata preserves source command names while Rust owns change-scope, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
+      "note": "root package metadata preserves source command names while Rust owns change-scope, configuration ownership, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
     {
       "source": "packages/AGENTS.md",
@@ -78974,12 +78975,32 @@
     {
       "source": "scripts/verify-config-source-ownership.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/config_source_ownership_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/verify-config-source-ownership.spec.ts (pinned source: 1 passed)",
+        "cargo test -p seekdeep-repository-tools --test config_source_ownership_parity --all-features (1 passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/verify-config-source-ownership.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/config_source_ownership.rs",
+        "crates/repository-tools/src/bin/verify-config-source-ownership.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm run verify-config-source-ownership (pinned source: no ordinary inline credential or endpoint forms)",
+        "cargo test -p seekdeep-repository-tools --test config_source_ownership_parity --all-features (1 passed)",
+        "pnpm --silent run verify-config-source-ownership (Rust target: no ordinary inline credential or endpoint forms)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/verify-cordis-config.spec.ts",
