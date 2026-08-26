@@ -20,3 +20,5 @@ pub mod public_repository_links;
 pub mod publication_payload;
 /// Shared repository glob discovery and line-oriented reference scanning.
 pub mod repo_files;
+/// Cross-product Skill invocation metadata policy.
+pub mod skill_invocation_metadata;

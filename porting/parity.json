@@ -36662,7 +36662,8 @@
         "pnpm --silent run verify-doc-refs delegates to the verified Rust repository scanner",
         "pnpm --silent run verify-public-repository-links delegates to the verified Rust tracked-file policy",
         "pnpm --silent run verify-config-source-ownership delegates to the verified Rust shipped-config policy",
-        "pnpm --silent run verify-seekdeep-package-licenses delegates to the verified product-renamed Rust policy"
+        "pnpm --silent run verify-seekdeep-package-licenses delegates to the verified product-renamed Rust policy",
+        "pnpm --silent run verify-skill-invocation-metadata delegates to the verified Rust cross-product policy"
       ],
       "note": "root package metadata preserves source command names while Rust owns change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
@@ -79176,12 +79177,32 @@
     {
       "source": "scripts/verify-skill-invocation-metadata.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/skill_invocation_metadata_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/verify-skill-invocation-metadata.spec.ts (pinned source: 2 passed)",
+        "cargo test -p seekdeep-repository-tools --test skill_invocation_metadata_parity --all-features (2 passed)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/verify-skill-invocation-metadata.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/skill_invocation_metadata.rs",
+        "crates/repository-tools/src/bin/verify-skill-invocation-metadata.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm run verify-skill-invocation-metadata (pinned source: 6 cross-product Skill policy pairs aligned)",
+        "cargo test -p seekdeep-repository-tools --test skill_invocation_metadata_parity --all-features (2 passed)",
+        "pnpm --silent run verify-skill-invocation-metadata (Rust target: the same 6 cross-product Skill policy pairs aligned)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/verify-translation-pairing.ts",

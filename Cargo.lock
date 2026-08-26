@@ -6462,6 +6462,7 @@ dependencies = [
  "indexmap 2.14.0",
  "regex",
  "serde_json",
+ "serde_yml",
  "sha1",
  "sha2 0.10.9",
  "tempfile",
