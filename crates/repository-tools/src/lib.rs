@@ -36,6 +36,7 @@ pub mod publication_payload;
 pub mod release_families;
 pub mod release_process;
 pub mod release_tarball;
+pub mod release_verify;
 /// Shared repository glob discovery and line-oriented reference scanning.
 pub mod repo_files;
 pub mod run_oxlint;

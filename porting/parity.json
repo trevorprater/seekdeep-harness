@@ -80439,7 +80439,21 @@
     {
       "source": "scripts/release/verify.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/release_verify.rs",
+        "crates/repository-tools/src/bin/release-verify.rs",
+        "crates/repository-tools/tests/release_verify_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/release/verify.ts --family dsh (pinned source: family dsh, 221 members, 0.1.0-rc.5)",
+        "cargo test -p seekdeep-repository-tools --test release_verify_parity --all-features (4 passed for local, private, missing/wrong/unknown tags, and valid publishing)",
+        "cargo run --quiet --package seekdeep-repository-tools --bin release-verify -- --family seekdeep (Rust target: 153 members, 0.1.0-rc.5)",
+        "cargo clippy -p seekdeep-repository-tools --test release_verify_parity --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "family id, tag ownership, usage, and output apply the required dsh to seekdeep rename; publication remains credential-free verification only and no publish action was performed"
     },
     {
       "source": "scripts/repo-files.ts",
