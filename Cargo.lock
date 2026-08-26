@@ -6666,6 +6666,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 2.14.0",
+ "markdown",
  "regex",
  "serde_json",
  "serde_yml",

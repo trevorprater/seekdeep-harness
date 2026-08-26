@@ -80153,7 +80153,17 @@
     {
       "source": "scripts/markdown.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/markdown_util.rs",
+        "crates/repository-tools/tests/markdown_util_parity.rs"
+      ],
+      "evidence": [
+        "pinned source and Rust fixtures produce exact fence, heading, and prose-line JSON over closed/unterminated/indented code, rendered heading text, depth-first pruning, and multiline HTML comments",
+        "Rust implementation uses position-aware GFM and byte-consistent source ranges so non-ASCII text before comments cannot skew retained lines",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test markdown_util_parity --all-features",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/merge-translation-pairing-driver.sh",
