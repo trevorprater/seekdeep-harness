@@ -80625,7 +80625,18 @@
     {
       "source": "scripts/translation-pairing-git.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/translation_pairing_git.rs",
+        "crates/repository-tools/tests/translation_pairing_git_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/translation-pairing.spec.ts -t 'translation pairing snapshots|translation pairing records' (pinned source: 7 passed)",
+        "cargo test -p seekdeep-repository-tools --test translation_pairing_git_parity --all-features (3 passed for exact non-UTF8 blob hashing/storage/recovery, pinned snapshot refs, staged bytes independent of the worktree, absent paths, and non-repository failure)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "the durable snapshot namespace applies the required refs/dsh to refs/seekdeep product rename; Git object bytes and SHA-1 pairing-record format remain unchanged"
     },
     {
       "source": "scripts/translation-pairing-merge.spec.ts",
@@ -80640,7 +80651,17 @@
     {
       "source": "scripts/translation-pairing-record.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/translation_pairing_record.rs",
+        "crates/repository-tools/tests/translation_pairing_record_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/translation-pairing.spec.ts -t 'translation pairing snapshots|translation pairing records' (pinned source record round-trip and malformed-key cases passed)",
+        "cargo test -p seekdeep-repository-tools --test translation_pairing_record_parity --all-features (3 passed for English/metadata path derivation, canonical byte-exact round trip, and duplicate/unexpected/malformed rejection)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ]
     },
     {
       "source": "scripts/translation-pairing.manifest.json",
