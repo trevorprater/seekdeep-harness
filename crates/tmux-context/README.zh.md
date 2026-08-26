@@ -12,7 +12,7 @@ Web 和无头组合不会加载它。
 - id: tmux-context
   name: seekdeep-tmux-context
   config:
-    refreshIntervalMs: 60000 # 可选；省略或设为 0 时检查每个发生变化的轮次
+    refreshIntervalMs: 60000 # optional; omit or use 0 for every changed turn
 ```
 
 `refreshIntervalMs` 必须是非负的 JavaScript 安全整数。省略或设为 `0` 时，

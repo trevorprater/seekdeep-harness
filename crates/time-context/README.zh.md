@@ -10,8 +10,8 @@
 - id: time-context
   name: seekdeep-time-context
   config:
-    timeZone: Asia/Shanghai  # 请求没有唯一浏览器时区时的可选回退
-    refreshIntervalMs: 60000 # 可选；省略或设为 0 时每次合格尝试均注入
+    timeZone: Asia/Shanghai  # optional fallback when the request has no unique browser zone
+    refreshIntervalMs: 60000 # optional; omit or set to 0 for every eligible attempt
 ```
 
 当前开放轮次只包含一个经 Host 校验的浏览器时区时，使用该请求本地时区格式化时间戳。浏览器来源信息缺失或混杂时，`timeZone` 提供显示回退；省略它则会在插件加载时解析一次进程时区。原生实现遵循 `TZ`，将支持的名称规范化为固定源运行时所公开的相同稳定标识，并在安装监听器前校验每个显式回退值。

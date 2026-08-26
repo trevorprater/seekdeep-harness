@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-[`seekdeep-subprocess`](../subprocess/README.zh.md) 能力 seam 的原生本地
+[`seekdeep-subprocess`](../subprocess/README.md) 能力 seam 的原生本地
 provider。`LocalSubprocessRuntime` 解析本地可执行文件，以显式 stdio
 spawn 隔离的普通进程树，并通过原生 PTY 与平台进程检查实现终端进程。
 它没有独立配置：每项处置方式、限制、终端尺寸、宽限期、环境与目录都

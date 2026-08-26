@@ -18,7 +18,7 @@
 - id: shell-env
   name: seekdeep-shell-env
   config:
-    seekdeepHome: C:\Users\me\.seekdeep # 默认：$SEEKDEEP_HOME，然后 ~/.seekdeep
+    seekdeepHome: C:\Users\me\.seekdeep # default: $SEEKDEEP_HOME, then ~/.seekdeep
 ```
 
 Loader 把 null 视为默认配置，在任何插件 effect 开始前验证 `seekdeepHome` 必须

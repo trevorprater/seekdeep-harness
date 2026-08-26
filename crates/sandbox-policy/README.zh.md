@@ -30,13 +30,19 @@ Invariant 配套组件在回放时以及实时提交前拒绝词汇之外的模�
 
 ## 模型体验
 
+### 只读
+
 ```markdown
 Current SeekDeep file policy: read-only. Any available operation enforced by the SeekDeep file sandbox cannot modify files in the standing mode. Do not refuse a required modification from this policy alone: try an available tool normally and follow any denial and escalation guidance it returns.
 ```
 
+### 工作区写入
+
 ```markdown
 Current SeekDeep file policy: workspace-write. Any available operation enforced by the SeekDeep file sandbox may modify files under the session workspace: "<workspace root>". Some platform temporary areas may also be writable.
 ```
+
+### 无限制完全访问
 
 ```markdown
 Current SeekDeep file policy: danger-full-access. The SeekDeep file sandbox does not restrict file modifications by available operations.

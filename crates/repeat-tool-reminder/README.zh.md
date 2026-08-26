@@ -10,10 +10,10 @@
 - id: repeat-tool-reminder
   name: repeat-tool-reminder
   config:
-    thresholds: [3, 5, 8]        # 默认值；触发提醒的连续次数
-    include: []                  # 要跟踪的工具名模式；空列表表示全部工具
-    exclude: [todo_write]        # 对链透明的工具名模式
-    argumentsPreviewChars: 500   # 默认值；详细提醒中参数文本的上限
+    thresholds: [3, 5, 8]        # default; consecutive counts that trigger a reminder
+    include: []                  # tool-name patterns to track; empty means all tools
+    exclude: [todo_write]        # tool-name patterns transparent to the chain
+    argumentsPreviewChars: 500   # default; cap on arguments quoted in a detailed reminder
 ```
 
 插件加载时，`thresholds` 会对错误配置快速失败：空列表、非整数、小于 2 的值或重复值都会返回错误，绝不静默回退到默认值；`argumentsPreviewChars` 同样只接受大于等于 1 的整数。系统会将阈值按升序规范化；第一个阈值发送简短的通用提醒，后续每个阈值发送详细版本，列出工具、连续次数和规范参数。参数内容截取前 `argumentsPreviewChars` 个字符并附带省略字符数标记，避免循环中的写入／编辑载荷无限制进入下一次请求；检测始终比较完整的规范字符串。

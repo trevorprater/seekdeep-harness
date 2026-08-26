@@ -6,8 +6,8 @@
 
 | Crate | 职责 | Context 键 |
 |---|---|---|
-| [`seekdeep-credentials`](../credentials/README.zh.md) | 凭据引用 seam | `credentials` |
-| [`seekdeep-credentials-local`](../credentials-local/README.zh.md) | 环境与本地文件提供方 | 注册 `credentials` |
+| [`seekdeep-credentials`](../credentials/README.md) | 凭据引用 seam | `credentials` |
+| [`seekdeep-credentials-local`](../credentials-local/README.md) | 环境与本地文件提供方 | 注册 `credentials` |
 
 配置只携带引用，不携带机密值。消费者在各自操作边界解析引用；写入、优先级与存储语义由子 crate 的 README 定义。
 
