@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+indexmap.workspace = true
 path-clean.workspace = true
 seekdeep-agent = { path = "../../crates/agent" }
 seekdeep-agent-default-model = { path = "../../crates/agent-default-model" }
@@ -19,12 +20,15 @@ seekdeep-app-boot = { path = "../../crates/app-boot" }
 seekdeep-code-runtime-worker-thread = { path = "../../crates/code-runtime-worker-thread" }
 seekdeep-cmdline = { path = "../../crates/cmdline" }
 seekdeep-cordis = { path = "../../crates/cordis" }
+seekdeep-cordis-timer = { path = "../../crates/cordis-timer" }
 seekdeep-core = { path = "../../crates/core" }
 seekdeep-credentials-local = { path = "../../crates/credentials-local" }
 seekdeep-headless = { path = "../../crates/headless" }
+seekdeep-hmr = { path = "../../crates/hmr" }
 seekdeep-llm = { path = "../../crates/llm" }
 seekdeep-llm-deepseek = { path = "../../crates/llm-deepseek" }
 seekdeep-llm-retry = { path = "../../crates/llm-retry" }
+seekdeep-loader = { path = "../../crates/loader" }
 seekdeep-session-checkpoint-policy = { path = "../../crates/session-checkpoint-policy" }
 seekdeep-session-persistence = { path = "../../crates/session-persistence" }
 seekdeep-session-persistence-jsonl = { path = "../../crates/session-persistence-jsonl" }

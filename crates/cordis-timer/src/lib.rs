@@ -13,7 +13,7 @@ use std::{
 
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use serde_json::Value;
 
 /// Asynchronous callback executed by one timer.
@@ -39,6 +39,10 @@ pub trait TimerDriver: Send + Sync + 'static {
 
 /// Cordis service slot inherited as `ctx.timer`.
 pub const TIMER: ServiceKey<TimerService> = ServiceKey::new("timer");
+/// Loader plugin identity.
+pub const NAME: &str = "timer";
+/// Timer plugin has no service prerequisites.
+pub const INJECT: &[&str] = &[];
 
 /// Error returned when a pending delay loses its owning Context.
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
@@ -335,6 +339,18 @@ impl TimerService {
             trailing_disabled: AtomicBool::new(no_trailing),
         }
     }
+}
+
+/// Builds the native Loader-compatible timer plugin.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            TimerService::install(&context, Arc::new(TokioTimerDriver::default()))?;
+            Ok(())
+        })
+    })
 }
 
 /// Future returned by [`TimerService::delay`].

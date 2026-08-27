@@ -69,7 +69,7 @@ async fn add_failure_recovery_and_removal_preserve_last_good_generation() -> any
         }
     });
     let compose: PatchComposer =
-        Arc::new(move |user| app_patch.iter().cloned().chain(user).collect());
+        Arc::new(move |user| Ok(app_patch.iter().cloned().chain(user).collect()));
     let watcher = watch_user_patches(UserPatchWatchOptions {
         bin_name: "seekdeep-test-bin".to_owned(),
         base_config: base,
@@ -172,7 +172,7 @@ async fn boot_root_include_recomposes_user_patches_without_dropping_app_layers()
         move |_, error| failures.lock().push(error.to_string())
     });
     let compose: PatchComposer =
-        Arc::new(move |user| app_patch.iter().cloned().chain(user).collect());
+        Arc::new(move |user| Ok(app_patch.iter().cloned().chain(user).collect()));
     let watcher = watch_boot_user_patches(BootUserPatchWatchOptions {
         bin_name: "seekdeep-test-bin".to_owned(),
         filename: user.clone(),
@@ -218,7 +218,7 @@ async fn boot_watcher_requires_the_live_loader_and_root_include() -> anyhow::Res
         BootUserPatchWatchOptions {
             bin_name: "seekdeep-test-bin".to_owned(),
             filename: filename.to_path_buf(),
-            compose: Arc::new(|patches| patches),
+            compose: Arc::new(Ok),
             context,
             registry: ConfigWatchRegistry::new(),
             failure: Arc::new(|_, _| {}),
@@ -281,7 +281,7 @@ async fn boot_watcher_returns_a_noop_when_ownership_turns_inactive_during_regist
     let watcher = watch_boot_user_patches(BootUserPatchWatchOptions {
         bin_name: "seekdeep-test-bin".to_owned(),
         filename: patch.clone(),
-        compose: Arc::new(|patches| patches),
+        compose: Arc::new(Ok),
         context: dead_context,
         registry: registry.clone(),
         failure: Arc::new(|_, _| {}),
@@ -292,7 +292,7 @@ async fn boot_watcher_returns_a_noop_when_ownership_turns_inactive_during_regist
     let live = watch_boot_user_patches(BootUserPatchWatchOptions {
         bin_name: "seekdeep-test-bin".to_owned(),
         filename: patch,
-        compose: Arc::new(|patches| patches),
+        compose: Arc::new(Ok),
         context: context.clone(),
         registry,
         failure: Arc::new(|_, _| {}),

@@ -8,6 +8,8 @@
 pub mod args;
 pub mod layered_env;
 pub mod process_shutdown;
+/// Source-compatible profile composition and live config boot.
+pub mod profile_boot;
 
 use std::{
     path::{Path, PathBuf},

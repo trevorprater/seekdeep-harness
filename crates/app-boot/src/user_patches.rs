@@ -11,7 +11,8 @@ use crate::{
 };
 
 /// Builds the complete patch list for one fresh user-layer generation.
-pub type PatchComposer = Arc<dyn Fn(Vec<ProfilePatch>) -> Vec<ProfilePatch> + Send + Sync>;
+pub type PatchComposer =
+    Arc<dyn Fn(Vec<ProfilePatch>) -> anyhow::Result<Vec<ProfilePatch>> + Send + Sync>;
 
 /// Inputs for live user patch reconciliation.
 pub struct UserPatchWatchOptions {
@@ -113,7 +114,7 @@ pub fn watch_user_patches(
         let reload = reload.clone();
         Box::pin(async move {
             let user = load_optional_patches(&bin_name, &filename)?.unwrap_or_default();
-            let patches = compose(user);
+            let patches = compose(user)?;
             let rendered = render_config_dump(
                 &bin_name,
                 &base_config,
@@ -170,7 +171,7 @@ pub async fn watch_boot_user_patches(
         Box::pin(async move {
             let user = load_optional_patches(&bin_name, &filename)?.unwrap_or_default();
             loader
-                .update_include_patches(&include, compose(user))
+                .update_include_patches(&include, compose(user)?)
                 .await?;
             Ok(())
         })

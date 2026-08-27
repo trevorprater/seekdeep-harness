@@ -72,7 +72,7 @@ pub fn prepare_profile(name: &str, user_layer: bool) -> anyhow::Result<Profile> 
 /// # Errors
 ///
 /// Returns fallback, profile, bundle, patch, or root-write failures.
-fn prepare_profile_at(
+pub fn prepare_profile_at(
     name: &str,
     user_layer: bool,
     home: &Path,

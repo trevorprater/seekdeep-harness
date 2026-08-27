@@ -4502,6 +4502,7 @@ name = "seekdeep"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "indexmap 2.14.0",
  "parking_lot",
  "path-clean",
  "portable-pty",
@@ -4512,12 +4513,15 @@ dependencies = [
  "seekdeep-cmdline",
  "seekdeep-code-runtime-worker-thread",
  "seekdeep-cordis",
+ "seekdeep-cordis-timer",
  "seekdeep-core",
  "seekdeep-credentials-local",
  "seekdeep-headless",
+ "seekdeep-hmr",
  "seekdeep-llm",
  "seekdeep-llm-deepseek",
  "seekdeep-llm-retry",
+ "seekdeep-loader",
  "seekdeep-session-checkpoint-policy",
  "seekdeep-session-persistence",
  "seekdeep-session-persistence-jsonl",

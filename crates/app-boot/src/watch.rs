@@ -230,6 +230,7 @@ impl Drop for ExactConfigWatcher {
 #[derive(Debug, Default)]
 pub struct ConfigWatchRegistry {
     keys: Arc<Mutex<HashSet<PathBuf>>>,
+    refresh_transaction: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl ConfigWatchRegistry {
@@ -256,7 +257,16 @@ impl ConfigWatchRegistry {
             "config path already registered: {}",
             key.display()
         );
-        match ExactConfigWatcher::open(target, refresh, failure) {
+        let transaction = self.refresh_transaction.clone();
+        let serialized: ConfigRefresh = Arc::new(move || {
+            let transaction = transaction.clone();
+            let refresh = refresh.clone();
+            Box::pin(async move {
+                let _guard = transaction.lock().await;
+                refresh().await
+            })
+        });
+        match ExactConfigWatcher::open(target, serialized, failure) {
             Ok(watcher) => Ok(RegisteredConfigWatcher {
                 watcher: Some(watcher),
                 registry: self.clone(),

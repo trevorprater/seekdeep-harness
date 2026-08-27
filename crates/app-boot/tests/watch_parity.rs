@@ -225,6 +225,62 @@ async fn serializes_refreshes_and_disposal_waits_for_the_admitted_queue() -> any
 }
 
 #[tokio::test]
+async fn one_registry_serializes_refreshes_across_distinct_paths() -> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let first = temporary.path().join("first.yml");
+    let second = temporary.path().join("second.yml");
+    std::fs::write(&first, "one")?;
+    std::fs::write(&second, "two")?;
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let active = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let max_active = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let first_started = Arc::new(tokio::sync::Notify::new());
+    let release_first = Arc::new(tokio::sync::Notify::new());
+    let refresh: seekdeep_app_boot::ConfigRefresh = Arc::new({
+        let calls = calls.clone();
+        let active = active.clone();
+        let max_active = max_active.clone();
+        let first_started = first_started.clone();
+        let release_first = release_first.clone();
+        move || {
+            let calls = calls.clone();
+            let active = active.clone();
+            let max_active = max_active.clone();
+            let first_started = first_started.clone();
+            let release_first = release_first.clone();
+            Box::pin(async move {
+                let call = calls.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                let now = active.fetch_add(1, std::sync::atomic::Ordering::AcqRel) + 1;
+                max_active.fetch_max(now, std::sync::atomic::Ordering::AcqRel);
+                if call == 0 {
+                    first_started.notify_one();
+                    release_first.notified().await;
+                }
+                active.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+                Ok(())
+            })
+        }
+    });
+    let registry = ConfigWatchRegistry::new();
+    let first_watcher = registry.register(&first, refresh.clone(), ignore_failure())?;
+    first_started.notified().await;
+    let second_watcher = registry.register(&second, refresh, ignore_failure())?;
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(active.load(std::sync::atomic::Ordering::Acquire), 1);
+    assert_eq!(max_active.load(std::sync::atomic::Ordering::Acquire), 1);
+    release_first.notify_one();
+    eventually(
+        || calls.load(std::sync::atomic::Ordering::Acquire) == 2,
+        "second path refresh",
+    )
+    .await;
+    second_watcher.dispose().await?;
+    first_watcher.dispose().await?;
+    assert_eq!(max_active.load(std::sync::atomic::Ordering::Acquire), 1);
+    Ok(())
+}
+
+#[tokio::test]
 async fn refresh_failures_are_contained_and_future_changes_continue() -> anyhow::Result<()> {
     let temporary = tempfile::tempdir()?;
     let filename = temporary.path().join("plugins.yml");
