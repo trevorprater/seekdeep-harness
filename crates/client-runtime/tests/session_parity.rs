@@ -10,11 +10,12 @@ use futures::{FutureExt, channel::oneshot, executor::LocalPool, task::LocalSpawn
 use indexmap::IndexMap;
 use seekdeep_client_runtime::{
     AssemblerEventDefinitions, AssemblerNodeDefinition, AssemblerViewBuilder,
-    AssemblerViewDefinition, AssemblerViewDefinitions, ClientRpcError, ClientRpcResult,
-    ClientSession, ComposerPhase, ConversationAssemblerError, ConversationContextReader,
-    ConversationLocationEvent, ConversationMatch, ConversationMatchResult, ConversationMatchRole,
-    ConversationNodeAssembler, ConversationNodeContext, ConversationTimelineSnapshot,
-    ConversationViewNode, NotifierScheduler, ProjectionValueStore, ProjectionsBaseline,
+    AssemblerViewDefinition, AssemblerViewDefinitions, ChatConversationViewMetadata,
+    ClientRpcError, ClientRpcResult, ClientSession, ComposerPhase, ConversationAssemblerError,
+    ConversationContextReader, ConversationLocationEvent, ConversationMatch,
+    ConversationMatchResult, ConversationMatchRole, ConversationNodeAssembler,
+    ConversationNodeContext, ConversationTimelineSnapshot, ConversationViewNode,
+    ConversationVisibility, NotifierScheduler, ProjectionValueStore, ProjectionsBaseline,
     PromptOperation, QueueItemInput, QueuePlacement, SessionHistoryEntry, SessionHistoryPage,
     SessionHistoryRequest, SessionMuxFrame, SessionOpenState, SessionOptions, SessionTaskSpawner,
     SessionTransport, SessionTransportRequest, SubagentAddress, SubagentMode,
@@ -208,6 +209,13 @@ fn conversation() -> ConversationNodeAssembler {
                     "seq":context.state.as_ref().unwrap()["seq"],
                     "view":context.state.as_ref().unwrap()["view"]
                 })),
+                chat: Some(ChatConversationViewMetadata {
+                    anchor_seq: context.state.as_ref().unwrap()["seq"]
+                        .as_f64()
+                        .unwrap_or_default(),
+                    location: context.start.as_ref().unwrap().location.clone(),
+                    visibility: ConversationVisibility::Visible,
+                }),
             })))
         })),
     });

@@ -81,6 +81,28 @@ pub struct ConversationViewNode {
     pub target: String,
     /// Complete JSON-compatible target data.
     pub data: Rc<Value>,
+    /// Chat-only ordering, placement, and visibility metadata.
+    pub chat: Option<ChatConversationViewMetadata>,
+}
+
+/// Chat target fields carried in addition to target-neutral Node identity/data.
+#[derive(Clone)]
+pub struct ChatConversationViewMetadata {
+    /// Numeric ordering anchor; may be fractional for synthetic command rows.
+    pub anchor_seq: f64,
+    /// Engine-owned Turn/Step placement.
+    pub location: ConversationLocation,
+    /// Whether the Chat builder includes this Node in the visible stream.
+    pub visibility: ConversationVisibility,
+}
+
+/// Closed Chat visibility vocabulary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConversationVisibility {
+    /// Node participates in the visible Chat stream.
+    Visible,
+    /// Node remains materialized but contributes no visible row.
+    Hidden,
 }
 
 /// Immutable public view of one assembled business Context.
@@ -1144,6 +1166,18 @@ impl ConversationNodeAssembler {
             return Err(ConversationAssemblerError::new(format!(
                 "conversation Definition \"{}\" returned target \"{}\" while building \"{target}\"",
                 current.kind, node.target
+            )));
+        }
+        if target == "chat" && node.chat.is_none() {
+            return Err(ConversationAssemblerError::new(format!(
+                "conversation Definition \"{}\" returned a Chat Node without anchorSeq, location, and visibility",
+                current.kind
+            )));
+        }
+        if target != "chat" && node.chat.is_some() {
+            return Err(ConversationAssemblerError::new(format!(
+                "conversation Definition \"{}\" returned Chat metadata for target \"{target}\"",
+                current.kind
             )));
         }
         Ok(Some(node))

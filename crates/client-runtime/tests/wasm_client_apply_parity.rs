@@ -416,12 +416,12 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
     let bench = bench();
     let runtime = apply_client_runtime(bench.root.clone()).unwrap();
     let view_definition = Object::new();
-    set(&view_definition, "target", &JsValue::from_str("probe"));
+    set(&view_definition, "target", &JsValue::from_str("chat"));
     set(
         &view_definition,
         "create",
         &Function::new_no_args(
-            "return { empty: { count: 0 }, replace({ nodes, timeline }) { return { count: nodes[0]?.data.count ?? 0, surfaceOp: nodes[0]?.data.surfaceOp, location: timeline.turns.get(0)?.data.get('turn-probe') } }, apply({ upserts, timeline }) { return { count: upserts[0]?.data.count ?? 0, surfaceOp: upserts[0]?.data.surfaceOp, location: timeline.turns.get(0)?.data.get('turn-probe') } } }",
+            "const read = (node, timeline) => ({ count: node?.data.count ?? 0, surfaceOp: node?.data.surfaceOp, location: timeline.turns.get(0)?.data.get('turn-probe'), anchorSeq: node?.anchorSeq, nodeLocation: node?.location?.kind, nodeTurn: node?.location?.turn?.turn, visibility: node?.visibility }); return { empty: { count: 0 }, replace({ nodes, timeline }) { return read(nodes[0], timeline) }, apply({ upserts, timeline }) { return read(upserts[0], timeline) } }",
         ),
     );
     let views = get(&runtime, "conversationViews");
@@ -433,7 +433,7 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
 
     let definition = Object::new();
     set(&definition, "kind", &JsValue::from_str("probe"));
-    set(&definition, "target", &JsValue::from_str("probe"));
+    set(&definition, "target", &JsValue::from_str("chat"));
     let match_calls = Rc::new(RefCell::new(0));
     let observed_matches = match_calls.clone();
     let match_event = Closure::wrap(Box::new(move |event: JsValue| {
@@ -502,7 +502,7 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
         "buildViewNode",
         &Function::new_with_args(
             "context",
-            "return { key: context.key, kind: context.kind, id: context.id, target: 'probe', data: context.state }",
+            "return { key: context.key, kind: context.kind, id: context.id, target: 'chat', anchorSeq: context.start.event.seq + 0.25, location: context.start.location, visibility: 'hidden', data: context.state }",
         ),
     );
     let events = get(&runtime, "conversationEvents");
@@ -590,7 +590,7 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
     let initial_view = get(&views, "get")
         .dyn_into::<Function>()
         .unwrap()
-        .call1(&views, &JsValue::from_str("probe"))
+        .call1(&views, &JsValue::from_str("chat"))
         .unwrap();
     assert!(
         !initial_view.is_undefined(),
@@ -664,7 +664,7 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
     let snapshot = get(&views, "get")
         .dyn_into::<Function>()
         .unwrap()
-        .call1(&views, &JsValue::from_str("probe"))
+        .call1(&views, &JsValue::from_str("chat"))
         .unwrap();
     assert!(
         Reflect::set(
@@ -697,6 +697,16 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
             .as_deref(),
         Some("located")
     );
+    assert_eq!(get(&snapshot, "anchorSeq").as_f64(), Some(1.25));
+    assert_eq!(
+        get(&snapshot, "nodeLocation").as_string().as_deref(),
+        Some("turn")
+    );
+    assert_eq!(get(&snapshot, "nodeTurn").as_f64(), Some(0.0));
+    assert_eq!(
+        get(&snapshot, "visibility").as_string().as_deref(),
+        Some("hidden")
+    );
 
     let update = Object::new();
     set(&update, "id", &JsValue::from_str("one"));
@@ -711,7 +721,7 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
     let snapshot = get(&views, "get")
         .dyn_into::<Function>()
         .unwrap()
-        .call1(&views, &JsValue::from_str("probe"))
+        .call1(&views, &JsValue::from_str("chat"))
         .unwrap();
     assert_eq!(get(&snapshot, "count").as_f64(), Some(5.0));
 
@@ -728,7 +738,7 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
     let snapshot = get(&views, "get")
         .dyn_into::<Function>()
         .unwrap()
-        .call1(&views, &JsValue::from_str("probe"))
+        .call1(&views, &JsValue::from_str("chat"))
         .unwrap();
     assert_eq!(get(&snapshot, "count").as_f64(), Some(6.0));
 }

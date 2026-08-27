@@ -36,6 +36,7 @@ members = [
   "crates/client-ui-sidebar",
   "crates/client-ui-theme",
   "crates/client-ui-tool",
+  "crates/client-ui-workflow-run",
   "crates/client-ui-slots",
   "crates/client-web",
   "crates/client-web-react",

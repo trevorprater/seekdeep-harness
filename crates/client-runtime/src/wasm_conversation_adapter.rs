@@ -249,7 +249,7 @@ fn adapt_node_definition(
             if result.is_null() {
                 return Ok(None);
             }
-            view_node_from_js(&result)
+            view_node_from_js(&result, context)
                 .map(|node| Some(Rc::new(node)))
                 .map_err(adapter_error)
         }) as Rc<_>
@@ -519,22 +519,147 @@ fn view_node_to_js(node: &ConversationViewNode) -> Result<JsValue, JsValue> {
     set(&value, "kind", &JsValue::from_str(&node.kind))?;
     set(&value, "id", &JsValue::from_str(&node.id))?;
     set(&value, "target", &JsValue::from_str(&node.target))?;
+    if let Some(chat) = &node.chat {
+        set(&value, "anchorSeq", &JsValue::from_f64(chat.anchor_seq))?;
+        set(&value, "location", &location_to_js(&chat.location)?)?;
+        set(
+            &value,
+            "visibility",
+            &JsValue::from_str(match chat.visibility {
+                crate::ConversationVisibility::Visible => "visible",
+                crate::ConversationVisibility::Hidden => "hidden",
+            }),
+        )?;
+    }
     set(&value, "data", &json_to_js(&node.data)?)?;
     Ok(value.into())
 }
 
-fn view_node_from_js(value: &JsValue) -> Result<ConversationViewNode, JsValue> {
+fn view_node_from_js(
+    value: &JsValue,
+    context: &ConversationNodeContext,
+) -> Result<ConversationViewNode, JsValue> {
+    let target = required_string(value, "target", "Conversation view Node")?;
+    let chat = if target == "chat" {
+        let anchor_seq = required(value, "anchorSeq", "Conversation Chat view Node")?
+            .as_f64()
+            .ok_or_else(|| {
+                js_sys::Error::new("Conversation Chat view Node anchorSeq must be a number")
+            })?;
+        if !anchor_seq.is_finite() {
+            return Err(
+                js_sys::Error::new("Conversation Chat view Node anchorSeq must be finite").into(),
+            );
+        }
+        let location = required(value, "location", "Conversation Chat view Node")?;
+        let visibility =
+            match required_string(value, "visibility", "Conversation Chat view Node")?.as_str() {
+                "visible" => crate::ConversationVisibility::Visible,
+                "hidden" => crate::ConversationVisibility::Hidden,
+                visibility => {
+                    return Err(js_sys::Error::new(&format!(
+                        "Conversation Chat view Node visibility {visibility:?} is invalid"
+                    ))
+                    .into());
+                }
+            };
+        Some(crate::ChatConversationViewMetadata {
+            anchor_seq,
+            location: context_location_from_js(&location, context)?,
+            visibility,
+        })
+    } else {
+        None
+    };
     Ok(ConversationViewNode {
         key: required_string(value, "key", "Conversation view Node")?,
         kind: required_string(value, "kind", "Conversation view Node")?,
         id: required_string(value, "id", "Conversation view Node")?,
-        target: required_string(value, "target", "Conversation view Node")?,
+        target,
         data: Rc::new(js_to_json(&required(
             value,
             "data",
             "Conversation view Node",
         )?)?),
+        chat,
     })
+}
+
+fn context_location_from_js(
+    value: &JsValue,
+    context: &ConversationNodeContext,
+) -> Result<ConversationLocation, JsValue> {
+    let kind = required_string(value, "kind", "Conversation Chat view Node location")?;
+    match kind.as_str() {
+        "session" => Ok(ConversationLocation::Session),
+        "unresolved" => Ok(ConversationLocation::Unresolved),
+        "turn" => {
+            let turn = required_u64(
+                &required(value, "turn", "Conversation Chat view Node location")?,
+                "turn",
+                "Conversation Chat view Node location turn",
+            )?;
+            context
+                .matches
+                .borrow()
+                .iter()
+                .find_map(|accepted| match &accepted.location {
+                    ConversationLocation::Turn { turn: known }
+                    | ConversationLocation::Step { turn: known, .. }
+                        if known.turn == turn =>
+                    {
+                        Some(ConversationLocation::Turn {
+                            turn: known.clone(),
+                        })
+                    }
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    js_sys::Error::new(&format!(
+                        "Conversation Chat view Node location references unknown Turn {turn}"
+                    ))
+                    .into()
+                })
+        }
+        "step" => {
+            let turn = required_u64(
+                &required(value, "turn", "Conversation Chat view Node location")?,
+                "turn",
+                "Conversation Chat view Node location turn",
+            )?;
+            let step = required_u64(
+                &required(value, "step", "Conversation Chat view Node location")?,
+                "step",
+                "Conversation Chat view Node location step",
+            )?;
+            context
+                .matches
+                .borrow()
+                .iter()
+                .find_map(|accepted| match &accepted.location {
+                    ConversationLocation::Step {
+                        turn: known_turn,
+                        step: known_step,
+                    } if known_turn.turn == turn && known_step.step == step => {
+                        Some(ConversationLocation::Step {
+                            turn: known_turn.clone(),
+                            step: known_step.clone(),
+                        })
+                    }
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    js_sys::Error::new(&format!(
+                        "Conversation Chat view Node location references unknown Step {turn}:{step}"
+                    ))
+                    .into()
+                })
+        }
+        kind => Err(js_sys::Error::new(&format!(
+            "Conversation Chat view Node location kind {kind:?} is invalid"
+        ))
+        .into()),
+    }
 }
 
 pub(crate) fn location_data_from_js(

@@ -8,12 +8,13 @@ use std::{
 use indexmap::IndexMap;
 use seekdeep_client_runtime::{
     AssemblerEventDefinitions, AssemblerNodeDefinition, AssemblerViewBuilder,
-    AssemblerViewDefinition, AssemblerViewDefinitions, ConversationAssemblerError,
-    ConversationContextReader, ConversationEventInput, ConversationLocation,
-    ConversationLocationData, ConversationLocationDataScope, ConversationLocationEvent,
-    ConversationMatch, ConversationMatchResult, ConversationMatchRole, ConversationNodeAssembler,
-    ConversationNodeContext, ConversationPublication, ConversationTimelineSnapshot,
-    ConversationViewNode, conversation_context_key,
+    AssemblerViewDefinition, AssemblerViewDefinitions, ChatConversationViewMetadata,
+    ConversationAssemblerError, ConversationContextReader, ConversationEventInput,
+    ConversationLocation, ConversationLocationData, ConversationLocationDataScope,
+    ConversationLocationEvent, ConversationMatch, ConversationMatchResult, ConversationMatchRole,
+    ConversationNodeAssembler, ConversationNodeContext, ConversationPublication,
+    ConversationTimelineSnapshot, ConversationViewNode, ConversationVisibility,
+    conversation_context_key,
 };
 use serde_json::{Map, Value, json};
 
@@ -132,6 +133,16 @@ fn node(context: &ConversationNodeContext, data: Value) -> Rc<ConversationViewNo
         id: context.id.clone(),
         target: "chat".to_owned(),
         data: Rc::new(data),
+        chat: Some(ChatConversationViewMetadata {
+            anchor_seq: 0.0,
+            location: context
+                .start
+                .as_ref()
+                .map_or(ConversationLocation::Session, |start| {
+                    start.location.clone()
+                }),
+            visibility: ConversationVisibility::Visible,
+        }),
     })
 }
 
@@ -1101,6 +1112,7 @@ fn undefined_update_unstable_nodes_and_invalid_location_data_fail_loud() {
             id: context.id.clone(),
             target: "chat".to_owned(),
             data: Rc::new(Value::Null),
+            chat: None,
         })))
     }));
     let mut unstable = assembler(vec![Rc::new(unstable)], None, Rc::new(Cell::new(0)));
@@ -1147,6 +1159,44 @@ fn undefined_update_unstable_nodes_and_invalid_location_data_fail_loud() {
             .unwrap_err()
             .to_string()
             .contains("published turn data through its step scope")
+    );
+}
+
+#[test]
+fn chat_nodes_require_ordering_location_and_visibility_metadata() {
+    let mut definition = basic_definition(
+        "missing-chat-metadata",
+        |event| {
+            Ok(
+                (event.event_type == "start").then(|| ConversationMatchResult {
+                    id: "one".to_owned(),
+                    role: ConversationMatchRole::Start,
+                }),
+            )
+        },
+        |_context, _accepted, _reader| Ok(Some(Rc::new(Value::Null))),
+        |context, _accepted| Ok(context.state.clone()),
+    );
+    definition.build_view_node = Some(Rc::new(|context| {
+        Ok(Some(Rc::new(ConversationViewNode {
+            key: context.key.clone(),
+            kind: context.kind.clone(),
+            id: context.id.clone(),
+            target: "chat".to_owned(),
+            data: Rc::new(Value::Null),
+            chat: None,
+        })))
+    }));
+    let mut value = assembler(vec![Rc::new(definition)], None, Rc::new(Cell::new(0)));
+    value
+        .replace_window(&[at(1, "start", json!({}))], false)
+        .unwrap();
+    assert!(
+        value
+            .flush()
+            .unwrap_err()
+            .to_string()
+            .contains("without anchorSeq, location, and visibility")
     );
 }
 

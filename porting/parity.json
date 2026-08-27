@@ -39736,6 +39736,7 @@
         "pnpm exec vitest run packages/client/runtime/tests/conversation-assembler.client.spec.ts packages/client/runtime/tests/conversation-registry.client.spec.ts packages/client/runtime/tests/conversation.client.spec.ts --reporter=dot (pinned source: 33 passed)",
         "cargo test -p seekdeep-client-runtime --test conversation_assembler_parity --test conversation_location_parity --test conversation_registry_parity --all-features (25 passed)",
         "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_apply_parity-*.wasm (live JavaScript match/start/update/publication/reader/location-data/node/view-builder flow passed)",
+        "live WASM Chat metadata round trip preserves fractional anchorSeq, engine-owned Location, and visible/hidden identity through the Rust assembler and JavaScript view builder",
         "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
       ],
       "note": "Rust owns collision-free Context identity, exact Match roles, immutable Context/previous snapshots, demand-recorded backward reads, Step/Turn Location and data ownership, publication cadence, Node contracts, timeline Maps, and per-target builder inputs; the WASM adapter preserves the complete extension-bearing SessionEvent wire object and synchronously adapts model-authored JavaScript match/start/update/publication/buildLocationData/buildViewNode/create/replace/apply callbacks without moving replay or ownership into JavaScript"
@@ -48806,12 +48807,30 @@
     {
       "source": "packages/client/ui-workflow-run/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workflow-run/src/locales.rs",
+        "crates/client-ui-workflow-run/tests/workflow_run_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins the exact workflowRun namespace plus all 18 Chinese and English key/value pairs in source order",
+        "cargo test -p seekdeep-client-ui-workflow-run --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-workflow-run/src/client/workflow-definition.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workflow-run/src/projection.rs",
+        "crates/client-ui-workflow-run/tests/workflow_run_parity.rs",
+        "crates/client-runtime/src/conversation_assembler.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs"
+      ],
+      "evidence": [
+        "pinned source workflow-run suite passed 24/24",
+        "Rust assembler parity covers complete replay, live append, update-only prepend repair, Step/Turn interruption, zero-member completion, terminal outcomes, phase grouping, UTF-16 phase identity, and Chat anchor/location/visibility metadata"
+      ]
     },
     {
       "source": "packages/client/ui-workflow-run/src/css-modules.d.ts",
@@ -48821,7 +48840,17 @@
     {
       "source": "packages/client/ui-workflow-run/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workflow-run/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-workflow-run to ui-deliverables"
+      ],
+      "note": "this row is the source Host no-op half; Client/WASM registration and renderer surfaces remain independently pending"
     },
     {
       "source": "packages/client/ui-workflow-run/src/invariant.ts",
