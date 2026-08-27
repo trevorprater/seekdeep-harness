@@ -43013,7 +43013,15 @@
     {
       "source": "packages/client/ui-input-trigger/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/locales.rs",
+        "crates/client-ui-input-trigger/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins the slash.menu namespace and all five Chinese/English dictionary triples in source order",
+        "pinned source detect/menu suites passed 39/39"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/client/service.ts",
@@ -43028,17 +43036,42 @@
     {
       "source": "packages/client/ui-input-trigger/src/core/contract.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/types.rs",
+        "crates/client-ui-input-trigger/src/detect.rs",
+        "crates/client-ui-input-trigger/src/menu.rs"
+      ],
+      "evidence": [
+        "Rust closed enums and structs preserve trigger hits, UTF-16 token spans, guard tiers, candidate groups, generations, highlight identity, and the complete reducer event vocabulary",
+        "strict native and wasm32 Clippy compile the target-portable contract"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/core/detect.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/detect.rs",
+        "crates/client-ui-input-trigger/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source detect/menu suites passed 39/39",
+        "Rust parity scans JavaScript UTF-16 offsets and preserves leading/inline placement, Unicode word/whitespace boundaries, URL carve-outs, suppressed-trigger scan-through, nearest-hit selection, mid-token carets, and placeholder draft revision"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/core/menu.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/menu.rs",
+        "crates/client-ui-input-trigger/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source detect/menu suites passed 39/39",
+        "Rust Cow reducer preserves same-reference no-ops, source roster order, generation gating, omitted-item settlement, all-empty auto-close, silent failure removal, highlight repair, cyclic movement, close generation, and ready-group exact lookup"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/css-modules.d.ts",
@@ -43048,7 +43081,17 @@
     {
       "source": "packages/client/ui-input-trigger/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-input-trigger to ui-commands"
+      ],
+      "note": "this row is the source Host no-op half; Client service/controller/slot and render surfaces remain independently pending"
     },
     {
       "source": "packages/client/ui-input-trigger/src/invariant.ts",
@@ -43077,12 +43120,26 @@
     {
       "source": "packages/client/ui-input-trigger/tests/core-detect.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source detect/menu suites passed 39/39",
+        "Rust consolidated detection case covers every source boundary, position, guard, query, span, empty/caret, multiline, and URL branch plus an astral UTF-16 offset"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/tests/core-menu.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source detect/menu suites passed 39/39",
+        "Rust consolidated reducer cases cover hit/refinement, stale and unknown settlements/failures, all close paths, ready/pending mixtures, highlight retention/repair, both movement directions, wrap, single-item identity, and exact lookup"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx",

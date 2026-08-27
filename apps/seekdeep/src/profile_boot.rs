@@ -491,7 +491,7 @@ fn register_product_plugin(
 /// Returns duplicate or invalid catalog-registration failures.
 #[allow(clippy::too_many_lines)]
 pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> {
-    for (name, plugin) in [
+    for (name, plugin) in vec![
         ("seekdeep-agent", seekdeep_agent::plugin()),
         ("seekdeep-agent-loop", seekdeep_agent_loop::plugin()),
         (
@@ -540,6 +540,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         (
             "seekdeep-client-ui-deliverables",
             seekdeep_client_ui_deliverables::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-input-trigger",
+            seekdeep_client_ui_input_trigger::host_plugin(),
         ),
         (
             "seekdeep-client-ui-layout",
