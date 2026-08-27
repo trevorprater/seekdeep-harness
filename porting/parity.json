@@ -41827,7 +41827,15 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/turn-metrics.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/metrics.rs",
+        "crates/client-ui-conversation/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Host/submission/image/metrics selection passed 23/23",
+        "Rust fold preserves lowest-step TTFT, nonnegative timing clamps, finite nonnegative usage admission, sampled decode aggregation, throughput-only and TTFT-only turns, zero-decode omission, independent turns, and footer formatting"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/use-calendar-day.ts",
@@ -41847,7 +41855,13 @@
     {
       "source": "packages/client/ui-conversation/src/client/contract/composer-submission.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/submission.rs"
+      ],
+      "evidence": [
+        "Rust closed enums preserve queue/steer delivery modes and enter/accelerated gestures"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/contract/queue.ts",
@@ -41977,7 +41991,15 @@
     {
       "source": "packages/client/ui-conversation/src/client/input/submission-policy.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/submission.rs",
+        "crates/client-ui-conversation/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/ui-conversation/tests/submission-policy.client.spec.ts (pinned source selected suite passed)",
+        "Rust policy preserves Queue default, idle/no-steering Queue, accelerated opposite mode, local-before-durable change signal, identical-write no-op, and Host adoption without writeback"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/locales.ts",
@@ -42172,7 +42194,16 @@
     {
       "source": "packages/client/ui-conversation/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/host.rs",
+        "apps/seekdeep/src/profile_boot.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin dynamically attaches the strict ui-conversation settings namespace only when settings exists",
+        "real Web preflight advances to ui-tool"
+      ],
+      "note": "this row is the Host settings-registration half; Client/WASM surfaces remain independently pending"
     },
     {
       "source": "packages/client/ui-conversation/src/invariant.ts",
@@ -42191,7 +42222,14 @@
     {
       "source": "packages/client/ui-conversation/src/submission-settings.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/submission.rs",
+        "crates/client-ui-conversation/src/host.rs"
+      ],
+      "evidence": [
+        "Rust constants and serde/schema contracts preserve namespace, field, queue/steer closed union, Queue default, and unknown-value rejection"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/apply-inject.client.spec.tsx",
@@ -42261,7 +42299,15 @@
     {
       "source": "packages/client/ui-conversation/tests/host.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/host.rs",
+        "crates/client-ui-conversation/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Host spec passed",
+        "Rust test verifies default resolution, steer acceptance, invalid-value rejection, and dependency-free optional Host plugin"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/image-labels.client.spec.tsx",
@@ -42316,7 +42362,14 @@
     {
       "source": "packages/client/ui-conversation/tests/submission-policy.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source submission policy spec passed 4/4",
+        "Rust parity covers default, resolution matrix, local change/no-op, and Host adoption"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/todo-panel.client.spec.tsx",
@@ -42326,7 +42379,14 @@
     {
       "source": "packages/client/ui-conversation/tests/turn-metrics.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source turn-metrics selection passed",
+        "Rust parity covers all reading/fold/formatter branches with the exact source 3.14 formatter sample"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/views-type-chain.client.spec.tsx",

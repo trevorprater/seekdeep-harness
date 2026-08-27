@@ -4521,6 +4521,7 @@ dependencies = [
  "seekdeep-client-locale",
  "seekdeep-client-modules",
  "seekdeep-client-runtime",
+ "seekdeep-client-ui-conversation",
  "seekdeep-client-ui-cordis",
  "seekdeep-client-ui-layout",
  "seekdeep-client-ui-message-feedback",
@@ -5271,6 +5272,22 @@ version = "0.1.0-rc.5"
 dependencies = [
  "futures",
  "serde_json",
+]
+
+[[package]]
+name = "seekdeep-client-ui-conversation"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.0",
+ "seekdeep-attachment",
+ "seekdeep-client-runtime",
+ "seekdeep-cordis",
+ "seekdeep-schemastery",
+ "seekdeep-settings",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
