@@ -4526,6 +4526,7 @@ dependencies = [
  "seekdeep-client-ui-message-feedback",
  "seekdeep-client-ui-settings",
  "seekdeep-client-ui-settings-general",
+ "seekdeep-client-ui-settings-models",
  "seekdeep-client-ui-sidebar",
  "seekdeep-client-ui-theme",
  "seekdeep-cmdline",
@@ -5376,6 +5377,18 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "seekdeep-client-ui-settings-models"
+version = "0.1.0-rc.5"
+dependencies = [
+ "futures",
+ "seekdeep-client-runtime",
+ "seekdeep-cordis",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

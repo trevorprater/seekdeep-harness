@@ -30,6 +30,7 @@ members = [
   "crates/client-ui-primitives",
   "crates/client-ui-settings",
   "crates/client-ui-settings-general",
+  "crates/client-ui-settings-models",
   "crates/client-ui-sidebar",
   "crates/client-ui-theme",
   "crates/client-ui-slots",

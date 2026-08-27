@@ -46008,7 +46008,16 @@
     {
       "source": "packages/client/ui-settings-models/src/client/apiKey.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/api_key.rs",
+        "crates/client-ui-settings-models/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source components suite passed within 103/103 selected ui-settings-models tests",
+        "Rust parity covers empty input, ECMAScript-whitespace blank input, printable ASCII, trimmed input, environment-line heuristic, matching quote wrappers, partial quotes, base64 padding, control bytes, and non-ASCII rejection",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-settings-models --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/index.ts",
@@ -46038,7 +46047,17 @@
     {
       "source": "packages/client/ui-settings-models/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled no-op Host plugin is registered under @seekdeep-ai/seekdeep-client-ui-settings-models",
+        "real base+web profile preflight advances past this package to the next absent Rust/WASM UI package"
+      ],
+      "note": "this row is only the source package's intentionally empty Host half; Client/WASM files remain independently pending"
     },
     {
       "source": "packages/client/ui-settings-models/src/invariant.ts",
@@ -46057,7 +46076,13 @@
     {
       "source": "packages/client/ui-settings-models/src/onboarding-copy.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/onboarding.rs"
+      ],
+      "evidence": [
+        "Rust constants preserve namespace, acknowledgement field, exact notice version, paragraph structure, and both locale labels while applying the required SeekDeep product rename"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/apply.client.spec.ts",
@@ -46087,7 +46112,15 @@
     {
       "source": "packages/client/ui-settings-models/tests/readiness.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/models.rs",
+        "crates/client-ui-settings-models/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/ui-settings-models/tests/readiness.client.spec.ts (pinned source selected suite passed)",
+        "Rust parity covers idle/loading, absent declaration, wrong namespace, active/reference-free routes, configured file/env credentials, inactive provider, credential read/enrichment failure, settings read-only, credential read-only, missing credential, and any-other-provider readiness"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/store.client.spec.ts",
