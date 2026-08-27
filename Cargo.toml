@@ -35,6 +35,7 @@ members = [
   "crates/client-ui-settings-plugin-inventory",
   "crates/client-ui-sidebar",
   "crates/client-ui-theme",
+  "crates/client-ui-tool",
   "crates/client-ui-slots",
   "crates/client-web",
   "crates/client-web-react",

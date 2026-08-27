@@ -47981,32 +47981,80 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/models/diff-card-model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/cards.rs",
+        "crates/client-ui-tool/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "pinned source diff-card suite passed in the 94-assertion model/card selection",
+        "Rust parity preserves call/result authority, whole-file creation hunks, malformed-wire generic fallback, and the eight-line chat cap"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/models/read-card-model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/cards.rs",
+        "crates/client-ui-tool/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "pinned source read-card suite passed in the 94-assertion model/card selection",
+        "Rust parity preserves result-only authority, detached line data, replacement titles, workspace-relative labels, optional language, and malformed-wire fallback"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/models/search-card-model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/cards.rs",
+        "crates/client-ui-tool/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "pinned source search-card suite passed 69/69 with terminal-card coverage",
+        "Rust parity preserves matches/paths discrimination, defensive nested-shape validation, replacement title, capped-result recovery text, and result-only authority"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/models/terminal-card-model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/cards.rs",
+        "crates/client-ui-tool/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "pinned source terminal-card suite passed 69/69 with search-card coverage",
+        "Rust parity preserves call/result replacement, failure detection, POSIX/drive/UNC cwd resolution, dot-segment normalization, window truncation, and generic fallback"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/models/tool-call-model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/model.rs",
+        "crates/client-ui-tool/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "pinned source tool-row suite passed in the 94-assertion model/card selection",
+        "Rust parity preserves classification, Cordis titles, state, summary preference, path extraction/relativization, input body, flattened result text, and first-line error summary"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/models/web-card-model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/cards.rs",
+        "crates/client-ui-tool/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Web-card suite passed in the 94-assertion model/card selection",
+        "Rust parity preserves result-only search/fetch cards, detached source data, truncation and status fields, and unknown-kind generic fallback"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx",
@@ -48042,7 +48090,15 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/plan-summary.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/plan.rs",
+        "crates/client-ui-tool/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "pinned source todo-row suite passed 18/18",
+        "Rust parity preserves done/total counts, first active name, parallel extra count, whitespace/name validation, and empty-list behavior"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/read-row.tsx",
@@ -48072,7 +48128,17 @@
     {
       "source": "packages/client/ui-tool/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-tool to ui-workflow-run"
+      ],
+      "note": "this row is the source Host no-op half; Client/WASM surfaces remain independently pending"
     },
     {
       "source": "packages/client/ui-tool/src/invariant.ts",

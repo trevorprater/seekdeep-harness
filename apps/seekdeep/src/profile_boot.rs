@@ -570,6 +570,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_client_ui_theme::host_plugin(),
         ),
         (
+            "seekdeep-client-ui-tool",
+            seekdeep_client_ui_tool::host_plugin(),
+        ),
+        (
             "seekdeep-code-runtime-worker-thread",
             seekdeep_code_runtime_worker_thread::plugin(),
         ),
