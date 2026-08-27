@@ -1,0 +1,25 @@
+[package]
+name = "seekdeep-client-ui-workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Workspace browser tree, search, ordering, and Rust/WASM UI semantics"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+chrono.workspace = true
+indexmap.workspace = true
+seekdeep-client-runtime = { path = "../client-runtime" }
+seekdeep-identity = { path = "../identity" }
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[lints]
+workspace = true

@@ -38,6 +38,7 @@ members = [
   "crates/client-ui-theme",
   "crates/client-ui-tool",
   "crates/client-ui-workflow-run",
+  "crates/client-ui-workspace",
   "crates/client-ui-slots",
   "crates/client-web",
   "crates/client-web-react",

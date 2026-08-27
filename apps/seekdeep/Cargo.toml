@@ -40,6 +40,7 @@ seekdeep-client-ui-sidebar = { path = "../../crates/client-ui-sidebar" }
 seekdeep-client-ui-theme = { path = "../../crates/client-ui-theme" }
 seekdeep-client-ui-tool = { path = "../../crates/client-ui-tool" }
 seekdeep-client-ui-workflow-run = { path = "../../crates/client-ui-workflow-run" }
+seekdeep-client-ui-workspace = { path = "../../crates/client-ui-workspace" }
 seekdeep-code-runtime-worker-thread = { path = "../../crates/code-runtime-worker-thread" }
 seekdeep-cmdline = { path = "../../crates/cmdline" }
 seekdeep-command-compact = { path = "../../crates/command-compact" }

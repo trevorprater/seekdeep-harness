@@ -49011,7 +49011,15 @@
     {
       "source": "packages/client/ui-workspace/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/locales.rs",
+        "crates/client-ui-workspace/tests/tree_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins the workspace namespace and all 62 Chinese/English dictionary triples in source order",
+        "pinned source tree/store suite passed 24/24"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/client/rows/Rows.module.css",
@@ -49032,12 +49040,29 @@
     {
       "source": "packages/client/ui-workspace/src/client/stores.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/state.rs",
+        "crates/client-ui-workspace/tests/tree_parity.rs",
+        "crates/client-runtime/src/store.rs"
+      ],
+      "evidence": [
+        "pinned source tree/store suite passed 24/24",
+        "Rust EngineStore handle preserves fresh defaults, synchronous named actions, group/account retention, order/timestamp separation, and the compatibility persistence key dsh.workspace.view.v5"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/client/tree.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/tree.rs",
+        "crates/client-ui-workspace/tests/tree_parity.rs"
+      ],
+      "evidence": [
+        "pinned source tree/store suite passed 24/24",
+        "Rust parity uses the real RuntimeSessionListState and ClientWorkspaceView types and covers Host account order, Ungrouped order, blank/archive/subagent visibility, descendant counts, flat recency, local-first content search, caps, snippets, labels, and injected-clock relative time"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/css-modules.d.ts",
@@ -49047,7 +49072,17 @@
     {
       "source": "packages/client/ui-workspace/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-workspace to ui-input-trigger"
+      ],
+      "note": "this row is the source Host no-op half; Client/WASM slot registration and render surfaces remain independently pending"
     },
     {
       "source": "packages/client/ui-workspace/src/invariant.ts",
@@ -49091,7 +49126,14 @@
     {
       "source": "packages/client/ui-workspace/tests/tree.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/tests/tree_parity.rs"
+      ],
+      "evidence": [
+        "pinned source tree/store spec passed 24/24",
+        "Rust consolidated cases cover every grouping, flat, archive, blank, lineage, pending, completion, search, store, path-label, and time-bucket branch"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx",

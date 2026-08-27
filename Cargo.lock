@@ -4534,6 +4534,7 @@ dependencies = [
  "seekdeep-client-ui-theme",
  "seekdeep-client-ui-tool",
  "seekdeep-client-ui-workflow-run",
+ "seekdeep-client-ui-workspace",
  "seekdeep-cmdline",
  "seekdeep-code-runtime-worker-thread",
  "seekdeep-command-compact",
@@ -5496,6 +5497,19 @@ dependencies = [
 name = "seekdeep-client-ui-workflow-run"
 version = "0.1.0-rc.5"
 dependencies = [
+ "seekdeep-client-runtime",
+ "seekdeep-cordis",
+ "seekdeep-identity",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "seekdeep-client-ui-workspace"
+version = "0.1.0-rc.5"
+dependencies = [
+ "chrono",
+ "indexmap 2.14.0",
  "seekdeep-client-runtime",
  "seekdeep-cordis",
  "seekdeep-identity",
