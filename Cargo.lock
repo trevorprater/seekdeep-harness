@@ -4523,6 +4523,7 @@ dependencies = [
  "seekdeep-client-runtime",
  "seekdeep-client-ui-conversation",
  "seekdeep-client-ui-cordis",
+ "seekdeep-client-ui-deliverables",
  "seekdeep-client-ui-layout",
  "seekdeep-client-ui-message-feedback",
  "seekdeep-client-ui-settings",
@@ -5311,6 +5312,20 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
+]
+
+[[package]]
+name = "seekdeep-client-ui-deliverables"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.0",
+ "seekdeep-client-runtime",
+ "seekdeep-cordis",
+ "seekdeep-system-prompt",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

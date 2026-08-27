@@ -29,6 +29,7 @@ seekdeep-client-modules = { path = "../../crates/client-modules" }
 seekdeep-client-runtime = { path = "../../crates/client-runtime" }
 seekdeep-client-ui-cordis = { path = "../../crates/client-ui-cordis" }
 seekdeep-client-ui-conversation = { path = "../../crates/client-ui-conversation" }
+seekdeep-client-ui-deliverables = { path = "../../crates/client-ui-deliverables" }
 seekdeep-client-ui-layout = { path = "../../crates/client-ui-layout" }
 seekdeep-client-ui-message-feedback = { path = "../../crates/client-ui-message-feedback" }
 seekdeep-client-ui-settings = { path = "../../crates/client-ui-settings" }

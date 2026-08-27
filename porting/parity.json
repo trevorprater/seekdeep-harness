@@ -42478,12 +42478,29 @@
     {
       "source": "packages/client/ui-deliverables/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-deliverables/src/locales.rs",
+        "crates/client-ui-deliverables/tests/deliverables_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins the exact deliverables namespace plus all five Chinese and English key/value pairs in source order",
+        "pinned source ui-deliverables suites passed 14/14"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/src/client/turn-deliverables.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-deliverables/src/projection.rs",
+        "crates/client-ui-deliverables/src/produced.rs",
+        "crates/client-ui-deliverables/tests/deliverables_parity.rs"
+      ],
+      "evidence": [
+        "pinned source produced-files suite passed with prompt coverage 14/14",
+        "Rust assembler parity covers append-only call/result pairing, render-intent mutation recognition, successful settlement, Turn ownership, prepend/live replay, closing-sequence filtering, first-seen deduplication, basename ambiguity, and exact mention resolution"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/src/css-modules.d.ts",
@@ -42493,7 +42510,18 @@
     {
       "source": "packages/client/ui-deliverables/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-deliverables/src/lib.rs",
+        "crates/client-ui-deliverables/tests/deliverables_parity.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled Host plugin injects systemPrompt and owns the exact order-190 ui:deliverable-file-references section",
+        "Rust lifecycle test proves the prompt section retracts with its plugin fiber",
+        "real Web preflight advances from ui-deliverables to ui-workspace"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/src/invariant.ts",
@@ -42517,7 +42545,14 @@
     {
       "source": "packages/client/ui-deliverables/tests/prompt.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-deliverables/tests/deliverables_parity.rs"
+      ],
+      "evidence": [
+        "pinned source prompt spec passed in the 14-test ui-deliverables selection",
+        "Rust parity asserts exact copy, name, order, dependency, active ownership, assembled presence, and disposal retraction"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/tsconfig.json",
