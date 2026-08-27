@@ -39,6 +39,7 @@ seekdeep-client-ui-settings-general = { path = "../../crates/client-ui-settings-
 seekdeep-client-ui-settings-models = { path = "../../crates/client-ui-settings-models" }
 seekdeep-client-ui-settings-plugin-inventory = { path = "../../crates/client-ui-settings-plugin-inventory" }
 seekdeep-client-ui-sidebar = { path = "../../crates/client-ui-sidebar" }
+seekdeep-client-ui-skill = { path = "../../crates/client-ui-skill" }
 seekdeep-client-ui-theme = { path = "../../crates/client-ui-theme" }
 seekdeep-client-ui-tool = { path = "../../crates/client-ui-tool" }
 seekdeep-client-ui-workflow-run = { path = "../../crates/client-ui-workflow-run" }

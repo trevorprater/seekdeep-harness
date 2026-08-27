@@ -4533,6 +4533,7 @@ dependencies = [
  "seekdeep-client-ui-settings-models",
  "seekdeep-client-ui-settings-plugin-inventory",
  "seekdeep-client-ui-sidebar",
+ "seekdeep-client-ui-skill",
  "seekdeep-client-ui-theme",
  "seekdeep-client-ui-tool",
  "seekdeep-client-ui-workflow-run",
@@ -5464,6 +5465,15 @@ dependencies = [
  "tokio",
  "wasm-bindgen",
  "wasm-bindgen-test",
+]
+
+[[package]]
+name = "seekdeep-client-ui-skill"
+version = "0.1.0-rc.5"
+dependencies = [
+ "seekdeep-client-ui-tool",
+ "seekdeep-cordis",
+ "serde_json",
 ]
 
 [[package]]
