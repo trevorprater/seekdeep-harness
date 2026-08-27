@@ -36692,9 +36692,10 @@
         "pnpm --silent run verify-seekdeep-package-licenses delegates to the verified product-renamed Rust policy",
         "pnpm --silent run verify-skill-invocation-metadata delegates to the verified Rust cross-product policy",
         "pnpm --silent run verify-doc-budgets delegates to the verified Rust documentation policy",
-        "pnpm --silent run verify-vendored-links delegates to the verified Rust lockfile policy"
+        "pnpm --silent run verify-vendored-links delegates to the verified Rust lockfile policy",
+        "demo:acp, demo:code-mode, and demo:cordis delegate only to compiled Rust entrypoints"
       ],
-      "note": "root package metadata preserves source command names while Rust owns change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
+      "note": "root package metadata preserves source command names while compiled Rust owns the repository demos, change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
     {
       "source": "packages/AGENTS.md",
@@ -79982,12 +79983,38 @@
     {
       "source": "scripts/demo-code-mode.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/demo-launcher/src/lib.rs",
+        "crates/demo-launcher/src/bin/seekdeep-demo-code-mode.rs",
+        "crates/demo-launcher/tests/process_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pinned source process oracle exits 2 with exact usage on any extra argument; Rust process acceptance matches status, empty stdout, and stderr byte-for-byte",
+        "Rust launch plan selects the compiled seekdeep-acp-demo application with examples/acp-agent/code-mode.cordis.yml, inherits all three standard streams, preserves child exit codes, and normalizes signal termination to 1",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-demo-launcher --all-features -- --test-threads=1",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-demo-launcher --all-targets --all-features -- -D warnings"
+      ],
+      "note": "this row verifies the repository wrapper boundary; the selected ACP composition and Code Mode runtime remain covered by their own manifest rows"
     },
     {
       "source": "scripts/demo-cordis.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/demo-launcher/src/lib.rs",
+        "crates/demo-launcher/src/bin/seekdeep-demo-cordis.rs",
+        "crates/demo-launcher/tests/process_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pinned source process oracle exits 2 with exact usage for unknown surfaces and extra arity; Rust process acceptance matches status, empty stdout, and stderr byte-for-byte",
+        "Rust launch plans preserve the default web and explicit web/acp surface matrix, exact 3081 readiness hint, config paths, inherited standard streams, child exit propagation, and signal normalization",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-demo-launcher --all-features -- --test-threads=1",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-demo-launcher --all-targets --all-features -- -D warnings"
+      ],
+      "note": "this row verifies the repository wrapper boundary; the selected Web and ACP compositions and Cordis tools remain covered by their own manifest rows"
     },
     {
       "source": "scripts/dev-web.spec.ts",

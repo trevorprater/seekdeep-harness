@@ -5736,6 +5736,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-demo-launcher"
+version = "0.1.0-rc.5"
+
+[[package]]
 name = "seekdeep-e2b"
 version = "0.1.0-rc.5"
 dependencies = [

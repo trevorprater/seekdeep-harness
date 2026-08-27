@@ -96,6 +96,7 @@ members = [
   "crates/jsonrpc-demo",
   "crates/agent-spine-demo",
   "crates/acp-demo",
+  "crates/demo-launcher",
   "crates/llm",
   "crates/llm-deepseek",
   "crates/llm-mock-server",
