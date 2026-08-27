@@ -80204,12 +80204,34 @@
     {
       "source": "scripts/install-lefthook.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/lefthook_installer.rs",
+        "crates/repository-tools/src/bin/install-lefthook.rs",
+        "package.json",
+        "lefthook.yml"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/install-lefthook.spec.ts --testTimeout=60000 (pinned source: 38 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test lefthook_installer_parity --all-features (17 passed)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' CARGO_INCREMENTAL=0 cargo doc -p seekdeep-repository-tools --all-features --no-deps",
+        "CARGO_INCREMENTAL=0 cargo xtask docs"
+      ],
+      "note": "The Rust installer preserves fail-closed worktree configuration migration, direct-versus-included ownership checks, marker and hardlink safety, cross-process lock publication and takeover protection, exact merge-driver probing, command-scope filtering, rollback aggregation, and CI/non-repository skips; product-owned dsh hook, lock, config, and environment identities are renamed to seekdeep."
     },
     {
       "source": "scripts/install-lefthook.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/lefthook_installer_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/install-lefthook.spec.ts --testTimeout=60000 (pinned source: 38 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test lefthook_installer_parity --all-features (17 grouped Rust tests cover the source ownership, worktree, locking, probe, rollback, include, relocation, command-environment, executable-discovery, and minimum-Git partitions)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/jsdoc.ts",
@@ -80251,16 +80273,30 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "scripts/merge-translation-pairing-driver.sh"
+        "scripts/merge-translation-pairing-driver.sh",
+        "crates/repository-tools/tests/translation_pairing_merge_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
-      ]
+        "pnpm exec vitest run scripts/translation-pairing-merge.spec.ts (pinned source: 19 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test translation_pairing_merge_parity --all-features (13 passed, including real executable launcher, unavailable-Cargo text fallback, and rejecting pre-merge-commit hook state)",
+        "shell launcher is executable and invokes only the compiled Rust merge entrypoint through Cargo; failed probes retain Git's ordinary unresolved text merge"
+      ],
+      "note": "The installed merge-driver identity and recovery command use the required dsh to seekdeep rename; the general runtime dependency changes from Node and tsx to the repository Rust toolchain."
     },
     {
       "source": "scripts/merge-translation-pairing.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/bin/merge-translation-pairing.rs",
+        "crates/repository-tools/src/translation_pairing_merge.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/translation-pairing-merge.spec.ts (pinned source: 19 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test translation_pairing_merge_parity --all-features (13 passed for probe, driver, explicit resolver, recovery diagnostics, launcher, and hook failure state)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/migrate-packed-session-fixtures.ts",
@@ -80850,12 +80886,31 @@
     {
       "source": "scripts/translation-pairing-merge.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/translation_pairing_merge_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/translation-pairing-merge.spec.ts (pinned source: 19 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test translation_pairing_merge_parity --all-features (13 grouped Rust tests cover all composition, structure, strategy, resolver, index/worktree, batch failure, CLI, launcher fallback, and hook-state partitions)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/translation-pairing-merge.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/translation_pairing_merge.rs",
+        "crates/repository-tools/src/bin/merge-translation-pairing.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/translation-pairing-merge.spec.ts (pinned source: 19 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test translation_pairing_merge_parity --all-features (13 passed)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' CARGO_INCREMENTAL=0 cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "Rust reconstructs all six recorded Git blobs, accepts only default text strategy, independently merges each language, verifies switchers and structural signatures, stores exact merged blobs, rejects edited or unstaged stopped-merge state, stages every safe sidecar as one batch, and aggregates remaining manual conflicts."
     },
     {
       "source": "scripts/translation-pairing-record.ts",

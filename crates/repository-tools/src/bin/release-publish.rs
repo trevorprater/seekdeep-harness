@@ -16,10 +16,10 @@ fn main() -> ExitCode {
             "--family" => family = args.next(),
             "--from" => directory = args.next(),
             _ if argument.starts_with("--family=") => {
-                family = argument.strip_prefix("--family=").map(str::to_owned)
+                family = argument.strip_prefix("--family=").map(str::to_owned);
             }
             _ if argument.starts_with("--from=") => {
-                directory = argument.strip_prefix("--from=").map(str::to_owned)
+                directory = argument.strip_prefix("--from=").map(str::to_owned);
             }
             _ => {
                 eprintln!("release publish: unknown argument {argument}");

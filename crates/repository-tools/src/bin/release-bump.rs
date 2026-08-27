@@ -20,10 +20,10 @@ fn main() -> ExitCode {
             "--prerelease" => prerelease = args.next(),
             "--dry-run" => dry_run = true,
             _ if argument.starts_with("--family=") => {
-                family = argument.strip_prefix("--family=").map(str::to_owned)
+                family = argument.strip_prefix("--family=").map(str::to_owned);
             }
             _ if argument.starts_with("--prerelease=") => {
-                prerelease = argument.strip_prefix("--prerelease=").map(str::to_owned)
+                prerelease = argument.strip_prefix("--prerelease=").map(str::to_owned);
             }
             _ if argument.starts_with("--") => {
                 eprintln!("release bump: unknown argument {argument}");

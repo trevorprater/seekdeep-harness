@@ -19,6 +19,7 @@ pub mod doc_typecheck_paths;
 /// Standing-document word-budget policy.
 pub mod document_budgets;
 pub mod fixture_cleanup;
+pub mod lefthook_installer;
 pub mod markdown_util;
 pub mod md_links;
 pub mod md_wrap;
@@ -57,6 +58,7 @@ pub mod skill_invocation_metadata;
 pub mod translation_pairing;
 pub mod translation_pairing_command;
 pub mod translation_pairing_git;
+pub mod translation_pairing_merge;
 pub mod translation_pairing_record;
 pub mod translation_prompt;
 pub mod translation_prompt_verifier;

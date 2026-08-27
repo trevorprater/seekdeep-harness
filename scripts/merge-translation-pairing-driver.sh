@@ -10,11 +10,14 @@ current_path=$2
 other_path=$3
 meta_path=$4
 driver_directory=$(CDPATH= cd -P "$(dirname "$0")" && pwd) || exit 129
-driver_path=$driver_directory/merge-translation-pairing.ts
+repository_root=$(dirname "$driver_directory")
 
-if command -v node >/dev/null 2>&1 \
-  && node --import tsx/esm "$driver_path" --probe >/dev/null 2>&1; then
-  exec node --import tsx/esm "$driver_path" \
+if command -v cargo >/dev/null 2>&1 \
+  && cargo run --quiet --manifest-path "$repository_root/Cargo.toml" \
+    --package seekdeep-repository-tools --bin merge-translation-pairing -- \
+    --probe >/dev/null 2>&1; then
+  exec cargo run --quiet --manifest-path "$repository_root/Cargo.toml" \
+    --package seekdeep-repository-tools --bin merge-translation-pairing -- \
     "$ancestor_path" "$current_path" "$other_path" "$meta_path"
 fi
 
@@ -25,7 +28,7 @@ git merge-file \
   -L "$meta_path:other" \
   -- "$current_path" "$ancestor_path" "$other_path"
 fallback_status=$?
-echo 'merge-translation-pairing: restore Node dependencies, then rerun the merge or `pnpm run resolve-translation-pairing-conflicts`; use `git merge --abort` to cancel' >&2
+echo 'merge-translation-pairing: restore the Rust toolchain, then rerun the merge or `pnpm run resolve-translation-pairing-conflicts`; use `git merge --abort` to cancel' >&2
 
 # A clean text merge is still unverified pairing metadata, so the driver must
 # leave Git's index stages unresolved until the repository-aware resolver runs.

@@ -83,7 +83,8 @@
     "verify-skill-invocation-metadata": "cargo run --quiet --package seekdeep-repository-tools --bin verify-skill-invocation-metadata",
     "verify-translation-prompt": "cargo run --quiet --package seekdeep-repository-tools --bin verify-translation-prompt --",
     "verify-translation-pairing": "cargo run --quiet --package seekdeep-repository-tools --bin verify-translation-pairing --",
-    "resolve-translation-pairing-conflicts": "tsx scripts/merge-translation-pairing.ts --resolve",
+    "resolve-translation-pairing-conflicts": "cargo run --quiet --package seekdeep-repository-tools --bin merge-translation-pairing -- --resolve",
+    "install-lefthook": "cargo build --quiet --package seekdeep-repository-tools --bin merge-translation-pairing && cargo run --quiet --package seekdeep-repository-tools --bin install-lefthook",
     "gen-translation-brief": "tsx scripts/gen-translation-brief.ts",
     "verify-doc-budgets": "cargo run --quiet --package seekdeep-repository-tools --bin verify-doc-budgets --",
     "docs:dev": "pnpm --filter @seekdeep-ai/website run dev",
@@ -139,7 +140,7 @@
     "demo:acp": "node --import tsx packages/examples/acp-demo/src/bin.ts --config examples/acp-agent/cordis.yml",
     "mock:llm": "cargo run --quiet -p seekdeep-llm-mock-server --",
     "dev:web": "tsx scripts/dev-web.ts --poll",
-    "postinstall": "node scripts/install-lefthook.mjs"
+    "postinstall": "pnpm run install-lefthook"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "0.25.1",

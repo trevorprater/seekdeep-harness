@@ -12,7 +12,7 @@ A bilingual consistency record contains the two owner files' exact blob hashes. 
 
 `*.i18n.yaml` uses the repository-owned `seekdeep-translation-pairing` merge driver. The worktree-local Git installer registers its command alongside Lefthook setup; Git configuration remains local because a tracked attribute can name a driver but cannot carry its executable command.
 
-The installer loads the exact Node/tsx entrypoint before publishing worktree integration. Git invokes a checked-in shell launcher that does not require Node and repeats this probe before every driver execution. When the runtime or entrypoint is unavailable, the launcher materializes Git's ordinary three-way text result in the sidecar but returns a conflict even when that text merge is clean, so Git retains the unmerged index stages and never accepts unverified metadata.
+The Rust installer loads the exact compiled driver entrypoint before publishing worktree integration. Git invokes a checked-in shell launcher that repeats a Cargo-backed probe before every driver execution. When the Rust toolchain or entrypoint is unavailable, the launcher materializes Git's ordinary three-way text result in the sidecar but returns a conflict even when that text merge is clean, so Git retains the unmerged index stages and never accepts unverified metadata.
 
 The driver parses the ancestor, current, and other records and loads the six owner blobs named by their hashes. It independently runs Git's default three-way text merge for the English and Chinese triplets, requires both merges to be clean, verifies language switchers and the pairing structural signature, stores the two merged blobs, and writes their hashes as the canonical record. This composes confirmations already present in both parents; it never records an ordinary one-sided documentation edit.
 
@@ -26,8 +26,8 @@ The driver fails with an ordinary unresolved sidecar when a record is malformed,
 
 | Failure during a normal `git merge` | Observable state | Recovery |
 |---|---|---|
-| A fresh install cannot probe the driver or install Lefthook | No new driver or hook-path configuration is published; any newly added integration is rolled back to the previous hook lookup. | Restore the dependencies and rerun `node scripts/install-lefthook.mjs`. |
-| Node, tsx, or the driver entrypoint becomes unavailable after installation | The merge stops with the sidecar at `UU`, index stages 1/2/3 remain, the worktree sidecar contains Git's text result, `MERGE_HEAD` exists, and no commit is created. | Restore the dependencies and run `pnpm run resolve-translation-pairing-conflicts`, or run `git merge --abort`. |
+| A fresh install cannot probe the driver or install Lefthook | No new driver or hook-path configuration is published; any newly added integration is rolled back to the previous hook lookup. | Restore the Rust toolchain and dependencies, then rerun `pnpm run install-lefthook`. |
+| Cargo, the Rust toolchain, or the driver entrypoint becomes unavailable after installation | The merge stops with the sidecar at `UU`, index stages 1/2/3 remain, the worktree sidecar contains Git's text result, `MERGE_HEAD` exists, and no commit is created. | Restore the toolchain and run `pnpm run resolve-translation-pairing-conflicts`, or run `git merge --abort`. |
 | The repository-aware driver rejects the records | The merge stops with the sidecar unresolved and no commit; the driver prints the owner-repair and explicit-resolver path. | Repair the owner conflict or record, then run the printed resolver workflow or abort. |
 | The driver process crashes with a status above 128 | Git aborts the merge strategy without publishing `MERGE_HEAD` or unmerged index stages. | Repair the runtime and rerun the merge. |
 | `pre-merge-commit` rejects an otherwise clean file merge | No unmerged entries remain, the complete result is staged with `MERGE_HEAD`, and no merge commit is created. | Repair the hook failure and run `git commit`, or run `git merge --abort`. |
@@ -36,7 +36,7 @@ An installer rollback failure reports both the original installation error and e
 
 ## Verification
 
-Script tests exercise clean composition through the installed launcher, missing-runtime and broken-entrypoint text fallback, installer probe rollback, a rejecting `pre-merge-commit` hook, explicit recovery from an unresolved index, mixed safe and owner-conflicted pairs, edited sidecars, non-text default merge configuration, record parsing, and worktree-local installation. The existing corpus verifier continues to prove that a committed record matches its two owners.
+Rust integration tests exercise clean composition through the installed launcher, missing-runtime and failed-probe text fallback, installer probe rollback, a rejecting `pre-merge-commit` hook, explicit recovery from an unresolved index, mixed safe and owner-conflicted pairs, edited sidecars, non-text default merge configuration, record parsing, and worktree-local installation. The existing corpus verifier continues to prove that a committed record matches its two owners.
 
 ## Alternatives considered
 
@@ -52,4 +52,4 @@ Script tests exercise clean composition through the installed launcher, missing-
 
 Installed worktrees automatically remove pairing-record-only conflicts while preserving human judgment for owner conflicts and translation quality. GitHub's hosted mergeability calculation does not run the worktree-local executable, so a contributor or agent must still merge the base and push the resulting commit before the remote conflict badge clears.
 
-The installer reserves `merge.seekdeep-translation-pairing.*` in worktree configuration and refuses a conflicting custom value. Automatic composition depends on the installed Node dependencies, like the repository's contributor hooks; runtime loss produces a visible unresolved text result rather than selecting stale metadata.
+The installer reserves `merge.seekdeep-translation-pairing.*` in worktree configuration and refuses a conflicting custom value. Automatic composition depends on the Rust toolchain available to the checked-in launcher; runtime loss produces a visible unresolved text result rather than selecting stale metadata.
