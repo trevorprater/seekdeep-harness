@@ -11,7 +11,7 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_typert_protocol::{
     InvocationDescriptor, InvocationParameterSource, InvocationReceiver, TypertClientContextBinder,
     TypertContextRegistry as TypertContextRegistryContract, TypertDisposer,
@@ -29,6 +29,10 @@ pub use types::*;
 
 /// Typed Cordis slot corresponding to `ctx.typert`.
 pub const TYPERT: ServiceKey<TypertRegistry> = ServiceKey::new("typert");
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "typert-registry";
+/// Registry plugin has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 /// Compose the global key of one generated schema.
 #[must_use]
@@ -490,6 +494,17 @@ pub fn install(context: &Context) -> anyhow::Result<Arc<TypertRegistry>> {
     let registry = TypertRegistry::new();
     registry.provide(context)?;
     Ok(registry)
+}
+
+/// Builds the Loader-compatible Typert registry plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            install(&context)?;
+            Ok(())
+        })
+    })
 }
 
 /// Current-environment invocation registry view.

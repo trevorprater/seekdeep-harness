@@ -67,3 +67,19 @@ pub use types::{
     ModelModality, StreamChunk, TokenUsage, ToolSchema, is_agent_loop_request, is_token_delta,
     mark_agent_loop_request,
 };
+
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "llm";
+/// Provider-neutral LLM runtime has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
+
+/// Builds the Loader-compatible provider-neutral LLM runtime.
+#[must_use]
+pub fn plugin() -> seekdeep_cordis::Plugin {
+    seekdeep_cordis::Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            LlmRuntime::install(&context)?;
+            Ok(())
+        })
+    })
+}

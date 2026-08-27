@@ -50,3 +50,26 @@ pub use schema::{
 };
 pub use testing::{ContentToolFixtureOptions, define_content_tool_fixture};
 pub use ts_types::{ToolSdkSchema, json_schema_to_ts, render_tools_sdk};
+
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "tools";
+/// Tool registry prompt integration requires the system prompt service.
+pub const PLUGIN_INJECT: &[&str] = &["systemPrompt"];
+
+/// Builds the Loader-compatible tool registry plugin.
+#[must_use]
+pub fn plugin() -> seekdeep_cordis::Plugin {
+    seekdeep_cordis::Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        |context, config| {
+            Box::pin(async move {
+                let system_prompt = context
+                    .get(seekdeep_system_prompt::SYSTEM_PROMPT)
+                    .ok_or_else(|| anyhow::anyhow!("tools requires systemPrompt"))?;
+                install(&context, &system_prompt, serde_json::from_value(config)?)?;
+                Ok(())
+            })
+        },
+    )
+}

@@ -11,7 +11,7 @@ use futures::FutureExt;
 use indexmap::IndexMap;
 use regex::Regex;
 use seekdeep_cordis::{
-    Context, CordisError, EventArgs, EventOptions, EventReply, ServiceKey, events::Next,
+    Context, CordisError, EventArgs, EventOptions, EventReply, Plugin, ServiceKey, events::Next,
     fiber::EffectHandle,
 };
 use seekdeep_core::session::Session;
@@ -32,6 +32,10 @@ pub const PERSONA_ORDER: f64 = 0.0;
 pub const TOOL_ORDER_REST: &str = "<unlisted-tools>";
 /// Typed Cordis slot corresponding to `ctx.systemPrompt`.
 pub const SYSTEM_PROMPT: ServiceKey<SystemPrompt> = ServiceKey::new("systemPrompt");
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "system-prompt";
+/// System prompt service has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 /// Merge-extensible context for one prompt assembly.
 #[derive(Clone, Debug, Default)]
@@ -695,6 +699,21 @@ pub fn install(context: &Context, config: SystemPromptConfig) -> anyhow::Result<
     let prompt = SystemPrompt::new(context, config)?;
     prompt.provide(context)?;
     Ok(prompt)
+}
+
+/// Builds the Loader-compatible system-prompt plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        |context, config| {
+            Box::pin(async move {
+                install(&context, serde_json::from_value(config)?)?;
+                Ok(())
+            })
+        },
+    )
 }
 
 /// Interpolates variables, drops empty sections, and joins with blank lines.

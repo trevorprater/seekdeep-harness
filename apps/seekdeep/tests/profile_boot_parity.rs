@@ -8,13 +8,15 @@ use std::{
 
 use seekdeep::profile_boot::{
     boot_profile_with_failure_handler, compose_profile_at, register_profile_framework_plugins,
-    resolve_telemetry_patch,
+    resolve_telemetry_patch, run_profile_process,
 };
 use seekdeep_app_boot::{compose_entries, init_profile, resolve_profile_dir};
-use seekdeep_cordis::{Context, Plugin, ServiceKey};
+use seekdeep_cmdline::{APP_EXIT, CMDLINE_ARGS};
+use seekdeep_cordis::{Context, FiberState, Plugin, ServiceKey};
 use seekdeep_cordis_timer::TIMER;
 use seekdeep_hmr::HMR;
 use seekdeep_loader::{PluginCatalog, profile_patch::ProfileNode};
+use seekdeep_util::launch_environment::SEEKDEEP_LAUNCH_ENVIRONMENT;
 use serde_json::{Value, json};
 
 const CURRENT: ServiceKey<Value> = ServiceKey::new("current");
@@ -207,5 +209,70 @@ async fn minimal_profile_boots_with_watch_only_hmr_and_recomposes_both_user_laye
 
     application.dispose().await?;
     assert_no_refresh_failures(&failures, "after disposal");
+    Ok(())
+}
+
+#[tokio::test]
+async fn app_exit_during_boot_waits_for_publication_and_disposes_before_process_completion()
+-> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let home = temporary.path().join("home");
+    let cwd = temporary.path().join("workspace");
+    std::fs::create_dir_all(&cwd)?;
+    let profile_dir = resolve_profile_dir("exit-during-boot", &home)?;
+    init_profile(&profile_dir, &[])?;
+    std::fs::write(
+        profile_dir.join("cordis.patch.yml"),
+        "- insert:\n    - id: exit\n      name: exit-during-boot\n",
+    )?;
+    let plan = compose_profile_at(
+        "exit-during-boot",
+        &[],
+        &cwd,
+        &home,
+        &install_anchor(&home),
+        temporary.path(),
+        None,
+    )?;
+    let observed = Arc::new(Mutex::new(None));
+    let observed_by_plugin = observed.clone();
+    let catalog = PluginCatalog::new();
+    register_profile_framework_plugins(&catalog)?;
+    catalog.register_named(
+        "exit-during-boot",
+        Plugin::new(
+            "exit-during-boot",
+            ["cmdlineArgs", "launchEnvironment", "appExit"],
+            move |context, _| {
+                let observed = observed_by_plugin.clone();
+                Box::pin(async move {
+                    let arguments = context
+                        .get(CMDLINE_ARGS)
+                        .ok_or_else(|| anyhow::anyhow!("cmdline args missing"))?;
+                    let has_environment = context.get(SEEKDEEP_LAUNCH_ENVIRONMENT).is_some();
+                    *observed.lock().unwrap() = Some((arguments.get().to_vec(), has_environment));
+                    context
+                        .get(APP_EXIT)
+                        .ok_or_else(|| anyhow::anyhow!("app exit missing"))?
+                        .request(7)?;
+                    Ok(())
+                })
+            },
+        ),
+    )?;
+    let running = run_profile_process(
+        plan,
+        &catalog,
+        Default::default(),
+        vec!["--probe".to_owned()],
+    )
+    .await?;
+    let context = running.context().clone();
+    assert_eq!(running.wait().await?, 7);
+    assert_eq!(
+        observed.lock().unwrap().as_ref(),
+        Some(&(vec!["--probe".to_owned()], true))
+    );
+    assert_eq!(context.fiber().state(), FiberState::Disposed);
     Ok(())
 }

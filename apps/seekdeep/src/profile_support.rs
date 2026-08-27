@@ -40,7 +40,7 @@ const EMBEDDED_INSTALLATION_DIR: &str = ".seekdeep-installation";
 
 /// Materialized Rust installation manifest used as the installed bundle-resolution anchor.
 #[must_use]
-pub(crate) fn install_anchor(home: &Path) -> PathBuf {
+pub fn install_anchor(home: &Path) -> PathBuf {
     home.join("profiles")
         .join(EMBEDDED_INSTALLATION_DIR)
         .join("package.json")

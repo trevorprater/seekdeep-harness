@@ -2,7 +2,10 @@
 
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicI32, Ordering},
+    },
 };
 
 use indexmap::IndexMap;
@@ -12,24 +15,70 @@ use seekdeep_app_boot::{
     ConfigWatchRegistry, OwnedConfigWatcher, PROFILE_PATCH_FILENAME, PatchComposer, Profile, boot,
     compose_entries, load_optional_patches, load_overlay_patches, watch_boot_user_patches,
 };
+use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
 use seekdeep_cordis::FiberState;
 use seekdeep_cordis_timer::TIMER;
 use seekdeep_hmr::HMR;
 use seekdeep_loader::{
-    Entry, EntryId, EntryParent, LOADER, PluginCatalog, PluginSpecifier,
+    Entry, EntryId, EntryParent, ExpressionEnvironment, LOADER, PluginCatalog, PluginSpecifier,
     profile_patch::{ProfileEntry, ProfileNode, ProfilePatch, ProfilePatchWarning},
 };
+use seekdeep_util::launch_environment::{LaunchEnvironmentSnapshot, SEEKDEEP_LAUNCH_ENVIRONMENT};
 
-use crate::profile_support;
+use crate::{process_shutdown::ProcessShutdown, profile_support};
 
 const NAME: &str = "seekdeep";
 const TELEMETRY_ROW_ID: &str = "session-telemetry-otel";
 const AGENT_PRESETS_ROW_ID: &str = "agent-presets";
 const FRAMEWORK_TIMER_ID: &str = "profile-watch-timer";
 const FRAMEWORK_HMR_ID: &str = "profile-watch-hmr";
+const EXIT_CODE_UNSET: i32 = i32::MIN;
 
 /// Privacy switch applied after every user-controlled profile layer.
 pub const TELEMETRY_DISABLED_ENV: &str = "SEEKDEEP_TELEMETRY_DISABLED";
+
+/// Shipped agent-preset asset root in the source-checkout application layout.
+#[must_use]
+pub fn shipped_preset_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../cli/config/agent-presets")
+        .clean()
+}
+
+/// Builds the profile framework catalog over one frozen launch environment.
+///
+/// Product plugins join this catalog as their compiled Loader boundaries are ported.
+/// Unknown installed packages remain eligible for the model-authored JavaScript
+/// compatibility loader under the profile's module-resolution anchors.
+///
+/// # Errors
+///
+/// Returns executable-path, expression-environment, or registration failures.
+pub fn framework_profile_catalog(
+    cwd: &Path,
+    home: &Path,
+    environment: &LaunchEnvironmentSnapshot,
+) -> anyhow::Result<PluginCatalog> {
+    let platform = match std::env::consts::OS {
+        "windows" => "win32",
+        "macos" => "darwin",
+        other => other,
+    };
+    let expressions = ExpressionEnvironment::from_launch_environment(
+        environment,
+        cwd.to_owned(),
+        std::env::current_exe()?,
+        platform,
+        env!("CARGO_PKG_VERSION"),
+        home.to_owned(),
+    );
+    let catalog = PluginCatalog::new()
+        .with_expression_environment(expressions)
+        .with_bare_module_base(profile_support::install_anchor(home));
+    register_profile_framework_plugins(&catalog)?;
+    register_compiled_profile_plugins(&catalog)?;
+    Ok(catalog)
+}
 
 /// Fully resolved profile layer stack and its pre-launch row index.
 #[derive(Clone, Debug)]
@@ -79,6 +128,144 @@ impl ProfileBootApplication {
     /// Aggregates every watcher and application cleanup failure after attempting all of them.
     pub async fn dispose(self) -> anyhow::Result<()> {
         dispose_profile_parts(self.application, self.watchers).await
+    }
+}
+
+#[derive(Debug, Default)]
+struct ProfileApplicationSlot {
+    application: tokio::sync::Mutex<Option<ProfileBootApplication>>,
+    boot_finished: AtomicBool,
+    changed: tokio::sync::Notify,
+}
+
+impl ProfileApplicationSlot {
+    async fn publish(
+        &self,
+        application: ProfileBootApplication,
+    ) -> Result<(), ProfileBootApplication> {
+        let mut slot = self.application.lock().await;
+        if slot.is_some() || self.boot_finished.load(Ordering::Acquire) {
+            return Err(application);
+        }
+        *slot = Some(application);
+        self.boot_finished.store(true, Ordering::Release);
+        drop(slot);
+        self.changed.notify_waiters();
+        Ok(())
+    }
+
+    fn finish_without_application(&self) {
+        self.boot_finished.store(true, Ordering::Release);
+        self.changed.notify_waiters();
+    }
+
+    async fn shutdown(&self) -> anyhow::Result<()> {
+        loop {
+            let changed = self.changed.notified();
+            if let Some(application) = self.application.lock().await.take() {
+                return application.dispose().await;
+            }
+            if self.boot_finished.load(Ordering::Acquire) {
+                return Ok(());
+            }
+            changed.await;
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct ProfileProcessCompletion {
+    code: AtomicI32,
+    changed: tokio::sync::Notify,
+}
+
+impl ProfileProcessCompletion {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            code: AtomicI32::new(EXIT_CODE_UNSET),
+            changed: tokio::sync::Notify::new(),
+        })
+    }
+
+    fn complete(&self, code: i32) {
+        if self
+            .code
+            .compare_exchange(EXIT_CODE_UNSET, code, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            self.changed.notify_waiters();
+        }
+    }
+
+    async fn wait(&self) -> i32 {
+        loop {
+            let changed = self.changed.notified();
+            let code = self.code.load(Ordering::Acquire);
+            if code != EXIT_CODE_UNSET {
+                return code;
+            }
+            changed.await;
+        }
+    }
+}
+
+/// Long-lived profile process waiting for app exit or a process signal.
+pub struct RunningProfile {
+    context: seekdeep_cordis::Context,
+    shutdown: ProcessShutdown,
+    completion: Arc<ProfileProcessCompletion>,
+    signals: tokio::task::JoinHandle<anyhow::Result<()>>,
+}
+
+impl std::fmt::Debug for RunningProfile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RunningProfile")
+            .field("fiber_state", &self.context.fiber().state())
+            .finish_non_exhaustive()
+    }
+}
+
+impl RunningProfile {
+    /// Root profile context, including launcher environment and cmdline facts.
+    #[must_use]
+    pub fn context(&self) -> &seekdeep_cordis::Context {
+        &self.context
+    }
+
+    /// Waits for an app-requested normal exit and joins signal observation.
+    ///
+    /// # Errors
+    ///
+    /// Returns when the signal task fails or ends without terminating the process.
+    pub async fn wait(self) -> anyhow::Result<i32> {
+        let mut signals = self.signals;
+        tokio::select! {
+            code = self.completion.wait() => {
+                signals.abort();
+                match signals.await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => return Err(error),
+                    Err(error) if error.is_cancelled() => {}
+                    Err(error) => return Err(error.into()),
+                }
+                Ok(code)
+            }
+            result = &mut signals => {
+                result??;
+                anyhow::bail!("seekdeep: profile signal task ended without terminating the process")
+            }
+        }
+    }
+
+    /// Requests ordinary bounded shutdown, then returns the selected exit code.
+    ///
+    /// # Errors
+    ///
+    /// Returns application cleanup or signal-task failures.
+    pub async fn shutdown(self, code: i32) -> anyhow::Result<i32> {
+        self.shutdown.shutdown(code).await;
+        self.wait().await
     }
 }
 
@@ -258,6 +445,217 @@ pub fn register_profile_framework_plugins(catalog: &PluginCatalog) -> anyhow::Re
     Ok(())
 }
 
+fn register_product_plugin(
+    catalog: &PluginCatalog,
+    name: &str,
+    plugin: seekdeep_cordis::Plugin,
+) -> anyhow::Result<()> {
+    catalog.register_named(name, plugin.clone())?;
+    catalog.register_named(&format!("@seekdeep-ai/{name}"), plugin)?;
+    Ok(())
+}
+
+/// Registers every product Host plugin that currently exposes a compiled Loader boundary.
+///
+/// # Errors
+///
+/// Returns duplicate or invalid catalog-registration failures.
+pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> {
+    for (name, plugin) in [
+        ("seekdeep-agent", seekdeep_agent::plugin()),
+        (
+            "seekdeep-agent-default-model",
+            seekdeep_agent_default_model::plugin(),
+        ),
+        (
+            "seekdeep-agent-instructions",
+            seekdeep_agent_instructions::plugin(),
+        ),
+        ("seekdeep-api-gateway", seekdeep_api_gateway::plugin()),
+        (
+            "seekdeep-attachment-local",
+            seekdeep_attachment_local::plugin(),
+        ),
+        ("seekdeep-bash-sandbox", seekdeep_bash_sandbox::plugin()),
+        (
+            "seekdeep-command-compact",
+            seekdeep_command_compact::index::plugin(),
+        ),
+        (
+            "seekdeep-command-feedback",
+            seekdeep_command_feedback::plugin(),
+        ),
+        ("seekdeep-command-goal", seekdeep_command_goal::plugin()),
+        ("seekdeep-commands", seekdeep_commands::plugin()),
+        (
+            "seekdeep-compaction-basic",
+            seekdeep_compaction_basic::plugin(),
+        ),
+        (
+            "seekdeep-compaction-tool-result-pruner",
+            seekdeep_compaction_tool_result_pruner::plugin(),
+        ),
+        (
+            "seekdeep-cordis-host-runner",
+            seekdeep_cordis_host_runner::plugin(),
+        ),
+        (
+            "seekdeep-credentials-local",
+            seekdeep_credentials_local::plugin(),
+        ),
+        (
+            "seekdeep-fs-observation-policy",
+            seekdeep_fs_observation_policy::plugin(),
+        ),
+        ("seekdeep-fs-sandbox", seekdeep_fs_sandbox::plugin()),
+        ("seekdeep-goal", seekdeep_goal::plugin()),
+        (
+            "seekdeep-goal-round-driver",
+            seekdeep_goal_round_driver::plugin(),
+        ),
+        (
+            "seekdeep-host-directory-picker-auto",
+            seekdeep_host_directory_picker_auto::plugin(),
+        ),
+        (
+            "seekdeep-host-plugin-inventory",
+            seekdeep_host_plugin_inventory::plugin(),
+        ),
+        ("seekdeep-llm", seekdeep_llm::plugin()),
+        ("seekdeep-llm-deepseek", seekdeep_llm_deepseek::plugin()),
+        ("seekdeep-llm-pi-ai", seekdeep_llm_pi_ai::plugin()),
+        ("seekdeep-llm-retry", seekdeep_llm_retry::plugin()),
+        (
+            "seekdeep-message-feedback",
+            seekdeep_message_feedback::plugin(),
+        ),
+        (
+            "seekdeep-permission-presets",
+            seekdeep_permission_presets::plugin(),
+        ),
+        ("seekdeep-plan-mode", seekdeep_plan_mode::plugin()),
+        ("seekdeep-pwsh-sandbox", seekdeep_pwsh_sandbox::plugin()),
+        (
+            "seekdeep-repeat-tool-reminder",
+            seekdeep_repeat_tool_reminder::plugin(),
+        ),
+        ("seekdeep-sandbox-local", seekdeep_sandbox_local::plugin()),
+        ("seekdeep-sandbox-policy", seekdeep_sandbox_policy::plugin()),
+        ("seekdeep-session", seekdeep_core::session_store::plugin()),
+        (
+            "seekdeep-session-checkpoint-policy",
+            seekdeep_session_checkpoint_policy::plugin(),
+        ),
+        (
+            "seekdeep-session-log-export",
+            seekdeep_session_log_export::plugin(),
+        ),
+        (
+            "seekdeep-session-persistence-jsonl",
+            seekdeep_session_persistence_jsonl::plugin(),
+        ),
+        (
+            "seekdeep-session-projection",
+            seekdeep_session_projection::plugin(),
+        ),
+        (
+            "seekdeep-session-projection-cache",
+            seekdeep_session_projection_cache::plugin(),
+        ),
+        (
+            "seekdeep-session-query-sqlite",
+            seekdeep_session_query_sqlite::plugin(),
+        ),
+        (
+            "seekdeep-session-telemetry-otel",
+            seekdeep_session_telemetry_otel::plugin(),
+        ),
+        ("seekdeep-session-title", seekdeep_session_title::plugin()),
+        (
+            "seekdeep-session-title-first-prompt-llm",
+            seekdeep_session_title_first_prompt_llm::plugin(),
+        ),
+        ("seekdeep-settings-file", seekdeep_settings_file::plugin()),
+        ("seekdeep-shell-env", seekdeep_shell_env::plugin()),
+        ("seekdeep-skill", seekdeep_skill::plugin()),
+        ("seekdeep-skill-badge", seekdeep_skill_badge::plugin()),
+        (
+            "seekdeep-skill-filesystem",
+            seekdeep_skill_filesystem::plugin(),
+        ),
+        ("seekdeep-storage", seekdeep_storage::plugin()),
+        ("seekdeep-storage-domain", seekdeep_storage_domain::plugin()),
+        ("seekdeep-storage-json", seekdeep_storage_json::plugin()),
+        ("seekdeep-subagent", seekdeep_subagent::plugin()),
+        (
+            "seekdeep-subagent-fork-in-process",
+            seekdeep_subagent_fork_in_process::plugin(),
+        ),
+        (
+            "seekdeep-subagent-spawn-in-process",
+            seekdeep_subagent_spawn_in_process::plugin(),
+        ),
+        (
+            "seekdeep-subprocess-local",
+            seekdeep_subprocess_local::plugin(),
+        ),
+        ("seekdeep-system-prompt", seekdeep_system_prompt::plugin()),
+        ("seekdeep-token-meter", seekdeep_token_meter::plugin()),
+        ("seekdeep-tool-bash", seekdeep_tool_bash::plugin()),
+        ("seekdeep-tool-fs", seekdeep_tool_fs::plugin()),
+        ("seekdeep-tool-fs-search", seekdeep_tool_fs_search::plugin()),
+        ("seekdeep-tool-goal", seekdeep_tool_goal::index::plugin()),
+        ("seekdeep-tool-jobs", seekdeep_tool_jobs::index::plugin()),
+        ("seekdeep-tool-pwsh", seekdeep_tool_pwsh::plugin()),
+        (
+            "seekdeep-tool-str-replace-editor",
+            seekdeep_tool_str_replace_editor::plugin(),
+        ),
+        ("seekdeep-tool-subagent", seekdeep_tool_subagent::plugin()),
+        (
+            "seekdeep-tool-subagent-control",
+            seekdeep_tool_subagent_control::plugin(),
+        ),
+        (
+            "seekdeep-tool-subagent-report",
+            seekdeep_tool_subagent_report::plugin(),
+        ),
+        ("seekdeep-tool-todo", seekdeep_tool_todo::plugin()),
+        ("seekdeep-tool-web", seekdeep_tool_web::plugin()),
+        ("seekdeep-tools", seekdeep_tools::plugin()),
+        ("seekdeep-typert-loader", seekdeep_typert_loader::plugin()),
+        (
+            "seekdeep-typert-registry",
+            seekdeep_typert_registry::plugin(),
+        ),
+        ("seekdeep-user-approval", seekdeep_user_approval::plugin()),
+        ("seekdeep-user-questions", seekdeep_user_questions::plugin()),
+        ("seekdeep-web", seekdeep_web::plugin()),
+        (
+            "seekdeep-web-search-deepseek",
+            seekdeep_web_search_deepseek::plugin(),
+        ),
+        (
+            "seekdeep-workflow-worker-thread",
+            seekdeep_workflow_worker_thread::plugin(),
+        ),
+        ("seekdeep-workspace", seekdeep_workspace::plugin()),
+    ] {
+        register_product_plugin(catalog, name, plugin)?;
+    }
+    register_product_plugin(
+        catalog,
+        "seekdeep-jobs-local",
+        seekdeep_jobs_local::LocalJobRegistry::plugin(),
+    )?;
+    register_product_plugin(
+        catalog,
+        "seekdeep-tool-subagent-control/list-agents",
+        seekdeep_tool_subagent_control::list_plugin(),
+    )?;
+    Ok(())
+}
+
 fn unused_entry_id(
     base: &str,
     loader: &seekdeep_loader::LoaderSettlement,
@@ -426,5 +824,126 @@ pub async fn boot_profile_with_failure_handler(
     Ok(ProfileBootApplication {
         application,
         watchers,
+    })
+}
+
+#[cfg(unix)]
+fn spawn_profile_signals(
+    shutdown: ProcessShutdown,
+) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+    Ok(tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                signal = terminate.recv() => {
+                    anyhow::ensure!(signal.is_some(), "SIGTERM stream ended");
+                    shutdown.interrupt_sigterm();
+                }
+                signal = interrupt.recv() => {
+                    anyhow::ensure!(signal.is_some(), "SIGINT stream ended");
+                    shutdown.interrupt_sigint();
+                }
+            }
+        }
+    }))
+}
+
+#[cfg(not(unix))]
+fn spawn_profile_signals(
+    shutdown: ProcessShutdown,
+) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
+    Ok(tokio::spawn(async move {
+        loop {
+            tokio::signal::ctrl_c().await?;
+            shutdown.interrupt_sigint();
+        }
+    }))
+}
+
+async fn stop_profile_signals(
+    signals: tokio::task::JoinHandle<anyhow::Result<()>>,
+) -> anyhow::Result<()> {
+    signals.abort();
+    match signals.await {
+        Ok(result) => result,
+        Err(error) if error.is_cancelled() => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Boots one profile under launcher-owned environment, cmdline, signal, and shutdown facts.
+///
+/// An app may request exit while its siblings are still mounting. The shutdown
+/// owner waits for publication, then drains profile watchers before the Loader tree.
+///
+/// # Errors
+///
+/// Returns signal setup, host preparation, profile boot, publication, or rollback failures.
+pub async fn run_profile_process(
+    plan: ProfileBootPlan,
+    catalog: &PluginCatalog,
+    environment: LaunchEnvironmentSnapshot,
+    arguments: Vec<String>,
+) -> anyhow::Result<RunningProfile> {
+    let application_slot = Arc::new(ProfileApplicationSlot::default());
+    let completion = ProfileProcessCompletion::new();
+    let application_for_shutdown = application_slot.clone();
+    let completion_for_shutdown = completion.clone();
+    let shutdown = ProcessShutdown::new(
+        move || async move { application_for_shutdown.shutdown().await },
+        std::process::exit,
+        move |code| completion_for_shutdown.complete(code),
+    );
+    let signals = spawn_profile_signals(shutdown.clone())?;
+    let shutdown_for_cmdline = shutdown.clone();
+    let prepare: BootPrepare = Arc::new(move |context| {
+        let environment = environment.clone();
+        let arguments = arguments.clone();
+        let shutdown = shutdown_for_cmdline.clone();
+        Box::pin(async move {
+            context.provide(SEEKDEEP_LAUNCH_ENVIRONMENT, Arc::new(environment))?;
+            provide_cmdline(
+                &context,
+                CmdlineHost::new(arguments, move |code| {
+                    drop(shutdown.shutdown(code));
+                    Ok(())
+                }),
+            )?;
+            Ok(())
+        })
+    });
+    let application = match boot_profile(plan, catalog, Some(prepare)).await {
+        Ok(application) => application,
+        Err(error) => {
+            application_slot.finish_without_application();
+            let signal_result = stop_profile_signals(signals).await;
+            return match signal_result {
+                Ok(()) => Err(error),
+                Err(signals) => Err(anyhow::anyhow!(
+                    "{error:#}\nprofile signal cleanup failed: {signals:#}"
+                )),
+            };
+        }
+    };
+    let context = application.context().clone();
+    if let Err(application) = application_slot.publish(application).await {
+        application_slot.finish_without_application();
+        let cleanup = application.dispose().await;
+        let signal_cleanup = stop_profile_signals(signals).await;
+        return match (cleanup, signal_cleanup) {
+            (Ok(()), Ok(())) => Err(anyhow::anyhow!(
+                "seekdeep: profile application was published more than once"
+            )),
+            (cleanup, signals) => Err(anyhow::anyhow!(
+                "seekdeep: profile application was published more than once\nprofile cleanup: {cleanup:?}\nprofile signal cleanup: {signals:?}"
+            )),
+        };
+    }
+    Ok(RunningProfile {
+        context,
+        shutdown,
+        completion,
+        signals,
     })
 }

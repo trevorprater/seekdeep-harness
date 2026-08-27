@@ -18,7 +18,7 @@ use seekdeep_client_connection::{
     ConnectionRpcAuthority, HOST_CONNECTION, HostConnectionService, RpcError, RpcHandler,
     RpcHandlerFuture, RpcResult, SharedRpcRegistration,
 };
-use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_llm::AbortSignal;
 use seekdeep_typert_protocol::{
     InvocationDescriptor, InvocationParameterDescriptor, InvocationParameterSource,
@@ -37,6 +37,10 @@ pub use types::*;
 pub const TYPERT_GATEWAY: ServiceKey<TypertGatewayService> = ServiceKey::new("typertGateway");
 /// Typed directory slot used to re-resolve native Typert services by Context.
 pub const TYPERT_SERVICES: ServiceKey<TypertServiceDirectory> = ServiceKey::new("typertServices");
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "api-gateway";
+/// Gateway requires the Typert registry.
+pub const PLUGIN_INJECT: &[&str] = &["typert"];
 
 /// Dynamic service resolver preserving Cordis Context rebinding.
 pub type TypertServiceResolver =
@@ -836,6 +840,17 @@ pub fn install(
     })?;
     gateway.refresh_connection_binding(context)?;
     Ok((services, gateway))
+}
+
+/// Builds the Loader-compatible Typert API gateway plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            install(&context)?;
+            Ok(())
+        })
+    })
 }
 
 /// Mounts the Host Gateway claim on Connection's shared `/api` channel.

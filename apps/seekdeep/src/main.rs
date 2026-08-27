@@ -3,6 +3,7 @@
 use std::{
     ffi::OsString,
     io::{self, Write},
+    path::PathBuf,
     process::ExitCode,
     sync::{
         Arc, OnceLock,
@@ -84,21 +85,67 @@ fn dispatch_invocation(invocation: SeekDeepInvocation) -> i32 {
 }
 
 fn dispatch_profile(invocation: ProfileInvocation) -> i32 {
-    if !invocation.patches.is_empty() {
-        write_stderr(
-            "seekdeep: profile overlays are not available until the Rust profile loader is complete\n",
-        );
-        return 1;
+    if invocation.profile.as_str() == "headless" && invocation.patches.is_empty() {
+        return run_headless(invocation.args);
     }
-    if invocation.profile.as_str() != "headless" {
-        write_stderr(&format!(
-            "seekdeep: profile {:?} is not available in the current Rust launcher\n",
-            invocation.profile.as_str()
-        ));
-        return 1;
-    }
+    run_loader_profile(invocation)
+}
 
-    run_headless(invocation.args)
+fn run_loader_profile(invocation: ProfileInvocation) -> i32 {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            write_stderr(&format!(
+                "seekdeep: failed to start async runtime: {error}\n"
+            ));
+            return 1;
+        }
+    };
+    match runtime.block_on(run_loader_profile_async(invocation)) {
+        Ok(code) => code,
+        Err(error) => {
+            write_stderr(&format!("{error:#}\n"));
+            1
+        }
+    }
+}
+
+async fn run_loader_profile_async(invocation: ProfileInvocation) -> anyhow::Result<i32> {
+    let cwd = std::env::current_dir()?;
+    let layered = seekdeep::layered_env::load_layered_env("seekdeep", &cwd)?;
+    let telemetry_disabled = layered
+        .launch_environment
+        .get(seekdeep::profile_boot::TELEMETRY_DISABLED_ENV)
+        .map(|entry| entry.value);
+    let plan = seekdeep::profile_boot::compose_profile_at(
+        invocation.profile.as_str(),
+        &invocation
+            .patches
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>(),
+        &cwd,
+        &layered.seekdeep_home,
+        &seekdeep::profile_support::install_anchor(&layered.seekdeep_home),
+        &seekdeep::profile_boot::shipped_preset_root(),
+        telemetry_disabled.as_deref(),
+    )?;
+    let catalog = seekdeep::profile_boot::framework_profile_catalog(
+        &cwd,
+        &layered.seekdeep_home,
+        &layered.launch_environment,
+    )?;
+    let running = seekdeep::profile_boot::run_profile_process(
+        plan,
+        &catalog,
+        layered.launch_environment,
+        invocation.args,
+    )
+    .await?;
+    running.wait().await
 }
 
 fn dispatch_dump_config(invocation: &DumpConfigInvocation) -> i32 {

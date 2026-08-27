@@ -11,7 +11,7 @@ use seekdeep_attachment::{
     AttachmentBackend, AttachmentStore, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
     SaveImageAttachment, StoredImageAttachment,
 };
-use seekdeep_cordis::Context;
+use seekdeep_cordis::{Context, Plugin};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_util::{abort::AbortSignal, home_paths::resolve_process_seekdeep_home};
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,10 @@ pub const DEFAULT_MAX_IMAGES_PER_MESSAGE: u64 = 20;
 pub const DEFAULT_MAX_MESSAGE_IMAGE_BYTES: u64 = 100 * 1024 * 1024;
 /// Default maximum intrinsic pixels for one image.
 pub const DEFAULT_MAX_IMAGE_PIXELS: u64 = 40_000_000;
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "attachment-local";
+/// Local attachment storage has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 /// Local attachment backend configuration.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,6 +164,22 @@ pub fn install(
     let service = Arc::new(AttachmentStore::new(backend.clone()));
     service.provide(context)?;
     Ok(backend)
+}
+
+/// Builds the Loader-compatible local attachment plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        |context, config| {
+            Box::pin(async move {
+                let config: LocalAttachmentConfig = serde_json::from_value(config)?;
+                install(&context, &config)?;
+                Ok(())
+            })
+        },
+    )
 }
 
 /// Registers the local attachment package's explained empty invariant companion.

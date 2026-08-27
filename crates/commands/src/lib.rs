@@ -16,7 +16,7 @@ use std::{
 use futures::{FutureExt, future::Either};
 use regex::Regex;
 use seekdeep_agent::Agent;
-use seekdeep_cordis::{Context, EventArgs, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, EventArgs, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, Session};
 use seekdeep_llm::AbortSignal;
 use seekdeep_scope::{
@@ -36,6 +36,10 @@ use uuid::Uuid;
 
 /// Typed Cordis slot corresponding to `ctx.commands`.
 pub const COMMANDS: ServiceKey<CommandRuntime> = ServiceKey::new("commands");
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "commands";
+/// Command registry has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 /// Maximum JavaScript safe integer accepted for a domain-event reference.
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
@@ -959,6 +963,17 @@ pub fn install(context: &Context) -> anyhow::Result<Arc<CommandRuntime>> {
     let runtime = CommandRuntime::new(context);
     runtime.provide(context)?;
     Ok(runtime)
+}
+
+/// Builds the Loader-compatible command registry plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            install(&context)?;
+            Ok(())
+        })
+    })
 }
 
 pub use invariant::register_invariant;

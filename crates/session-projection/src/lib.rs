@@ -6,7 +6,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use indexmap::IndexMap;
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, EventOptions, EventReply, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{Session, SessionEvent};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,10 @@ use uuid::Uuid;
 /// Typed context service slot for the session-projection registry.
 pub const SESSION_PROJECTIONS: ServiceKey<SessionProjectionRegistry> =
     ServiceKey::new("sessionProjections");
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "session-projection";
+/// Projection registry subscribes to events without a service prerequisite.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
@@ -552,6 +556,17 @@ impl SessionProjectionRegistry {
         }
         Ok(())
     }
+}
+
+/// Builds the Loader-compatible session-projection registry plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            SessionProjectionRegistry::install(&context)?;
+            Ok(())
+        })
+    })
 }
 
 fn unregister(state: &Mutex<RegistryState>, key: &str) {

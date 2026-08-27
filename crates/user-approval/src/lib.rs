@@ -8,8 +8,8 @@ use std::{future::Future, ops::Deref, panic::AssertUnwindSafe, pin::Pin, sync::A
 use futures::{FutureExt, future::Either};
 use seekdeep_agent::Agent;
 use seekdeep_cordis::{
-    Context, CordisError, EventArgs, EventOptions, EventReply, Fiber, ServiceKey, events::Next,
-    fiber::EffectHandle,
+    Context, CordisError, EventArgs, EventOptions, EventReply, Fiber, Plugin, ServiceKey,
+    events::Next, fiber::EffectHandle,
 };
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, MessageSource, UserMessage};
@@ -22,6 +22,10 @@ use uuid::Uuid;
 
 /// Typed Cordis slot corresponding to `ctx.approval`.
 pub const APPROVAL: ServiceKey<ApprovalService> = ServiceKey::new("approval");
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "user-approval";
+/// Approval prompt integration requires the system prompt service.
+pub const PLUGIN_INJECT: &[&str] = &["systemPrompt"];
 
 /// Model-facing statement for the deterministic never policy.
 pub const NEVER_SENTENCE: &str = "Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).";
@@ -519,6 +523,21 @@ pub fn install(context: &Context, config: ApprovalConfig) -> anyhow::Result<Appr
         };
     }
     Ok(ApprovalInstallation { service, effect })
+}
+
+/// Builds the Loader-compatible approval plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        |context, config| {
+            Box::pin(async move {
+                install(&context, serde_json::from_value(config)?)?;
+                Ok(())
+            })
+        },
+    )
 }
 
 /// Folds the last durable approval policy override.

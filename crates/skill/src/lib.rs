@@ -3,13 +3,17 @@
 
 use std::sync::Arc;
 
-use seekdeep_cordis::{Context, ServiceKey};
+use seekdeep_cordis::{Context, Plugin, ServiceKey};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Standard precedence rank for packaged skill providers and local bundled roots.
 pub const BUNDLED_SKILL_RANK: f64 = 600.0;
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "skill";
+/// Skill registry has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 /// Returns whether a string is a valid kebab-case skill name.
 #[must_use]
@@ -808,6 +812,21 @@ impl SkillRegistry {
         scope_ids.insert(key, id);
         id
     }
+}
+
+/// Builds the Loader-compatible skill registry plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        |context, config| {
+            Box::pin(async move {
+                SkillRegistry::install(&context, &serde_json::from_value(config)?)?;
+                Ok(())
+            })
+        },
+    )
 }
 
 fn runtime_candidate(skill: &SkillDefinition) -> SkillCandidate {

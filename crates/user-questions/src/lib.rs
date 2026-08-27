@@ -5,7 +5,7 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use seekdeep_agent::{AGENTS, Agent};
-use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{AbortSignal, HarnessError};
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,10 @@ use uuid::Uuid;
 
 /// Typed Cordis slot corresponding to `ctx.userQuestions`.
 pub const USER_QUESTIONS: ServiceKey<UserQuestionService> = ServiceKey::new("userQuestions");
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "user-questions";
+/// User questions service has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 /// One selectable answer offered to the user.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -333,6 +337,17 @@ pub fn install(context: &Context) -> anyhow::Result<Arc<UserQuestionService>> {
     let service = UserQuestionService::new(context.clone());
     service.provide(context)?;
     Ok(service)
+}
+
+/// Builds the Loader-compatible user-question service plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            install(&context)?;
+            Ok(())
+        })
+    })
 }
 
 /// Registers the package's explained empty invariant companion.
