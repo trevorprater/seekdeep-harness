@@ -41475,7 +41475,15 @@
     {
       "source": "packages/client/ui-commands/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/src/locales.rs",
+        "crates/client-ui-commands/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins the command namespace and all seven Chinese/English dictionary triples in source order",
+        "pinned source popup/service suites passed 68/68"
+      ]
     },
     {
       "source": "packages/client/ui-commands/src/client/popup.ts",
@@ -41495,7 +41503,17 @@
     {
       "source": "packages/client/ui-commands/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-commands to ui-skill"
+      ],
+      "note": "this row is the source Host no-op half; Client directory, popup, service, slot, and render surfaces remain independently pending"
     },
     {
       "source": "packages/client/ui-commands/src/invariant.ts",

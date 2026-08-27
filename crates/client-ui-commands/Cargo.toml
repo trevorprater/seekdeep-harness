@@ -1,0 +1,21 @@
+[package]
+name = "seekdeep-client-ui-commands"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM command UI contracts, ranking, and popup semantics"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+seekdeep-client-ui-input-trigger = { path = "../client-ui-input-trigger" }
+serde.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[lints]
+workspace = true
