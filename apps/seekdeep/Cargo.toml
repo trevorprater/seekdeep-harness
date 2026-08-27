@@ -31,6 +31,7 @@ seekdeep-client-ui-cordis = { path = "../../crates/client-ui-cordis" }
 seekdeep-client-ui-conversation = { path = "../../crates/client-ui-conversation" }
 seekdeep-client-ui-commands = { path = "../../crates/client-ui-commands" }
 seekdeep-client-ui-deliverables = { path = "../../crates/client-ui-deliverables" }
+seekdeep-client-ui-goal = { path = "../../crates/client-ui-goal" }
 seekdeep-client-ui-input-trigger = { path = "../../crates/client-ui-input-trigger" }
 seekdeep-client-ui-jobs = { path = "../../crates/client-ui-jobs" }
 seekdeep-client-ui-layout = { path = "../../crates/client-ui-layout" }

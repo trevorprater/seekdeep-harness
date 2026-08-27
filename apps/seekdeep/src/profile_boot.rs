@@ -546,6 +546,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_client_ui_deliverables::host_plugin(),
         ),
         (
+            "seekdeep-client-ui-goal",
+            seekdeep_client_ui_goal::host_plugin(),
+        ),
+        (
             "seekdeep-client-ui-input-trigger",
             seekdeep_client_ui_input_trigger::host_plugin(),
         ),
