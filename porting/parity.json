@@ -81180,7 +81180,24 @@
     {
       "source": "scripts/verify-cordis-config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/cordis_config_verifier.rs",
+        "crates/repository-tools/src/cordis_config_files.rs",
+        "crates/repository-tools/src/cordis_config_metadata.rs",
+        "crates/repository-tools/src/bin/verify-cordis-config.rs",
+        "crates/repository-tools/tests/cordis_config_verifier_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/verify-cordis-config.ts (pinned source: 120 config files passed)",
+        "target/debug/verify-cordis-config (Rust target: the same 120 config files passed)",
+        "pnpm exec vitest run scripts/verify-cordis-config.spec.ts (pinned source: 4 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test cordis_config_files_parity --test cordis_config_metadata_parity --test cordis_config_verifier_parity --all-features (15 passed across discovery, parse-only metadata, recursive composition, dependencies, hidden chooser packages, execution planes, client halves, YAML tag boundaries, and Rust ownership)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' CARGO_INCREMENTAL=0 cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "The approved Rust architecture replaces the source TypeScript-paths proof with clean-tree Rust ownership: direct Cargo identities, exact Rust-declared identities, and conditional aliases whose Cargo owners must exist. All other source checks remain, with dsh.client and package identities renamed to seekdeep.client and SeekDeep names; model-authored relative, URL, and external JavaScript remains supported."
     },
     {
       "source": "scripts/verify-doc-budgets.ts",

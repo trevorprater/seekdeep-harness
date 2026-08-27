@@ -1,4 +1,4 @@
-# Agent Note: verify-cordis-config gates source-plane resolution of configured plugins
+# Agent Note: verify-cordis-config gates source ownership of configured plugins
 
 Status: implemented
 
@@ -6,22 +6,24 @@ English | [中文](2026-07-30-cordis-config-source-plane-resolution-gate.zh.md)
 
 ## Problem
 
-`apps/cli/config/tui.cordis.yml` gained the `@seekdeep-ai/seekdeep-tui/prompt` entry without a matching tsconfig `paths` mapping. The generic `@seekdeep-ai/seekdeep-*` wildcard substitutes `tui/prompt` whole into its `<group>/*/src` candidates, none of which exist, so the [tsx source launch](../architecture/2026-07-29-seekdeep-source-launch-tsx-esm.md) fell back to package `exports` and resolved `lib/prompt.js` — an artifact-plane file. Every environment with a built `lib/` (developer trees after `pnpm build`) booted fine, and the e2e workflow runs the keyless TUI PTY smoke in `lib` mode (`SEEKDEEP_EXAMPLE_MODE=lib`, built bin under plain Node) so CI never exercises the source vector at all — while every clean checkout failed `pnpm seekdeep` at startup with `plugin(s) failed to load: @seekdeep-ai/seekdeep-tui/prompt`. No gate checked the source plane, so the breakage shipped silently and surfaced only in fresh worktrees.
+A Loader configuration names plugins by external package specifier, while the Rust launcher resolves first from its compiled `PluginCatalog` and permits model-authored JavaScript only through the compatibility path. Compatibility manifests, built JavaScript, and Cargo packages can drift independently: a local product specifier may remain in cordis.yml after its compiled Rust owner disappears, or a developer tree may mask the missing owner with stale `lib/` output. The resulting failure appears only when that composition boots from a clean checkout. A boot smoke proves one composition and platform; the repository contains shipped, example, fixture, and overlay configurations whose plugin sets differ.
 
 ## Decision
 
-`scripts/verify-cordis-config.ts` (`validateSourcePlaneResolution`) requires every configured specifier of a local workspace package — harness packages and vendored Cordis alike — to resolve through the `tsconfig.base.json` `paths` facade to a `.ts`/`.tsx` source file, using `ts.resolveModuleName` from the repository root. A failed resolution or a `.d.ts` hit (the `exports` fallback into built `lib/types`) fails `verify-cordis-config`, naming the config files and the specifier. The missing `@seekdeep-ai/seekdeep-tui/prompt` mapping is added next to the other explicit subpath entries; removing it reproduces the gate failure.
+The Rust [`verify-cordis-config`](../../../../crates/repository-tools/src/cordis_config_verifier.rs) implementation requires every configured local package specifier to have source-tree Rust ownership. A Cargo package named `seekdeep-foo` owns `@seekdeep-ai/seekdeep-foo`; committed Rust source may declare additional exact package identities; and a small alias table covers compiled Loader built-ins and intentional NPM/Cargo naming differences. An alias becomes valid only when its named Cargo package exists. The check uses the package portion of a subpath specifier, reports every configuration that names an unowned package, and leaves relative, URL, and external model-authored JavaScript specifiers outside the local-package rule.
+
+The same command preserves the surrounding source invariants: recursive group, insert, and include-patch metadata validation; owner-manifest dependencies; adaptive directory-picker packages mounted by runtime string; host-versus-session preset plane separation; and agreement between a client package's `./client` export and `seekdeep.client` declaration. `!!js` is parsed but never executed. The YAML boundary preserves actual tags while excluding quoted text, comments, and block-scalar bodies from tag normalization.
 
 ## Alternatives considered
 
-**Rely on the keyless TUI PTY smoke.** In default source mode it boots the real tree through the source vector and does catch the failure — but only on a clean tree. CI's e2e workflow runs it exclusively in `lib` mode (the built bin resolving real package `exports`), so no CI line runs the source vector, and developer trees with a stale `lib/` stay masked locally. Adding a source-mode CI smoke proves one composition per run; the static gate covers every shipped and example config.
+**Rely on keyless boot smokes.** A smoke detects a missing owner only for the selected profile, environment, and platform. The static verifier covers every discovered configuration and reports all missing owners in one run.
 
-**Broaden the `seekdeep-source-launch-smoke` compat test to full boot.** The node-compat smoke asserts only the TTY refusal, which happens before plugin loading. A full keyless boot per matrix line duplicates the PTY smoke at higher cost and, like it, proves one composition rather than every shipped and example config.
+**Treat compatibility `package.json` exports as source ownership.** Those exports name built JavaScript and declarations. Accepting them would recreate the stale-artifact masking problem and would make a foreign-language compatibility surface authoritative over Rust production ownership.
 
-**A `@seekdeep-ai/seekdeep-*/prompt`-style wildcard mapping.** Fixes this one subpath but not the class; the next single-file subpath export (`/surface`, `/message`, …) regresses identically. The static gate covers all current and future configured specifiers.
+**Require identical NPM and Cargo suffixes.** Most packages follow that convention, but framework built-ins and a few established product identities intentionally differ. Exact conditional aliases keep those exceptions visible without weakening missing-owner detection.
 
 ## Consequences
 
-- A configured workspace specifier that resolves only through built `lib/` is now a red `verify-cordis-config` (in `hygiene` and CI) instead of a clean-tree-only startup crash.
-- New single-file subpath exports referenced from a cordis.yml need an explicit `tsconfig.base.json` `paths` entry at introduction time; the gate message says so.
-- The gate resolves with `tsconfig.base.json` options only; a specifier needing client-only compiler options to resolve would fail it, which matches the facade's role as the single resolution surface for tsx and vitest.
+- A configured local package with no compiled Rust owner makes `verify-cordis-config` fail before any profile boot.
+- Adding or renaming a configured package requires a Cargo owner, an exact Rust-declared identity, or a reviewed conditional alias in the same change.
+- External model-authored JavaScript remains supported; the ownership check applies only to repository-local SeekDeep and Cordis package identities.

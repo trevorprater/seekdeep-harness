@@ -12,6 +12,7 @@ pub mod config_source_ownership;
 /// Cordis Loader configuration discovery.
 pub mod cordis_config_files;
 pub mod cordis_config_metadata;
+pub mod cordis_config_verifier;
 pub mod coverage_exempt;
 pub mod doc_site_fragments;
 /// Workspace source-alias to built-declaration path mapping.

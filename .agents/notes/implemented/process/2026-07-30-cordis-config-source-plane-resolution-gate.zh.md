@@ -1,4 +1,4 @@
-# Agent Note: verify-cordis-config 对配置中插件的源码面解析实施门禁
+# Agent Note: verify-cordis-config 对配置中插件的源码归属实施门禁
 
 Status: implemented
 
@@ -6,22 +6,24 @@ Status: implemented
 
 ## 问题
 
-`apps/cli/config/tui.cordis.yml` 新增了 `@seekdeep-ai/seekdeep-tui/prompt` 配置项，却没有对应的 tsconfig `paths` 映射。通用的 `@seekdeep-ai/seekdeep-*` 通配符会把 `tui/prompt` 整体代入其 `<group>/*/src` 候选路径，而这些路径全都不存在，因此 [tsx 源码启动](../architecture/2026-07-29-seekdeep-source-launch-tsx-esm.md) 会回退到包的 `exports`，解析出产物面文件 `lib/prompt.js`。任何带有已构建 `lib/` 的环境（开发者目录树运行 `pnpm build` 后）都能正常启动，而 e2e 工作流以 `lib` 模式（`SEEKDEEP_EXAMPLE_MODE=lib`，构建产物 bin 在普通 Node 下运行）执行无密钥 TUI PTY 冒烟测试，因此 CI 根本不会经过源码启动向量——与此同时，所有干净检出环境中的 `pnpm seekdeep` 都会在启动时失败，并报错 `plugin(s) failed to load: @seekdeep-ai/seekdeep-tui/prompt`。当时没有门禁检查源码面，因此该故障未被发现便进入发布版本，仅在新的 worktree 中暴露。
+Loader 配置用外部包说明符命名插件，而 Rust 启动器会先从已编译的 `PluginCatalog` 解析；model（模型）编写的 JavaScript 只能通过兼容路径运行。兼容 manifest（元数据清单）、构建后的 JavaScript 与 Cargo 包可以分别发生漂移：本地产品说明符可能在其已编译 Rust 归属消失后仍留在 cordis.yml 中，开发目录树也可能用陈旧的 `lib/` 产物掩盖缺失的归属。由此产生的故障只会在干净检出目录启动该组合时出现。一次启动冒烟测试只能证明一种组合与一个平台；仓库中的发布配置、示例配置、fixture（测试前置数据）与 overlay 各自使用不同的插件集合。
 
 ## 决策
 
-`scripts/verify-cordis-config.ts`（`validateSourcePlaneResolution`）要求配置中凡是引用本地 workspace 包的模块说明符（包括 harness 包与纳入 vendor 的 Cordis）都必须通过 `tsconfig.base.json` 的 `paths` 外观层（facade）解析到 `.ts`/`.tsx` 源文件；解析以仓库根目录为起点，调用 `ts.resolveModuleName` 完成。解析失败或命中 `.d.ts`（即经 `exports` 回退到构建出的 `lib/types`）都会使 `verify-cordis-config` 失败，并列出配置文件与模块说明符。缺失的 `@seekdeep-ai/seekdeep-tui/prompt` 映射已添加在其他显式子路径条目旁；删除该映射即可复现门禁失败。
+Rust [`verify-cordis-config`](../../../../crates/repository-tools/src/cordis_config_verifier.rs) 实现要求配置中每个本地包说明符都有源码树内的 Rust 归属。名为 `seekdeep-foo` 的 Cargo 包归属 `@seekdeep-ai/seekdeep-foo`；已提交的 Rust 源码可以声明额外的确切包标识；一张小型别名表则覆盖已编译的 Loader 内置项以及有意保留的 NPM／Cargo 命名差异。只有别名指定的 Cargo 包确实存在时，该别名才有效。检查使用子路径说明符中的包部分，报告每个引用无归属包的配置，并把相对路径、URL 与外部 model 编写的 JavaScript 说明符排除在本地包规则之外。
+
+同一命令保留周边源约束：递归校验 group、insert 与 include patch 的元数据；检查所属 manifest 的依赖；检查自适应目录选择器通过运行时字符串挂载的包；分离 host 与每会话 preset 所属平面；并要求客户端包的 `./client` 导出与 `seekdeep.client` 声明一致。`!!js` 只解析而不执行。YAML 边界会保留真正的 tag，同时在 tag 规范化时排除带引号文本、注释与块标量正文。
 
 ## 备选方案
 
-**依赖无密钥 TUI PTY 冒烟测试。** 在默认源码模式下，该测试通过源码向量启动真实目录树，确实能捕获这个故障，但仅限干净目录树。CI 的 e2e 工作流只以 `lib` 模式运行它（构建产物 bin 通过真实的包 `exports` 解析），因此没有任何 CI 环节执行源码向量，而带有陈旧 `lib/` 的开发者目录树在本地也仍被掩盖。为 CI 增加一个源码模式冒烟测试，每次也只能证明一种组合；静态门禁则覆盖所有随产品发布的配置与示例配置。
+**依赖无密钥启动冒烟测试。** 冒烟测试只能针对所选 profile、环境与平台发现缺失归属。静态校验器覆盖发现到的每份配置，并在一次运行中报告所有缺失归属。
 
-**将 `seekdeep-source-launch-smoke` 兼容性测试扩展为完整启动。** node-compat 冒烟测试只断言 TTY 拒绝，而该拒绝发生在插件加载之前。每条矩阵版本线都执行一次完整的无密钥启动，会以更高成本重复 PTY 冒烟测试，而且同样只能验证一种组合，无法覆盖所有随产品发布的配置与示例配置。
+**把兼容 `package.json` 的 exports 当作源码归属。** 这些 exports 指向构建后的 JavaScript 与声明。接受它们会再次引入陈旧产物掩盖问题，还会让其他语言兼容层凌驾于 Rust 生产归属之上。
 
-**使用类似 `@seekdeep-ai/seekdeep-*/prompt` 的通配符映射。** 这能修复当前子路径，却不能杜绝这一类问题；下一个单文件子路径导出（`/surface`、`/message` 等）仍会以同样方式复发。静态门禁覆盖当前及未来配置中引用的所有模块说明符。
+**要求 NPM 与 Cargo 后缀完全一致。** 大多数包遵循该约定，但框架内置项和少数既有产品标识有意采用不同名称。确切且带条件的别名会让这些例外保持可见，同时不削弱缺失归属检测。
 
 ## 结果
 
-- 配置中的 workspace 模块说明符若只能通过构建后的 `lib/` 解析，现在会导致 `verify-cordis-config` 门禁失败（在 `hygiene` 和 CI 中执行），而不再成为只在干净目录树中出现的启动崩溃。
-- cordis.yml 中引用新的单文件子路径导出时，必须同步为 `tsconfig.base.json` 添加显式 `paths` 条目；门禁消息会明确提示这一要求。
-- 门禁只使用 `tsconfig.base.json` 的选项执行解析；如果某个模块说明符需要仅客户端可用的编译器选项才能解析，门禁就会失败。这符合该外观层作为 tsx 与 vitest 唯一解析入口的定位。
+- 配置中的本地包若没有已编译 Rust 归属，`verify-cordis-config` 会在任何 profile 启动前失败。
+- 新增或重命名配置中的包时，必须在同一次变更中提供 Cargo 归属、由 Rust 明确声明的标识或经评审的条件别名。
+- 外部 model 编写的 JavaScript 仍受支持；归属检查只适用于仓库本地的 SeekDeep 与 Cordis 包标识。

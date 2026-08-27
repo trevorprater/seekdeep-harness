@@ -98,7 +98,7 @@
     "verify-node-next-types": "cargo run --quiet --package seekdeep-repository-tools --bin verify-node-next-types",
     "verify-runtime-closure": "cargo run --quiet --package seekdeep-repository-tools --bin verify-runtime-closure --",
     "verify-vendored-links": "cargo run --quiet --package seekdeep-repository-tools --bin verify-vendored-links",
-    "verify-cordis-config": "tsx scripts/verify-cordis-config.ts",
+    "verify-cordis-config": "cargo run --quiet --package seekdeep-repository-tools --bin verify-cordis-config",
     "rescope-vendor": "tsx scripts/rescope-vendor.ts",
     "rescope-vendor:check": "tsx scripts/rescope-vendor.ts --check",
     "verify-client-domain-graph": "cargo run --quiet --package seekdeep-repository-tools --bin verify-client-domain-graph",
