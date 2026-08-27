@@ -72,7 +72,7 @@ Rust 启动等待会在异步 installer 回滚期间保留带包归属的 `Invar
 
 ### 作用域事件语义映射
 
-生成的作用域事件主体解析表位于 `seekdeep-scope`，与消费它的约定和不变式相邻。`gen-scoped-events` 使用根 TypeScript Program 枚举 `this: Scoped<Base>` 声明，从真实 `scopeTarget(base, key)` 调用推断路由键类型，并要求唯一、无歧义的 payload 主体或显式 unsupported 标记。提交的运行时映射不导入事件所有者包，因此语义完整性不会扩大服务包或 scope 包的运行时依赖闭包。
+生成的作用域事件要求目录位于 `seekdeep-scope`，与消费它的约定和不变式相邻。Rust `EventArgs` 在构造时嵌入可选路由主体，因此不变式只需要固定的事件到 `Subject`／`Presence` 分类，不再需要源实现专用的参数／属性解析器。[`gen-scoped-events`](../../../../crates/repository-tools/src/scoped_events_generator.rs) 把 oracle 中 20 个带主体事件与 6 个仅要求载体存在的事件渲染成不导入任何事件所有者包的运行时映射，因此语义完整性不会扩大服务包或 scope 包的运行时依赖闭包。
 
 ### 示例组合与 SDK 输出
 
@@ -84,7 +84,7 @@ Workspace 约束识别独立的不变式 bundle；包 exports、项目引用、�
 
 服务测试覆盖默认值、全局关闭、allow/block 选择、blocklist 优先级、锚定与非锚定匹配、大小写敏感、无效配置、零匹配模式、延迟注册、重复所有权、dispose、回滚和 HMR 重新注册。具备可执行检查的所有者会把正向与负向行为保留在 companion 源码旁边。
 
-组合测试覆盖标准主干转发和生成的 SDK 条目。Loader 测试固定每个伴随命名空间，构建后的纯 Node 冒烟测试覆盖编译子路径 export。作用域事件新鲜度门禁会重新执行语义 Program 分析。
+组合测试覆盖标准主干转发和生成的 SDK 条目。Loader 测试固定每个伴随命名空间，构建后的兼容性冒烟测试覆盖编译子路径 export。作用域事件新鲜度门禁逐字节检查 Rust 生成目录，运行时测试则固定每个带主体、仅存在与无作用域查询。
 
 每个 Vitest 配置都会加载测试宿主；在普通 Cordis 根上下文启动第一个插件之前，宿主会挂载显式启用的服务，并添加当前测试包的伴随插件。一个完整拓扑会一次挂载所有包的伴随插件；服务与所有者的聚焦测试自行构建不变式拓扑，从而在不发生重复所有权冲突的前提下覆盖关闭、过滤、回滚与重载。门禁测试还会执行每个伴随插件的 `apply` 函数，并验证它调用 `register` 时使用 manifest（元数据清单）中的包名，而不是只检查源码文本。
 

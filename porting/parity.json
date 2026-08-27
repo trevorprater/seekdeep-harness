@@ -80165,7 +80165,23 @@
     {
       "source": "scripts/gen-scoped-events.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/scoped_events_generator.rs",
+        "crates/repository-tools/src/bin/gen-scoped-events.rs",
+        "crates/repository-tools/tests/scoped_events_generator_parity.rs",
+        "crates/scope/src/scoped_events.rs",
+        "crates/scope/tests/scoped_events_parity.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec tsx scripts/gen-scoped-events.ts --check (pinned source resolver map is up to date)",
+        "target/debug/gen-scoped-events --check (generated Rust requirement catalog is up to date)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test scoped_events_generator_parity --all-features (3 passed for exact 20 subject and 6 presence oracle events, committed rendering, write, check, and stale diagnostics)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-scope --test scoped_events_parity --all-features (1 passed for all subject, presence, and unscoped runtime lookups)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools -p seekdeep-scope --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The approved Rust event model fuses the routing subject into EventArgs, eliminating source-specific parameter/property resolver paths and type ambiguity. The Rust generator therefore transforms the pinned oracle into the exact 20 Subject and 6 Presence requirements, applies dsh-scope to seekdeep-scope identity changes, and owns deterministic write/check behavior."
     },
     {
       "source": "scripts/gen-third-party-notices.spec.ts",

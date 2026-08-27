@@ -1,4 +1,4 @@
-# Agent Note: TypeScript Program-backed semantic gates
+# Agent Note: Semantic event gates and generated routing contracts
 
 Status: implemented
 
@@ -14,9 +14,9 @@ The repository needs one semantic source of truth without introducing runtime pa
 
 ## Decision
 
-Repository gates can combine project-wide type information through `ts.Program` and use `TypeChecker` to extract **strongly typed** facts, reducing their reliance on naming conventions, handwritten tables, and JSDoc metadata.
+The documentation graph gate combines project-wide type information through `ts.Program` and uses `TypeChecker` to extract **strongly typed** facts, reducing reliance on naming conventions, handwritten tables, and JSDoc metadata. The Rust scoped-event runtime carries its routing subject as a typed token and generates a closed requirement catalog from the pinned oracle.
 
-The repository applies this model to two gates.
+These two mechanisms preserve semantic ownership on their respective execution planes.
 
 ### One project model expands the root solution
 
@@ -34,23 +34,21 @@ Semantic queries run only where a branch can consume them: calls are prefiltered
 
 Every declared harness event must have a discovered producer. A missing producer fails generation as dead vocabulary or an unsupported semantic dispatch shape; listener-free extension points remain valid. `internal/dispatch` instrumentation is not treated as a subscription to every event it observes, so the matrix contains direct product listeners rather than manually asserted indirect relationships.
 
-### B. Scoped-event routing generates one typed resolver map
+### B. Scoped-event routing uses generated Rust subject requirements
 
-[`gen-scoped-events`](../../../../scripts/gen-scoped-events.ts) scans real `scopeTarget(base, key)` calls to establish the routing-key type for each scoped base. It then finds Cordis `Events` members with `this: Scoped<Base>` and searches every payload parameter plus one public property level for a type identical to that key after removing `null` and `undefined`.
+Rust `EventArgs` embeds the optional scope subject when a scoped payload is constructed. The invariant can therefore compare one typed subject token with the carrier key without generating source-specific parameter indexes or property paths. Events whose public payload intentionally omits that key require carrier presence only.
 
-Exactly one match generates a resolver. Multiple matches are ambiguous and fail. Zero matches require `@seekdeepScopeScan unsupported`, which is reserved for events whose routing key intentionally stays outside the payload, such as owner-keyed session events and parent-keyed subagent lifecycle events. The annotation records an unsupported scan; it does not encode an event name, parameter index, property path, or replacement type.
+The Rust [`gen-scoped-events`](../../../../crates/repository-tools/src/scoped_events_generator.rs) generator preserves the pinned source oracle as twenty `Subject` and six `Presence` events. It writes the runtime [`scoped_events`](../../../../crates/scope/src/scoped_events.rs) module beside the dispatch contract and fails freshness checks when the committed source differs.
 
-The committed [`scoped-events.generated.ts`](../../../../packages/core/scope/src/scoped-events.generated.ts) is a runtime-only map in the package that owns scoped dispatch and imports no event-owner package. Semantic completeness lives in the generator: its root Program enumerates every scoped `Events` declaration and real `scopeTarget` contract, resolves the unique payload path with the checker, and refuses missing, stale, or ambiguous entries before rendering the `unknown[]` runtime boundary.
-
-The `seekdeep-scope/invariant` companion consumes this map instead of maintaining a handwritten table. Because Program analysis happens in the repository gate rather than through generated type imports, neither `seekdeep-scope` nor `seekdeep-invariants` acquires dependencies on every event owner.
+The `seekdeep-scope/invariant` companion consumes this generated map. Neither `seekdeep-scope` nor `seekdeep-invariants` acquires dependencies on every event owner, and the target no longer needs a flattened TypeScript Program to recover routing subjects already carried by `EventArgs`.
 
 ### Semantic gaps fail explicitly
 
-The generators reject missing declarations, config diagnostics, widened or generic event names, inconsistent routing-key types, ambiguous payload matches, unnecessary unsupported annotations, and stale generated output. Recovery through local helper call sites is deliberately narrow: exported or unresolved dataflow requires a new semantic rule rather than a package-specific override.
+The TypeScript documentation graph generator rejects missing declarations, config diagnostics, widened or generic event names, and unresolved dataflow. The Rust scoped-event generator rejects stale output, while runtime construction and invariant tests pin subject-token and carrier behavior directly.
 
 ## Verification
 
-`verify-doc-graphs` freshness-checks semantic producer/listener discovery, and `verify-scoped-events` reruns the Program analysis while freshness-checking the generated resolver map. The root TypeScript build compiles its runtime adapter; workspace constraints and runtime-closure checks keep event-owner aggregation out of deployment dependencies.
+`verify-doc-graphs` freshness-checks semantic producer/listener discovery. `verify-scoped-events` byte-checks the generated Rust catalog; generator and runtime suites pin the complete twenty/six partition and unscoped fallback. Workspace and runtime-closure checks keep event-owner aggregation out of deployment dependencies.
 
 ## Alternatives considered
 
@@ -59,7 +57,7 @@ The generators reject missing declarations, config diagnostics, widened or gener
 ## Consequences
 
 - Event relation generation follows semantic receiver identity and closed event values instead of local naming conventions.
-- Scoped-event membership, subject extraction, and runtime invariant coverage come from event declarations and real dispatch contracts rather than handwritten tables.
-- Refactors that change event names, parameter positions, subject properties, or routing-key types fail generation at the owning contract.
+- Scoped-event membership and runtime invariant coverage come from the generated pinned oracle; subject extraction is fused into Rust `EventArgs` construction.
+- Refactors that change the supported scoped-event vocabulary update the generator input and runtime tests together.
 - Building a flattened Program costs more startup time and memory than parsing isolated files, and semantic gates depend on a valid root project graph.
-- Generated TypeScript remains committed source: changes to event owners or dispatch shapes must regenerate it and the affected documentation.
+- Generated Rust remains committed source: scoped-event catalog changes must regenerate it and update affected documentation.

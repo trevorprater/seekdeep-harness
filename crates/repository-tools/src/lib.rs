@@ -56,6 +56,7 @@ pub mod rescope_exact_edit;
 pub mod run_gates;
 pub mod run_oxlint;
 pub mod runtime_closure;
+pub mod scoped_events_generator;
 /// Cross-product Skill invocation metadata policy.
 pub mod skill_invocation_metadata;
 pub mod translation_pairing;

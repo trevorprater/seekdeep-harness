@@ -72,7 +72,7 @@ These four owners supplied the initial stateful checks. The follow-up runtime-co
 
 ### Scoped-event semantic map
 
-The generated scoped-event subject resolver lives in `seekdeep-scope`, beside the contract and invariant that consume it. `gen-scoped-events` uses the root TypeScript Program to enumerate `this: Scoped<Base>` declarations, infer routing-key types from real `scopeTarget(base, key)` calls, and require one unambiguous payload subject or an explicit unsupported marker. The committed runtime map imports no event-owner package, so semantic completeness does not expand either the service or scope package's runtime closure.
+The generated scoped-event requirement catalog lives in `seekdeep-scope`, beside the contract and invariant that consume it. Rust `EventArgs` embeds the optional routing subject at construction, so the invariant needs only the pinned event-to-`Subject`/`Presence` classification rather than source-specific parameter/property resolvers. [`gen-scoped-events`](../../../../crates/repository-tools/src/scoped_events_generator.rs) renders the twenty subject-bearing and six presence-only oracle events into a runtime map that imports no event-owner package, so semantic completeness does not expand either the service or scope package's runtime closure.
 
 ### Example composition and SDK output
 
@@ -84,7 +84,7 @@ Workspace constraints recognize the separate invariant bundle, and package expor
 
 Service tests cover defaults, global disablement, allow/block selection, blocklist precedence, anchoring, unanchored matching, case sensitivity, invalid configuration, zero-match patterns, late registration, duplicate ownership, disposal, rollback, and HMR re-registration. Owners with executable checks keep positive and negative behavior beside the companion source.
 
-Composition tests cover standard-spine forwarding and generated SDK entries. Loader tests preserve each companion namespace, while built plain-Node smokes exercise the compiled subpath exports. The scoped-event freshness gate reruns its semantic Program analysis.
+Composition tests cover standard-spine forwarding and generated SDK entries. Loader tests preserve each companion namespace, while built compatibility smokes exercise the compiled subpath exports. The scoped-event freshness gate checks the Rust-generated catalog byte-for-byte, and runtime tests pin every subject, presence, and unscoped lookup.
 
 Every Vitest configuration loads a test host that mounts an explicitly enabled service before an ordinary Cordis root's first plugin and adds the current test package's companion. One exhaustive topology mounts all package companions once; focused service and owner tests construct their own invariant topology so they can exercise disablement, filtering, rollback, and reload without duplicate ownership. Gate tests also execute every companion's `apply` function and verify that it calls `register` with its manifest name, rather than accepting source text alone.
 

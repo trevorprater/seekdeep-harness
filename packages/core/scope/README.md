@@ -20,7 +20,7 @@ Scoped registration primitive. `createScope(ctx, key)` creates a tagged Cordis c
 - `NamedEntries<V>` Insertion-ordered named storage with caller-owned duplicate diagnostics, lookup, and live iteration within one nonempty table generation; draining the table detaches existing iterators from later insertions, and `insert()` returns an idempotent exact-entry undo.
 - `AnonymousEntries<V>` Insertion-ordered anonymous storage whose unique internal keys keep equal values as independent registrations; it uses the same drained-generation iterator boundary, and `append()` returns an idempotent exact-entry undo.
 
-The optional `@seekdeep-ai/seekdeep-scope/invariant` companion owns that runtime assertion. It uses the generated `scoped-events.generated.ts` resolver map to require a carrier for every declared scoped event and, when the payload exposes its routing subject, require identity with the carrier key. The Program-backed generator derives the map from event declarations and real `scopeTarget(base, key)` calls.
+The optional `@seekdeep-ai/seekdeep-scope/invariant` companion owns that runtime assertion. It uses the generated Rust [`scoped_events`](../../../crates/scope/src/scoped_events.rs) requirement catalog to require a carrier for every scoped event and, when `EventArgs` carries an external routing subject, require identity with the carrier key. The Rust generator preserves the pinned oracle's twenty subject-bearing and six presence-only events; embedding the subject in `EventArgs` removes the source-specific parameter/property resolver path.
 
 ## Design contract
 
