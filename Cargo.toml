@@ -38,6 +38,7 @@ members = [
   "crates/client-ui-settings-plugin-inventory",
   "crates/client-ui-sidebar",
   "crates/client-ui-skill",
+  "crates/client-ui-subagent",
   "crates/client-ui-theme",
   "crates/client-ui-tool",
   "crates/client-ui-workflow-run",

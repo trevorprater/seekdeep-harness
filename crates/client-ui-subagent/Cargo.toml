@@ -1,0 +1,24 @@
+[package]
+name = "seekdeep-client-ui-subagent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM subagent catalog and read-only composer semantics"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+seekdeep-client-runtime = { path = "../client-runtime" }
+seekdeep-identity = { path = "../identity" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[dev-dependencies]
+indexmap.workspace = true
+
+[lints]
+workspace = true

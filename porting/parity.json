@@ -47585,7 +47585,15 @@
     {
       "source": "packages/client/ui-subagent/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-subagent/src/locales.rs",
+        "crates/client-ui-subagent/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins the subagent namespace and all 33 Chinese/English dictionary triples in source order",
+        "pinned source browser/catalog/composer suites passed 30/30"
+      ]
     },
     {
       "source": "packages/client/ui-subagent/src/css-modules.d.ts",
@@ -47595,7 +47603,17 @@
     {
       "source": "packages/client/ui-subagent/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-subagent/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-subagent to ui-jobs"
+      ],
+      "note": "this row is the source Host no-op half; Client trigger, catalog, read-only composer, slot, and renderer surfaces remain independently pending"
     },
     {
       "source": "packages/client/ui-subagent/src/invariant.ts",
