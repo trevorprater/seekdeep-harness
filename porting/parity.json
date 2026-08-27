@@ -43253,7 +43253,15 @@
     {
       "source": "packages/client/ui-jobs/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-jobs/src/lib.rs",
+        "crates/client-ui-jobs/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins the job namespace and all 15 Chinese/English dictionary triples in source order",
+        "pinned source job list and browser-plugin suites passed 22/22"
+      ]
     },
     {
       "source": "packages/client/ui-jobs/src/css-modules.d.ts",
@@ -43263,7 +43271,17 @@
     {
       "source": "packages/client/ui-jobs/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-jobs/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-jobs to ui-goal"
+      ],
+      "note": "this row is the source Host no-op half; Client slot registration, popover, timer, focus, and renderer surfaces remain independently pending"
     },
     {
       "source": "packages/client/ui-jobs/src/invariant.ts",

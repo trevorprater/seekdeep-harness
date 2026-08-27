@@ -29,6 +29,7 @@ members = [
   "crates/client-ui-commands",
   "crates/client-ui-deliverables",
   "crates/client-ui-input-trigger",
+  "crates/client-ui-jobs",
   "crates/client-ui-layout",
   "crates/client-ui-message-feedback",
   "crates/client-ui-primitives",

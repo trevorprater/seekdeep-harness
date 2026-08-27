@@ -4526,6 +4526,7 @@ dependencies = [
  "seekdeep-client-ui-cordis",
  "seekdeep-client-ui-deliverables",
  "seekdeep-client-ui-input-trigger",
+ "seekdeep-client-ui-jobs",
  "seekdeep-client-ui-layout",
  "seekdeep-client-ui-message-feedback",
  "seekdeep-client-ui-settings",
@@ -5344,6 +5345,14 @@ dependencies = [
 
 [[package]]
 name = "seekdeep-client-ui-input-trigger"
+version = "0.1.0-rc.5"
+dependencies = [
+ "seekdeep-cordis",
+ "serde",
+]
+
+[[package]]
+name = "seekdeep-client-ui-jobs"
 version = "0.1.0-rc.5"
 dependencies = [
  "seekdeep-cordis",
