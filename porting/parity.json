@@ -46226,7 +46226,15 @@
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugin-inventory/src/lib.rs",
+        "crates/client-ui-settings-plugin-inventory/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-settings-plugin-inventory suites passed 8/8",
+        "Rust English and Chinese dictionaries preserve the exact ordered key set and all five observed Fiber phase labels plus unobserved state"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/css-modules.d.ts",
@@ -46236,7 +46244,17 @@
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugin-inventory/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled no-op Host plugin is dependency-free and registered under @seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory",
+        "real base+web preflight advances to ui-conversation"
+      ],
+      "note": "this row is only the source package's intentionally inert Host half; Client/WASM files remain independently pending"
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/invariant.ts",
@@ -46265,7 +46283,15 @@
     {
       "source": "packages/client/ui-settings-plugin-inventory/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugin-inventory/tests/core_parity.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned source invariant/browser/component selection passed within 8/8",
+        "Rust test proves the Host plugin is inert and dependency-free; the generated invariant catalog retains the exact no-op companion"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/tsconfig.json",

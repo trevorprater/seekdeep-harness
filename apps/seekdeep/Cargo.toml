@@ -33,6 +33,7 @@ seekdeep-client-ui-message-feedback = { path = "../../crates/client-ui-message-f
 seekdeep-client-ui-settings = { path = "../../crates/client-ui-settings" }
 seekdeep-client-ui-settings-general = { path = "../../crates/client-ui-settings-general" }
 seekdeep-client-ui-settings-models = { path = "../../crates/client-ui-settings-models" }
+seekdeep-client-ui-settings-plugin-inventory = { path = "../../crates/client-ui-settings-plugin-inventory" }
 seekdeep-client-ui-sidebar = { path = "../../crates/client-ui-sidebar" }
 seekdeep-client-ui-theme = { path = "../../crates/client-ui-theme" }
 seekdeep-code-runtime-worker-thread = { path = "../../crates/code-runtime-worker-thread" }
