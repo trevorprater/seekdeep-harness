@@ -36,6 +36,7 @@ seekdeep-client-ui-input-trigger = { path = "../../crates/client-ui-input-trigge
 seekdeep-client-ui-jobs = { path = "../../crates/client-ui-jobs" }
 seekdeep-client-ui-layout = { path = "../../crates/client-ui-layout" }
 seekdeep-client-ui-message-feedback = { path = "../../crates/client-ui-message-feedback" }
+seekdeep-client-ui-model-selection = { path = "../../crates/client-ui-model-selection" }
 seekdeep-client-ui-settings = { path = "../../crates/client-ui-settings" }
 seekdeep-client-ui-settings-general = { path = "../../crates/client-ui-settings-general" }
 seekdeep-client-ui-settings-models = { path = "../../crates/client-ui-settings-models" }

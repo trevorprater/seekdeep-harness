@@ -43928,7 +43928,15 @@
     {
       "source": "packages/client/ui-model-selection/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/src/lib.rs",
+        "crates/client-ui-model-selection/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins the model namespace and all 17 Chinese/English dictionary triples in source order",
+        "pinned source ModelSelect and browser-plugin suites passed 17/17"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/src/client/service.ts",
@@ -43948,7 +43956,17 @@
     {
       "source": "packages/client/ui-model-selection/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-model-selection to ui-permission-presets"
+      ],
+      "note": "this row is the source Host no-op half; Client directory controller, command contribution, slot, and ModelSelect renderer remain independently pending"
     },
     {
       "source": "packages/client/ui-model-selection/src/invariant.ts",

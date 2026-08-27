@@ -130,7 +130,7 @@ fn compiled_catalog_preflights_the_real_web_tree_to_the_first_unported_host_boun
     let catalog = framework_profile_catalog(&cwd, &home, &LaunchEnvironmentSnapshot::default())?;
     let error = catalog.preflight_yaml(&source).unwrap_err().to_string();
     assert!(
-        error.contains("@seekdeep-ai/seekdeep-client-ui-model-selection"),
+        error.contains("@seekdeep-ai/seekdeep-client-ui-permission-presets"),
         "unexpected compiled-catalog frontier: {error}"
     );
     Ok(())
