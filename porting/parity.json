@@ -80474,12 +80474,32 @@
     {
       "source": "scripts/publint-all.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/publint_all_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/publint-all.spec.ts (pinned source: 3 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test publint_all_parity --all-features (6 grouped Rust tests cover recursive exact publication views, missing and unpublished exports, explicit-directory dotfiles, glob dot exclusion, sorted discovery/results, real worker bounds, canonical concurrency overrides, and attributable stdout/stderr blocks)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/publint-all.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/publint_all.rs",
+        "crates/repository-tools/src/bin/publint-all.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/publint-all.spec.ts (pinned source: 3 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test publint_all_parity --all-features (6 passed)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' CARGO_INCREMENTAL=0 cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "Rust owns dynamic package discovery, exact manifest-declared staging, npm-default documentation files, recursive dotfile inclusion for explicit directories, bounded workers, deterministic package blocks, and SEEKDEEP_PUBLINT_CONCURRENCY. The standards engine remains the external Publint CLI over an isolated staged view, preserving the compatibility boundary without making JavaScript repository orchestration."
     },
     {
       "source": "scripts/publish-npm-baseline.ts",

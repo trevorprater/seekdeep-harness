@@ -18,13 +18,13 @@ Package scripts that directly or transitively invoke Cargo share a `cargo-target
 
 The Node 24 consumer job is one ten-gate mode rather than a shell-owned process pool. Its default worker count equals its gate count while dependencies control readiness: `publint` precedes built-package invariant validation, and snapshot replay, Web snapshot comparison, NodeNext type checks, built-bin smokes, documentation typecheck, and lint wait for that validation. Lint waits because the invariant verifier temporarily stages package views that the linter must not traverse; source compatibility checks can overlap the validation chain.
 
-[scripts/publint-all.ts](../../../../scripts/publint-all.ts) discovers packages from `packages/<group>/<pkg>` and runs `publint` with a worker pool sized from `availableParallelism()`. `SEEKDEEP_PUBLINT_CONCURRENCY` can cap or raise the worker count for local machines and CI runners with different resource profiles. Results are buffered per package and printed in deterministic package order, so parallel execution does not scramble each package's log block.
+The Rust [Publint runner](../../../../crates/repository-tools/src/publint_all.rs) discovers packages from `packages/<group>/<pkg>` and runs the external `publint` standards engine with a worker pool sized from available host parallelism. `SEEKDEEP_PUBLINT_CONCURRENCY` can cap or raise the worker count for local machines and CI runners with different resource profiles. Results are buffered per package and printed in deterministic package order, so parallel execution does not scramble each package's log block.
 
 The per-gate package scripts remain the vocabulary for ad hoc local runs. `hygiene` stays an aggregate `&&` chain, while `doc-sync` owns its member list in the scheduler ([doc-sync through the gate scheduler](../../archived/process/2026-07-21-doc-sync-through-gate-scheduler.md)).
 
 ## Verification
 
-The Rust [scheduler parity suite](../../../../crates/repository-tools/tests/run_gates_parity.rs) rejects invalid graphs before the executor runs, pins all fourteen mode counts plus the consumer inventory and dependency edges, enforces the worker bound, and exercises signal termination through a real child process. [scripts/publint-all.spec.ts](../../../../scripts/publint-all.spec.ts) rejects a missing public export before downstream artifact consumers run.
+The Rust [scheduler parity suite](../../../../crates/repository-tools/tests/run_gates_parity.rs) rejects invalid graphs before the executor runs, pins all fourteen mode counts plus the consumer inventory and dependency edges, enforces the worker bound, and exercises signal termination through a real child process. The Rust [Publint parity suite](../../../../crates/repository-tools/tests/publint_all_parity.rs) validates exact publication views, dotfile handling, worker bounds, deterministic ordering, and rejection of missing or unpublished exports before downstream artifact consumers run.
 
 ## Alternatives considered
 
@@ -40,4 +40,4 @@ Scheduler-backed commands take the slowest dependency chain instead of the sum o
 
 The consumer validation chain delays restored-artifact consumers and lint until the shared artifact view is known-good and transient staging is gone; those downstream gates can still overlap one another.
 
-`publint-all.ts` is asynchronous and buffers command output instead of inheriting stdio live. The payoff is package-level parallelism with stable output order and one environment variable for resource tuning.
+The Publint runner buffers command output instead of inheriting stdio live. The payoff is package-level parallelism with stable output order and one environment variable for resource tuning.

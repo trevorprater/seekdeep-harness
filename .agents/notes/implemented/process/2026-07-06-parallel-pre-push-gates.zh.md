@@ -18,13 +18,13 @@ Rust [门禁调度器](../../../../crates/repository-tools/src/run_gates.rs)负�
 
 Node 24 消费方任务采用单个包含十道门禁的模式，而非由 shell 管理的进程池。其默认 worker 数等于门禁数，但门禁是否就绪由依赖关系控制：`publint` 先于已构建包不变式验证运行，快照回放、Web 快照比较、NodeNext 类型检查、built-bin 冒烟测试、文档类型检查和 lint 则等待该验证完成。lint 之所以等待，是因为不变式验证器会临时暂存包视图，而 linter 不得遍历这些视图；源码兼容性检查可以与这条验证链重叠运行。
 
-[scripts/publint-all.ts](../../../../scripts/publint-all.ts) 从 `packages/<group>/<pkg>` 发现包，并以根据 `availableParallelism()` 确定大小的 worker 池运行 `publint`。`SEEKDEEP_PUBLINT_CONCURRENCY` 可以针对资源配置不同的本地机器和 CI runner 限制或提高 worker 数量。结果按包缓冲，并按确定性的包顺序打印，因此并行执行不会打乱各包的日志块。
+Rust [Publint 运行器](../../../../crates/repository-tools/src/publint_all.rs)从 `packages/<group>/<pkg>` 发现包，并以根据宿主可用并行度确定大小的 worker 池运行外部 `publint` 标准引擎。`SEEKDEEP_PUBLINT_CONCURRENCY` 可以针对资源配置不同的本地机器和 CI runner 限制或提高 worker 数量。结果按包缓冲，并按确定性的包顺序打印，因此并行执行不会打乱各包的日志块。
 
 各门禁的包脚本仍是临时本地运行所用的命令入口。`hygiene` 继续作为聚合 `&&` 链，而 `doc-sync` 的成员列表由调度器管理（[通过门禁调度器运行 doc-sync](../../archived/process/2026-07-21-doc-sync-through-gate-scheduler.md)）。
 
 ## 验证
 
-Rust [调度器对等测试](../../../../crates/repository-tools/tests/run_gates_parity.rs)会在执行器运行前拒绝无效图，固定全部 14 种模式的数量以及消费方清单和依赖边，强制 worker 上限，并通过真实子进程验证信号终止。[scripts/publint-all.spec.ts](../../../../scripts/publint-all.spec.ts) 在下游产物消费方运行前拒绝缺失的公开导出。
+Rust [调度器对等测试](../../../../crates/repository-tools/tests/run_gates_parity.rs)会在执行器运行前拒绝无效图，固定全部 14 种模式的数量以及消费方清单和依赖边，强制 worker 上限，并通过真实子进程验证信号终止。Rust [Publint 对等测试](../../../../crates/repository-tools/tests/publint_all_parity.rs)会校验确切发布视图、点文件处理、worker 上限、确定性顺序，并在下游产物消费方运行前拒绝缺失或未发布的导出。
 
 ## 曾考虑的替代方案
 
@@ -40,4 +40,4 @@ Rust [调度器对等测试](../../../../crates/repository-tools/tests/run_gates
 
 这条验证链会让使用已恢复产物的下游消费方和 lint 延后启动，直至共享产物视图经确认有效且临时暂存已清除；这些下游门禁仍可彼此重叠运行。
 
-`publint-all.ts` 采用异步执行并缓冲命令输出，而不是实时继承 stdio。换来的是具有稳定输出顺序的包级并行，以及用于资源调节的单一环境变量。
+Publint 运行器会缓冲命令输出，而不是实时继承 stdio。换来的是具有稳定输出顺序的包级并行，以及用于资源调节的单一环境变量。

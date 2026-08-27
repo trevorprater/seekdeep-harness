@@ -61,7 +61,7 @@
     "check:ci:windows-observational": "cargo run --quiet --package seekdeep-repository-tools --bin run-gates -- ci-windows-observational",
     "check:node-compat": "cargo run --quiet --package seekdeep-repository-tools --bin run-gates -- node-compat",
     "knip": "knip --treat-config-hints-as-errors",
-    "publint": "tsx scripts/publint-all.ts",
+    "publint": "cargo run --quiet --package seekdeep-repository-tools --bin publint-all",
     "doc-typecheck": "npm run build:lib:host && npm run doc-typecheck:contracts-ready",
     "doc-typecheck:contracts-ready": "tsx scripts/doc-typecheck.ts",
     "verify-md-wrap": "cargo run --quiet --package seekdeep-repository-tools --bin verify-md-wrap",
