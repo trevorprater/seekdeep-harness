@@ -12,9 +12,11 @@ Status: implemented
 
 ## 决策
 
-[scripts/run-gates.ts](../../../../scripts/run-gates.ts) 拥有 CI、`doc-sync` 和按需启用的 `check:all` 命令所使用的有界调度器。它将具名模式展开为叶子门禁，在启动子进程前拒绝空的或有歧义的依赖图，遵守产物依赖，缓冲可归因的输出，分别报告进程退出与信号终止结果，并在调用方需要不同 worker 上限时接受 `SEEKDEEP_GATE_CONCURRENCY`。
+Rust [门禁调度器](../../../../crates/repository-tools/src/run_gates.rs)负责 CI、`doc-sync` 和按需启用的 `check:all` 命令所使用的有界调度。它将具名模式展开为叶子门禁，在启动子进程前拒绝空的或有歧义的依赖图，遵守产物依赖，缓冲可归因的输出，分别报告进程退出与信号终止结果，并在调用方需要不同 worker 上限时接受 `SEEKDEEP_GATE_CONCURRENCY`。
 
-Node 24 消费方任务采用单个包含七道门禁的模式，而非由 shell 管理的进程池。其默认 worker 数等于门禁数，但门禁是否就绪由依赖关系控制：`publint` 先于已构建包不变式验证运行，快照回放、NodeNext 类型检查、built-bin 冒烟测试和 lint 则等待该验证完成。lint 之所以等待，是因为不变式验证器会临时暂存包视图，而 linter 不得遍历这些视图；源码兼容性检查可以与这条验证链重叠运行。
+直接或间接调用 Cargo 的包脚本共享一个 `cargo-target` 运行时资源组。调度器绝不会让该组成员针对同一构建目录重叠运行，而无关门禁仍使用普通 worker 池。随着叶子实现从 TypeScript 迁移到 Rust，这项仅适用于目标实现的守卫会保留源 DAG，同时避免让有用并行退化为 Cargo 锁竞争。
+
+Node 24 消费方任务采用单个包含十道门禁的模式，而非由 shell 管理的进程池。其默认 worker 数等于门禁数，但门禁是否就绪由依赖关系控制：`publint` 先于已构建包不变式验证运行，快照回放、Web 快照比较、NodeNext 类型检查、built-bin 冒烟测试、文档类型检查和 lint 则等待该验证完成。lint 之所以等待，是因为不变式验证器会临时暂存包视图，而 linter 不得遍历这些视图；源码兼容性检查可以与这条验证链重叠运行。
 
 [scripts/publint-all.ts](../../../../scripts/publint-all.ts) 从 `packages/<group>/<pkg>` 发现包，并以根据 `availableParallelism()` 确定大小的 worker 池运行 `publint`。`SEEKDEEP_PUBLINT_CONCURRENCY` 可以针对资源配置不同的本地机器和 CI runner 限制或提高 worker 数量。结果按包缓冲，并按确定性的包顺序打印，因此并行执行不会打乱各包的日志块。
 
@@ -22,7 +24,7 @@ Node 24 消费方任务采用单个包含七道门禁的模式，而非由 shell
 
 ## 验证
 
-[scripts/run-gates.spec.ts](../../../../scripts/run-gates.spec.ts) 在执行器运行前拒绝无效图，锁定消费方清单和依赖边，并通过真实子进程验证信号终止。[scripts/publint-all.spec.ts](../../../../scripts/publint-all.spec.ts) 在下游产物消费方运行前拒绝缺失的公开导出。
+Rust [调度器对等测试](../../../../crates/repository-tools/tests/run_gates_parity.rs)会在执行器运行前拒绝无效图，固定全部 14 种模式的数量以及消费方清单和依赖边，强制 worker 上限，并通过真实子进程验证信号终止。[scripts/publint-all.spec.ts](../../../../scripts/publint-all.spec.ts) 在下游产物消费方运行前拒绝缺失的公开导出。
 
 ## 曾考虑的替代方案
 

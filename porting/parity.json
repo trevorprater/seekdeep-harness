@@ -80685,12 +80685,33 @@
     {
       "source": "scripts/run-gates.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/run_gates_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run scripts/run-gates.spec.ts (pinned source: 35 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test run_gates_parity --all-features (12 grouped Rust tests cover all 14 source graph counts, invalid graph preflight, dependency skipping, worker bounds, Cargo resource serialization, target command/env renames, consumer and Windows ordering, and real signal/spawn outcomes)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "scripts/run-gates.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/run_gates.rs",
+        "crates/repository-tools/src/bin/run-gates.rs",
+        "package.json"
+      ],
+      "evidence": [
+        "pinned source graph inspection and Rust fixtures match all 14 mode cardinalities: ci-primary 52, ci-linux-primary 53, ci-static 35, ci-lint-contracts-ready 2, ci-coverage 2, ci-snapshot 2, ci-artifacts 5, ci-consumers 10, ci-windows-blocking 2, ci-windows-complete 44, ci-windows-observational 42, node-compat 5, check-all 46, doc-sync 28",
+        "pnpm exec vitest run scripts/run-gates.spec.ts (pinned source: 35 passed)",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-repository-tools --test run_gates_parity --all-features (12 passed)",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings",
+        "RUSTDOCFLAGS='-D warnings' CARGO_INCREMENTAL=0 cargo doc -p seekdeep-repository-tools --all-features --no-deps"
+      ],
+      "note": "All product-owned DSH gate, coverage, snapshot, example, and Oxlint environment identities are renamed to SEEKDEEP. The source DAG and shell-free process behavior are preserved; the Rust target additionally detects direct and transitive Cargo-backed package scripts and serializes them through a cargo-target resource group so independent gates remain parallel without sharing Cargo target locks."
     },
     {
       "source": "scripts/run-oxlint.spec.ts",

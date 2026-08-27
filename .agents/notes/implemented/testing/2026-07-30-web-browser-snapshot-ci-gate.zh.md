@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-Linux PR 的 `node 24 / snapshots and artifacts` 必须运行完整 Web 浏览器 replay/compare。`scripts/run-gates.ts` 把 `test:web:built` 作为 `ci-consumers` 的一个 gate，并显式注入 `SEEKDEEP_SNAPSHOT=replay`；CI 永不以 `record` 或 `refresh` 模式运行，因此提交的 golden 与当前组装应用不一致时测试直接失败，不会在 runner 内静默改写后通过。
+Linux PR 的 `node 24 / snapshots and artifacts` 必须运行完整 Web 浏览器 replay/compare。Rust [门禁调度器](../../../../crates/repository-tools/src/run_gates.rs)把 `test:web:built` 作为 `ci-consumers` 的一个 gate，并显式注入 `SEEKDEEP_SNAPSHOT=replay`；CI 永不以 `record` 或 `refresh` 模式运行，因此提交的 golden 与当前组装应用不一致时测试直接失败，不会在 runner 内静默改写后通过。
 
 消费方 job 在[消费方独立构建](../process/2026-07-30-independent-ci-consumer-build.md)中负责唯一一次 Linux 构建，因此 `apps/web/dist` 和包的 `lib/` 目录会保留在其工作区中，供浏览器套件使用。在托管运行器上，CI 按锁文件中的 Playwright 版本安装 Chromium 及其系统依赖。在持久化故障切换 VM 上，镜像负责预装 Linux 系统软件包，CI 只安装 Chromium，避免每次运行都通过 `apt` 改动系统。托管的默认分支 Linux 串行 job 运行该套件，并生成以操作系统和锁文件为键的浏览器缓存；PR 恢复该缓存，使必需路径无需承担压缩和上传开销，并可在锁文件变化时按操作系统前缀回退。自托管热备运行相同的比较，但不执行托管缓存操作。
 
