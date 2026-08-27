@@ -54,6 +54,17 @@ pub const DEFAULT_MAX_REQUEST_BODY_BYTES: usize = 160 * 1024 * 1024;
 /// Headroom for RPC JSON fields around aggregate base64 image payloads.
 pub const REQUEST_ENVELOPE_HEADROOM_BYTES: usize = 1024 * 1024;
 
+/// Builds the Loader-compatible Host Connection plugin.
+#[must_use]
+pub fn host_plugin() -> seekdeep_cordis::Plugin {
+    seekdeep_cordis::Plugin::new(NAME, ["webServer"], |context, config| {
+        Box::pin(async move {
+            install_host(&context, serde_json::from_value(config)?, None)?;
+            Ok(())
+        })
+    })
+}
+
 /// Computes the minimum carrier body capacity for the configured aggregate image limit.
 ///
 /// # Errors

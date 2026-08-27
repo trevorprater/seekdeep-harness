@@ -24,6 +24,16 @@ pub const FEEDBACK_STYLES: &str = include_str!("../data/styles.css");
 /// Host half of this pure UI plugin; it intentionally owns no native effects.
 pub fn apply_host() {}
 
+/// Builds the Loader-compatible no-op Host half of this pure Client plugin.
+#[must_use]
+pub fn host_plugin() -> seekdeep_cordis::Plugin {
+    seekdeep_cordis::Plugin::new(
+        "client-ui-message-feedback",
+        std::iter::empty::<String>(),
+        |_, _| Box::pin(async { Ok(()) }),
+    )
+}
+
 /// Simplified-Chinese feedback copy.
 pub const FEEDBACK_ZH: &[(&str, &str)] = &[
     ("action.like", "好的回答"),

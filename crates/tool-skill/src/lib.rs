@@ -9,7 +9,7 @@ use regex::Regex;
 use seekdeep_agent::{Agent, AgentEvent, PreStepDecision};
 use seekdeep_agent_loop::AgentPreStepEvent;
 use seekdeep_cordis::events::Next;
-use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
+use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, Plugin, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
 use seekdeep_skill::{
@@ -27,6 +27,10 @@ use sha2::{Digest, Sha256};
 
 /// Default maximum normalized description length rendered in the session catalog.
 pub const DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH: usize = 500;
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "tool-skill";
+/// Skill tool requires both the skill and tool registries.
+pub const PLUGIN_INJECT: &[&str] = &["skills", "tools"];
 
 /// One durable catalog entry: the skill name and its normalized description.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -605,6 +609,21 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Builds the Loader-compatible skill-tool plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        |context, config| {
+            Box::pin(async move {
+                apply(&context, &serde_json::from_value(config)?)?;
+                Ok(())
+            })
+        },
+    )
 }
 
 async fn gesture_step(

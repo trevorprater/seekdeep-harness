@@ -103,6 +103,8 @@ fn defaults() -> ApiProxyDefaults {
         can_open_path: Some(Arc::new(|| false)),
         native_path_opener: PathOpenerInternals::default(),
         cold_blank_probe_max_bytes: None,
+        session_export_compression_level:
+            seekdeep_host_apiproxy::SessionLogCompressionLevel::default(),
     }
 }
 

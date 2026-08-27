@@ -89,6 +89,8 @@ static NEXT_SESSION_FRAME_ID: AtomicU64 = AtomicU64::new(1);
 /// Session-domain runtime options.
 #[derive(Clone, Default)]
 pub struct SessionApiProxyOptions {
+    /// DEFLATE level used for every session-log ZIP entry.
+    pub session_export_compression_level: SessionLogCompressionLevel,
     /// Maximum physical artifact size eligible for a cold blankness read.
     pub cold_blank_probe_max_bytes: Option<u64>,
     /// Optional artifact-size boundary for alternate hosts and deterministic tests.
@@ -103,6 +105,10 @@ impl std::fmt::Debug for SessionApiProxyOptions {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("SessionApiProxyOptions")
+            .field(
+                "session_export_compression_level",
+                &self.session_export_compression_level,
+            )
             .field(
                 "cold_blank_probe_max_bytes",
                 &self.cold_blank_probe_max_bytes,
@@ -1560,16 +1566,8 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
             }),
             sessions: Some(Arc::new(SessionStoreExportAdapter(self.sessions.clone()))),
         };
-        async move {
-            prepare_session_log_response(
-                &deps,
-                query,
-                SessionLogCompressionLevel::default(),
-                signal,
-            )
-            .await
-        }
-        .boxed()
+        let compression = self.options.session_export_compression_level;
+        async move { prepare_session_log_response(&deps, query, compression, signal).await }.boxed()
     }
 }
 

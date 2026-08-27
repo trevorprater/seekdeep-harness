@@ -160,7 +160,8 @@ impl DownlinkMounts {
 }
 
 /// Resolved Host plugin configuration.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConnectionHostConfig {
     /// Non-loopback deployment authorities accepted by the browser trust fence.
     pub trusted_hosts: Vec<String>,

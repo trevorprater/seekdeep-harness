@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use seekdeep_cordis::{Context, EventOptions, fiber::EffectHandle};
+use seekdeep_cordis::{Context, EventOptions, Plugin, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::ContentBlock;
 use seekdeep_tools::{
@@ -13,6 +13,10 @@ use seekdeep_util::timeout::{deadline, timeout_of};
 
 /// Stable policy-owned timeout code.
 pub const TOOL_TIMEOUT: &str = "TOOL_TIMEOUT";
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "tool-timeout-policy";
+/// Timeout policy wraps the tool registry.
+pub const PLUGIN_INJECT: &[&str] = &["tools"];
 
 /// Installs the `tools/execute` timeout wrapper.
 ///
@@ -53,6 +57,20 @@ pub fn install(context: &Context, tools: &Arc<ToolRuntime>) -> anyhow::Result<Ef
         },
         EventOptions::default(),
     )?)
+}
+
+/// Builds the Loader-compatible tool timeout policy plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            let tools = context
+                .get(seekdeep_tools::TOOLS)
+                .ok_or_else(|| anyhow::anyhow!("tool timeout policy requires tools"))?;
+            install(&context, &tools)?;
+            Ok(())
+        })
+    })
 }
 
 struct DispatchSignalRestore {

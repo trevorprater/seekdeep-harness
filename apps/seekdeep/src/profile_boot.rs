@@ -134,17 +134,38 @@ impl ProfileBootApplication {
 #[derive(Debug, Default)]
 struct ProfileApplicationSlot {
     application: tokio::sync::Mutex<Option<ProfileBootApplication>>,
+    context: tokio::sync::Mutex<Option<seekdeep_cordis::Context>>,
     boot_finished: AtomicBool,
+    shutdown_started: AtomicBool,
     changed: tokio::sync::Notify,
 }
 
 impl ProfileApplicationSlot {
+    async fn publish_context(&self, context: seekdeep_cordis::Context) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.shutdown_started.load(Ordering::Acquire),
+            "profile shutdown started before host preparation"
+        );
+        let mut slot = self.context.lock().await;
+        anyhow::ensure!(
+            slot.is_none(),
+            "profile boot context was published more than once"
+        );
+        *slot = Some(context);
+        drop(slot);
+        self.changed.notify_waiters();
+        Ok(())
+    }
+
     async fn publish(
         &self,
         application: ProfileBootApplication,
     ) -> Result<(), ProfileBootApplication> {
         let mut slot = self.application.lock().await;
-        if slot.is_some() || self.boot_finished.load(Ordering::Acquire) {
+        if slot.is_some()
+            || self.boot_finished.load(Ordering::Acquire)
+            || self.shutdown_started.load(Ordering::Acquire)
+        {
             return Err(application);
         }
         *slot = Some(application);
@@ -159,11 +180,19 @@ impl ProfileApplicationSlot {
         self.changed.notify_waiters();
     }
 
+    fn is_shutdown_started(&self) -> bool {
+        self.shutdown_started.load(Ordering::Acquire)
+    }
+
     async fn shutdown(&self) -> anyhow::Result<()> {
+        self.shutdown_started.store(true, Ordering::Release);
         loop {
             let changed = self.changed.notified();
             if let Some(application) = self.application.lock().await.take() {
                 return application.dispose().await;
+            }
+            if let Some(context) = self.context.lock().await.take() {
+                return context.fiber().dispose().await;
             }
             if self.boot_finished.load(Ordering::Acquire) {
                 return Ok(());
@@ -460,9 +489,11 @@ fn register_product_plugin(
 /// # Errors
 ///
 /// Returns duplicate or invalid catalog-registration failures.
+#[allow(clippy::too_many_lines)]
 pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> {
     for (name, plugin) in [
         ("seekdeep-agent", seekdeep_agent::plugin()),
+        ("seekdeep-agent-loop", seekdeep_agent_loop::plugin()),
         (
             "seekdeep-agent-default-model",
             seekdeep_agent_default_model::plugin(),
@@ -472,11 +503,64 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_agent_instructions::plugin(),
         ),
         ("seekdeep-api-gateway", seekdeep_api_gateway::plugin()),
+        ("seekdeep-api-remotes", seekdeep_api_remotes::host_plugin()),
         (
             "seekdeep-attachment-local",
             seekdeep_attachment_local::plugin(),
         ),
         ("seekdeep-bash-sandbox", seekdeep_bash_sandbox::plugin()),
+        (
+            "seekdeep-client-connection",
+            seekdeep_client_connection::host_plugin(),
+        ),
+        (
+            "seekdeep-client-hmr",
+            seekdeep_client_hmr::client_hmr_host_plugin(),
+        ),
+        (
+            "seekdeep-client-locale",
+            seekdeep_client_locale::host_plugin(),
+        ),
+        (
+            "seekdeep-client-modules",
+            seekdeep_client_modules::client_modules_host_plugin(),
+        ),
+        (
+            "seekdeep-client-runtime",
+            seekdeep_client_runtime::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-cordis",
+            seekdeep_client_ui_cordis::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-layout",
+            seekdeep_client_ui_layout::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-message-feedback",
+            seekdeep_client_ui_message_feedback::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-settings",
+            seekdeep_client_ui_settings::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-settings-general",
+            seekdeep_client_ui_settings_general::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-sidebar",
+            seekdeep_client_ui_sidebar::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-theme",
+            seekdeep_client_ui_theme::host_plugin(),
+        ),
+        (
+            "seekdeep-code-runtime-worker-thread",
+            seekdeep_code_runtime_worker_thread::plugin(),
+        ),
         (
             "seekdeep-command-compact",
             seekdeep_command_compact::index::plugin(),
@@ -494,6 +578,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         (
             "seekdeep-compaction-tool-result-pruner",
             seekdeep_compaction_tool_result_pruner::plugin(),
+        ),
+        (
+            "seekdeep-cordis-client-runner",
+            seekdeep_cordis_client_runner::host_plugin(),
         ),
         (
             "seekdeep-cordis-host-runner",
@@ -517,6 +605,8 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             "seekdeep-host-directory-picker-auto",
             seekdeep_host_directory_picker_auto::plugin(),
         ),
+        ("seekdeep-host-apiproxy", seekdeep_host_apiproxy::plugin()),
+        ("seekdeep-host-webserver", seekdeep_host_webserver::plugin()),
         (
             "seekdeep-host-plugin-inventory",
             seekdeep_host_plugin_inventory::plugin(),
@@ -570,6 +660,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             "seekdeep-session-telemetry-otel",
             seekdeep_session_telemetry_otel::plugin(),
         ),
+        ("seekdeep-session-stats", seekdeep_session_stats::plugin()),
         ("seekdeep-session-title", seekdeep_session_title::plugin()),
         (
             "seekdeep-session-title-first-prompt-llm",
@@ -583,6 +674,8 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             "seekdeep-skill-filesystem",
             seekdeep_skill_filesystem::plugin(),
         ),
+        ("seekdeep-spill-local", seekdeep_spill_local::plugin()),
+        ("seekdeep-spill-policy", seekdeep_spill_policy::plugin()),
         ("seekdeep-storage", seekdeep_storage::plugin()),
         ("seekdeep-storage-domain", seekdeep_storage_domain::plugin()),
         ("seekdeep-storage-json", seekdeep_storage_json::plugin()),
@@ -607,6 +700,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         ("seekdeep-tool-goal", seekdeep_tool_goal::index::plugin()),
         ("seekdeep-tool-jobs", seekdeep_tool_jobs::index::plugin()),
         ("seekdeep-tool-pwsh", seekdeep_tool_pwsh::plugin()),
+        ("seekdeep-tool-skill", seekdeep_tool_skill::plugin()),
         (
             "seekdeep-tool-str-replace-editor",
             seekdeep_tool_str_replace_editor::plugin(),
@@ -621,6 +715,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_tool_subagent_report::plugin(),
         ),
         ("seekdeep-tool-todo", seekdeep_tool_todo::plugin()),
+        (
+            "seekdeep-tool-call-timeout-policy",
+            seekdeep_tool_timeout_policy::plugin(),
+        ),
         ("seekdeep-tool-web", seekdeep_tool_web::plugin()),
         ("seekdeep-tools", seekdeep_tools::plugin()),
         ("seekdeep-typert-loader", seekdeep_typert_loader::plugin()),
@@ -631,6 +729,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         ("seekdeep-user-approval", seekdeep_user_approval::plugin()),
         ("seekdeep-user-questions", seekdeep_user_questions::plugin()),
         ("seekdeep-web", seekdeep_web::plugin()),
+        ("seekdeep-web-app", seekdeep_web_app::plugin()),
         (
             "seekdeep-web-search-deepseek",
             seekdeep_web_search_deepseek::plugin(),
@@ -652,6 +751,11 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         catalog,
         "seekdeep-tool-subagent-control/list-agents",
         seekdeep_tool_subagent_control::list_plugin(),
+    )?;
+    register_product_plugin(
+        catalog,
+        "seekdeep-web-app/startup",
+        seekdeep_web_app::startup::plugin(),
     )?;
     Ok(())
 }
@@ -897,11 +1001,14 @@ pub async fn run_profile_process(
     );
     let signals = spawn_profile_signals(shutdown.clone())?;
     let shutdown_for_cmdline = shutdown.clone();
+    let application_for_prepare = application_slot.clone();
     let prepare: BootPrepare = Arc::new(move |context| {
         let environment = environment.clone();
         let arguments = arguments.clone();
         let shutdown = shutdown_for_cmdline.clone();
+        let application = application_for_prepare.clone();
         Box::pin(async move {
+            application.publish_context(context.clone()).await?;
             context.provide(SEEKDEEP_LAUNCH_ENVIRONMENT, Arc::new(environment))?;
             provide_cmdline(
                 &context,
@@ -928,8 +1035,17 @@ pub async fn run_profile_process(
     };
     let context = application.context().clone();
     if let Err(application) = application_slot.publish(application).await {
-        application_slot.finish_without_application();
         let cleanup = application.dispose().await;
+        if application_slot.is_shutdown_started() {
+            cleanup?;
+            return Ok(RunningProfile {
+                context,
+                shutdown,
+                completion,
+                signals,
+            });
+        }
+        application_slot.finish_without_application();
         let signal_cleanup = stop_profile_signals(signals).await;
         return match (cleanup, signal_cleanup) {
             (Ok(()), Ok(())) => Err(anyhow::anyhow!(

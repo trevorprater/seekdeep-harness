@@ -7,16 +7,19 @@ use std::{
 };
 
 use seekdeep::profile_boot::{
-    boot_profile_with_failure_handler, compose_profile_at, register_profile_framework_plugins,
-    resolve_telemetry_patch, run_profile_process,
+    boot_profile_with_failure_handler, compose_profile_at, framework_profile_catalog,
+    register_profile_framework_plugins, resolve_telemetry_patch, run_profile_process,
 };
 use seekdeep_app_boot::{compose_entries, init_profile, resolve_profile_dir};
 use seekdeep_cmdline::{APP_EXIT, CMDLINE_ARGS};
 use seekdeep_cordis::{Context, FiberState, Plugin, ServiceKey};
 use seekdeep_cordis_timer::TIMER;
 use seekdeep_hmr::HMR;
-use seekdeep_loader::{PluginCatalog, profile_patch::ProfileNode};
-use seekdeep_util::launch_environment::SEEKDEEP_LAUNCH_ENVIRONMENT;
+use seekdeep_loader::{
+    PluginCatalog,
+    profile_patch::{ProfileNode, render_entry_list_yaml},
+};
+use seekdeep_util::launch_environment::{LaunchEnvironmentSnapshot, SEEKDEEP_LAUNCH_ENVIRONMENT};
 use serde_json::{Value, json};
 
 const CURRENT: ServiceKey<Value> = ServiceKey::new("current");
@@ -103,6 +106,33 @@ fn web_plan_orders_layers_and_appends_launcher_owned_preset_and_privacy_patches(
     );
     let port = config_field(entry(effective.entries(), "webserver"), "port");
     assert!(matches!(port, ProfileNode::Number(number) if number.as_u64() == Some(3999)));
+    Ok(())
+}
+
+#[test]
+fn compiled_catalog_preflights_the_real_web_tree_to_the_first_unported_host_boundary()
+-> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let home = temporary.path().join("home");
+    let cwd = temporary.path().join("workspace");
+    std::fs::create_dir_all(&cwd)?;
+    let plan = compose_profile_at(
+        "web",
+        &[],
+        &cwd,
+        &home,
+        &install_anchor(&home),
+        temporary.path(),
+        None,
+    )?;
+    let effective = compose_entries(&[plan.all_patches()])?;
+    let source = render_entry_list_yaml(effective.entries())?;
+    let catalog = framework_profile_catalog(&cwd, &home, &LaunchEnvironmentSnapshot::default())?;
+    let error = catalog.preflight_yaml(&source).unwrap_err().to_string();
+    assert!(
+        error.contains("@seekdeep-ai/seekdeep-client-ui-settings-models"),
+        "unexpected compiled-catalog frontier: {error}"
+    );
     Ok(())
 }
 
@@ -263,7 +293,7 @@ async fn app_exit_during_boot_waits_for_publication_and_disposes_before_process_
     let running = run_profile_process(
         plan,
         &catalog,
-        Default::default(),
+        LaunchEnvironmentSnapshot::default(),
         vec!["--probe".to_owned()],
     )
     .await?;
@@ -273,6 +303,131 @@ async fn app_exit_during_boot_waits_for_publication_and_disposes_before_process_
         observed.lock().unwrap().as_ref(),
         Some(&(vec!["--probe".to_owned()], true))
     );
+    assert_eq!(context.fiber().state(), FiberState::Disposed);
+    Ok(())
+}
+
+#[tokio::test]
+async fn compiled_foundation_catalog_activates_real_services_and_agent_loop() -> anyhow::Result<()>
+{
+    let temporary = tempfile::tempdir()?;
+    let home = temporary.path().join("home");
+    let cwd = temporary.path().join("workspace");
+    std::fs::create_dir_all(&cwd)?;
+    let profile_dir = resolve_profile_dir("compiled-foundation", &home)?;
+    init_profile(&profile_dir, &[])?;
+    std::fs::write(
+        profile_dir.join("cordis.patch.yml"),
+        concat!(
+            "- insert:\n",
+            "    - { id: llm, name: '@seekdeep-ai/seekdeep-llm' }\n",
+            "    - { id: session, name: '@seekdeep-ai/seekdeep-session' }\n",
+            "    - { id: typert, name: '@seekdeep-ai/seekdeep-typert-registry' }\n",
+            "    - { id: gateway, name: '@seekdeep-ai/seekdeep-api-gateway' }\n",
+            "    - { id: questions, name: '@seekdeep-ai/seekdeep-user-questions' }\n",
+            "    - { id: agent, name: '@seekdeep-ai/seekdeep-agent' }\n",
+            "    - id: default-model\n",
+            "      name: '@seekdeep-ai/seekdeep-agent-default-model'\n",
+            "      config: { provider: mock, model: model }\n",
+            "    - id: prompt\n",
+            "      name: '@seekdeep-ai/seekdeep-system-prompt'\n",
+            "      config: { persona: '' }\n",
+            "    - { id: tools, name: '@seekdeep-ai/seekdeep-tools' }\n",
+            "    - id: loop\n",
+            "      name: '@seekdeep-ai/seekdeep-agent-loop'\n",
+            "      config: { agents: [], maxParallelToolCalls: 3 }\n",
+        ),
+    )?;
+    let plan = compose_profile_at(
+        "compiled-foundation",
+        &[],
+        &cwd,
+        &home,
+        &install_anchor(&home),
+        temporary.path(),
+        None,
+    )?;
+    let catalog = framework_profile_catalog(&cwd, &home, &LaunchEnvironmentSnapshot::default())?;
+    let failures = Arc::new(Mutex::new(Vec::new()));
+    let observed = failures.clone();
+    let application = boot_profile_with_failure_handler(
+        plan,
+        &catalog,
+        None,
+        Arc::new(move |_, error| observed.lock().unwrap().push(error.to_string())),
+    )
+    .await?;
+    let context = application.context();
+    assert!(context.get(seekdeep_llm::LLM).is_some());
+    assert!(
+        context
+            .get(seekdeep_core::session_store::SESSIONS)
+            .is_some()
+    );
+    assert!(context.get(seekdeep_typert_registry::TYPERT).is_some());
+    assert!(context.get(seekdeep_api_gateway::TYPERT_GATEWAY).is_some());
+    assert!(context.get(seekdeep_agent::AGENTS).is_some());
+    assert_eq!(
+        context
+            .get(seekdeep_agent_loop::AGENT_LOOP)
+            .unwrap()
+            .max_parallel_tool_calls(),
+        3
+    );
+    application.dispose().await?;
+    assert_no_refresh_failures(&failures, "after compiled foundation disposal");
+    Ok(())
+}
+
+#[tokio::test]
+async fn web_help_disposes_raw_boot_context_while_web_startup_consumers_are_pending()
+-> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let home = temporary.path().join("home");
+    let cwd = temporary.path().join("workspace");
+    std::fs::create_dir_all(&cwd)?;
+    let profile_dir = resolve_profile_dir("web-help", &home)?;
+    init_profile(&profile_dir, &[])?;
+    std::fs::write(
+        profile_dir.join("cordis.patch.yml"),
+        concat!(
+            "- insert:\n",
+            "    - id: consumer\n",
+            "      name: startup-consumer\n",
+            "      inject: [webStartup]\n",
+            "    - id: startup\n",
+            "      name: '@seekdeep-ai/seekdeep-web-app/startup'\n",
+        ),
+    )?;
+    let plan = compose_profile_at(
+        "web-help",
+        &[],
+        &cwd,
+        &home,
+        &install_anchor(&home),
+        temporary.path(),
+        None,
+    )?;
+    let catalog = framework_profile_catalog(&cwd, &home, &LaunchEnvironmentSnapshot::default())?;
+    let consumer_activated = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let observed = consumer_activated.clone();
+    catalog.register_named(
+        "startup-consumer",
+        Plugin::new("startup-consumer", ["webStartup"], move |_, _| {
+            observed.store(true, std::sync::atomic::Ordering::Release);
+            Box::pin(async { Ok(()) })
+        }),
+    )?;
+    let running = run_profile_process(
+        plan,
+        &catalog,
+        LaunchEnvironmentSnapshot::default(),
+        vec!["--help".to_owned()],
+    )
+    .await?;
+    let context = running.context().clone();
+    assert_eq!(running.wait().await?, 0);
+    assert!(!consumer_activated.load(std::sync::atomic::Ordering::Acquire));
     assert_eq!(context.fiber().state(), FiberState::Disposed);
     Ok(())
 }

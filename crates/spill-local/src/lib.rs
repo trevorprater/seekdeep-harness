@@ -7,7 +7,7 @@ use std::{
 
 use async_trait::async_trait;
 use path_clean::PathClean as _;
-use seekdeep_cordis::Context;
+use seekdeep_cordis::{Context, Plugin};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_spill::{SaveTextSpill, SpillBackend, SpillLocator, SpillRef, SpillStore};
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,10 @@ pub use store::{
 /// Exact local-path retrieval guidance shown to the model.
 pub const RETRIEVAL_HINT: &str =
     "Use read with offset/limit, or grep this path to search within it.";
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "spill-local";
+/// Local spill storage has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 /// Local spill backend configuration.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +97,21 @@ pub fn install(
     let backend = Arc::new(LocalSpillStore::new(config)?);
     Arc::new(SpillStore::new(backend.clone())).provide(context)?;
     Ok(backend)
+}
+
+/// Builds the Loader-compatible local spill backend plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        |context, config| {
+            Box::pin(async move {
+                install(&context, &serde_json::from_value(config)?)?;
+                Ok(())
+            })
+        },
+    )
 }
 
 /// Registers the local spill package's explained empty invariant companion.

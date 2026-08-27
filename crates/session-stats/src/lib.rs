@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use indexmap::IndexMap;
-use seekdeep_cordis::{Context, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
 use seekdeep_core::session::SessionEvent;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_session_projection::{
@@ -14,6 +14,10 @@ use serde_json::Value;
 
 /// Projection registry key owned by this package.
 pub const SESSION_STATS_KEY: &str = "sessionStats";
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "session-stats";
+/// Statistics fold requires the session-projection registry.
+pub const PLUGIN_INJECT: &[&str] = &["sessionProjections"];
 
 /// Whole-log conversation figures.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -82,6 +86,20 @@ pub fn install(
     projections: &Arc<SessionProjectionRegistry>,
 ) -> anyhow::Result<EffectHandle> {
     projections.register(context, definition())
+}
+
+/// Builds the Loader-compatible session statistics plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            let projections = context
+                .get(seekdeep_session_projection::SESSION_PROJECTIONS)
+                .ok_or_else(|| anyhow::anyhow!("session stats requires sessionProjections"))?;
+            install(&context, &projections)?;
+            Ok(())
+        })
+    })
 }
 
 fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransition> {

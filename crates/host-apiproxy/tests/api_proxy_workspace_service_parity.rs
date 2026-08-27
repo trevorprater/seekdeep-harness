@@ -411,6 +411,8 @@ fn service(workspace: Arc<dyn WorkspaceRuntime>) -> Arc<ApiProxyService> {
             can_open_path: Some(Arc::new(|| false)),
             native_path_opener: PathOpenerInternals::default(),
             cold_blank_probe_max_bytes: None,
+            session_export_compression_level:
+                seekdeep_host_apiproxy::SessionLogCompressionLevel::default(),
         },
         DirectoryPickerService::new(DirectoryPickerCapability::Native {
             pick: Arc::new(|_| async { Ok(None) }.boxed()),

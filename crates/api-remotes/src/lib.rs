@@ -15,3 +15,11 @@ pub use types::ApiRemoteForwardedEvent;
 
 /// Host plugin body; the selected contributions mount only in Client environments.
 pub fn apply() {}
+
+/// Builds the Loader-compatible Host shell for Client Remote contributions.
+#[must_use]
+pub fn host_plugin() -> seekdeep_cordis::Plugin {
+    seekdeep_cordis::Plugin::new("api-remotes", std::iter::empty::<String>(), |_, _| {
+        Box::pin(async { Ok(()) })
+    })
+}

@@ -199,6 +199,7 @@ members = [
   "crates/typert-protocol",
   "crates/typert-registry",
   "crates/web",
+  "crates/web-app",
   "crates/web-fetch-http",
   "crates/web-search-deepseek",
   "crates/web-search-exa",

@@ -19,7 +19,7 @@ use http_body_util::{BodyExt as _, Empty, Full, combinators::UnsyncBoxBody};
 use hyper::{Request, Response, StatusCode, body::Incoming, service::service_fn};
 use hyper_util::rt::TokioIo;
 use parking_lot::{Mutex, RwLock};
-use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_llm::AbortSignal;
 use socket2::SockRef;
 use tokio::{net::TcpListener, task::JoinHandle};
@@ -31,6 +31,24 @@ pub use invariant::{INVARIANT_NAME, register_invariant};
 pub const WEB_SERVER: ServiceKey<WebServer> = ServiceKey::new("webServer");
 /// Stable Cordis plugin name.
 pub const NAME: &str = "host-webserver";
+/// Webserver plugin has no service prerequisites.
+pub const INJECT: &[&str] = &[];
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct WebServerWireConfig {
+    host: String,
+    port: u16,
+}
+
+impl Default for WebServerWireConfig {
+    fn default() -> Self {
+        Self {
+            host: "127.0.0.1".to_owned(),
+            port: 3080,
+        }
+    }
+}
 
 /// Response body used by registered handlers.
 pub type WebBody = UnsyncBoxBody<Bytes, std::io::Error>;
@@ -540,6 +558,30 @@ impl WebServer {
         }
         Ok(())
     }
+}
+
+/// Builds the Loader-compatible Host Webserver plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
+        Box::pin(async move {
+            let config: WebServerWireConfig = serde_json::from_value(config)?;
+            let host = match config.host.as_str() {
+                "127.0.0.1" => ListenHost::Loopback,
+                "0.0.0.0" => ListenHost::AllInterfaces,
+                other => anyhow::bail!("webserver: unsupported host {other:?}"),
+            };
+            WebServer::install(
+                &context,
+                WebServerConfig {
+                    host,
+                    port: config.port,
+                },
+            )
+            .await?;
+            Ok(())
+        })
+    })
 }
 
 async fn watch_disconnect(

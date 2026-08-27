@@ -38412,17 +38412,45 @@
     {
       "source": "packages/bundle/web-app/src/startup.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-app/src/startup.rs",
+        "crates/web-app/tests/web_app_parity.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/bundle/web-app/tests/startup.spec.ts (pinned source: 5/5 passed)",
+        "Rust parser preserves default values, repeated variadic trusted hosts, help exit 0, nonnumeric-port rejection, all-interfaces safety rejection, and unknown/missing option failures",
+        "real profile acceptance proves help disposes the raw boot Context while a webStartup consumer remains pending, with zero exit and no consumer activation",
+        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-web-app --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/bundle/web-app/tests/startup.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-app/tests/web_app_parity.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "pinned source startup spec passed 5/5",
+        "Rust unit parity and real Loader pending-consumer early-exit acceptance passed"
+      ]
     },
     {
       "source": "packages/bundle/web-app/tests/trusted-hosts.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-app/src/lib.rs",
+        "crates/web-app/tests/web_app_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/bundle/web-app/tests/trusted-hosts.spec.ts (pinned source: 2/2 passed)",
+        "Rust trust resolver preserves all-interfaces IPv4 snapshot order, appends explicit authorities, and derives no LAN trust for loopback"
+      ],
+      "note": "production interface enumeration remains part of the still-pending web-app runtime row; this row verifies the resolver contract over the sampled addresses"
     },
     {
       "source": "packages/bundle/web-app/tests/web-app.spec.ts",
@@ -51315,7 +51343,8 @@
       ],
       "evidence": [
         "cargo test -p seekdeep-agent-loop --all-features && cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings",
-        "AgentLoop, AgentSetup, CreateAgentOptions, ResumeAgentOptions, AgentHandle, and Config are ported in factory.rs"
+        "AgentLoop, AgentSetup, CreateAgentOptions, ResumeAgentOptions, AgentHandle, and strict Loader Config are ported in factory.rs/lib.rs",
+        "compiled foundation profile acceptance mounts the real LLM, Session, Typert, Gateway, Questions, Agent, Prompt, Tools, and Agent Loop services and verifies the configured scheduler cap"
       ]
     },
     {
@@ -58934,9 +58963,10 @@
         "crates/host-apiproxy/Cargo.toml"
       ],
       "evidence": [
-        "cargo test -p seekdeep-host-apiproxy --all-features"
+        "cargo test -p seekdeep-host-apiproxy --all-features",
+        "compiled Loader adapter composes the existing Rust Host/configuration/interaction/preset/session domains and publishes the typed Connection carrier"
       ],
-      "note": "Contract and carrier exports are present; the composed ApiProxyService runtime and invariant companion remain separate pending surfaces."
+      "note": "Contract, carrier, and compiled Host composition are present; replacing the fail-loud terminal fallback for any still-unported API domain remains covered by the separate pending domain surfaces."
     },
     {
       "source": "packages/host/apiproxy/src/invariant.ts",

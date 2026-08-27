@@ -20,7 +20,7 @@ use crate::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, ConfigurationApiProxyOptions,
     ConfigurationApiProxyRuntime, InteractionApiProxyRuntime, PresetApiProxyOptions,
     PresetApiProxyRuntime, RpcId, RpcMethod, RpcReceipt, RpcRequest, RpcResponse,
-    SessionApiProxyOptions, SessionApiProxyRuntime,
+    SessionApiProxyOptions, SessionApiProxyRuntime, SessionLogCompressionLevel,
     api::{
         downloads::SessionLogQuery,
         events::{HostFrame, MuxFrame},
@@ -171,6 +171,8 @@ pub struct ApiProxyDefaults {
     pub native_path_opener: PathOpenerInternals,
     /// Maximum cold artifact size eligible for a blankness probe.
     pub cold_blank_probe_max_bytes: Option<u64>,
+    /// DEFLATE level used for every session-log ZIP entry.
+    pub session_export_compression_level: SessionLogCompressionLevel,
 }
 
 impl std::fmt::Debug for ApiProxyDefaults {
@@ -189,6 +191,10 @@ impl std::fmt::Debug for ApiProxyDefaults {
             .field(
                 "cold_blank_probe_max_bytes",
                 &self.cold_blank_probe_max_bytes,
+            )
+            .field(
+                "session_export_compression_level",
+                &self.session_export_compression_level,
             )
             .finish_non_exhaustive()
     }
@@ -292,6 +298,7 @@ impl ApiProxyService {
             let sessions = SessionApiProxyRuntime::from_context(
                 &child,
                 SessionApiProxyOptions {
+                    session_export_compression_level: defaults.session_export_compression_level,
                     cold_blank_probe_max_bytes: defaults.cold_blank_probe_max_bytes,
                     artifact_metadata: None,
                     default_cwd: Some(defaults.cwd.clone()),

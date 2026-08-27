@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use seekdeep_cordis::{Context, EventOptions, Fiber, fiber::EffectHandle};
+use seekdeep_cordis::{Context, EventOptions, Fiber, Plugin, fiber::EffectHandle};
 use seekdeep_core::session::SessionId;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::{CallId, ContentBlock};
@@ -102,6 +102,20 @@ pub async fn install(
         };
     }
     Ok(Some(effect))
+}
+
+/// Builds the Loader-compatible spill policy plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
+        Box::pin(async move {
+            let tools = context
+                .get(seekdeep_tools::TOOLS)
+                .ok_or_else(|| anyhow::anyhow!("spill policy requires tools"))?;
+            install(&context, &tools, serde_json::from_value(config)?).await?;
+            Ok(())
+        })
+    })
 }
 
 fn validate_cap(value: f64) -> anyhow::Result<usize> {

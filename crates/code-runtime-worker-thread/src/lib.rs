@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use seekdeep_cordis::Plugin;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
 mod engine;
@@ -10,6 +11,26 @@ mod runtime;
 mod snapshot;
 
 pub use runtime::{WorkerThreadCodeRuntime, WorkerThreadCodeRuntimeConfig, install};
+
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "code-runtime-worker-thread";
+/// Worker code runtime has no service prerequisites.
+pub const PLUGIN_INJECT: &[&str] = &[];
+
+/// Builds the Loader-compatible worker-thread code runtime plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        |context, config| {
+            Box::pin(async move {
+                install(&context, &serde_json::from_value(config)?)?;
+                Ok(())
+            })
+        },
+    )
+}
 
 /// Registers this process-boundary implementation's explained empty invariant.
 ///

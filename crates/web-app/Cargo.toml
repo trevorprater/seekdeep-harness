@@ -1,0 +1,30 @@
+[package]
+name = "seekdeep-web-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Compiled Web profile startup and runtime glue"
+
+[dependencies]
+anyhow.workspace = true
+indexmap.workspace = true
+path-clean.workspace = true
+seekdeep-app-boot = { path = "../app-boot" }
+seekdeep-cmdline = { path = "../cmdline" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-host-frontend-static = { path = "../host-frontend-static" }
+seekdeep-host-webserver = { path = "../host-webserver" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-shell-env = { path = "../shell-env" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

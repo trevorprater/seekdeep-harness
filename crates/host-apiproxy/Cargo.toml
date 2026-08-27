@@ -18,6 +18,7 @@ indexmap.workspace = true
 parking_lot.workspace = true
 seekdeep-attachment = { path = "../attachment" }
 seekdeep-agent = { path = "../agent" }
+seekdeep-agent-default-model = { path = "../agent-default-model" }
 seekdeep-agent-presets = { path = "../agent-presets" }
 seekdeep-api-remotes = { path = "../api-remotes" }
 seekdeep-client-connection = { path = "../client-connection" }
