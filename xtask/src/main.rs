@@ -466,6 +466,7 @@ fn copy_wasm_package_assets(
 fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> anyhow::Result<()> {
     let invariant_name = match module_id {
         "@seekdeep-ai/seekdeep-client-ui-message-feedback" => "client-ui-feedback-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-plan" => "client-ui-plan-invariant",
         "@seekdeep-ai/seekdeep-client-ui-goal" => "client-ui-goal-invariant",
         "@seekdeep-ai/seekdeep-client-ui-deliverables" => "client-ui-deliverables-invariant",
         "@seekdeep-ai/seekdeep-client-ui-directory-picker-native" => {
@@ -627,6 +628,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-plan" {
+        return format!(
+            "require => {{ {global}.configureClientUiPlan(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiPlan, inject: ['slots', 'remote', 'remote.commands', 'locale'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-goal" {
         return format!(
             "require => {{ {global}.configureClientUiGoal(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiGoal, inject: ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 'conversationEvents'] }}); return {global}; }}"
@@ -763,6 +769,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-plan" {
+        return ui_plan_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-goal" {
         return ui_goal_declarations();
     }
@@ -846,6 +855,21 @@ fn ui_directory_picker_native_declarations() -> String {
 export const apply: typeof wasm_bindgen.applyClientUiDirectoryPickerNative;
 export const inject: readonly ['slots', 'workspaces'];
 export interface NativeFlowInjected { pick(): Promise<string | null> }
+"
+    .to_owned()
+}
+
+fn ui_plan_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiPlan;
+export const inject: readonly ['slots', 'remote', 'remote.commands', 'locale'];
+export type PlanKey = 'chip.on.aria' | 'chip.on.title' | 'chip.off.aria' | 'chip.off.title';
+export interface PlanChipInjected {
+  exitPlanMode(): Promise<string | null>;
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { plan: PlanKey }
+}
 "
     .to_owned()
 }
@@ -1651,6 +1675,44 @@ mod tests {
             let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
             assert!(artifact.contains(expected), "{path} omitted {expected:?}");
         }
+    }
+
+    #[test]
+    fn ui_plan_bundle_configures_command_chip_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_plan_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-plan",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiPlan(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_plan_wasm.applyClientUiPlan",
+            "inject: ['slots', 'remote', 'remote.commands', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-plan");
+        for expected in [
+            "type PlanKey",
+            "interface PlanChipInjected",
+            "Promise<string | null>",
+            "interface LocaleNamespaceMap",
+            "readonly ['slots', 'remote', 'remote.commands', 'locale']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-plan",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-plan-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-plan"));
     }
 
     #[test]

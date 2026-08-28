@@ -1,5 +1,14 @@
 //! Plan mode control Rust/WASM semantics.
 
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
+/// Compiled Plan chip stylesheet.
+pub const PLAN_CHIP_STYLES: &str = include_str!("../data/plan-mode-control.css");
+
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-plan";
 /// Dictionary namespace.

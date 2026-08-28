@@ -44400,10 +44400,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-plan/package.json"
+        "packages/client/ui-plan/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "product and package identities are mechanically renamed from dsh to seekdeep",
+        "bundle and watch scripts delegate to the Rust wasm-package builder with the exact module identity",
+        "optimized Rust/WASM bundle built successfully and passed a Node classic ModuleLoader handoff smoke"
       ]
     },
     {
@@ -44420,12 +44423,35 @@
     {
       "source": "packages/client/ui-plan/src/client/PlanModeControl.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-plan/src/lib.rs",
+        "crates/client-ui-plan/src/wasm.rs",
+        "crates/client-ui-plan/data/plan-mode-control.css",
+        "crates/client-ui-plan/tests/model_parity.rs",
+        "crates/client-ui-plan/tests/css_parity.rs",
+        "crates/client-ui-plan/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Plan control and browser-plugin suites passed 10/10",
+        "Rust state and exact CSS projection tests passed 4/4",
+        "live Rust/WASM tests passed 3/3 for projection visibility, locked and one-flight disabling, admitted and transport failures, Error and non-Error rejection text, projection exit, and fulfillment/rejection after unmount"
+      ]
     },
     {
       "source": "packages/client/ui-plan/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-plan/src/wasm.rs",
+        "crates/client-ui-plan/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM plugin test registers dictionaries and the Plan single-seat renderer, executes exact /plan off requests, folds admission outcomes, and retracts and replaces its registration",
+        "generated package test pins React and primitive configuration, apply, exact inject order, PlanKey, PlanChipInjected, locale augmentation, and invariant companion",
+        "optimized classic bundle passed a real ModuleLoader dependency-resolution handoff smoke"
+      ]
     },
     {
       "source": "packages/client/ui-plan/src/client/locales.ts",
@@ -44443,7 +44469,16 @@
     {
       "source": "packages/client/ui-plan/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-plan/src/lib.rs",
+        "crates/client-ui-plan/data/plan-mode-control.css",
+        "crates/client-ui-plan/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "Rust embeds the stylesheet directly without a TypeScript CSS-module binding",
+        "exact namespaced projection test proves every source selector and declaration is preserved"
+      ]
     },
     {
       "source": "packages/client/ui-plan/src/index.ts",
@@ -44477,12 +44512,30 @@
     {
       "source": "packages/client/ui-plan/tests/browser-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-plan/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source Plan browser-plugin suite passed in the 10-test selection",
+        "live Rust/WASM plugin test covers exact dependencies, Slot options, /plan off execution, success, business failure, unknown command, disposal, and replacement"
+      ]
     },
     {
       "source": "packages/client/ui-plan/tests/plan-mode-control.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-plan/tests/model_parity.rs",
+        "crates/client-ui-plan/tests/css_parity.rs",
+        "crates/client-ui-plan/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Plan control suite passed in the 10-test selection",
+        "Rust projection, state, locale, and CSS tests passed 4/4",
+        "live Rust/WASM component tests cover all projection targets, one-flight behavior, locked ownership, visible failure retention, transport formatting, and both late-settlement unmount paths"
+      ]
     },
     {
       "source": "packages/client/ui-plan/tsconfig.json",
@@ -44498,7 +44551,16 @@
     {
       "source": "packages/client/ui-plan/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-plan/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle and watch scripts delegate to the Rust wasm-package builder",
+        "optimized Rust/WASM classic bundle built successfully and passed the Node ModuleLoader handoff smoke",
+        "xtask compatibility test passed for the factory, declarations, inject list, and invariant companion"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/README.i18n.yaml",
