@@ -48734,7 +48734,17 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-assistant-definition.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/assistant_definition.rs",
+        "crates/client-ui-trajectory/tests/assistant_definition_parity.rs"
+      ],
+      "evidence": [
+        "Rust preserves sparse block streaming, text/reasoning/tool deltas, block replacement, visible and first-token boundaries, additive usage, finalized messages, provenance and timing, retry reset policy, Step/Turn interruption, update-only fallback, partials, request lifecycle, and publication cadence",
+        "Rust Turn-end Definition preserves complete versus display-safe error boundaries",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --test assistant_definition_parity --all-features (5 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-compaction-definition.ts",
