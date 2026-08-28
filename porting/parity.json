@@ -43444,10 +43444,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-jobs/package.json"
+        "packages/client/ui-jobs/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "product and package identities are mechanically renamed from dsh to seekdeep",
+        "bundle and watch scripts delegate to the Rust wasm-package builder with the exact module identity",
+        "optimized Rust/WASM bundle built successfully and passed a Node classic ModuleLoader handoff smoke"
       ]
     },
     {
@@ -43464,12 +43467,35 @@
     {
       "source": "packages/client/ui-jobs/src/client/JobListAction.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-jobs/src/lib.rs",
+        "crates/client-ui-jobs/src/wasm.rs",
+        "crates/client-ui-jobs/data/job-list-action.css",
+        "crates/client-ui-jobs/tests/model_parity.rs",
+        "crates/client-ui-jobs/tests/css_parity.rs",
+        "crates/client-ui-jobs/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source job list and browser-plugin suites passed 22/22",
+        "Rust ordering, duration, status, count, locale, and exact CSS projection tests passed 3/3",
+        "live Rust/WASM tests passed 3/3 for empty and live counts, deterministic ordering, all status/detail paths, seconds/minutes/hours and skew clamping, open-only ticking, settled freezing, Escape focus, pointer dismissal, disappearance, and primitive composition"
+      ]
     },
     {
       "source": "packages/client/ui-jobs/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-jobs/src/wasm.rs",
+        "crates/client-ui-jobs/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM plugin test registers both dictionaries and the ordered job-list header action, then retracts and replaces its registration",
+        "generated package test pins React and primitive configuration, apply, exact inject order, JobKey, runtime props, locale augmentation, and invariant companion",
+        "optimized classic bundle passed a real ModuleLoader dependency-resolution handoff smoke"
+      ]
     },
     {
       "source": "packages/client/ui-jobs/src/client/locales.ts",
@@ -43487,7 +43513,16 @@
     {
       "source": "packages/client/ui-jobs/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-jobs/src/lib.rs",
+        "crates/client-ui-jobs/data/job-list-action.css",
+        "crates/client-ui-jobs/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "Rust embeds the stylesheet directly without a TypeScript CSS-module binding",
+        "exact namespaced projection test proves every renamed source selector, scrollbar variable, and declaration is preserved"
+      ]
     },
     {
       "source": "packages/client/ui-jobs/src/index.ts",
@@ -43521,12 +43556,30 @@
     {
       "source": "packages/client/ui-jobs/tests/browser-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-jobs/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source jobs browser-plugin suite passed in the 22-test selection",
+        "live Rust/WASM plugin test covers exact dependencies, header name/id/order/locale, dictionary ownership, disposal, and replacement"
+      ]
     },
     {
       "source": "packages/client/ui-jobs/tests/job-list-action.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-jobs/tests/model_parity.rs",
+        "crates/client-ui-jobs/tests/css_parity.rs",
+        "crates/client-ui-jobs/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source JobListAction suite passed in the 22-test selection",
+        "Rust model and CSS tests passed 3/3",
+        "live Rust/WASM component tests cover render ordering, wire tolerance, timer lifecycle, focus and pointer dismissal, dynamic disappearance, exact cells, titles, detail precedence, and accessibility labels"
+      ]
     },
     {
       "source": "packages/client/ui-jobs/tsconfig.json",
@@ -43542,7 +43595,16 @@
     {
       "source": "packages/client/ui-jobs/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-jobs/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle and watch scripts delegate to the Rust wasm-package builder",
+        "optimized Rust/WASM classic bundle built successfully and passed the Node ModuleLoader handoff smoke",
+        "xtask compatibility test passed for the factory, declarations, inject list, and invariant companion"
+      ]
     },
     {
       "source": "packages/client/ui-layout/README.i18n.yaml",

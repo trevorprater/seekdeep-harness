@@ -2,6 +2,15 @@
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
+/// Compiled background-job popover stylesheet.
+pub const JOB_LIST_STYLES: &str = include_str!("../data/job-list-action.css");
+
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-jobs";
 /// Dictionary namespace.
@@ -83,7 +92,8 @@ pub enum JobDotState {
 }
 
 /// One durable background-job row.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct JobView {
     /// Stable job id.
     pub id: String,

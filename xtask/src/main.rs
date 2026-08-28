@@ -466,6 +466,7 @@ fn copy_wasm_package_assets(
 fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> anyhow::Result<()> {
     let invariant_name = match module_id {
         "@seekdeep-ai/seekdeep-client-ui-message-feedback" => "client-ui-feedback-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-jobs" => "client-ui-jobs-invariant",
         "@seekdeep-ai/seekdeep-client-ui-plan" => "client-ui-plan-invariant",
         "@seekdeep-ai/seekdeep-client-ui-goal" => "client-ui-goal-invariant",
         "@seekdeep-ai/seekdeep-client-ui-deliverables" => "client-ui-deliverables-invariant",
@@ -628,6 +629,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-jobs" {
+        return format!(
+            "require => {{ {global}.configureClientUiJobs(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiJobs, inject: ['sessions', 'slots', 'locale'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-plan" {
         return format!(
             "require => {{ {global}.configureClientUiPlan(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiPlan, inject: ['slots', 'remote', 'remote.commands', 'locale'] }}); return {global}; }}"
@@ -769,6 +775,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-jobs" {
+        return ui_jobs_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-plan" {
         return ui_plan_declarations();
     }
@@ -869,6 +878,28 @@ export interface PlanChipInjected {
 }
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { plan: PlanKey }
+}
+"
+    .to_owned()
+}
+
+fn ui_jobs_declarations() -> String {
+    r"
+import type { SessionId, SessionListState } from '@seekdeep-ai/seekdeep-client-runtime/client';
+export const apply: typeof wasm_bindgen.applyClientUiJobs;
+export const inject: readonly ['sessions', 'slots', 'locale'];
+export type JobKey =
+  | 'count.live.one' | 'count.live.other' | 'count.idle.one' | 'count.idle.other'
+  | 'list.aria' | 'status.running' | 'status.stopping' | 'status.completed'
+  | 'status.killed' | 'status.failed' | 'duration.seconds' | 'duration.minutes'
+  | 'duration.hours' | 'duration.title.live' | 'duration.title.done';
+export interface JobListActionProps {
+  sessionId: SessionId;
+  useSessions<T>(selector: (state: SessionListState) => T): T;
+  t(key: JobKey, values?: Record<string, string | number>): string;
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { job: JobKey }
 }
 "
     .to_owned()
@@ -1170,7 +1201,42 @@ export interface SessionProviderProps {
 }
 
 fn runtime_settings_contract_declarations() -> &'static str {
-    r"export type WorkspaceId = string & { readonly __brand: 'WorkspaceId' };
+    r"export type SessionId = string & { readonly __brand: 'SessionId' };
+export type WorkspaceId = string & { readonly __brand: 'WorkspaceId' };
+export type SessionListPhase = 'pending' | 'ready';
+export interface JobView {
+  id: string;
+  kind: string;
+  label: string;
+  status: 'running' | 'stopping' | 'completed' | 'killed' | 'failed';
+  detail?: string;
+  startedAt: number;
+  finishedAt?: number;
+}
+export interface SessionSummary {
+  id: SessionId;
+  title?: string;
+  displayTitle: string;
+  cwd?: string;
+  agentPreset?: string;
+  parentId?: SessionId;
+  origin?: 'subagent';
+  running: boolean;
+  pendingInteraction?: unknown;
+  completed?: boolean;
+  blank: boolean;
+  updatedAt: number;
+  projectionValues?: Readonly<Record<string, unknown>>;
+}
+export interface SessionListState {
+  ids: SessionId[];
+  byId: Record<SessionId, SessionSummary>;
+  current: SessionId | undefined;
+  phase: SessionListPhase;
+  subagentsByParent: Readonly<Record<SessionId, unknown>>;
+  jobsBySession: Readonly<Record<SessionId, readonly JobView[]>>;
+  currentAddress: unknown | undefined;
+}
 export interface SettingsScopeSnapshot<T> {
   status: 'loading' | 'ready' | 'unavailable';
   value: T | undefined;
@@ -1716,6 +1782,45 @@ mod tests {
     }
 
     #[test]
+    fn ui_jobs_bundle_configures_header_popover_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_jobs_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-jobs",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiJobs(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_jobs_wasm.applyClientUiJobs",
+            "inject: ['sessions', 'slots', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-jobs");
+        for expected in [
+            "type JobKey",
+            "interface JobListActionProps",
+            "SessionId, SessionListState",
+            "useSessions<T>",
+            "interface LocaleNamespaceMap",
+            "readonly ['sessions', 'slots', 'locale']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-jobs",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-jobs-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-jobs"));
+    }
+
+    #[test]
     fn ui_goal_bundle_configures_dock_and_public_contract() {
         let bundle = classic_module_bundle(
             "let wasm_bindgen = {};",
@@ -2186,6 +2291,10 @@ mod tests {
             "interface SettingsScopeSnapshot<T>",
             "interface SettingsScopeSpec<T>",
             "interface SettingsScope<T>",
+            "type SessionId = string &",
+            "interface JobView",
+            "interface SessionSummary",
+            "interface SessionListState",
             "type WorkspaceId = string &",
         ] {
             assert!(declarations.contains(expected));
