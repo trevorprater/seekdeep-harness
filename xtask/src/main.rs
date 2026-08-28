@@ -485,6 +485,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
             "client-ui-permission-presets-invariant"
         }
         "@seekdeep-ai/seekdeep-client-ui-model-selection" => "client-ui-model-selection-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-input-trigger" => "client-ui-input-trigger-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -653,6 +654,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-model-selection" {
         return ui_model_selection_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-input-trigger" {
+        return ui_input_trigger_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
@@ -736,6 +740,12 @@ fn ui_permission_presets_module_factory(global: &str) -> String {
 fn ui_model_selection_module_factory(global: &str) -> String {
     format!(
         "require => {{ {global}.configureClientUiModelSelection(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); class ModelDirectoryResolver {{ static inject = ['connection', 'sessions', 'remote']; constructor(ctx, config) {{ return {global}.createModelDirectoryResolver(ctx, config.blockReason); }} }} Object.assign({global}, {{ apply: {global}.applyClientUiModelSelection, inject: ['commandUi', 'connection', 'locale', 'sessions', 'slots', 'remote'], ModelDirectory: {global}.__ModelDirectory, ModelDirectoryResolver }}); return {global}; }}"
+    )
+}
+
+fn ui_input_trigger_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ {global}.configureClientUiInputTrigger(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); class InputTriggerService {{ static inject = ['sessions']; constructor(ctx) {{ return new {global}.__InputTriggerService(ctx); }} }} Object.assign({global}, {{ apply: {global}.applyClientUiInputTrigger, inject: ['sessions', 'locale'], InputTriggerService, InputTriggerController: {global}.__InputTriggerController }}); return {global}; }}"
     )
 }
 
@@ -833,6 +843,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-model-selection" {
         return ui_model_selection_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-input-trigger" {
+        return ui_input_trigger_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
@@ -1019,6 +1032,95 @@ export interface ModelSelectInjected {
 }
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { model: ModelKey }
+}
+"
+    .to_owned()
+}
+
+fn ui_input_trigger_declarations() -> String {
+    r"
+import type { ClientContext, SessionId } from '@seekdeep-ai/seekdeep-client-runtime/client';
+export const apply: typeof wasm_bindgen.applyClientUiInputTrigger;
+export const inject: readonly ['sessions', 'locale'];
+export type TriggerChar = '/' | '@';
+export type TriggerPosition = 'leading' | 'inline';
+export type PickVia = 'menu' | 'space' | 'enter';
+export type ArbitrateKey = 'up' | 'down' | 'enter' | 'escape';
+export type ArbitrateOutcome = 'consumed' | 'pick-highlighted' | 'pass';
+export interface ClientSessionContext { readonly sessionId: SessionId }
+export interface InputTriggerCandidate {
+  readonly name: string;
+  readonly description?: string;
+  readonly icon?: string;
+  readonly hint?: string;
+}
+export interface TokenSpan { readonly start: number; readonly end: number; readonly draftRev: number }
+export interface TriggerGuard { readonly tier: 'plain' | 'claimed' | 'frozen' }
+export interface TriggerHit { trigger: TriggerChar; query: string; position: TriggerPosition; span: TokenSpan }
+export interface ReferenceInsert {
+  readonly source: string;
+  readonly ref: string;
+  readonly label: string;
+  readonly clipboardText: string;
+}
+export interface CommandClaim {
+  readonly token: string;
+  readonly hint?: string;
+  submit(args: string, actx: ClientContext): Promise<unknown>;
+}
+export type PickOutcome = { readonly claim: CommandClaim } | { readonly insert: ReferenceInsert }
+  | { readonly text: string } | 'handled' | undefined;
+export interface InputTriggerSource {
+  readonly trigger: TriggerChar;
+  readonly name: string;
+  readonly order?: number;
+  candidates(session: ClientSessionContext, request: { query: string; position: TriggerPosition; signal: AbortSignal }): Promise<readonly InputTriggerCandidate[]>;
+  onPick(input: { candidate: InputTriggerCandidate; session: ClientSessionContext; position: TriggerPosition; via: PickVia; span: TokenSpan }): PickOutcome;
+  matchSpace?(session: ClientSessionContext, token: string): PickOutcome;
+  matchEnter?(session: ClientSessionContext, line: string, signal: AbortSignal): Promise<PickOutcome>;
+  warm?(session: ClientSessionContext): void;
+  lexicon?(session: ClientSessionContext): readonly string[] | undefined;
+  subscribeLexicon?(session: ClientSessionContext, listener: () => void): () => void;
+  readonly codec?: { clipboardText(ref: string): string; serialize(ref: string, signal: AbortSignal): Promise<string> };
+}
+export interface MenuState {
+  open: boolean;
+  hit: TriggerHit | null;
+  generation: number;
+  groups: readonly { source: string; status: 'pending' | 'ready'; items: readonly InputTriggerCandidate[] }[];
+  highlight: { source: string; index: number } | null;
+}
+export interface SnapshotStore<T> { getSnapshot(): T; subscribe(listener: () => void): () => void }
+export const InputTriggerController: {
+  new (...args: never[]): {
+    readonly menu: SnapshotStore<MenuState>;
+    readonly launcher: SnapshotStore<string | null>;
+    readonly lexicon: SnapshotStore<ReadonlyMap<TriggerChar, readonly string[]>>;
+    track(draft: string, caret: number, guard: TriggerGuard, draftRev: number): void;
+    toggleSource(source: string, hit: TriggerHit): void;
+    pick(source: string, index: number): void;
+    arbitrate(key: ArbitrateKey, composing: boolean): ArbitrateOutcome;
+    onSpace(): boolean;
+    serializeReference(source: string, ref: string, signal: AbortSignal): Promise<string>;
+    adjudicate(line: string, signal: AbortSignal): Promise<PickOutcome>;
+    dismiss(): void;
+    dispose(): void;
+  };
+};
+export class InputTriggerService {
+  static readonly inject: readonly ['sessions'];
+  constructor(ctx: unknown);
+  registerSource(source: InputTriggerSource): () => void;
+  sessionOf(actx: ClientContext): InstanceType<typeof InputTriggerController>;
+}
+export interface MenuViewInjected {
+  menu: SnapshotStore<MenuState>;
+  onPick: (source: string, index: number) => void;
+  onDismiss: () => void;
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { 'slash.menu': 'command' | 'skill' | 'subagent' | 'loading' | 'suggestions.aria' }
+  interface SlotMap { 'conversation.input.overlay': { kind: 'list'; scope: 'session' } }
 }
 "
     .to_owned()
@@ -2129,6 +2231,49 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-model-selection-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-model-selection"));
+    }
+
+    #[test]
+    fn ui_input_trigger_bundle_configures_service_menu_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_input_trigger_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-input-trigger",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiInputTrigger(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_input_trigger_wasm.applyClientUiInputTrigger",
+            "inject: ['sessions', 'locale']",
+            "class InputTriggerService",
+            "InputTriggerController: __seekdeep_client_ui_input_trigger_wasm.__InputTriggerController",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-input-trigger");
+        for expected in [
+            "type TriggerChar",
+            "interface InputTriggerSource",
+            "interface MenuState",
+            "InputTriggerController",
+            "class InputTriggerService",
+            "interface MenuViewInjected",
+            "interface SlotMap",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-input-trigger",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-input-trigger-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-input-trigger"));
     }
 
     #[test]

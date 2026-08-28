@@ -1,9 +1,11 @@
 //! Pure backward-scanning trigger detection over JavaScript UTF-16 offsets.
 
 use crate::{TokenSpan, TriggerChar, TriggerGuard, TriggerPosition, TriggerTier};
+use serde::{Deserialize, Serialize};
 
 /// A detected trigger token under the caret.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TriggerHit {
     /// Trigger character.
     pub trigger: TriggerChar,

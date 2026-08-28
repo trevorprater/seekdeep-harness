@@ -5405,8 +5405,15 @@ dependencies = [
 name = "seekdeep-client-ui-input-trigger"
 version = "0.1.0-rc.5"
 dependencies = [
+ "js-sys",
+ "regex",
  "seekdeep-cordis",
  "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]

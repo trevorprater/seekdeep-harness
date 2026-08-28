@@ -43232,10 +43232,14 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-input-trigger/package.json"
+        "packages/client/ui-input-trigger/package.json",
+        "crates/client-ui-input-trigger/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package metadata preserves the renamed public exports and replaces tsdown with the Rust/WASM package builder",
+        "optimized @seekdeep-ai/seekdeep-client-ui-input-trigger bundle passed its Host, invariant, service, controller, dependency-order, and stylesheet handoff in plain Node",
+        "verify-package-invariants: 151 hand-owned package companions conform"
       ]
     },
     {
@@ -43243,31 +43247,85 @@
       "kind": "asset",
       "status": "verified",
       "targets": [
-        "packages/client/ui-input-trigger/src/client/MenuView.module.css"
+        "packages/client/ui-input-trigger/src/client/MenuView.module.css",
+        "crates/client-ui-input-trigger/data/menu-view.css",
+        "crates/client-ui-input-trigger/tests/css_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "compiled MenuView stylesheet is an exact namespaced source projection with renamed scrollbar ownership",
+        "cargo test -p seekdeep-client-ui-input-trigger --all-features: CSS projection test passed"
       ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/client/MenuView.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/wasm.rs",
+        "crates/client-ui-input-trigger/src/wasm/menu_view.rs",
+        "crates/client-ui-input-trigger/data/menu-view.css",
+        "crates/client-ui-input-trigger/tests/css_parity.rs",
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM preserves closed-null rendering, roster-order localized groups, pending and ready rows, icons and descriptions, active-option accessibility, anchored max height, highlighted scrolling, focus-preserving mousedown picks, and composer-aware outside dismissal",
+        "product-renamed option ids remain stable across aria-activedescendant and scroll targeting",
+        "pinned source MenuView suite passed 15/15; live Node/WASM suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/client/contract.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/types.rs",
+        "crates/client-ui-input-trigger/src/detect.rs",
+        "crates/client-ui-input-trigger/src/menu.rs",
+        "crates/client-ui-input-trigger/src/wasm/controller.rs",
+        "crates/client-ui-input-trigger/src/wasm/service.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust types and generated declarations preserve trigger, guard, UTF-16 span, candidate, outcome, arbitration, source, codec, Session projection, Store, and service faces",
+        "live WASM accepts and emits draftRev as a JavaScript number rather than BigInt and preserves scoped event payload field names"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/client/controller.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/detect.rs",
+        "crates/client-ui-input-trigger/src/menu.rs",
+        "crates/client-ui-input-trigger/src/wasm/controller.rs",
+        "crates/client-ui-input-trigger/tests/core_parity.rs",
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM owns authoritative hits, menu and launcher Stores, candidate generation and AbortController lifecycle, exact retrack no-op, trigger reseeding, single-source launch, pick dispatch, arbitration, lexicon aggregation, serialization, and Enter and Space polling",
+        "late sources warm and subscribe in every live controller; removal drops menu groups and lexicon entries; dispose aborts, closes, unsubscribes, and inerts the Session instance",
+        "pinned source service suite passed 49/49; native detector/reducer tests passed 5/5; live Node/WASM suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/lib.rs",
+        "crates/client-ui-input-trigger/src/wasm.rs",
+        "crates/client-ui-input-trigger/src/wasm/controller.rs",
+        "crates/client-ui-input-trigger/src/wasm/service.rs",
+        "crates/client-ui-input-trigger/src/wasm/plugin.rs",
+        "crates/client-ui-input-trigger/src/wasm/menu_view.rs",
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM registers the exact Sessions and locale dependencies, provides the root service before conversation availability, owns dictionaries, and defers the overlay contribution until Slot services exist",
+        "compiled public classes and TypeScript declarations preserve InputTriggerService, InputTriggerController, source contracts, menu Store, locale map, and overlay SlotMap augmentation",
+        "pinned source apply suite passed 5/5; live Node/WASM suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/client/locales.ts",
@@ -43285,12 +43343,33 @@
     {
       "source": "packages/client/ui-input-trigger/src/client/service.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/wasm/controller.rs",
+        "crates/client-ui-input-trigger/src/wasm/service.rs",
+        "crates/client-ui-input-trigger/src/wasm/plugin.rs",
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust service preserves unique trigger/name registration, stable order sorting, same-name cross-trigger admission, late-controller notifications with contained setup failures, idempotent removal, lazy Session-scope resolution, resident identity, isolation, and scope-owned deletion",
+        "source registration and every controller Store are reversible effects; reminted scopes receive fresh controllers",
+        "pinned source service suite passed 49/49; live Node/WASM suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/client/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/wasm/plugin.rs",
+        "crates/client-ui-input-trigger/src/wasm/menu_view.rs",
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "compiled overlay injection resolves the exact Session scope, fails loud for unknown Session ids, and exposes the resident menu Store plus pointer-pick and dismiss routes",
+        "generated declarations preserve the conversation.input.overlay list/session SlotMap contract"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/core/contract.ts",
@@ -43335,7 +43414,16 @@
     {
       "source": "packages/client/ui-input-trigger/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/lib.rs",
+        "crates/client-ui-input-trigger/data/menu-view.css",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust owns and embeds the stylesheet without a runtime CSS-module import, while the package builder emits the public Client declarations",
+        "optimized WASM package build and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/src/index.ts",
@@ -43350,7 +43438,7 @@
         "compiled dependency-free Host plugin preserves the source no-op node half",
         "real Web preflight advances from ui-input-trigger to ui-commands"
       ],
-      "note": "this row is the source Host no-op half; Client service/controller/slot and render surfaces remain independently pending"
+      "note": "This row covers the dependency-free Host half; the Client service, controller, slot, contracts, and MenuView renderer have independent manifest rows."
     },
     {
       "source": "packages/client/ui-input-trigger/src/invariant.ts",
@@ -43369,12 +43457,31 @@
     {
       "source": "packages/client/ui-input-trigger/src/types.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/src/types.rs",
+        "crates/client-ui-input-trigger/src/wasm/controller.rs",
+        "crates/client-ui-input-trigger/src/wasm/service.rs",
+        "crates/client-ui-input-trigger/tests/core_parity.rs",
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "closed Rust enums preserve trigger, position, guard, pick-via, key, and arbitration vocabularies; extensible source callback payloads remain JavaScript-owned values dispatched by Rust",
+        "live tests cover candidate, claim, reference, text, handled, undefined, codec, lexicon, warm, Space, Enter, abort, and source lifecycle contracts"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source apply suite passed 5/5",
+        "live Node/WASM plugin, locale, provision, overlay, scope-resolution, and cleanup tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/tests/core-detect.client.spec.ts",
@@ -43403,12 +43510,28 @@
     {
       "source": "packages/client/ui-input-trigger/tests/menu-view.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/tests/css_parity.rs",
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source MenuView suite passed 15/15",
+        "native CSS projection and live Node/WASM MenuView tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/tests/service.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-input-trigger/tests/core_parity.rs",
+        "crates/client-ui-input-trigger/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source service suite passed 49/49",
+        "native Rust detector/reducer tests and live WASM controller/service lifecycle tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/tsconfig.json",
@@ -43424,7 +43547,15 @@
     {
       "source": "packages/client/ui-input-trigger/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-input-trigger/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM package builder emits the Host, invariant, Client, and declaration entry points for @seekdeep-ai/seekdeep-client-ui-input-trigger",
+        "xtask ui_input_trigger_bundle_configures_service_menu_and_public_contract passed; optimized bundle and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-jobs/README.i18n.yaml",

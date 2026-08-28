@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Trigger character bound by a source.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum TriggerChar {
     /// Slash command/reference trigger.
     #[serde(rename = "/")]

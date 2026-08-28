@@ -39,8 +39,8 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-input-trigger --artifact seekdeep_client_ui_input_trigger --module-id @seekdeep-ai/seekdeep-client-ui-input-trigger --out-dir packages/client/ui-input-trigger/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-input-trigger --artifact seekdeep_client_ui_input_trigger --module-id @seekdeep-ai/seekdeep-client-ui-input-trigger --out-dir packages/client/ui-input-trigger/lib --watch"
   },
   "license": "MIT",
   "dependencies": {
