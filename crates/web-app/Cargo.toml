@@ -9,6 +9,7 @@ description = "Compiled Web profile startup and runtime glue"
 
 [dependencies]
 anyhow.workspace = true
+if-addrs.workspace = true
 indexmap.workspace = true
 path-clean.workspace = true
 seekdeep-app-boot = { path = "../app-boot" }

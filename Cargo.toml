@@ -275,6 +275,7 @@ hyper-util = { version = "0.1.19", features = ["tokio"] }
 html2md-rs = "0.12.2"
 image = { version = "0.25.9", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 iana-time-zone = "0.1.64"
+if-addrs = "0.15.0"
 icu_collator = "=2.0.0"
 icu_locale = "=2.0.0"
 icu_timezone = "1.5.0"

@@ -38393,7 +38393,19 @@
     {
       "source": "packages/bundle/web-app/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "Cargo.toml",
+        "crates/web-app/Cargo.toml",
+        "crates/web-app/src/lib.rs",
+        "crates/web-app/tests/web_app_parity.rs"
+      ],
+      "evidence": [
+        "pinned source web-app runtime suite passed 7/7",
+        "Rust web-app tests pass 5/5 for startup, production interface enumeration, all-interface trust and readiness, loopback behavior, optional surface services, static frontend mount, bind-dependent runtime publication, dynamic model prompt and shell variable, exact URL copy, Loader-delayed success and quiet failure, and missing live-server failure",
+        "cross-platform if-addrs 0.15.0 supplies the production non-loopback IPv4 snapshot on POSIX and Windows",
+        "strict all-target native Clippy passes for seekdeep-web-app"
+      ]
     },
     {
       "source": "packages/bundle/web-app/src/invariant.ts",
@@ -38448,14 +38460,22 @@
       ],
       "evidence": [
         "pnpm exec vitest run packages/bundle/web-app/tests/trusted-hosts.spec.ts (pinned source: 2/2 passed)",
-        "Rust trust resolver preserves all-interfaces IPv4 snapshot order, appends explicit authorities, and derives no LAN trust for loopback"
-      ],
-      "note": "production interface enumeration remains part of the still-pending web-app runtime row; this row verifies the resolver contract over the sampled addresses"
+        "Rust trust resolver preserves all-interfaces IPv4 snapshot order, appends explicit authorities, and derives no LAN trust for loopback",
+        "production enumeration uses the cross-platform if-addrs boundary and retains every non-loopback IPv4 value in platform order"
+      ]
     },
     {
       "source": "packages/bundle/web-app/tests/web-app.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/web-app/src/lib.rs",
+        "crates/web-app/tests/web_app_parity.rs"
+      ],
+      "evidence": [
+        "pinned source web-app runtime suite passed 7/7",
+        "Rust runtime integration and readiness tests pass 5/5 and cover enabled/disabled surface context, synchronous and Loader-delayed readiness, quiet failure, deterministic LAN trust, dynamic live-service URL resolution, prompt and shell registrations, and assembled model-visible copy"
+      ]
     },
     {
       "source": "packages/bundle/web-app/tsconfig.json",

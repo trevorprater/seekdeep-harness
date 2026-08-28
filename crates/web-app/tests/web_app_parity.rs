@@ -1,15 +1,27 @@
 //! Web startup flags, trust derivation, and runtime glue parity.
 
+use std::sync::{Arc, Mutex};
+
 use seekdeep_cordis::Context;
 use seekdeep_host_webserver::{ListenHost, WebServer, WebServerConfig};
 use seekdeep_system_prompt::{AssembleContext, SystemPromptConfig, render_prompt};
 use seekdeep_web_app::{
-    Config, SEEKDEEP_WEB_URL, WEB_RUNTIME, install_with_dist_index, resolve_lan_trust,
+    Config, INJECT, SEEKDEEP_WEB_URL, WEB_RUNTIME, install_with_dist_index,
+    install_with_runtime_seams, plugin, resolve_lan_trust,
     startup::{WebStartupOutcome, WebStartupValues, parse_web_startup},
 };
 
 fn strings(values: &[&str]) -> Vec<String> {
     values.iter().map(ToString::to_string).collect()
+}
+
+fn stage_dist() -> anyhow::Result<(tempfile::TempDir, std::path::PathBuf)> {
+    let temporary = tempfile::tempdir()?;
+    let dist = temporary.path().join("dist");
+    std::fs::create_dir(&dist)?;
+    let index = dist.join("index.html");
+    std::fs::write(&index, "<head></head><body>shell</body>")?;
+    Ok((temporary, index))
 }
 
 #[test]
@@ -90,11 +102,7 @@ fn lan_trust_uses_one_noninternal_ipv4_sample_and_preserves_extra_order() {
 #[tokio::test]
 async fn runtime_mounts_static_fallback_prompt_shell_variable_and_runtime_values()
 -> anyhow::Result<()> {
-    let temporary = tempfile::tempdir()?;
-    let dist = temporary.path().join("dist");
-    std::fs::create_dir(&dist)?;
-    let index = dist.join("index.html");
-    std::fs::write(&index, "<head></head><body>shell</body>")?;
+    let (_temporary, index) = stage_dist()?;
     let context = Context::new();
     let server = WebServer::install(
         &context,
@@ -134,6 +142,53 @@ async fn runtime_mounts_static_fallback_prompt_shell_variable_and_runtime_values
             .list()
             .iter()
             .any(|entry| entry.key == SEEKDEEP_WEB_URL)
+    );
+    context.fiber().dispose().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn optional_surface_services_and_synchronous_readiness_match_source_lifecycle()
+-> anyhow::Result<()> {
+    assert_eq!(INJECT, ["webServer"]);
+    assert_eq!(plugin().inject(), ["webServer"]);
+    let (_temporary, index) = stage_dist()?;
+    let context = Context::new();
+    let server = WebServer::install(
+        &context,
+        WebServerConfig {
+            host: ListenHost::AllInterfaces,
+            port: 0,
+        },
+    )
+    .await?;
+    let lines = Arc::new(Mutex::new(Vec::new()));
+    let sink_lines = lines.clone();
+    install_with_runtime_seams(
+        &context,
+        &Config {
+            print_url: true,
+            surface_context: false,
+            trusted_hosts: vec!["lab.internal".to_owned()],
+        },
+        index,
+        strings(&["192.168.1.5"]),
+        Arc::new(move |line| sink_lines.lock().unwrap().push(line)),
+    )?;
+    assert_eq!(
+        context.get(WEB_RUNTIME).unwrap().as_ref(),
+        &serde_json::json!({
+            "lanAddresses": ["192.168.1.5"],
+            "trustedHosts": ["192.168.1.5", "lab.internal"],
+        })
+    );
+    assert_eq!(
+        lines.lock().unwrap().as_slice(),
+        [format!(
+            "seekdeep web: http://127.0.0.1:{} (LAN: http://192.168.1.5:{})",
+            server.port(),
+            server.port()
+        )]
     );
     context.fiber().dispose().await?;
     Ok(())
