@@ -513,7 +513,7 @@ pub(crate) fn timeline_to_js(timeline: &ConversationTimelineSnapshot) -> Result<
     Ok(value.into())
 }
 
-fn view_node_to_js(node: &ConversationViewNode) -> Result<JsValue, JsValue> {
+pub(crate) fn view_node_to_js(node: &ConversationViewNode) -> Result<JsValue, JsValue> {
     let value = Object::new();
     set(&value, "key", &JsValue::from_str(&node.key))?;
     set(&value, "kind", &JsValue::from_str(&node.kind))?;

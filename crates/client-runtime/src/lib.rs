@@ -38,6 +38,8 @@ mod wasm_invariant;
 #[cfg(target_arch = "wasm32")]
 mod wasm_misc;
 #[cfg(target_arch = "wasm32")]
+mod wasm_native_definition;
+#[cfg(target_arch = "wasm32")]
 mod wasm_notifier;
 #[cfg(target_arch = "wasm32")]
 mod wasm_pending;
@@ -100,6 +102,8 @@ pub use wasm_conversation_registry::*;
 pub use wasm_invariant::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_misc::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_native_definition::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_pending::*;
 #[cfg(target_arch = "wasm32")]

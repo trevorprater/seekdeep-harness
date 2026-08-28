@@ -464,18 +464,22 @@ fn copy_wasm_package_assets(
 }
 
 fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> anyhow::Result<()> {
-    if module_id != "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
-        return Ok(());
-    }
+    let invariant_name = match module_id {
+        "@seekdeep-ai/seekdeep-client-ui-message-feedback" => "client-ui-feedback-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-trajectory" => "client-ui-trajectory-invariant",
+        _ => return Ok(()),
+    };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
     std::fs::write(
         out_dir.join("invariant.js"),
-        r"const PACKAGE_NAME = '@seekdeep-ai/seekdeep-client-ui-message-feedback';
-export const name = 'client-ui-feedback-invariant';
+        format!(
+            r"const PACKAGE_NAME = '{module_id}';
+export const name = '{invariant_name}';
 export const inject = ['invariants'];
-const install = () => {};
+const install = () => {{}};
 export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install));
 ",
+        ),
     )?;
     let type_dir = out_dir.join("types");
     std::fs::create_dir_all(&type_dir)?;
@@ -485,13 +489,15 @@ export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME
     )?;
     std::fs::write(
         type_dir.join("invariant.d.ts"),
-        r#"export interface InvariantContext {
-  invariants: { register(packageName: string, install: () => void): () => void };
-}
-export declare const name = "client-ui-feedback-invariant";
+        format!(
+            r#"export interface InvariantContext {{
+  invariants: {{ register(packageName: string, install: () => void): () => void }};
+}}
+export declare const name = "{invariant_name}";
 export declare const inject: string[];
 export declare const apply: (ctx: InvariantContext) => Promise<() => void>;
 "#,
+        ),
     )?;
     Ok(())
 }
@@ -614,6 +620,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-trajectory" {
+        return format!(
+            "require => {{ {global}.configureClientUiTrajectoryModules(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); {global}.configureClientUiTrajectoryRuntime(require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiTrajectory, inject: ['slots', 'conversationEvents', 'conversationViews', 'sessions', 'locale'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return format!(
             "require => {{ {global}.configureClientUiLayout(require('react'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiLayout, inject: ['slots', 'theme'] }}); return {global}; }}"
@@ -637,6 +648,7 @@ fn module_factory(global: &str, module_id: &str) -> String {
     format!("() => {global}")
 }
 
+#[allow(clippy::too_many_lines)] // Closed module-specific declaration dispatch stays auditable here.
 fn compatibility_declarations(module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
         return api_remotes_declarations();
@@ -719,6 +731,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-trajectory" {
+        return ui_trajectory_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return ui_layout_declarations();
     }
@@ -751,7 +766,6 @@ export interface MessageFeedbackItem {
   version: string;
   createdAt: number;
   updatedAt: number;
-}
 export interface MessageFeedbackView {
   status: MessageFeedbackStatus;
   items: ReadonlyMap<string, MessageFeedbackItem>;
@@ -776,6 +790,21 @@ export type MessageFeedbackKey =
   | 'action.like' | 'action.likeActive' | 'action.dislike' | 'action.dislikeActive'
   | 'note.open' | 'note.placeholder' | 'note.save' | 'note.cancel' | 'note.aria'
   | 'error.conflict' | 'error.load' | 'error.generic';
+"
+    .to_owned()
+}
+
+fn ui_trajectory_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiTrajectory;
+export const inject: readonly ['slots', 'conversationEvents', 'conversationViews', 'sessions', 'locale'];
+export interface TrajectoryViewInjected {
+  hooks: { duration: unknown };
+  loadOlder(): Promise<boolean>;
+  setActualDuration(actualDuration: boolean): void;
+}
+export type TrajectoryTimelineMode = 'sequence' | 'duration' | 'time' | 'actual';
+export interface TrajectoryTimeRange { start: number; end: number }
 "
     .to_owned()
 }
@@ -1454,6 +1483,51 @@ mod tests {
             ("types/index.d.ts", "function apply(): void"),
             ("types/invariant.d.ts", "interface InvariantContext"),
             ("types/invariant.d.ts", "Promise<() => void>"),
+        ] {
+            let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
+            assert!(artifact.contains(expected), "{path} omitted {expected:?}");
+        }
+    }
+
+    #[test]
+    fn ui_trajectory_bundle_configures_runtime_graph_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_trajectory_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-trajectory",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiTrajectoryModules(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "configureClientUiTrajectoryRuntime(require('@seekdeep-ai/seekdeep-client-runtime/client'))",
+            "apply: __seekdeep_client_ui_trajectory_wasm.applyClientUiTrajectory",
+            "inject: ['slots', 'conversationEvents', 'conversationViews', 'sessions', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-trajectory");
+        for expected in [
+            "interface TrajectoryViewInjected",
+            "type TrajectoryTimelineMode",
+            "interface TrajectoryTimeRange",
+            "readonly ['slots', 'conversationEvents', 'conversationViews', 'sessions', 'locale']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-trajectory",
+            output.path(),
+        )
+        .unwrap();
+        for (path, expected) in [
+            ("index.js", "export function apply() {}"),
+            ("invariant.js", "client-ui-trajectory-invariant"),
+            ("invariant.js", "@seekdeep-ai/seekdeep-client-ui-trajectory"),
+            ("types/index.d.ts", "function apply(): void"),
+            ("types/invariant.d.ts", "client-ui-trajectory-invariant"),
         ] {
             let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
             assert!(artifact.contains(expected), "{path} omitted {expected:?}");

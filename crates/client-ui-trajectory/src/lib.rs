@@ -4,9 +4,13 @@ mod assistant_definition;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
+mod browser_plugin;
+#[cfg(target_arch = "wasm32")]
 mod browser_table;
 #[cfg(target_arch = "wasm32")]
 mod browser_timeline;
+#[cfg(target_arch = "wasm32")]
+mod browser_view;
 mod compaction_definitions;
 mod contract;
 mod duration_store;
@@ -23,15 +27,20 @@ mod table_projection;
 mod timeline;
 mod timeline_controller;
 mod tool_definition;
+mod view_projection;
 mod virtual_rows;
 
 pub use assistant_definition::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser::*;
 #[cfg(target_arch = "wasm32")]
+pub use browser_plugin::*;
+#[cfg(target_arch = "wasm32")]
 pub use browser_table::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_timeline::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_view::*;
 pub use compaction_definitions::*;
 pub use contract::*;
 pub use duration_store::*;
@@ -48,6 +57,7 @@ pub use table_projection::*;
 pub use timeline::*;
 pub use timeline_controller::*;
 pub use tool_definition::*;
+pub use view_projection::*;
 pub use virtual_rows::*;
 
 /// Stable Host plugin identity.
@@ -70,6 +80,8 @@ pub const DEFAULT_ACTUAL_DURATION: bool = false;
 pub const SIMPLE_COMPONENT_STYLES: &str = include_str!("../data/simple-components.css");
 /// Source-equivalent globalized stylesheet for the compiled table renderer.
 pub const TRAJECTORY_TABLE_STYLES: &str = include_str!("../data/table.css");
+/// Source-equivalent stylesheet for the compiled full trajectory view.
+pub const TRAJECTORY_VIEW_STYLES: &str = include_str!("../data/view.css");
 /// Simplified-Chinese trajectory copy in source order.
 pub const TRAJECTORY_ZH: &[(&str, &str)] = &[
     ("view.trajectory", "轨迹"),

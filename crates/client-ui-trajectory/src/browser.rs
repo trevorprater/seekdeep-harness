@@ -5,7 +5,10 @@ use std::cell::RefCell;
 use js_sys::{Array, Function, Object, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
-use crate::{SIMPLE_COMPONENT_STYLES, TRAJECTORY_TABLE_STYLES, format_elapsed_seconds};
+use crate::{
+    SIMPLE_COMPONENT_STYLES, TRAJECTORY_TABLE_STYLES, TRAJECTORY_VIEW_STYLES,
+    format_elapsed_seconds,
+};
 
 thread_local! {
     static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
@@ -15,6 +18,7 @@ thread_local! {
 struct BrowserModules {
     react: JsValue,
     primitives: Option<JsValue>,
+    runtime: Option<JsValue>,
 }
 
 /// Configures React and injects the compiled simple-component stylesheet once.
@@ -26,9 +30,14 @@ struct BrowserModules {
 #[allow(clippy::needless_pass_by_value)]
 pub fn configure_client_ui_trajectory(react: JsValue) -> Result<(), JsValue> {
     MODULES.with(|slot| {
+        let runtime = slot
+            .borrow()
+            .as_ref()
+            .and_then(|modules| modules.runtime.clone());
         *slot.borrow_mut() = Some(BrowserModules {
             react,
             primitives: None,
+            runtime,
         });
     });
     inject_styles()
@@ -46,12 +55,35 @@ pub fn configure_client_ui_trajectory_modules(
     primitives: JsValue,
 ) -> Result<(), JsValue> {
     MODULES.with(|slot| {
+        let runtime = slot
+            .borrow()
+            .as_ref()
+            .and_then(|modules| modules.runtime.clone());
         *slot.borrow_mut() = Some(BrowserModules {
             react,
             primitives: Some(primitives),
+            runtime,
         });
     });
     inject_styles()
+}
+
+/// Configures the compiled Client runtime module used by plugin apply.
+///
+/// # Errors
+///
+/// Returns before the React module is configured.
+#[wasm_bindgen(js_name = configureClientUiTrajectoryRuntime)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn configure_client_ui_trajectory_runtime(runtime: JsValue) -> Result<(), JsValue> {
+    MODULES.with(|slot| {
+        let mut modules = slot.borrow_mut();
+        let configured = modules.as_mut().ok_or_else(|| {
+            js_sys::Error::new("configure Client trajectory React modules before runtime")
+        })?;
+        configured.runtime = Some(runtime);
+        Ok(())
+    })
 }
 
 /// Returns the compiled `TrajectoryCell` React component.
@@ -589,7 +621,7 @@ fn inject_styles() -> Result<(), JsValue> {
         &style,
         &JsValue::from_str("textContent"),
         &JsValue::from_str(&format!(
-            "{SIMPLE_COMPONENT_STYLES}\n{TRAJECTORY_TABLE_STYLES}"
+            "{SIMPLE_COMPONENT_STYLES}\n{TRAJECTORY_TABLE_STYLES}\n{TRAJECTORY_VIEW_STYLES}"
         )),
     )?;
     let head = required(&document, "head", "document")?;
@@ -617,6 +649,18 @@ pub(crate) fn trajectory_browser_modules() -> Result<(JsValue, Option<JsValue>),
             .clone()
             .map(|modules| (modules.react, modules.primitives))
             .ok_or_else(|| js_sys::Error::new("client-ui-trajectory is not configured").into())
+    })
+}
+
+pub(crate) fn trajectory_runtime_module() -> Result<JsValue, JsValue> {
+    MODULES.with(|modules| {
+        modules
+            .borrow()
+            .as_ref()
+            .and_then(|modules| modules.runtime.clone())
+            .ok_or_else(|| {
+                js_sys::Error::new("client-ui-trajectory runtime is not configured").into()
+            })
     })
 }
 

@@ -48555,10 +48555,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-trajectory/package.json"
+        "packages/client/ui-trajectory/package.json",
+        "crates/client-ui-trajectory/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package exports and peer contracts remain source-compatible while bundle/watch now invoke the Rust/WASM package builder and obsolete diff/react-virtual runtime dependencies are absent",
+        "verify-package-invariants covers the hand-owned companion manifest"
       ]
     },
     {
@@ -48626,7 +48629,7 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTable.tsx",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/client-ui-trajectory/src/table_projection.rs",
         "crates/client-ui-trajectory/src/table_controller.rs",
@@ -48652,9 +48655,10 @@
         "cargo test -p seekdeep-client-ui-trajectory --test table_css_parity --all-features (1 passed)",
         "cargo test -p seekdeep-client-ui-trajectory --test prompt_diff_parity --all-features (3 passed)",
         "wasm-bindgen-test runner executed tests/wasm_table_parity.rs in Node (5 passed)",
+        "assembled tests/wasm_view_parity.rs drives the compiled Table through the real Rust/WASM Toolbar and Timeline module graph (3 passed)",
+        "pinned source table.client.spec.tsx passed (29 tests)",
         "strict native and wasm32 Clippy passed"
-      ],
-      "note": "keep pending until assembled TrajectoryView and client registration drive the compiled Table with the real shared module graph and source view integration cases"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTimeline.module.css",
@@ -48768,7 +48772,25 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryView.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/view_projection.rs",
+        "crates/client-ui-trajectory/src/browser_view.rs",
+        "crates/client-ui-trajectory/src/layout.rs",
+        "crates/client-ui-trajectory/src/search_index.rs",
+        "crates/client-ui-trajectory/data/view.css",
+        "crates/client-ui-trajectory/tests/view_projection_parity.rs",
+        "crates/client-ui-trajectory/tests/wasm_view_parity.rs",
+        "crates/client-ui-trajectory/tests/table_css_parity.rs"
+      ],
+      "evidence": [
+        "Rust owns request numbering and cumulative usage, structure-only partials, duration mode selection, fold discovery, record search identity, and the immediate-first plus one-3-second-timer search update lifecycle",
+        "compiled Rust/WASM composes the actual Toolbar, Timeline, and Table components against one configured React/primitives graph and routes duration persistence, paging, search, folds, ranges, record focus/selection, and cross-view inspection",
+        "cargo test -p seekdeep-client-ui-trajectory --test view_projection_parity --all-features (4 passed)",
+        "wasm-bindgen-test runner executed tests/wasm_view_parity.rs in Node (3 passed)",
+        "pinned source client-ui-trajectory suite passed (8 files, 107 tests; views.client.spec.tsx has 31 tests)",
+        "strict native and wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/duration-store.ts",
@@ -48788,7 +48810,19 @@
     {
       "source": "packages/client/ui-trajectory/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/browser_plugin.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-ui-trajectory/src/browser_view.rs",
+        "crates/client-ui-trajectory/tests/wasm_plugin_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust/WASM apply registers locale dictionaries, all eight native Event Definitions, the native trajectory View builder, and the conversation.view Slot entry with exact id/order/label/inject semantics",
+        "session injection shares one persisted duration store, fails loud for missing bindings, reports whether paging replaced the trajectory snapshot, and delegates duration mutation to the store",
+        "live WASM round-trips a user event through caller-bound browser registries, native Rust Definitions, the Rust assembler, and the Rust trajectory builder, then proves event/view/Slot disposal",
+        "wasm-bindgen-test runner executed tests/wasm_plugin_parity.rs in Node (2 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/layout.ts",
@@ -49027,7 +49061,17 @@
     {
       "source": "packages/client/ui-trajectory/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/data/simple-components.css",
+        "crates/client-ui-trajectory/data/table.css",
+        "crates/client-ui-trajectory/data/view.css",
+        "crates/client-ui-trajectory/tests/table_css_parity.rs"
+      ],
+      "evidence": [
+        "Rust uses compile-time include_str assets and injects globally namespaced CSS, eliminating the TypeScript CSS-module declaration while preserving every source rule",
+        "exact Table and View stylesheet projection tests passed (2 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/index.ts",
@@ -49076,7 +49120,17 @@
     {
       "source": "packages/client/ui-trajectory/tests/client-bundle.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/tests/wasm_plugin_parity.rs",
+        "xtask/src/main.rs",
+        "packages/client/ui-trajectory/package.json"
+      ],
+      "evidence": [
+        "real optimized Rust/WASM classic bundle built and passed node --check",
+        "actual generated artifact handed off @seekdeep-ai/seekdeep-client-ui-trajectory, required only React/primitives/runtime, and exported apply plus the exact five-service inject array",
+        "xtask focused bundle-contract test and live browser plugin registration/disposal tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tests/conversation-definitions.client.spec.ts",
@@ -49120,12 +49174,34 @@
     {
       "source": "packages/client/ui-trajectory/tests/table.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/tests/table_projection_parity.rs",
+        "crates/client-ui-trajectory/tests/table_controller_parity.rs",
+        "crates/client-ui-trajectory/tests/prompt_diff_parity.rs",
+        "crates/client-ui-trajectory/tests/wasm_table_parity.rs",
+        "crates/client-ui-trajectory/tests/wasm_view_parity.rs"
+      ],
+      "evidence": [
+        "pinned source table.client.spec.tsx passed (29 tests)",
+        "Rust pure tests cover projection/controller/diff decisions and compiled WASM tests exercise the mounted ledger, inspector, paging, virtualization, folds, selection, resize, search, focus, and inspect adapters"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tests/views.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/tests/core_parity.rs",
+        "crates/client-ui-trajectory/tests/timeline_controller_parity.rs",
+        "crates/client-ui-trajectory/tests/wasm_timeline_parity.rs",
+        "crates/client-ui-trajectory/tests/view_projection_parity.rs",
+        "crates/client-ui-trajectory/tests/wasm_view_parity.rs"
+      ],
+      "evidence": [
+        "pinned source views.client.spec.tsx passed (31 tests)",
+        "compiled WASM tests cover empty/full assembled views, request/search/duration/inspect flow, timeline-to-table selection, Timeline gestures/tooltips/history, and deterministic projection modes"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tests/virtual-rows.client.spec.ts",
@@ -49154,7 +49230,15 @@
     {
       "source": "packages/client/ui-trajectory/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-trajectory/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally replaced by cargo xtask wasm-package for the 100% Rust/WASM production artifact",
+        "xtask configures the exact runtime module graph, generates compatibility entrypoints and declarations, embeds optimized WASM, and passes its focused unit test"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/README.i18n.yaml",

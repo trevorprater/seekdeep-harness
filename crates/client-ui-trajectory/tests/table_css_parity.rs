@@ -1,10 +1,12 @@
 //! Mechanical source-CSS projection for the compiled global Table renderer.
 
-use seekdeep_client_ui_trajectory::TRAJECTORY_TABLE_STYLES;
+use seekdeep_client_ui_trajectory::{TRAJECTORY_TABLE_STYLES, TRAJECTORY_VIEW_STYLES};
 
 const SOURCE: &str =
     include_str!("../../../packages/client/ui-trajectory/src/client/TrajectoryTable.module.css");
 const PREFIX: &str = "seekdeep-trajectory-table-";
+const VIEW_SOURCE: &str =
+    include_str!("../../../packages/client/ui-trajectory/src/client/views.module.css");
 
 fn globalize_css_modules(source: &str) -> String {
     let bytes = source.as_bytes();
@@ -44,4 +46,14 @@ fn globalize_css_modules(source: &str) -> String {
 #[test]
 fn compiled_table_styles_are_an_exact_globalized_source_projection() {
     assert_eq!(TRAJECTORY_TABLE_STYLES, globalize_css_modules(SOURCE));
+}
+
+#[test]
+fn compiled_view_styles_are_an_exact_namespaced_source_projection() {
+    assert_eq!(
+        TRAJECTORY_VIEW_STYLES,
+        VIEW_SOURCE
+            .replace(".root", ".seekdeep-trajectory-view-root")
+            .replace(".ledger", ".seekdeep-trajectory-view-ledger")
+    );
 }

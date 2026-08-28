@@ -40,14 +40,10 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-trajectory --artifact seekdeep_client_ui_trajectory --module-id @seekdeep-ai/seekdeep-client-ui-trajectory --out-dir packages/client/ui-trajectory/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-trajectory --artifact seekdeep_client_ui_trajectory --module-id @seekdeep-ai/seekdeep-client-ui-trajectory --out-dir packages/client/ui-trajectory/lib --watch"
   },
   "license": "MIT",
-  "dependencies": {
-    "@tanstack/react-virtual": "^3.14.9",
-    "diff": "^9.0.0"
-  },
   "peerDependencies": {
     "@seekdeep-ai/seekdeep-agent": "workspace:^",
     "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
