@@ -95,6 +95,7 @@ function ordinaryTurns() {
           sourceSeq: 100,
           text: 'Checking files',
           outputDetail: 'Checking files',
+          sourceBlocks: [{ type: 'tool-call', content: '{"command":"pwd"}', callId: 'call-1', toolName: 'bash' }],
           input: 10,
           output: 20,
           think: 5,
@@ -307,6 +308,16 @@ export function tableRequestRunTurns() {
     timeSeconds: 0.1,
   }] }] }))
 }
+export function tablePromptTurns() {
+  return [{ turn: 1, groups: [{ title: 'Prompt', cells: [{
+    index: 1,
+    kind: 'system',
+    text: 'System prompt updated',
+    previousPromptDetail: { system: 'a\nb\nc\n', tools: [] },
+    promptDetail: { system: 'a\nB\nc\n', tools: [] },
+    timeSeconds: 0,
+  }] }] }]
+}
 export function tableSetCollapsedTurn(bench, turn) { bench.props.collapsedTurns = new Set([turn]) }
 export function tableResolveLoad(bench, advanced) { bench.resolveLoad(advanced) }
 export function tableTick() { return Promise.resolve().then(() => Promise.resolve()) }
@@ -331,6 +342,7 @@ extern "C" {
     fn tableJsonTurns() -> JsValue;
     fn tableRoleTurns() -> JsValue;
     fn tableRequestRunTurns() -> JsValue;
+    fn tablePromptTurns() -> JsValue;
     fn tableSetCollapsedTurn(bench: &JsValue, turn: u32);
     fn tableResolveLoad(bench: &JsValue, advanced: bool);
     fn tableTick() -> Promise;
@@ -404,6 +416,10 @@ fn selection_tokens_timing_and_prepend_stability_are_live() {
             "missing {expected}"
         );
     }
+    let timestamp = tableFind(&timing, "title", &JsValue::from_str("Show Unix timestamp"));
+    tableInvoke(&timestamp, "onClick", &JsValue::UNDEFINED);
+    let unix = tableRender(&bench, &component);
+    assert!(!tableFindText(&unix, "1.000").is_undefined());
 
     let old_turns = tableOrdinaryTurns();
     let older = object(&[
@@ -499,6 +515,18 @@ async fn older_history_promise_and_virtual_window_are_live() {
         .is_undefined()
     );
     let pane = tablePane(&long);
+    let focus = js_sys::Set::new(&JsValue::UNDEFINED);
+    focus.add(&JsValue::from_f64(400.0));
+    tableSetProp(&long, "timelineFocusIndexes", &focus.into());
+    let _ = tableRender(&long, &long_component);
+    let focused = tableRender(&long, &long_component);
+    let focused_first = tableFindAll(&focused, "data-kind", &JsValue::from_str("context")).get(0);
+    assert!(
+        tableProp(&focused_first, "data-virtual-position")
+            .as_f64()
+            .unwrap()
+            > 0.0
+    );
     Reflect::set(
         &pane,
         &JsValue::from_str("scrollTop"),
@@ -611,9 +639,22 @@ fn thinking_disclosure_error_payload_and_json_tree_paths_are_live() {
     );
     assert!(!payload.is_undefined());
     assert!(tableText(&payload).contains("ToolError: non_zero_exit"));
+
+    let prompt = makeTableBench("ordinary");
+    tableSetTurns(&prompt, &tablePromptTurns());
+    let prompt_component = component(&prompt);
+    let prompt_first = settled_render(&prompt, &prompt_component);
+    let prompt_row = tableRowsContaining(&prompt_first, "System prompt updated").get(0);
+    tableInvoke(&prompt_row, "onClick", &JsValue::UNDEFINED);
+    let prompt_selected = tableRender(&prompt, &prompt_component);
+    let diff_tab = tableFind(&prompt_selected, "aria-label", &JsValue::from_str("Diff"));
+    tableInvoke(&diff_tab, "onClick", &JsValue::UNDEFINED);
+    let diff = tableRender(&prompt, &prompt_component);
+    assert!(tableText(&diff).contains("@@ -1,3 +1,3 @@"));
 }
 
 #[wasm_bindgen_test]
+#[allow(clippy::too_many_lines)] // One mounted instance covers coupled ledger adapters.
 fn folds_roles_request_runs_whitespace_and_resize_adapters_are_live() {
     let folded = makeTableBench("ordinary");
     tableSetCollapsedTurn(&folded, 2);
@@ -681,8 +722,27 @@ fn folds_roles_request_runs_whitespace_and_resize_adapters_are_live() {
     let row = tableRowsContaining(&first, "Checking files").get(0);
     tableInvoke(&row, "onClick", &JsValue::UNDEFINED);
     let selected = tableRender(&ordinary, &ordinary_component);
+    let tool_row = tableRowsContaining(&selected, "pwd").get(0);
+    tableInvoke(&tool_row, "onClick", &JsValue::UNDEFINED);
+    let tool_selected = tableRender(&ordinary, &ordinary_component);
+    let assistant_link = tableFind(
+        &tool_selected,
+        "aria-label",
+        &JsValue::from_str("Assistant Message"),
+    );
+    assert!(!assistant_link.is_undefined());
+    tableInvoke(&assistant_link, "onClick", &JsValue::UNDEFINED);
+    let parent_selected = tableRender(&ordinary, &ordinary_component);
+    assert_eq!(
+        tableProp(
+            &tableRowsContaining(&parent_selected, "Checking files").get(0),
+            "aria-selected"
+        )
+        .as_bool(),
+        Some(true)
+    );
     let separator = tableFind(
-        &selected,
+        &parent_selected,
         "aria-label",
         &JsValue::from_str("Resize event details"),
     );

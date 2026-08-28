@@ -82,6 +82,8 @@ pub struct TrajectoryTableControllerSnapshot {
     pub active_tab: TrajectoryDetailTab,
     /// Whether long assistant thinking is expanded.
     pub thinking_expanded: bool,
+    /// Whether recorded times use Unix-seconds display.
+    pub show_unix_timestamp: bool,
     /// User-resized details width.
     pub details_width: Option<f64>,
     /// Coupled Tool/request split offset.
@@ -105,6 +107,7 @@ pub struct TrajectoryTableController {
     active_tab: TrajectoryDetailTab,
     tab_history: Vec<TrajectoryDetailTab>,
     thinking_expanded: bool,
+    show_unix_timestamp: bool,
     details_width: Option<f64>,
     tool_request_offset: Option<f64>,
     details_resize_drag: Option<DetailsResizeDrag>,
@@ -132,6 +135,7 @@ impl TrajectoryTableController {
             active_tab: TrajectoryDetailTab::Overview,
             tab_history: vec![TrajectoryDetailTab::Overview],
             thinking_expanded: false,
+            show_unix_timestamp: false,
             details_width: None,
             tool_request_offset: None,
             details_resize_drag: None,
@@ -152,6 +156,7 @@ impl TrajectoryTableController {
             selected_request: self.selected_request.clone(),
             active_tab: self.active_tab,
             thinking_expanded: self.thinking_expanded,
+            show_unix_timestamp: self.show_unix_timestamp,
             details_width: self.details_width,
             tool_request_offset: self.tool_request_offset,
             follows_table_tail: self.follows_table_tail,
@@ -219,6 +224,11 @@ impl TrajectoryTableController {
         self.thinking_expanded = !self.thinking_expanded;
     }
 
+    /// Toggles recorded times between local and Unix-seconds display.
+    pub fn toggle_timestamp(&mut self) {
+        self.show_unix_timestamp = !self.show_unix_timestamp;
+    }
+
     /// Applies one cross-view call inspection when the record is currently resolvable.
     #[must_use]
     pub fn inspect_call(&mut self, records: &[TrajectoryTableRecord], call_id: &str) -> bool {
@@ -265,6 +275,11 @@ impl TrajectoryTableController {
             metrics.scroll_height - metrics.client_height - metrics.scroll_top
                 <= BOTTOM_FOLLOW_THRESHOLD_PX;
         metrics.scroll_top <= OLDER_LOAD_THRESHOLD_PX
+    }
+
+    /// Detaches automatic tail following before an explicit focus scroll.
+    pub fn detach_tail_follow(&mut self) {
+        self.follows_table_tail = false;
     }
 
     /// Starts one older-page request and snapshots the non-virtual scroll anchor.

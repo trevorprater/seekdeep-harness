@@ -198,6 +198,12 @@ fn controller_face() -> Result<JsValue, JsValue> {
     }) as Box<dyn FnMut(JsValue) -> Result<bool, JsValue>>);
     set(&face, "onScroll", &on_scroll.into_js_value())?;
 
+    let detach_runtime = runtime.clone();
+    let detach = Closure::wrap(Box::new(move || {
+        detach_runtime.borrow_mut().controller.detach_tail_follow();
+    }) as Box<dyn FnMut()>);
+    set(&face, "detachTailFollow", &detach.into_js_value())?;
+
     let load_runtime = runtime.clone();
     let begin_load = Closure::wrap(Box::new(move |request: JsValue| -> Result<bool, JsValue> {
         let history_start_seq = optional_usize(&request, "historyStartSeq")
@@ -268,6 +274,12 @@ fn controller_face() -> Result<JsValue, JsValue> {
         thinking_runtime.borrow_mut().controller.toggle_thinking();
     }) as Box<dyn FnMut()>);
     set(&face, "toggleThinking", &toggle_thinking.into_js_value())?;
+
+    let timestamp_runtime = runtime.clone();
+    let toggle_timestamp = Closure::wrap(Box::new(move || {
+        timestamp_runtime.borrow_mut().controller.toggle_timestamp();
+    }) as Box<dyn FnMut()>);
+    set(&face, "toggleTimestamp", &toggle_timestamp.into_js_value())?;
 
     let resize_runtime = runtime.clone();
     let reset_resize = Closure::wrap(Box::new(move || {
@@ -461,6 +473,16 @@ fn render_table(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
         &pane_ref,
         &set_viewport,
         state.pending_scroll_record_id.as_deref(),
+        &records,
+        virtualization_enabled,
+        &turns_value,
+    )?;
+    install_timeline_focus_effect(
+        ui,
+        &controller,
+        &pane_ref,
+        &set_viewport,
+        timeline_focus.as_ref(),
         &records,
         virtualization_enabled,
         &turns_value,
@@ -1765,6 +1787,10 @@ fn render_inspector_body(
                     }
                 }
                 children.push(definition_list(ui, &rows)?);
+                let parents = crate::trajectory_parent_records(all_records, record);
+                if parents.message.is_some() || parents.tool.is_some() {
+                    children.push(render_parent_links(ui, controller, bump, parents)?);
+                }
                 if matches!(
                     record.cell.kind,
                     TrajectoryCellKind::User
@@ -1824,34 +1850,7 @@ fn render_inspector_body(
                 }
             }
             TrajectoryDetailTab::Timing => {
-                if let Some(metrics) = &record.cell.assistant_metrics {
-                    children.push(definition_list(
-                        ui,
-                        &[
-                            (
-                                "Total duration",
-                                crate::trajectory_assistant_total_time(metrics),
-                            ),
-                            ("TTFT", crate::trajectory_assistant_ttft(metrics)),
-                            (
-                                "Generation",
-                                crate::trajectory_assistant_generation_time(metrics),
-                            ),
-                            (
-                                "Throughput",
-                                crate::trajectory_assistant_throughput(metrics),
-                            ),
-                        ],
-                    )?);
-                } else {
-                    children.push(definition_list(
-                        ui,
-                        &[(
-                            "Duration",
-                            crate::format_elapsed_seconds(record.cell.time_seconds),
-                        )],
-                    )?);
-                }
+                children.push(render_record_timing(ui, controller, bump, state, record)?);
             }
             TrajectoryDetailTab::Output => {
                 children.push(render_record_payload(ui, record, false)?);
@@ -1917,45 +1916,15 @@ fn render_inspector_body(
                 children.push(render_request_usage(ui, usage, cumulative)?);
             }
             TrajectoryDetailTab::Timing => {
-                if let Some(metrics) =
-                    assistant.and_then(|record| record.cell.assistant_metrics.as_ref())
-                {
-                    children.push(definition_list(
-                        ui,
-                        &[
-                            (
-                                "Total duration",
-                                crate::trajectory_assistant_total_time(metrics),
-                            ),
-                            ("TTFT", crate::trajectory_assistant_ttft(metrics)),
-                            (
-                                "Generation",
-                                crate::trajectory_assistant_generation_time(metrics),
-                            ),
-                            (
-                                "Throughput",
-                                crate::trajectory_assistant_throughput(metrics),
-                            ),
-                        ],
-                    )?);
-                } else {
-                    children.push(definition_list(
-                        ui,
-                        &[(
-                            "Duration",
-                            info.and_then(|request| {
-                                request.completed_at.zip(request.started_at).map(
-                                    |(completed, started)| {
-                                        crate::format_elapsed_seconds(Some(
-                                            (completed - started).max(0.0) / 1_000.0,
-                                        ))
-                                    },
-                                )
-                            })
-                            .unwrap_or_else(|| crate::format_elapsed_seconds(None)),
-                        )],
-                    )?);
-                }
+                children.push(render_request_timing(
+                    ui,
+                    controller,
+                    bump,
+                    state,
+                    assistant,
+                    request_records.first(),
+                    info,
+                )?);
             }
             _ => {
                 let mut rows = vec![
@@ -2030,6 +1999,58 @@ fn render_inspector_body(
             ),
         ])?),
         &children,
+    )
+}
+
+fn render_parent_links(
+    ui: &ReactUi,
+    controller: &JsValue,
+    bump: &Function,
+    parents: crate::TrajectoryParentRecords,
+) -> Result<JsValue, JsValue> {
+    let mut links = Vec::new();
+    for (label, index) in [
+        ("Assistant Message", parents.message),
+        ("Tool Call", parents.tool),
+    ] {
+        let Some(index) = index else { continue };
+        let link_controller = controller.clone();
+        let link_bump = bump.clone();
+        let on_click = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
+            call_method(
+                &link_controller,
+                "selectRecord",
+                &[JsValue::from_f64(usize_as_f64(index))],
+            )?;
+            call_method(
+                &link_controller,
+                "activateTab",
+                &[JsValue::from_str("overview")],
+            )?;
+            link_bump.call0(&JsValue::UNDEFINED)?;
+            Ok(())
+        }) as Box<dyn FnMut() -> Result<(), JsValue>>);
+        links.push(ui.tag(
+            "button",
+            Some(&object(&[
+                ("type", JsValue::from_str("button")),
+                (
+                    "className",
+                    JsValue::from_str("seekdeep-trajectory-table-overviewHierarchyNavLink"),
+                ),
+                ("aria-label", JsValue::from_str(label)),
+                ("onClick", on_click.into_js_value()),
+            ])?),
+            &[JsValue::from_str(label)],
+        )?);
+    }
+    ui.tag(
+        "section",
+        Some(&class("seekdeep-trajectory-table-overviewParentLinks")?),
+        &[
+            ui.tag("h3", None, &[JsValue::from_str("Hierarchy")])?,
+            ui.tag("div", None, &links)?,
+        ],
     )
 }
 
@@ -2311,6 +2332,208 @@ fn render_record_schema(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<
     )
 }
 
+fn render_record_timing(
+    ui: &ReactUi,
+    controller: &JsValue,
+    bump: &Function,
+    state: &TrajectoryTableControllerSnapshot,
+    record: &TrajectoryTableRecord,
+) -> Result<JsValue, JsValue> {
+    if let Some(metrics) = &record.cell.assistant_metrics {
+        return timing_list(
+            ui,
+            started_at_row(
+                ui,
+                controller,
+                bump,
+                state.show_unix_timestamp,
+                metrics.step_start_time,
+            )?,
+            &[
+                (
+                    "Total duration",
+                    crate::trajectory_assistant_total_time(metrics),
+                ),
+                ("TTFT", crate::trajectory_assistant_ttft(metrics)),
+                (
+                    "Generation",
+                    crate::trajectory_assistant_generation_time(metrics),
+                ),
+                (
+                    "Throughput",
+                    crate::trajectory_assistant_throughput(metrics),
+                ),
+            ],
+        );
+    }
+    timing_list(
+        ui,
+        started_at_row(
+            ui,
+            controller,
+            bump,
+            state.show_unix_timestamp,
+            record.cell.started_at,
+        )?,
+        &[
+            (
+                "Duration",
+                crate::format_elapsed_seconds(record.cell.time_seconds),
+            ),
+            (
+                "Timing source",
+                if record.cell.time_seconds.is_none() {
+                    "Not available".to_owned()
+                } else {
+                    "Session timestamps".to_owned()
+                },
+            ),
+        ],
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_request_timing(
+    ui: &ReactUi,
+    controller: &JsValue,
+    bump: &Function,
+    state: &TrajectoryTableControllerSnapshot,
+    assistant: Option<&TrajectoryTableRecord>,
+    anchor: Option<&TrajectoryTableRecord>,
+    request: Option<&TrajectoryRequestNumber>,
+) -> Result<JsValue, JsValue> {
+    if let Some(assistant) = assistant {
+        return render_record_timing(ui, controller, bump, state, assistant);
+    }
+    if let Some(started) = request.and_then(|request| request.started_at) {
+        let duration = request
+            .and_then(|request| request.completed_at)
+            .map(|completed| (completed - started).max(0.0) / 1_000.0);
+        return timing_list(
+            ui,
+            started_at_row(
+                ui,
+                controller,
+                bump,
+                state.show_unix_timestamp,
+                Some(started),
+            )?,
+            &[
+                ("Duration", crate::format_elapsed_seconds(duration)),
+                (
+                    "Timing source",
+                    if duration.is_none() {
+                        "Session timestamps (running)".to_owned()
+                    } else {
+                        "Session timestamps".to_owned()
+                    },
+                ),
+            ],
+        );
+    }
+    timing_list(
+        ui,
+        started_at_row(
+            ui,
+            controller,
+            bump,
+            state.show_unix_timestamp,
+            anchor.and_then(|anchor| anchor.cell.started_at),
+        )?,
+        &[("Duration", crate::format_elapsed_seconds(None))],
+    )
+}
+
+fn started_at_row(
+    ui: &ReactUi,
+    controller: &JsValue,
+    bump: &Function,
+    show_unix: bool,
+    timestamp: Option<f64>,
+) -> Result<JsValue, JsValue> {
+    let detail = if let Some(timestamp) = timestamp.filter(|timestamp| timestamp.is_finite()) {
+        let toggle_controller = controller.clone();
+        let toggle_bump = bump.clone();
+        let toggle = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
+            call_method(&toggle_controller, "toggleTimestamp", &[])?;
+            toggle_bump.call0(&JsValue::UNDEFINED)?;
+            Ok(())
+        }) as Box<dyn FnMut() -> Result<(), JsValue>>);
+        ui.tag(
+            "dd",
+            None,
+            &[ui.tag(
+                "button",
+                Some(&object(&[
+                    ("type", JsValue::from_str("button")),
+                    (
+                        "className",
+                        JsValue::from_str("seekdeep-trajectory-table-timestampToggle"),
+                    ),
+                    (
+                        "title",
+                        JsValue::from_str(if show_unix {
+                            "Show local time"
+                        } else {
+                            "Show Unix timestamp"
+                        }),
+                    ),
+                    ("onClick", toggle.into_js_value()),
+                ])?),
+                &[JsValue::from_str(&if show_unix {
+                    format!("{:.3}", timestamp / 1_000.0)
+                } else {
+                    format_local_timestamp(timestamp)
+                })],
+            )?],
+        )?
+    } else {
+        ui.tag("dd", None, &[JsValue::from_str("Not available")])?
+    };
+    ui.tag(
+        "div",
+        None,
+        &[ui.tag("dt", None, &[JsValue::from_str("Started")])?, detail],
+    )
+}
+
+fn timing_list(
+    ui: &ReactUi,
+    started: JsValue,
+    rows: &[(&str, String)],
+) -> Result<JsValue, JsValue> {
+    let mut children = vec![started];
+    for (label, value) in rows {
+        children.push(ui.tag(
+            "div",
+            None,
+            &[
+                ui.tag("dt", None, &[JsValue::from_str(label)])?,
+                ui.tag("dd", None, &[JsValue::from_str(value)])?,
+            ],
+        )?);
+    }
+    ui.tag(
+        "dl",
+        Some(&class("seekdeep-trajectory-table-overview")?),
+        &children,
+    )
+}
+
+fn format_local_timestamp(timestamp: f64) -> String {
+    let date = js_sys::Date::new(&JsValue::from_f64(timestamp));
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+        date.get_full_year(),
+        date.get_month() + 1,
+        date.get_date(),
+        date.get_hours(),
+        date.get_minutes(),
+        date.get_seconds(),
+        date.get_milliseconds(),
+    )
+}
+
 fn render_system_prompt(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<JsValue, JsValue> {
     let prompt = record
         .cell
@@ -2421,23 +2644,80 @@ fn render_prompt_diff(ui: &ReactUi, record: &TrajectoryTableRecord) -> Result<Js
         .prompt_detail
         .clone()
         .unwrap_or_else(|| serde_json::json!({"system": "", "tools": []}));
-    let before = serde_json::to_string_pretty(&before).map_err(js_error_from_display)?;
-    let after = serde_json::to_string_pretty(&after).map_err(js_error_from_display)?;
+    let before_system = before
+        .get("system")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let after_system = after
+        .get("system")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let empty_tools = serde_json::Value::Array(Vec::new());
+    let before_tools = serde_json::to_string_pretty(before.get("tools").unwrap_or(&empty_tools))
+        .map_err(js_error_from_display)?;
+    let after_tools = serde_json::to_string_pretty(after.get("tools").unwrap_or(&empty_tools))
+        .map_err(js_error_from_display)?;
+    let mut sections = Vec::new();
+    if before_system != after_system {
+        sections.push(prompt_diff_section(
+            ui,
+            "System Prompt",
+            before_system,
+            after_system,
+        )?);
+    }
+    if before_tools != after_tools {
+        sections.push(prompt_diff_section(
+            ui,
+            "Tools",
+            &before_tools,
+            &after_tools,
+        )?);
+    }
     ui.tag(
         "div",
         Some(&class("seekdeep-trajectory-table-promptDiffSections")?),
+        &sections,
+    )
+}
+
+fn prompt_diff_section(
+    ui: &ReactUi,
+    title: &str,
+    before: &str,
+    after: &str,
+) -> Result<JsValue, JsValue> {
+    let mut lines = Vec::new();
+    for line in crate::trajectory_prompt_diff_lines(before, after) {
+        lines.push(ui.tag(
+            "span",
+            Some(&class(&format!(
+                "seekdeep-trajectory-table-promptDiffLine{}",
+                line.kind.as_str()
+            ))?),
+            &[
+                JsValue::from_str(if line.text.is_empty() {
+                    " "
+                } else {
+                    &line.text
+                }),
+                JsValue::from_str("\n"),
+            ],
+        )?);
+    }
+    ui.tag(
+        "section",
+        Some(&class("seekdeep-trajectory-table-promptDiffSection")?),
         &[
             ui.tag(
                 "h3",
                 Some(&class("seekdeep-trajectory-table-promptDiffTitle")?),
-                &[JsValue::from_str("Prompt Update")],
+                &[JsValue::from_str(title)],
             )?,
             ui.tag(
                 "pre",
                 Some(&class("seekdeep-trajectory-table-promptDiff")?),
-                &[JsValue::from_str(&format!(
-                    "--- before\n{before}\n+++ after\n{after}"
-                ))],
+                &lines,
             )?,
         ],
     )
@@ -2812,6 +3092,106 @@ fn install_pending_scroll_effect(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn install_timeline_focus_effect(
+    ui: &ReactUi,
+    controller: &JsValue,
+    pane_ref: &JsValue,
+    set_viewport: &Function,
+    focus: Option<&BTreeSet<usize>>,
+    records: &[TrajectoryTableRecord],
+    virtualized: bool,
+    turns: &JsValue,
+) -> Result<(), JsValue> {
+    let focused = focus.map_or_else(Vec::new, |focus| {
+        records
+            .iter()
+            .enumerate()
+            .filter(|(_, record)| {
+                record.collapsed_summary.is_none()
+                    && record.cell.request_only != Some(true)
+                    && focus.contains(&record.cell.index)
+            })
+            .map(|(position, record)| (position, record.cell.index))
+            .collect::<Vec<_>>()
+    });
+    let key = focused
+        .iter()
+        .map(|(_, index)| index.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let dependency = JsValue::from_str(&key);
+    let effect_controller = controller.clone();
+    let effect_ref = pane_ref.clone();
+    let effect_setter = set_viewport.clone();
+    let effect = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
+        let Some(&(first_position, first_index)) = focused.first() else {
+            return Ok(());
+        };
+        let pane = Reflect::get(&effect_ref, &JsValue::from_str("current"))?;
+        if pane.is_null() || pane.is_undefined() {
+            return Ok(());
+        }
+        call_method(&effect_controller, "detachTailFollow", &[])?;
+        let pane_height = number_member(&pane, "clientHeight")?;
+        let focus_height = usize_as_f64(focused.len()) * 30.0;
+        let (position, index) = if focus_height > pane_height {
+            (first_position, first_index)
+        } else {
+            focused[(focused.len() - 1) / 2]
+        };
+        if virtualized {
+            let scroll_top = usize_as_f64(position) * 30.0;
+            Reflect::set(
+                &pane,
+                &JsValue::from_str("scrollTop"),
+                &JsValue::from_f64(scroll_top),
+            )?;
+            effect_setter.call1(
+                &JsValue::UNDEFINED,
+                &object(&[
+                    ("scrollTop", JsValue::from_f64(scroll_top)),
+                    ("height", JsValue::from_f64(pane_height)),
+                ])?
+                .into(),
+            )?;
+        } else {
+            let query = Reflect::get(&pane, &JsValue::from_str("querySelector"))?;
+            if query.is_function() {
+                let selector = format!("tr[data-record-index=\"{index}\"]");
+                let row = query
+                    .dyn_into::<Function>()?
+                    .call1(&pane, &JsValue::from_str(&selector))?;
+                if !row.is_null() && !row.is_undefined() {
+                    let method = Reflect::get(&row, &JsValue::from_str("scrollIntoView"))?;
+                    if method.is_function() {
+                        method.dyn_into::<Function>()?.call1(
+                            &row,
+                            &object(&[
+                                ("behavior", JsValue::from_str("smooth")),
+                                (
+                                    "block",
+                                    JsValue::from_str(if focus_height > pane_height {
+                                        "start"
+                                    } else {
+                                        "center"
+                                    }),
+                                ),
+                            ])?
+                            .into(),
+                        )?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }) as Box<dyn FnMut() -> Result<(), JsValue>>);
+    use_effect(
+        &ui.react,
+        &effect.into_js_value(),
+        &Array::of2(&dependency, turns),
+    )
+}
+
 fn install_scroll_reconciliation_effect(
     ui: &ReactUi,
     props: &JsValue,

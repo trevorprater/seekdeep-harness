@@ -96,6 +96,9 @@ fn request_selection_and_thinking_state_have_one_owner() {
     assert!(!controller.snapshot().thinking_expanded);
     controller.toggle_thinking();
     assert!(controller.snapshot().thinking_expanded);
+    assert!(!controller.snapshot().show_unix_timestamp);
+    controller.toggle_timestamp();
+    assert!(controller.snapshot().show_unix_timestamp);
 }
 
 #[test]

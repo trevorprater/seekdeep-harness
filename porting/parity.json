@@ -48631,11 +48631,13 @@
         "crates/client-ui-trajectory/src/table_projection.rs",
         "crates/client-ui-trajectory/src/table_controller.rs",
         "crates/client-ui-trajectory/src/browser_table.rs",
+        "crates/client-ui-trajectory/src/prompt_diff.rs",
         "crates/client-ui-trajectory/src/virtual_rows.rs",
         "crates/client-ui-trajectory/data/table.css",
         "crates/client-ui-trajectory/tests/table_projection_parity.rs",
         "crates/client-ui-trajectory/tests/table_controller_parity.rs",
         "crates/client-ui-trajectory/tests/table_css_parity.rs",
+        "crates/client-ui-trajectory/tests/prompt_diff_parity.rs",
         "crates/client-ui-trajectory/tests/wasm_table_parity.rs",
         "crates/client-ui-trajectory/tests/core_parity.rs"
       ],
@@ -48644,13 +48646,15 @@
         "a single-owner Rust controller preserves stable selection across prepends, contextual tab history, append following, initial-tail readiness, older-page anchor restoration, inspect/focus handoff, Promise ownership, and coupled pointer/keyboard details resizing",
         "compiled Rust/WASM renders the virtualized ledger, persistent earlier-history control, request and turn markers, semantic role glyphs, folds, stable record/request selection, Promise settlement, thinking disclosure, Markdown/JSON/schema/request inspectors, error payloads, and pointer/keyboard resize adapters",
         "the complete 1,799-line source CSS module is mechanically globalized for Rust-owned class names and guarded by an exact projection test",
+        "Rust Myers diff output matches pinned diff@9 structuredPatch hunk headers, three-line context, split hunks, replacements, insertion, deletion, and empty inputs",
         "cargo test -p seekdeep-client-ui-trajectory --test table_projection_parity --all-features (8 passed)",
         "cargo test -p seekdeep-client-ui-trajectory --test table_controller_parity --all-features (7 passed)",
         "cargo test -p seekdeep-client-ui-trajectory --test table_css_parity --all-features (1 passed)",
+        "cargo test -p seekdeep-client-ui-trajectory --test prompt_diff_parity --all-features (3 passed)",
         "wasm-bindgen-test runner executed tests/wasm_table_parity.rs in Node (5 passed)",
         "strict native and wasm32 Clippy passed"
       ],
-      "note": "keep pending until source-exact prompt diff and timestamp-toggle rendering, hierarchy navigation, timeline-focus scrolling, and assembled TrajectoryView/client registration coverage are live"
+      "note": "keep pending until assembled TrajectoryView and client registration drive the compiled Table with the real shared module graph and source view integration cases"
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTimeline.module.css",
