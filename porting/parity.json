@@ -48575,7 +48575,17 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryCell.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/browser.rs",
+        "crates/client-ui-trajectory/data/simple-components.css",
+        "crates/client-ui-trajectory/tests/wasm_simple_components_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust/WASM React component preserves seven kind labels/tints, index, text, Message-only metric order, elapsed duration, selected state, custom class, source-compatible rest props, and private business-prop stripping",
+        "live Node WASM React harness passed Cell and style behavior",
+        "pinned source Cell suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryGroupHeader.module.css",
@@ -48591,7 +48601,16 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryGroupHeader.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/browser.rs",
+        "crates/client-ui-trajectory/data/simple-components.css",
+        "crates/client-ui-trajectory/tests/wasm_simple_components_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust/WASM React component preserves title and nonempty optional description structure",
+        "live Node WASM React harness passed described and absent-description branches"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTable.module.css",
@@ -48655,7 +48674,16 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTurn.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/browser.rs",
+        "crates/client-ui-trajectory/data/simple-components.css",
+        "crates/client-ui-trajectory/tests/wasm_simple_components_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust/WASM React section preserves data-turn, sticky header, padded body, and child identity",
+        "live Node WASM React harness passed Turn wrapper behavior"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTurnHeader.module.css",
@@ -48671,7 +48699,16 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTurnHeader.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/browser.rs",
+        "crates/client-ui-trajectory/data/simple-components.css",
+        "crates/client-ui-trajectory/tests/wasm_simple_components_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust/WASM React header preserves Turn N plus Input, Output, Think, Time columns and aria-hidden metric chrome",
+        "live Node WASM React harness passed Turn header structure"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryView.tsx",
@@ -48971,7 +49008,15 @@
     {
       "source": "packages/client/ui-trajectory/tests/cell.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/tests/core_parity.rs",
+        "crates/client-ui-trajectory/tests/wasm_simple_components_parity.rs"
+      ],
+      "evidence": [
+        "Rust native formatting plus live WASM rendering cover exact millisecond labels, kind tags, Message metric order, selected ring, and non-Message metric omission",
+        "pinned source Cell suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tests/client-bundle.client.spec.ts",
@@ -48994,7 +49039,16 @@
     {
       "source": "packages/client/ui-trajectory/tests/layout.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/tests/layout_parity.rs",
+        "crates/client-ui-trajectory/tests/wasm_simple_components_parity.rs"
+      ],
+      "evidence": [
+        "seven consolidated native Rust cases cover all 18 layout-fold scenarios",
+        "live WASM React harness covers the four Turn/Group renderer scenarios",
+        "pinned source layout suite passed 22/22"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tests/snapshot-builder.client.spec.ts",

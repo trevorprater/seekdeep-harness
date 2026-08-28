@@ -1,6 +1,8 @@
 //! Trajectory timeline, record identity, and virtual-ledger semantics.
 
 mod assistant_definition;
+#[cfg(target_arch = "wasm32")]
+mod browser;
 mod compaction_definitions;
 mod contract;
 mod duration_store;
@@ -16,6 +18,8 @@ mod tool_definition;
 mod virtual_rows;
 
 pub use assistant_definition::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser::*;
 pub use compaction_definitions::*;
 pub use contract::*;
 pub use duration_store::*;
@@ -46,6 +50,8 @@ pub const LOCALE_NAMESPACE: &str = "trajectory";
 pub const DURATION_PERSISTENCE_KEY: &str = "dsh.trajectory.duration";
 /// Initial duration preference.
 pub const DEFAULT_ACTUAL_DURATION: bool = false;
+/// Compiled simple trajectory component stylesheet.
+pub const SIMPLE_COMPONENT_STYLES: &str = include_str!("../data/simple-components.css");
 /// Simplified-Chinese trajectory copy in source order.
 pub const TRAJECTORY_ZH: &[(&str, &str)] = &[
     ("view.trajectory", "轨迹"),

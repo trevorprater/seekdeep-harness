@@ -5606,6 +5606,7 @@ name = "seekdeep-client-ui-trajectory"
 version = "0.1.0-rc.5"
 dependencies = [
  "indexmap 2.14.0",
+ "js-sys",
  "percent-encoding",
  "seekdeep-client-runtime",
  "seekdeep-client-ui-primitives",
@@ -5615,6 +5616,8 @@ dependencies = [
  "serde_json",
  "tokio",
  "url",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
