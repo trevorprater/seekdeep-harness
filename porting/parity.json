@@ -41148,7 +41148,17 @@
     {
       "source": "packages/client/ui-agent-preset/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-agent-preset to ui-settings-plugins"
+      ],
+      "note": "this row is the source Host no-op half; Client roster/settings/seat/section controllers, locale bundle, slots, and renderers remain independently pending"
     },
     {
       "source": "packages/client/ui-agent-preset/src/invariant.ts",

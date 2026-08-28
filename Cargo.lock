@@ -4521,6 +4521,7 @@ dependencies = [
  "seekdeep-client-locale",
  "seekdeep-client-modules",
  "seekdeep-client-runtime",
+ "seekdeep-client-ui-agent-preset",
  "seekdeep-client-ui-commands",
  "seekdeep-client-ui-conversation",
  "seekdeep-client-ui-cordis",
@@ -5284,6 +5285,13 @@ version = "0.1.0-rc.5"
 dependencies = [
  "futures",
  "serde_json",
+]
+
+[[package]]
+name = "seekdeep-client-ui-agent-preset"
+version = "0.1.0-rc.5"
+dependencies = [
+ "seekdeep-cordis",
 ]
 
 [[package]]

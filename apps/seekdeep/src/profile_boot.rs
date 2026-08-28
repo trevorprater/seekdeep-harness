@@ -534,6 +534,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_client_ui_cordis::host_plugin(),
         ),
         (
+            "seekdeep-client-ui-agent-preset",
+            seekdeep_client_ui_agent_preset::host_plugin(),
+        ),
+        (
             "seekdeep-client-ui-conversation",
             seekdeep_client_ui_conversation::host_plugin(),
         ),
