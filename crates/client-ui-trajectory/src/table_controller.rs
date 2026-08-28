@@ -70,7 +70,8 @@ struct DetailsResizeDrag {
 }
 
 /// Render-facing snapshot of local table controller state.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[allow(clippy::struct_excessive_bools)] // Independent source hooks are observable render inputs.
 pub struct TrajectoryTableControllerSnapshot {
     /// Projection-stable selected record identity.
@@ -297,9 +298,19 @@ impl TrajectoryTableController {
 
     /// Settles the owned older-page Promise, retaining only an advancing anchor.
     pub fn settle_older_load(&mut self, advanced: bool) {
+        self.record_older_load_result(advanced);
+        self.finish_older_load();
+    }
+
+    /// Records whether an older-page Promise advanced the history window.
+    pub fn record_older_load_result(&mut self, advanced: bool) {
         if !advanced {
             self.older_load_anchor = None;
         }
+    }
+
+    /// Releases ownership after an older-page Promise fulfills or rejects.
+    pub fn finish_older_load(&mut self) {
         self.loading_older = false;
     }
 

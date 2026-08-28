@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use js_sys::{Array, Function, Object, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
-use crate::{SIMPLE_COMPONENT_STYLES, format_elapsed_seconds};
+use crate::{SIMPLE_COMPONENT_STYLES, TRAJECTORY_TABLE_STYLES, format_elapsed_seconds};
 
 thread_local! {
     static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
@@ -588,7 +588,9 @@ fn inject_styles() -> Result<(), JsValue> {
     Reflect::set(
         &style,
         &JsValue::from_str("textContent"),
-        &JsValue::from_str(SIMPLE_COMPONENT_STYLES),
+        &JsValue::from_str(&format!(
+            "{SIMPLE_COMPONENT_STYLES}\n{TRAJECTORY_TABLE_STYLES}"
+        )),
     )?;
     let head = required(&document, "head", "document")?;
     call_method(&head, "appendChild", &[style])?;

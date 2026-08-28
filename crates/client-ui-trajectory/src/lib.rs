@@ -4,6 +4,8 @@ mod assistant_definition;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
+mod browser_table;
+#[cfg(target_arch = "wasm32")]
 mod browser_timeline;
 mod compaction_definitions;
 mod contract;
@@ -25,6 +27,8 @@ mod virtual_rows;
 pub use assistant_definition::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_table::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_timeline::*;
 pub use compaction_definitions::*;
@@ -62,6 +66,8 @@ pub const DURATION_PERSISTENCE_KEY: &str = "dsh.trajectory.duration";
 pub const DEFAULT_ACTUAL_DURATION: bool = false;
 /// Compiled simple trajectory component stylesheet.
 pub const SIMPLE_COMPONENT_STYLES: &str = include_str!("../data/simple-components.css");
+/// Source-equivalent globalized stylesheet for the compiled table renderer.
+pub const TRAJECTORY_TABLE_STYLES: &str = include_str!("../data/table.css");
 /// Simplified-Chinese trajectory copy in source order.
 pub const TRAJECTORY_ZH: &[(&str, &str)] = &[
     ("view.trajectory", "轨迹"),

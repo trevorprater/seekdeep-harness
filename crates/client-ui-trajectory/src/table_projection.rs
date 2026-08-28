@@ -119,7 +119,8 @@ pub struct TrajectoryRequestNumber {
 }
 
 /// Inspector tab identity.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum TrajectoryDetailTab {
     /// Complete system prompt.
     SystemPrompt,
