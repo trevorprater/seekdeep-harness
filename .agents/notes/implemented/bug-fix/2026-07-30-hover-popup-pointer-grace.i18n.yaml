@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-07-30-hover-popup-pointer-grace.md
-2026-07-30-hover-popup-pointer-grace.md: 302592a2e9de8e749ef2450e8877a3ccbffd15d5
-2026-07-30-hover-popup-pointer-grace.zh.md: 4020a6f1f7ab52b6340a07f4c099906a7353a8a5
+2026-07-30-hover-popup-pointer-grace.md: f31a4a640209d518b3c53524fb0a8f744e9dfe14
+2026-07-30-hover-popup-pointer-grace.zh.md: 7ca7fdb5e8467d6d8b92e41f1bef0d7898379700

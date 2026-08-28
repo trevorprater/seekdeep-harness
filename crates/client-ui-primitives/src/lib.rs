@@ -8,6 +8,8 @@ mod browser_blocks;
 #[cfg(target_arch = "wasm32")]
 mod browser_dialogs;
 #[cfg(target_arch = "wasm32")]
+mod browser_hover_card;
+#[cfg(target_arch = "wasm32")]
 mod browser_icons;
 #[cfg(target_arch = "wasm32")]
 mod browser_tooltip;
@@ -27,6 +29,8 @@ pub use browser_atoms::*;
 pub use browser_blocks::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_dialogs::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_hover_card::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_icons::*;
 #[cfg(target_arch = "wasm32")]

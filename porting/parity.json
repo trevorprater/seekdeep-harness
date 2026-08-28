@@ -45267,7 +45267,18 @@
     {
       "source": "packages/client/ui-primitives/src/HoverCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_hover_card.rs",
+        "crates/client-ui-primitives/src/browser_util.rs",
+        "crates/client-ui-primitives/tests/wasm_hover_card_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source HoverCard suite: 24 passed",
+        "live wasm32 timing, portal, placement, copy, selection, keyboard, disabled, race, and teardown assertions: 4 passed",
+        "shared live wasm32 clipboard and pointer-grace assertions: 6 passed",
+        "strict wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/Input.module.css",
@@ -46412,7 +46423,16 @@
     {
       "source": "packages/client/ui-primitives/tests/hover-card.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_hover_card_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_clipboard_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 24 passed",
+        "compiled live wasm32 HoverCard assertions: 4 passed",
+        "compiled shared clipboard and pointer-grace assertions: 6 passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/icons.client.spec.tsx",

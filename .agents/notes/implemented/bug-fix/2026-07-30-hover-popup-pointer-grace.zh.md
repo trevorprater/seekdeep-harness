@@ -10,9 +10,9 @@ Status: implemented
 
 ## 决策
 
-`usePointerGrace`（[packages/client/ui-primitives/src/pointer-grace.ts](../../../../packages/client/ui-primitives/src/pointer-grace.ts)）持有唯一一个可取消的延迟关闭，由两个原子组件共享，`POINTER_GRACE_MS` 为 200。离开会启动关闭，折返则取消它。因此指针可以安全穿越锚点与弹层之间的间隙，而真正移开的指针仍会关闭弹层。
+编译后的 `seekdeep-client-ui-primitives` `usePointerGrace` hook（[browser_util.rs](../../../../crates/client-ui-primitives/src/browser_util.rs)）持有唯一一个可取消的延迟关闭，由两个原子组件共享，`POINTER_GRACE_MS` 为 200。离开会启动关闭，折返则取消它。因此指针可以安全穿越锚点与弹层之间的间隙，而真正移开的指针仍会关闭弹层。
 
-`HoverCard` 在离开时启动宽限期而不再立即关闭，其卡片也不再设置 `pointer-events: none`，因此指针停在卡片上即可让它保持打开。在已打开状态下重新进入只取消待执行的关闭，而不重启停留计时，从而避免指针穿越间隙时卡片闪烁。在卡片上按下指针用于开始文本选择，不会关闭卡片；只有在锚点区域内发生按下操作，或所有者将 `disabled` 置真时，才会抢在宽限期之前立即关闭卡片。
+Rust/WASM `HoverCard`（[browser_hover_card.rs](../../../../crates/client-ui-primitives/src/browser_hover_card.rs)）在离开时启动宽限期而不立即关闭，其卡片不设置 `pointer-events: none`，因此指针停在卡片上即可让它保持打开。在已打开状态下重新进入只取消待执行的关闭，而不重启停留计时，从而避免指针穿越间隙时卡片闪烁。在卡片上按下指针用于开始文本选择，不会关闭卡片；只有在锚点区域内发生按下操作，或所有者将 `disabled` 置真时，才会抢在宽限期之前立即关闭。关闭与卸载会让进行中的复制反馈失效，并释放停留、宽限、反馈、滚动与窗口尺寸监听的所有者。
 
 `Menu` 把指针离开关闭的处理从传送后的列表移到包裹 span 上。React 的 enter/leave 遍历基于 React 树进行，因此触发按钮与传送后的列表在这里属于同一区域：穿越两者之间 4px 的间隙、或把指针移回触发按钮，都不再算作离开。只有在列表打开时才会启动离开关闭；由所有者驱动的关闭（选择、Escape、外部点击）会在一个仅以 `open` 为依赖的 effect 中解除待执行的宽限关闭——若把它折叠进外部点击的 effect，则每次重新渲染都会取消宽限期，因为所有者每次都传入新的 `onClose` 闭包。
 
@@ -32,4 +32,4 @@ Status: implemented
 
 ## 测试
 
-`packages/client/ui-primitives/tests/hover-card.client.spec.tsx` 与 `tests/atoms.spec.tsx` 固定验证宽限期边界、折返取消、不重启停留计时、所有者关闭时解除待执行关闭，以及列表关闭时不启动关闭。可抵达性手势本身——把指针移到卡片上，以及在打开的列表与其触发按钮之间移动——由 `apps/web/tests/workspace-management.e2e.ts` 在真实浏览器中固定验证，因为它们依赖 jsdom 无法建模的命中测试与布局。
+固定源码中的 `hover-card.client.spec.tsx` 套件覆盖全部 24 个组件用例。`crates/client-ui-primitives/tests/wasm_hover_card_parity.rs` 通过 live WASM 驱动编译后的组件，固定验证停留／宽限边界、portal 定位与重排、保护文本选择的复制激活、反馈竞态、键盘输入、disabled 拆卸以及计时器／监听器清理；`wasm_clipboard_parity.rs` 独立固定共享 host 边界。组装浏览器的命中测试仍属于待完成的 `apps/web` workspace-management 行，因为 hook harness 无法证明指针在真实 portal 几何之间的移动。

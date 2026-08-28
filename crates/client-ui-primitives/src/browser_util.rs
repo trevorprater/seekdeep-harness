@@ -4,7 +4,6 @@ use std::cell::RefCell;
 
 use js_sys::{Array, Function, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
-use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 /// Pointer transit grace shared by hover-dismissed popups.
 pub const POINTER_GRACE_MS: u32 = 200;
@@ -40,11 +39,16 @@ pub fn copied_feedback_ms() -> u32 {
 
 /// Writes exact text through the async Clipboard API or the textarea fallback.
 #[wasm_bindgen(js_name = writeClipboard)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn write_clipboard(text: String) -> Promise {
-    future_to_promise(async move { write_clipboard_inner(&text).await.map(JsValue::from_bool) })
+    begin_clipboard_write(&text)
 }
 
-async fn write_clipboard_inner(text: &str) -> Result<bool, JsValue> {
+pub(crate) fn begin_clipboard_write(text: &str) -> Promise {
+    clipboard_write_attempt(text).unwrap_or_else(|_| Promise::resolve(&JsValue::FALSE))
+}
+
+fn clipboard_write_attempt(text: &str) -> Result<Promise, JsValue> {
     let global = js_sys::global();
     let navigator = Reflect::get(&global, &JsValue::from_str("navigator"))?;
     let clipboard = Reflect::get(&navigator, &JsValue::from_str("clipboard"))?;
@@ -52,19 +56,33 @@ async fn write_clipboard_inner(text: &str) -> Result<bool, JsValue> {
         let write_text = Reflect::get(&clipboard, &JsValue::from_str("writeText"))?;
         if write_text.is_truthy() {
             let Ok(write_text) = write_text.dyn_into::<Function>() else {
-                return Ok(false);
+                return Ok(Promise::resolve(&JsValue::FALSE));
             };
             let Ok(pending) = write_text.call1(&clipboard, &JsValue::from_str(text)) else {
-                return Ok(false);
+                return Ok(Promise::resolve(&JsValue::FALSE));
             };
-            return Ok(JsFuture::from(Promise::resolve(&pending)).await.is_ok());
+            let accepted = Closure::wrap(Box::new(move |_value: JsValue| JsValue::TRUE)
+                as Box<dyn FnMut(JsValue) -> JsValue>)
+            .into_js_value()
+            .unchecked_into::<Function>();
+            let rejected = Closure::wrap(Box::new(move |_error: JsValue| JsValue::FALSE)
+                as Box<dyn FnMut(JsValue) -> JsValue>)
+            .into_js_value()
+            .unchecked_into::<Function>();
+            let promise = Promise::resolve(&pending);
+            return call_method(
+                promise.as_ref(),
+                "then",
+                &[accepted.into(), rejected.into()],
+            )?
+            .dyn_into();
         }
     }
 
     let document = required_property(&global, "document", "global")?;
     let exec = Reflect::get(&document, &JsValue::from_str("execCommand"))?;
     let Ok(exec) = exec.dyn_into::<Function>() else {
-        return Ok(false);
+        return Ok(Promise::resolve(&JsValue::FALSE));
     };
     let textarea = call_method(&document, "createElement", &[JsValue::from_str("textarea")])?;
     Reflect::set(
@@ -93,10 +111,12 @@ async fn write_clipboard_inner(text: &str) -> Result<bool, JsValue> {
     call_method(&textarea, "select", &[])?;
     let accepted = exec.call1(&document, &JsValue::from_str("copy"));
     call_method(&textarea, "remove", &[])?;
-    Ok(accepted
-        .ok()
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false))
+    Ok(Promise::resolve(&JsValue::from_bool(
+        accepted
+            .ok()
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false),
+    )))
 }
 
 /// Compiled React hook implementing the cancelable popup-close grace.
