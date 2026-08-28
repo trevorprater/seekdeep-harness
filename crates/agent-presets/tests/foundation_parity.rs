@@ -3,11 +3,12 @@
 use std::path::Path;
 
 use seekdeep_agent_presets::{
-    AgentPresetConfig, COMPOSITION_FILE, METADATA_FILE, PresetMetadata, PresetRoot, PresetTrust,
-    UnknownPresetError, discover_presets, read_preset_metadata, render_preset_metadata,
-    resolve_session_preset, scan_root, valid_preset_id,
+    AgentPresetConfig, COMPOSITION_FILE, METADATA_FILE, PLUGIN_INJECT, PLUGIN_NAME, PresetMetadata,
+    PresetRoot, PresetTrust, UnknownPresetError, discover_presets, plugin, read_preset_metadata,
+    render_preset_metadata, resolve_session_preset, scan_root, valid_preset_id,
 };
 use seekdeep_core::session::{SessionEvent, SessionHeader, SessionId};
+use seekdeep_loader::PluginCatalog;
 use serde_json::json;
 
 async fn preset(directory: &Path, id: &str, composition: Option<&str>) {
@@ -59,6 +60,15 @@ fn ids_and_closed_trust_config_match_the_directory_boundary() {
         serde_json::to_value(config).unwrap()["includeUserRoot"],
         true
     );
+    let defaults: AgentPresetConfig =
+        serde_json::from_value(json!({"default": "standard"})).unwrap();
+    assert!(defaults.roots.is_empty());
+    assert!(defaults.include_user_root);
+    let default_root: PresetRoot = serde_json::from_value(json!({"path": "/presets"})).unwrap();
+    assert_eq!(default_root.trust, PresetTrust::User);
+    let loader_plugin = plugin(PluginCatalog::new());
+    assert_eq!(loader_plugin.name(), PLUGIN_NAME);
+    assert_eq!(loader_plugin.inject(), PLUGIN_INJECT);
     let error =
         UnknownPresetError::new("missing", vec!["minimal".to_owned(), "standard".to_owned()]);
     assert_eq!(error.preset_id, "missing");

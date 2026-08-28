@@ -502,6 +502,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             "seekdeep-agent-instructions",
             seekdeep_agent_instructions::plugin(),
         ),
+        (
+            "seekdeep-agent-presets",
+            seekdeep_agent_presets::plugin(catalog.clone()),
+        ),
         ("seekdeep-api-gateway", seekdeep_api_gateway::plugin()),
         ("seekdeep-api-remotes", seekdeep_api_remotes::host_plugin()),
         (
@@ -624,6 +628,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         (
             "seekdeep-client-ui-tool",
             seekdeep_client_ui_tool::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-trajectory",
+            seekdeep_client_ui_trajectory::host_plugin(),
         ),
         (
             "seekdeep-client-ui-workflow-run",

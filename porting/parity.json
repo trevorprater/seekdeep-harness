@@ -48695,12 +48695,30 @@
     {
       "source": "packages/client/ui-trajectory/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/lib.rs",
+        "crates/client-ui-trajectory/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "Rust pins the trajectory namespace and all 14 Chinese and English key/value pairs in exact source order",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/timeline.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/timeline.rs",
+        "crates/client-ui-trajectory/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "Rust preserves sequence, duration, time, and actual projections; semantic lanes; idle compression; wall-time retention; request-boundary exclusion; turn boundaries; failure markers; and inclusive focus",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-assistant-definition.ts",
@@ -48735,7 +48753,17 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-record.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/record.rs",
+        "crates/client-ui-trajectory/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "Rust owns the complete trajectory record data contract, closed kind enum, stable record-id precedence, and JavaScript-compatible finite duration formatting",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --all-features -- --test-threads=1"
+      ],
+      "note": "arbitrary DOM presentation attributes are owned by the still-pending Rust/WASM cell renderer rather than the portable record model"
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-request-header-definition.ts",
@@ -48760,7 +48788,16 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-virtual-rows.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/virtual_rows.rs",
+        "crates/client-ui-trajectory/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "Rust groups zero-height request boundaries into the next measurable row, retains terminal clearance, preserves logical indexes, uses exact rendered heights, and emits encodeURIComponent-compatible stable keys",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/views.module.css",
@@ -48781,7 +48818,19 @@
     {
       "source": "packages/client/ui-trajectory/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/lib.rs",
+        "crates/client-ui-trajectory/tests/host_parity.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "the complete real Web composition now preflights through every compiled Host package row",
+        "pinned source trajectory suites passed 107/107"
+      ],
+      "note": "this row is the source Host no-op half; Client registries, slot contribution, duration store, and renderers remain independently pending"
     },
     {
       "source": "packages/client/ui-trajectory/src/invariant.ts",
@@ -48835,7 +48884,15 @@
     {
       "source": "packages/client/ui-trajectory/tests/virtual-rows.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "Rust covers all seven source virtual-row contracts: grouping, terminal boundary, collapsed height, prepend stability, joined-boundary key, summary distinction, and DOM-safe encoding",
+        "pinned source virtual-row suite passed",
+        "cargo test -p seekdeep-client-ui-trajectory --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tsconfig.json",
@@ -64780,11 +64837,16 @@
       "status": "verified",
       "targets": [
         "crates/agent-presets/src/lib.rs",
-        "crates/agent-presets/src/mount.rs"
+        "crates/agent-presets/src/mount.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-agent-presets --all-features (30 consolidated preset cases passed)",
-        "cargo clippy -p seekdeep-agent-presets -p seekdeep-cordis -p seekdeep-scope --all-targets --all-features -- -D warnings"
+        "pinned source Agent Presets suites passed 129/129",
+        "cargo test -p seekdeep-agent-presets --all-features (33 consolidated preset cases passed)",
+        "cargo clippy -p seekdeep-agent-presets -p seekdeep-cordis -p seekdeep-scope --all-targets --all-features -- -D warnings",
+        "compiled product catalog registers the preset plugin under its bare and @seekdeep-ai package identities",
+        "focused compiled-foundation boot activates the real AgentPresetRegistry service and disposes it cleanly"
       ],
       "note": "The Rust registry owns live discovery, effective settings default, standing generations, reversible Agent joins, child inheritance, recompose, private-service addressing, authoring policy, user-root derivation, selected-event republication, and advisory bare-Agent detection."
     },
@@ -64815,7 +64877,8 @@
       ],
       "evidence": [
         "cargo test -p seekdeep-agent-presets --all-features (9 consolidated foundation cases passed)",
-        "cargo clippy -p seekdeep-agent-presets --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-agent-presets --all-targets --all-features -- -D warnings",
+        "Rust config deserialization preserves source defaults: roots empty, includeUserRoot true, and per-root trust user"
       ],
       "note": "Optional YAML display metadata trims text, accepts only finite order, cannot carry identity or trust, degrades every read/parse/shape failure to empty, and renders minimal stable documents."
     },

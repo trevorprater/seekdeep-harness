@@ -23,3 +23,37 @@ pub use preset::{
     valid_preset_id,
 };
 pub use session::resolve_session_preset;
+
+/// Loader plugin identity.
+pub const PLUGIN_NAME: &str = "agent-presets";
+/// The roster mounts standing compositions through the active Loader generation.
+pub const PLUGIN_INJECT: &[&str] = &["loader"];
+
+/// Builds the Loader-compatible Agent preset roster plugin over the product catalog.
+#[must_use]
+pub fn plugin(catalog: seekdeep_loader::PluginCatalog) -> seekdeep_cordis::Plugin {
+    seekdeep_cordis::Plugin::new(
+        PLUGIN_NAME,
+        PLUGIN_INJECT.iter().copied(),
+        move |context, config| {
+            let catalog = catalog.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    context.get(seekdeep_loader::LOADER).is_some(),
+                    "agent-presets requires loader"
+                );
+                let roster = serde_json::from_value(config)?;
+                let registry = AgentPresetRegistry::new(
+                    &context,
+                    catalog,
+                    AgentPresetRegistryConfig {
+                        roster,
+                        user_root: None,
+                    },
+                )?;
+                registry.provide(&context)?;
+                Ok(())
+            })
+        },
+    )
+}

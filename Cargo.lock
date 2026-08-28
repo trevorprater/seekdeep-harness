@@ -4511,6 +4511,7 @@ dependencies = [
  "seekdeep-agent-default-model",
  "seekdeep-agent-instructions",
  "seekdeep-agent-loop",
+ "seekdeep-agent-presets",
  "seekdeep-api-gateway",
  "seekdeep-api-remotes",
  "seekdeep-app-boot",
@@ -4544,6 +4545,7 @@ dependencies = [
  "seekdeep-client-ui-subagent",
  "seekdeep-client-ui-theme",
  "seekdeep-client-ui-tool",
+ "seekdeep-client-ui-trajectory",
  "seekdeep-client-ui-user-questions",
  "seekdeep-client-ui-workflow-run",
  "seekdeep-client-ui-workspace",
@@ -5597,6 +5599,16 @@ version = "0.1.0-rc.5"
 dependencies = [
  "seekdeep-cordis",
  "serde_json",
+]
+
+[[package]]
+name = "seekdeep-client-ui-trajectory"
+version = "0.1.0-rc.5"
+dependencies = [
+ "percent-encoding",
+ "seekdeep-cordis",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

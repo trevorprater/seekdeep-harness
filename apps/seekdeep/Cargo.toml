@@ -17,6 +17,7 @@ seekdeep-agent = { path = "../../crates/agent" }
 seekdeep-agent-default-model = { path = "../../crates/agent-default-model" }
 seekdeep-agent-instructions = { path = "../../crates/agent-instructions" }
 seekdeep-agent-loop = { path = "../../crates/agent-loop" }
+seekdeep-agent-presets = { path = "../../crates/agent-presets" }
 seekdeep-app-boot = { path = "../../crates/app-boot" }
 seekdeep-api-gateway = { path = "../../crates/api-gateway" }
 seekdeep-api-remotes = { path = "../../crates/api-remotes" }
@@ -51,6 +52,7 @@ seekdeep-client-ui-skill = { path = "../../crates/client-ui-skill" }
 seekdeep-client-ui-subagent = { path = "../../crates/client-ui-subagent" }
 seekdeep-client-ui-theme = { path = "../../crates/client-ui-theme" }
 seekdeep-client-ui-tool = { path = "../../crates/client-ui-tool" }
+seekdeep-client-ui-trajectory = { path = "../../crates/client-ui-trajectory" }
 seekdeep-client-ui-workflow-run = { path = "../../crates/client-ui-workflow-run" }
 seekdeep-client-ui-workspace = { path = "../../crates/client-ui-workspace" }
 seekdeep-code-runtime-worker-thread = { path = "../../crates/code-runtime-worker-thread" }

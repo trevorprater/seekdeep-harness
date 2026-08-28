@@ -110,8 +110,7 @@ fn web_plan_orders_layers_and_appends_launcher_owned_preset_and_privacy_patches(
 }
 
 #[test]
-fn compiled_catalog_preflights_the_real_web_tree_to_the_first_unported_host_boundary()
--> anyhow::Result<()> {
+fn compiled_catalog_preflights_the_complete_real_web_tree() -> anyhow::Result<()> {
     let temporary = tempfile::tempdir()?;
     let home = temporary.path().join("home");
     let cwd = temporary.path().join("workspace");
@@ -128,11 +127,7 @@ fn compiled_catalog_preflights_the_real_web_tree_to_the_first_unported_host_boun
     let effective = compose_entries(&[plan.all_patches()])?;
     let source = render_entry_list_yaml(effective.entries())?;
     let catalog = framework_profile_catalog(&cwd, &home, &LaunchEnvironmentSnapshot::default())?;
-    let error = catalog.preflight_yaml(&source).unwrap_err().to_string();
-    assert!(
-        error.contains("@seekdeep-ai/seekdeep-client-ui-trajectory"),
-        "unexpected compiled-catalog frontier: {error}"
-    );
+    catalog.preflight_yaml(&source)?;
     Ok(())
 }
 
@@ -326,6 +321,9 @@ async fn compiled_foundation_catalog_activates_real_services_and_agent_loop() ->
             "    - { id: gateway, name: '@seekdeep-ai/seekdeep-api-gateway' }\n",
             "    - { id: questions, name: '@seekdeep-ai/seekdeep-user-questions' }\n",
             "    - { id: agent, name: '@seekdeep-ai/seekdeep-agent' }\n",
+            "    - id: agent-presets\n",
+            "      name: '@seekdeep-ai/seekdeep-agent-presets'\n",
+            "      config: { default: standard, roots: [], includeUserRoot: false }\n",
             "    - id: default-model\n",
             "      name: '@seekdeep-ai/seekdeep-agent-default-model'\n",
             "      config: { provider: mock, model: model }\n",
@@ -367,6 +365,7 @@ async fn compiled_foundation_catalog_activates_real_services_and_agent_loop() ->
     assert!(context.get(seekdeep_typert_registry::TYPERT).is_some());
     assert!(context.get(seekdeep_api_gateway::TYPERT_GATEWAY).is_some());
     assert!(context.get(seekdeep_agent::AGENTS).is_some());
+    assert!(context.get(seekdeep_agent_presets::AGENT_PRESETS).is_some());
     assert_eq!(
         context
             .get(seekdeep_agent_loop::AGENT_LOOP)

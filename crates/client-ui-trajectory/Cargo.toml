@@ -1,0 +1,24 @@
+[package]
+name = "seekdeep-client-ui-trajectory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM trajectory timeline and virtual-ledger semantics"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+percent-encoding.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

@@ -6,12 +6,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Trust inherited from the root that supplied a preset.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PresetTrust {
     /// Ships with the deployment.
     System,
     /// Authored locally with the same trust as shell access.
+    #[default]
     User,
 }
 
@@ -40,6 +41,7 @@ pub struct PresetRoot {
     /// Directory holding one subdirectory per preset.
     pub path: String,
     /// Trust applied to every discovered child.
+    #[serde(default)]
     pub trust: PresetTrust,
 }
 
@@ -50,9 +52,15 @@ pub struct AgentPresetConfig {
     /// Preset mounted when a caller names none.
     pub default: String,
     /// Roots in first-wins precedence order.
+    #[serde(default)]
     pub roots: Vec<PresetRoot>,
     /// Whether the harness-home user root follows configured roots.
+    #[serde(default = "default_include_user_root")]
     pub include_user_root: bool,
+}
+
+const fn default_include_user_root() -> bool {
+    true
 }
 
 /// Whether an id is a safe lowercase directory segment.
