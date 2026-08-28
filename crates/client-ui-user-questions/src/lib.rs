@@ -3,10 +3,14 @@
 mod flow;
 mod model;
 mod pending;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 pub use flow::*;
 pub use model::*;
 pub use pending::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
 
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-user-questions";
@@ -14,6 +18,10 @@ pub const NAME: &str = "client-ui-user-questions";
 pub const INJECT: &[&str] = &["slots", "locale"];
 /// Dictionary namespace owned by the browser plugin.
 pub const LOCALE_NAMESPACE: &str = "question";
+/// Compiled generic-composer stylesheet.
+pub const QUESTION_STYLES: &str = include_str!("../data/question.css");
+/// Compiled plan-review stylesheet.
+pub const PLAN_REVIEW_STYLES: &str = include_str!("../data/plan-review.css");
 /// Simplified-Chinese question-composer copy in source order.
 pub const QUESTION_ZH: &[(&str, &str)] = &[
     ("error.incomplete", "请先完成这道问题。"),

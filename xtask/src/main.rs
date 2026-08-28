@@ -467,6 +467,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
     let invariant_name = match module_id {
         "@seekdeep-ai/seekdeep-client-ui-message-feedback" => "client-ui-feedback-invariant",
         "@seekdeep-ai/seekdeep-client-ui-trajectory" => "client-ui-trajectory-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-user-questions" => "client-ui-user-questions-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -625,6 +626,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiTrajectoryModules(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); {global}.configureClientUiTrajectoryRuntime(require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiTrajectory, inject: ['slots', 'conversationEvents', 'conversationViews', 'sessions', 'locale'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-user-questions" {
+        return format!(
+            "require => {{ {global}.configureClientUiUserQuestions(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiUserQuestions, inject: ['slots', 'locale'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return format!(
             "require => {{ {global}.configureClientUiLayout(require('react'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiLayout, inject: ['slots', 'theme'] }}); return {global}; }}"
@@ -733,6 +739,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-trajectory" {
         return ui_trajectory_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-user-questions" {
+        return ui_user_questions_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return ui_layout_declarations();
@@ -881,6 +890,24 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
     'sidebar.settings': { kind: 'single'; scope: 'root'; owner: SidebarSettingsOwnerProps };
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps };
   }
+}
+"
+    .to_owned()
+}
+
+fn ui_user_questions_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiUserQuestions;
+export const inject: readonly ['slots', 'locale'];
+export interface QuestionComposerProps { matched: unknown; t(key: string): string }
+export interface QuestionAnswerItem { id: string; selected: string[]; custom?: string }
+export interface QuestionAnswer { answers: QuestionAnswerItem[] }
+export interface PlanReview {
+  id: string;
+  question: string;
+  plan: string;
+  approve: { label: string; description?: string };
+  decline?: { label: string; description?: string };
 }
 "
     .to_owned()
@@ -1528,6 +1555,54 @@ mod tests {
             ("invariant.js", "@seekdeep-ai/seekdeep-client-ui-trajectory"),
             ("types/index.d.ts", "function apply(): void"),
             ("types/invariant.d.ts", "client-ui-trajectory-invariant"),
+        ] {
+            let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
+            assert!(artifact.contains(expected), "{path} omitted {expected:?}");
+        }
+    }
+
+    #[test]
+    fn ui_user_questions_bundle_configures_composer_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_user_questions_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-user-questions",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiUserQuestions(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_user_questions_wasm.applyClientUiUserQuestions",
+            "inject: ['slots', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-user-questions");
+        for expected in [
+            "interface QuestionComposerProps",
+            "interface QuestionAnswer",
+            "interface PlanReview",
+            "readonly ['slots', 'locale']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-user-questions",
+            output.path(),
+        )
+        .unwrap();
+        for (path, expected) in [
+            ("index.js", "export function apply() {}"),
+            ("invariant.js", "client-ui-user-questions-invariant"),
+            (
+                "invariant.js",
+                "@seekdeep-ai/seekdeep-client-ui-user-questions",
+            ),
+            ("types/index.d.ts", "function apply(): void"),
+            ("types/invariant.d.ts", "client-ui-user-questions-invariant"),
         ] {
             let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
             assert!(artifact.contains(expected), "{path} omitted {expected:?}");

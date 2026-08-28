@@ -49278,10 +49278,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-user-questions/package.json"
+        "packages/client/ui-user-questions/package.json",
+        "crates/client-ui-user-questions/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package exports and peer contracts remain source-compatible while bundle/watch now invoke the Rust/WASM builder and obsolete React/clsx/client implementation dependencies are absent",
+        "verify-package-invariants covers the hand-owned companion manifest"
       ]
     },
     {
@@ -49298,7 +49301,20 @@
     {
       "source": "packages/client/ui-user-questions/src/client/PlanReviewPanel.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/src/model.rs",
+        "crates/client-ui-user-questions/src/flow.rs",
+        "crates/client-ui-user-questions/src/wasm.rs",
+        "crates/client-ui-user-questions/data/plan-review.css",
+        "crates/client-ui-user-questions/tests/core_parity.rs",
+        "crates/client-ui-user-questions/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust narrows only one reachable binary single-choice plan-review intent and preserves asker-owned approve/decline labels and descriptions",
+        "compiled WASM renders shared Markdown, review strip, optional decline, approve/refuse/discuss actions, one-shot busy state, exact envelopes, and failure re-arming",
+        "pinned source ui-user-questions suite passed (4 files, 37 tests); Rust core 7 passed; live WASM 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/src/client/QuestionComposer.module.css",
@@ -49314,7 +49330,21 @@
     {
       "source": "packages/client/ui-user-questions/src/client/QuestionComposer.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/src/flow.rs",
+        "crates/client-ui-user-questions/src/model.rs",
+        "crates/client-ui-user-questions/src/pending.rs",
+        "crates/client-ui-user-questions/src/wasm.rs",
+        "crates/client-ui-user-questions/data/question.css",
+        "crates/client-ui-user-questions/tests/core_parity.rs",
+        "crates/client-ui-user-questions/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust owns positional drafts, single/multi/custom/skip semantics, pager validation, recommendation suffixes, whole-batch submission, cancellation, same-key carrier replay, exact receipt failures, and plan-intent routing",
+        "compiled WASM renders option, custom input/textarea, Markdown detail, navigation, validation, IME-safe Enter, busy and localized feedback paths and delegates only encoded response transport to the carrier",
+        "pinned source ui-user-questions suite passed (4 files, 37 tests); Rust core 7 passed; live WASM 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/src/client/contract/slots.ts",
@@ -49340,7 +49370,15 @@
     {
       "source": "packages/client/ui-user-questions/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/src/wasm.rs",
+        "crates/client-ui-user-questions/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust/WASM apply owns question dictionaries and the conversation.composer chain entry with exact selector, locale, no injected business face, and reversible Slot registration",
+        "live WASM selector and disposal test passed"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/src/client/locales.ts",
@@ -49359,7 +49397,16 @@
     {
       "source": "packages/client/ui-user-questions/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/data/question.css",
+        "crates/client-ui-user-questions/data/plan-review.css",
+        "crates/client-ui-user-questions/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "Rust compile-time CSS inclusion replaces TypeScript CSS-module declarations",
+        "all 530 source CSS lines are exactly namespaced and projection-tested"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/src/index.ts",
@@ -49395,7 +49442,15 @@
     {
       "source": "packages/client/ui-user-questions/tests/browser-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/tests/wasm_parity.rs",
+        "crates/client-ui-user-questions/src/wasm.rs"
+      ],
+      "evidence": [
+        "pinned source browser plugin tests passed",
+        "live WASM verifies inject order, question-only selector routing, Slot registration, and teardown"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/tests/node-plugin.client.spec.ts",
@@ -49413,12 +49468,28 @@
     {
       "source": "packages/client/ui-user-questions/tests/plan-review-panel.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/tests/core_parity.rs",
+        "crates/client-ui-user-questions/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source plan review tests passed",
+        "Rust pure narrowing/decision tests and mounted WASM Markdown, tooltip, asker-label, and submission tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/tests/user-questions-composer.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/tests/core_parity.rs",
+        "crates/client-ui-user-questions/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source composer tests passed",
+        "Rust pure flow/carrier tests plus mounted WASM batch submission, recommendation, multi-select, same-key replay, locale, and plugin tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/tsconfig.json",
@@ -49434,7 +49505,15 @@
     {
       "source": "packages/client/ui-user-questions/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-user-questions/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally replaced by cargo xtask wasm-package for the Rust/WASM artifact",
+        "focused xtask contract test passed; optimized 1.66 MB classic bundle built, passed node --check, and handed off exact apply/inject exports"
+      ]
     },
     {
       "source": "packages/client/ui-workflow-run/README.i18n.yaml",

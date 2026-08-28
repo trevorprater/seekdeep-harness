@@ -3,9 +3,11 @@
 use seekdeep_user_questions_contract::{
     AskUserQuestionAnswer, AskUserQuestionAnswerItem, AskUserQuestionItem,
 };
+use serde::{Deserialize, Serialize};
 
 /// One local answer draft keyed positionally to the request batch.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DraftAnswer {
     /// Option labels selected verbatim.
     pub selected: Vec<String>,
@@ -16,7 +18,8 @@ pub struct DraftAnswer {
 }
 
 /// In-flight carrier operation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum QuestionBusy {
     /// Whole-batch answer send.
     Answer,
@@ -25,7 +28,8 @@ pub enum QuestionBusy {
 }
 
 /// Displayed feedback; dictionary keys remain live across locale changes.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "lowercase")]
 pub enum QuestionFeedback {
     /// At least one batch item remains incomplete.
     Incomplete,

@@ -5627,6 +5627,7 @@ name = "seekdeep-client-ui-user-questions"
 version = "0.1.0-rc.5"
 dependencies = [
  "futures",
+ "js-sys",
  "regex",
  "seekdeep-client-runtime",
  "seekdeep-cordis",
@@ -5636,8 +5637,12 @@ dependencies = [
  "seekdeep-user-questions",
  "seekdeep-user-questions-contract",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
