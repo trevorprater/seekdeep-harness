@@ -109,6 +109,7 @@ fn expansion_retry_generic_failure_and_stale_completions_follow_component_state(
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn host_half_is_inert_and_dependency_free() {
     let plugin = seekdeep_client_ui_settings_plugin_inventory::host_plugin();

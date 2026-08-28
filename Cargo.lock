@@ -5547,8 +5547,15 @@ dependencies = [
 name = "seekdeep-client-ui-settings-plugin-inventory"
 version = "0.1.0-rc.5"
 dependencies = [
+ "js-sys",
+ "regex",
  "seekdeep-cordis",
  "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

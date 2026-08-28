@@ -2,6 +2,15 @@
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
+/// Compiled plugin-inventory settings stylesheet.
+pub const PLUGIN_INVENTORY_STYLES: &str = include_str!("../data/plugin-inventory.css");
+
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-settings-plugin-inventory";
 /// Browser dictionary namespace.

@@ -46784,10 +46784,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-settings-plugin-inventory/package.json"
+        "packages/client/ui-settings-plugin-inventory/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "product and package identities are mechanically renamed from dsh to seekdeep",
+        "bundle and watch scripts delegate to the Rust wasm-package builder with the exact module identity",
+        "optimized Rust/WASM bundle built successfully and passed a Node classic ModuleLoader handoff smoke"
       ]
     },
     {
@@ -46804,12 +46807,35 @@
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/client/PluginInventorySettingsTab.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugin-inventory/src/lib.rs",
+        "crates/client-ui-settings-plugin-inventory/src/wasm.rs",
+        "crates/client-ui-settings-plugin-inventory/data/plugin-inventory.css",
+        "crates/client-ui-settings-plugin-inventory/tests/core_parity.rs",
+        "crates/client-ui-settings-plugin-inventory/tests/css_parity.rs",
+        "crates/client-ui-settings-plugin-inventory/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source inventory component, browser-plugin, and invariant suites passed 8/8",
+        "Rust controller, phase, module-name, query, stale-generation, dictionary, Host, and exact CSS projection tests passed 5/5",
+        "live Rust/WASM tests passed 3/3 for deferred and synchronous loads, generic failure containment, retry, empty and filtered catalogs, module/id search, expansion reconciliation, enabled/disabled details and accessibility, both late unmount outcomes, and primitive composition"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugin-inventory/src/wasm.rs",
+        "crates/client-ui-settings-plugin-inventory/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM plugin test registers dictionaries and the ordered all-inventory Settings tab, folds exact Remote success/failure outcomes, translates the label, and retracts and replaces its registration",
+        "generated package test pins React and primitive configuration, apply, exact inject order, snapshot and component types, locale augmentation, and invariant companion",
+        "optimized classic bundle passed a real ModuleLoader dependency-resolution handoff smoke"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/client/locales.ts",
@@ -46827,7 +46853,16 @@
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugin-inventory/src/lib.rs",
+        "crates/client-ui-settings-plugin-inventory/data/plugin-inventory.css",
+        "crates/client-ui-settings-plugin-inventory/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "Rust embeds the stylesheet directly without a TypeScript CSS-module binding",
+        "exact namespaced projection test proves every source selector and declaration is preserved"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/src/index.ts",
@@ -46861,12 +46896,30 @@
     {
       "source": "packages/client/ui-settings-plugin-inventory/tests/browser-plugin.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugin-inventory/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source inventory browser-plugin suite passed in the 8-test selection",
+        "live Rust/WASM plugin test covers exact dependencies, tab name/id/order/locale/label, generated Remote success and stable-code failure, dictionary ownership, disposal, and replacement"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/tests/components.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugin-inventory/tests/core_parity.rs",
+        "crates/client-ui-settings-plugin-inventory/tests/css_parity.rs",
+        "crates/client-ui-settings-plugin-inventory/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source inventory component suite passed in the 8-test selection",
+        "Rust controller and CSS tests passed 5/5",
+        "live Rust/WASM component tests cover every phase, enabled/disabled rendering, accessible labels, entry details, filter collapse, retry, generic errors, synchronous throws, and fulfillment/rejection after unmount"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/tests/invariant.client.spec.ts",
@@ -46895,7 +46948,16 @@
     {
       "source": "packages/client/ui-settings-plugin-inventory/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-settings-plugin-inventory/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle and watch scripts delegate to the Rust wasm-package builder",
+        "optimized Rust/WASM classic bundle built successfully and passed the Node ModuleLoader handoff smoke",
+        "xtask compatibility test passed for the factory, declarations, inject list, and invariant companion"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/README.i18n.yaml",

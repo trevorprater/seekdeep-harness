@@ -41,8 +41,8 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-settings-plugin-inventory --artifact seekdeep_client_ui_settings_plugin_inventory --module-id @seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory --out-dir packages/client/ui-settings-plugin-inventory/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-settings-plugin-inventory --artifact seekdeep_client_ui_settings_plugin_inventory --module-id @seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory --out-dir packages/client/ui-settings-plugin-inventory/lib --watch"
   },
   "license": "MIT",
   "peerDependencies": {
