@@ -44246,7 +44246,15 @@
     {
       "source": "packages/client/ui-plan/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-plan/src/lib.rs",
+        "crates/client-ui-plan/tests/model_parity.rs"
+      ],
+      "evidence": [
+        "Rust parity pins all four Chinese/English Plan chip dictionary triples in source order",
+        "pinned source Plan control and browser-plugin suites passed 10/10"
+      ]
     },
     {
       "source": "packages/client/ui-plan/src/css-modules.d.ts",
@@ -44256,7 +44264,17 @@
     {
       "source": "packages/client/ui-plan/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-plan/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-plan to ui-user-questions"
+      ],
+      "note": "this row is the source Host no-op half; Client projection wiring, command execution, unmount guards, slot, and PlanChip renderer remain independently pending"
     },
     {
       "source": "packages/client/ui-plan/src/invariant.ts",
