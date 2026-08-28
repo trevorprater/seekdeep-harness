@@ -1,6 +1,8 @@
 //! Trajectory timeline, record identity, and virtual-ledger semantics.
 
+mod compaction_definitions;
 mod duration_store;
+mod message_definitions;
 mod preview;
 mod record;
 mod request_header;
@@ -8,7 +10,9 @@ mod search_index;
 mod timeline;
 mod virtual_rows;
 
+pub use compaction_definitions::*;
 pub use duration_store::*;
+pub use message_definitions::*;
 pub use preview::*;
 pub use record::*;
 pub use request_header::*;

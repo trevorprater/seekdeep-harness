@@ -48739,7 +48739,16 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-compaction-definition.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/compaction_definitions.rs",
+        "crates/client-ui-trajectory/tests/message_definitions_parity.rs"
+      ],
+      "evidence": [
+        "Rust preserves compaction id matching, summary/end/checkpoint folding, running/complete/error status, nullable Turn and completion, raw output, provenance, request config, usage, replacement sequence, and Session-end contribution",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --test message_definitions_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-contract.ts",
@@ -48766,7 +48775,17 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-message-definitions.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/message_definitions.rs",
+        "crates/client-ui-trajectory/tests/message_definitions_parity.rs"
+      ],
+      "evidence": [
+        "Rust preserves next-step splice ordering, removal claims, canceled removal, reinsert claim clearing, non-target exclusion, and state-only no-publication cadence",
+        "Rust publishes user, claimed steering, plugin context, and recalled context nodes with exact message id, source, provenance, and known form",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --test message_definitions_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-preview.ts",
