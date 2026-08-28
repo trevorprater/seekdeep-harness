@@ -1,10 +1,16 @@
 //! Trajectory timeline, record identity, and virtual-ledger semantics.
 
+mod duration_store;
+mod preview;
 mod record;
+mod search_index;
 mod timeline;
 mod virtual_rows;
 
+pub use duration_store::*;
+pub use preview::*;
 pub use record::*;
+pub use search_index::*;
 pub use timeline::*;
 pub use virtual_rows::*;
 

@@ -5605,7 +5605,10 @@ dependencies = [
 name = "seekdeep-client-ui-trajectory"
 version = "0.1.0-rc.5"
 dependencies = [
+ "indexmap 2.14.0",
  "percent-encoding",
+ "seekdeep-client-runtime",
+ "seekdeep-client-ui-primitives",
  "seekdeep-cordis",
  "serde_json",
  "tokio",

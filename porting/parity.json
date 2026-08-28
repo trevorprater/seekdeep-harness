@@ -48680,7 +48680,17 @@
     {
       "source": "packages/client/ui-trajectory/src/client/duration-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/duration_store.rs",
+        "crates/client-ui-trajectory/tests/duration_store_parity.rs",
+        "crates/client-runtime/src/store.rs"
+      ],
+      "evidence": [
+        "Rust creates one synchronous SnapshotStore over injected scheduler, persistence, and logger seams with false default and exact root key dsh.trajectory.duration",
+        "Rust persistence parity proves root-key writes and rehydration without a Session suffix",
+        "pinned source trajectory suites passed 107/107"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/index.ts",
@@ -48748,7 +48758,16 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-preview.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/preview.rs",
+        "crates/client-ui-trajectory/tests/search_parity.rs"
+      ],
+      "evidence": [
+        "Rust uses the shared GFM plain-text projection, collapses whitespace, enforces the 2048 UTF-16-unit source cap and 512-unit output cap, and appends the exact ellipsis condition",
+        "live pinned-source differential passed 2/2 preview/search cases over the same Markdown and cap inputs",
+        "cargo test -p seekdeep-client-ui-trajectory --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-record.ts",
@@ -48773,7 +48792,16 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-search-index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/search_index.rs",
+        "crates/client-ui-trajectory/tests/search_parity.rs"
+      ],
+      "evidence": [
+        "Rust preserves outer-layout identity short-circuiting, stable record identities, every searchable domain source, Markdown/result previews, JSON projections, insertion order, stale deletion, boundary exclusion, and case-insensitive all-term matching",
+        "live pinned-source differential passed 2/2 preview/search cases with the same identity and multi-term queries",
+        "cargo test -p seekdeep-client-ui-trajectory --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-snapshot-builder.ts",
