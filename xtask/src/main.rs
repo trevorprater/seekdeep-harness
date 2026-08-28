@@ -473,6 +473,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         }
         "@seekdeep-ai/seekdeep-client-ui-trajectory" => "client-ui-trajectory-invariant",
         "@seekdeep-ai/seekdeep-client-ui-user-questions" => "client-ui-user-questions-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-workflow-run" => "client-ui-workflow-run-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -651,6 +652,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiUserQuestions(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiUserQuestions, inject: ['slots', 'locale'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-workflow-run" {
+        return format!(
+            "require => {{ {global}.configureClientUiWorkflowRun(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiWorkflowRun, inject: ['conversationEvents', 'slots', 'sessions', 'locale'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return format!(
             "require => {{ {global}.configureClientUiLayout(require('react'), require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiLayout, inject: ['slots', 'theme'] }}); return {global}; }}"
@@ -771,6 +777,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-user-questions" {
         return ui_user_questions_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-workflow-run" {
+        return ui_workflow_run_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-layout" {
         return ui_layout_declarations();
@@ -997,6 +1006,45 @@ export interface PlanReview {
   plan: string;
   approve: { label: string; description?: string };
   decline?: { label: string; description?: string };
+}
+"
+    .to_owned()
+}
+
+fn ui_workflow_run_declarations() -> String {
+    r"
+import type { SessionId } from '@seekdeep-ai/seekdeep-client-runtime/client';
+export const apply: typeof wasm_bindgen.applyClientUiWorkflowRun;
+export const inject: readonly ['conversationEvents', 'slots', 'sessions', 'locale'];
+export type WorkflowRunStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+export interface WorkflowRunMemberData {
+  readonly seq: number;
+  readonly label: string;
+  readonly childId: SessionId;
+  readonly status: WorkflowRunStatus;
+}
+export interface WorkflowRunPhaseData {
+  readonly key: string;
+  readonly phase: string | null;
+  readonly members: readonly WorkflowRunMemberData[];
+}
+export interface WorkflowRunChatData {
+  readonly name: string;
+  readonly status: WorkflowRunStatus;
+  readonly phases: readonly WorkflowRunPhaseData[];
+}
+export type WorkflowRunKey =
+  | 'run.title' | 'run.members.one' | 'run.members.other' | 'run.empty'
+  | 'phase.unassigned' | 'phase.empty' | 'statusCount.running'
+  | 'statusCount.completed' | 'statusCount.failed' | 'statusCount.cancelled'
+  | 'statusCount.interrupted' | 'member.empty' | 'member.open'
+  | 'status.running' | 'status.completed' | 'status.failed'
+  | 'status.cancelled' | 'status.interrupted';
+declare module '@seekdeep-ai/seekdeep-client-ui-conversation/client' {
+  interface ChatNodeDataMap { 'workflow-run': WorkflowRunChatData }
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { workflowRun: WorkflowRunKey }
 }
 "
     .to_owned()
@@ -1777,6 +1825,49 @@ mod tests {
             let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
             assert!(artifact.contains(expected), "{path} omitted {expected:?}");
         }
+    }
+
+    #[test]
+    fn ui_workflow_run_bundle_configures_keyed_renderer_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_workflow_run_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-workflow-run",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiWorkflowRun(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "require('@seekdeep-ai/seekdeep-client-runtime/client')",
+            "apply: __seekdeep_client_ui_workflow_run_wasm.applyClientUiWorkflowRun",
+            "inject: ['conversationEvents', 'slots', 'sessions', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-workflow-run");
+        for expected in [
+            "type WorkflowRunStatus",
+            "import type { SessionId }",
+            "interface WorkflowRunMemberData",
+            "interface WorkflowRunPhaseData",
+            "interface WorkflowRunChatData",
+            "interface ChatNodeDataMap",
+            "interface LocaleNamespaceMap",
+            "readonly ['conversationEvents', 'slots', 'sessions', 'locale']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-workflow-run",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-workflow-run-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-workflow-run"));
     }
 
     #[test]

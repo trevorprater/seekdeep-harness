@@ -49736,10 +49736,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-workflow-run/package.json"
+        "packages/client/ui-workflow-run/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "product and package identities are mechanically renamed from dsh to seekdeep",
+        "bundle and watch scripts delegate to the Rust wasm-package builder with the exact module identity",
+        "optimized Rust/WASM bundle built successfully and passed a Node classic ModuleLoader handoff smoke"
       ]
     },
     {
@@ -49756,12 +49759,35 @@
     {
       "source": "packages/client/ui-workflow-run/src/client/WorkflowRunPanel.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workflow-run/src/panel.rs",
+        "crates/client-ui-workflow-run/src/wasm.rs",
+        "crates/client-ui-workflow-run/data/workflow-run.css",
+        "crates/client-ui-workflow-run/tests/css_parity.rs",
+        "crates/client-ui-workflow-run/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source workflow-run suite passed 24/24",
+        "Rust native decision and CSS projection tests passed 9/9",
+        "live Rust/WASM tests passed 3/3 for forced and manual disclosures, clean-cycle remounts, empty and mixed statuses, exact labels, navigation, and React primitive composition"
+      ]
     },
     {
       "source": "packages/client/ui-workflow-run/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workflow-run/src/wasm.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-ui-workflow-run/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM plugin test registers the native workflow-run Definition, dictionaries, keyed Chat renderer, and Session opener, then retracts both registrations on disposal",
+        "generated package test pins React, primitives, runtime, apply, exact inject order, public Conversation data, locale declarations, and invariant companion",
+        "optimized classic bundle passed a real ModuleLoader dependency-resolution handoff smoke"
+      ]
     },
     {
       "source": "packages/client/ui-workflow-run/src/client/locales.ts",
@@ -49794,7 +49820,16 @@
     {
       "source": "packages/client/ui-workflow-run/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workflow-run/src/lib.rs",
+        "crates/client-ui-workflow-run/data/workflow-run.css",
+        "crates/client-ui-workflow-run/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "Rust embeds the stylesheet directly without a TypeScript CSS-module binding",
+        "exact namespaced projection test proves every source selector and declaration is preserved"
+      ]
     },
     {
       "source": "packages/client/ui-workflow-run/src/index.ts",
@@ -49828,7 +49863,17 @@
     {
       "source": "packages/client/ui-workflow-run/tests/workflow-run.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workflow-run/tests/workflow_run_parity.rs",
+        "crates/client-ui-workflow-run/tests/css_parity.rs",
+        "crates/client-ui-workflow-run/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source workflow-run suite passed 24/24",
+        "Rust projection, decision, navigation, locale, and CSS tests passed 9/9",
+        "live Rust/WASM component and plugin tests passed 3/3"
+      ]
     },
     {
       "source": "packages/client/ui-workflow-run/tsconfig.json",
@@ -49844,7 +49889,16 @@
     {
       "source": "packages/client/ui-workflow-run/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-workflow-run/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle and watch scripts delegate to the Rust wasm-package builder",
+        "optimized Rust/WASM classic bundle built successfully and passed the Node ModuleLoader handoff smoke",
+        "xtask compatibility test passed for the factory, declarations, inject list, and invariant companion"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/README.i18n.yaml",

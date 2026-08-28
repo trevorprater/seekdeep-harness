@@ -5671,11 +5671,16 @@ dependencies = [
 name = "seekdeep-client-ui-workflow-run"
 version = "0.1.0-rc.5"
 dependencies = [
+ "js-sys",
+ "regex",
  "seekdeep-client-runtime",
  "seekdeep-cordis",
  "seekdeep-identity",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

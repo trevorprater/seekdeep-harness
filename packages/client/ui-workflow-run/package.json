@@ -40,8 +40,8 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-workflow-run --artifact seekdeep_client_ui_workflow_run --module-id @seekdeep-ai/seekdeep-client-ui-workflow-run --out-dir packages/client/ui-workflow-run/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-workflow-run --artifact seekdeep_client_ui_workflow_run --module-id @seekdeep-ai/seekdeep-client-ui-workflow-run --out-dir packages/client/ui-workflow-run/lib --watch"
   },
   "files": [
     "lib/index.js",
@@ -50,9 +50,6 @@
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
-  "dependencies": {
-    "react": "^18.2.0"
-  },
   "peerDependencies": {
     "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
     "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
@@ -63,7 +60,8 @@
     "@seekdeep-ai/seekdeep-session": "workspace:^",
     "@seekdeep-ai/seekdeep-tool-workflow": "workspace:^",
     "@seekdeep-ai/seekdeep-workflow": "workspace:^",
-    "@seekdeep-ai/cordis": "workspace:^"
+    "@seekdeep-ai/cordis": "workspace:^",
+    "react": "^18.2.0"
   },
   "devDependencies": {
     "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
@@ -77,6 +75,7 @@
     "@seekdeep-ai/seekdeep-tool-workflow": "workspace:^",
     "@seekdeep-ai/seekdeep-workflow": "workspace:^",
     "@types/react": "~18.3.1",
-    "@seekdeep-ai/cordis": "workspace:^"
+    "@seekdeep-ai/cordis": "workspace:^",
+    "react": "^18.2.0"
   }
 }
