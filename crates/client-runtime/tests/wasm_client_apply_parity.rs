@@ -431,6 +431,25 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
         .call1(&views, &view_definition)
         .unwrap();
 
+    let trajectory_view_definition = Object::new();
+    set(
+        &trajectory_view_definition,
+        "target",
+        &JsValue::from_str("trajectory"),
+    );
+    set(
+        &trajectory_view_definition,
+        "create",
+        &Function::new_no_args(
+            "const read = node => ({ anchorSeq: node?.anchorSeq, location: node?.location?.kind, turn: node?.location?.turn?.turn, value: node?.data.value, ...(node?.visibility === undefined ? {} : { visibility: node.visibility }) }); return { empty: {}, replace({ nodes }) { return read(nodes[0]) }, apply({ upserts }) { return read(upserts[0]) } }",
+        ),
+    );
+    get(&views, "register")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&views, &trajectory_view_definition)
+        .unwrap();
+
     let definition = Object::new();
     set(&definition, "kind", &JsValue::from_str("probe"));
     set(&definition, "target", &JsValue::from_str("chat"));
@@ -510,6 +529,48 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
         .dyn_into::<Function>()
         .unwrap()
         .call1(&events, &definition)
+        .unwrap();
+    let trajectory_definition = Object::new();
+    set(
+        &trajectory_definition,
+        "kind",
+        &JsValue::from_str("trajectory-probe"),
+    );
+    set(
+        &trajectory_definition,
+        "target",
+        &JsValue::from_str("trajectory"),
+    );
+    set(
+        &trajectory_definition,
+        "match",
+        &Function::new_with_args(
+            "event",
+            "return event.type === 'trajectory/start' ? { id: 'one', role: 'start' } : null",
+        ),
+    );
+    set(
+        &trajectory_definition,
+        "start",
+        &Function::new_with_args("context, match, reader", "return match.event.data"),
+    );
+    set(
+        &trajectory_definition,
+        "update",
+        &Function::new_with_args("context, match", "return context.state"),
+    );
+    set(
+        &trajectory_definition,
+        "buildViewNode",
+        &Function::new_with_args(
+            "context",
+            "return { key: context.key, kind: context.kind, id: context.id, target: 'trajectory', anchorSeq: context.start.event.seq + 0.5, location: context.start.location, data: context.state }",
+        ),
+    );
+    get(&events, "register")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&events, &trajectory_definition)
         .unwrap();
     let location_definition = Object::new();
     set(
@@ -741,4 +802,27 @@ async fn registered_javascript_definition_executes_inside_rust_session_assembler
         .call1(&views, &JsValue::from_str("chat"))
         .unwrap();
     assert_eq!(get(&snapshot, "count").as_f64(), Some(6.0));
+
+    let trajectory = Object::new();
+    set(&trajectory, "value", &JsValue::from_str("kept"));
+    send(4.0, "trajectory/start", trajectory.into());
+    flush().await;
+    get(&session, "getSnapshot")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&session)
+        .unwrap();
+    let snapshot = get(&views, "get")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&views, &JsValue::from_str("trajectory"))
+        .unwrap();
+    assert_eq!(get(&snapshot, "anchorSeq").as_f64(), Some(4.5));
+    assert_eq!(
+        get(&snapshot, "location").as_string().as_deref(),
+        Some("turn")
+    );
+    assert_eq!(get(&snapshot, "turn").as_f64(), Some(0.0));
+    assert_eq!(get(&snapshot, "value").as_string().as_deref(), Some("kept"));
+    assert!(get(&snapshot, "visibility").is_undefined());
 }

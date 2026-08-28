@@ -39737,6 +39737,7 @@
         "cargo test -p seekdeep-client-runtime --test conversation_assembler_parity --test conversation_location_parity --test conversation_registry_parity --all-features (25 passed)",
         "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_client_apply_parity-*.wasm (live JavaScript match/start/update/publication/reader/location-data/node/view-builder flow passed)",
         "live WASM Chat metadata round trip preserves fractional anchorSeq, engine-owned Location, and visible/hidden identity through the Rust assembler and JavaScript view builder",
+        "live WASM generic target round trip preserves trajectory anchorSeq and engine-owned Location without inventing Chat visibility",
         "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
       ],
       "note": "Rust owns collision-free Context identity, exact Match roles, immutable Context/previous snapshots, demand-recorded backward reads, Step/Turn Location and data ownership, publication cadence, Node contracts, timeline Maps, and per-target builder inputs; the WASM adapter preserves the complete extension-bearing SessionEvent wire object and synchronously adapts model-authored JavaScript match/start/update/publication/buildLocationData/buildViewNode/create/replace/apply callbacks without moving replay or ownership into JavaScript"
@@ -48748,7 +48749,19 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-definition-common.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/request_header.rs",
+        "crates/client-ui-trajectory/tests/request_header_parity.rs",
+        "crates/client-runtime/src/conversation_assembler.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs",
+        "crates/client-runtime/tests/wasm_client_apply_parity.rs"
+      ],
+      "evidence": [
+        "Rust wraps trajectory contributions with exact Context identity, target, anchorSeq, start Location fallback, and data while keeping Chat visibility absent",
+        "live WASM round trip preserves non-Chat anchorSeq and engine-owned Location through JavaScript Definition, Rust assembler, and JavaScript view builder",
+        "cargo test -p seekdeep-client-ui-trajectory --test request_header_parity --all-features"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-message-definitions.ts",
@@ -48787,7 +48800,16 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-request-header-definition.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/request_header.rs",
+        "crates/client-ui-trajectory/tests/request_header_parity.rs"
+      ],
+      "evidence": [
+        "Rust Definition matches each request/header by sequence, inherits the nearest prior header, normalizes nullable system and non-array tools, computes all four prompt-change kinds, suppresses a noninitial truncated-window false change, and publishes exact Step placement",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --test request_header_parity --all-features (2 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-search-index.ts",

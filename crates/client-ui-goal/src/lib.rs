@@ -178,6 +178,7 @@ pub fn goal_command_input_definition() -> AssemblerNodeDefinition {
                 id: context.id.clone(),
                 target: "chat".to_owned(),
                 data: encode(&data)?,
+                placement: None,
                 chat: Some(ChatConversationViewMetadata {
                     anchor_seq: anchor_seq(state.seq),
                     location,

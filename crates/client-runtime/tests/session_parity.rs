@@ -209,6 +209,7 @@ fn conversation() -> ConversationNodeAssembler {
                     "seq":context.state.as_ref().unwrap()["seq"],
                     "view":context.state.as_ref().unwrap()["view"]
                 })),
+                placement: None,
                 chat: Some(ChatConversationViewMetadata {
                     anchor_seq: context.state.as_ref().unwrap()["seq"]
                         .as_f64()

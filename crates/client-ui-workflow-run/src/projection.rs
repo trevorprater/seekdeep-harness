@@ -352,6 +352,7 @@ pub fn workflow_run_definition() -> AssemblerNodeDefinition {
                 id: context.id.clone(),
                 target: "chat".to_owned(),
                 data,
+                placement: None,
                 chat: Some(ChatConversationViewMetadata {
                     anchor_seq: event_anchor(start.event.seq),
                     location: start.location.clone(),

@@ -3,6 +3,7 @@
 mod duration_store;
 mod preview;
 mod record;
+mod request_header;
 mod search_index;
 mod timeline;
 mod virtual_rows;
@@ -10,6 +11,7 @@ mod virtual_rows;
 pub use duration_store::*;
 pub use preview::*;
 pub use record::*;
+pub use request_header::*;
 pub use search_index::*;
 pub use timeline::*;
 pub use virtual_rows::*;

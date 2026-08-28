@@ -133,6 +133,7 @@ fn node(context: &ConversationNodeContext, data: Value) -> Rc<ConversationViewNo
         id: context.id.clone(),
         target: "chat".to_owned(),
         data: Rc::new(data),
+        placement: None,
         chat: Some(ChatConversationViewMetadata {
             anchor_seq: 0.0,
             location: context
@@ -1112,6 +1113,7 @@ fn undefined_update_unstable_nodes_and_invalid_location_data_fail_loud() {
             id: context.id.clone(),
             target: "chat".to_owned(),
             data: Rc::new(Value::Null),
+            placement: None,
             chat: None,
         })))
     }));
@@ -1184,6 +1186,7 @@ fn chat_nodes_require_ordering_location_and_visibility_metadata() {
             id: context.id.clone(),
             target: "chat".to_owned(),
             data: Rc::new(Value::Null),
+            placement: None,
             chat: None,
         })))
     }));

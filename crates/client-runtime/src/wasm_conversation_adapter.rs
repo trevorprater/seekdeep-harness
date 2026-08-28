@@ -519,6 +519,14 @@ fn view_node_to_js(node: &ConversationViewNode) -> Result<JsValue, JsValue> {
     set(&value, "kind", &JsValue::from_str(&node.kind))?;
     set(&value, "id", &JsValue::from_str(&node.id))?;
     set(&value, "target", &JsValue::from_str(&node.target))?;
+    if let Some(placement) = &node.placement {
+        set(
+            &value,
+            "anchorSeq",
+            &JsValue::from_f64(placement.anchor_seq),
+        )?;
+        set(&value, "location", &location_to_js(&placement.location)?)?;
+    }
     if let Some(chat) = &node.chat {
         set(&value, "anchorSeq", &JsValue::from_f64(chat.anchor_seq))?;
         set(&value, "location", &location_to_js(&chat.location)?)?;
@@ -540,6 +548,36 @@ fn view_node_from_js(
     context: &ConversationNodeContext,
 ) -> Result<ConversationViewNode, JsValue> {
     let target = required_string(value, "target", "Conversation view Node")?;
+    let placement = if target == "chat" {
+        None
+    } else {
+        let anchor = Reflect::get(value, &JsValue::from_str("anchorSeq"))?;
+        let location = Reflect::get(value, &JsValue::from_str("location"))?;
+        match (anchor.is_undefined(), location.is_undefined()) {
+            (true, true) => None,
+            (false, false) => {
+                let anchor_seq = anchor.as_f64().ok_or_else(|| {
+                    js_sys::Error::new("Conversation view Node anchorSeq must be a number")
+                })?;
+                if !anchor_seq.is_finite() {
+                    return Err(js_sys::Error::new(
+                        "Conversation view Node anchorSeq must be finite",
+                    )
+                    .into());
+                }
+                Some(crate::ConversationViewPlacement {
+                    anchor_seq,
+                    location: context_location_from_js(&location, context)?,
+                })
+            }
+            _ => {
+                return Err(js_sys::Error::new(
+                    "Conversation view Node must provide anchorSeq and location together",
+                )
+                .into());
+            }
+        }
+    };
     let chat = if target == "chat" {
         let anchor_seq = required(value, "anchorSeq", "Conversation Chat view Node")?
             .as_f64()
@@ -581,6 +619,7 @@ fn view_node_from_js(
             "data",
             "Conversation view Node",
         )?)?),
+        placement,
         chat,
     })
 }

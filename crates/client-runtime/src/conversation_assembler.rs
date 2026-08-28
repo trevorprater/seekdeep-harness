@@ -81,8 +81,19 @@ pub struct ConversationViewNode {
     pub target: String,
     /// Complete JSON-compatible target data.
     pub data: Rc<Value>,
+    /// Optional target-defined ordering and Location extension.
+    pub placement: Option<ConversationViewPlacement>,
     /// Chat-only ordering, placement, and visibility metadata.
     pub chat: Option<ChatConversationViewMetadata>,
+}
+
+/// Target-neutral optional ordering and placement extension.
+#[derive(Clone)]
+pub struct ConversationViewPlacement {
+    /// Numeric ordering anchor.
+    pub anchor_seq: f64,
+    /// Engine-owned Turn/Step placement.
+    pub location: ConversationLocation,
 }
 
 /// Chat target fields carried in addition to target-neutral Node identity/data.
