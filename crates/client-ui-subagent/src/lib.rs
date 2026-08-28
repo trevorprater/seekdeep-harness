@@ -2,9 +2,18 @@
 
 mod locales;
 mod model;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 pub use locales::*;
 pub use model::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
+/// Compiled subagent catalog stylesheet.
+pub const SUBAGENT_CATALOG_STYLES: &str = include_str!("../data/catalog.css");
+/// Compiled read-only composer stylesheet.
+pub const SUBAGENT_READ_ONLY_STYLES: &str = include_str!("../data/read-only.css");
 
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-subagent";

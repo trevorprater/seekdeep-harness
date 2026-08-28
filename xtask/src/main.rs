@@ -480,6 +480,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
             "client-ui-settings-plugin-inventory-invariant"
         }
         "@seekdeep-ai/seekdeep-client-ui-skill" => "client-ui-skill-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-subagent" => "client-ui-subagent-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -638,6 +639,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiSkill(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSkill, inject: ['inputTriggers', 'connection', 'sessions', 'slots', 'locale', 'remote'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-subagent" {
+        return ui_subagent_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
@@ -704,6 +708,12 @@ fn module_factory(global: &str, module_id: &str) -> String {
         );
     }
     format!("() => {global}")
+}
+
+fn ui_subagent_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ {global}.configureClientUiSubagent(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSubagent, inject: ['inputTriggers', 'sessions', 'slots', 'locale'] }}); return {global}; }}"
+    )
 }
 
 #[allow(clippy::too_many_lines)] // Closed module-specific declaration dispatch stays auditable here.
@@ -792,6 +802,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-skill" {
         return ui_skill_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-subagent" {
+        return ui_subagent_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
     }
@@ -846,6 +859,39 @@ export type SkillKey =
   | 'row.running' | 'row.failed' | 'row.stopped' | 'row.instructions' | 'menu.userOnly';
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { skill: SkillKey }
+}
+"
+    .to_owned()
+}
+
+fn ui_subagent_declarations() -> String {
+    r"
+import type { SessionId, SubagentAddress } from '@seekdeep-ai/seekdeep-client-runtime/client';
+import type { PropsLocale, PropsRuntime } from '@seekdeep-ai/seekdeep-client-ui-slots';
+export const apply: typeof wasm_bindgen.applyClientUiSubagent;
+export const inject: readonly ['inputTriggers', 'sessions', 'slots', 'locale'];
+export type SubagentKey =
+  | 'diagnostic.corrupt' | 'diagnostic.unsupported' | 'diagnostic.unavailable'
+  | 'duration.seconds' | 'duration.minutes' | 'duration.hours' | 'duration.days'
+  | 'duration.daysHours' | 'duration.months' | 'duration.monthsDays' | 'duration.years'
+  | 'duration.yearsMonths' | 'duration.exactDays' | 'duration.exactTitle'
+  | 'loading.label' | 'loading.aria' | 'load.error' | 'retry' | 'mode.oneShot'
+  | 'mode.continuable' | 'activity.running' | 'activity.inactive' | 'branch.collapse'
+  | 'branch.expand' | 'count.total.one' | 'count.total.other' | 'count.running.one'
+  | 'count.running.other' | 'tree.aria' | 'readonly.oneShot.title' | 'readonly.title'
+  | 'readonly.oneShot.body' | 'readonly.body';
+export interface SubagentCatalogInjected {
+  openChild: (address: SubagentAddress) => void;
+  refresh: (parentSessionId: SessionId) => void;
+  setCatalogOpen: (parentSessionId: SessionId, open: boolean) => void;
+}
+export type SubagentCatalogActionProps =
+  PropsRuntime<'conversation.session.header.actions'> & SubagentCatalogInjected & PropsLocale<'subagent'>;
+export interface SubagentReadOnlyMatch { reason: 'one-shot' | 'parent-unavailable' }
+export type SubagentReadOnlyComposerProps =
+  PropsRuntime<'conversation.composer'> & { matched: SubagentReadOnlyMatch } & PropsLocale<'subagent'>;
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { subagent: SubagentKey }
 }
 "
     .to_owned()
@@ -1830,6 +1876,46 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-skill-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-skill"));
+    }
+
+    #[test]
+    fn ui_subagent_bundle_configures_catalog_composer_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_subagent_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-subagent",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiSubagent(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_subagent_wasm.applyClientUiSubagent",
+            "inject: ['inputTriggers', 'sessions', 'slots', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-subagent");
+        for expected in [
+            "type SubagentKey",
+            "interface SubagentCatalogInjected",
+            "type SubagentCatalogActionProps",
+            "interface SubagentReadOnlyMatch",
+            "type SubagentReadOnlyComposerProps",
+            "interface LocaleNamespaceMap",
+            "readonly ['inputTriggers', 'sessions', 'slots', 'locale']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-subagent",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-subagent-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-subagent"));
     }
 
     #[test]

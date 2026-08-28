@@ -1,6 +1,7 @@
 //! Pure subagent trigger, read-only, token, and duration policy.
 
-use seekdeep_client_runtime::RuntimeSessionListState;
+use std::collections::{BTreeMap, BTreeSet};
+
 use seekdeep_identity::SessionId;
 
 /// Addressed subagent mode.
@@ -50,15 +51,70 @@ pub const fn select_read_only_subagent(
     }
 }
 
+/// Session-list fields consumed by reference and lineage policies.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SubagentListSummary {
+    /// Stable Session identity.
+    pub id: SessionId,
+    /// Parent Session identity.
+    pub parent_id: Option<SessionId>,
+    /// Whether the durable origin is subagent.
+    pub subagent_origin: bool,
+    /// Current running bit.
+    pub running: bool,
+    /// User-facing label.
+    pub display_title: String,
+}
+
+/// Descendant totals for one possible parent Session.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SubagentDescendantSummary {
+    /// All descendants connected by uninterrupted subagent-origin lineage.
+    pub count: usize,
+    /// Descendants whose exact summary is running.
+    pub running_count: usize,
+}
+
+/// Indexes each subagent descendant under every uninterrupted subagent-origin ancestor.
+#[must_use]
+pub fn index_subagent_descendants(
+    summaries: &[SubagentListSummary],
+) -> BTreeMap<SessionId, SubagentDescendantSummary> {
+    let by_id = summaries
+        .iter()
+        .map(|summary| (summary.id.clone(), summary))
+        .collect::<BTreeMap<_, _>>();
+    let mut indexed = BTreeMap::<SessionId, SubagentDescendantSummary>::new();
+    for descendant in summaries.iter().filter(|summary| summary.subagent_origin) {
+        let mut seen = BTreeSet::new();
+        let mut current = Some(descendant);
+        while let Some(summary) = current.filter(|summary| summary.subagent_origin) {
+            let Some(parent) = &summary.parent_id else {
+                break;
+            };
+            if !seen.insert(summary.id.clone()) {
+                break;
+            }
+            let aggregate = indexed.entry(parent.clone()).or_default();
+            aggregate.count += 1;
+            if descendant.running {
+                aggregate.running_count += 1;
+            }
+            current = by_id.get(parent).copied();
+        }
+    }
+    indexed
+}
+
 /// Running direct-child labels matching one case-sensitive query in list order.
 #[must_use]
 pub fn child_labels(
-    list: &RuntimeSessionListState,
+    summaries: &[SubagentListSummary],
     parent_session_id: &SessionId,
     query: &str,
 ) -> Vec<String> {
-    list.by_id
-        .values()
+    summaries
+        .iter()
         .filter(|child| {
             child.parent_id.as_ref() == Some(parent_session_id)
                 && child.running
@@ -131,6 +187,46 @@ pub struct TokenUsage {
     pub cache_write_tokens: u64,
 }
 
+/// One active timing interval retained in the Session projection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SubagentActiveTiming {
+    /// Interval start in epoch milliseconds.
+    pub since: i128,
+    /// Latest durable interval edge in epoch milliseconds.
+    pub through: i128,
+}
+
+/// Settled and optionally active duration retained in the Session projection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SubagentTiming {
+    /// Duration already settled before the current active interval.
+    pub settled_ms: i128,
+    /// Current or most recently interrupted active interval.
+    pub active: Option<SubagentActiveTiming>,
+}
+
+/// Returns the active duration sampled at `now` for running rows and at `through` otherwise.
+#[must_use]
+pub const fn activity_duration(
+    timing: Option<SubagentTiming>,
+    running: bool,
+    now: i128,
+) -> Option<i128> {
+    let Some(timing) = timing else {
+        return None;
+    };
+    let Some(active) = timing.active else {
+        return Some(timing.settled_ms);
+    };
+    let end = if running { now } else { active.through };
+    let elapsed = end.saturating_sub(active.since);
+    Some(
+        timing
+            .settled_ms
+            .saturating_add(if elapsed < 0 { 0 } else { elapsed }),
+    )
+}
+
 /// Sums every durable provider-usage bucket.
 #[must_use]
 pub const fn token_total(usage: Option<TokenUsage>) -> Option<u64> {
@@ -184,7 +280,16 @@ pub struct DurationFormat {
     /// Locale key suffix under `duration.`.
     pub key: &'static str,
     /// Ordered named values.
-    pub values: Vec<(&'static str, String)>,
+    pub values: Vec<(&'static str, DurationValue)>,
+}
+
+/// JavaScript-observable duration interpolation value.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DurationValue {
+    /// An unpadded numeric unit.
+    Number(u64),
+    /// A zero-padded textual unit.
+    Text(String),
 }
 
 /// Chooses decreasing visual precision at larger scales.
@@ -197,9 +302,12 @@ pub fn format_duration(milliseconds: i128) -> DurationFormat {
         return DurationFormat {
             key: if months == 0 { "years" } else { "yearsMonths" },
             values: if months == 0 {
-                vec![("years", years.to_string())]
+                vec![("years", DurationValue::Number(years))]
             } else {
-                vec![("years", years.to_string()), ("months", months.to_string())]
+                vec![
+                    ("years", DurationValue::Number(years)),
+                    ("months", DurationValue::Number(months)),
+                ]
             },
         };
     }
@@ -209,9 +317,12 @@ pub fn format_duration(milliseconds: i128) -> DurationFormat {
         return DurationFormat {
             key: if days == 0 { "months" } else { "monthsDays" },
             values: if days == 0 {
-                vec![("months", months.to_string())]
+                vec![("months", DurationValue::Number(months))]
             } else {
-                vec![("months", months.to_string()), ("days", days.to_string())]
+                vec![
+                    ("months", DurationValue::Number(months)),
+                    ("days", DurationValue::Number(days)),
+                ]
             },
         };
     }
@@ -223,11 +334,11 @@ pub fn format_duration(milliseconds: i128) -> DurationFormat {
                 "daysHours"
             },
             values: if parts.hours == 0 {
-                vec![("days", parts.days.to_string())]
+                vec![("days", DurationValue::Number(parts.days))]
             } else {
                 vec![
-                    ("days", parts.days.to_string()),
-                    ("hours", parts.hours.to_string()),
+                    ("days", DurationValue::Number(parts.days)),
+                    ("hours", DurationValue::Number(parts.hours)),
                 ]
             },
         };
@@ -236,9 +347,15 @@ pub fn format_duration(milliseconds: i128) -> DurationFormat {
         return DurationFormat {
             key: "hours",
             values: vec![
-                ("hours", parts.total_hours.to_string()),
-                ("minutes", format!("{:02}", parts.minutes)),
-                ("seconds", format!("{:02}", parts.seconds)),
+                ("hours", DurationValue::Number(parts.total_hours)),
+                (
+                    "minutes",
+                    DurationValue::Text(format!("{:02}", parts.minutes)),
+                ),
+                (
+                    "seconds",
+                    DurationValue::Text(format!("{:02}", parts.seconds)),
+                ),
             ],
         };
     }
@@ -246,14 +363,17 @@ pub fn format_duration(milliseconds: i128) -> DurationFormat {
         return DurationFormat {
             key: "minutes",
             values: vec![
-                ("minutes", parts.total_minutes.to_string()),
-                ("seconds", format!("{:02}", parts.seconds)),
+                ("minutes", DurationValue::Number(parts.total_minutes)),
+                (
+                    "seconds",
+                    DurationValue::Text(format!("{:02}", parts.seconds)),
+                ),
             ],
         };
     }
     DurationFormat {
         key: "seconds",
-        values: vec![("seconds", parts.seconds.to_string())],
+        values: vec![("seconds", DurationValue::Number(parts.seconds))],
     }
 }
 
@@ -267,10 +387,16 @@ pub fn format_exact_duration(milliseconds: i128) -> DurationFormat {
     DurationFormat {
         key: "exactDays",
         values: vec![
-            ("days", parts.days.to_string()),
-            ("hours", format!("{:02}", parts.hours)),
-            ("minutes", format!("{:02}", parts.minutes)),
-            ("seconds", format!("{:02}", parts.seconds)),
+            ("days", DurationValue::Number(parts.days)),
+            ("hours", DurationValue::Text(format!("{:02}", parts.hours))),
+            (
+                "minutes",
+                DurationValue::Text(format!("{:02}", parts.minutes)),
+            ),
+            (
+                "seconds",
+                DurationValue::Text(format!("{:02}", parts.seconds)),
+            ),
         ],
     }
 }

@@ -48113,10 +48113,14 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-subagent/package.json"
+        "packages/client/ui-subagent/package.json",
+        "crates/client-ui-subagent/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package metadata preserves the renamed public exports and replaces tsdown with the Rust/WASM package builder",
+        "optimized @seekdeep-ai/seekdeep-client-ui-subagent bundle exposes only its own Client API and passed its Host, invariant, dependency-order, and stylesheet handoff in plain Node",
+        "verify-package-invariants: 151 hand-owned package companions conform"
       ]
     },
     {
@@ -48124,37 +48128,81 @@
       "kind": "asset",
       "status": "verified",
       "targets": [
-        "packages/client/ui-subagent/src/client/SubagentCatalogAction.module.css"
+        "packages/client/ui-subagent/src/client/SubagentCatalogAction.module.css",
+        "crates/client-ui-subagent/data/catalog.css",
+        "crates/client-ui-subagent/tests/css_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "compiled stylesheet preserves every source rule under a stable namespace and lowers CSS Modules global selectors for direct browser injection",
+        "cargo test -p seekdeep-client-ui-subagent --all-features: CSS projection test passed"
       ]
     },
     {
       "source": "packages/client/ui-subagent/src/client/SubagentCatalogAction.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-subagent/src/model.rs",
+        "crates/client-ui-subagent/src/wasm.rs",
+        "crates/client-ui-subagent/src/wasm/catalog_action.rs",
+        "crates/client-ui-subagent/data/catalog.css",
+        "crates/client-ui-subagent/tests/model_parity.rs",
+        "crates/client-ui-subagent/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM preserves descendant aggregation, catalog visibility and hydration, recursive expansion ownership, direct-parent navigation, diagnostics, retry, token and duration metrics, and exact translation value types",
+        "live browser tests cover mouse, keyboard, focus restoration, outside dismissal, running timers, loading and error states, branch teardown, unmount cleanup, accessibility attributes, and stable row layout",
+        "pinned source conversation UI suite passed 19/19; native Rust model and CSS tests passed 7/7; live Node/WASM suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-subagent/src/client/SubagentReadOnlyComposer.module.css",
       "kind": "asset",
       "status": "verified",
       "targets": [
-        "packages/client/ui-subagent/src/client/SubagentReadOnlyComposer.module.css"
+        "packages/client/ui-subagent/src/client/SubagentReadOnlyComposer.module.css",
+        "crates/client-ui-subagent/data/read-only.css",
+        "crates/client-ui-subagent/tests/css_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "compiled read-only composer stylesheet is an exact namespaced source projection",
+        "cargo test -p seekdeep-client-ui-subagent --all-features: CSS projection test passed"
       ]
     },
     {
       "source": "packages/client/ui-subagent/src/client/SubagentReadOnlyComposer.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-subagent/src/model.rs",
+        "crates/client-ui-subagent/src/wasm.rs",
+        "crates/client-ui-subagent/data/read-only.css",
+        "crates/client-ui-subagent/tests/model_parity.rs",
+        "crates/client-ui-subagent/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust selector preserves one-shot takeover, parent-available continuation, running parent-offline Stop access, and stopped parent-offline read-only recovery",
+        "live Rust/WASM renders both localized status explanations with the source role and hierarchy",
+        "pinned source composer tests passed 2/2; native and live Rust tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-subagent/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-subagent/src/model.rs",
+        "crates/client-ui-subagent/src/wasm.rs",
+        "crates/client-ui-subagent/src/wasm/plugin.rs",
+        "crates/client-ui-subagent/src/wasm/catalog_action.rs",
+        "crates/client-ui-subagent/tests/model_parity.rs",
+        "crates/client-ui-subagent/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM registers the exact dependency order, locale dictionaries, @ source, catalog action, and read-only composer with reversible lifecycle ownership",
+        "reference behavior preserves zero-RPC Session-list containment filtering, synchronous lexicon and subscription, literal pick text, clipboard and model serialization, and refusal to adjudicate commands",
+        "pinned source browser-plugin suite passed 11/11; native Rust model tests passed 6/6; live Node/WASM suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-subagent/src/client/locales.ts",
@@ -48172,7 +48220,17 @@
     {
       "source": "packages/client/ui-subagent/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-subagent/src/lib.rs",
+        "crates/client-ui-subagent/data/catalog.css",
+        "crates/client-ui-subagent/data/read-only.css",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust owns and embeds both stylesheets without runtime CSS-module imports, while the package builder emits the public Client declarations",
+        "optimized WASM package build and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-subagent/src/index.ts",
@@ -48187,7 +48245,7 @@
         "compiled dependency-free Host plugin preserves the source no-op node half",
         "real Web preflight advances from ui-subagent to ui-jobs"
       ],
-      "note": "this row is the source Host no-op half; Client trigger, catalog, read-only composer, slot, and renderer surfaces remain independently pending"
+      "note": "This row covers the dependency-free Host half; the Client trigger, catalog, read-only composer, slots, and renderer have independent manifest rows."
     },
     {
       "source": "packages/client/ui-subagent/src/invariant.ts",
@@ -48206,12 +48264,29 @@
     {
       "source": "packages/client/ui-subagent/tests/browser-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-subagent/tests/model_parity.rs",
+        "crates/client-ui-subagent/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source browser-plugin suite passed 11/11",
+        "native Rust model tests passed 6/6 and live Node/WASM suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-subagent/tests/conversation-ui.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-subagent/tests/model_parity.rs",
+        "crates/client-ui-subagent/tests/css_parity.rs",
+        "crates/client-ui-subagent/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation UI suite passed 19/19",
+        "native Rust model and CSS tests passed 7/7 and live Node/WASM suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-subagent/tsconfig.json",
@@ -48227,7 +48302,15 @@
     {
       "source": "packages/client/ui-subagent/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-subagent/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM package builder emits the Host, invariant, Client, and declaration entry points for @seekdeep-ai/seekdeep-client-ui-subagent",
+        "xtask ui_subagent_bundle_configures_catalog_composer_and_public_contract passed; optimized bundle and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-theme/README.i18n.yaml",

@@ -11,14 +11,26 @@ description = "Rust/WASM subagent catalog and read-only composer semantics"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-seekdeep-client-runtime = { path = "../client-runtime" }
 seekdeep-identity = { path = "../identity" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 seekdeep-cordis = { path = "../cordis" }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+seekdeep-client-runtime = { path = "../client-runtime" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+serde_json.workspace = true
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = ["Node"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-futures.workspace = true
+wasm-bindgen-test = "0.3.77"
+
 [dev-dependencies]
-indexmap.workspace = true
+regex.workspace = true
 
 [lints]
 workspace = true

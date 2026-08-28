@@ -5625,10 +5625,16 @@ dependencies = [
 name = "seekdeep-client-ui-subagent"
 version = "0.1.0-rc.5"
 dependencies = [
- "indexmap 2.14.0",
+ "js-sys",
+ "regex",
  "seekdeep-client-runtime",
  "seekdeep-cordis",
  "seekdeep-identity",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]
