@@ -5613,6 +5613,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-failure-display",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "tokio",
  "url",

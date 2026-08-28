@@ -2,10 +2,13 @@
 
 use std::collections::BTreeSet;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{TrajectoryCell, TrajectoryCellKind, format_duration_millis};
 
 /// One titled group of projected cells.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrajectoryGroupModel {
     /// Display title.
     pub title: String,
@@ -16,7 +19,8 @@ pub struct TrajectoryGroupModel {
 }
 
 /// One turn or between-turn section.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrajectoryTurnModel {
     /// Model turn number, absent between turns.
     pub turn: Option<u64>,
@@ -25,7 +29,8 @@ pub struct TrajectoryTurnModel {
 }
 
 /// Horizontal timeline projection mode.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TrajectoryTimelineMode {
     /// Equal-width operation slots.
     #[default]
@@ -39,7 +44,7 @@ pub enum TrajectoryTimelineMode {
 }
 
 /// Inclusive selection in the active projection domain.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TrajectoryTimeRange {
     /// Lower domain coordinate.
     pub start: f64,
@@ -48,7 +53,8 @@ pub struct TrajectoryTimeRange {
 }
 
 /// One ledger record projected into the active timeline domain.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrajectoryTimelineSpan {
     /// Lower coordinate.
     pub start: f64,
@@ -67,7 +73,7 @@ pub struct TrajectoryTimelineSpan {
 }
 
 /// One model-turn boundary in the active timeline domain.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TrajectoryTimelineTurnBoundary {
     /// Model turn number.
     pub turn: u64,
@@ -76,7 +82,8 @@ pub struct TrajectoryTimelineTurnBoundary {
 }
 
 /// Full-domain timeline model.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrajectoryTimelineModel {
     /// Domain lower bound.
     pub start: f64,

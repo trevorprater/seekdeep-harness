@@ -48642,7 +48642,19 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTimeline.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/client-ui-trajectory/src/timeline.rs",
+        "crates/client-ui-trajectory/src/timeline_controller.rs",
+        "crates/client-ui-trajectory/tests/core_parity.rs",
+        "crates/client-ui-trajectory/tests/timeline_controller_parity.rs"
+      ],
+      "evidence": [
+        "Rust owns all four timeline projections plus deterministic anchored zoom, right-button pan/clear, left drag/click selection, nearest-record focus, minimum ranges, repeated edge auto-pan, cancellation, selected-record reveal, and model/range reconciliation",
+        "cargo test -p seekdeep-client-ui-trajectory --test timeline_controller_parity --all-features (5 passed)",
+        "strict native and wasm32 Clippy passed"
+      ],
+      "note": "keep pending until the Rust/WASM React renderer, earlier-history Promise lifecycle, delayed tooltips, DOM pointer capture, native wheel cancellation, and visible lane/span/selection structure are live"
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryToolbar.module.css",

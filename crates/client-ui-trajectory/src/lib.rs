@@ -14,6 +14,7 @@ mod request_header;
 mod search_index;
 mod snapshot_builder;
 mod timeline;
+mod timeline_controller;
 mod tool_definition;
 mod virtual_rows;
 
@@ -31,6 +32,7 @@ pub use request_header::*;
 pub use search_index::*;
 pub use snapshot_builder::*;
 pub use timeline::*;
+pub use timeline_controller::*;
 pub use tool_definition::*;
 pub use virtual_rows::*;
 

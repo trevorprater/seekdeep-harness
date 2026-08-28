@@ -1,9 +1,11 @@
 //! Shared trajectory record data and formatting contracts.
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Closed set of trajectory record kinds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TrajectoryCellKind {
     /// System-prompt or tool-catalog change.
     System,
@@ -38,7 +40,8 @@ impl TrajectoryCellKind {
 }
 
 /// Recorded inputs needed to derive assistant TTFT and decode throughput.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AssistantMetricDetail {
     /// Whether timing fields were recorded.
     pub timing_recorded: bool,
@@ -55,9 +58,11 @@ pub struct AssistantMetricDetail {
 }
 
 /// One source content block preserved in model order.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrajectorySourceBlock {
     /// Extensible block tag.
+    #[serde(rename = "type")]
     pub kind: String,
     /// Complete text or serialized content.
     pub content: String,
@@ -72,7 +77,8 @@ pub struct TrajectorySourceBlock {
 }
 
 /// Data contract for one trajectory record.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrajectoryCell {
     /// One-based display index.
     pub index: usize,
@@ -103,8 +109,10 @@ pub struct TrajectoryCell {
     /// Complete reasoning detail.
     pub thinking_detail: Option<String>,
     /// Original input blocks.
+    #[serde(default)]
     pub source_blocks: Vec<TrajectorySourceBlock>,
     /// Original output blocks.
+    #[serde(default)]
     pub output_blocks: Vec<TrajectorySourceBlock>,
     /// Call-time model-visible schema.
     pub schema_detail: Option<String>,
