@@ -2,6 +2,10 @@
 
 use std::rc::Rc;
 
+mod bar;
+
+pub use bar::*;
+
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ChatConversationViewMetadata, ConversationAssemblerError,
     ConversationLocation, ConversationLocationEvent, ConversationMatchResult,

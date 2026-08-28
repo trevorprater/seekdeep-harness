@@ -42871,7 +42871,16 @@
     {
       "source": "packages/client/ui-goal/src/client/GoalBar.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/client-ui-goal/src/bar.rs",
+        "crates/client-ui-goal/tests/bar_parity.rs"
+      ],
+      "evidence": [
+        "Rust owns visibility, identity reconciliation, edit prefill/cancel/reset, same-render single-flight admission, clear-before-projection hiding, action settlement, and exact inline failure text",
+        "cargo test -p seekdeep-client-ui-goal --test bar_parity --all-features (2 passed)"
+      ],
+      "note": "keep pending until the compiled Rust/WASM GoalBar, GoalDock projection adapter, tooltip/action DOM, and Remote action adapters are live"
     },
     {
       "source": "packages/client/ui-goal/src/client/GoalCommandInputView.module.css",
