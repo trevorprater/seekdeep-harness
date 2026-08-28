@@ -13,6 +13,7 @@ fn layout(cells: Vec<TrajectoryCell>) -> Rc<Vec<Vec<TrajectoryTurnModel>>> {
         turn: Some(2),
         groups: vec![TrajectoryGroupModel {
             title: "Step 1".to_owned(),
+            description: None,
             cells,
         }],
     }]])

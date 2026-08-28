@@ -48701,7 +48701,18 @@
     {
       "source": "packages/client/ui-trajectory/src/client/layout.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/layout.rs",
+        "crates/client-ui-trajectory/src/record.rs",
+        "crates/client-ui-trajectory/tests/layout_parity.rs"
+      ],
+      "evidence": [
+        "Rust preserves chronological node/request/system/compaction ordering; Turn, Message, and Step grouping; request boundaries; prompt details; standalone compactions; user/context/steering placement; duration cursor; provider metrics; recorded assistant timing; running placeholders; and Turn-0 folding",
+        "Rust expands finalized/streaming Assistant blocks, root Tools, running and settled recursive subcalls, result/detail/source/image projections, schema details, group wall spans and Tool histograms, while append preserves unaffected Turn identity and replaces matching placeholders",
+        "pinned source layout suite passed all 18 fold cases within the 22/22 layout run",
+        "cargo test -p seekdeep-client-ui-trajectory --test layout_parity --all-features (7 consolidated cases passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/locales.ts",

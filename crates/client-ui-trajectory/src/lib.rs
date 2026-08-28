@@ -3,6 +3,7 @@
 mod assistant_definition;
 mod compaction_definitions;
 mod duration_store;
+mod layout;
 mod message_definitions;
 mod preview;
 mod record;
@@ -16,6 +17,7 @@ mod virtual_rows;
 pub use assistant_definition::*;
 pub use compaction_definitions::*;
 pub use duration_store::*;
+pub use layout::*;
 pub use message_definitions::*;
 pub use preview::*;
 pub use record::*;

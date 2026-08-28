@@ -9,6 +9,8 @@ use crate::{TrajectoryCell, TrajectoryCellKind, format_duration_millis};
 pub struct TrajectoryGroupModel {
     /// Display title.
     pub title: String,
+    /// Optional wall-span and Tool histogram.
+    pub description: Option<String>,
     /// Records in projection order.
     pub cells: Vec<TrajectoryCell>,
 }

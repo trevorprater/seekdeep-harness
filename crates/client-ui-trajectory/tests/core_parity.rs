@@ -35,6 +35,7 @@ fn turn(turn: Option<u64>, cells: Vec<TrajectoryCell>) -> TrajectoryTurnModel {
         turn,
         groups: vec![TrajectoryGroupModel {
             title: "Step 1".to_owned(),
+            description: None,
             cells,
         }],
     }
