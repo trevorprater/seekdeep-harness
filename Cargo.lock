@@ -5594,6 +5594,8 @@ version = "0.1.0-rc.5"
 dependencies = [
  "seekdeep-client-ui-tool",
  "seekdeep-cordis",
+ "seekdeep-identity",
+ "serde",
  "serde_json",
 ]
 

@@ -1,5 +1,9 @@
 //! Skill tool-row model and Rust/WASM UI semantics.
 
+mod catalog;
+
+pub use catalog::*;
+
 use seekdeep_client_ui_tool::{ToolCallBlock, result_text};
 use serde_json::Value;
 

@@ -12,6 +12,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 seekdeep-client-ui-tool = { path = "../client-ui-tool" }
+seekdeep-identity = { path = "../identity" }
+serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
