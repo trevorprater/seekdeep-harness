@@ -48857,7 +48857,18 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-snapshot-builder.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/snapshot_builder.rs",
+        "crates/client-ui-trajectory/tests/snapshot_builder_parity.rs"
+      ],
+      "evidence": [
+        "Rust keyed replace/apply preserves cached contribution order and rebuilds only for inserts or anchor changes",
+        "Rust snapshot fold preserves exact Step header and prior-header inheritance, one-time prompt changes, request config injection, recursive call-schema capture, running/final Tool axes, input locations, partials, request ordering, stacked compaction interruption, Turn error assignment, and numeric event ordering",
+        "pinned source snapshot-builder suite passed 4/4 within the 107/107 trajectory run",
+        "cargo test -p seekdeep-client-ui-trajectory --test snapshot_builder_parity --all-features (5 passed)"
+      ],
+      "note": "the typed Rust snapshot retains IndexMap fields; JavaScript Map materialization and registry installation belong to the independently pending Client/WASM plugin boundary"
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-tool-definition.ts",
