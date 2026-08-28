@@ -45316,7 +45316,17 @@
     {
       "source": "packages/client/ui-primitives/src/JsonTree.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_json_tree.rs",
+        "crates/client-ui-primitives/src/browser_menu.rs",
+        "crates/client-ui-primitives/tests/wasm_json_tree_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source JsonTree suite: 10 passed",
+        "live wasm32 recursion, preview, focus, copy, placement, localization, data-reset, and teardown assertions: 6 passed",
+        "strict wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/Menu.module.css",
@@ -46484,7 +46494,16 @@
     {
       "source": "packages/client/ui-primitives/tests/json-tree.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_json_tree_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_menu_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 10 passed",
+        "compiled live wasm32 JsonTree assertions: 6 passed",
+        "compiled Menu composition assertions: 5 passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx",

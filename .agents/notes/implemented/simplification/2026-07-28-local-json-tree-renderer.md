@@ -10,12 +10,12 @@ The read-only JSON inspector used by the [trajectory ledger](../feature/2026-07-
 
 ## Decision
 
-`JsonTree` owns its recursive presentation in `seekdeep-client-ui-primitives`.
+The Rust/WASM `JsonTree` ([browser_json_tree.rs](../../../../crates/client-ui-primitives/src/browser_json_tree.rs)) owns recursive presentation in `seekdeep-client-ui-primitives`. One top-level React state owner holds expanded paths, the roving tab stop, copy targeting, and feedback; recursive row projection is pure and the copy-options popup composes the package's compiled `Menu`.
 
 - Each rendered row receives its value and property path directly. Object keys and array indexes extend that path during recursion, so copy actions never recover application data from rendered DOM text.
 - Expandable rows render the compact preview locally and mount child rows only while expanded. `expandTopLevel` selects between a fixed-open bracket frame and a collapsible root node without changing the public component contract.
 - The tree keeps one tabbable expander among visible nodes. Pointer activation claims that tab stop; Up and Down move it cyclically, while Left and Right collapse or expand the focused node.
-- `react-json-view-lite` is not a package dependency and has no pnpm patch. Focused component tests pin previews, expansion, keyboard focus, and array copy paths.
+- `react-json-view-lite` is not a package dependency and has no pnpm patch. The pinned source suite and live WASM suite pin previews across JavaScript-only values, expansion, keyboard focus, array/object paths, copy modes and feedback, placement, localization, data replacement, and teardown. The package-wide export and assembled trajectory/browser rows remain independently pending until their complete dependency paths are compiled.
 
 ## Alternatives considered
 
@@ -29,4 +29,4 @@ The read-only JSON inspector used by the [trajectory ledger](../feature/2026-07-
 
 ## Consequences
 
-The JSON inspector has one source-level owner, explicit data flow, accurate array paths, and no patched dependency. The package now owns recursive rendering, expansion state, ARIA tree structure, and roving focus behavior, so changes to those semantics require focused component coverage. The implementation remains intentionally read-only and limited to the preview, navigation, and copy behavior used by current consumers.
+The JSON inspector has one compiled owner, explicit data flow, accurate array paths, and no patched dependency. The package owns recursive rendering, expansion state, ARIA tree structure, roving focus, copy positioning, and the feedback timer, so changes to those semantics require source-oracle and live-WASM coverage. The implementation remains intentionally read-only and limited to the preview, navigation, and copy behavior used by current consumers.

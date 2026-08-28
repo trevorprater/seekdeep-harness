@@ -10,12 +10,12 @@ Status: implemented
 
 ## 决策
 
-`seekdeep-client-ui-primitives` 中的 `JsonTree` 自行负责递归呈现。
+Rust/WASM `JsonTree`（[browser_json_tree.rs](../../../../crates/client-ui-primitives/src/browser_json_tree.rs)）在 `seekdeep-client-ui-primitives` 中负责递归呈现。一个顶层 React 状态所有者持有展开路径、roving Tab 焦点、复制目标与反馈；递归行投影保持纯函数，复制选项弹层则组合本包编译后的 `Menu`。
 
 - 每个渲染行都直接接收自身的值和属性路径。递归时，对象键和数组索引会附加到路径末尾，因此复制操作无需再从 DOM 渲染文本中反向还原应用数据。
 - 可展开行在本地渲染紧凑预览，仅在展开时挂载子行。`expandTopLevel` 可选择固定展开的括号框架或可折叠根节点，而不改变组件的公开约定。
 - 树中所有可见节点仅保留一个可通过 Tab 键聚焦的展开控件。使用指针激活控件后，该控件会成为 Tab 键焦点位置；上、下方向键循环移动焦点，左、右方向键折叠或展开当前焦点所在节点。
-- `react-json-view-lite` 不在 `seekdeep-client-ui-primitives` 的依赖项中，也没有 pnpm 补丁。针对性组件测试锁定预览、展开、键盘焦点和数组复制路径。
+- `react-json-view-lite` 不在 `seekdeep-client-ui-primitives` 的依赖项中，也没有 pnpm 补丁。固定源码套件与 live WASM 套件锁定 JavaScript 专有值的预览、展开、键盘焦点、数组／对象路径、复制模式与反馈、定位、本地化、数据替换及拆卸。整包导出与组装后的 trajectory／浏览器行仍各自保持待完成，直到其完整依赖路径都完成编译。
 
 ## 曾考虑的替代方案
 
@@ -29,4 +29,4 @@ Status: implemented
 
 ## 后果
 
-JSON 检查器在源码层由单一实现负责，具有显式数据流和准确的数组路径，且没有经过补丁修改的依赖。`seekdeep-client-ui-primitives` 负责递归渲染、展开状态、ARIA 树结构和焦点循环移动行为，因此修改这些语义时必须提供针对性组件测试。实现有意保持只读，仅包含当前消费方使用的预览、导航与复制行为。
+JSON 检查器由单一编译实现负责，具有显式数据流和准确的数组路径，且没有经过补丁修改的依赖。`seekdeep-client-ui-primitives` 负责递归渲染、展开状态、ARIA 树结构、焦点循环移动、复制定位与反馈计时器，因此修改这些语义时必须同时提供源码 oracle 与 live WASM 覆盖。实现有意保持只读，仅包含当前消费方使用的预览、导航与复制行为。
