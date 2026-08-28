@@ -48626,7 +48626,19 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTable.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/client-ui-trajectory/src/table_projection.rs",
+        "crates/client-ui-trajectory/src/virtual_rows.rs",
+        "crates/client-ui-trajectory/tests/table_projection_parity.rs",
+        "crates/client-ui-trajectory/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "Rust owns table flatten/filter structure, stable request placement and numbering, coincident marker runs, turn and assistant folding, record states, detail tabs, timing fallbacks, display previews, parent hierarchy, usage totals, and JSON/schema classification",
+        "cargo test -p seekdeep-client-ui-trajectory --test table_projection_parity --all-features (8 passed)",
+        "strict native and wasm32 Clippy passed"
+      ],
+      "note": "keep pending until the Rust/WASM React ledger, virtual scroll lifecycle, earlier-history Promise and anchor restoration, record/request inspector, resize interactions, Markdown/JSON detail panels, and inspect/focus callbacks are live"
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTimeline.module.css",
