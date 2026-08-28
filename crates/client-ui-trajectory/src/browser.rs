@@ -608,6 +608,16 @@ fn ui() -> Result<ReactUi, JsValue> {
     })
 }
 
+pub(crate) fn trajectory_browser_modules() -> Result<(JsValue, Option<JsValue>), JsValue> {
+    MODULES.with(|modules| {
+        modules
+            .borrow()
+            .clone()
+            .map(|modules| (modules.react, modules.primitives))
+            .ok_or_else(|| js_sys::Error::new("client-ui-trajectory is not configured").into())
+    })
+}
+
 #[derive(Clone)]
 struct ReactUi {
     react: JsValue,

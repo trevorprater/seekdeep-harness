@@ -3,6 +3,8 @@
 mod assistant_definition;
 #[cfg(target_arch = "wasm32")]
 mod browser;
+#[cfg(target_arch = "wasm32")]
+mod browser_timeline;
 mod compaction_definitions;
 mod contract;
 mod duration_store;
@@ -21,6 +23,8 @@ mod virtual_rows;
 pub use assistant_definition::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_timeline::*;
 pub use compaction_definitions::*;
 pub use contract::*;
 pub use duration_store::*;

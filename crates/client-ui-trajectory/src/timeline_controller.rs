@@ -3,7 +3,7 @@
 use crate::{
     TrajectoryTimeRange, TrajectoryTimelineMode, TrajectoryTimelineModel, TrajectoryTimelineSpan,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 const MINIMUM_DRAG_PX: f64 = 3.0;
 const MINIMUM_ZOOM_OPERATIONS: f64 = 4.0;
@@ -29,7 +29,7 @@ struct PanGesture {
 }
 
 /// Timeline hover projection.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineHoverPoint {
     /// Track-relative fraction.
@@ -50,7 +50,7 @@ pub struct TimelinePointerOutcome {
 }
 
 /// Immutable render-facing controller snapshot.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineControllerSnapshot {
     /// Current viewport, absent at full zoom.
@@ -173,6 +173,16 @@ impl TimelineViewportController {
         }) {
             self.viewport = None;
         }
+    }
+
+    /// Replaces the projection mode used by subsequent zoom operations.
+    pub fn set_mode(&mut self, mode: TrajectoryTimelineMode) {
+        self.mode = mode;
+    }
+
+    /// Clears hover without disturbing an active viewport or committed range.
+    pub fn clear_hover(&mut self) {
+        self.hover = None;
     }
 
     /// Returns whether a committed range lies wholly outside the model and must clear.
