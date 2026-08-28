@@ -8,7 +8,13 @@ use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen
 use crate::{SIMPLE_COMPONENT_STYLES, format_elapsed_seconds};
 
 thread_local! {
-    static REACT: RefCell<Option<JsValue>> = const { RefCell::new(None) };
+    static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
+}
+
+#[derive(Clone)]
+struct BrowserModules {
+    react: JsValue,
+    primitives: Option<JsValue>,
 }
 
 /// Configures React and injects the compiled simple-component stylesheet once.
@@ -19,7 +25,32 @@ thread_local! {
 #[wasm_bindgen(js_name = configureClientUiTrajectory)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn configure_client_ui_trajectory(react: JsValue) -> Result<(), JsValue> {
-    REACT.with(|slot| *slot.borrow_mut() = Some(react));
+    MODULES.with(|slot| {
+        *slot.borrow_mut() = Some(BrowserModules {
+            react,
+            primitives: None,
+        });
+    });
+    inject_styles()
+}
+
+/// Configures React plus shared UI primitives for the complete component set.
+///
+/// # Errors
+///
+/// Returns DOM stylesheet construction failures.
+#[wasm_bindgen(js_name = configureClientUiTrajectoryModules)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn configure_client_ui_trajectory_modules(
+    react: JsValue,
+    primitives: JsValue,
+) -> Result<(), JsValue> {
+    MODULES.with(|slot| {
+        *slot.borrow_mut() = Some(BrowserModules {
+            react,
+            primitives: Some(primitives),
+        });
+    });
     inject_styles()
 }
 
@@ -78,6 +109,26 @@ pub fn trajectory_turn_component() -> Result<JsValue, JsValue> {
     let ui = ui()?;
     Ok(
         Closure::wrap(Box::new(move |props: JsValue| render_turn(&ui, &props))
+            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>)
+        .into_js_value(),
+    )
+}
+
+/// Returns the compiled `TrajectoryToolbar` React component.
+///
+/// # Errors
+///
+/// Returns before React and UI-primitives configuration.
+#[wasm_bindgen(js_name = trajectoryToolbarComponent)]
+pub fn trajectory_toolbar_component() -> Result<JsValue, JsValue> {
+    let ui = ui()?;
+    if ui.primitives.is_none() {
+        return Err(
+            js_sys::Error::new("client-ui-trajectory Toolbar requires UI primitives").into(),
+        );
+    }
+    Ok(
+        Closure::wrap(Box::new(move |props: JsValue| render_toolbar(&ui, &props))
             as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>)
         .into_js_value(),
     )
@@ -271,6 +322,244 @@ fn render_turn(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
     ui.tag("section", Some(&section_props), &[header, body])
 }
 
+#[allow(clippy::too_many_lines)] // Source toolbar controls remain one auditable render surface.
+fn render_toolbar(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
+    let actual_duration = required_bool(props, "actualDuration", "TrajectoryToolbar")?;
+    let actual_time = required_bool(props, "actualTime", "TrajectoryToolbar")?;
+    let turns_collapsed = required_bool(props, "allTurnsCollapsed", "TrajectoryToolbar")?;
+    let assistants_collapsed = required_bool(props, "allAssistantsCollapsed", "TrajectoryToolbar")?;
+    let search_query = required(props, "searchQuery", "TrajectoryToolbar")?;
+    let translate = required(props, "t", "TrajectoryToolbar")?.dyn_into::<Function>()?;
+
+    let duration_change =
+        required(props, "onActualDurationChange", "TrajectoryToolbar")?.dyn_into::<Function>()?;
+    let duration_click = Closure::wrap(Box::new(move || {
+        duration_change.call1(&JsValue::UNDEFINED, &JsValue::from_bool(!actual_duration))
+    }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
+    let duration_label = translated(&translate, "toolbar.useActualDuration")?;
+    let duration_title = translated(
+        &translate,
+        if actual_duration {
+            "toolbar.useEqualWidth"
+        } else {
+            "toolbar.useActualDuration"
+        },
+    )?;
+    let circle = ui.tag(
+        "circle",
+        Some(&object(&[
+            ("cx", JsValue::from_str("8")),
+            ("cy", JsValue::from_str("8")),
+            ("r", JsValue::from_str("5.25")),
+        ])?),
+        &[],
+    )?;
+    let path = ui.tag(
+        "path",
+        Some(&object(&[("d", JsValue::from_str("M8 4.75V8l2.25 1.5"))])?),
+        &[],
+    )?;
+    let clock = ui.tag(
+        "svg",
+        Some(&object(&[
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar-toggle-icon"),
+            ),
+            ("viewBox", JsValue::from_str("0 0 16 16")),
+            ("fill", JsValue::from_str("none")),
+            ("aria-hidden", JsValue::TRUE),
+        ])?),
+        &[circle, path],
+    )?;
+    let duration = ui.tag(
+        "button",
+        Some(&object(&[
+            ("type", JsValue::from_str("button")),
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar-toggle"),
+            ),
+            ("aria-label", duration_label),
+            ("aria-pressed", JsValue::from_bool(actual_duration)),
+            ("title", duration_title),
+            ("onClick", duration_click.into_js_value()),
+        ])?),
+        &[clock, translated(&translate, "toolbar.duration")?],
+    )?;
+
+    let time_change =
+        required(props, "onActualTimeChange", "TrajectoryToolbar")?.dyn_into::<Function>()?;
+    let time_click = Closure::wrap(Box::new(move || {
+        time_change.call1(&JsValue::UNDEFINED, &JsValue::from_bool(!actual_time))
+    }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
+    let thumb = ui.tag(
+        "span",
+        Some(&class("seekdeep-trajectory-toolbar-control-thumb")?),
+        &[],
+    )?;
+    let track = ui.tag(
+        "span",
+        Some(&object(&[
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar-control-track"),
+            ),
+            (
+                "data-on",
+                if actual_time {
+                    JsValue::TRUE
+                } else {
+                    JsValue::UNDEFINED
+                },
+            ),
+            ("aria-hidden", JsValue::TRUE),
+        ])?),
+        &[thumb],
+    )?;
+    let actual_time_control = ui.tag(
+        "button",
+        Some(&object(&[
+            ("type", JsValue::from_str("button")),
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar-control"),
+            ),
+            ("role", JsValue::from_str("switch")),
+            ("aria-checked", JsValue::from_bool(actual_time)),
+            ("hidden", JsValue::TRUE),
+            ("onClick", time_click.into_js_value()),
+        ])?),
+        &[translated(&translate, "toolbar.actualTime")?, track],
+    )?;
+    let turns = toolbar_action(
+        ui,
+        props,
+        &translate,
+        "onToggleAllTurns",
+        turns_collapsed,
+        "toolbar.expandTurns",
+        "toolbar.collapseTurns",
+        "toolbar.turns",
+    )?;
+    let calls = toolbar_action(
+        ui,
+        props,
+        &translate,
+        "onToggleAllAssistants",
+        assistants_collapsed,
+        "toolbar.expandCalls",
+        "toolbar.collapseCalls",
+        "toolbar.calls",
+    )?;
+    let actions = ui.tag(
+        "div",
+        Some(&class("seekdeep-trajectory-toolbar-actions")?),
+        &[duration, actual_time_control, turns, calls],
+    )?;
+
+    let icon = ui.primitive(
+        "IconSearchOutline16",
+        Some(&object(&[
+            ("size", JsValue::from_f64(11.0)),
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar-search-icon"),
+            ),
+        ])?),
+        &[],
+    )?;
+    let search_change =
+        required(props, "onSearchQueryChange", "TrajectoryToolbar")?.dyn_into::<Function>()?;
+    let on_change = Closure::wrap(Box::new(move |event: JsValue| {
+        let current = required(&event, "currentTarget", "search event")?;
+        let value = required(&current, "value", "search input")?;
+        search_change.call1(&JsValue::UNDEFINED, &value)
+    })
+        as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
+    let input = ui.tag(
+        "input",
+        Some(&object(&[
+            ("type", JsValue::from_str("search")),
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar-search-input"),
+            ),
+            ("aria-label", translated(&translate, "toolbar.search")?),
+            (
+                "placeholder",
+                translated(&translate, "toolbar.searchPlaceholder")?,
+            ),
+            ("value", search_query),
+            ("onChange", on_change.into_js_value()),
+        ])?),
+        &[],
+    )?;
+    let search = ui.tag(
+        "div",
+        Some(&class("seekdeep-trajectory-toolbar-search")?),
+        &[icon, input],
+    )?;
+    let inner = ui.tag(
+        "div",
+        Some(&class("seekdeep-trajectory-toolbar-inner")?),
+        &[actions, search],
+    )?;
+    ui.tag(
+        "div",
+        Some(&object(&[
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar"),
+            ),
+            ("role", JsValue::from_str("toolbar")),
+            ("aria-label", translated(&translate, "toolbar.aria")?),
+        ])?),
+        &[inner],
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn toolbar_action(
+    ui: &ReactUi,
+    props: &JsValue,
+    translate: &Function,
+    callback: &str,
+    collapsed: bool,
+    expand_key: &str,
+    collapse_key: &str,
+    text_key: &str,
+) -> Result<JsValue, JsValue> {
+    let callback = required(props, callback, "TrajectoryToolbar")?;
+    let label = translated(translate, if collapsed { expand_key } else { collapse_key })?;
+    let icon = ui.tag(
+        "span",
+        Some(&object(&[
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar-action-icon"),
+            ),
+            ("aria-hidden", JsValue::TRUE),
+        ])?),
+        &[JsValue::from_str(if collapsed { "⊞" } else { "⊟" })],
+    )?;
+    ui.tag(
+        "button",
+        Some(&object(&[
+            ("type", JsValue::from_str("button")),
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-toolbar-action"),
+            ),
+            ("aria-label", label.clone()),
+            ("aria-pressed", JsValue::from_bool(collapsed)),
+            ("title", label),
+            ("onClick", callback),
+        ])?),
+        &[icon, translated(translate, text_key)?],
+    )
+}
+
 fn inject_styles() -> Result<(), JsValue> {
     const PACKAGE: &str = "@seekdeep-ai/seekdeep-client-ui-trajectory";
     const TAG: &str = "@seekdeep-ai/seekdeep-client-ui-trajectory/simple-components.css";
@@ -307,11 +596,14 @@ fn inject_styles() -> Result<(), JsValue> {
 }
 
 fn ui() -> Result<ReactUi, JsValue> {
-    REACT.with(|react| {
-        react
+    MODULES.with(|modules| {
+        modules
             .borrow()
             .clone()
-            .map(|react| ReactUi { react })
+            .map(|modules| ReactUi {
+                react: modules.react,
+                primitives: modules.primitives,
+            })
             .ok_or_else(|| js_sys::Error::new("client-ui-trajectory is not configured").into())
     })
 }
@@ -319,6 +611,7 @@ fn ui() -> Result<ReactUi, JsValue> {
 #[derive(Clone)]
 struct ReactUi {
     react: JsValue,
+    primitives: Option<JsValue>,
 }
 
 impl ReactUi {
@@ -330,6 +623,25 @@ impl ReactUi {
     ) -> Result<JsValue, JsValue> {
         let arguments = Array::new();
         arguments.push(&JsValue::from_str(name));
+        arguments.push(props.map_or(&JsValue::NULL, AsRef::as_ref));
+        for child in children {
+            arguments.push(child);
+        }
+        function(&self.react, "createElement")?.apply(&self.react, &arguments)
+    }
+
+    fn primitive(
+        &self,
+        name: &str,
+        props: Option<&Object>,
+        children: &[JsValue],
+    ) -> Result<JsValue, JsValue> {
+        let primitives = self.primitives.as_ref().ok_or_else(|| {
+            js_sys::Error::new("client-ui-trajectory UI primitives are not configured")
+        })?;
+        let kind = required(primitives, name, "UI primitives")?;
+        let arguments = Array::new();
+        arguments.push(&kind);
         arguments.push(props.map_or(&JsValue::NULL, AsRef::as_ref));
         for child in children {
             arguments.push(child);
@@ -421,6 +733,16 @@ fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, Js
     required(value, key, owner)?
         .as_string()
         .ok_or_else(|| js_sys::Error::new(&format!("{owner} {key:?} must be a string")).into())
+}
+
+fn required_bool(value: &JsValue, key: &str, owner: &str) -> Result<bool, JsValue> {
+    required(value, key, owner)?
+        .as_bool()
+        .ok_or_else(|| js_sys::Error::new(&format!("{owner} {key:?} must be a boolean")).into())
+}
+
+fn translated(translate: &Function, key: &str) -> Result<JsValue, JsValue> {
+    translate.call1(&JsValue::UNDEFINED, &JsValue::from_str(key))
 }
 
 fn function(value: &JsValue, key: &str) -> Result<Function, JsValue> {

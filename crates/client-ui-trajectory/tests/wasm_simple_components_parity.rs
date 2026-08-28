@@ -4,10 +4,12 @@
 
 use js_sys::{Array, Function, Object, Reflect};
 use seekdeep_client_ui_trajectory::{
-    configure_client_ui_trajectory, trajectory_cell_component, trajectory_group_header_component,
+    configure_client_ui_trajectory, configure_client_ui_trajectory_modules,
+    trajectory_cell_component, trajectory_group_header_component, trajectory_toolbar_component,
     trajectory_turn_component, trajectory_turn_header_component,
 };
-use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
+use std::{cell::RefCell, rc::Rc};
+use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_test::wasm_bindgen_test;
 
 #[wasm_bindgen(inline_js = r#"
@@ -28,7 +30,7 @@ export function makeTrajectorySimpleBench() {
   const React = {
     createElement(kind, props, ...children) { return { kind, props: props ?? {}, children } },
   }
-  return { React, styles }
+  return { React, styles, primitives: { IconSearchOutline16: 'IconSearchOutline16' } }
 }
 
 export function trajectoryNodeText(node) {
@@ -65,6 +67,24 @@ export function trajectoryCountClass(node, className) {
   return count
 }
 
+export function trajectoryFindProp(node, property, value) {
+  if (node === null || node === undefined || node === false) return undefined
+  if (typeof node === 'string' || typeof node === 'number') return undefined
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = trajectoryFindProp(child, property, value)
+      if (found !== undefined) return found
+    }
+    return undefined
+  }
+  if (node.props?.[property] === value) return node
+  for (const child of node.children ?? []) {
+    const found = trajectoryFindProp(child, property, value)
+    if (found !== undefined) return found
+  }
+  return undefined
+}
+
 export function trajectoryStyles(bench) { return bench.styles.length }
 export function trajectoryProperty(value, key) { return value?.[key] }
 export function trajectoryChildren(node) { return node?.children ?? [] }
@@ -74,6 +94,7 @@ extern "C" {
     fn trajectoryNodeText(node: &JsValue) -> String;
     fn trajectoryFindClass(node: &JsValue, class_name: &str) -> JsValue;
     fn trajectoryCountClass(node: &JsValue, class_name: &str) -> u32;
+    fn trajectoryFindProp(node: &JsValue, property: &str, value: &JsValue) -> JsValue;
     fn trajectoryStyles(bench: &JsValue) -> u32;
     fn trajectoryProperty(value: &JsValue, key: &str) -> JsValue;
     fn trajectoryChildren(node: &JsValue) -> Array;
@@ -227,4 +248,135 @@ fn headers_turn_wrapper_and_style_injection_match_source_structure() {
     assert!(trajectoryNodeText(&turn).starts_with("Turn 3InputOutputThinkTime"));
     let body = trajectoryFindClass(&turn, "seekdeep-trajectory-turn-body");
     assert!(Object::is(&trajectoryChildren(&body).get(0), &child));
+}
+
+#[wasm_bindgen_test]
+#[allow(clippy::too_many_lines)] // One render retains every callback for live invocation.
+fn toolbar_toggles_hidden_time_control_and_search_callback_match_source() {
+    let bench = makeTrajectorySimpleBench();
+    configure_client_ui_trajectory_modules(
+        property(&bench, "React"),
+        property(&bench, "primitives"),
+    )
+    .unwrap();
+    let calls = Rc::new(RefCell::new(Vec::<String>::new()));
+    let duration_calls = calls.clone();
+    let duration = Closure::wrap(Box::new(move |value: bool| {
+        duration_calls
+            .borrow_mut()
+            .push(format!("duration:{value}"));
+    }) as Box<dyn FnMut(bool)>);
+    let time_calls = calls.clone();
+    let time = Closure::wrap(Box::new(move |value: bool| {
+        time_calls.borrow_mut().push(format!("time:{value}"));
+    }) as Box<dyn FnMut(bool)>);
+    let turn_calls = calls.clone();
+    let turns = Closure::wrap(Box::new(move || {
+        turn_calls.borrow_mut().push("turns".to_owned());
+    }) as Box<dyn FnMut()>);
+    let assistant_calls = calls.clone();
+    let assistants = Closure::wrap(Box::new(move || {
+        assistant_calls.borrow_mut().push("assistants".to_owned());
+    }) as Box<dyn FnMut()>);
+    let search_calls = calls.clone();
+    let search = Closure::wrap(Box::new(move |value: String| {
+        search_calls.borrow_mut().push(format!("search:{value}"));
+    }) as Box<dyn FnMut(String)>);
+    let translate = Closure::wrap(Box::new(move |key: String| -> String {
+        match key.as_str() {
+            "toolbar.aria" => "Trajectory toolbar",
+            "toolbar.duration" => "Duration",
+            "toolbar.useActualDuration" => "Use actual duration",
+            "toolbar.useEqualWidth" => "Use equal-width operations",
+            "toolbar.actualTime" => "Actual time",
+            "toolbar.turns" => "Turns",
+            "toolbar.expandTurns" => "Expand turns",
+            "toolbar.collapseTurns" => "Collapse turns",
+            "toolbar.calls" => "Calls",
+            "toolbar.expandCalls" => "Expand calls",
+            "toolbar.collapseCalls" => "Collapse calls",
+            "toolbar.search" => "Search trajectory",
+            "toolbar.searchPlaceholder" => "Search",
+            other => other,
+        }
+        .to_owned()
+    }) as Box<dyn FnMut(String) -> String>);
+    let tree = render(
+        trajectory_toolbar_component().unwrap(),
+        &props(&[
+            ("actualDuration", JsValue::FALSE),
+            ("onActualDurationChange", duration.into_js_value()),
+            ("actualTime", JsValue::FALSE),
+            ("onActualTimeChange", time.into_js_value()),
+            ("allTurnsCollapsed", JsValue::FALSE),
+            ("onToggleAllTurns", turns.into_js_value()),
+            ("allAssistantsCollapsed", JsValue::TRUE),
+            ("onToggleAllAssistants", assistants.into_js_value()),
+            ("searchQuery", JsValue::from_str("needle")),
+            ("onSearchQueryChange", search.into_js_value()),
+            ("t", translate.into_js_value()),
+        ]),
+    );
+    let root_props = property(&tree, "props");
+    assert_eq!(
+        trajectoryProperty(&root_props, "role")
+            .as_string()
+            .as_deref(),
+        Some("toolbar")
+    );
+    assert_eq!(
+        trajectoryProperty(&root_props, "aria-label")
+            .as_string()
+            .as_deref(),
+        Some("Trajectory toolbar")
+    );
+    let duration_button = trajectoryFindProp(
+        &tree,
+        "aria-label",
+        &JsValue::from_str("Use actual duration"),
+    );
+    property(&property(&duration_button, "props"), "onClick")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&JsValue::UNDEFINED)
+        .unwrap();
+    let turn_button = trajectoryFindProp(&tree, "aria-label", &JsValue::from_str("Collapse turns"));
+    property(&property(&turn_button, "props"), "onClick")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&JsValue::UNDEFINED)
+        .unwrap();
+    let calls_button = trajectoryFindProp(&tree, "aria-label", &JsValue::from_str("Expand calls"));
+    assert_eq!(
+        trajectoryProperty(&property(&calls_button, "props"), "aria-pressed").as_bool(),
+        Some(true)
+    );
+    property(&property(&calls_button, "props"), "onClick")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&JsValue::UNDEFINED)
+        .unwrap();
+    let hidden = trajectoryFindProp(&tree, "role", &JsValue::from_str("switch"));
+    assert_eq!(
+        trajectoryProperty(&property(&hidden, "props"), "hidden").as_bool(),
+        Some(true)
+    );
+    let input = trajectoryFindProp(&tree, "aria-label", &JsValue::from_str("Search trajectory"));
+    assert_eq!(
+        trajectoryProperty(&property(&input, "props"), "value")
+            .as_string()
+            .as_deref(),
+        Some("needle")
+    );
+    let current = props(&[("value", JsValue::from_str("updated"))]);
+    let event = props(&[("currentTarget", current)]);
+    property(&property(&input, "props"), "onChange")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call1(&JsValue::UNDEFINED, &event)
+        .unwrap();
+    assert_eq!(
+        calls.borrow().as_slice(),
+        ["duration:true", "turns", "assistants", "search:updated"]
+    );
 }

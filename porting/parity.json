@@ -48658,7 +48658,17 @@
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryToolbar.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/browser.rs",
+        "crates/client-ui-trajectory/data/simple-components.css",
+        "crates/client-ui-trajectory/tests/wasm_simple_components_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust/WASM React toolbar preserves duration and hidden actual-time toggles, whole-Turn and Assistant-call fold controls, translated aria/title/glyph states, shared search icon, controlled search input, and exact callback inversions",
+        "live Node WASM React harness invoked all visible callbacks and the controlled search event path",
+        "strict wasm32 Clippy passed for all targets and features"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/TrajectoryTurn.module.css",
