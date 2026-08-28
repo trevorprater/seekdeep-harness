@@ -47718,10 +47718,14 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-skill/package.json"
+        "packages/client/ui-skill/package.json",
+        "crates/client-ui-skill/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package metadata preserves the renamed public exports and replaces tsdown with the Rust/WASM package builder",
+        "optimized @seekdeep-ai/seekdeep-client-ui-skill bundle completed and its Host, invariant, Client, dependency-order, and stylesheet handoff passed in plain Node",
+        "verify-package-invariants: 151 hand-owned package companions conform"
       ]
     },
     {
@@ -47729,21 +47733,48 @@
       "kind": "asset",
       "status": "verified",
       "targets": [
-        "packages/client/ui-skill/src/client/SkillRow.module.css"
+        "packages/client/ui-skill/src/client/SkillRow.module.css",
+        "crates/client-ui-skill/data/skill-row.css",
+        "crates/client-ui-skill/tests/css_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "compiled stylesheet is an exact namespaced projection of every source selector, declaration, animation, and reduced-motion rule",
+        "cargo test -p seekdeep-client-ui-skill --all-features: CSS projection test passed"
       ]
     },
     {
       "source": "packages/client/ui-skill/src/client/SkillRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-skill/src/lib.rs",
+        "crates/client-ui-skill/src/wasm.rs",
+        "crates/client-ui-skill/data/skill-row.css",
+        "crates/client-ui-skill/tests/model_parity.rs",
+        "crates/client-ui-skill/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust derives replay-stable name, output, error summary, and lifecycle state solely from the durable tool-call slice",
+        "live Rust/WASM React tests cover compact and expanded rows, keyboard disclosure, accessibility attributes, all states, exact text and structured output, Inspect, and durable fallbacks",
+        "pinned source SkillRow suite passed 6/6; live Node/WASM ui-skill suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-skill/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-skill/src/catalog.rs",
+        "crates/client-ui-skill/src/wasm.rs",
+        "crates/client-ui-skill/src/wasm/catalog_adapter.rs",
+        "crates/client-ui-skill/tests/catalog_parity.rs",
+        "crates/client-ui-skill/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM registers the exact dependency order, locale dictionaries, keyed SkillRow, and slash source with reversible cleanup",
+        "session-keyed exact-generation cache preserves addressed-child refusal, single-flight, local prefix filtering, warm, failure retry, caller abort, preset and reset invalidation, synchronous lexicon reads, listener containment, and literal pick text",
+        "pinned source browser-plugin suite passed 19/19; portable Rust cache tests passed 4/4; live Node/WASM ui-skill suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-skill/src/client/locales.ts",
@@ -47761,7 +47792,16 @@
     {
       "source": "packages/client/ui-skill/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-skill/src/lib.rs",
+        "crates/client-ui-skill/data/skill-row.css",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust owns and embeds the stylesheet without a runtime CSS-module import, while the package builder emits the public Client declarations",
+        "optimized WASM package build and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-skill/src/index.ts",
@@ -47776,7 +47816,7 @@
         "compiled dependency-free Host plugin preserves the source no-op node half",
         "real Web preflight advances from ui-skill to ui-subagent"
       ],
-      "note": "this row is the source Host no-op half; Client catalog, trigger, toolview, and renderer surfaces remain independently pending"
+      "note": "This row covers the dependency-free Host half; the Client catalog, trigger, toolview, and renderer have independent manifest rows."
     },
     {
       "source": "packages/client/ui-skill/src/invariant.ts",
@@ -47795,12 +47835,29 @@
     {
       "source": "packages/client/ui-skill/tests/browser-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-skill/tests/catalog_parity.rs",
+        "crates/client-ui-skill/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source browser-plugin suite passed 19/19",
+        "portable Rust cache tests passed 4/4 and live Node/WASM ui-skill suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-skill/tests/skill-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-skill/tests/model_parity.rs",
+        "crates/client-ui-skill/tests/css_parity.rs",
+        "crates/client-ui-skill/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source SkillRow suite passed 6/6",
+        "native Rust row-model and CSS tests passed 4/4 and live Node/WASM ui-skill suite passed 5/5"
+      ]
     },
     {
       "source": "packages/client/ui-skill/tsconfig.json",
@@ -47816,7 +47873,15 @@
     {
       "source": "packages/client/ui-skill/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-skill/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM package builder emits the Host, invariant, Client, and declaration entry points for @seekdeep-ai/seekdeep-client-ui-skill",
+        "xtask ui_skill_bundle_configures_catalog_row_and_public_contract passed; optimized bundle and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-slots/README.i18n.yaml",

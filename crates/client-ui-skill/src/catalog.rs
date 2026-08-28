@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// One browser-safe skill catalog row.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 pub struct SkillCatalogEntry {
     /// Stable slash name.
     pub name: String,
@@ -22,7 +22,8 @@ pub struct SkillCatalogEntry {
 }
 
 /// One slash-menu candidate.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SkillCandidate {
     /// Slash name.
     pub name: String,

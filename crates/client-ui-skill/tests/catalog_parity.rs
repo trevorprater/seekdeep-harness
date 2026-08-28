@@ -113,3 +113,23 @@ fn prefix_user_only_and_pick_copy_match_the_source() {
         "/commit-helper "
     );
 }
+
+#[test]
+fn catalog_rows_ignore_future_fields_like_javascript_property_reads() {
+    let row = serde_json::from_value::<SkillCatalogEntry>(serde_json::json!({
+        "name": "future-skill",
+        "description": "forward compatible",
+        "modelInvocable": true,
+        "futureCapability": { "enabled": true }
+    }))
+    .unwrap();
+    assert_eq!(
+        row,
+        SkillCatalogEntry {
+            name: "future-skill".to_owned(),
+            description: "forward compatible".to_owned(),
+            when_to_use: None,
+            model_invocable: true,
+        }
+    );
+}

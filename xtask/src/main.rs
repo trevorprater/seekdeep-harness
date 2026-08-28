@@ -479,6 +479,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory" => {
             "client-ui-settings-plugin-inventory-invariant"
         }
+        "@seekdeep-ai/seekdeep-client-ui-skill" => "client-ui-skill-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -632,6 +633,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiSettingsPluginInventory(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSettingsPluginInventory, inject: ['slots', 'locale', 'remote', 'remote.pluginInventory'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-skill" {
+        return format!(
+            "require => {{ {global}.configureClientUiSkill(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSkill, inject: ['inputTriggers', 'connection', 'sessions', 'slots', 'locale', 'remote'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
@@ -783,6 +789,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory" {
         return ui_settings_plugin_inventory_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-skill" {
+        return ui_skill_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
     }
@@ -827,6 +836,19 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     "\nexport const apply: typeof wasm_bindgen.applyClientRuntime;\nexport const isAppendSurfaceEvent: typeof wasm_bindgen.isAppendSurfaceEvent;\nexport const isReplacementSurfaceEvent: typeof wasm_bindgen.isReplacementSurfaceEvent;\nexport const SlotRegistry: typeof wasm_bindgen.ClientSlotRegistry;\nexport const ConversationEventRegistry: typeof wasm_bindgen.ConversationEventRegistry;\nexport const ConversationViewRegistry: typeof wasm_bindgen.ConversationViewRegistry;\nexport const ConversationNodeAssembler: typeof wasm_bindgen.ConversationNodeAssembler;\nexport const ConversationLocationIndex: typeof wasm_bindgen.ConversationLocationIndex;\nexport const conversationContextKey: typeof wasm_bindgen.conversationContextKey;\nexport const SessionRuntime: typeof wasm_bindgen.SessionRuntime;\nexport const scopeOf: typeof wasm_bindgen.scopeOf;\nexport const workspaceTitleOf: typeof wasm_bindgen.workspaceTitleOf;\nexport const indexSubagentDescendants: typeof wasm_bindgen.indexSubagentDescendants;\nexport const SessionProvideChannel: typeof wasm_bindgen.SessionProvideChannel;\nexport const createScope: typeof wasm_bindgen.createScope;\nexport const WorkspaceRuntime: typeof wasm_bindgen.WorkspaceRuntime;\nexport const resolveWorkspacePath: typeof wasm_bindgen.resolveWorkspacePath;\nexport const createSnapshotStore: typeof wasm_bindgen.createSnapshotStore;\nexport const defineStore: typeof wasm_bindgen.defineStore;\nexport const shallowEqual: typeof wasm_bindgen.shallowEqual;\nexport const toAssistantBlock: typeof wasm_bindgen.toAssistantBlock;\nexport const toAssistantBlocks: typeof wasm_bindgen.toAssistantBlocks;\nexport const emptyAssistantBlock: typeof wasm_bindgen.emptyAssistantBlock;\nexport const isTokenDelta: typeof wasm_bindgen.isTokenDelta;\nexport const contextForm: typeof wasm_bindgen.contextForm;\nexport const contextProvenance: typeof wasm_bindgen.contextProvenance;\nexport const displayFailureMessage: typeof wasm_bindgen.displayFailureMessage;\nexport const PendingWait: typeof wasm_bindgen.PendingWait;\nexport class SessionCreateError extends Error { constructor(rpcError: any, requestedSessionId: string | undefined); readonly rpcError: any; readonly requestedSessionId: string | undefined; }\nexport class SessionForkError extends Error { constructor(rpcError: any, sourceSessionId: string); readonly rpcError: any; readonly sourceSessionId: string; }\nexport class WorkspaceCreateError extends Error { constructor(rpcError: any); readonly rpcError: any; }\nexport class DirectoryBrowseError extends Error { constructor(rpcError: any); readonly rpcError: any; }\nexport const EMPTY_CHAT_SNAPSHOT: ReturnType<typeof wasm_bindgen.emptyChatSnapshot>;\nexport const EMPTY_CONVERSATION_VIEWS: ReturnType<typeof wasm_bindgen.emptyConversationViews>;\n".to_owned()
         + runtime_settings_contract_declarations()
+}
+
+fn ui_skill_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiSkill;
+export const inject: readonly ['inputTriggers', 'connection', 'sessions', 'slots', 'locale', 'remote'];
+export type SkillKey =
+  | 'row.running' | 'row.failed' | 'row.stopped' | 'row.instructions' | 'menu.userOnly';
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { skill: SkillKey }
+}
+"
+    .to_owned()
 }
 
 fn ui_settings_plugin_inventory_declarations() -> String {
@@ -1772,6 +1794,42 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-settings-plugin-inventory-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory"));
+    }
+
+    #[test]
+    fn ui_skill_bundle_configures_catalog_row_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_skill_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-skill",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiSkill(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_skill_wasm.applyClientUiSkill",
+            "inject: ['inputTriggers', 'connection', 'sessions', 'slots', 'locale', 'remote']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-skill");
+        for expected in [
+            "type SkillKey",
+            "interface LocaleNamespaceMap",
+            "readonly ['inputTriggers', 'connection', 'sessions', 'slots', 'locale', 'remote']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-skill",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-skill-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-skill"));
     }
 
     #[test]

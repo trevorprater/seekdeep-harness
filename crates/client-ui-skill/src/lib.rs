@@ -1,8 +1,15 @@
 //! Skill tool-row model and Rust/WASM UI semantics.
 
 mod catalog;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 pub use catalog::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
+/// Compiled dedicated skill-row stylesheet.
+pub const SKILL_ROW_STYLES: &str = include_str!("../data/skill-row.css");
 
 use seekdeep_client_ui_tool::{ToolCallBlock, result_text};
 use serde_json::Value;

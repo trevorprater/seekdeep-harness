@@ -5592,11 +5592,17 @@ dependencies = [
 name = "seekdeep-client-ui-skill"
 version = "0.1.0-rc.5"
 dependencies = [
+ "js-sys",
+ "regex",
  "seekdeep-client-ui-tool",
  "seekdeep-cordis",
  "seekdeep-identity",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
