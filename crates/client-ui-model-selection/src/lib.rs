@@ -1,8 +1,15 @@
 //! Model directory and selection Rust/WASM UI semantics.
 
 mod directory;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 pub use directory::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
+/// Compiled composer model selector stylesheet.
+pub const MODEL_SELECT_STYLES: &str = include_str!("../data/model-select.css");
 
 use seekdeep_client_ui_commands::SelectOption;
 use serde::{Deserialize, Serialize};
@@ -245,6 +252,21 @@ pub fn options_of(
     directory: &SessionModels,
     load_error: impl Fn(&str) -> String,
 ) -> Vec<SelectOption> {
+    match try_options_of::<std::convert::Infallible>(directory, |message| Ok(load_error(message))) {
+        Ok(options) => options,
+        Err(error) => match error {},
+    }
+}
+
+/// Flattens model rows while permitting fallible provider-failure localization.
+///
+/// # Errors
+///
+/// Returns the localization callback's error for the first provider failure.
+pub fn try_options_of<E>(
+    directory: &SessionModels,
+    load_error: impl Fn(&str) -> Result<String, E>,
+) -> Result<Vec<SelectOption>, E> {
     let mut rows = Vec::new();
     for group in &directory.groups {
         for model in &group.models {
@@ -266,12 +288,12 @@ pub fn options_of(
         rows.push(SelectOption {
             id: format!("failure/{}", failure.id.as_str()),
             label: failure.name.clone(),
-            detail: Some(load_error(&failure.message)),
+            detail: Some(load_error(&failure.message)?),
             active: None,
             confirmation: None,
         });
     }
-    rows
+    Ok(rows)
 }
 
 /// Resolves an opaque picked row back to its complete selection.

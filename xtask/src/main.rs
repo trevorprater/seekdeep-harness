@@ -484,6 +484,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-permission-presets" => {
             "client-ui-permission-presets-invariant"
         }
+        "@seekdeep-ai/seekdeep-client-ui-model-selection" => "client-ui-model-selection-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -649,6 +650,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-permission-presets" {
         return ui_permission_presets_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-model-selection" {
+        return ui_model_selection_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
@@ -726,6 +730,12 @@ fn ui_subagent_module_factory(global: &str) -> String {
 fn ui_permission_presets_module_factory(global: &str) -> String {
     format!(
         "require => {{ {global}.configureClientUiPermissionPresets(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiPermissionPresets, inject: ['commandUi', 'sessions', 'slots', 'locale', 'connection', 'remote'], PermissionPresetSettingsController: {global}.__PermissionPresetSettingsController }}); return {global}; }}"
+    )
+}
+
+fn ui_model_selection_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ {global}.configureClientUiModelSelection(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); class ModelDirectoryResolver {{ static inject = ['connection', 'sessions', 'remote']; constructor(ctx, config) {{ return {global}.createModelDirectoryResolver(ctx, config.blockReason); }} }} Object.assign({global}, {{ apply: {global}.applyClientUiModelSelection, inject: ['commandUi', 'connection', 'locale', 'sessions', 'slots', 'remote'], ModelDirectory: {global}.__ModelDirectory, ModelDirectoryResolver }}); return {global}; }}"
     )
 }
 
@@ -820,6 +830,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-permission-presets" {
         return ui_permission_presets_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-model-selection" {
+        return ui_model_selection_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
@@ -957,6 +970,55 @@ export type PermissionRowProps = PropsRuntime<'settings.general.item'>
   & PropsLocale<'settings.permission'> & InjectFace<PermissionRowInjected>;
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { 'settings.permission': PermissionSettingsKey }
+}
+"
+    .to_owned()
+}
+
+fn ui_model_selection_declarations() -> String {
+    r"
+import type { ModelCatalogFailure, ModelProviderGroup, ModelSelection, SessionId, SessionModels } from '@seekdeep-ai/seekdeep-api-remotes/client';
+export const apply: typeof wasm_bindgen.applyClientUiModelSelection;
+export const inject: readonly ['commandUi', 'connection', 'locale', 'sessions', 'slots', 'remote'];
+export type ModelKey =
+  | 'command.description' | 'option.loadError' | 'trigger.fallback' | 'trigger.selectAria'
+  | 'trigger.aria' | 'trigger.ariaEffort' | 'menu.aria' | 'menu.model' | 'menu.effort'
+  | 'effort.providerDefault' | 'status.loading' | 'error.action' | 'action.reload'
+  | 'warning.groupLoad' | 'empty.models' | 'blocked.composer' | 'empty.efforts';
+export interface ModelDirectoryState {
+  current: ModelSelection | null;
+  routable: boolean | null;
+  groups: readonly ModelProviderGroup[];
+  failures: readonly ModelCatalogFailure[];
+  status: 'idle' | 'loading' | 'ready' | 'selecting' | 'error';
+  error: string | null;
+}
+export interface ModelDirectoryStore {
+  getSnapshot(): ModelDirectoryState;
+  subscribe(listener: () => void): () => void;
+}
+export const ModelDirectory: {
+  new (sessions: unknown, sessionId: SessionId, available: () => boolean): {
+    readonly store: ModelDirectoryStore;
+    load(): Promise<SessionModels>;
+    select(selection: ModelSelection): Promise<void>;
+    resetConnected(): void;
+    dispose(): void;
+  };
+};
+export class ModelDirectoryResolver {
+  static readonly inject: readonly ['connection', 'sessions', 'remote'];
+  constructor(ctx: unknown, config: { blockReason: () => string });
+  directoryFor(sessionId: SessionId): InstanceType<typeof ModelDirectory>;
+}
+export interface ModelSelectInjected {
+  available: boolean;
+  directory: ModelDirectoryStore;
+  load: () => void;
+  select: (selection: ModelSelection) => Promise<boolean>;
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { model: ModelKey }
 }
 "
     .to_owned()
@@ -2024,6 +2086,49 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-permission-presets-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-permission-presets"));
+    }
+
+    #[test]
+    fn ui_model_selection_bundle_configures_directory_dual_entry_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_model_selection_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-model-selection",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiModelSelection(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_model_selection_wasm.applyClientUiModelSelection",
+            "inject: ['commandUi', 'connection', 'locale', 'sessions', 'slots', 'remote']",
+            "ModelDirectory: __seekdeep_client_ui_model_selection_wasm.__ModelDirectory",
+            "class ModelDirectoryResolver",
+            "createModelDirectoryResolver(ctx, config.blockReason)",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-model-selection");
+        for expected in [
+            "type ModelKey",
+            "interface ModelDirectoryState",
+            "interface ModelDirectoryStore",
+            "ModelDirectoryResolver",
+            "interface ModelSelectInjected",
+            "interface LocaleNamespaceMap",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-model-selection",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-model-selection-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-model-selection"));
     }
 
     #[test]

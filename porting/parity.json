@@ -44169,10 +44169,14 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-model-selection/package.json"
+        "packages/client/ui-model-selection/package.json",
+        "crates/client-ui-model-selection/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package metadata preserves the renamed public exports and replaces tsdown with the Rust/WASM package builder",
+        "optimized @seekdeep-ai/seekdeep-client-ui-model-selection bundle passed its Host, invariant, directory, resolver, dependency-order, and stylesheet handoff in plain Node",
+        "verify-package-invariants: 151 hand-owned package companions conform"
       ]
     },
     {
@@ -44180,26 +44184,69 @@
       "kind": "asset",
       "status": "verified",
       "targets": [
-        "packages/client/ui-model-selection/src/client/ModelSelect.module.css"
+        "packages/client/ui-model-selection/src/client/ModelSelect.module.css",
+        "crates/client-ui-model-selection/data/model-select.css",
+        "crates/client-ui-model-selection/tests/css_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "compiled ModelSelect stylesheet is an exact namespaced source projection with renamed scrollbar ownership",
+        "cargo test -p seekdeep-client-ui-model-selection --all-features: CSS projection test passed"
       ]
     },
     {
       "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/src/wasm.rs",
+        "crates/client-ui-model-selection/src/wasm/model_select.rs",
+        "crates/client-ui-model-selection/data/model-select.css",
+        "crates/client-ui-model-selection/tests/css_parity.rs",
+        "crates/client-ui-model-selection/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM preserves shared-store subscription, mount/open reloads, two-level Model and Effort panes, provider defaults, metadata, accessibility labels, focus and dismissal, load retry strips, provider warnings, empty states, and locked or unavailable omission",
+        "selection failures remain out of the load strip and publish a transient Toast from the directory Store error; accepted model and effort selections close and restore focus",
+        "pinned source ModelSelect suite passed 5/5; live Node/WASM suite passed 4/4"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/src/client/directory.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/src/lib.rs",
+        "crates/client-ui-model-selection/src/directory.rs",
+        "crates/client-ui-model-selection/src/wasm/browser_directory.rs",
+        "crates/client-ui-model-selection/tests/directory_parity.rs",
+        "crates/client-ui-model-selection/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "portable Rust directory preserves shared stable snapshots, availability refusal, exact-generation load and selection, last-good data on failure, source-distinct current and stale error strings, reconnect clearing and repull, and disposal suppression",
+        "WASM adapter emits exact session.models and session.selectModel payloads and projects null, status, group, failure, current, and routability fields",
+        "native Rust directory tests passed 3/3; live Node/WASM suite passed 4/4"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/src/lib.rs",
+        "crates/client-ui-model-selection/src/directory.rs",
+        "crates/client-ui-model-selection/src/wasm.rs",
+        "crates/client-ui-model-selection/src/wasm/browser_directory.rs",
+        "crates/client-ui-model-selection/src/wasm/resolver.rs",
+        "crates/client-ui-model-selection/src/wasm/plugin.rs",
+        "crates/client-ui-model-selection/src/wasm/model_select.rs",
+        "crates/client-ui-model-selection/tests/model_parity.rs",
+        "crates/client-ui-model-selection/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM registers the exact service order, model locale, shared resolver, /model popup contribution, and conversation.input.model slot with reversible root and Session-scope effects",
+        "popup and seat resolve one directory per Session in both directions, use opaque row lookup and model defaults, isolate Sessions, reject failure or stale rows, and withhold Agent-bound RPCs from addressed subagents",
+        "pinned source browser-plugin suite passed 12/12; native Rust model and directory tests passed 5/5; live Node/WASM suite passed 4/4"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/src/client/locales.ts",
@@ -44217,17 +44264,48 @@
     {
       "source": "packages/client/ui-model-selection/src/client/service.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/src/directory.rs",
+        "crates/client-ui-model-selection/src/wasm/resolver.rs",
+        "crates/client-ui-model-selection/src/wasm/plugin.rs",
+        "crates/client-ui-model-selection/tests/directory_parity.rs",
+        "crates/client-ui-model-selection/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust resolver lazily owns one directory per real Session scope, fails loud for unknown scopes, removes and disposes on scope teardown, resets on reconnect, and refreshes every resident directory on adapter or Settings changes",
+        "composer blocking publishes only for an explicit Host routable=false value, ignores catalog membership and unknown routability, localizes at publish time, and clears on recovery or scope disposal",
+        "pinned source service behavior passed in the 12-test browser suite; live Node/WASM resolver tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/src/client/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/src/wasm/plugin.rs",
+        "crates/client-ui-model-selection/src/wasm/model_select.rs",
+        "crates/client-ui-model-selection/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "compiled slot injection exposes exact availability, shared Store identity, fire-and-forget load, and boolean selection settlement",
+        "live Node/WASM tests cover resident identity, cross-entry updates, addressed refusal, and Session isolation"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/src/lib.rs",
+        "crates/client-ui-model-selection/data/model-select.css",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust owns and embeds the stylesheet without a runtime CSS-module import, while the package builder emits the public Client declarations",
+        "optimized WASM package build and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/src/index.ts",
@@ -44242,7 +44320,7 @@
         "compiled dependency-free Host plugin preserves the source no-op node half",
         "real Web preflight advances from ui-model-selection to ui-permission-presets"
       ],
-      "note": "this row is the source Host no-op half; Client directory controller, command contribution, slot, and ModelSelect renderer remain independently pending"
+      "note": "This row covers the dependency-free Host half; the Client directory controller, command contribution, slot, resolver, and ModelSelect renderer have independent manifest rows."
     },
     {
       "source": "packages/client/ui-model-selection/src/invariant.ts",
@@ -44261,12 +44339,30 @@
     {
       "source": "packages/client/ui-model-selection/tests/browser-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/tests/directory_parity.rs",
+        "crates/client-ui-model-selection/tests/model_parity.rs",
+        "crates/client-ui-model-selection/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source browser-plugin suite passed 12/12",
+        "native Rust directory and model tests passed 5/5 and live Node/WASM suite passed 4/4"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/tests/model-select.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-model-selection/tests/css_parity.rs",
+        "crates/client-ui-model-selection/tests/model_parity.rs",
+        "crates/client-ui-model-selection/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ModelSelect suite passed 5/5",
+        "native Rust model and CSS tests passed 3/3 and live Node/WASM suite passed 4/4"
+      ]
     },
     {
       "source": "packages/client/ui-model-selection/tsconfig.json",
@@ -44282,7 +44378,15 @@
     {
       "source": "packages/client/ui-model-selection/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-model-selection/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM package builder emits the Host, invariant, Client, and declaration entry points for @seekdeep-ai/seekdeep-client-ui-model-selection",
+        "xtask ui_model_selection_bundle_configures_directory_dual_entry_and_public_contract passed; optimized bundle and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/README.i18n.yaml",
