@@ -582,6 +582,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_client_ui_plan::host_plugin(),
         ),
         (
+            "seekdeep-client-ui-user-questions",
+            seekdeep_client_ui_user_questions::host_plugin(),
+        ),
+        (
             "seekdeep-client-ui-settings",
             seekdeep_client_ui_settings::host_plugin(),
         ),

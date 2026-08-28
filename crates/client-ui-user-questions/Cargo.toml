@@ -1,0 +1,33 @@
+[package]
+name = "seekdeep-client-ui-user-questions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM user-question composer semantics"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+futures.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-identity = { path = "../identity" }
+seekdeep-user-questions-contract = { path = "../user-questions-contract" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-client-runtime = { path = "../client-runtime" }
+seekdeep-cordis = { path = "../cordis" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+futures.workspace = true
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-user-questions = { path = "../user-questions" }
+tokio.workspace = true
+
+[lints]
+workspace = true

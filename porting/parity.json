@@ -48932,7 +48932,23 @@
     {
       "source": "packages/client/ui-user-questions/src/client/contract/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/user-questions-contract/src/lib.rs",
+        "crates/user-questions-contract/tests/wire_parity.rs",
+        "crates/client-ui-user-questions/src/model.rs",
+        "crates/client-ui-user-questions/src/pending.rs",
+        "crates/client-ui-user-questions/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "executor-free shared question contract preserves exact camelCase wire names, optional omissions, closed-object validation, and extensible intent fields",
+        "Rust domain face forwards stable render and Session identity, parses the typed question batch, and encodes exact answer/cancel result envelopes",
+        "plan-review narrowing preserves every generic-flow escape condition and asker-owned option label",
+        "pinned source user-question package suites passed 37/37",
+        "24 native tests passed across seekdeep-user-questions-contract, seekdeep-user-questions, and seekdeep-client-ui-user-questions",
+        "strict wasm32 Clippy passed for the portable contract and UI core"
+      ],
+      "note": "the React/WASM composer renderer and Client slot registration remain independently pending"
     },
     {
       "source": "packages/client/ui-user-questions/src/client/index.ts",
@@ -48942,7 +48958,16 @@
     {
       "source": "packages/client/ui-user-questions/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/src/lib.rs",
+        "crates/client-ui-user-questions/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "Rust pins all 13 Chinese and English question dictionary entries in exact source order",
+        "pinned source user-question package suites passed 37/37",
+        "cargo test -p seekdeep-client-ui-user-questions --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/src/css-modules.d.ts",
@@ -48952,7 +48977,19 @@
     {
       "source": "packages/client/ui-user-questions/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/src/lib.rs",
+        "crates/client-ui-user-questions/tests/host_parity.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half and does not register ask_user_question into the real global tool registry",
+        "real Web preflight advances from ui-user-questions to ui-trajectory",
+        "pinned source node plugin suite passed"
+      ],
+      "note": "this row is the source Host no-op half; the Client plugin, slot registration, and renderer remain independently pending"
     },
     {
       "source": "packages/client/ui-user-questions/src/invariant.ts",
@@ -48976,7 +49013,15 @@
     {
       "source": "packages/client/ui-user-questions/tests/node-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-user-questions/tests/host_parity.rs"
+      ],
+      "evidence": [
+        "Rust mounts the real system-prompt, tools, and user-questions services before the UI Host plugin and proves ask_user_question remains absent from the global tool layer",
+        "pinned source node plugin suite passed",
+        "cargo test -p seekdeep-client-ui-user-questions --all-features -- --test-threads=1"
+      ]
     },
     {
       "source": "packages/client/ui-user-questions/tests/plan-review-panel.client.spec.tsx",
@@ -61558,12 +61603,15 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
+        "crates/user-questions-contract/src/lib.rs",
+        "crates/user-questions-contract/tests/wire_parity.rs",
         "crates/user-questions/src/lib.rs"
       ],
       "evidence": [
         "pnpm exec vitest run packages/interaction/user-questions/tests/user-questions.spec.ts",
+        "target-portable contract tests pin exact request and answer serialization plus extensible intent preservation",
         "cargo test -p seekdeep-user-questions --test user_questions_parity --all-features",
-        "cargo clippy -p seekdeep-user-questions --all-targets --all-features -- -D warnings"
+        "strict native and wasm32 Clippy passed for the shared contract and its Host re-export"
       ]
     },
     {

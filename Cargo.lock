@@ -4544,6 +4544,7 @@ dependencies = [
  "seekdeep-client-ui-subagent",
  "seekdeep-client-ui-theme",
  "seekdeep-client-ui-tool",
+ "seekdeep-client-ui-user-questions",
  "seekdeep-client-ui-workflow-run",
  "seekdeep-client-ui-workspace",
  "seekdeep-cmdline",
@@ -5596,6 +5597,24 @@ version = "0.1.0-rc.5"
 dependencies = [
  "seekdeep-cordis",
  "serde_json",
+]
+
+[[package]]
+name = "seekdeep-client-ui-user-questions"
+version = "0.1.0-rc.5"
+dependencies = [
+ "futures",
+ "regex",
+ "seekdeep-client-runtime",
+ "seekdeep-cordis",
+ "seekdeep-identity",
+ "seekdeep-system-prompt",
+ "seekdeep-tools",
+ "seekdeep-user-questions",
+ "seekdeep-user-questions-contract",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -9103,11 +9122,19 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-scope",
- "serde",
+ "seekdeep-user-questions-contract",
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-user-questions-contract"
+version = "0.1.0-rc.5"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -13,14 +13,14 @@ seekdeep-agent = { path = "../agent" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
-serde.workspace = true
-serde_json.workspace = true
+seekdeep-user-questions-contract = { path = "../user-questions-contract" }
 thiserror.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 seekdeep-core = { path = "../core" }
 seekdeep-scope = { path = "../scope" }
+serde_json.workspace = true
 tokio.workspace = true
 
 [lints]
