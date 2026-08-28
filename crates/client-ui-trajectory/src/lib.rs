@@ -2,6 +2,7 @@
 
 mod assistant_definition;
 mod compaction_definitions;
+mod contract;
 mod duration_store;
 mod layout;
 mod message_definitions;
@@ -16,6 +17,7 @@ mod virtual_rows;
 
 pub use assistant_definition::*;
 pub use compaction_definitions::*;
+pub use contract::*;
 pub use duration_store::*;
 pub use layout::*;
 pub use message_definitions::*;
@@ -78,6 +80,18 @@ pub const TRAJECTORY_EN: &[(&str, &str)] = &[
     ("toolbar.search", "Search trajectory"),
     ("toolbar.searchPlaceholder", "Search"),
 ];
+
+/// Builds every native trajectory Event Definition in Client registration order.
+#[must_use]
+pub fn trajectory_event_definitions() -> Vec<seekdeep_client_runtime::AssemblerNodeDefinition> {
+    let mut definitions = Vec::new();
+    definitions.extend(trajectory_message_definitions());
+    definitions.push(trajectory_request_header_definition());
+    definitions.extend(trajectory_assistant_definitions());
+    definitions.push(trajectory_tool_definition());
+    definitions.extend(trajectory_compaction_definitions());
+    definitions
+}
 
 /// Builds the no-op Host half of this browser-owned plugin.
 #[cfg(not(target_arch = "wasm32"))]

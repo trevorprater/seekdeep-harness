@@ -48774,7 +48774,18 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-contract.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/contract.rs",
+        "crates/client-ui-trajectory/src/request_header.rs",
+        "crates/client-ui-trajectory/src/snapshot_builder.rs",
+        "crates/client-ui-trajectory/tests/contract_parity.rs"
+      ],
+      "evidence": [
+        "Rust owns the closed seven-variant contribution union, exact optional/null member semantics, request-header placement contract, numeric event-location identity, and typed snapshot axes",
+        "all contribution variants round-trip exact JSON and malformed/unknown inputs fail at the contract boundary",
+        "cargo test -p seekdeep-client-ui-trajectory --test contract_parity --all-features (2 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-definition-common.ts",
@@ -48970,7 +48981,15 @@
     {
       "source": "packages/client/ui-trajectory/tests/conversation-definitions.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/tests/conversation_definitions_parity.rs"
+      ],
+      "evidence": [
+        "Native Rust runs all eight trajectory Event Definitions with the native snapshot builder in source registration order",
+        "the four pinned scenarios pass unchanged: streaming retry interruption, parallel nested Tools, compaction checkpoint/orphan interruption, and claimed steering with one-time prompt inheritance",
+        "cargo test -p seekdeep-client-ui-trajectory --test conversation_definitions_parity --all-features (4 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tests/layout.client.spec.tsx",
@@ -48980,7 +48999,14 @@
     {
       "source": "packages/client/ui-trajectory/tests/snapshot-builder.client.spec.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/tests/snapshot_builder_parity.rs"
+      ],
+      "evidence": [
+        "Rust ports all four source snapshot-builder cases plus a fifth finalized-location/partial/running-axis case",
+        "cargo test -p seekdeep-client-ui-trajectory --test snapshot_builder_parity --all-features (5 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/tests/table.client.spec.tsx",
