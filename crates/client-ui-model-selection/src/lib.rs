@@ -1,5 +1,9 @@
 //! Model directory and selection Rust/WASM UI semantics.
 
+mod directory;
+
+pub use directory::*;
+
 use seekdeep_client_ui_commands::SelectOption;
 use serde::{Deserialize, Serialize};
 
@@ -92,51 +96,61 @@ wire_id!(ModelId);
 wire_id!(ReasoningEffortId);
 
 /// Complete provider/model/effort selection.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelSelection {
     /// Provider route.
     pub provider: ModelProviderId,
     /// Provider-owned model.
     pub model: ModelId,
     /// Optional adapter-owned effort.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffortId>,
 }
 
 /// One effort choice.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReasoningEffort {
     /// Stable effort id.
     pub id: ReasoningEffortId,
     /// Display name.
     pub name: String,
     /// Optional description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
 
 /// Model reasoning metadata.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelReasoning {
     /// Supported efforts.
     pub efforts: Vec<ReasoningEffort>,
     /// Optional configured default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_effort: Option<ReasoningEffortId>,
 }
 
 /// One advertised model.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelEntry {
     /// Provider-owned model id.
     pub id: ModelId,
     /// Display name.
     pub name: String,
     /// Optional description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// Optional reasoning vocabulary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<ModelReasoning>,
 }
 
 /// One provider group.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelProviderGroup {
     /// Provider id.
     pub id: ModelProviderId,
@@ -147,7 +161,8 @@ pub struct ModelProviderGroup {
 }
 
 /// Provider-local catalog failure.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelCatalogFailure {
     /// Provider id.
     pub id: ModelProviderId,
@@ -158,7 +173,8 @@ pub struct ModelCatalogFailure {
 }
 
 /// Successfully loaded Session model directory.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionModels {
     /// Current next-step selection.
     pub current: ModelSelection,
@@ -171,7 +187,8 @@ pub struct SessionModels {
 }
 
 /// Directory operation lifecycle.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ModelDirectoryStatus {
     /// No operation active.
     Idle,
@@ -186,7 +203,8 @@ pub enum ModelDirectoryStatus {
 }
 
 /// Shared per-session directory snapshot.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelDirectoryState {
     /// Current selection, absent before first load/reset.
     pub current: Option<ModelSelection>,

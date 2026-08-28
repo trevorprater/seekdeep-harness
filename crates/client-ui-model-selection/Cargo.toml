@@ -11,7 +11,9 @@ description = "Rust/WASM model directory and selection UI semantics"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+futures.workspace = true
 seekdeep-client-ui-commands = { path = "../client-ui-commands" }
+seekdeep-identity = { path = "../identity" }
 serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
