@@ -144,6 +144,16 @@ pub fn trajectory_node(
     anchor_seq: u64,
     data: Value,
 ) -> Rc<ConversationViewNode> {
+    trajectory_node_at(context, u64_as_f64(anchor_seq), data)
+}
+
+/// Wraps one contribution with an exact fractional ordering anchor.
+#[must_use]
+pub fn trajectory_node_at(
+    context: &ConversationNodeContext,
+    anchor_seq: f64,
+    data: Value,
+) -> Rc<ConversationViewNode> {
     let location = context
         .start
         .as_ref()
@@ -157,7 +167,7 @@ pub fn trajectory_node(
         target: TRAJECTORY_TARGET.to_owned(),
         data: Rc::new(data),
         placement: Some(ConversationViewPlacement {
-            anchor_seq: u64_as_f64(anchor_seq),
+            anchor_seq,
             location,
         }),
         chat: None,

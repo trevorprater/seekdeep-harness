@@ -8,6 +8,7 @@ mod record;
 mod request_header;
 mod search_index;
 mod timeline;
+mod tool_definition;
 mod virtual_rows;
 
 pub use compaction_definitions::*;
@@ -18,6 +19,7 @@ pub use record::*;
 pub use request_header::*;
 pub use search_index::*;
 pub use timeline::*;
+pub use tool_definition::*;
 pub use virtual_rows::*;
 
 /// Stable Host plugin identity.

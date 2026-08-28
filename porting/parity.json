@@ -48852,7 +48852,17 @@
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-tool-definition.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-trajectory/src/tool_definition.rs",
+        "crates/client-ui-trajectory/tests/tool_definition_parity.rs"
+      ],
+      "evidence": [
+        "Rust preserves root call/result pairing, call and result render views, Code Dispatch start/settle replacement, recursive order, exact argument JSON, child timing/content, and update-only result fallback",
+        "Rust converts running root and child calls to fractional interruption results at closed Step/Turn boundaries and rejects self edges, cycles, second parents, duplicate starts, and depth overflow at the exact 256 ceiling",
+        "pinned source trajectory suites passed 107/107",
+        "cargo test -p seekdeep-client-ui-trajectory --test tool_definition_parity --all-features (4 passed)"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-virtual-rows.ts",
