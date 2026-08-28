@@ -1,0 +1,25 @@
+[package]
+name = "seekdeep-client-ui-directory-picker-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust/WASM native directory-picker flow occupant"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-cordis = { path = "../cordis" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+wasm-bindgen.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-futures.workspace = true
+wasm-bindgen-test = "0.3.77"
+
+[lints]
+workspace = true

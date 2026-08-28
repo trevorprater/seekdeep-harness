@@ -5360,6 +5360,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-ui-directory-picker-native"
+version = "0.1.0-rc.5"
+dependencies = [
+ "js-sys",
+ "seekdeep-cordis",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-client-ui-goal"
 version = "0.1.0-rc.5"
 dependencies = [

@@ -42757,26 +42757,54 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-directory-picker-native/package.json"
+        "packages/client/ui-directory-picker-native/package.json",
+        "crates/client-ui-directory-picker-native/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package exports remain source-compatible while bundle/watch now invoke the Rust/WASM builder",
+        "verify-package-invariants covers the companion manifest"
       ]
     },
     {
       "source": "packages/client/ui-directory-picker-native/src/client/flow.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-native/src/lib.rs",
+        "crates/client-ui-directory-picker-native/src/wasm.rs",
+        "crates/client-ui-directory-picker-native/tests/state_parity.rs",
+        "crates/client-ui-directory-picker-native/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust owns one-pick-per-rising-edge arming and alive settlement admission",
+        "compiled renderless WASM keeps latest owner handlers, ignores injected-face churn, re-arms on closed edges and StrictMode setup, and discards post-unmount settlements",
+        "pinned source suite passed (13 tests); Rust state 2 passed; live WASM 2 passed"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-native/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-native/src/wasm.rs",
+        "crates/client-ui-directory-picker-native/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "compiled WASM fills both directory-flow holes through nested deferrals and rolls back the first registration if the second fails",
+        "each injected face delegates only pickDirectory transport to the workspace service; registration, pick, and disposal tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-native/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-native/src/lib.rs"
+      ],
+      "evidence": [
+        "native host_plugin is intentionally dependency-free and behavior-free for this browser surface"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-native/src/invariant.ts",
@@ -42795,7 +42823,15 @@
     {
       "source": "packages/client/ui-directory-picker-native/tests/client-flow.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-native/tests/state_parity.rs",
+        "crates/client-ui-directory-picker-native/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source client-flow suite passed (13 tests)",
+        "Rust and live WASM cover edges, latest handlers, cancellation/error/picked routing, unmount discard, paired registration, injected pick, and teardown"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-native/tsconfig.json",
@@ -42811,7 +42847,15 @@
     {
       "source": "packages/client/ui-directory-picker-native/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-directory-picker-native/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally replaced by cargo xtask wasm-package",
+        "optimized classic bundle built, passed node --check, and handed off exact apply/inject exports"
+      ]
     },
     {
       "source": "packages/client/ui-goal/README.i18n.yaml",

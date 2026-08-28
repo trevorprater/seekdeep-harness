@@ -467,6 +467,9 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
     let invariant_name = match module_id {
         "@seekdeep-ai/seekdeep-client-ui-message-feedback" => "client-ui-feedback-invariant",
         "@seekdeep-ai/seekdeep-client-ui-goal" => "client-ui-goal-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-directory-picker-native" => {
+            "client-ui-directory-picker-native-invariant"
+        }
         "@seekdeep-ai/seekdeep-client-ui-trajectory" => "client-ui-trajectory-invariant",
         "@seekdeep-ai/seekdeep-client-ui-user-questions" => "client-ui-user-questions-invariant",
         _ => return Ok(()),
@@ -627,6 +630,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiGoal(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiGoal, inject: ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 'conversationEvents'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-directory-picker-native" {
+        return format!(
+            "require => {{ {global}.configureClientUiDirectoryPickerNative(require('react')); Object.assign({global}, {{ apply: {global}.applyClientUiDirectoryPickerNative, inject: ['slots', 'workspaces'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-trajectory" {
         return format!(
             "require => {{ {global}.configureClientUiTrajectoryModules(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); {global}.configureClientUiTrajectoryRuntime(require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiTrajectory, inject: ['slots', 'conversationEvents', 'conversationViews', 'sessions', 'locale'] }}); return {global}; }}"
@@ -746,6 +754,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-goal" {
         return ui_goal_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-directory-picker-native" {
+        return ui_directory_picker_native_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-trajectory" {
         return ui_trajectory_declarations();
     }
@@ -808,6 +819,15 @@ export type MessageFeedbackKey =
   | 'action.like' | 'action.likeActive' | 'action.dislike' | 'action.dislikeActive'
   | 'note.open' | 'note.placeholder' | 'note.save' | 'note.cancel' | 'note.aria'
   | 'error.conflict' | 'error.load' | 'error.generic';
+"
+    .to_owned()
+}
+
+fn ui_directory_picker_native_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiDirectoryPickerNative;
+export const inject: readonly ['slots', 'workspaces'];
+export interface NativeFlowInjected { pick(): Promise<string | null> }
 "
     .to_owned()
 }
