@@ -45332,7 +45332,17 @@
     {
       "source": "packages/client/ui-primitives/src/Menu.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_menu.rs",
+        "crates/client-ui-primitives/src/browser_util.rs",
+        "crates/client-ui-primitives/tests/wasm_menu_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source atoms suite: 26 passed",
+        "live wasm32 controlled rows, dismissal, pointer grace, submenu, portal placement, reflow, and teardown assertions: 5 passed",
+        "strict wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/Modal.module.css",
@@ -45895,7 +45905,18 @@
     {
       "source": "packages/client/ui-primitives/tests/atoms.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_atoms_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_dialogs_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_menu_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 26 passed",
+        "compiled live wasm32 atom assertions: 4 passed",
+        "compiled live wasm32 dialog assertions: 3 passed",
+        "compiled live wasm32 Menu assertions: 5 passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/code-block.client.spec.tsx",

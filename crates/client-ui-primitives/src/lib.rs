@@ -12,6 +12,8 @@ mod browser_hover_card;
 #[cfg(target_arch = "wasm32")]
 mod browser_icons;
 #[cfg(target_arch = "wasm32")]
+mod browser_menu;
+#[cfg(target_arch = "wasm32")]
 mod browser_tooltip;
 #[cfg(target_arch = "wasm32")]
 mod browser_util;
@@ -33,6 +35,8 @@ pub use browser_dialogs::*;
 pub use browser_hover_card::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_icons::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_menu::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_tooltip::*;
 #[cfg(target_arch = "wasm32")]
