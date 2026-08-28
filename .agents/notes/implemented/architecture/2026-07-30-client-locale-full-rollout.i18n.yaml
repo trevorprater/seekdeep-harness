@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-30-client-locale-full-rollout.md
-2026-07-30-client-locale-full-rollout.md: e239e3e31aad775e2650cf3d638d17884b36c90a
-2026-07-30-client-locale-full-rollout.zh.md: fe5f9e863a60c30c12240dcc54bc6c6391af9448
+2026-07-30-client-locale-full-rollout.md: 60ead49bd01c5fdb12c04ba810e9e297ad6363bf
+2026-07-30-client-locale-full-rollout.zh.md: 8b90c87503228b96c4fda29d0ee926ca2e4c87cf

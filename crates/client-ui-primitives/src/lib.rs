@@ -18,6 +18,8 @@ mod browser_icons;
 #[cfg(target_arch = "wasm32")]
 mod browser_json_tree;
 #[cfg(target_arch = "wasm32")]
+mod browser_markdown_atoms;
+#[cfg(target_arch = "wasm32")]
 mod browser_menu;
 #[cfg(target_arch = "wasm32")]
 mod browser_read_block;
@@ -49,6 +51,8 @@ pub use browser_hover_card::*;
 pub use browser_icons::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_json_tree::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_markdown_atoms::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_menu::*;
 #[cfg(target_arch = "wasm32")]

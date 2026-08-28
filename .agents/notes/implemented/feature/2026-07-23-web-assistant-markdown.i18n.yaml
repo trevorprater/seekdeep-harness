@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-23-web-assistant-markdown.md
-2026-07-23-web-assistant-markdown.md: 6a3e954f80c83c7aa03c057c97de5feaa2c3adac
-2026-07-23-web-assistant-markdown.zh.md: 51e76b6b58a6304b6a0a87432fcd6f4d4a884e31
+2026-07-23-web-assistant-markdown.md: 94021668c78b91d7de2b4052d6d5190cc5868c81
+2026-07-23-web-assistant-markdown.zh.md: 80dbcde74febb34ba67e66f1ca53bffcf2264943

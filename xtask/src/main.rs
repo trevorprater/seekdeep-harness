@@ -547,6 +547,7 @@ wasm.configureClientUiPrimitiveWeb(React);
 wasm.configureClientUiPrimitiveHoverCard(React, ReactDOM);
 wasm.configureClientUiPrimitiveMenu(React, ReactDOM);
 wasm.configureClientUiPrimitiveJsonTree(React, ReactDOM);
+wasm.configureClientUiPrimitiveMarkdownAtoms(React);
 wasm.configureClientUiPrimitiveCodeBlock(React);
 wasm.configureClientUiPrimitiveReadBlock(React);
 
@@ -568,6 +569,8 @@ export const WebBlock = wasm.webBlockComponent();
 export const HoverCard = wasm.hoverCardComponent();
 export const Menu = wasm.menuComponent();
 export const JsonTree = wasm.jsonTreeComponent();
+export const JsonBlock = wasm.jsonBlockComponent();
+export const MessageText = wasm.messageTextComponent();
 export const CodeBlock = wasm.codeBlockComponent();
 export const ReadBlock = wasm.readBlockComponent();
 export const DEFAULT_READ_MAX_LINES = wasm.defaultReadMaxLines();
@@ -3157,9 +3160,12 @@ mod tests {
         for expected in [
             "await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) })",
             "configureClientUiPrimitiveHighlight(createHighlightBackend())",
+            "configureClientUiPrimitiveMarkdownAtoms(React)",
             "configureClientUiPrimitiveCodeBlock(React)",
             "configureClientUiPrimitiveReadBlock(React)",
             "export const CodeBlock = wasm.codeBlockComponent()",
+            "export const JsonBlock = wasm.jsonBlockComponent()",
+            "export const MessageText = wasm.messageTextComponent()",
             "export const ReadBlock = wasm.readBlockComponent()",
             "export const highlightToHtml = wasm.highlightToHtml",
             "export const highlightLines = wasm.highlightLines",

@@ -45764,7 +45764,17 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/JsonBlock.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_markdown_atoms.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_atoms_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source MessageText and JsonBlock cases: 6 passed",
+        "three grouped live WASM tests pin collapsed and default-open state, functional toggling, open-only and dependency-stable memoized stringify, pretty JSON, undefined and circular fallbacks, the 20000-code-unit cap, default and custom footer formatting, and JavaScript-exact split-surrogate slicing",
+        "optimized ESM wrapper configures and exports the compiled JsonBlock"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/MarkdownText.module.css",
@@ -45796,7 +45806,17 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/MessageText.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_markdown_atoms.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_atoms_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source MessageText and JsonBlock cases: 6 passed",
+        "live WASM test pins verbatim Markdown-looking multiline text, literal div shape, namespaced stylesheet injection, and duplicate-configuration style deduplication",
+        "optimized ESM wrapper configures and exports the compiled MessageText"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/cjkFriendlyStrong.ts",
