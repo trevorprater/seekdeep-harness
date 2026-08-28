@@ -11,8 +11,13 @@ description = "Rust/WASM command UI contracts, ranking, and popup semantics"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+futures.workspace = true
+indexmap.workspace = true
+seekdeep-commands = { path = "../commands" }
 seekdeep-client-ui-input-trigger = { path = "../client-ui-input-trigger" }
+seekdeep-identity = { path = "../identity" }
 serde.workspace = true
+serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 seekdeep-cordis = { path = "../cordis" }

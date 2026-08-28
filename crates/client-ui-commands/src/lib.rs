@@ -1,11 +1,15 @@
 //! Command UI contracts, fuzzy ranking, and popup filtering semantics.
 
 mod contract;
+mod directory;
 mod locales;
+mod popup;
 mod ranking;
 
 pub use contract::*;
+pub use directory::*;
 pub use locales::*;
+pub use popup::*;
 pub use ranking::*;
 
 /// Stable Host plugin identity.

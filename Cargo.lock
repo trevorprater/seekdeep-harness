@@ -5313,9 +5313,14 @@ dependencies = [
 name = "seekdeep-client-ui-commands"
 version = "0.1.0-rc.5"
 dependencies = [
+ "futures",
+ "indexmap 2.14.0",
  "seekdeep-client-ui-input-trigger",
+ "seekdeep-commands",
  "seekdeep-cordis",
+ "seekdeep-identity",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
