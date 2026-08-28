@@ -44322,10 +44322,14 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-permission-presets/package.json"
+        "packages/client/ui-permission-presets/package.json",
+        "crates/client-ui-permission-presets/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package metadata preserves the renamed public exports and replaces tsdown with the Rust/WASM package builder",
+        "optimized @seekdeep-ai/seekdeep-client-ui-permission-presets bundle passed its Host, invariant, controller, dependency-order, and stylesheet handoff in plain Node",
+        "verify-package-invariants: 151 hand-owned package companions conform"
       ]
     },
     {
@@ -44333,21 +44337,51 @@
       "kind": "asset",
       "status": "verified",
       "targets": [
-        "packages/client/ui-permission-presets/src/client/PermissionRow.module.css"
+        "packages/client/ui-permission-presets/src/client/PermissionRow.module.css",
+        "crates/client-ui-permission-presets/data/permission-row.css",
+        "crates/client-ui-permission-presets/tests/css_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "compiled Permission row stylesheet is an exact namespaced source projection",
+        "cargo test -p seekdeep-client-ui-permission-presets --all-features: CSS projection test passed"
       ]
     },
     {
       "source": "packages/client/ui-permission-presets/src/client/PermissionRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-permission-presets/src/wasm.rs",
+        "crates/client-ui-permission-presets/src/wasm/row.rs",
+        "crates/client-ui-permission-presets/data/permission-row.css",
+        "crates/client-ui-permission-presets/tests/css_parity.rs",
+        "crates/client-ui-permission-presets/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM preserves initial load, unavailable omission, loading and saving states, read-only disabling, contained errors, Menu selection, and selected-label fallback",
+        "Full access requires the source RiskConfirmation acknowledgement flow; cancel and confirm reset local state before any write",
+        "pinned source PermissionRow suite passed 4/4; live Node/WASM suite passed 3/3"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-permission-presets/src/lib.rs",
+        "crates/client-ui-permission-presets/src/controller.rs",
+        "crates/client-ui-permission-presets/src/wasm.rs",
+        "crates/client-ui-permission-presets/src/wasm/browser_controller.rs",
+        "crates/client-ui-permission-presets/src/wasm/plugin.rs",
+        "crates/client-ui-permission-presets/src/wasm/row.rs",
+        "crates/client-ui-permission-presets/tests/controller_parity.rs",
+        "crates/client-ui-permission-presets/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "Rust/WASM registers the exact services, two locale domains, Settings row, invalidation ownership, and /permission popup decoration with reversible cleanup",
+        "Session projection availability, custom exclusion, active/detail labels, lazy Full access confirmation, command submission, and failure and unmatched diagnostics preserve the source behavior",
+        "pinned source browser-plugin suite passed 4/4; native Rust tests passed 7/7; live Node/WASM suite passed 3/3"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/src/client/locales.ts",
@@ -44377,12 +44411,34 @@
     {
       "source": "packages/client/ui-permission-presets/src/client/settings-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-permission-presets/src/lib.rs",
+        "crates/client-ui-permission-presets/src/controller.rs",
+        "crates/client-ui-permission-presets/src/wasm/browser_controller.rs",
+        "crates/client-ui-permission-presets/tests/controller_parity.rs",
+        "crates/client-ui-permission-presets/tests/model_parity.rs",
+        "crates/client-ui-permission-presets/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "portable Rust controller preserves stable snapshots, dynamic schema options, latest-request-wins generations, optimistic revision writes, no-op read-only selection, unavailable state, contained failures, loaded-only invalidation, and disposal suppression",
+        "WASM adapter emits the exact Settings describe and defaultPreset mutation payloads and contains RPC and transport failures in the Store",
+        "pinned source settings-store suite passed 6/6; native controller and model tests passed 6/6; live Node/WASM suite passed 3/3"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-permission-presets/src/lib.rs",
+        "crates/client-ui-permission-presets/data/permission-row.css",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust owns and embeds the stylesheet without a runtime CSS-module import, while the package builder emits the public Client declarations",
+        "optimized WASM package build and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/src/index.ts",
@@ -44397,7 +44453,7 @@
         "compiled dependency-free Host plugin preserves the source no-op node half",
         "real Web preflight advances from ui-permission-presets to ui-agent-preset"
       ],
-      "note": "this row is the source Host no-op half; Client Settings controller, command decoration, slot, and PermissionRow renderer remain independently pending"
+      "note": "This row covers the dependency-free Host half; the Client Settings controller, command decoration, slot, and PermissionRow renderer have independent manifest rows."
     },
     {
       "source": "packages/client/ui-permission-presets/src/invariant.ts",
@@ -44416,17 +44472,42 @@
     {
       "source": "packages/client/ui-permission-presets/tests/browser-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-permission-presets/tests/model_parity.rs",
+        "crates/client-ui-permission-presets/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source browser-plugin suite passed 4/4",
+        "native Rust popup tests and live Node/WASM plugin tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/tests/permission-presets-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-permission-presets/tests/css_parity.rs",
+        "crates/client-ui-permission-presets/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source PermissionRow suite passed 4/4",
+        "native CSS projection and live Node/WASM row tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/tests/settings-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-permission-presets/tests/controller_parity.rs",
+        "crates/client-ui-permission-presets/tests/model_parity.rs",
+        "crates/client-ui-permission-presets/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source settings-store suite passed 6/6",
+        "native Rust controller and model tests plus live WASM Settings boundary tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-permission-presets/tsconfig.json",
@@ -44442,7 +44523,15 @@
     {
       "source": "packages/client/ui-permission-presets/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-permission-presets/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM package builder emits the Host, invariant, Client, and declaration entry points for @seekdeep-ai/seekdeep-client-ui-permission-presets",
+        "xtask ui_permission_presets_bundle_configures_controller_row_and_public_contract passed; optimized bundle and plain-Node classic-loader handoff passed"
+      ]
     },
     {
       "source": "packages/client/ui-plan/README.i18n.yaml",

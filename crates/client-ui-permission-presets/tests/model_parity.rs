@@ -30,6 +30,7 @@ fn dynamic_settings_schema_and_labels_match_the_source() {
     assert!(permission_default_of(&schema(), &json!({"defaultPreset":"missing"})).is_err());
     assert_eq!(display_preset_name("read-only-2"), "Read Only 2");
     assert_eq!(display_preset_name("double--dash"), "double--dash");
+    assert_eq!(display_preset_name("Ask Every Time"), "Ask Every Time");
     assert_eq!(
         display_permission_preset(FULL_ACCESS_PRESET, "ignored"),
         "Full access"

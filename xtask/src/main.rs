@@ -481,6 +481,9 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         }
         "@seekdeep-ai/seekdeep-client-ui-skill" => "client-ui-skill-invariant",
         "@seekdeep-ai/seekdeep-client-ui-subagent" => "client-ui-subagent-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-permission-presets" => {
+            "client-ui-permission-presets-invariant"
+        }
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -608,6 +611,7 @@ fn compatibility_prelude(global: &str, module_id: &str) -> String {
     )
 }
 
+#[allow(clippy::too_many_lines)] // Closed module-specific factory dispatch stays auditable here.
 fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
         return format!(
@@ -641,6 +645,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-subagent" {
         return ui_subagent_module_factory(global);
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-permission-presets" {
+        return ui_permission_presets_module_factory(global);
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
@@ -713,6 +720,12 @@ fn module_factory(global: &str, module_id: &str) -> String {
 fn ui_subagent_module_factory(global: &str) -> String {
     format!(
         "require => {{ {global}.configureClientUiSubagent(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSubagent, inject: ['inputTriggers', 'sessions', 'slots', 'locale'] }}); return {global}; }}"
+    )
+}
+
+fn ui_permission_presets_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ {global}.configureClientUiPermissionPresets(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiPermissionPresets, inject: ['commandUi', 'sessions', 'slots', 'locale', 'connection', 'remote'], PermissionPresetSettingsController: {global}.__PermissionPresetSettingsController }}); return {global}; }}"
     )
 }
 
@@ -805,6 +818,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-subagent" {
         return ui_subagent_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-permission-presets" {
+        return ui_permission_presets_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
     }
@@ -892,6 +908,55 @@ export type SubagentReadOnlyComposerProps =
   PropsRuntime<'conversation.composer'> & { matched: SubagentReadOnlyMatch } & PropsLocale<'subagent'>;
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { subagent: SubagentKey }
+}
+"
+    .to_owned()
+}
+
+fn ui_permission_presets_declarations() -> String {
+    r"
+import type { InjectFace, PropsLocale, PropsRuntime } from '@seekdeep-ai/seekdeep-client-ui-slots';
+export const apply: typeof wasm_bindgen.applyClientUiPermissionPresets;
+export const inject: readonly ['commandUi', 'sessions', 'slots', 'locale', 'connection', 'remote'];
+export type PermissionSettingsKey =
+  | 'title' | 'description' | 'loading' | 'unavailable' | 'confirm.title'
+  | 'confirm.description' | 'confirm.acknowledge' | 'confirm.cancel' | 'confirm.enable';
+export interface PermissionDefaultOption { id: string; label: string }
+export interface PermissionSettingsState {
+  status: 'idle' | 'loading' | 'ready' | 'saving' | 'unavailable' | 'error';
+  error: string | null;
+  writable: boolean;
+  currentValue: string;
+  options: readonly PermissionDefaultOption[];
+  revision: number;
+}
+export interface PermissionSnapshotStore {
+  getSnapshot(): PermissionSettingsState;
+  subscribe(listener: () => void): () => void;
+}
+export const PermissionPresetSettingsController: {
+  new (api: unknown): {
+    readonly store: PermissionSnapshotStore;
+    load(): Promise<void>;
+    select(preset: string): Promise<void>;
+    dispose(): void;
+  };
+};
+export const permissionDefaultOf: (view: unknown) => {
+  currentValue: string;
+  options: PermissionDefaultOption[];
+};
+export const refreshPermissionIfLoaded:
+  (controller: InstanceType<typeof PermissionPresetSettingsController>) => void;
+export interface PermissionRowInjected {
+  hooks: { permission: PermissionSnapshotStore };
+  load: () => Promise<void>;
+  select: (preset: string) => Promise<void>;
+}
+export type PermissionRowProps = PropsRuntime<'settings.general.item'>
+  & PropsLocale<'settings.permission'> & InjectFace<PermissionRowInjected>;
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { 'settings.permission': PermissionSettingsKey }
 }
 "
     .to_owned()
@@ -1916,6 +1981,49 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-subagent-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-subagent"));
+    }
+
+    #[test]
+    fn ui_permission_presets_bundle_configures_controller_row_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_permission_presets_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-permission-presets",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiPermissionPresets(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_permission_presets_wasm.applyClientUiPermissionPresets",
+            "inject: ['commandUi', 'sessions', 'slots', 'locale', 'connection', 'remote']",
+            "PermissionPresetSettingsController: __seekdeep_client_ui_permission_presets_wasm.__PermissionPresetSettingsController",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-permission-presets");
+        for expected in [
+            "type PermissionSettingsKey",
+            "interface PermissionDefaultOption",
+            "interface PermissionSettingsState",
+            "interface PermissionSnapshotStore",
+            "interface PermissionRowInjected",
+            "type PermissionRowProps",
+            "PermissionPresetSettingsController",
+            "interface LocaleNamespaceMap",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-permission-presets",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-permission-presets-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-permission-presets"));
     }
 
     #[test]

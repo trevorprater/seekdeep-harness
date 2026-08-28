@@ -5467,9 +5467,17 @@ dependencies = [
 name = "seekdeep-client-ui-permission-presets"
 version = "0.1.0-rc.5"
 dependencies = [
+ "futures",
+ "js-sys",
+ "regex",
  "seekdeep-client-ui-commands",
  "seekdeep-cordis",
+ "serde",
+ "serde-wasm-bindgen",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

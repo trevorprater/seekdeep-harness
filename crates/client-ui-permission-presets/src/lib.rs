@@ -1,6 +1,15 @@
 //! Permission preset Settings and popup UI semantics.
 
+mod controller;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+
+pub use controller::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
 use seekdeep_client_ui_commands::{SelectConfirmation, SelectOption};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Stable Host plugin identity.
@@ -13,6 +22,8 @@ pub const FULL_ACCESS_PRESET: &str = "danger-full-access";
 pub const SETTINGS_NS: &str = "settings.permission";
 /// Current-session confirmation namespace.
 pub const ACCESS_NS: &str = "permission.access";
+/// Compiled Permission Settings row stylesheet.
+pub const PERMISSION_ROW_STYLES: &str = include_str!("../data/permission-row.css");
 
 /// Settings key, Chinese, and English values.
 pub const SETTINGS_LOCALES: [(&str, &str, &str); 9] = [
@@ -180,7 +191,8 @@ pub fn permission_default_of(schema: &Value, value: &Value) -> Result<Permission
 }
 
 /// One current-session projected option.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PermissionOption {
     /// Machine value.
     pub value: String,
@@ -191,7 +203,8 @@ pub struct PermissionOption {
 }
 
 /// Current-session permission select projection.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PermissionSelect {
     /// Current machine value.
     pub current_value: String,
@@ -205,18 +218,40 @@ pub fn popup_options(
     value: &PermissionSelect,
     confirmation: impl Fn() -> SelectConfirmation,
 ) -> Vec<SelectOption> {
-    value
+    match try_popup_options::<std::convert::Infallible>(value, || Ok(confirmation())) {
+        Ok(options) => options,
+        Err(error) => match error {},
+    }
+}
+
+/// Flattens current-session presets while permitting fallible confirmation copy.
+///
+/// # Errors
+///
+/// Returns the confirmation factory's error only when Full access is advertised.
+pub fn try_popup_options<E>(
+    value: &PermissionSelect,
+    confirmation: impl Fn() -> Result<SelectConfirmation, E>,
+) -> Result<Vec<SelectOption>, E> {
+    let mut options = Vec::new();
+    for option in value
         .options
         .iter()
         .filter(|option| option.value != "custom")
-        .map(|option| SelectOption {
+    {
+        options.push(SelectOption {
             id: option.value.clone(),
             label: display_permission_preset(&option.value, &option.name),
             detail: option.description.clone(),
             active: (option.value == value.current_value).then_some(true),
-            confirmation: (option.value == FULL_ACCESS_PRESET).then(&confirmation),
-        })
-        .collect()
+            confirmation: if option.value == FULL_ACCESS_PRESET {
+                Some(confirmation()?)
+            } else {
+                None
+            },
+        });
+    }
+    Ok(options)
 }
 
 /// Builds the no-op Host half of this pure Client plugin.
