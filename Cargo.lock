@@ -5351,12 +5351,17 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
+ "js-sys",
+ "regex",
  "seekdeep-client-runtime",
  "seekdeep-cordis",
  "seekdeep-system-prompt",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

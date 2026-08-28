@@ -42477,10 +42477,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-deliverables/package.json"
+        "packages/client/ui-deliverables/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "product and package identities are mechanically renamed from dsh to seekdeep",
+        "bundle and watch scripts delegate to the Rust wasm-package builder with the exact module identity",
+        "release Rust/WASM bundle built successfully and passed a Node classic ModuleLoader handoff smoke"
       ]
     },
     {
@@ -42497,12 +42500,36 @@
     {
       "source": "packages/client/ui-deliverables/src/client/ProducedFiles.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-deliverables/src/produced.rs",
+        "crates/client-ui-deliverables/src/wasm.rs",
+        "crates/client-ui-deliverables/data/produced-files.css",
+        "crates/client-ui-deliverables/tests/css_parity.rs",
+        "crates/client-ui-deliverables/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-deliverables suites passed 14/14",
+        "Rust pure and exact CSS projection tests passed 7/7",
+        "live Rust/WASM tests passed 3/3 for measured prefix fitting, exact remainder copy, resize observation and cleanup, opener wiring, loopback Host capability, and singular localization"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-deliverables/src/wasm.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-runtime/tests/wasm_native_definition_parity.rs",
+        "crates/client-ui-deliverables/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live Rust/WASM plugin test registers the native deliverables Definition, dictionaries, turn-tail selector and injection, and chatFileMentions service, then retracts every registration on disposal",
+        "native Definition bridge WASM regression round-trips Turn and Step buildLocationData values and rejects unknown scopes",
+        "generated package test and Node classic-loader handoff expose apply, exact inject order, ProducedFiles, and producedForClosing"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/src/client/locales.ts",
@@ -42534,7 +42561,16 @@
     {
       "source": "packages/client/ui-deliverables/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-deliverables/src/lib.rs",
+        "crates/client-ui-deliverables/data/produced-files.css",
+        "crates/client-ui-deliverables/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "Rust embeds the stylesheet directly without a TypeScript CSS-module binding",
+        "exact namespaced projection test proves every source selector and declaration is preserved"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/src/index.ts",
@@ -42569,7 +42605,17 @@
     {
       "source": "packages/client/ui-deliverables/tests/produced-files.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-deliverables/tests/deliverables_parity.rs",
+        "crates/client-ui-deliverables/tests/css_parity.rs",
+        "crates/client-ui-deliverables/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source produced-files and prompt suites passed 14/14",
+        "Rust native selection, fold, mention, fit, localization, CSS, and lifecycle tests passed 7/7",
+        "live Rust/WASM component and assembled plugin boundary tests passed 3/3"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/tests/prompt.client.spec.ts",
@@ -42597,7 +42643,16 @@
     {
       "source": "packages/client/ui-deliverables/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-deliverables/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle and watch scripts delegate to the Rust wasm-package builder",
+        "release Rust/WASM classic bundle built successfully and passed the Node ModuleLoader handoff smoke",
+        "xtask compatibility test passed for the factory, declarations, ProducedFiles export, inject list, and invariant companion"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/README.i18n.yaml",

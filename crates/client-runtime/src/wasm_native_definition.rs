@@ -9,8 +9,9 @@ use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 use crate::{
     AssemblerNodeDefinition, AssemblerViewBuilder, AssemblerViewDefinition,
     ChatConversationViewMetadata, ConversationAssemblerError, ConversationBoundaryStatus,
-    ConversationContextReader, ConversationLocation, ConversationLocationDataStore,
-    ConversationMatch, ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
+    ConversationContextReader, ConversationLocation, ConversationLocationData,
+    ConversationLocationDataScope, ConversationLocationDataStore, ConversationMatch,
+    ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
     ConversationPreviousContext, ConversationPublication, ConversationTimelineSnapshot,
     ConversationViewNode, ConversationViewPlacement, ConversationVisibility, StepLocation,
     TurnLocation,
@@ -92,6 +93,30 @@ pub fn native_conversation_node_definition_to_js(
         set(&value, "publication", &callback.into_js_value())?;
     }
 
+    if let Some(builder) = &definition.build_location_data {
+        let builder = builder.clone();
+        let callback = Closure::wrap(Box::new(
+            move |context: JsValue, scope: String| -> Result<JsValue, JsValue> {
+                let context = context_from_js(&context)?;
+                let scope = match scope.as_str() {
+                    "step" => ConversationLocationDataScope::Step,
+                    "turn" => ConversationLocationDataScope::Turn,
+                    _ => {
+                        return Err(js_sys::Error::new(&format!(
+                            "Conversation Location data scope {scope:?} is invalid"
+                        ))
+                        .into());
+                    }
+                };
+                builder(&context, scope)
+                    .map_err(assembler_error)?
+                    .map_or(Ok(JsValue::NULL), |data| location_data_to_js(&data))
+            },
+        )
+            as Box<dyn FnMut(JsValue, String) -> Result<JsValue, JsValue>>);
+        set(&value, "buildLocationData", &callback.into_js_value())?;
+    }
+
     if let Some(builder) = &definition.build_view_node {
         let builder = builder.clone();
         let callback = Closure::wrap(
@@ -105,6 +130,35 @@ pub fn native_conversation_node_definition_to_js(
         set(&value, "buildViewNode", &callback.into_js_value())?;
     }
     Ok(value.into())
+}
+
+fn location_data_to_js(data: &ConversationLocationData) -> Result<JsValue, JsValue> {
+    match data {
+        ConversationLocationData::Turn { turn, key, value } => object(&[
+            ("kind", JsValue::from_str("turn")),
+            ("turn", JsValue::from_f64(u64_as_f64(*turn))),
+            ("key", JsValue::from_str(key)),
+            ("value", json_to_js(value)?),
+        ]),
+        ConversationLocationData::Step {
+            turn,
+            step,
+            key,
+            value,
+        } => object(&[
+            ("kind", JsValue::from_str("step")),
+            ("turn", JsValue::from_f64(u64_as_f64(*turn))),
+            (
+                "step",
+                step.map_or(JsValue::UNDEFINED, |step| {
+                    JsValue::from_f64(u64_as_f64(step))
+                }),
+            ),
+            ("key", JsValue::from_str(key)),
+            ("value", json_to_js(value)?),
+        ]),
+    }
+    .map(Into::into)
 }
 
 /// Wraps one native Rust View Definition in the browser registry object contract.
@@ -498,6 +552,13 @@ fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
 
 fn set(value: &Object, key: &str, entry: &JsValue) -> Result<(), JsValue> {
     Reflect::set(value, &JsValue::from_str(key), entry).map(|_| ())
+}
+
+fn u64_as_f64(value: u64) -> f64 {
+    #[allow(clippy::cast_precision_loss)]
+    {
+        value as f64
+    }
 }
 
 #[allow(clippy::needless_pass_by_value)] // `Result::map_err` owns the error at this ABI seam.

@@ -3,10 +3,14 @@
 mod locales;
 mod produced;
 mod projection;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 pub use locales::*;
 pub use produced::*;
 pub use projection::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
 
 /// Stable plugin identity.
 pub const NAME: &str = "client-ui-deliverables";
@@ -18,6 +22,8 @@ pub const PROMPT_SECTION_NAME: &str = "ui:deliverable-file-references";
 pub const PROMPT_SECTION_ORDER: f64 = 190.0;
 /// Stable final-response guidance paired with the browser file renderer.
 pub const FILE_REFERENCE_PROMPT: &str = "When you successfully create or modify files, mention the primary outputs in your final response. To make those and any other changed-file references clickable in Web, format them as Markdown inline code using the exact file-tool path, or a basename when unique among the files changed in that turn.";
+/// Compiled produced-files stylesheet.
+pub const PRODUCED_FILES_STYLES: &str = include_str!("../data/produced-files.css");
 
 /// Registers the ordered file-reference model guidance.
 ///

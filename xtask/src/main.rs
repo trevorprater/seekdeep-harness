@@ -467,6 +467,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
     let invariant_name = match module_id {
         "@seekdeep-ai/seekdeep-client-ui-message-feedback" => "client-ui-feedback-invariant",
         "@seekdeep-ai/seekdeep-client-ui-goal" => "client-ui-goal-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-deliverables" => "client-ui-deliverables-invariant",
         "@seekdeep-ai/seekdeep-client-ui-directory-picker-native" => {
             "client-ui-directory-picker-native-invariant"
         }
@@ -630,6 +631,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiGoal(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiGoal, inject: ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 'conversationEvents'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-deliverables" {
+        return format!(
+            "require => {{ {global}.configureClientUiDeliverables(require('react')); Object.assign({global}, {{ apply: {global}.applyClientUiDeliverables, inject: ['slots', 'locale', 'conversationEvents', 'connection'], ProducedFiles: {global}.producedFilesComponent() }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-directory-picker-native" {
         return format!(
             "require => {{ {global}.configureClientUiDirectoryPickerNative(require('react')); Object.assign({global}, {{ apply: {global}.applyClientUiDirectoryPickerNative, inject: ['slots', 'workspaces'] }}); return {global}; }}"
@@ -754,6 +760,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-goal" {
         return ui_goal_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-deliverables" {
+        return ui_deliverables_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-directory-picker-native" {
         return ui_directory_picker_native_declarations();
     }
@@ -843,6 +852,41 @@ export interface GoalBarActions {
   onPause(): Promise<GoalActionResult>;
   onResume(): Promise<GoalActionResult>;
   onClear(): Promise<GoalActionResult>;
+}
+"
+    .to_owned()
+}
+
+fn ui_deliverables_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiDeliverables;
+export const inject: readonly ['slots', 'locale', 'conversationEvents', 'connection'];
+export interface ProducedPath { readonly seq: number; readonly path: string }
+export interface DeliverablesTurnData { readonly produced: readonly ProducedPath[] }
+export interface ProducedFilesInjected {
+  isLoopback: boolean;
+  hooks: { hostDescription: unknown };
+}
+export interface ProducedFilesProps {
+  matched: readonly string[];
+  openFile(path: string): void;
+  isLoopback: boolean;
+  useHostDescription<T>(selector: (description: unknown) => T): T;
+  t(key: DeliverablesKey, values?: Record<string, string>): string;
+}
+export const ProducedFiles: (props: ProducedFilesProps) => import('react').JSX.Element;
+export const producedForClosing: (
+  data: Readonly<DeliverablesTurnData> | undefined,
+  seq?: number,
+) => readonly string[];
+export type DeliverablesKey =
+  | 'produced.label' | 'produced.moreOne' | 'produced.more'
+  | 'produced.open' | 'produced.showInFolder';
+declare module '@seekdeep-ai/seekdeep-client-runtime/client' {
+  interface ConversationTurnDataMap { deliverables: DeliverablesTurnData }
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { deliverables: DeliverablesKey }
 }
 "
     .to_owned()
@@ -1596,6 +1640,50 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-goal-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-goal"));
+    }
+
+    #[test]
+    fn ui_deliverables_bundle_configures_file_surfaces_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_deliverables_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-deliverables",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiDeliverables(require('react'))",
+            "apply: __seekdeep_client_ui_deliverables_wasm.applyClientUiDeliverables",
+            "inject: ['slots', 'locale', 'conversationEvents', 'connection']",
+            "ProducedFiles: __seekdeep_client_ui_deliverables_wasm.producedFilesComponent()",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-deliverables");
+        for expected in [
+            "interface DeliverablesTurnData",
+            "interface ProducedFilesInjected",
+            "interface ProducedFilesProps",
+            "useHostDescription<T>",
+            "import('react').JSX.Element",
+            "const ProducedFiles",
+            "const producedForClosing",
+            "interface ConversationTurnDataMap",
+            "interface LocaleNamespaceMap",
+            "readonly ['slots', 'locale', 'conversationEvents', 'connection']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-deliverables",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-deliverables-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-deliverables"));
     }
 
     #[test]
