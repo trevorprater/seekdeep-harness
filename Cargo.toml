@@ -41,6 +41,7 @@ members = [
   "crates/client-ui-settings-general",
   "crates/client-ui-settings-models",
   "crates/client-ui-settings-plugin-inventory",
+  "crates/client-ui-settings-plugins",
   "crates/client-ui-sidebar",
   "crates/client-ui-skill",
   "crates/client-ui-subagent",

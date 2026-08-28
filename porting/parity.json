@@ -46726,7 +46726,17 @@
     {
       "source": "packages/client/ui-settings-plugins/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
+      ],
+      "evidence": [
+        "compiled dependency-free Host plugin preserves the source no-op node half",
+        "real Web preflight advances from ui-settings-plugins to ui-plan"
+      ],
+      "note": "this row is the source Host no-op half; Client staged form controllers, secret writes, locale bundle, slots, and card renderers remain independently pending"
     },
     {
       "source": "packages/client/ui-settings-plugins/src/invariant.ts",

@@ -4537,6 +4537,7 @@ dependencies = [
  "seekdeep-client-ui-settings-general",
  "seekdeep-client-ui-settings-models",
  "seekdeep-client-ui-settings-plugin-inventory",
+ "seekdeep-client-ui-settings-plugins",
  "seekdeep-client-ui-sidebar",
  "seekdeep-client-ui-skill",
  "seekdeep-client-ui-subagent",
@@ -5502,6 +5503,14 @@ version = "0.1.0-rc.5"
 dependencies = [
  "seekdeep-cordis",
  "serde",
+]
+
+[[package]]
+name = "seekdeep-client-ui-settings-plugins"
+version = "0.1.0-rc.5"
+dependencies = [
+ "seekdeep-cordis",
+ "serde_json",
 ]
 
 [[package]]
