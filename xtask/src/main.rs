@@ -466,6 +466,7 @@ fn copy_wasm_package_assets(
 fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> anyhow::Result<()> {
     let invariant_name = match module_id {
         "@seekdeep-ai/seekdeep-client-ui-message-feedback" => "client-ui-feedback-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-goal" => "client-ui-goal-invariant",
         "@seekdeep-ai/seekdeep-client-ui-trajectory" => "client-ui-trajectory-invariant",
         "@seekdeep-ai/seekdeep-client-ui-user-questions" => "client-ui-user-questions-invariant",
         _ => return Ok(()),
@@ -621,6 +622,11 @@ fn module_factory(global: &str, module_id: &str) -> String {
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
         );
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-goal" {
+        return format!(
+            "require => {{ {global}.configureClientUiGoal(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiGoal, inject: ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 'conversationEvents'] }}); return {global}; }}"
+        );
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-trajectory" {
         return format!(
             "require => {{ {global}.configureClientUiTrajectoryModules(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); {global}.configureClientUiTrajectoryRuntime(require('@seekdeep-ai/seekdeep-client-runtime/client')); Object.assign({global}, {{ apply: {global}.applyClientUiTrajectory, inject: ['slots', 'conversationEvents', 'conversationViews', 'sessions', 'locale'] }}); return {global}; }}"
@@ -737,6 +743,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-goal" {
+        return ui_goal_declarations();
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-trajectory" {
         return ui_trajectory_declarations();
     }
@@ -799,6 +808,22 @@ export type MessageFeedbackKey =
   | 'action.like' | 'action.likeActive' | 'action.dislike' | 'action.dislikeActive'
   | 'note.open' | 'note.placeholder' | 'note.save' | 'note.cancel' | 'note.aria'
   | 'error.conflict' | 'error.load' | 'error.generic';
+"
+    .to_owned()
+}
+
+fn ui_goal_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiGoal;
+export const inject: readonly ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 'conversationEvents'];
+export interface GoalActionError { code: string; message: string; details: unknown }
+export type GoalActionResult = { ok: true; value?: unknown } | { ok: false; error: GoalActionError };
+export interface GoalBarActions {
+  onEdit(objective: string): Promise<GoalActionResult>;
+  onPause(): Promise<GoalActionResult>;
+  onResume(): Promise<GoalActionResult>;
+  onClear(): Promise<GoalActionResult>;
+}
 "
     .to_owned()
 }
@@ -1514,6 +1539,43 @@ mod tests {
             let artifact = std::fs::read_to_string(output.path().join(path)).unwrap();
             assert!(artifact.contains(expected), "{path} omitted {expected:?}");
         }
+    }
+
+    #[test]
+    fn ui_goal_bundle_configures_dock_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_goal_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-goal",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiGoal(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_goal_wasm.applyClientUiGoal",
+            "inject: ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 'conversationEvents']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-goal");
+        for expected in [
+            "interface GoalActionError",
+            "type GoalActionResult",
+            "interface GoalBarActions",
+            "readonly ['slots', 'sessions', 'remote', 'remote.goals', 'locale', 'conversationEvents']",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-goal",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-goal-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-goal"));
     }
 
     #[test]

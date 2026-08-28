@@ -3,8 +3,12 @@
 use std::rc::Rc;
 
 mod bar;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 pub use bar::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
 
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ChatConversationViewMetadata, ConversationAssemblerError,
@@ -18,6 +22,10 @@ use serde_json::Value;
 pub const NAME: &str = "client-ui-goal";
 /// Locale namespace.
 pub const GOAL_NS: &str = "goal";
+/// Compiled goal-dock stylesheet.
+pub const GOAL_BAR_STYLES: &str = include_str!("../data/goal-bar.css");
+/// Compiled command-input bubble stylesheet.
+pub const GOAL_COMMAND_STYLES: &str = include_str!("../data/command-input.css");
 /// Key, Simplified Chinese, and English values in source order.
 pub const GOAL_LOCALES: [(&str, &str, &str); 11] = [
     ("phase.active", "进行中的目标", "Ongoing Goal"),

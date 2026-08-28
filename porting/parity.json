@@ -42851,10 +42851,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-goal/package.json"
+        "packages/client/ui-goal/package.json",
+        "crates/client-ui-goal/Cargo.toml",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package exports remain source-compatible while bundle/watch now invoke the Rust/WASM builder",
+        "verify-package-invariants covers the hand-owned companion manifest"
       ]
     },
     {
@@ -42871,16 +42874,19 @@
     {
       "source": "packages/client/ui-goal/src/client/GoalBar.tsx",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/client-ui-goal/src/bar.rs",
-        "crates/client-ui-goal/tests/bar_parity.rs"
+        "crates/client-ui-goal/src/wasm.rs",
+        "crates/client-ui-goal/data/goal-bar.css",
+        "crates/client-ui-goal/tests/bar_parity.rs",
+        "crates/client-ui-goal/tests/wasm_parity.rs"
       ],
       "evidence": [
         "Rust owns visibility, identity reconciliation, edit prefill/cancel/reset, same-render single-flight admission, clear-before-projection hiding, action settlement, and exact inline failure text",
-        "cargo test -p seekdeep-client-ui-goal --test bar_parity --all-features (2 passed)"
-      ],
-      "note": "keep pending until the compiled Rust/WASM GoalBar, GoalDock projection adapter, tooltip/action DOM, and Remote action adapters are live"
+        "compiled WASM renders active/paused/blocked phases, edit form, delayed tooltips, mutation actions, failures, clear hiding, and GoalDock useProjection adaptation",
+        "pinned source ui-goal suite passed (3 files, 27 tests); Rust controller 2 passed; live WASM 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-goal/src/client/GoalCommandInputView.module.css",
@@ -42896,7 +42902,16 @@
     {
       "source": "packages/client/ui-goal/src/client/GoalCommandInputView.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-goal/src/wasm.rs",
+        "crates/client-ui-goal/data/command-input.css",
+        "crates/client-ui-goal/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "compiled WASM renders the right-aligned command-input node through shared MessageText with exact group label and no ordinary message actions",
+        "live plugin-mounted command bubble test passed"
+      ]
     },
     {
       "source": "packages/client/ui-goal/src/client/goal-command-input.ts",
@@ -42915,7 +42930,17 @@
     {
       "source": "packages/client/ui-goal/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-goal/src/wasm.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-ui-goal/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "compiled Rust/WASM registers the native Goal command Definition, locale dictionaries, keyed Chat renderer, ordered Goal dock, and live injected Remote mutations",
+        "actions read the current projection CAS ref and current remote.goals namespace at call time and short-circuit absent projections",
+        "mounted WASM registration, CAS forwarding, command rendering, and disposal tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-goal/src/client/locales.ts",
@@ -42933,12 +42958,30 @@
     {
       "source": "packages/client/ui-goal/src/client/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-goal/src/wasm.rs",
+        "crates/client-ui-goal/src/bar.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust/WASM preserves the four async Goal mutation callbacks and settled RemoteResult failure contract",
+        "generated declarations retain GoalBarActions and GoalActionResult"
+      ]
     },
     {
       "source": "packages/client/ui-goal/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-goal/data/goal-bar.css",
+        "crates/client-ui-goal/data/command-input.css",
+        "crates/client-ui-goal/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "Rust compile-time CSS inclusion replaces TypeScript CSS-module declarations",
+        "both source stylesheets are exactly namespaced and projection-tested"
+      ]
     },
     {
       "source": "packages/client/ui-goal/src/index.ts",
@@ -42972,17 +43015,41 @@
     {
       "source": "packages/client/ui-goal/tests/browser-plugin.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-goal/tests/wasm_parity.rs",
+        "crates/client-ui-goal/src/wasm.rs"
+      ],
+      "evidence": [
+        "pinned source browser plugin tests passed",
+        "mounted WASM covers Definition/Slot registration, current CAS refs, Remote dispatch, projected dock rendering, and teardown"
+      ]
     },
     {
       "source": "packages/client/ui-goal/tests/goal-command-input.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-goal/tests/projection_parity.rs",
+        "crates/client-ui-goal/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source command-input tests passed",
+        "Rust Definition projection and mounted WASM command bubble tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-goal/tests/goalbar.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-goal/tests/bar_parity.rs",
+        "crates/client-ui-goal/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source GoalBar tests passed",
+        "Rust controller and mounted WASM cover visibility, phases, edit/save/cancel, single-flight actions, identity resets, blocked tooltip, failures, and clear hiding"
+      ]
     },
     {
       "source": "packages/client/ui-goal/tsconfig.json",
@@ -42998,7 +43065,15 @@
     {
       "source": "packages/client/ui-goal/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-goal/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally replaced by cargo xtask wasm-package",
+        "focused xtask test passed; optimized classic bundle built, passed node --check, and handed off exact apply/inject exports"
+      ]
     },
     {
       "source": "packages/client/ui-input-trigger/README.i18n.yaml",
