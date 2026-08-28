@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 futures.workspace = true
-seekdeep-client-ui-commands = { path = "../client-ui-commands" }
+seekdeep-client-ui-commands = { path = "../client-ui-commands", default-features = false }
 seekdeep-identity = { path = "../identity" }
 serde.workspace = true
 

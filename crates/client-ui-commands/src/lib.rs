@@ -5,12 +5,19 @@ mod directory;
 mod locales;
 mod popup;
 mod ranking;
+#[cfg(all(target_arch = "wasm32", feature = "browser"))]
+mod wasm;
 
 pub use contract::*;
 pub use directory::*;
 pub use locales::*;
 pub use popup::*;
 pub use ranking::*;
+#[cfg(all(target_arch = "wasm32", feature = "browser"))]
+pub use wasm::*;
+
+/// Compiled popup-select stylesheet.
+pub const POPUP_VIEW_STYLES: &str = include_str!("../data/popup-select.css");
 
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-commands";

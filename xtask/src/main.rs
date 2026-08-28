@@ -486,6 +486,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         }
         "@seekdeep-ai/seekdeep-client-ui-model-selection" => "client-ui-model-selection-invariant",
         "@seekdeep-ai/seekdeep-client-ui-input-trigger" => "client-ui-input-trigger-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-commands" => "client-ui-commands-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -657,6 +658,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-input-trigger" {
         return ui_input_trigger_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-commands" {
+        return ui_commands_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
@@ -746,6 +750,12 @@ fn ui_model_selection_module_factory(global: &str) -> String {
 fn ui_input_trigger_module_factory(global: &str) -> String {
     format!(
         "require => {{ {global}.configureClientUiInputTrigger(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); class InputTriggerService {{ static inject = ['sessions']; constructor(ctx) {{ return new {global}.__InputTriggerService(ctx); }} }} Object.assign({global}, {{ apply: {global}.applyClientUiInputTrigger, inject: ['sessions', 'locale'], InputTriggerService, InputTriggerController: {global}.__InputTriggerController }}); return {global}; }}"
+    )
+}
+
+fn ui_commands_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ {global}.configureClientUiCommands(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}.__CommandUiRuntime, {{ inject: ['inputTriggers', 'sessions', 'remote', 'remote.commands'] }}); Object.assign({global}, {{ apply: {global}.applyClientUiCommands, inject: ['inputTriggers', 'sessions', 'remote', 'remote.commands', 'locale'], CommandUiRuntime: {global}.__CommandUiRuntime, CommandDirectory: {global}.__CommandDirectory, PopupSelectController: {global}.__PopupSelectController, PopupSelectView: {global}.popupSelectViewComponent() }}); return {global}; }}"
     )
 }
 
@@ -846,6 +856,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-input-trigger" {
         return ui_input_trigger_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-commands" {
+        return ui_commands_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
@@ -1121,6 +1134,119 @@ export interface MenuViewInjected {
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { 'slash.menu': 'command' | 'skill' | 'subagent' | 'loading' | 'suggestions.aria' }
   interface SlotMap { 'conversation.input.overlay': { kind: 'list'; scope: 'session' } }
+}
+"
+    .to_owned()
+}
+
+fn ui_commands_declarations() -> String {
+    r"
+import type { ClientContext, SessionId } from '@seekdeep-ai/seekdeep-client-runtime/client';
+import type { ClientSessionContext, SnapshotStore, TokenSpan } from '@seekdeep-ai/seekdeep-client-ui-input-trigger/client';
+import type { CommandResult } from '@seekdeep-ai/seekdeep-commands/types';
+export const apply: typeof wasm_bindgen.applyClientUiCommands;
+export const inject: readonly ['inputTriggers', 'sessions', 'remote', 'remote.commands', 'locale'];
+export type DirectoryStatus = 'cold' | 'pending' | 'ready' | 'failed';
+export interface CommandDescriptor {
+  readonly name: string;
+  readonly description: string;
+  readonly input?: { readonly hint: string };
+}
+export class CommandDirectory {
+  constructor(fetchCommands: (sessionId: SessionId) => Promise<readonly CommandDescriptor[]>);
+  status(sessionId: SessionId): DirectoryStatus;
+  resolve(sessionId: SessionId, name: string): CommandDescriptor | undefined;
+  invalidateAll(): void;
+  resetConnected(): void;
+  warm(sessionId: SessionId): void;
+  refresh(sessionId: SessionId): Promise<void>;
+  ensureReady(sessionId: SessionId, signal: AbortSignal): Promise<readonly CommandDescriptor[]>;
+}
+export interface SelectConfirmation {
+  readonly title: string;
+  readonly description: string;
+  readonly acknowledgeLabel: string;
+  readonly cancelLabel: string;
+  readonly confirmLabel: string;
+}
+export interface SelectOption {
+  readonly id: string;
+  readonly label: string;
+  readonly detail?: string;
+  readonly active?: boolean;
+  readonly confirmation?: SelectConfirmation;
+}
+export type TokenSegment =
+  | { readonly via: 'menu'; readonly span: TokenSpan }
+  | { readonly via: 'enter'; readonly token: string };
+export interface PopupSpec<TCtx> {
+  options(context: TCtx, signal: AbortSignal): Promise<readonly SelectOption[]>;
+  onSelect(option: SelectOption, context: TCtx): void | Promise<void>;
+}
+export interface PopupSelectDeps {
+  consume(segment: TokenSegment): boolean;
+  focusComposer(): void;
+}
+export interface PopupState {
+  readonly open: boolean;
+  readonly command: string | null;
+  readonly status: 'pending' | 'ready' | 'failed';
+  readonly options: readonly SelectOption[];
+  readonly search: string;
+  readonly active: number;
+  readonly submitting: boolean;
+  readonly confirming: SelectOption | null;
+  readonly acknowledged: boolean;
+  readonly error: string | null;
+}
+export class PopupSelectController<TCtx = unknown> {
+  constructor(deps: PopupSelectDeps);
+  readonly state: SnapshotStore<PopupState>;
+  open(command: string, spec: PopupSpec<TCtx>, context: TCtx, segment: TokenSegment): void;
+  retry(): void;
+  setSearch(search: string): void;
+  move(direction: 1 | -1): void;
+  highlight(index: number): void;
+  select(index: number): Promise<void>;
+  acknowledge(acknowledged: boolean): void;
+  cancelConfirmation(): void;
+  confirm(): Promise<void>;
+  dismiss(options?: { readonly focusComposer?: boolean }): void;
+  dispose(): void;
+}
+export type CommandUiSpec = { readonly kind: 'popupSelect' } & PopupSpec<ClientSessionContext>;
+export interface CommandContribution {
+  readonly name: string;
+  readonly description: string;
+  available(session: ClientSessionContext): boolean;
+  readonly ui: CommandUiSpec;
+}
+export interface CommandDecoration {
+  readonly name: string;
+  available(session: ClientSessionContext): boolean;
+  readonly ui: CommandUiSpec;
+}
+export class CommandUiRuntime {
+  static readonly inject: readonly ['inputTriggers', 'sessions', 'remote', 'remote.commands'];
+  constructor(ctx: ClientContext);
+  register(contribution: CommandContribution): () => void;
+  decorate(decoration: CommandDecoration): () => void;
+  popupFor(actx: ClientContext): PopupSelectController<ClientSessionContext>;
+  bindComposerFocus(id: SessionId, focus: () => void): () => void;
+}
+export const filterOptions: (options: readonly SelectOption[], search: string) => readonly SelectOption[];
+export interface PopupSelectInjected { popup: PopupSelectController<ClientSessionContext> }
+export interface PopupSelectViewProps extends PopupSelectInjected { t(key: CommandKey, values?: Record<string, unknown>): string }
+export const PopupSelectView: (props: PopupSelectViewProps) => import('react').JSX.Element | null;
+export type CommandKey =
+  | 'search.placeholder' | 'search.aria' | 'status.loading' | 'status.applying'
+  | 'status.empty' | 'overlay.aria' | 'listbox.aria';
+declare module '@seekdeep-ai/cordis' {
+  interface Context { commandUi: CommandUiRuntime }
+  interface Events { 'command/executed'(sessionId: SessionId, name: string, result: CommandResult): void }
+}
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { command: CommandKey }
 }
 "
     .to_owned()
@@ -2274,6 +2400,54 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-input-trigger-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-input-trigger"));
+    }
+
+    #[test]
+    fn ui_commands_bundle_configures_service_popup_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_commands_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-commands",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiCommands(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_commands_wasm.applyClientUiCommands",
+            "inject: ['inputTriggers', 'sessions', 'remote', 'remote.commands', 'locale']",
+            "CommandUiRuntime: __seekdeep_client_ui_commands_wasm.__CommandUiRuntime",
+            "CommandDirectory: __seekdeep_client_ui_commands_wasm.__CommandDirectory",
+            "PopupSelectController: __seekdeep_client_ui_commands_wasm.__PopupSelectController",
+            "PopupSelectView: __seekdeep_client_ui_commands_wasm.popupSelectViewComponent()",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-commands");
+        for expected in [
+            "type DirectoryStatus",
+            "interface CommandDescriptor",
+            "class CommandDirectory",
+            "interface PopupState",
+            "class PopupSelectController",
+            "interface CommandContribution",
+            "interface CommandDecoration",
+            "class CommandUiRuntime",
+            "const filterOptions",
+            "interface PopupSelectInjected",
+            "interface LocaleNamespaceMap",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-commands",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-commands-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-commands"));
     }
 
     #[test]

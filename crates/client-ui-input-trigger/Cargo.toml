@@ -10,6 +10,10 @@ description = "Rust/WASM input-trigger detection and menu state machine"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["browser"]
+browser = []
+
 [dependencies]
 serde.workspace = true
 

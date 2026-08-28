@@ -18,16 +18,32 @@ pub fn filter_options<'a>(options: &'a [SelectOption], search: &str) -> Cow<'a, 
     Cow::Owned(
         options
             .iter()
-            .filter(|option| {
-                option.label.to_lowercase().contains(&query)
-                    || option
-                        .detail
-                        .as_ref()
-                        .is_some_and(|detail| detail.to_lowercase().contains(&query))
-            })
+            .filter(|option| option_matches_query(option, &query))
             .cloned()
             .collect(),
     )
+}
+
+/// Returns source-array positions selected by [`filter_options`].
+#[must_use]
+pub fn filtered_option_indices(options: &[SelectOption], search: &str) -> Vec<usize> {
+    let query = js_trim(search).to_lowercase();
+    if query.is_empty() {
+        return (0..options.len()).collect();
+    }
+    options
+        .iter()
+        .enumerate()
+        .filter_map(|(index, option)| option_matches_query(option, &query).then_some(index))
+        .collect()
+}
+
+fn option_matches_query(option: &SelectOption, query: &str) -> bool {
+    option.label.to_lowercase().contains(query)
+        || option
+            .detail
+            .as_ref()
+            .is_some_and(|detail| detail.to_lowercase().contains(query))
 }
 
 fn boundary_bonus(name: &[u16], index: usize) -> i64 {

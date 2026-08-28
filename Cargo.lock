@@ -5315,12 +5315,19 @@ version = "0.1.0-rc.5"
 dependencies = [
  "futures",
  "indexmap 2.14.0",
+ "js-sys",
+ "regex",
  "seekdeep-client-ui-input-trigger",
- "seekdeep-commands",
+ "seekdeep-commands-contract",
  "seekdeep-cordis",
  "seekdeep-identity",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
 ]
 
 [[package]]
@@ -5920,6 +5927,7 @@ dependencies = [
  "parking_lot",
  "regex",
  "seekdeep-agent",
+ "seekdeep-commands-contract",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
@@ -5932,6 +5940,13 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-commands-contract"
+version = "0.1.0-rc.5"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

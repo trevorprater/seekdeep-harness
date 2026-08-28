@@ -41466,10 +41466,11 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-commands/package.json"
+        "packages/client/ui-commands/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "optimized Rust/WASM package build, classic ModuleLoader smoke, dependency-export isolation, and package metadata assertions passed"
       ]
     },
     {
@@ -41486,22 +41487,64 @@
     {
       "source": "packages/client/ui-commands/src/client/PopupSelectView.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/src/wasm/popup_view.rs",
+        "crates/client-ui-commands/src/wasm.rs",
+        "crates/client-ui-commands/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ui-commands suite: 106 passed",
+        "live wasm32 popup rendering, filtering, focus, confirmation, retry, keyboard, and outside-dismiss assertions: 4 passed",
+        "strict wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/src/client/contract.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/src/contract.rs",
+        "crates/commands-contract/src/lib.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "target-portable command and popup wire contracts preserve the source fields and optionality",
+        "native command UI parity suite: 10 passed",
+        "generated compatibility declaration assertions passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/src/client/directory.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/src/directory.rs",
+        "crates/client-ui-commands/src/wasm/browser_directory.rs",
+        "crates/client-ui-commands/tests/directory_parity.rs",
+        "crates/client-ui-commands/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ui-commands suite: 106 passed",
+        "native directory lifecycle and epoch parity assertions: 3 passed",
+        "live wasm32 public directory and assembled remote assertions: 4 passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/src/wasm/plugin.rs",
+        "crates/client-ui-commands/src/wasm.rs",
+        "packages/client/ui-commands/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live wasm32 plugin service, locale, source, scoped popup Slot, disposal, and exact inject assertions: 4 passed",
+        "optimized Rust/WASM package build and classic ModuleLoader smoke passed",
+        "generated compatibility declaration assertions passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/src/client/locales.ts",
@@ -41519,17 +41562,46 @@
     {
       "source": "packages/client/ui-commands/src/client/popup.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/src/popup.rs",
+        "crates/client-ui-commands/src/wasm/browser_popup.rs",
+        "crates/client-ui-commands/tests/popup_parity.rs",
+        "crates/client-ui-commands/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ui-commands suite: 106 passed",
+        "native popup binding, race, confirmation, and settlement assertions: 3 passed",
+        "live wasm32 preserves JavaScript context identity, AbortSignal behavior, token number encoding, and option identity"
+      ]
     },
     {
       "source": "packages/client/ui-commands/src/client/service.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/src/wasm/service.rs",
+        "crates/client-ui-commands/src/directory.rs",
+        "crates/client-ui-commands/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source ui-commands suite: 106 passed",
+        "live wasm32 candidate, contribution, claim, execute, observer-containment, notice, addressing, invalidation, and teardown assertions: 4 passed",
+        "strict native and wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/data/popup-select.css",
+        "crates/client-ui-commands/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "compiled stylesheet is an exact namespaced projection of the source CSS module",
+        "native command UI parity suite: 10 passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/src/index.ts",
@@ -41544,7 +41616,7 @@
         "compiled dependency-free Host plugin preserves the source no-op node half",
         "real Web preflight advances from ui-commands to ui-skill"
       ],
-      "note": "this row is the source Host no-op half; Client directory, popup, service, slot, and render surfaces remain independently pending"
+      "note": "This row is the source Host no-op half; the compiled Client module is verified by its independent source rows."
     },
     {
       "source": "packages/client/ui-commands/src/invariant.ts",
@@ -41563,27 +41635,67 @@
     {
       "source": "packages/client/ui-commands/tests/browser-plugin.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/tests/wasm_parity.rs",
+        "crates/client-ui-commands/src/wasm/plugin.rs"
+      ],
+      "evidence": [
+        "pinned-source browser plugin tests included in 106 passed",
+        "live wasm32 assembled plugin lifecycle assertions: 4 passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/tests/directory.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/tests/directory_parity.rs",
+        "crates/client-ui-commands/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source directory tests included in 106 passed",
+        "native directory assertions: 3 passed; live wasm32 assertions: 4 passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/tests/popup-view.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/tests/wasm_parity.rs",
+        "crates/client-ui-commands/tests/css_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source popup view tests included in 106 passed",
+        "live wasm32 view assertions: 4 passed; exact CSS projection assertion passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/tests/popup.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/tests/popup_parity.rs",
+        "crates/client-ui-commands/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source popup controller tests included in 106 passed",
+        "native popup assertions: 3 passed; live wasm32 assertions: 4 passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/tests/service.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-commands/tests/wasm_parity.rs",
+        "crates/client-ui-commands/tests/directory_parity.rs"
+      ],
+      "evidence": [
+        "pinned-source service tests included in 106 passed",
+        "live wasm32 assembled service assertions: 4 passed; native directory assertions: 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-commands/tsconfig.json",
@@ -41599,7 +41711,15 @@
     {
       "source": "packages/client/ui-commands/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-commands/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "optimized Rust/WASM classic package build passed",
+        "package-owned export isolation, generated declarations, compatibility entries, and ModuleLoader smoke passed"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/README.i18n.yaml",

@@ -8,7 +8,7 @@ use futures::{
     future::{Either, LocalBoxFuture, select},
 };
 use indexmap::IndexMap;
-use seekdeep_commands::CommandDescriptor;
+use seekdeep_commands_contract::CommandDescriptor;
 use seekdeep_identity::SessionId;
 
 /// One cache key's load lifecycle.

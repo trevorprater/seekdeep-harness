@@ -15,8 +15,9 @@ use futures::{
     task::LocalSpawnExt as _,
 };
 use seekdeep_client_ui_commands::{
-    PopupAbortFactory, PopupAbortHandle, PopupBusinessSpec, PopupSelectController, PopupSelectDeps,
-    PopupStatus, PopupTaskSpawner, PopupTokenSegment, SelectConfirmation, SelectOption,
+    PopupAbortFactory, PopupAbortHandle, PopupBusinessSpec, PopupContext, PopupSelectController,
+    PopupSelectDeps, PopupStatus, PopupTaskSpawner, PopupTokenSegment, SelectConfirmation,
+    SelectOption,
 };
 use seekdeep_client_ui_input_trigger::TokenSpan;
 use serde_json::{Value, json};
@@ -70,10 +71,10 @@ struct Spec {
 impl PopupBusinessSpec for Spec {
     fn options(
         &self,
-        context: Value,
+        context: Rc<dyn PopupContext>,
         _signal: Rc<dyn PopupAbortHandle>,
     ) -> LocalBoxFuture<'static, Result<Vec<SelectOption>, String>> {
-        self.option_calls.borrow_mut().push(context);
+        self.option_calls.borrow_mut().push(context_json(&context));
         match self.options.borrow_mut().pop_front().unwrap() {
             OptionPlan::Ready(value) => futures::future::ready(value).boxed_local(),
             OptionPlan::Deferred(receiver) => async move {
@@ -88,9 +89,11 @@ impl PopupBusinessSpec for Spec {
     fn on_select(
         &self,
         option: SelectOption,
-        context: Value,
+        context: Rc<dyn PopupContext>,
     ) -> LocalBoxFuture<'static, Result<(), String>> {
-        self.select_calls.borrow_mut().push((option.id, context));
+        self.select_calls
+            .borrow_mut()
+            .push((option.id, context_json(&context)));
         match self.selects.borrow_mut().pop_front().unwrap() {
             SelectPlan::Ready(value) => futures::future::ready(value).boxed_local(),
             SelectPlan::Deferred(receiver) => async move {
@@ -101,6 +104,15 @@ impl PopupBusinessSpec for Spec {
             .boxed_local(),
         }
     }
+}
+
+fn context_json(context: &Rc<dyn PopupContext>) -> Value {
+    context
+        .as_ref()
+        .as_any()
+        .downcast_ref::<Value>()
+        .expect("test context must remain an exact serde_json::Value")
+        .clone()
 }
 
 #[derive(Default)]
@@ -165,11 +177,13 @@ fn controller(pool: &LocalPool) -> (Rc<Deps>, Rc<AbortFactory>, Rc<PopupSelectCo
 }
 
 fn segment(revision: u64) -> PopupTokenSegment {
-    PopupTokenSegment::Menu(TokenSpan {
-        start: 0,
-        end: 4,
-        draft_rev: revision,
-    })
+    PopupTokenSegment::Menu {
+        span: TokenSpan {
+            start: 0,
+            end: 4,
+            draft_rev: revision,
+        },
+    }
 }
 
 #[test]

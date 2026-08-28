@@ -13,7 +13,7 @@ use seekdeep_client_ui_commands::{
     CommandDirectory, CommandDirectoryAbort, CommandDirectorySpawner, CommandDirectoryStatus,
     CommandDirectoryTransport,
 };
-use seekdeep_commands::{CommandDescriptor, CommandInputDescriptor};
+use seekdeep_commands_contract::{CommandDescriptor, CommandInputDescriptor};
 use seekdeep_identity::SessionId;
 
 enum Plan {

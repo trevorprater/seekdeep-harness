@@ -87,6 +87,7 @@ members = [
   "crates/command-feedback",
   "crates/command-compact",
   "crates/command-goal",
+  "crates/commands-contract",
   "crates/commands",
   "crates/compaction",
   "crates/compaction-basic",

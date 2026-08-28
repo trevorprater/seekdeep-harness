@@ -8,18 +8,25 @@ use std::{
 };
 
 use futures::{FutureExt as _, future::LocalBoxFuture};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 
 use crate::{PopupState, PopupStatus, SelectOption, filter_options};
 use seekdeep_client_ui_input_trigger::TokenSpan;
 
 /// Open-time command token guard.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "via", rename_all = "lowercase")]
 pub enum PopupTokenSegment {
     /// Menu pick carries a revision-stamped span.
-    Menu(TokenSpan),
+    Menu {
+        /// Exact menu-time span.
+        span: TokenSpan,
+    },
     /// Bare Enter carries the exact token.
-    Enter(String),
+    Enter {
+        /// Exact bare token.
+        token: String,
+    },
 }
 
 /// One options request's cancellation handle.
@@ -36,12 +43,24 @@ pub trait PopupAbortFactory {
     fn create(&self) -> Rc<dyn PopupAbortHandle>;
 }
 
+/// Opaque open-time context carried unchanged between business callbacks.
+pub trait PopupContext: Any {
+    /// Downcast support for target adapters and typed business specifications.
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: Any> PopupContext for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// Business callbacks captured by one popup binding.
 pub trait PopupBusinessSpec {
     /// Loads option rows once per open/retry.
     fn options(
         &self,
-        context: Value,
+        context: Rc<dyn PopupContext>,
         signal: Rc<dyn PopupAbortHandle>,
     ) -> LocalBoxFuture<'static, Result<Vec<SelectOption>, String>>;
 
@@ -49,7 +68,7 @@ pub trait PopupBusinessSpec {
     fn on_select(
         &self,
         option: SelectOption,
-        context: Value,
+        context: Rc<dyn PopupContext>,
     ) -> LocalBoxFuture<'static, Result<(), String>>;
 }
 
@@ -79,7 +98,7 @@ struct Binding {
     id: u64,
     command: String,
     spec: Rc<dyn PopupBusinessSpec>,
-    context: Value,
+    context: Rc<dyn PopupContext>,
     segment: PopupTokenSegment,
     abort: Rc<dyn PopupAbortHandle>,
 }
@@ -150,11 +169,11 @@ impl PopupSelectController {
     /// # Panics
     ///
     /// Panics after exhausting every `u64` binding id rather than aliasing settlement rights.
-    pub fn open(
+    pub fn open<C: PopupContext>(
         self: &Rc<Self>,
         command: String,
         spec: Rc<dyn PopupBusinessSpec>,
-        context: Value,
+        context: C,
         segment: PopupTokenSegment,
     ) {
         if let Some(binding) = self.binding.borrow_mut().take() {
@@ -169,7 +188,7 @@ impl PopupSelectController {
             id,
             command: command.clone(),
             spec,
-            context,
+            context: Rc::new(context),
             segment,
             abort: self.abort_factory.create(),
         };

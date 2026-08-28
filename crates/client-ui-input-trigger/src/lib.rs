@@ -4,14 +4,14 @@ mod detect;
 mod locales;
 mod menu;
 mod types;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "browser"))]
 mod wasm;
 
 pub use detect::*;
 pub use locales::*;
 pub use menu::*;
 pub use types::*;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "browser"))]
 pub use wasm::*;
 
 /// Compiled trigger menu stylesheet.

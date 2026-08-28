@@ -16,6 +16,7 @@ use std::{
 use futures::{FutureExt, future::Either};
 use regex::Regex;
 use seekdeep_agent::Agent;
+pub use seekdeep_commands_contract::{CommandDescriptor, CommandInputDescriptor};
 use seekdeep_cordis::{Context, EventArgs, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, Session};
 use seekdeep_llm::AbortSignal;
@@ -67,27 +68,6 @@ impl std::fmt::Display for CommandId {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(formatter)
     }
-}
-
-/// Immutable metadata for optional unstructured input.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CommandInputDescriptor {
-    /// Placeholder shown before free-form input.
-    pub hint: String,
-}
-
-/// Handler-free immutable discovery view.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CommandDescriptor {
-    /// Lowercase command name without slash.
-    pub name: String,
-    /// Human-readable summary.
-    pub description: String,
-    /// Optional free-form input metadata.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub input: Option<CommandInputDescriptor>,
 }
 
 /// Merge-extensible producer record for one human-issued command.
