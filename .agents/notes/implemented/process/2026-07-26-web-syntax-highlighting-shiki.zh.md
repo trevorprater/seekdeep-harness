@@ -14,10 +14,10 @@ client 过去把每一处代码表面——assistant 正文里的 markdown 围�
 
 **采用同步细粒度形态的 shiki，作为 `ui-primitives` 里的一个单例，主题化完全经由 CSS 自定义属性完成。**
 
-- **依赖**：`shiki/core` + `@shikijs/langs`，经 `createHighlighterCoreSync` 搭配 `createJavaScriptRegexEngine({ forgiving: true })` 组装——不带 oniguruma WASM、没有异步初始化、对 bundle 友好。语法（grammar）白名单：`typescript`（内嵌 JS）、`shellscript`、`json`——即 harness 实际会渲染的那几种语言；其余一律回退到几何完全一致的纯文本块，绝不报错。先例：VitePress 站点已经通过 shiki 渲染全部文档代码；而在 TypeScript（正是此处要紧的载荷）上，TextMate 语法实质性优于正则高亮器。
-- **单例**：`ui-primitives/src/markdown/highlight.ts` 为每个 document 创建一个 `HighlighterCore`，并公开 `highlightToHtml(code, lang)`（undefined 即渲染为纯文本）。引擎加语法的构建是一次约 120-175ms 的长任务，因此模块在插件启动时用延迟任务预热单例（惰性路径保留为正确性兜底），把这笔开销挪出渲染路径——否则流式 finalize 交换的那一刻会卡顿。别名表用 `Map` 而非对象：fence 信息字符串由 assistant 撰写，诸如 `constructor` 这样的标签必须落空，而不是解析到继承属性并让 shiki 崩溃。共享的 `CodeBlock` 组件同时拥有两条分支；其 shiki 分支经 `dangerouslySetInnerHTML` 注入生成的 span 树——此用法获准，因为 shiki 输出的是从代码文本计算出的静态 span 树（不流经任何用户 HTML，没有脚本或事件处理器），这正是 shiki 自身文档载明的消费路径。
+- **依赖**：`shiki/core` + `@shikijs/langs`，经 `createHighlighterCoreSync` 搭配 `createJavaScriptRegexEngine({ forgiving: true })` 组装——不带 oniguruma WASM、没有异步 boot 初始化、对 bundle 友好。boot 集合为 `typescript`（内嵌 JS）、`shellscript` 与 `json`；23 种读取卡片语法置于封闭的 lazy 表之后。落在这份组合白名单之外的内容一律回退到几何完全一致的纯文本块，绝不报错。先例：VitePress 站点已经通过 Shiki 渲染全部文档代码；而在 TypeScript（正是此处要紧的载荷）上，TextMate 语法实质性优于正则高亮器。
+- **单例与所有权**：编译后的 Rust/WASM（[browser_highlight.rs](../../../../crates/client-ui-primitives/src/browser_highlight.rs)）拥有别名、boot／lazy 准入、单次加载请求、加载计数发布、订阅、回退行为、HTML 派发、逐行 token 整形和尾部行归一化。由 [`xtask`](../../../../xtask/src/main.rs) 生成的纯库 ESM 包只提供一项薄 Shiki 能力：构造唯一的 `HighlighterCore`、嵌入三种 boot 语法，并承载 23 个语法级动态 import thunk，但不做 Harness 策略决策。Rust 调度延迟预热，使约 120-175ms 的引擎构建不进入流式 finalize 后的渲染路径。assistant 撰写的 `constructor` 等标签会在 Rust 封闭别名表中落空，不会沿对象原型解析。编译后的 `CodeBlock`（[browser_code_block.rs](../../../../crates/client-ui-primitives/src/browser_code_block.rs)）拥有高亮与纯文本两条分支；高亮分支通过 `dangerouslySetInnerHTML` 注入 Shiki 的静态 span 树，这是依赖文档规定的消费路径，且不含用户 HTML、脚本或处理器。
 - **主题化**：shiki 的 `createCssVariablesTheme` 让每一种 token 颜色都经由 `--shiki-*` 自定义属性路由；取值本身住在新增的 `ui-theme/styles/shiki.css` token 表里（亮色在 `:root`、暗色在 `body[data-ds-dark-theme]`——层叠方式与其余每张样式表相同），由壳的 `base.css` 导入链引入。组件 CSS 保持只用 token；任何颜色字面量都不进入 JS 或组件样式表。背景/前景以别名指向既有的 markdown 代码块 token，使高亮块与纯文本块彼此一致。
-- **表面**：markdown 围栏代码块（`MarkdownText` 的 `pre` 组件把单字符串围栏路由到 `CodeBlock`）、`run_code` 展开后的程序正文（ToolRow 的 code 变体，`lang="typescript"`），以及 details 面板的 Input 参数（`lang="json"`）。工具输出从不做语法高亮——它是任意文本，硬猜一种语法，带来的误高亮会多于帮助；bash 卡片的输出只承载其自身 ANSI 序列声明的颜色，经由[终端卡片](../feature/2026-07-28-web-terminal-card.md)渲染。
+- **表面**：markdown 围栏代码块（`MarkdownText` 的 `pre` 组件把单字符串围栏路由到 `CodeBlock`）、`run_code` 展开后的程序正文（`lang="typescript"`）、details 面板的 Input 参数（`lang="json"`），以及通过同一逐行 tokenizer 渲染的带行号 `ReadBlock`。工具输出从不做语法高亮——它是任意文本，硬猜一种语法，带来的误高亮会多于帮助；bash 卡片的输出只承载其自身 ANSI 序列声明的颜色，经由[终端卡片](../feature/2026-07-28-web-terminal-card.md)渲染。
 
 ## 曾考虑的替代方案
 
@@ -29,4 +29,4 @@ client 过去把每一处代码表面——assistant 正文里的 markdown 围�
 
 ## 后果
 
-所有消费方共用同一个代码表面——未来的新表面导入 `CodeBlock` 即继承高亮、主题化与纯文本回退。bundle 的增量是 shiki core 加三种语法（在 `ui-primitives` 中一次性支付）。token 颜色是第一张 `--shiki-*` 表；注册别名覆写的主题包扩展它们的方式与扩展任何其他 token 无异。jsdom spec 锁定 token span 结构、别名解析、两条回退分支与围栏路由；既有的已构建 bundle 快照和浏览器 e2e 覆盖组装后的路径。
+每个消费方共用一套 Rust 所有的策略与一个 Shiki 单例。bundle 增量是 Shiki core 加三种 boot 语法；每种 lazy 语法只在首次使用后付费。token 颜色仍住在 `--shiki-*` 表。固定源码 spec、live WASM 策略／组件测试、优化 ESM 包测试与真实 Shiki→WASM smoke 共同锁定别名、token／HTML 输出、lazy 通知、回退、复制与 block 外壳。其余 Markdown 渲染器与整包 index 行仍各自保持待完成，直到完整组装路径完成编译。

@@ -45437,7 +45437,18 @@
     {
       "source": "packages/client/ui-primitives/src/ReadBlock.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_read_block.rs",
+        "crates/client-ui-primitives/src/browser_highlight.rs",
+        "crates/client-ui-primitives/tests/wasm_code_read_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ReadBlock/highlight suite: 22 passed",
+        "five grouped live WASM component tests pin highlighted/plain rows, stable token memoization, per-run keys, banner and count chrome, exact head/tail/default/one-line caps, expand accessibility, full-window copy, refusal, empty guard, lazy re-highlight, and class merging",
+        "real optimized ESM package smoke initializes the generated index and React server-renders compiled ReadBlock with the source-compatible default plus exact five-row fractional-cap coercion",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/RiskConfirmation.module.css",
@@ -45726,7 +45737,18 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/CodeBlock.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_code_block.rs",
+        "crates/client-ui-primitives/src/browser_highlight.rs",
+        "crates/client-ui-primitives/tests/wasm_code_read_parity.rs"
+      ],
+      "evidence": [
+        "pinned source CodeBlock/highlight suite: 15 passed",
+        "five grouped live WASM component tests pin highlighted/plain arms, one-newline trimming, language and custom copy labels, stable Shiki memoization, DOM pre-text copying, copied-state suppression/reset, refusal, and execCommand success/throw/absence",
+        "real optimized ESM package smoke initializes the generated index and React server-renders compiled CodeBlock over real Shiki HTML",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/JsonBlock.module.css",
@@ -45792,7 +45814,18 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/highlight.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_highlight.rs",
+        "crates/client-ui-primitives/tests/wasm_highlight_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source CodeBlock and ReadBlock suites: 15 plus 22 passed",
+        "five live WASM tests pin all aliases, hostile object-property labels, deferred singleton warmup and failure propagation, boot HTML, 23 one-shot lazy grammars, opaque load count, reentrant and live-Set subscription semantics, per-line CSS-variable runs, trailing-line normalization, and malformed capability output",
+        "optimized package assertion pins the CSS-variable theme, eager regex compilation, three boot warmups, all 23 syntax-level dynamic imports, thin capability boundary, compiled exports, and absence of global export pollution",
+        "real generated-index smoke drives Shiki HTML, two-line tokens, Python lazy registration, load publication, and hostile-alias fallback through release WASM"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/incremental.ts",
@@ -45931,7 +45964,17 @@
     {
       "source": "packages/client/ui-primitives/tests/code-block.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_highlight_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_code_read_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 15 passed",
+        "compiled live WASM highlighter assertions: 5 passed",
+        "compiled live WASM CodeBlock and ReadBlock assertions: 5 passed",
+        "real optimized ESM Shiki-to-WASM smoke passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/diff-block.client.spec.tsx",
@@ -46552,7 +46595,17 @@
     {
       "source": "packages/client/ui-primitives/tests/read-block.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_highlight_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_code_read_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 22 passed",
+        "compiled live WASM highlighter assertions: 5 passed",
+        "compiled live WASM CodeBlock and ReadBlock assertions: 5 passed",
+        "real optimized ESM Shiki-to-WASM smoke passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/search-block.client.spec.tsx",

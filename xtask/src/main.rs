@@ -262,6 +262,9 @@ fn wasm_package_once(
     if module_id == "@seekdeep-ai/seekdeep-client-web" {
         return wasm_web_shell_package(&metadata, artifact, out_dir, &wasm);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-primitives" {
+        return wasm_ui_primitives_package(&metadata, artifact, out_dir, &wasm);
+    }
     let staging = metadata
         .target_directory
         .join("xtask/wasm-package")
@@ -421,6 +424,161 @@ export interface AppShellService { renderApp(): unknown }
 export type BootSeams = { loadBundle?: Function };
 export type LoaderEntryState = 'pending' | 'loading' | 'active' | 'failed' | 'disposed' | 'unloading';
 export type LoaderStatus = Record<string, LoaderEntryState>;
+"
+}
+
+fn wasm_ui_primitives_package(
+    metadata: &CargoMetadata,
+    artifact: &str,
+    out_dir: &Path,
+    wasm: &Path,
+) -> anyhow::Result<()> {
+    let staging = metadata
+        .target_directory
+        .join("xtask/wasm-package")
+        .join(artifact);
+    if staging.exists() {
+        std::fs::remove_dir_all(&staging)?;
+    }
+    std::fs::create_dir_all(&staging)?;
+    let status = ProcessCommand::new("wasm-bindgen")
+        .args(["--target", "web", "--out-name", "client", "--out-dir"])
+        .arg(&staging)
+        .arg(wasm)
+        .status()?;
+    anyhow::ensure!(
+        status.success(),
+        "wasm-bindgen failed for client UI primitives"
+    );
+    let out_dir = if out_dir.is_absolute() {
+        out_dir.to_owned()
+    } else {
+        metadata.workspace_root.join(out_dir)
+    };
+    std::fs::create_dir_all(&out_dir)?;
+    for name in ["client.js", "client.d.ts", "client_bg.wasm"] {
+        std::fs::copy(staging.join(name), out_dir.join(name))?;
+    }
+    std::fs::write(
+        out_dir.join("highlight-backend.js"),
+        ui_primitives_highlight_backend(),
+    )?;
+    std::fs::write(out_dir.join("index.js"), ui_primitives_esm_wrapper())?;
+    let type_dir = out_dir.join("types");
+    std::fs::create_dir_all(&type_dir)?;
+    std::fs::copy(staging.join("client.d.ts"), type_dir.join("index.d.ts"))?;
+    println!(
+        "built @seekdeep-ai/seekdeep-client-ui-primitives Rust/WASM ESM library at {}",
+        out_dir.join("index.js").display()
+    );
+    Ok(())
+}
+
+fn ui_primitives_highlight_backend() -> &'static str {
+    r#"import { createHighlighterCoreSync, createCssVariablesTheme } from 'shiki/core';
+import { createJavaScriptRegexEngine, defaultJavaScriptRegexConstructor } from 'shiki/engine/javascript';
+import langTs from '@shikijs/langs/typescript';
+import langBash from '@shikijs/langs/shellscript';
+import langJson from '@shikijs/langs/json';
+
+const theme = createCssVariablesTheme({ name: 'css-variables', variablePrefix: '--shiki-', fontStyle: true });
+const engine = createJavaScriptRegexEngine({
+  forgiving: true,
+  regexConstructor: pattern => defaultJavaScriptRegexConstructor(pattern, { lazyCompileLength: Number.POSITIVE_INFINITY }),
+});
+const lazy = new Map([
+  ['python', () => import('@shikijs/langs/python')], ['ruby', () => import('@shikijs/langs/ruby')],
+  ['go', () => import('@shikijs/langs/go')], ['rust', () => import('@shikijs/langs/rust')],
+  ['java', () => import('@shikijs/langs/java')], ['c', () => import('@shikijs/langs/c')],
+  ['cpp', () => import('@shikijs/langs/cpp')], ['csharp', () => import('@shikijs/langs/csharp')],
+  ['kotlin', () => import('@shikijs/langs/kotlin')], ['swift', () => import('@shikijs/langs/swift')],
+  ['php', () => import('@shikijs/langs/php')], ['yaml', () => import('@shikijs/langs/yaml')],
+  ['toml', () => import('@shikijs/langs/toml')], ['ini', () => import('@shikijs/langs/ini')],
+  ['markdown', () => import('@shikijs/langs/markdown')], ['mdx', () => import('@shikijs/langs/mdx')],
+  ['html', () => import('@shikijs/langs/html')], ['css', () => import('@shikijs/langs/css')],
+  ['scss', () => import('@shikijs/langs/scss')], ['less', () => import('@shikijs/langs/less')],
+  ['sql', () => import('@shikijs/langs/sql')], ['xml', () => import('@shikijs/langs/xml')],
+  ['lua', () => import('@shikijs/langs/lua')],
+]);
+let singleton;
+function createHighlighter() {
+  const instance = createHighlighterCoreSync({ themes: [theme], langs: [langTs, langBash, langJson], engine });
+  for (const sample of [
+    { lang: 'typescript', code: 'const answer: number = 42' },
+    { lang: 'shellscript', code: 'printf \'%s\\n\' "$HOME"' },
+    { lang: 'json', code: '{"ready":true}' },
+  ]) instance.codeToTokens(sample.code, { lang: sample.lang, theme: 'css-variables', tokenizeTimeLimit: 0 });
+  return instance;
+}
+function highlighter() {
+  singleton ??= createHighlighter();
+  return singleton;
+}
+export function createHighlightBackend() {
+  return {
+    warm() { highlighter(); },
+    loadGrammar(id) {
+      const load = lazy.get(id);
+      if (load === undefined) throw new Error(`unknown lazy grammar: ${id}`);
+      return load().then(mod => { highlighter().loadLanguageSync(mod.default); });
+    },
+    codeToHtml(code, lang) { return highlighter().codeToHtml(code, { lang, theme: 'css-variables' }); },
+    codeToTokens(code, lang) { return highlighter().codeToTokens(code, { lang, theme: 'css-variables' }); },
+  };
+}
+"#
+}
+
+fn ui_primitives_esm_wrapper() -> &'static str {
+    r"import init, * as wasm from './client.js';
+import * as React from 'react';
+import * as ReactDOM from 'react-dom';
+import { createHighlightBackend } from './highlight-backend.js';
+
+await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
+wasm.configureClientUiPrimitiveHighlight(createHighlightBackend());
+wasm.configureClientUiPrimitiveHooks(React);
+wasm.configureClientUiPrimitiveAtoms(React, ReactDOM);
+wasm.configureClientUiPrimitiveDialogs(React, ReactDOM);
+wasm.configureClientUiPrimitiveIcons(React);
+wasm.configureClientUiPrimitiveTooltip(React);
+wasm.configureClientUiPrimitiveBlocks(React);
+wasm.configureClientUiPrimitiveWeb(React);
+wasm.configureClientUiPrimitiveHoverCard(React, ReactDOM);
+wasm.configureClientUiPrimitiveMenu(React, ReactDOM);
+wasm.configureClientUiPrimitiveJsonTree(React, ReactDOM);
+wasm.configureClientUiPrimitiveCodeBlock(React);
+wasm.configureClientUiPrimitiveReadBlock(React);
+
+export const Button = wasm.buttonComponent();
+export const Pill = wasm.pillComponent();
+export const Input = wasm.inputComponent();
+export const StateDot = wasm.stateDotComponent();
+export const ConnectionBanner = wasm.connectionBannerComponent();
+export const OnboardingSurface = wasm.onboardingSurfaceComponent();
+export const Toast = wasm.toastComponent();
+export const Modal = wasm.modalComponent();
+export const DisclosureRow = wasm.disclosureRowComponent();
+export const RiskConfirmation = wasm.riskConfirmationComponent();
+export const Tooltip = wasm.tooltipComponent();
+export const DiffBlock = wasm.diffBlockComponent();
+export const SearchBlock = wasm.searchBlockComponent();
+export const TerminalBlock = wasm.terminalBlockComponent();
+export const WebBlock = wasm.webBlockComponent();
+export const HoverCard = wasm.hoverCardComponent();
+export const Menu = wasm.menuComponent();
+export const JsonTree = wasm.jsonTreeComponent();
+export const CodeBlock = wasm.codeBlockComponent();
+export const ReadBlock = wasm.readBlockComponent();
+export const DEFAULT_READ_MAX_LINES = wasm.defaultReadMaxLines();
+export const highlightToHtml = wasm.highlightToHtml;
+export const highlightLines = wasm.highlightLines;
+export const subscribeGrammarLoaded = wasm.subscribeGrammarLoaded;
+export const grammarLoadCount = wasm.grammarLoadCount;
+export const writeClipboard = wasm.writeClipboard;
+export const usePointerGrace = wasm.usePointerGrace;
+export const useCopyFeedback = wasm.useCopyFeedback;
+export const useAnchoredMaxHeight = wasm.useAnchoredMaxHeight;
 "
 }
 
@@ -2031,8 +2189,8 @@ mod tests {
     use super::{
         classic_module_bundle, client_web_esm_declarations, client_web_esm_wrapper,
         compatibility_declarations, copy_wasm_package_assets, default_macos_platform_tag,
-        is_generated_package_output, is_localization, watch_snapshot,
-        write_wasm_package_compatibility_entries,
+        is_generated_package_output, is_localization, ui_primitives_esm_wrapper,
+        ui_primitives_highlight_backend, watch_snapshot, write_wasm_package_compatibility_entries,
     };
 
     #[test]
@@ -2974,6 +3132,41 @@ mod tests {
         ] {
             assert!(declarations.contains(expected), "missing {expected:?}");
         }
+    }
+
+    #[test]
+    fn ui_primitives_esm_library_keeps_shiki_linkage_thin_and_rust_policy_owned() {
+        let backend = ui_primitives_highlight_backend();
+        for expected in [
+            "createHighlighterCoreSync",
+            "createJavaScriptRegexEngine",
+            "lazyCompileLength: Number.POSITIVE_INFINITY",
+            "function createHighlighter()",
+            "tokenizeTimeLimit: 0",
+            "warm() { highlighter(); }",
+            "['python', () => import('@shikijs/langs/python')]",
+            "['lua', () => import('@shikijs/langs/lua')]",
+            "loadLanguageSync(mod.default)",
+            "codeToHtml(code, { lang, theme: 'css-variables' })",
+            "codeToTokens(code, { lang, theme: 'css-variables' })",
+        ] {
+            assert!(backend.contains(expected), "missing {expected:?}");
+        }
+        assert_eq!(backend.matches("() => import('@shikijs/langs/").count(), 23);
+        let wrapper = ui_primitives_esm_wrapper();
+        for expected in [
+            "await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) })",
+            "configureClientUiPrimitiveHighlight(createHighlightBackend())",
+            "configureClientUiPrimitiveCodeBlock(React)",
+            "configureClientUiPrimitiveReadBlock(React)",
+            "export const CodeBlock = wasm.codeBlockComponent()",
+            "export const ReadBlock = wasm.readBlockComponent()",
+            "export const highlightToHtml = wasm.highlightToHtml",
+            "export const highlightLines = wasm.highlightLines",
+        ] {
+            assert!(wrapper.contains(expected), "missing {expected:?}");
+        }
+        assert!(!wrapper.contains("Object.assign(globalThis"));
     }
 
     #[test]

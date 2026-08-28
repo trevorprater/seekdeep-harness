@@ -6,7 +6,11 @@ mod browser_atoms;
 #[cfg(target_arch = "wasm32")]
 mod browser_blocks;
 #[cfg(target_arch = "wasm32")]
+mod browser_code_block;
+#[cfg(target_arch = "wasm32")]
 mod browser_dialogs;
+#[cfg(target_arch = "wasm32")]
+mod browser_highlight;
 #[cfg(target_arch = "wasm32")]
 mod browser_hover_card;
 #[cfg(target_arch = "wasm32")]
@@ -15,6 +19,8 @@ mod browser_icons;
 mod browser_json_tree;
 #[cfg(target_arch = "wasm32")]
 mod browser_menu;
+#[cfg(target_arch = "wasm32")]
+mod browser_read_block;
 #[cfg(target_arch = "wasm32")]
 mod browser_tooltip;
 #[cfg(target_arch = "wasm32")]
@@ -32,7 +38,11 @@ pub use browser_atoms::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_blocks::*;
 #[cfg(target_arch = "wasm32")]
+pub use browser_code_block::*;
+#[cfg(target_arch = "wasm32")]
 pub use browser_dialogs::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_highlight::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_hover_card::*;
 #[cfg(target_arch = "wasm32")]
@@ -41,6 +51,8 @@ pub use browser_icons::*;
 pub use browser_json_tree::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_menu::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_read_block::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_tooltip::*;
 #[cfg(target_arch = "wasm32")]
