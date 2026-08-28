@@ -4531,6 +4531,7 @@ dependencies = [
  "seekdeep-client-ui-layout",
  "seekdeep-client-ui-message-feedback",
  "seekdeep-client-ui-model-selection",
+ "seekdeep-client-ui-permission-presets",
  "seekdeep-client-ui-settings",
  "seekdeep-client-ui-settings-general",
  "seekdeep-client-ui-settings-models",
@@ -5408,6 +5409,15 @@ dependencies = [
  "seekdeep-client-ui-commands",
  "seekdeep-cordis",
  "serde",
+]
+
+[[package]]
+name = "seekdeep-client-ui-permission-presets"
+version = "0.1.0-rc.5"
+dependencies = [
+ "seekdeep-client-ui-commands",
+ "seekdeep-cordis",
+ "serde_json",
 ]
 
 [[package]]

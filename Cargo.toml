@@ -34,6 +34,7 @@ members = [
   "crates/client-ui-layout",
   "crates/client-ui-message-feedback",
   "crates/client-ui-model-selection",
+  "crates/client-ui-permission-presets",
   "crates/client-ui-primitives",
   "crates/client-ui-settings",
   "crates/client-ui-settings-general",

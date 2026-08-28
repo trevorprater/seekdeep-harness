@@ -570,6 +570,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_client_ui_model_selection::host_plugin(),
         ),
         (
+            "seekdeep-client-ui-permission-presets",
+            seekdeep_client_ui_permission_presets::host_plugin(),
+        ),
+        (
             "seekdeep-client-ui-settings",
             seekdeep_client_ui_settings::host_plugin(),
         ),
