@@ -42485,7 +42485,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/ContextMeter.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_context_meter.rs",
+        "crates/client-ui-conversation/tests/wasm_context_meter_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ContextMeter suite: 8 passed",
+        "five live WASM tests pin pressure/capacity gating, projected-token precedence, integer occupancy clamp, ring geometry and dash, localized split headline, compact figures, ordered proportional segments/legend, absent-breakdown fallback, zero-width suppression, trigger/Tooltip contract, capacity-loss reset, inside-pointer retention, outside/Escape close, one-listener lifecycle, and unmount cleanup",
+        "wall-clock-free compiled composition consumes configured Tooltip and projection faces; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css",

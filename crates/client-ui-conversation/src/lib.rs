@@ -15,6 +15,8 @@ mod browser_chat_seat;
 #[cfg(target_arch = "wasm32")]
 mod browser_command;
 #[cfg(target_arch = "wasm32")]
+mod browser_context_meter;
+#[cfg(target_arch = "wasm32")]
 mod browser_details_panel;
 #[cfg(target_arch = "wasm32")]
 mod browser_enter_behavior;
@@ -46,6 +48,8 @@ pub use browser_assistant::*;
 pub use browser_chat_seat::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_command::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_context_meter::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_details_panel::*;
 #[cfg(target_arch = "wasm32")]
