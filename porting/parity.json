@@ -41987,7 +41987,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/ContextBody.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_context_body.rs",
+        "crates/client-ui-conversation/tests/wasm_context_body_parity.rs"
+      ],
+      "evidence": [
+        "pinned source chat-branch-tails suite: 40 passed",
+        "nine live WASM tests pin UTF-16 text and source-field bounds, adjacent/interleaved content runs, unknown-block JSON fallbacks, ordered source fields, all-or-nothing instructions/catalog/snapshot/notice/relay/recall readers, first-seen instruction deduplication, 200-entry catalog bounds, empty replacement catalogs, supersession/sender/completeness copy, opaque fallbacks, all body component exports, and closed-form failure",
+        "strict WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/ContextInjectionRow.module.css",
@@ -42003,7 +42012,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/ContextInjectionRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_context_body.rs",
+        "crates/client-ui-conversation/tests/wasm_context_body_parity.rs"
+      ],
+      "evidence": [
+        "pinned source chat-branch-tails suite: 40 passed",
+        "live WASM tests pin collapsed-by-default disclosure state, functional toggling, inject/recall titles, browse icon and disclosure props, optional producer and notice-summary chrome, keep-content posture, rendered-form marker truth, opaque fallback, and compiled body wiring",
+        "strict WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/GenericCommandCard.module.css",
