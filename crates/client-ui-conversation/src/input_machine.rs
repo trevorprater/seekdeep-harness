@@ -2,7 +2,7 @@
 
 use std::{cell::Cell, collections::BTreeSet, rc::Rc};
 
-use crate::{BusyEnterBehavior, OccurrenceId};
+use crate::{BusyEnterBehavior, DraftAttachmentId, OccurrenceId, QueuedMessage};
 
 /// Object-replacement character backing every reference chip.
 pub const INPUT_PLACEHOLDER: char = '\u{FFFC}';
@@ -207,9 +207,9 @@ pub struct InputMachineState {
     /// Live paste attempt.
     pub paste: Option<PasteAttemptState>,
     /// Browser-owned image ids; empty in the pure reducer.
-    pub image_ids: Rc<Vec<String>>,
+    pub image_ids: Rc<Vec<DraftAttachmentId>>,
     /// Queue projection; empty in the pure reducer.
-    pub queue: Rc<Vec<serde_json::Value>>,
+    pub queue: Rc<Vec<QueuedMessage>>,
 }
 
 /// Cloneable cancellation signal for one submit attempt.
@@ -466,7 +466,7 @@ pub struct InputMachine {
     paste: Option<PasteAttemptState>,
     paste_seq: u64,
     options: InputMachineOptions,
-    empty_queue: Rc<Vec<serde_json::Value>>,
+    empty_queue: Rc<Vec<QueuedMessage>>,
 }
 
 impl Default for InputMachine {

@@ -1,6 +1,7 @@
 //! Conversation UI semantic core and Rust/WASM surfaces.
 
 mod input_blocks;
+mod input_contract;
 mod input_decorations;
 mod input_machine;
 mod metrics;
@@ -68,6 +69,7 @@ mod browser_turn_tail;
 mod host;
 
 pub use input_blocks::*;
+pub use input_contract::*;
 pub use input_decorations::*;
 pub use input_machine::*;
 pub use metrics::*;
