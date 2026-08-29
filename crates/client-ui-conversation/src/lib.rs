@@ -18,6 +18,8 @@ mod browser_message_actions;
 mod browser_message_chrome;
 #[cfg(target_arch = "wasm32")]
 mod browser_reasoning;
+#[cfg(target_arch = "wasm32")]
+mod browser_turn_tail;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod host;
@@ -40,6 +42,8 @@ pub use browser_message_actions::*;
 pub use browser_message_chrome::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_reasoning::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_turn_tail::*;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use host::*;

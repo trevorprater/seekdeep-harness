@@ -42126,7 +42126,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/TurnTailNodeView.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_turn_tail.rs",
+        "crates/client-ui-conversation/tests/wasm_turn_tail_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused Turn Tail visibility, metrics, and branch cases: 8 passed",
+        "four live WASM tests pin the one-turn location selector, unsupported-location null, open-turn chain owner/wrapper behavior, closing-seq fallback, visible assistant-text fold, run/TTFT/throughput props, durable-message action slot, inline fork currency, later-node branch disabling, and message-less partial handling",
+        "compiled composition reuses the configured MessageIconActions component and CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/accessibility.module.css",
