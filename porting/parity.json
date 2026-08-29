@@ -42087,7 +42087,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/MessageItem.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_message_item.rs",
+        "crates/client-ui-conversation/tests/wasm_message_item_parity.rs"
+      ],
+      "evidence": [
+        "pinned source chat-branch-tails suite: 40 passed; pinned source chat-view suite: 46 passed",
+        "five live WASM tests pin text/image/unknown-block partitioning, adjacent text joins, plain /skill and @subagent chip projection, image-gallery labels/load forwarding, admitted and pending action props, unavailable pending image rejection, the raw pending component, seven memoized node adapters, and all eight component exports",
+        "live retry test pins browser-local deadline anchoring, ceil/minimum seconds, immediate and 250ms interval updates, attempt re-anchoring, normal/infinite maximums, scheduled/started/cancelled labels, rounded delay and failure details, interval stop at one second, and cleanup; strict WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/ReasoningRow.module.css",

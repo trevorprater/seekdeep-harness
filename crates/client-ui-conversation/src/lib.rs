@@ -35,6 +35,8 @@ mod browser_message_actions;
 #[cfg(target_arch = "wasm32")]
 mod browser_message_chrome;
 #[cfg(target_arch = "wasm32")]
+mod browser_message_item;
+#[cfg(target_arch = "wasm32")]
 mod browser_permission_select;
 #[cfg(target_arch = "wasm32")]
 mod browser_queue_dock;
@@ -88,6 +90,8 @@ pub use browser_image_labels::*;
 pub use browser_message_actions::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_message_chrome::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_message_item::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_permission_select::*;
 #[cfg(target_arch = "wasm32")]
