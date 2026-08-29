@@ -42428,7 +42428,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/queue/QueueDock.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_queue_dock.rs",
+        "crates/client-ui-conversation/tests/wasm_queue_dock_parity.rs"
+      ],
+      "evidence": [
+        "pinned source QueueDock suite: 17 passed",
+        "nine live WASM tests pin queued-only memoized projection, empty/single/multi collapse posture and linked list id, interaction-forced expansion, editor change/Escape/IME/Enter/save/cancel, optimistic busy exclusion and race-safe finally release, edit/remove/steer action payloads, click-time failure translations/notices, tooltip delay, mixed-content and non-running disables, subagent action suppression, authoritative editor/list retirement, and terminal-order registration metadata",
+        "registration live test pins scoped conversation resolution, updateQueue receiver forwarding, input.for(actx).notify forwarding, and loud missing-scope/service errors in compiled code; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/queue/store.ts",
