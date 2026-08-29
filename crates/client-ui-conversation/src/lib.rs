@@ -15,6 +15,8 @@ mod browser_chat_seat;
 #[cfg(target_arch = "wasm32")]
 mod browser_chat_store;
 #[cfg(target_arch = "wasm32")]
+mod browser_chat_view;
+#[cfg(target_arch = "wasm32")]
 mod browser_command;
 #[cfg(target_arch = "wasm32")]
 mod browser_context_body;
@@ -72,6 +74,8 @@ pub use browser_assistant::*;
 pub use browser_chat_seat::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_chat_store::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_chat_view::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_command::*;
 #[cfg(target_arch = "wasm32")]

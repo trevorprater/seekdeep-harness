@@ -41929,7 +41929,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/ChatView.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_chat_view.rs",
+        "crates/client-ui-conversation/tests/wasm_chat_view_parity.rs"
+      ],
+      "evidence": [
+        "pinned source chat-view suite: 46 passed",
+        "six live WASM tests pin ordered ChatNodeSeat prop threading, selected call and cwd shares, Host-pending steering filtering, loading/error/paging surfaces, first-open bottom jump, saved semantic restore and normalization, reader-owned follow state, continuous save and back-to-bottom, latest-reader paging anchors across prepend, empty-flow removal, host/local scrollport resolution, one ResizeObserver over column/composer, pinned-only resize follow, and observer cleanup",
+        "live TurnStatus coverage pins logged turn/start anchoring, delayed localized clock, aria posture, one-second interval updates, and teardown; strict WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/CommandNodeView.tsx",
