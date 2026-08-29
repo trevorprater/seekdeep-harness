@@ -42204,7 +42204,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/register-node-renderers.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_register_node_renderers.rs",
+        "crates/client-ui-conversation/tests/wasm_register_node_renderers_parity.rs"
+      ],
+      "evidence": [
+        "pinned source chat-apply suite: 5 passed",
+        "two live WASM tests pin all 12 keyed registrations in source order, user/steering component reuse, conversation locale metadata, command keyed-child and turn-tail chain/list child declarations, deliberate tool-call omission, slots receiver binding, callback disposer propagation, and missing-component preflight before any mutation",
+        "strict WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/tool-node-reader.ts",
