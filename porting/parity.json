@@ -42097,7 +42097,17 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/message-chrome.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/metrics.rs",
+        "crates/client-ui-conversation/src/browser_message_chrome.rs",
+        "crates/client-ui-conversation/tests/wasm_message_chrome_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused duration, footer-format, local-clock, and midnight cases: 7 passed across three files",
+        "three live WASM tests pin negative and partial duration handling, JavaScript rounding and number strings, same-day/same-year/cross-year clocks, localized date templates, local midnight, and next-midnight delay",
+        "browser Date.now remains confined to the compiled boundary and the injectable now argument preserves deterministic message-clock tests"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/register-node-renderers.ts",
