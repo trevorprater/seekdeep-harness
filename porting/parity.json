@@ -45790,7 +45790,20 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/MarkdownText.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_markdown.rs",
+        "crates/client-ui-primitives/src/browser_markdown_render.rs",
+        "crates/client-ui-primitives/src/markdown.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_render_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source Markdown cluster: 4 files and 115 tests passed",
+        "six grouped live WASM tests pin semantic GFM, security policy, CodeBlock and KaTeX arms, inline URLs and file mentions, references and footnotes, tight lists, streaming reset, and code-label identity",
+        "release-WASM fixture replay matches all 46 settled and streaming DOM snapshots after normalizing only CSS-module namespaces and server/client style serialization",
+        "mounted release-WASM checks pin append-prefix equivalence, frozen DOM-node identity, divergent-text reset, label-cache reset, streaming-to-settled KaTeX, and character-by-character UTF-16 CJK chunks"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/MessageText.module.css",
@@ -45864,7 +45877,19 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/katex.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_markdown_render.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_render_parity.rs",
+        "packages/client/ui-primitives/assets/katex",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source Markdown cluster: 4 files and 115 tests passed",
+        "live WASM test pins strict render, strict-ignore retry, internal-error span, DOMParser element/attribute/style mapping, inline and display modes, and streaming deferral",
+        "release-WASM fixture replay matches every settled KaTeX fixture and the fixed bracket-display block shape",
+        "package build projects the pinned katex@0.16.47 stylesheet, 60 relative font assets, MIT license, and provenance README byte-for-byte; real wrapper smoke resolves the injected link and referenced font"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/markdown/mathCompatibility.ts",
@@ -45910,7 +45935,17 @@
     {
       "source": "packages/client/ui-primitives/src/markdown/render.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_markdown_render.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_render_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Markdown cluster: 4 files and 115 tests passed",
+        "release-WASM replay matches all 46 pinned DOM fixtures across CommonMark, GFM, code fences, references, footnotes, raw HTML, images, URL policy, and math",
+        "six grouped live WASM tests pin the product-owned node mappings, task and tight-list behavior, table alignment, safe-link attributes, remote-image policy, literal HTML, file mentions, CodeBlock composition, and footnote numbering/backrefs",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-primitives --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/pointer-grace.ts",
@@ -46571,12 +46606,32 @@
     {
       "source": "packages/client/ui-primitives/tests/markdown-dom-parity.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/wasm_markdown_render_parity.rs",
+        "crates/client-ui-primitives/src/browser_markdown_render.rs"
+      ],
+      "evidence": [
+        "pinned source: 46 passed",
+        "generated release-WASM package replay: 46 of 46 settled and streaming file snapshots matched with zero structural or text differences"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/markdown-incremental.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_markdown.rs",
+        "crates/client-ui-primitives/src/markdown.rs",
+        "crates/client-ui-primitives/tests/markdown_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_render_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 26 passed",
+        "18 native Rust tests pin the two-block frontier, parser-owned cuts, stable allocations and keys, reset generation, unclosed fences, extending lists, bounded work, astral UTF-16 offsets, and settled grammar swap",
+        "mounted release-WASM checks pin live/fresh prefix equivalence, frozen DOM identity, divergence and label reset, finalization, and code-unit CJK chunking",
+        "six grouped live WASM renderer tests pin cached-fence label identity, divergent-stream recovery, and streaming plain-code/math behavior"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/markdown-plain-text.client.spec.ts",
@@ -46598,7 +46653,17 @@
     {
       "source": "packages/client/ui-primitives/tests/markdown.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/tests/markdown_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_atoms_parity.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_render_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 30 passed",
+        "native Rust parser tests: 18 passed; compiled JsonBlock and MessageText tests: 3 passed; compiled Markdown renderer tests: 6 passed",
+        "real generated-package checks cover semantic GFM, Shiki, KaTeX and its assets, security policy, file mentions, footnotes, streaming/finalize behavior, and the complete 46-case DOM corpus"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/onboarding-surface.client.spec.tsx",

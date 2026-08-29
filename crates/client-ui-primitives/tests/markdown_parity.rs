@@ -212,6 +212,10 @@ fn settled_math_supports_dollars_backslash_delimiters_and_same_line_display() {
     assert_eq!(values[1], ("\\frac{1}{5}".to_owned(), false));
     assert!(values[2].0.contains("\\frac{\\pi}{4}"));
     assert!(values[3].0.contains("\\tag{1}"));
+    let Node::Root(root) = parse_gfm_with_math(source).unwrap() else {
+        panic!("parser did not return a root");
+    };
+    assert!(matches!(root.children.get(1), Some(Node::Math(_))));
 }
 
 #[test]

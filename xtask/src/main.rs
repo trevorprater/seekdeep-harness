@@ -209,6 +209,11 @@ fn wasm_package(
                 .workspace_root
                 .join("packages/client/web/src/base.css"),
         ),
+        "@seekdeep-ai/seekdeep-client-ui-primitives" => Some(
+            cargo_metadata()?
+                .workspace_root
+                .join("packages/client/ui-primitives"),
+        ),
         _ => None,
     };
     let mut previous = wasm_watch_snapshot(&package_root, asset_root.as_deref())?;
@@ -463,14 +468,53 @@ fn wasm_ui_primitives_package(
         out_dir.join("highlight-backend.js"),
         ui_primitives_highlight_backend(),
     )?;
+    std::fs::write(
+        out_dir.join("markdown-backend.js"),
+        ui_primitives_markdown_backend(),
+    )?;
     std::fs::write(out_dir.join("index.js"), ui_primitives_esm_wrapper())?;
     let type_dir = out_dir.join("types");
     std::fs::create_dir_all(&type_dir)?;
     std::fs::copy(staging.join("client.d.ts"), type_dir.join("index.d.ts"))?;
+    copy_ui_primitives_katex_assets(&metadata.workspace_root, &out_dir)?;
     println!(
         "built @seekdeep-ai/seekdeep-client-ui-primitives Rust/WASM ESM library at {}",
         out_dir.join("index.js").display()
     );
+    Ok(())
+}
+
+fn copy_ui_primitives_katex_assets(workspace: &Path, out_dir: &Path) -> anyhow::Result<()> {
+    let source = workspace.join("packages/client/ui-primitives/assets/katex");
+    let destination = out_dir.join("katex");
+    if destination.exists() {
+        std::fs::remove_dir_all(&destination)?;
+    }
+    let destination_fonts = destination.join("fonts");
+    std::fs::create_dir_all(&destination_fonts)?;
+    for name in ["katex.min.css", "LICENSE", "README.md"] {
+        std::fs::copy(source.join(name), destination.join(name))?;
+    }
+    let source_fonts = source.join("fonts");
+    let mut fonts = std::fs::read_dir(&source_fonts)?.collect::<Result<Vec<_>, _>>()?;
+    fonts.sort_by_key(std::fs::DirEntry::file_name);
+    for font in fonts {
+        let path = font.path();
+        anyhow::ensure!(
+            path.is_file(),
+            "KaTeX font asset is not a file: {}",
+            path.display()
+        );
+        anyhow::ensure!(
+            matches!(
+                path.extension().and_then(std::ffi::OsStr::to_str),
+                Some("ttf" | "woff" | "woff2")
+            ),
+            "KaTeX font asset has an unsupported extension: {}",
+            path.display()
+        );
+        std::fs::copy(&path, destination_fonts.join(font.file_name()))?;
+    }
     Ok(())
 }
 
@@ -529,11 +573,26 @@ export function createHighlightBackend() {
 "#
 }
 
+fn ui_primitives_markdown_backend() -> &'static str {
+    r#"import katex from 'katex';
+import { normalizeUri } from 'micromark-util-sanitize-uri';
+
+export function createMarkdownBackend(cssUrl) {
+  return {
+    cssUrl,
+    normalizeUri,
+    renderTex(value, options) { return katex.renderToString(value, options); },
+  };
+}
+"#
+}
+
 fn ui_primitives_esm_wrapper() -> &'static str {
     r"import init, * as wasm from './client.js';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import { createHighlightBackend } from './highlight-backend.js';
+import { createMarkdownBackend } from './markdown-backend.js';
 
 await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
 wasm.configureClientUiPrimitiveHighlight(createHighlightBackend());
@@ -549,6 +608,7 @@ wasm.configureClientUiPrimitiveMenu(React, ReactDOM);
 wasm.configureClientUiPrimitiveJsonTree(React, ReactDOM);
 wasm.configureClientUiPrimitiveMarkdownAtoms(React);
 wasm.configureClientUiPrimitiveCodeBlock(React);
+wasm.configureClientUiPrimitiveMarkdown(React, createMarkdownBackend(new URL('./katex/katex.min.css', import.meta.url).href));
 wasm.configureClientUiPrimitiveReadBlock(React);
 
 export const Button = wasm.buttonComponent();
@@ -572,6 +632,7 @@ export const JsonTree = wasm.jsonTreeComponent();
 export const JsonBlock = wasm.jsonBlockComponent();
 export const MessageText = wasm.messageTextComponent();
 export const CodeBlock = wasm.codeBlockComponent();
+export const MarkdownText = wasm.markdownTextComponent();
 export const ReadBlock = wasm.readBlockComponent();
 export const DEFAULT_READ_MAX_LINES = wasm.defaultReadMaxLines();
 export const highlightToHtml = wasm.highlightToHtml;
@@ -719,6 +780,13 @@ fn watch_snapshot(root: &Path) -> anyhow::Result<BTreeMap<PathBuf, (u64, u128)>>
     for entry in walkdir::WalkDir::new(root) {
         let entry = entry?;
         if !entry.file_type().is_file() {
+            continue;
+        }
+        let relative = entry.path().strip_prefix(root).unwrap_or(entry.path());
+        if relative
+            .components()
+            .any(|component| matches!(component.as_os_str().to_str(), Some("lib" | "node_modules")))
+        {
             continue;
         }
         let metadata = entry.metadata()?;
@@ -2191,9 +2259,10 @@ mod tests {
 
     use super::{
         classic_module_bundle, client_web_esm_declarations, client_web_esm_wrapper,
-        compatibility_declarations, copy_wasm_package_assets, default_macos_platform_tag,
-        is_generated_package_output, is_localization, ui_primitives_esm_wrapper,
-        ui_primitives_highlight_backend, watch_snapshot, write_wasm_package_compatibility_entries,
+        compatibility_declarations, copy_ui_primitives_katex_assets, copy_wasm_package_assets,
+        default_macos_platform_tag, is_generated_package_output, is_localization,
+        ui_primitives_esm_wrapper, ui_primitives_highlight_backend, ui_primitives_markdown_backend,
+        watch_snapshot, write_wasm_package_compatibility_entries,
     };
 
     #[test]
@@ -3156,16 +3225,44 @@ mod tests {
             assert!(backend.contains(expected), "missing {expected:?}");
         }
         assert_eq!(backend.matches("() => import('@shikijs/langs/").count(), 23);
+        let markdown_backend = ui_primitives_markdown_backend();
+        for expected in [
+            "import katex from 'katex'",
+            "import { normalizeUri } from 'micromark-util-sanitize-uri'",
+            "createMarkdownBackend(cssUrl)",
+            "cssUrl,",
+            "katex.renderToString(value, options)",
+        ] {
+            assert!(markdown_backend.contains(expected), "missing {expected:?}");
+        }
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("xtask has a workspace parent");
+        let output = tempfile::tempdir().unwrap();
+        copy_ui_primitives_katex_assets(workspace, output.path()).unwrap();
+        let projected = output.path().join("katex");
+        assert!(
+            std::fs::read_to_string(projected.join("katex.min.css"))
+                .unwrap()
+                .contains("fonts/KaTeX_Main-Regular.woff2")
+        );
+        assert_eq!(
+            std::fs::read_dir(projected.join("fonts")).unwrap().count(),
+            60
+        );
+        assert!(projected.join("LICENSE").is_file());
         let wrapper = ui_primitives_esm_wrapper();
         for expected in [
             "await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) })",
             "configureClientUiPrimitiveHighlight(createHighlightBackend())",
             "configureClientUiPrimitiveMarkdownAtoms(React)",
             "configureClientUiPrimitiveCodeBlock(React)",
+            "configureClientUiPrimitiveMarkdown(React, createMarkdownBackend(new URL('./katex/katex.min.css', import.meta.url).href))",
             "configureClientUiPrimitiveReadBlock(React)",
             "export const CodeBlock = wasm.codeBlockComponent()",
             "export const JsonBlock = wasm.jsonBlockComponent()",
             "export const MessageText = wasm.messageTextComponent()",
+            "export const MarkdownText = wasm.markdownTextComponent()",
             "export const ReadBlock = wasm.readBlockComponent()",
             "export const highlightToHtml = wasm.highlightToHtml",
             "export const highlightLines = wasm.highlightLines",
@@ -3221,6 +3318,20 @@ mod tests {
         std::fs::write(&source, "one two\n").unwrap();
         let after = watch_snapshot(root.path()).unwrap();
         assert_ne!(before, after);
+
+        std::fs::create_dir_all(root.path().join("lib")).unwrap();
+        std::fs::create_dir_all(root.path().join("node_modules/pkg")).unwrap();
+        std::fs::create_dir_all(root.path().join("assets")).unwrap();
+        let generated = root.path().join("lib/index.js");
+        let dependency = root.path().join("node_modules/pkg/index.js");
+        let asset = root.path().join("assets/style.css");
+        std::fs::write(&generated, "generated\n").unwrap();
+        std::fs::write(&dependency, "dependency\n").unwrap();
+        std::fs::write(&asset, "asset\n").unwrap();
+        let inputs = watch_snapshot(root.path()).unwrap();
+        assert!(!inputs.contains_key(&generated));
+        assert!(!inputs.contains_key(&dependency));
+        assert!(inputs.contains_key(&asset));
     }
 
     #[test]

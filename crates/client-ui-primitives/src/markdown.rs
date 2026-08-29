@@ -383,17 +383,28 @@ fn split_display_paragraph(paragraph: Paragraph, source: &str) -> Vec<Node> {
     let mut output = Vec::new();
     let mut inline = Vec::new();
     for child in paragraph.children {
-        let display = if let Node::InlineMath(math) = &child
-            && let Some(position) = &math.position
-            && is_flow_display_position(source, position)
-        {
-            Some(Node::Math(Math {
-                value: math.value.clone(),
-                position: Some(position.clone()),
-                meta: None,
-            }))
-        } else {
-            None
+        let display = match &child {
+            Node::InlineMath(math)
+                if math
+                    .position
+                    .as_ref()
+                    .is_some_and(|position| is_flow_display_position(source, position)) =>
+            {
+                Some(Node::Math(Math {
+                    value: math.value.clone(),
+                    position: math.position.clone(),
+                    meta: None,
+                }))
+            }
+            Node::Math(math)
+                if math
+                    .position
+                    .as_ref()
+                    .is_some_and(|position| is_flow_display_position(source, position)) =>
+            {
+                Some(child.clone())
+            }
+            _ => None,
         };
         if let Some(display) = display {
             if !inline.is_empty() {
