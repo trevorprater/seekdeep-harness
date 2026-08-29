@@ -42668,7 +42668,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_conversation_root.rs",
+        "crates/client-ui-conversation/src/browser_empty_hero.rs",
+        "crates/client-ui-conversation/src/browser_conversation_session.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_root_parity.rs"
+      ],
+      "evidence": [
+        "pinned source skeleton suite: 17 passed",
+        "one live WASM Hook/React matrix pins no-session hero, summary-proven blank, conservative settling, and active phases; workspace/title/cwd precedence, picker selected currency, pending selection and rejection rollback; inert-vs-blocked InputBar ownership; exact input-zone and dock currencies; three-argument overlay chain assembly; resident composer seat/session body/header placement; stable callback-ref ResizeObserver ownership; and the intentional --seekdeep-composer-height product rename consumed by compiled ChatView CSS",
+        "strict targeted WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/ConversationSession.tsx",
