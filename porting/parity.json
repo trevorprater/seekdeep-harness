@@ -42255,7 +42255,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/contract/queue.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/host-apiproxy/src/api/sessions.rs",
+        "crates/client-runtime/src/queue_mirror.rs"
+      ],
+      "evidence": [
+        "CARGO_INCREMENTAL=0 focused Host schema test passed: MessageId-backed item identity plus exact edit/remove/steer action union, extensible content blocks, and unknown-action rejection",
+        "CARGO_INCREMENTAL=0 focused runtime queue tests passed 2/2: authoritative QueueRow identity/placement/content, reference-stable snapshots, preview/editable-text projection, replacement ordering, and steering retirement",
+        "the source contract is type-only and derives these three aliases directly from the same runtime Session face and queue snapshot"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/contract/slots.ts",
