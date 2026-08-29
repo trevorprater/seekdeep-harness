@@ -42472,7 +42472,17 @@
     {
       "source": "packages/client/ui-conversation/src/client/input/machine.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/input_machine.rs",
+        "crates/client-ui-conversation/tests/input_machine_port_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_machine_port_parity.rs"
+      ],
+      "evidence": [
+        "pinned source input-machine suite: 77 passed",
+        "twelve portable Rust tests pin default/adjudicated/claimed submit paths, retained delivery modes, stale and released attempts, rollback drift guards, result notices, span CAS, nominal occurrences, clipboard projection, explicit/diff edit reconciliation, invalid-table reference stability, consume guards, injected-clock typing coalescence, bounded undo/redo, sync and async paste transactions, attempt killers, commit clearing, and per-instance isolation",
+        "three live WASM tests execute the same compiled reducer through adjudication/claim/commit, reference paste upgrades with two-stage undo, UTF-16 offsets after U+FFFC, stale settle rejection, release abort, and stable empty-queue identity; strict native and WASM Clippy pass with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/input/submission-policy.ts",

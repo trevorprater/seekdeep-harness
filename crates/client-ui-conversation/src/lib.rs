@@ -2,6 +2,7 @@
 
 mod input_blocks;
 mod input_decorations;
+mod input_machine;
 mod metrics;
 mod submission;
 
@@ -68,6 +69,7 @@ mod host;
 
 pub use input_blocks::*;
 pub use input_decorations::*;
+pub use input_machine::*;
 pub use metrics::*;
 pub use submission::*;
 
