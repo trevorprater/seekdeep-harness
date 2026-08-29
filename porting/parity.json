@@ -42364,7 +42364,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/command.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/command.rs",
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler test pins run/done identity, args and outcomes, safe sourceEventSeq handling, manual compaction correlation, checkpoint anchoring, partial-window fallback reconstruction, and summary/count projection",
+        "live WASM registry-to-assembler matrix materializes correlated manual compaction through compiled callbacks; strict targeted native and wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/common.ts",
@@ -42384,7 +42395,19 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/compaction.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/compaction.rs",
+        "crates/client-ui-conversation/src/conversation_nodes/command.rs",
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler test pins automatic-only ownership, landed checkpoint without start, null summary before history, identity-stable summary fill after prepend, text-block concatenation, validated shadow counts, and legacy correlation rejection",
+        "live WASM registry-to-assembler matrix materializes an automatic compaction independently from a manual transaction; strict targeted native and wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/fallback.ts",

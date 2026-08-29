@@ -13,7 +13,8 @@ use seekdeep_client_runtime::{
 };
 use seekdeep_client_ui_conversation::{
     CHAT_FINALIZED_FOLLOWUP_OFFSET, CHAT_INTERRUPTED_ASSISTANT_OFFSET,
-    CHAT_INTERRUPTED_FOLLOWUP_OFFSET, CHAT_MAX_TOKENS_NOTICE_OFFSET, conversation_coordinate,
+    CHAT_INTERRUPTED_FOLLOWUP_OFFSET, CHAT_MAX_TOKENS_NOTICE_OFFSET,
+    conversation_command_definition, conversation_compaction_definition, conversation_coordinate,
     conversation_inbox_definitions, conversation_message_definition, conversation_retry_definition,
     conversation_turn_error_definition, conversation_turn_max_tokens_definition,
     conversation_unknown_fallback_definition,
@@ -515,6 +516,253 @@ fn retry_chain_cancels_on_boundary_and_suppresses_or_hides_turn_error() {
         true,
     );
     assert!(node(&snapshot(&legacy), "model-retry").is_none());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One ordered fixture covers correlated and paged transactions.
+fn commands_keep_manual_and_automatic_compaction_ownership_separate() {
+    let value = assembler(
+        vec![
+            conversation_command_definition(),
+            conversation_compaction_definition(),
+        ],
+        None,
+        &[
+            at(
+                1,
+                "command/run",
+                json!({"commandId": "ordinary", "name": "help", "args": "--all"}),
+            ),
+            at(
+                2,
+                "command/done",
+                json!({
+                    "commandId": "ordinary", "kind": "success", "text": "ok",
+                    "sourceEventSeq": 1,
+                }),
+            ),
+            at(
+                10,
+                "command/run",
+                json!({"commandId": "manual-command", "name": "compact"}),
+            ),
+            at(
+                11,
+                "compaction/start",
+                json!({
+                    "compactionId": "manual", "sourceCommandId": "manual-command", "turn": null,
+                }),
+            ),
+            at(
+                12,
+                "compaction/summary",
+                json!({
+                    "compactionId": "manual", "sourceCommandId": "manual-command",
+                    "summary": [
+                        {"type": "text", "text": "manual "},
+                        {"type": "image", "data": "ignored"},
+                        {"type": "text", "text": "summary"},
+                    ],
+                    "shadowedSeqs": [1, 2], "shadowedTokenCount": 100,
+                }),
+            ),
+            surface(
+                13,
+                "user/message",
+                text_message(
+                    "manual-checkpoint",
+                    "checkpoint",
+                    json!({
+                        "kind": "plugin", "plugin": "compact", "compactionId": "manual",
+                        "sourceCommandId": "manual-command",
+                    }),
+                ),
+                json!({"op": "replace", "start": 1, "end": 2}),
+            ),
+            at(
+                14,
+                "compaction/end",
+                json!({
+                    "compactionId": "manual", "sourceCommandId": "manual-command", "turn": null,
+                }),
+            ),
+            at(
+                15,
+                "command/done",
+                json!({
+                    "commandId": "manual-command", "kind": "success", "sourceEventSeq": 12,
+                }),
+            ),
+            at(
+                20,
+                "compaction/start",
+                json!({"compactionId": "automatic", "turn": null}),
+            ),
+            at(
+                21,
+                "compaction/summary",
+                json!({
+                    "compactionId": "automatic",
+                    "summary": [{"type": "text", "text": "automatic summary"}],
+                    "shadowedSeqs": [3, 4, 5], "shadowedTokenCount": 200,
+                }),
+            ),
+            surface(
+                22,
+                "user/message",
+                text_message(
+                    "automatic-checkpoint",
+                    "checkpoint",
+                    json!({"kind": "plugin", "plugin": "compact", "compactionId": "automatic"}),
+                ),
+                json!({"op": "replace", "start": 3, "end": 5}),
+            ),
+            at(
+                23,
+                "compaction/end",
+                json!({"compactionId": "automatic", "turn": null}),
+            ),
+        ],
+        false,
+    );
+    let current = snapshot(&value);
+    let ordinary = node(&current, "command").unwrap();
+    assert_eq!(ordinary["data"]["seq"], 1);
+    assert_eq!(ordinary["data"]["name"], "help");
+    assert_eq!(ordinary["data"]["args"], "--all");
+    assert_eq!(ordinary["data"]["outcome"]["text"], "ok");
+    assert_eq!(ordinary["data"]["outcome"]["sourceEventSeq"], 1);
+
+    let manual = node(&current, "manual-compaction").unwrap();
+    assert_eq!(manual["anchorSeq"], 13.0);
+    assert_eq!(manual["data"]["command"]["seq"], 10);
+    assert_eq!(manual["data"]["command"]["outcome"]["sourceEventSeq"], 12);
+    assert_eq!(manual["data"]["compaction"]["summary"], "manual summary");
+    assert_eq!(manual["data"]["compaction"]["summaryEventSeq"], 12);
+    assert_eq!(manual["data"]["compaction"]["shadowedItemCount"], 2);
+    assert_eq!(manual["data"]["compaction"]["shadowedTokenCount"], 100);
+
+    let automatic = node(&current, "compaction").unwrap();
+    assert_eq!(automatic["data"]["summary"], "automatic summary");
+    assert_eq!(automatic["data"]["summaryEventSeq"], 21);
+    assert_eq!(automatic["data"]["shadowedItemCount"], 3);
+    assert_eq!(automatic["data"]["shadowedTokenCount"], 200);
+
+    let mut paged = assembler(
+        vec![conversation_compaction_definition()],
+        None,
+        &[surface(
+            33,
+            "user/message",
+            text_message(
+                "paged-checkpoint",
+                "checkpoint",
+                json!({"kind": "plugin", "plugin": "compact", "compactionId": "paged"}),
+            ),
+            json!({"op": "replace", "start": 1, "end": 3}),
+        )],
+        true,
+    );
+    let before = snapshot(&paged);
+    let before_node = node(&before, "compaction").unwrap();
+    let key = before_node["key"].clone();
+    assert_eq!(before_node["data"]["summary"], Value::Null);
+    paged
+        .prepend(
+            &[
+                at(
+                    31,
+                    "compaction/start",
+                    json!({"compactionId": "paged", "turn": null}),
+                ),
+                at(
+                    32,
+                    "compaction/summary",
+                    json!({
+                        "compactionId": "paged",
+                        "summary": [{"type": "text", "text": "older summary"}],
+                        "shadowedSeqs": [1, 2, 3], "shadowedTokenCount": 42,
+                    }),
+                ),
+            ],
+            false,
+        )
+        .unwrap();
+    paged.flush().unwrap();
+    let after = snapshot(&paged);
+    let after_node = node(&after, "compaction").unwrap();
+    assert_eq!(after_node["key"], key);
+    assert_eq!(after_node["data"]["summary"], "older summary");
+    assert_eq!(after_node["data"]["shadowedTokenCount"], 42);
+
+    let historical_manual = assembler(
+        vec![conversation_command_definition()],
+        None,
+        &[
+            at(
+                40,
+                "compaction/summary",
+                json!({
+                    "compactionId": "historical", "sourceCommandId": "missing-run",
+                    "summary": [{"type": "text", "text": "historical summary"}],
+                    "shadowedSeqs": [1], "shadowedTokenCount": 9,
+                }),
+            ),
+            surface(
+                41,
+                "user/message",
+                text_message(
+                    "historical-checkpoint",
+                    "checkpoint",
+                    json!({
+                        "kind": "plugin", "plugin": "compact", "compactionId": "historical",
+                        "sourceCommandId": "missing-run",
+                    }),
+                ),
+                json!({"op": "replace", "start": 1, "end": 1}),
+            ),
+            at(
+                42,
+                "command/done",
+                json!({"commandId": "missing-run", "kind": "success", "sourceEventSeq": 40}),
+            ),
+        ],
+        true,
+    );
+    let historical = node(&snapshot(&historical_manual), "manual-compaction")
+        .unwrap()
+        .clone();
+    assert_eq!(historical["data"]["command"]["name"], "compact");
+    assert_eq!(historical["data"]["command"]["seq"], 42);
+    assert_eq!(
+        historical["data"]["compaction"]["summary"],
+        "historical summary"
+    );
+
+    let legacy = assembler(
+        vec![conversation_compaction_definition()],
+        None,
+        &[
+            at(50, "compaction/start", json!({"turn": null})),
+            at(
+                51,
+                "compaction/summary",
+                json!({"summary": [], "shadowedSeqs": [], "shadowedTokenCount": 0}),
+            ),
+            surface(
+                52,
+                "user/message",
+                text_message(
+                    "legacy-checkpoint",
+                    "checkpoint",
+                    json!({"kind": "plugin", "plugin": "compact"}),
+                ),
+                json!({"op": "replace", "start": 1, "end": 1}),
+            ),
+        ],
+        true,
+    );
+    assert!(node(&snapshot(&legacy), "compaction").is_none());
 }
 
 #[test]

@@ -112,3 +112,14 @@ pub fn conversation_coordinate(value: &Value) -> Option<u64> {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     Some(value as u64)
 }
+
+pub(crate) fn js_string(value: &Value) -> String {
+    match value {
+        Value::String(value) => value.clone(),
+        Value::Null => "null".to_owned(),
+        Value::Bool(value) => value.to_string(),
+        Value::Number(value) => value.to_string(),
+        Value::Array(values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
+        Value::Object(_) => "[object Object]".to_owned(),
+    }
+}

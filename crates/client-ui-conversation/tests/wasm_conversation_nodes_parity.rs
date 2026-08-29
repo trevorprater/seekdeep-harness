@@ -125,7 +125,14 @@ fn live_entries() -> Array {
               {"event":{"seq":12,"time":1012,"type":"step/start","data":{"turn":2,"step":1}}},
               {"event":{"seq":13,"time":1013,"type":"step/end","data":{"turn":2,"step":1}}},
               {"event":{"seq":14,"time":1014,"type":"turn/end","data":{"turn":2,"reason":{"kind":"max-tokens"}}}},
-              {"event":{"seq":15,"time":1015,"type":"tool/result","surfaceOp":"append","data":{"message":"unclaimed"}}}
+              {"event":{"seq":15,"time":1015,"type":"tool/result","surfaceOp":"append","data":{"message":"unclaimed"}}},
+              {"event":{"seq":16,"time":1016,"type":"command/run","data":{"commandId":"manual","name":"compact"}}},
+              {"event":{"seq":17,"time":1017,"type":"compaction/start","data":{"compactionId":"manual-compaction","sourceCommandId":"manual","turn":null}}},
+              {"event":{"seq":18,"time":1018,"type":"compaction/summary","data":{"compactionId":"manual-compaction","sourceCommandId":"manual","summary":[{"type":"text","text":"manual summary"}],"shadowedSeqs":[1,2],"shadowedTokenCount":50}}},
+              {"event":{"seq":19,"time":1019,"type":"user/message","surfaceOp":{"op":"replace","start":1,"end":2},"data":{"id":"manual-checkpoint","source":{"kind":"plugin","plugin":"compact","compactionId":"manual-compaction","sourceCommandId":"manual"},"content":[]}}},
+              {"event":{"seq":20,"time":1020,"type":"command/done","data":{"commandId":"manual","kind":"success","sourceEventSeq":18}}},
+              {"event":{"seq":21,"time":1021,"type":"compaction/summary","data":{"compactionId":"automatic","summary":[{"type":"text","text":"automatic summary"}],"shadowedSeqs":[3],"shadowedTokenCount":25}}},
+              {"event":{"seq":22,"time":1022,"type":"user/message","surfaceOp":{"op":"replace","start":3,"end":3},"data":{"id":"automatic-checkpoint","source":{"kind":"plugin","plugin":"compact","compactionId":"automatic"},"content":[]}}}
             ]"#,
         )
         .unwrap(),
@@ -155,7 +162,7 @@ fn compiled_definitions_cross_the_live_registry_and_assembler_boundary() {
         )
         .unwrap();
 
-    assert_eq!(events.entries().length(), 6);
+    assert_eq!(events.entries().length(), 8);
     assert_eq!(
         property(&events.fallback_entry(), "kind")
             .as_string()
@@ -202,6 +209,28 @@ fn compiled_definitions_cross_the_live_registry_and_assembler_boundary() {
             .as_string()
             .as_deref(),
         Some("tool/result")
+    );
+    let manual = property(&find_node(&snapshot, "manual-compaction"), "data");
+    assert_eq!(
+        property(&property(&manual, "command"), "name")
+            .as_string()
+            .as_deref(),
+        Some("compact")
+    );
+    assert_eq!(
+        property(&property(&manual, "compaction"), "summary")
+            .as_string()
+            .as_deref(),
+        Some("manual summary")
+    );
+    assert_eq!(
+        property(
+            &property(&find_node(&snapshot, "compaction"), "data"),
+            "summary",
+        )
+        .as_string()
+        .as_deref(),
+        Some("automatic summary")
     );
 
     disposeConversationNodeEffects(&bench);

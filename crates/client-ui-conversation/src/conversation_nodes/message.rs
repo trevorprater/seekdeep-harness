@@ -9,7 +9,7 @@ use serde_json::{Map, Value, json};
 
 use super::{
     INBOX_NEXT_STEP_KIND, chat_node, inbox::decode, is_append_surface_event,
-    is_replacement_surface_event, sequence_anchor,
+    is_replacement_surface_event, js_string, sequence_anchor,
 };
 
 /// User, steering, and injected-context message definition kind.
@@ -147,16 +147,5 @@ const fn form_name(form: KnownContextForm) -> &'static str {
         KnownContextForm::Notice => "notice",
         KnownContextForm::Relay => "relay",
         KnownContextForm::Recall => "recall",
-    }
-}
-
-fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        Value::Null => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::Array(values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
     }
 }
