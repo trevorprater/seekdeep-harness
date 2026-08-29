@@ -42171,7 +42171,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/tool-node-reader.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_tool_node_reader.rs",
+        "crates/client-ui-conversation/tests/wasm_tool_node_reader_parity.rs"
+      ],
+      "evidence": [
+        "pinned source DetailsPanel nested-call consumer case passed",
+        "four live WASM tests pin UTF-16 length-prefixed root lookup, original block identity, depth-first nested traversal, keyed-node insertion order, first duplicate precedence, non-tool skipping, rootless and missing soft-falls",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-conversation --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/turn-assistant.ts",
