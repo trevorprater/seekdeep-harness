@@ -41934,17 +41934,44 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/CommandNodeView.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_command.rs",
+        "crates/client-ui-conversation/tests/wasm_command_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused command and manual-compaction renderer cases: 3 passed",
+        "live WASM dispatch test pins memoized owner currency, exact commandview slot name, null-name entry fallback, generic card fallback, and call-row shell",
+        "live WASM manual-compaction test pins omission of the nullable checkpoint prop and compiled adapter identity"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/CompactionCommandCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_command.rs",
+        "crates/client-ui-conversation/tests/wasm_command_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused command and manual-compaction renderer cases: 3 passed",
+        "live WASM adapter test pins running copy, generic no-history settlement, checkpoint selection, compact title, and handler-authored fallback summary",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-conversation --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/CompactionItem.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_command.rs",
+        "crates/client-ui-conversation/tests/wasm_command_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused command and manual-compaction renderer cases: 3 passed",
+        "live WASM checkpoint test pins count/token summary, disabled unavailable state, collapsed and expanded disclosure icons, aria state, click toggle, and MarkdownText body",
+        "complete deterministic CSS-module maps preserve styling regardless of ChatNodeSeat versus command configuration order"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/ContextBody.module.css",
@@ -41992,7 +42019,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/GenericCommandCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_command.rs",
+        "crates/client-ui-conversation/tests/wasm_command_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused command and manual-compaction renderer cases: 3 passed",
+        "live WASM state test pins bare-name and cross-window title copy, running/error/ok state, hidden status copy, default settlement copy, explicit 14px leading icon, multiline-only disclosure, and functional-state toggle",
+        "compiled composition consumes configured ui-primitives DisclosureRow, StateDot, icons, and MarkdownText through explicit module faces"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/MessageIconActions.module.css",

@@ -38,7 +38,23 @@ pub fn configure_client_ui_conversation_chat_seat(
     inject_style(
         "ChatView",
         CHAT_CSS,
-        &[("flowItem", "seekdeep-conversation-chat-flowItem")],
+        &[
+            ("callRow", "seekdeep-conversation-chat-callRow"),
+            ("column", "seekdeep-conversation-chat-column"),
+            ("flowItem", "seekdeep-conversation-chat-flowItem"),
+            ("hint", "seekdeep-conversation-chat-hint"),
+            ("older", "seekdeep-conversation-chat-older"),
+            ("openError", "seekdeep-conversation-chat-openError"),
+            ("root", "seekdeep-conversation-chat-root"),
+            ("scroll", "seekdeep-conversation-chat-scroll"),
+            ("toBottom", "seekdeep-conversation-chat-toBottom"),
+            ("toBottomSlot", "seekdeep-conversation-chat-toBottomSlot"),
+            ("turnStatus", "seekdeep-conversation-chat-turnStatus"),
+            (
+                "turnStatusClock",
+                "seekdeep-conversation-chat-turnStatusClock",
+            ),
+        ],
     )?;
     MODULES.with(|modules| *modules.borrow_mut() = Some(BrowserModules { react, json_block }));
     Ok(())
