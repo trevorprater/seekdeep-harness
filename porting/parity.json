@@ -42451,7 +42451,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/ApprovalPanel.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_approval_panel.rs",
+        "crates/client-ui-conversation/tests/wasm_approval_panel_parity.rs"
+      ],
+      "evidence": [
+        "pinned source has no direct ApprovalPanel test; its focused composer-takeover companion case passed and the source component was audited branch by branch",
+        "four live WASM tests pin command JSON soft-falls, memoized PendingApproval construction and keying, matching running-root command lookup, accessible capped body, reason fallback, Button variants, command omission, both outcomes, immediate one-shot disable, rejection re-arm, and successful latch persistence",
+        "compiled composition reuses rootToolCall plus configured PendingApproval and Button faces; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/ContextMeter.module.css",
