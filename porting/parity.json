@@ -42435,7 +42435,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/input/decorations.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/input_decorations.rs",
+        "crates/client-ui-conversation/src/browser_input_decorations.rs",
+        "crates/client-ui-conversation/tests/input_decorations_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_decorations_parity.rs"
+      ],
+      "evidence": [
+        "focused pinned-source input-matrix/InputBar/input-scenarios decoration run: 5 passed",
+        "two portable Rust tests pin JavaScript whitespace and ASCII-name boundaries, UTF-16 offsets after astral characters, trigger/member filtering, claim watch ranges, chip identity/order/invalid bits, submitting hints, and release on prefix break",
+        "three live WASM tests pin Map lexicon compatibility, browser object schemas, hot reference ranges, claim/chip/hint products, empty defaults, and loud malformed lexicon/occurrence failures; strict native and WASM Clippy pass with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/input/facade.ts",

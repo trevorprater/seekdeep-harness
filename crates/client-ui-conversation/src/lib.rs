@@ -1,5 +1,6 @@
 //! Conversation UI semantic core and Rust/WASM surfaces.
 
+mod input_decorations;
 mod metrics;
 mod submission;
 
@@ -33,6 +34,8 @@ mod browser_enter_behavior;
 #[cfg(target_arch = "wasm32")]
 mod browser_image_labels;
 #[cfg(target_arch = "wasm32")]
+mod browser_input_decorations;
+#[cfg(target_arch = "wasm32")]
 mod browser_message_actions;
 #[cfg(target_arch = "wasm32")]
 mod browser_message_chrome;
@@ -60,6 +63,7 @@ mod browser_turn_tail;
 #[cfg(not(target_arch = "wasm32"))]
 mod host;
 
+pub use input_decorations::*;
 pub use metrics::*;
 pub use submission::*;
 
@@ -92,6 +96,8 @@ pub use browser_empty_hero::*;
 pub use browser_enter_behavior::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_image_labels::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_input_decorations::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_message_actions::*;
 #[cfg(target_arch = "wasm32")]
