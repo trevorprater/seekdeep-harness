@@ -1,0 +1,23 @@
+[package]
+name = "seekdeep-client-ui-attachment"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Compiled Rust/WASM attachment atoms for the SeekDeep browser UI"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+seekdeep-client-ui-primitives = { path = "../client-ui-primitives" }
+wasm-bindgen.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-futures.workspace = true
+wasm-bindgen-test = "0.3.77"
+
+[lints]
+workspace = true

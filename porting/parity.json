@@ -41336,7 +41336,15 @@
     {
       "source": "packages/client/ui-attachment/src/ImageLightbox.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/src/browser_lightbox.rs",
+        "crates/client-ui-attachment/tests/wasm_message_parity.rs"
+      ],
+      "evidence": [
+        "pinned source image-lightbox and message-image suites: 13 passed",
+        "live WASM test pins body portal, dialog/close copy, close-button autofocus, Escape and mask dismissal, image non-dismissal, listener teardown, opener focus restoration, and missing focus-owner tolerance"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/src/MessageImage.module.css",
@@ -41352,7 +41360,17 @@
     {
       "source": "packages/client/ui-attachment/src/MessageImage.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/src/browser_message.rs",
+        "crates/client-ui-attachment/src/browser_lightbox.rs",
+        "crates/client-ui-attachment/tests/wasm_message_parity.rs"
+      ],
+      "evidence": [
+        "pinned source image-lightbox and message-image suites: 13 passed",
+        "three grouped live WASM tests pin authorized async loading, loading-click guard, unnamed fallback, retry success/refusal, late settlement liveness, exact single-fit geometry and crop anchors, tile sizing, gallery empty/single/multiple variants, lightbox composition, and localized labels",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-attachment --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/src/css-modules.d.ts",
@@ -41391,7 +41409,14 @@
     {
       "source": "packages/client/ui-attachment/tests/image-lightbox.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/tests/wasm_message_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: passed in the 13-test focused run",
+        "compiled live WASM message/lightbox assertions: 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/tests/invariant.client.spec.ts",
@@ -41410,7 +41435,14 @@
     {
       "source": "packages/client/ui-attachment/tests/message-image.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/tests/wasm_message_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: passed in the 13-test focused run",
+        "compiled live WASM message/lightbox assertions: 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/tsconfig.json",
