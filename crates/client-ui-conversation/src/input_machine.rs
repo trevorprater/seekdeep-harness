@@ -14,6 +14,12 @@ const LOG_LIMIT: usize = 100;
 pub struct DraftRevision(u64);
 
 impl DraftRevision {
+    /// Brands one exact revision number.
+    #[must_use]
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
     /// Returns the ordinary revision number.
     #[must_use]
     pub const fn get(self) -> u64 {
@@ -100,6 +106,12 @@ impl CommandSubmitId {
     #[must_use]
     pub const fn new(value: u64) -> Self {
         Self(value)
+    }
+
+    /// Returns the ordinary submit identity.
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
     }
 }
 
@@ -514,6 +526,12 @@ impl InputMachine {
             image_ids: Rc::new(Vec::new()),
             queue: self.empty_queue.clone(),
         }
+    }
+
+    /// Returns the submit closure identity still owned by the live claim.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn claim_submit_id(&self) -> Option<CommandSubmitId> {
+        self.claim.as_ref().map(|claim| claim.submit_id)
     }
 
     /// Feeds one event through the reducer.
@@ -1120,6 +1138,35 @@ pub fn project_input_clipboard(draft: &str, occurrences: &[InputOccurrence]) -> 
     }
     output.push_str(&js_slice(draft, cursor, js_len(draft)));
     output
+}
+
+/// Splices one UTF-16 range with literal text.
+#[must_use]
+pub fn splice_input_text(draft: &str, start: u32, end: u32, replacement: &str) -> String {
+    format!(
+        "{}{}{}",
+        js_slice(draft, 0, start),
+        replacement,
+        js_slice(draft, end, js_len(draft))
+    )
+}
+
+/// Returns one UTF-16 slice using JavaScript `String.prototype.slice` bounds.
+#[must_use]
+pub fn slice_input_text(draft: &str, start: u32, end: u32) -> String {
+    js_slice(draft, start, end)
+}
+
+/// Returns JavaScript UTF-16 string length.
+#[must_use]
+pub fn input_text_len(value: &str) -> u32 {
+    js_len(value)
+}
+
+/// Applies JavaScript `String.prototype.trim` whitespace semantics.
+#[must_use]
+pub fn trim_input_text(value: &str) -> String {
+    js_trim(value)
 }
 
 fn args_after(draft: &str, token: &str) -> String {

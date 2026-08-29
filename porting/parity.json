@@ -42462,7 +42462,17 @@
     {
       "source": "packages/client/ui-conversation/src/client/input/facade.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_input_facade.rs",
+        "crates/client-ui-conversation/src/input_machine.rs",
+        "crates/client-ui-conversation/tests/wasm_input_facade_parity.rs"
+      ],
+      "evidence": [
+        "four pinned-source shell-driving suites (InputBar, input scenarios, input matrix, and skeleton): 99 passed",
+        "six live WASM tests pin stable stores/actions/lexicon and shared empty currencies, queue and mirror lifecycle, image admission/order/commit, span-CAS command/reference/text/consume verbs, paste/undo, trigger forwarding, popup/queue commands, frozen tracking, browser AbortSignal teardown, async adjudication and command timing, rollback/drift/notices, ordered reference serialization, captured image transactions, serializer abort/failure/absence, disposal suppression, and reentrant image-only delivery",
+        "strict native and WASM all-targets Clippy passed with CARGO_INCREMENTAL=0; final sink-reentrancy hardening also passed strict targeted WASM Clippy"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/input/hub.ts",
