@@ -27,6 +27,8 @@ mod browser_empty_hero;
 #[cfg(target_arch = "wasm32")]
 mod browser_enter_behavior;
 #[cfg(target_arch = "wasm32")]
+mod browser_image_labels;
+#[cfg(target_arch = "wasm32")]
 mod browser_message_actions;
 #[cfg(target_arch = "wasm32")]
 mod browser_message_chrome;
@@ -72,6 +74,8 @@ pub use browser_details_panel::*;
 pub use browser_empty_hero::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_enter_behavior::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_image_labels::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_message_actions::*;
 #[cfg(target_arch = "wasm32")]

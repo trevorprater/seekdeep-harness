@@ -42349,7 +42349,17 @@
     {
       "source": "packages/client/ui-conversation/src/client/image-labels.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/images.rs",
+        "crates/client-ui-conversation/src/browser_image_labels.rs",
+        "crates/client-ui-conversation/tests/wasm_image_labels_parity.rs"
+      ],
+      "evidence": [
+        "pinned source image-label suite: 7 passed",
+        "four live WASM tests pin JavaScript integer/toFixed MB formatting, every specific and limit-aware rejection route, unknown fallback, exact message/lightbox locale keys, deferred named-open callback, blocked/accepting drop-overlay property shapes and call order, and rail labels",
+        "Assistant live WASM remains 3/3 after replacing stale shorthand image keys with the centralized pinned contract; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/index.ts",

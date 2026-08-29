@@ -5,7 +5,10 @@ use std::cell::RefCell;
 use js_sys::{Array, Function, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
-use crate::{browser_reasoning::inject_style, reasoning_row_component};
+use crate::{
+    browser_image_labels::message_image_labels, browser_reasoning::inject_style,
+    reasoning_row_component,
+};
 
 const ASSISTANT_CSS: &str = include_str!(
     "../../../packages/client/ui-conversation/src/client/chat/AssistantMarkdown.module.css"
@@ -372,54 +375,6 @@ fn render_assistant_node_view(
         ])?),
         &[],
     )
-}
-
-fn message_image_labels(translate: &Function) -> Result<JsValue, JsValue> {
-    let open_named_translate = translate.clone();
-    let open_named = Closure::wrap(Box::new(move |label: JsValue| {
-        open_named_translate.apply(
-            &JsValue::UNDEFINED,
-            &Array::of2(
-                &JsValue::from_str("image.openNamed"),
-                &object(&[("label", label)])?.into(),
-            ),
-        )
-    })
-        as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
-    Ok(object(&[
-        (
-            "image",
-            translate.call1(&JsValue::UNDEFINED, &JsValue::from_str("image.label"))?,
-        ),
-        (
-            "open",
-            translate.call1(&JsValue::UNDEFINED, &JsValue::from_str("image.open"))?,
-        ),
-        ("openNamed", open_named.into_js_value()),
-        (
-            "loading",
-            translate.call1(&JsValue::UNDEFINED, &JsValue::from_str("image.loading"))?,
-        ),
-        (
-            "loadFailed",
-            translate.call1(&JsValue::UNDEFINED, &JsValue::from_str("image.loadFailed"))?,
-        ),
-        (
-            "lightbox",
-            object(&[
-                (
-                    "dialog",
-                    translate.call1(&JsValue::UNDEFINED, &JsValue::from_str("image.dialog"))?,
-                ),
-                (
-                    "close",
-                    translate.call1(&JsValue::UNDEFINED, &JsValue::from_str("image.close"))?,
-                ),
-            ])?
-            .into(),
-        ),
-    ])?
-    .into())
 }
 
 fn configured_modules() -> Result<BrowserModules, JsValue> {

@@ -48,7 +48,7 @@ export function assistantRender(component, props) { cursor = 0; return component
 export function assistantObject(entries) { return Object.fromEntries(entries) }
 export function assistantKind(node) { return typeof node?.kind === 'function' ? node.kind.markerName ?? 'ReasoningRow' : node?.kind }
 export function assistantChildren(node) { return node?.children ?? [] }
-export function assistantTranslate(key, vars) { calls.push([key, vars]); const map = { copy: '复制', copied: '复制成功', 'message.unknownBlock': '未知内容块', 'message.stopped': '已停止', 'image.serviceUnavailable': '图片服务不可用', 'image.label': '图片', 'image.open': '查看原图', 'image.loading': '加载', 'image.loadFailed': '失败', 'image.dialog': '原图预览', 'image.close': '关闭' }; if (key === 'json.truncated') return '截断:' + vars.total; if (key === 'image.openNamed') return vars.label + '，点击查看原图'; return map[key] ?? key }
+export function assistantTranslate(key, vars) { calls.push([key, vars]); const map = { copy: '复制', copied: '复制成功', 'message.unknownBlock': '未知内容块', 'message.stopped': '已停止', 'image.serviceUnavailable': '图片服务不可用', 'image.label': '图片', 'image.openOriginal': '查看原图', 'image.loading': '加载', 'image.loadFailed': '失败', 'image.preview': '原图预览', 'image.closePreview': '关闭' }; if (key === 'json.truncated') return '截断:' + vars.total; if (key === 'image.openOriginalLabel') return vars.label + '，点击查看原图'; return map[key] ?? key }
 export function assistantCalls() { return calls }
 export function assistantMentions(owner) { mentionOwners.push(owner); return { owner } }
 export function assistantMentionOwners() { return mentionOwners }
