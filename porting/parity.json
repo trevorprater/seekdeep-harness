@@ -42414,7 +42414,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/queue/store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_queue_face.rs",
+        "crates/client-ui-conversation/tests/wasm_queue_face_parity.rs"
+      ],
+      "evidence": [
+        "pinned source has no direct queueReadFaceOf test; the two-closure implementation was audited directly against its input-hub use",
+        "four live WASM tests pin exact queue reference reuse, latest-snapshot reads, Session receiver binding, listener delivery, original disposer behavior, post-dispose silence, fresh face/method identity per projection, and deferred malformed-Session failure at closure invocation",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-conversation --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/service.ts",
