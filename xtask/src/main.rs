@@ -474,14 +474,108 @@ fn wasm_ui_primitives_package(
     )?;
     std::fs::write(out_dir.join("index.js"), ui_primitives_esm_wrapper())?;
     let type_dir = out_dir.join("types");
-    std::fs::create_dir_all(&type_dir)?;
-    std::fs::copy(staging.join("client.d.ts"), type_dir.join("index.d.ts"))?;
+    if type_dir.exists() {
+        std::fs::remove_dir_all(&type_dir)?;
+    }
+    let client_type_dir = type_dir.join("client");
+    std::fs::create_dir_all(&client_type_dir)?;
+    std::fs::copy(
+        staging.join("client.d.ts"),
+        client_type_dir.join("index.d.ts"),
+    )?;
+    copy_ui_primitives_type_declarations(&metadata.workspace_root, &type_dir)?;
+    std::fs::write(
+        type_dir.join("internal.d.ts"),
+        ui_primitives_internal_declarations(),
+    )?;
     copy_ui_primitives_katex_assets(&metadata.workspace_root, &out_dir)?;
+    std::fs::write(
+        out_dir.join("invariant.js"),
+        ui_primitives_invariant_wrapper(),
+    )?;
+    std::fs::write(
+        out_dir.join("internal.js"),
+        ui_primitives_internal_wrapper(),
+    )?;
     println!(
         "built @seekdeep-ai/seekdeep-client-ui-primitives Rust/WASM ESM library at {}",
         out_dir.join("index.js").display()
     );
     Ok(())
+}
+
+fn copy_ui_primitives_type_declarations(
+    workspace: &Path,
+    destination: &Path,
+) -> anyhow::Result<()> {
+    let source = workspace.join("packages/client/ui-primitives/assets/types");
+    let mut count = 0_usize;
+    for entry in walkdir::WalkDir::new(&source) {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let Some(name) = entry.path().file_name().and_then(std::ffi::OsStr::to_str) else {
+            continue;
+        };
+        if !name.ends_with(".d.ts.txt") {
+            anyhow::ensure!(
+                name == "README.md",
+                "unexpected type compatibility asset: {}",
+                entry.path().display()
+            );
+            continue;
+        }
+        let relative = entry.path().strip_prefix(&source)?;
+        let relative = relative.with_file_name(name.strip_suffix(".txt").expect("checked suffix"));
+        let output = destination.join(relative);
+        if let Some(parent) = output.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let declaration = std::fs::read_to_string(entry.path())?
+            .replace("@deepseek-ai/dsh-", "@seekdeep-ai/seekdeep-")
+            .replace("@deepseek-ai/cordis", "@seekdeep-ai/cordis")
+            .replace("DeepSeek Harness", "SeekDeep Harness");
+        std::fs::write(output, declaration)?;
+        count += 1;
+    }
+    anyhow::ensure!(
+        count == 43,
+        "expected 43 ui-primitives declaration files, found {count}"
+    );
+    Ok(())
+}
+
+fn ui_primitives_invariant_wrapper() -> &'static str {
+    r"const PACKAGE_NAME = '@seekdeep-ai/seekdeep-client-ui-primitives';
+export const name = 'client-ui-primitives-invariant';
+export const inject = ['invariants'];
+const install = () => {};
+export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install));
+"
+}
+
+fn ui_primitives_internal_wrapper() -> &'static str {
+    r"export * from './index.js';
+import * as wasm from './client.js';
+export const highlightToHtml = wasm.highlightToHtml;
+export const highlightLines = wasm.highlightLines;
+export const subscribeGrammarLoaded = wasm.subscribeGrammarLoaded;
+export const grammarLoadCount = wasm.grammarLoadCount;
+export const usePointerGrace = wasm.usePointerGrace;
+export const useCopyFeedback = wasm.useCopyFeedback;
+"
+}
+
+fn ui_primitives_internal_declarations() -> &'static str {
+    r"export * from './index.js';
+export const highlightToHtml: typeof import('./client/index.js').highlightToHtml;
+export const highlightLines: typeof import('./client/index.js').highlightLines;
+export const subscribeGrammarLoaded: typeof import('./client/index.js').subscribeGrammarLoaded;
+export const grammarLoadCount: typeof import('./client/index.js').grammarLoadCount;
+export const usePointerGrace: typeof import('./client/index.js').usePointerGrace;
+export const useCopyFeedback: typeof import('./client/index.js').useCopyFeedback;
+"
 }
 
 fn copy_ui_primitives_katex_assets(workspace: &Path, out_dir: &Path) -> anyhow::Result<()> {
@@ -587,8 +681,8 @@ export function createMarkdownBackend(cssUrl) {
 "#
 }
 
-fn ui_primitives_esm_wrapper() -> &'static str {
-    r"import init, * as wasm from './client.js';
+fn ui_primitives_esm_wrapper() -> String {
+    let mut wrapper = r"import init, * as wasm from './client.js';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import { createHighlightBackend } from './highlight-backend.js';
@@ -610,6 +704,7 @@ wasm.configureClientUiPrimitiveMarkdownAtoms(React);
 wasm.configureClientUiPrimitiveCodeBlock(React);
 wasm.configureClientUiPrimitiveMarkdown(React, createMarkdownBackend(new URL('./katex/katex.min.css', import.meta.url).href));
 wasm.configureClientUiPrimitiveReadBlock(React);
+const iconComponents = wasm.iconComponents();
 
 export const Button = wasm.buttonComponent();
 export const Pill = wasm.pillComponent();
@@ -634,16 +729,23 @@ export const MessageText = wasm.messageTextComponent();
 export const CodeBlock = wasm.codeBlockComponent();
 export const MarkdownText = wasm.markdownTextComponent();
 export const ReadBlock = wasm.readBlockComponent();
+export const DEFAULT_DIFF_MAX_LINES = wasm.defaultDiffMaxLines();
+export const DEFAULT_SEARCH_MAX_LINES = wasm.defaultSearchMaxLines();
+export const DEFAULT_TERMINAL_MAX_LINES = wasm.defaultTerminalMaxLines();
 export const DEFAULT_READ_MAX_LINES = wasm.defaultReadMaxLines();
-export const highlightToHtml = wasm.highlightToHtml;
-export const highlightLines = wasm.highlightLines;
-export const subscribeGrammarLoaded = wasm.subscribeGrammarLoaded;
-export const grammarLoadCount = wasm.grammarLoadCount;
+export const extractMarkdownPlainText = wasm.extractMarkdownPlainText;
 export const writeClipboard = wasm.writeClipboard;
-export const usePointerGrace = wasm.usePointerGrace;
-export const useCopyFeedback = wasm.useCopyFeedback;
 export const useAnchoredMaxHeight = wasm.useAnchoredMaxHeight;
 "
+    .to_owned();
+    for definition in seekdeep_client_ui_primitives::ICON_DEFINITIONS {
+        debug_assert!(is_javascript_identifier(definition.name));
+        wrapper.push_str(&format!(
+            "export const {name} = iconComponents.{name};\n",
+            name = definition.name
+        ));
+    }
+    wrapper
 }
 
 fn wasm_watch_snapshot(
@@ -2259,10 +2361,12 @@ mod tests {
 
     use super::{
         classic_module_bundle, client_web_esm_declarations, client_web_esm_wrapper,
-        compatibility_declarations, copy_ui_primitives_katex_assets, copy_wasm_package_assets,
-        default_macos_platform_tag, is_generated_package_output, is_localization,
-        ui_primitives_esm_wrapper, ui_primitives_highlight_backend, ui_primitives_markdown_backend,
-        watch_snapshot, write_wasm_package_compatibility_entries,
+        compatibility_declarations, copy_ui_primitives_katex_assets,
+        copy_ui_primitives_type_declarations, copy_wasm_package_assets, default_macos_platform_tag,
+        is_generated_package_output, is_localization, ui_primitives_esm_wrapper,
+        ui_primitives_highlight_backend, ui_primitives_internal_wrapper,
+        ui_primitives_invariant_wrapper, ui_primitives_markdown_backend, watch_snapshot,
+        write_wasm_package_compatibility_entries,
     };
 
     #[test]
@@ -3251,6 +3355,46 @@ mod tests {
             60
         );
         assert!(projected.join("LICENSE").is_file());
+        let projected_types = output.path().join("types");
+        copy_ui_primitives_type_declarations(workspace, &projected_types).unwrap();
+        assert_eq!(
+            walkdir::WalkDir::new(&projected_types)
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|entry| {
+                    entry.file_type().is_file()
+                        && entry.path().extension().and_then(std::ffi::OsStr::to_str) == Some("ts")
+                })
+                .count(),
+            43
+        );
+        let index_declaration =
+            std::fs::read_to_string(projected_types.join("index.d.ts")).unwrap();
+        assert!(index_declaration.contains("export { MarkdownText }"));
+        assert!(!index_declaration.contains("@deepseek-ai/dsh-"));
+        assert!(ui_primitives_invariant_wrapper().contains("client-ui-primitives-invariant"));
+        let internal = ui_primitives_internal_wrapper();
+        assert!(internal.contains("export * from './index.js'"));
+        assert!(internal.contains("export const highlightToHtml"));
+        let package: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(workspace.join("packages/client/ui-primitives/package.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            package
+                .get("exports")
+                .and_then(|exports| exports.get("./src/*"))
+                .and_then(|entry| entry.get("default"))
+                .and_then(serde_json::Value::as_str),
+            Some("./lib/internal.js")
+        );
+        assert!(
+            package["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| entry.as_str() == Some("lib/client_bg.wasm"))
+        );
         let wrapper = ui_primitives_esm_wrapper();
         for expected in [
             "await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) })",
@@ -3264,11 +3408,21 @@ mod tests {
             "export const MessageText = wasm.messageTextComponent()",
             "export const MarkdownText = wasm.markdownTextComponent()",
             "export const ReadBlock = wasm.readBlockComponent()",
-            "export const highlightToHtml = wasm.highlightToHtml",
-            "export const highlightLines = wasm.highlightLines",
+            "export const DEFAULT_DIFF_MAX_LINES = wasm.defaultDiffMaxLines()",
+            "export const DEFAULT_SEARCH_MAX_LINES = wasm.defaultSearchMaxLines()",
+            "export const DEFAULT_TERMINAL_MAX_LINES = wasm.defaultTerminalMaxLines()",
+            "export const extractMarkdownPlainText = wasm.extractMarkdownPlainText",
+            "export const FishLogo = iconComponents.FishLogo",
+            "export const BrandWordmark = iconComponents.BrandWordmark",
         ] {
             assert!(wrapper.contains(expected), "missing {expected:?}");
         }
+        assert_eq!(
+            wrapper.matches(" = iconComponents.").count(),
+            seekdeep_client_ui_primitives::ICON_DEFINITIONS.len()
+        );
+        assert!(!wrapper.contains("export const highlightToHtml"));
+        assert!(!wrapper.contains("export const usePointerGrace"));
         assert!(!wrapper.contains("Object.assign(globalThis"));
     }
 

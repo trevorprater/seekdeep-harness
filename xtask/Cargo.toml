@@ -24,6 +24,7 @@ seekdeep-attachment-local = { path = "../crates/attachment-local" }
 seekdeep-bash-local = { path = "../crates/bash-local" }
 seekdeep-cordis = { path = "../crates/cordis" }
 seekdeep-cordis-host-runner = { path = "../crates/cordis-host-runner" }
+seekdeep-client-ui-primitives = { path = "../crates/client-ui-primitives" }
 seekdeep-core = { path = "../crates/core" }
 seekdeep-fs-local = { path = "../crates/fs-local" }
 seekdeep-goal = { path = "../crates/goal" }

@@ -11046,6 +11046,7 @@ dependencies = [
  "seekdeep-agent",
  "seekdeep-attachment-local",
  "seekdeep-bash-local",
+ "seekdeep-client-ui-primitives",
  "seekdeep-cordis",
  "seekdeep-cordis-host-runner",
  "seekdeep-core",

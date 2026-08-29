@@ -7,14 +7,14 @@ use markdown::mdast::Node;
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use crate::{
-    IncrementalMarkdownParser,
+    IncrementalMarkdownParser, MarkdownPlainTextMode,
     browser_code_block::inject_namespaced_style,
     browser_markdown_render::{
         MarkdownModules, MarkdownRenderContext, ReferenceTargets, collect_reference_targets,
-        create_reference_targets, render_blocks, render_footnote_section, render_positioned_blocks,
-        wrap_block_children,
+        create_reference_targets, defensive_render_fixtures, render_blocks,
+        render_footnote_section, render_positioned_blocks, wrap_block_children,
     },
-    code_block_component, parse_gfm_with_math,
+    code_block_component, extract_markdown_plain_text, parse_gfm_with_math,
 };
 
 const MARKDOWN_CSS: &str =
@@ -73,6 +73,55 @@ pub fn markdown_text_component() -> Result<JsValue, JsValue> {
         )
         .into_js_value();
     required_function(&react, "memo", "React")?.call1(&react, &component)
+}
+
+/// Returns the compiled defensive renderer fixture catalog used by parity tests.
+///
+/// # Errors
+///
+/// Returns before configuration or when React element construction fails.
+#[doc(hidden)]
+#[wasm_bindgen(js_name = markdownDefensiveFixtures)]
+pub fn markdown_defensive_fixtures() -> Result<Object, JsValue> {
+    defensive_render_fixtures(&configured_modules()?)
+}
+
+/// Projects Markdown into the source-compatible complete or compact plain-text modes.
+///
+/// # Errors
+///
+/// Returns malformed options or parser diagnostics.
+#[wasm_bindgen(js_name = extractMarkdownPlainText)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn browser_extract_markdown_plain_text(
+    markdown: String,
+    options: JsValue,
+) -> Result<JsValue, JsValue> {
+    let mode = if options.is_undefined() {
+        JsValue::UNDEFINED
+    } else {
+        Reflect::get(&options, &JsValue::from_str("mode"))?
+    };
+    let (mode, known) = if mode.is_undefined() {
+        (MarkdownPlainTextMode::All, true)
+    } else {
+        match mode.as_string().as_deref() {
+            Some("all") => (MarkdownPlainTextMode::All, true),
+            Some("first-line") => (MarkdownPlainTextMode::FirstLine, true),
+            Some("first-paragraph") => (MarkdownPlainTextMode::FirstParagraph, true),
+            _ => (MarkdownPlainTextMode::All, false),
+        }
+    };
+    let projected = extract_markdown_plain_text(&markdown, mode).map_err(|error| {
+        JsValue::from(js_sys::Error::new(&format!(
+            "Markdown plain-text projection failed: {error}"
+        )))
+    })?;
+    Ok(if known {
+        JsValue::from_str(&projected)
+    } else {
+        JsValue::UNDEFINED
+    })
 }
 
 fn render_markdown_text(modules: &MarkdownModules, props: &JsValue) -> Result<JsValue, JsValue> {

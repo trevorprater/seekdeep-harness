@@ -16,7 +16,7 @@ Web 对话通过会话事件、历史回放与流式累积保留 assistant Markd
 
 视觉间距、表格、链接、引用块、行内代码与代码块外框遵循 deepsuite `@deepseek/md`（`markdown.css` / `code-block.css`），并使用同一套 `--dsw-alias-markdown-*`、`--dsw-font-markdown-*`、`--dsw-alias-border-l*` 与 `--dsw-alias-label-*` token。链接使用 `--dsw-alias-state-business-primary`（deepsuite 的样式表使用 `--dsw-alias-brand-text`，仅在 newDesign 下为蓝色；design-platform 将 brand-text 保持为近黑色，此处不做重新调色）。当单个行内代码 token 完全由绝对 HTTP(S) URL 构成时，其代码外框会包含一个与普通链接相同、可通过键盘聚焦的安全外链锚点；端口、路径与查询文本保持不变，而命令、非完整 URL、其他 scheme 与围栏代码仍不会成为链接。`CodeBlock` 提供语言横幅与复制控件（`复制` / `复制成功`）。已完成的文本通过定稿语法的数学扩展渲染 KaTeX；`mathCompatibility` 将 `\(...\)`、`\[...\]` 和块级同一行 `$$...$$` 映射为同一套标准数学 AST 节点。这是一层小范围的解析器兼容层，不是正则重写，也不修复格式错误的模型输出。流式输出在完成前保持按字面渲染，避免不完整公式闪现错误。引用胶囊、标题锚点、thinking-small markdown 变体，以及自定义 □/☑ 任务标记仍不在范围内；GFM 任务列表继续使用原生复选框。
 
-这些依赖在 `ui-primitives` 中显式声明；由于这一纯库由 Web shell 预置，编译后的解析器与高亮器会成为初始浏览器 bundle 的一部分。Rust package builder 把固定版本的 KaTeX 样式表、全部 60 个相对字体资产及其 MIT 许可证投影进生成库；Rust 在渲染数学公式前安装一个去重的 stylesheet link。
+这些依赖在 `ui-primitives` 中显式声明；由于这一纯库由 Web shell 预置，编译后的解析器与高亮器会成为初始浏览器 bundle 的一部分。Rust package builder 把固定版本的 KaTeX 样式表、全部 60 个相对字体资产及其 MIT 许可证投影进生成库；Rust 在渲染数学公式前安装一个去重的 stylesheet link。同一构建还产出与源码一致的 102 名 root index（其中 72 个名称直接从 Rust catalog 派生：70 个 icon 加两个 brand glyph）、invariant／internal 兼容入口，以及只做必要 package identity 替换的 43 文件 oracle declaration tree；发布白名单包含全部 WASM、backend、类型、CSS、字体与许可证资产。
 
 ## 不受信任输出策略
 

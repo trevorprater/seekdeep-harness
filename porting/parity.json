@@ -45707,7 +45707,20 @@
     {
       "source": "packages/client/ui-primitives/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/main.rs",
+        "crates/client-ui-primitives/src/browser_blocks.rs",
+        "crates/client-ui-primitives/src/browser_markdown.rs",
+        "packages/client/ui-primitives/assets/types",
+        "packages/client/ui-primitives/package.json"
+      ],
+      "evidence": [
+        "generated release package exposes exactly the source's 102 runtime names with no extras, including all 72 catalog-derived glyph names: 70 icons plus FishLogo and BrandWordmark",
+        "all source components, four default-cap constants, writeClipboard, useAnchoredMaxHeight, and extractMarkdownPlainText resolve through compiled WASM; internal-only highlighter and hook faces stay off the root index",
+        "43 oracle declaration files project byte-identically after only required dsh/deepseek package substitutions; a no-skip TypeScript consumer check passes root values/types, invariant, icons, and a development source subpath",
+        "real generated-package smoke passes invariant registration and compiled internal subpath exports"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/src/invariant.ts",
@@ -46648,7 +46661,16 @@
     {
       "source": "packages/client/ui-primitives/tests/markdown-render-units.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-primitives/src/browser_markdown_render.rs",
+        "crates/client-ui-primitives/tests/wasm_markdown_render_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 13 passed",
+        "compiled defensive fixture adapter pins nullable spread and alignment, unresolved reference text, first-definition wins, bare loose items, padded cells, empty checked items, empty image alt, nested definition dropping, unmapped nodes, and missing/uncounted/non-paragraph footnotes",
+        "compiled live WASM Markdown renderer assertions: 7 passed"
+      ]
     },
     {
       "source": "packages/client/ui-primitives/tests/markdown.client.spec.tsx",
@@ -46778,7 +46800,20 @@
     {
       "source": "packages/client/ui-primitives/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/main.rs",
+        "xtask/Cargo.toml",
+        "packages/client/ui-primitives/package.json",
+        "packages/client/ui-primitives/assets/katex",
+        "packages/client/ui-primitives/assets/types"
+      ],
+      "evidence": [
+        "cargo xtask wasm-package replaces the source tsdown library build with optimized web-target WASM, an ESM root/internal/invariant surface, thin Shiki and Markdown backends, source-shaped declarations, and pinned KaTeX assets",
+        "full xtask binary: 32 tests passed, including 72 generated glyph exports, 43 declarations, 60 fonts, CSS relative URL, license, invariant/internal wrappers, and watch-mode exclusion of lib/node_modules",
+        "npm pack --dry-run reports 119 publish entries containing WASM, both backends, root/internal/invariant modules, 45 declarations, KaTeX CSS/license/README, and all 60 fonts",
+        "optimized generated package passes real React, Shiki, KaTeX, Markdown, export-census, subpath, invariant, declaration, and TypeScript-consumer smokes"
+      ]
     },
     {
       "source": "packages/client/ui-settings-general/README.i18n.yaml",

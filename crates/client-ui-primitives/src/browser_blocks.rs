@@ -24,6 +24,27 @@ thread_local! {
     static REACT: RefCell<Option<JsValue>> = const { RefCell::new(None) };
 }
 
+/// Returns the source-compatible default diff content-line cap.
+#[wasm_bindgen(js_name = defaultDiffMaxLines)]
+#[must_use]
+pub fn default_diff_max_lines() -> f64 {
+    DEFAULT_DIFF_MAX_LINES
+}
+
+/// Returns the source-compatible default search content-line cap.
+#[wasm_bindgen(js_name = defaultSearchMaxLines)]
+#[must_use]
+pub fn default_search_max_lines() -> f64 {
+    DEFAULT_SEARCH_MAX_LINES
+}
+
+/// Returns the source-compatible default terminal content-line cap.
+#[wasm_bindgen(js_name = defaultTerminalMaxLines)]
+#[must_use]
+pub fn default_terminal_max_lines() -> f64 {
+    DEFAULT_TERMINAL_MAX_LINES
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DiffRowKind {
     Path,

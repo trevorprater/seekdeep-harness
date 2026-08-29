@@ -4,8 +4,9 @@
 
 use js_sys::{Array, Object, Reflect};
 use seekdeep_client_ui_primitives::{
-    configure_client_ui_primitive_code_block, configure_client_ui_primitive_highlight,
-    configure_client_ui_primitive_markdown, markdown_text_component,
+    browser_extract_markdown_plain_text, configure_client_ui_primitive_code_block,
+    configure_client_ui_primitive_highlight, configure_client_ui_primitive_markdown,
+    markdown_defensive_fixtures, markdown_text_component,
 };
 use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -392,4 +393,113 @@ fn streaming_label_identity_resets_cached_fences() {
         Some("Kopieren")
     );
     mdUnmount();
+}
+
+#[wasm_bindgen_test]
+fn defensive_nullable_and_partial_mdast_shapes_match_source() {
+    let _markdown = setup();
+    let fixtures = markdown_defensive_fixtures().unwrap();
+
+    let unresolved = property(fixtures.as_ref(), "unresolved");
+    assert_eq!(mdText(&unresolved), "[one][two][][three][C]![pic][d]![]");
+    assert!(mdFindKind(&unresolved, "a").is_undefined());
+
+    let first_definition = property(fixtures.as_ref(), "firstDefinition");
+    let link = mdFindKind(&first_definition, "a");
+    assert_eq!(
+        property(&property(&link, "props"), "href")
+            .as_string()
+            .as_deref(),
+        Some("https://example.com/first")
+    );
+
+    let bare = property(fixtures.as_ref(), "bareListItem");
+    let paragraphs = mdFindKinds(&bare, "p");
+    assert_eq!(paragraphs.length(), 2);
+    assert_eq!(mdText(&paragraphs.get(0)), "alpha");
+    assert_eq!(mdText(&paragraphs.get(1)), "beta");
+
+    let alignless = property(fixtures.as_ref(), "alignlessTable");
+    let cell = mdFindKind(&alignless, "th");
+    assert_eq!(mdText(&cell), "h");
+    assert!(property(&property(&cell, "props"), "style").is_undefined());
+
+    let padded = property(fixtures.as_ref(), "paddedTable");
+    let cells = mdFindKinds(&padded, "th");
+    assert_eq!(cells.length(), 2);
+    assert_eq!(mdText(&cells.get(1)), "");
+
+    let checked = property(fixtures.as_ref(), "checkedEmpty");
+    assert_eq!(mdFindKinds(&checked, "li").length(), 2);
+    assert_eq!(mdFindKinds(&checked, "input").length(), 2);
+
+    let images = property(fixtures.as_ref(), "emptyImageAlt");
+    for image in mdFindKinds(&images, "img").iter() {
+        assert_eq!(
+            property(&property(&image, "props"), "alt")
+                .as_string()
+                .as_deref(),
+            Some("")
+        );
+    }
+
+    let nested = property(fixtures.as_ref(), "nestedDefinition");
+    let ordered = mdFindKind(&nested, "ol");
+    assert_eq!(
+        property(&property(&ordered, "props"), "start").as_f64(),
+        Some(3.0)
+    );
+    assert_eq!(mdText(&mdFindKind(&nested, "li")), "\nbody\n");
+
+    let unmapped = property(fixtures.as_ref(), "unmapped");
+    assert_eq!(mdText(&unmapped), "after");
+    assert!(property(fixtures.as_ref(), "missingFootnote").is_null());
+
+    let quiet = property(fixtures.as_ref(), "uncountedFootnote");
+    assert_eq!(mdText(&mdFindKind(&quiet, "li")), "\nquiet \n");
+    let code = property(fixtures.as_ref(), "codeFootnote");
+    assert!(!mdFindFunction(&code).is_undefined());
+    assert!(mdText(&code).contains('↩'));
+    mdUnmount();
+}
+
+#[wasm_bindgen_test]
+fn plain_text_wasm_face_preserves_modes_and_invalid_runtime_behavior() {
+    let source = "# Heading\n\nFirst **paragraph**.\n\nSecond.";
+    assert_eq!(
+        browser_extract_markdown_plain_text(source.to_owned(), JsValue::UNDEFINED)
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("Heading\n\nFirst paragraph.\n\nSecond.")
+    );
+    assert_eq!(
+        browser_extract_markdown_plain_text(
+            source.to_owned(),
+            props(&[("mode", JsValue::from_str("first-line"))]).into(),
+        )
+        .unwrap()
+        .as_string()
+        .as_deref(),
+        Some("Heading")
+    );
+    assert_eq!(
+        browser_extract_markdown_plain_text(
+            source.to_owned(),
+            props(&[("mode", JsValue::from_str("first-paragraph"))]).into(),
+        )
+        .unwrap()
+        .as_string()
+        .as_deref(),
+        Some("First paragraph.")
+    );
+    assert!(
+        browser_extract_markdown_plain_text(
+            source.to_owned(),
+            props(&[("mode", JsValue::from_str("future-mode"))]).into(),
+        )
+        .unwrap()
+        .is_undefined()
+    );
+    assert!(browser_extract_markdown_plain_text(source.to_owned(), JsValue::NULL).is_err());
 }

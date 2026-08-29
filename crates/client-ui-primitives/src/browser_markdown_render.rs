@@ -236,7 +236,9 @@ fn render_node(
         Node::Math(node) => render_math(&node.value, true, key, context),
         Node::InlineMath(node) => render_math(&node.value, false, key, context),
         Node::List(node) => render_list(node, key, context),
-        Node::ListItem(node) => render_list_item(node, list_item_loose(node), key, context),
+        Node::ListItem(node) => {
+            render_list_item(node, list_item_loose(node, Some(node.spread)), key, context)
+        }
         Node::Table(node) => render_table(node, key, context),
         Node::Link(node) => {
             let prior = context.in_link;
@@ -396,14 +398,14 @@ fn list_loose(list: &markdown::mdast::List) -> bool {
             .children
             .iter()
             .filter_map(|node| match node {
-                Node::ListItem(item) => Some(list_item_loose(item)),
+                Node::ListItem(item) => Some(list_item_loose(item, Some(item.spread))),
                 _ => None,
             })
             .any(|loose| loose)
 }
 
-fn list_item_loose(item: &markdown::mdast::ListItem) -> bool {
-    item.spread
+fn list_item_loose(item: &markdown::mdast::ListItem, spread: Option<bool>) -> bool {
+    spread.unwrap_or(item.children.len() > 1)
 }
 
 fn render_list(
@@ -516,6 +518,15 @@ fn render_table(
     key: JsValue,
     context: &mut MarkdownRenderContext<'_>,
 ) -> Result<JsValue, JsValue> {
+    render_table_with_alignment(node, Some(&node.align), key, context)
+}
+
+fn render_table_with_alignment(
+    node: &markdown::mdast::Table,
+    align: Option<&[AlignKind]>,
+    key: JsValue,
+    context: &mut MarkdownRenderContext<'_>,
+) -> Result<JsValue, JsValue> {
     let rows = node
         .children
         .iter()
@@ -526,7 +537,7 @@ fn render_table(
         .collect::<Vec<_>>();
     let mut table_children = Vec::new();
     if let Some(head) = rows.first() {
-        let row = render_table_row(head, "th", &node.align, 0, context)?;
+        let row = render_table_row(head, "th", align, 0, context)?;
         table_children.push(create_element(
             &context.modules.react,
             &JsValue::from_str("thead"),
@@ -538,7 +549,7 @@ fn render_table(
         let body = rows[1..]
             .iter()
             .enumerate()
-            .map(|(index, row)| render_table_row(row, "td", &node.align, index + 1, context))
+            .map(|(index, row)| render_table_row(row, "td", align, index + 1, context))
             .collect::<Result<Vec<_>, _>>()?;
         table_children.push(create_element(
             &context.modules.react,
@@ -570,7 +581,7 @@ fn render_table(
 fn render_table_row(
     row: &markdown::mdast::TableRow,
     cell_tag: &str,
-    align: &[AlignKind],
+    align: Option<&[AlignKind]>,
     key: usize,
     context: &mut MarkdownRenderContext<'_>,
 ) -> Result<JsValue, JsValue> {
@@ -582,11 +593,11 @@ fn render_table_row(
             _ => None,
         })
         .collect::<Vec<_>>();
-    let length = align.len();
+    let length = align.map_or(cells.len(), <[AlignKind]>::len);
     let mut rendered = Vec::new();
     for index in 0..length {
         let mut props = vec![("key", index_key(index))];
-        if let Some(alignment) = align.get(index).copied()
+        if let Some(alignment) = align.and_then(|values| values.get(index)).copied()
             && alignment != AlignKind::None
         {
             let value = match alignment {
@@ -893,6 +904,341 @@ pub(crate) fn render_footnote_section(
         ])?),
         &[heading, list],
     )
+}
+
+#[allow(clippy::too_many_lines)] // Closed source-suite fixture catalog stays auditable in one table.
+pub(crate) fn defensive_render_fixtures(modules: &MarkdownModules) -> Result<Object, JsValue> {
+    use markdown::mdast::{
+        Code, FootnoteDefinition as MdFootnoteDefinition, Image, ImageReference, LinkReference,
+        List, ListItem, Paragraph, Table, TableCell, TableRow, Text, Yaml,
+    };
+
+    let output = Object::new();
+    let text = |value: &str| {
+        Node::Text(Text {
+            value: value.to_owned(),
+            position: None,
+        })
+    };
+    let paragraph = |children| {
+        Node::Paragraph(Paragraph {
+            children,
+            position: None,
+        })
+    };
+    let definition = |identifier: &str, url: &str| {
+        Node::Definition(Definition {
+            position: None,
+            url: url.to_owned(),
+            title: None,
+            identifier: identifier.to_owned(),
+            label: None,
+        })
+    };
+
+    let unresolved = paragraph(vec![
+        Node::LinkReference(LinkReference {
+            children: vec![text("one")],
+            position: None,
+            reference_kind: ReferenceKind::Shortcut,
+            identifier: "a".to_owned(),
+            label: None,
+        }),
+        Node::LinkReference(LinkReference {
+            children: vec![text("two")],
+            position: None,
+            reference_kind: ReferenceKind::Collapsed,
+            identifier: "b".to_owned(),
+            label: None,
+        }),
+        Node::LinkReference(LinkReference {
+            children: vec![text("three")],
+            position: None,
+            reference_kind: ReferenceKind::Full,
+            identifier: "c".to_owned(),
+            label: Some("C".to_owned()),
+        }),
+        Node::ImageReference(ImageReference {
+            position: None,
+            alt: "pic".to_owned(),
+            reference_kind: ReferenceKind::Full,
+            identifier: "d".to_owned(),
+            label: None,
+        }),
+        Node::ImageReference(ImageReference {
+            position: None,
+            alt: String::new(),
+            reference_kind: ReferenceKind::Shortcut,
+            identifier: "e".to_owned(),
+            label: None,
+        }),
+    ]);
+    set_fixture(
+        &output,
+        "unresolved",
+        render_fixture_nodes(modules, &[unresolved])?,
+    )?;
+
+    let first_definition = vec![
+        definition("dup", "https://example.com/first"),
+        definition("dup", "https://example.com/second"),
+        paragraph(vec![Node::LinkReference(LinkReference {
+            children: vec![text("link")],
+            position: None,
+            reference_kind: ReferenceKind::Full,
+            identifier: "dup".to_owned(),
+            label: None,
+        })]),
+    ];
+    set_fixture(
+        &output,
+        "firstDefinition",
+        render_fixture_nodes(modules, &first_definition)?,
+    )?;
+
+    let bare_item = ListItem {
+        children: vec![
+            paragraph(vec![text("alpha")]),
+            paragraph(vec![text("beta")]),
+        ],
+        position: None,
+        spread: false,
+        checked: None,
+    };
+    let mut context = MarkdownRenderContext::new(
+        modules,
+        false,
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        create_reference_targets(),
+    );
+    let bare = render_list_item(
+        &bare_item,
+        list_item_loose(&bare_item, None),
+        JsValue::from_str("bare"),
+        &mut context,
+    )?;
+    set_fixture(&output, "bareListItem", fixture_root(modules, &[bare])?)?;
+
+    let alignless_table = Table {
+        children: vec![Node::TableRow(TableRow {
+            children: vec![Node::TableCell(TableCell {
+                children: vec![text("h")],
+                position: None,
+            })],
+            position: None,
+        })],
+        position: None,
+        align: Vec::new(),
+    };
+    let mut context = MarkdownRenderContext::new(
+        modules,
+        false,
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        create_reference_targets(),
+    );
+    let table = render_table_with_alignment(
+        &alignless_table,
+        None,
+        JsValue::from_str("table"),
+        &mut context,
+    )?;
+    set_fixture(&output, "alignlessTable", fixture_root(modules, &[table])?)?;
+
+    let padded_table = Node::Table(Table {
+        children: vec![Node::TableRow(TableRow {
+            children: vec![Node::TableCell(TableCell {
+                children: vec![text("only")],
+                position: None,
+            })],
+            position: None,
+        })],
+        position: None,
+        align: vec![AlignKind::Left, AlignKind::Right],
+    });
+    set_fixture(
+        &output,
+        "paddedTable",
+        render_fixture_nodes(modules, &[padded_table])?,
+    )?;
+
+    let checked = Node::List(List {
+        children: vec![
+            Node::ListItem(ListItem {
+                children: Vec::new(),
+                position: None,
+                spread: false,
+                checked: Some(true),
+            }),
+            Node::ListItem(ListItem {
+                children: vec![paragraph(Vec::new())],
+                position: None,
+                spread: false,
+                checked: Some(false),
+            }),
+        ],
+        position: None,
+        ordered: false,
+        start: None,
+        spread: false,
+    });
+    set_fixture(
+        &output,
+        "checkedEmpty",
+        render_fixture_nodes(modules, &[checked])?,
+    )?;
+
+    let images = vec![
+        definition("r", "https://example.com/r.png"),
+        paragraph(vec![
+            Node::Image(Image {
+                position: None,
+                alt: String::new(),
+                url: "https://example.com/x.png".to_owned(),
+                title: None,
+            }),
+            Node::ImageReference(ImageReference {
+                position: None,
+                alt: String::new(),
+                reference_kind: ReferenceKind::Full,
+                identifier: "r".to_owned(),
+                label: None,
+            }),
+        ]),
+    ];
+    set_fixture(
+        &output,
+        "emptyImageAlt",
+        render_fixture_nodes(modules, &images)?,
+    )?;
+
+    let nested_definition = Node::List(List {
+        children: vec![Node::ListItem(ListItem {
+            children: vec![
+                paragraph(vec![text("body")]),
+                definition("x", "https://example.com"),
+            ],
+            position: None,
+            spread: true,
+            checked: None,
+        })],
+        position: None,
+        ordered: true,
+        start: Some(3),
+        spread: false,
+    });
+    set_fixture(
+        &output,
+        "nestedDefinition",
+        render_fixture_nodes(modules, &[nested_definition])?,
+    )?;
+
+    let unmapped = vec![
+        Node::Yaml(Yaml {
+            value: "front: matter".to_owned(),
+            position: None,
+        }),
+        Node::TableRow(TableRow {
+            children: Vec::new(),
+            position: None,
+        }),
+        paragraph(vec![text("after")]),
+    ];
+    set_fixture(
+        &output,
+        "unmapped",
+        render_fixture_nodes(modules, &unmapped)?,
+    )?;
+
+    let mut missing = MarkdownRenderContext::new(
+        modules,
+        false,
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        create_reference_targets(),
+    );
+    missing.footnote_order.push("GHOST".to_owned());
+    missing.footnote_counts.insert("GHOST".to_owned(), 1);
+    set_fixture(
+        &output,
+        "missingFootnote",
+        render_footnote_section(&mut missing)?,
+    )?;
+
+    let quiet_definition = Node::FootnoteDefinition(MdFootnoteDefinition {
+        children: vec![paragraph(vec![text("quiet")])],
+        position: None,
+        identifier: "q".to_owned(),
+        label: None,
+    });
+    let mut quiet_targets = create_reference_targets();
+    collect_reference_targets(&[quiet_definition], &mut quiet_targets);
+    let mut quiet = MarkdownRenderContext::new(
+        modules,
+        false,
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        quiet_targets,
+    );
+    quiet.footnote_order.push("Q".to_owned());
+    set_fixture(
+        &output,
+        "uncountedFootnote",
+        render_footnote_section(&mut quiet)?,
+    )?;
+
+    let code_definition = Node::FootnoteDefinition(MdFootnoteDefinition {
+        children: vec![Node::Code(Code {
+            value: "code body".to_owned(),
+            position: None,
+            lang: None,
+            meta: None,
+        })],
+        position: None,
+        identifier: "n".to_owned(),
+        label: None,
+    });
+    let mut code_targets = create_reference_targets();
+    collect_reference_targets(&[code_definition], &mut code_targets);
+    let mut code_context = MarkdownRenderContext::new(
+        modules,
+        false,
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        code_targets,
+    );
+    code_context.footnote_order.push("N".to_owned());
+    code_context.footnote_counts.insert("N".to_owned(), 1);
+    set_fixture(
+        &output,
+        "codeFootnote",
+        render_footnote_section(&mut code_context)?,
+    )?;
+    Ok(output)
+}
+
+fn render_fixture_nodes(modules: &MarkdownModules, nodes: &[Node]) -> Result<JsValue, JsValue> {
+    let mut targets = create_reference_targets();
+    collect_reference_targets(nodes, &mut targets);
+    let mut context = MarkdownRenderContext::new(
+        modules,
+        false,
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        targets,
+    );
+    let rendered = render_blocks(nodes, &mut context)?;
+    fixture_root(modules, &rendered)
+}
+
+fn fixture_root(modules: &MarkdownModules, children: &[JsValue]) -> Result<JsValue, JsValue> {
+    create_element(&modules.react, &JsValue::from_str("div"), None, children)
+}
+
+#[allow(clippy::needless_pass_by_value)] // Callers hand off freshly rendered JS values.
+fn set_fixture(output: &Object, name: &str, value: JsValue) -> Result<(), JsValue> {
+    Reflect::set(output, &JsValue::from_str(name), &value).map(|_| ())
 }
 
 fn render_math(
