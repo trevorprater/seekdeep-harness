@@ -214,6 +214,11 @@ fn wasm_package(
                 .workspace_root
                 .join("packages/client/ui-primitives"),
         ),
+        "@seekdeep-ai/seekdeep-client-ui-attachment" => Some(
+            cargo_metadata()?
+                .workspace_root
+                .join("packages/client/ui-attachment"),
+        ),
         _ => None,
     };
     let mut previous = wasm_watch_snapshot(&package_root, asset_root.as_deref())?;
@@ -269,6 +274,9 @@ fn wasm_package_once(
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-primitives" {
         return wasm_ui_primitives_package(&metadata, artifact, out_dir, &wasm);
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-attachment" {
+        return wasm_ui_attachment_package(&metadata, artifact, out_dir, &wasm);
     }
     let staging = metadata
         .target_directory
@@ -502,6 +510,124 @@ fn wasm_ui_primitives_package(
         out_dir.join("index.js").display()
     );
     Ok(())
+}
+
+fn wasm_ui_attachment_package(
+    metadata: &CargoMetadata,
+    artifact: &str,
+    out_dir: &Path,
+    wasm: &Path,
+) -> anyhow::Result<()> {
+    let staging = metadata
+        .target_directory
+        .join("xtask/wasm-package")
+        .join(artifact);
+    if staging.exists() {
+        std::fs::remove_dir_all(&staging)?;
+    }
+    std::fs::create_dir_all(&staging)?;
+    let status = ProcessCommand::new("wasm-bindgen")
+        .args(["--target", "web", "--out-name", "client", "--out-dir"])
+        .arg(&staging)
+        .arg(wasm)
+        .status()?;
+    anyhow::ensure!(
+        status.success(),
+        "wasm-bindgen failed for client UI attachment"
+    );
+    let out_dir = if out_dir.is_absolute() {
+        out_dir.to_owned()
+    } else {
+        metadata.workspace_root.join(out_dir)
+    };
+    std::fs::create_dir_all(&out_dir)?;
+    for name in ["client.js", "client_bg.wasm"] {
+        std::fs::copy(staging.join(name), out_dir.join(name))?;
+    }
+    std::fs::write(out_dir.join("index.js"), ui_attachment_esm_wrapper())?;
+    std::fs::write(
+        out_dir.join("invariant.js"),
+        ui_attachment_invariant_wrapper(),
+    )?;
+    let type_dir = out_dir.join("types");
+    if type_dir.exists() {
+        std::fs::remove_dir_all(&type_dir)?;
+    }
+    let client_types = type_dir.join("client");
+    std::fs::create_dir_all(&client_types)?;
+    std::fs::copy(staging.join("client.d.ts"), client_types.join("index.d.ts"))?;
+    copy_ui_attachment_type_declarations(&metadata.workspace_root, &type_dir)?;
+    println!(
+        "built @seekdeep-ai/seekdeep-client-ui-attachment Rust/WASM ESM library at {}",
+        out_dir.join("index.js").display()
+    );
+    Ok(())
+}
+
+fn copy_ui_attachment_type_declarations(
+    workspace: &Path,
+    destination: &Path,
+) -> anyhow::Result<()> {
+    let source = workspace.join("packages/client/ui-attachment/assets/types");
+    let mut count = 0_usize;
+    for entry in walkdir::WalkDir::new(&source) {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy();
+        if !name.ends_with(".d.ts.txt") {
+            anyhow::ensure!(
+                name == "README.md",
+                "unexpected attachment type asset: {}",
+                entry.path().display()
+            );
+            continue;
+        }
+        let relative = entry.path().strip_prefix(&source)?;
+        let relative = relative.with_file_name(name.strip_suffix(".txt").expect("checked suffix"));
+        let output = destination.join(relative);
+        if let Some(parent) = output.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let declaration = std::fs::read_to_string(entry.path())?
+            .replace("@deepseek-ai/dsh-", "@seekdeep-ai/seekdeep-")
+            .replace("@deepseek-ai/cordis", "@seekdeep-ai/cordis")
+            .replace("DeepSeek Harness", "SeekDeep Harness");
+        std::fs::write(output, declaration)?;
+        count += 1;
+    }
+    anyhow::ensure!(
+        count == 6,
+        "expected 6 ui-attachment declarations, found {count}"
+    );
+    Ok(())
+}
+
+fn ui_attachment_esm_wrapper() -> &'static str {
+    r"import init, * as wasm from './client.js';
+import * as React from 'react';
+import * as ReactDOM from 'react-dom';
+import * as UiPrimitives from '@seekdeep-ai/seekdeep-client-ui-primitives';
+
+await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
+wasm.configureClientUiAttachment(React, ReactDOM, UiPrimitives);
+
+export const AttachmentRail = wasm.attachmentRailComponent();
+export const DropOverlay = wasm.dropOverlayComponent();
+export const ImageLightbox = wasm.imageLightboxComponent();
+export const MessageImage = wasm.messageImageComponent();
+export const ImageGallery = wasm.imageGalleryComponent();
+"
+}
+
+fn ui_attachment_invariant_wrapper() -> &'static str {
+    r"const PACKAGE_NAME = '@seekdeep-ai/seekdeep-client-ui-attachment';
+export const name = 'client-ui-attachment-invariant';
+export const inject = ['invariants'];
+const install = () => {};
+export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install));
+"
 }
 
 fn copy_ui_primitives_type_declarations(
@@ -2361,10 +2487,11 @@ mod tests {
 
     use super::{
         classic_module_bundle, client_web_esm_declarations, client_web_esm_wrapper,
-        compatibility_declarations, copy_ui_primitives_katex_assets,
-        copy_ui_primitives_type_declarations, copy_wasm_package_assets, default_macos_platform_tag,
-        is_generated_package_output, is_localization, ui_primitives_esm_wrapper,
-        ui_primitives_highlight_backend, ui_primitives_internal_wrapper,
+        compatibility_declarations, copy_ui_attachment_type_declarations,
+        copy_ui_primitives_katex_assets, copy_ui_primitives_type_declarations,
+        copy_wasm_package_assets, default_macos_platform_tag, is_generated_package_output,
+        is_localization, ui_attachment_esm_wrapper, ui_attachment_invariant_wrapper,
+        ui_primitives_esm_wrapper, ui_primitives_highlight_backend, ui_primitives_internal_wrapper,
         ui_primitives_invariant_wrapper, ui_primitives_markdown_backend, watch_snapshot,
         write_wasm_package_compatibility_entries,
     };
@@ -3424,6 +3551,43 @@ mod tests {
         assert!(!wrapper.contains("export const highlightToHtml"));
         assert!(!wrapper.contains("export const usePointerGrace"));
         assert!(!wrapper.contains("Object.assign(globalThis"));
+    }
+
+    #[test]
+    fn ui_attachment_esm_library_exports_components_types_and_invariant() {
+        let wrapper = ui_attachment_esm_wrapper();
+        for expected in [
+            "configureClientUiAttachment(React, ReactDOM, UiPrimitives)",
+            "export const AttachmentRail = wasm.attachmentRailComponent()",
+            "export const DropOverlay = wasm.dropOverlayComponent()",
+            "export const ImageLightbox = wasm.imageLightboxComponent()",
+            "export const MessageImage = wasm.messageImageComponent()",
+            "export const ImageGallery = wasm.imageGalleryComponent()",
+        ] {
+            assert!(wrapper.contains(expected), "missing {expected:?}");
+        }
+        assert_eq!(wrapper.matches("export const ").count(), 5);
+        assert!(ui_attachment_invariant_wrapper().contains("client-ui-attachment-invariant"));
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("xtask has a workspace parent");
+        let output = tempfile::tempdir().unwrap();
+        copy_ui_attachment_type_declarations(workspace, output.path()).unwrap();
+        assert_eq!(
+            walkdir::WalkDir::new(output.path())
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|entry| {
+                    entry.file_type().is_file()
+                        && entry.path().extension().and_then(std::ffi::OsStr::to_str) == Some("ts")
+                })
+                .count(),
+            6
+        );
+        let index = std::fs::read_to_string(output.path().join("index.d.ts")).unwrap();
+        assert!(index.contains("export { AttachmentRail }"));
+        assert!(index.contains("export { ImageGallery, MessageImage }"));
+        assert!(!index.contains("@deepseek-ai/dsh-"));
     }
 
     #[test]

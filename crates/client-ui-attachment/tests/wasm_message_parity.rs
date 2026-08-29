@@ -7,7 +7,7 @@ use seekdeep_client_ui_attachment::{
     configure_client_ui_attachment, image_gallery_component, image_lightbox_component,
     message_image_component,
 };
-use seekdeep_client_ui_primitives::configure_client_ui_primitive_icons;
+use seekdeep_client_ui_primitives::{configure_client_ui_primitive_icons, icon_components};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -142,7 +142,12 @@ fn setup() -> (JsValue, JsValue, JsValue) {
     let bench = installMessageBench();
     let react = property(&bench, "React");
     configure_client_ui_primitive_icons(react.clone());
-    configure_client_ui_attachment(react, property(&bench, "ReactDOM")).unwrap();
+    configure_client_ui_attachment(
+        react,
+        property(&bench, "ReactDOM"),
+        icon_components().unwrap().into(),
+    )
+    .unwrap();
     (
         image_lightbox_component().unwrap(),
         message_image_component().unwrap(),
@@ -170,7 +175,7 @@ fn message_props(attachment: JsValue, variant: &str) -> Object {
 #[wasm_bindgen_test]
 fn lightbox_focus_escape_mask_and_restore_match_source() {
     let (lightbox, _message, _gallery) = setup();
-    assert_eq!(messageStyles().length(), 2);
+    assert_eq!(messageStyles().length(), 4);
     let opener = messageOpener();
     let close = Closure::wrap(Box::new(messageClose) as Box<dyn FnMut()>);
     let lightbox_props = props(&[

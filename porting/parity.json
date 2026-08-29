@@ -41304,7 +41304,16 @@
     {
       "source": "packages/client/ui-attachment/src/AttachmentRail.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/src/browser_rail.rs",
+        "crates/client-ui-attachment/tests/wasm_rail_overlay_parity.rs"
+      ],
+      "evidence": [
+        "pinned source attachment-rail and drop-overlay suites: 9 passed",
+        "three grouped live WASM tests pin ordered thumbnails and item identity callbacks, edge arrows, 1px slack, ResizeObserver, viewport paging and reduced motion, exclusive non-passive vertical/diagonal wheel normalization and 60px clamp, growth-only end reveal, and listener cleanup",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-attachment --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/src/DropOverlay.module.css",
@@ -41320,7 +41329,17 @@
     {
       "source": "packages/client/ui-attachment/src/DropOverlay.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/src/browser_overlay.rs",
+        "packages/client/ui-attachment/assets/upload-enabled.svg.html",
+        "packages/client/ui-attachment/assets/upload-disabled.svg.html",
+        "crates/client-ui-attachment/tests/wasm_rail_overlay_parity.rs"
+      ],
+      "evidence": [
+        "pinned source attachment-rail and drop-overlay suites: 9 passed",
+        "live WASM test pins body portal, status role, title/optional-desc/disabled gating, and distinct trusted SVG trees mechanically extracted from the pinned source renderer with only dsh-to-seekdeep id renaming"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/src/ImageLightbox.module.css",
@@ -41375,12 +41394,29 @@
     {
       "source": "packages/client/ui-attachment/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/src/browser.rs"
+      ],
+      "evidence": [
+        "compiled Rust injects namespaced styles for AttachmentRail, DropOverlay, ImageLightbox, and MessageImage, with data-plugin-css deduplication and no runtime CSS-module lookup"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/main.rs",
+        "crates/client-ui-attachment/src/browser.rs",
+        "packages/client/ui-attachment/assets/types",
+        "packages/client/ui-attachment/package.json"
+      ],
+      "evidence": [
+        "real generated package exposes exactly AttachmentRail, DropOverlay, ImageLightbox, MessageImage, and ImageGallery with no extra root names",
+        "all six oracle declaration files project byte-identically after required package substitutions; invariant registration and source-subpath mapping pass",
+        "real generated package smoke mounts the body-portal overlay and asynchronously resolves a compiled MessageImage"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/src/invariant.ts",
@@ -41399,12 +41435,26 @@
     {
       "source": "packages/client/ui-attachment/tests/attachment-rail.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/tests/wasm_rail_overlay_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: passed in the 9-test focused run",
+        "compiled live WASM rail/overlay assertions: 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/tests/drop-overlay.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-attachment/tests/wasm_rail_overlay_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: passed in the 9-test focused run",
+        "compiled live WASM rail/overlay assertions: 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/tests/image-lightbox.client.spec.tsx",
@@ -41458,7 +41508,17 @@
     {
       "source": "packages/client/ui-attachment/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/main.rs",
+        "packages/client/ui-attachment/package.json",
+        "packages/client/ui-attachment/assets/types"
+      ],
+      "evidence": [
+        "cargo xtask wasm-package replaces the browser-only tsdown build with optimized web-target WASM plus ESM root/invariant modules and source-shaped declarations",
+        "npm pack --dry-run reports 15 publish entries containing client WASM/bindings, root/invariant modules, raw client declarations, and all six compatibility declarations",
+        "xtask unit assertions pin five exports, six declarations, invariant identity, package source-subpath mapping, and watch-mode asset coverage"
+      ]
     },
     {
       "source": "packages/client/ui-commands/README.i18n.yaml",

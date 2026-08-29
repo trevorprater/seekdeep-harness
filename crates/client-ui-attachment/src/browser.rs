@@ -3,10 +3,15 @@
 use std::cell::RefCell;
 
 use js_sys::{Array, Function, Object, Reflect};
-use seekdeep_client_ui_primitives::icon_components;
 use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
 
-use crate::{browser_lightbox, browser_message};
+use crate::{browser_lightbox, browser_message, browser_overlay, browser_rail};
+
+const RAIL_CSS: &str =
+    include_str!("../../../packages/client/ui-attachment/src/AttachmentRail.module.css");
+
+const OVERLAY_CSS: &str =
+    include_str!("../../../packages/client/ui-attachment/src/DropOverlay.module.css");
 const LIGHTBOX_CSS: &str =
     include_str!("../../../packages/client/ui-attachment/src/ImageLightbox.module.css");
 const MESSAGE_CSS: &str =
@@ -21,11 +26,16 @@ pub(crate) struct BrowserDependencies {
     pub(crate) react: JsValue,
     pub(crate) react_dom: JsValue,
     pub(crate) fragment: JsValue,
+    pub(crate) chevron_left: JsValue,
+    pub(crate) chevron_right: JsValue,
+    pub(crate) close_fill: JsValue,
     pub(crate) close_outline: JsValue,
 }
 
 #[derive(Clone)]
 struct Configured {
+    rail: JsValue,
+    overlay: JsValue,
     lightbox: JsValue,
     message_image: JsValue,
     image_gallery: JsValue,
@@ -38,7 +48,11 @@ struct Configured {
 /// Returns on missing dependencies or stylesheet injection failures.
 #[wasm_bindgen(js_name = configureClientUiAttachment)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn configure_client_ui_attachment(react: JsValue, react_dom: JsValue) -> Result<(), JsValue> {
+pub fn configure_client_ui_attachment(
+    react: JsValue,
+    react_dom: JsValue,
+    ui_primitives: JsValue,
+) -> Result<(), JsValue> {
     for method in [
         "createElement",
         "useCallback",
@@ -52,11 +66,14 @@ pub fn configure_client_ui_attachment(react: JsValue, react_dom: JsValue) -> Res
     }
     required_function(&react_dom, "createPortal", "ReactDOM")?;
     let fragment = required_property(&react, "Fragment", "React")?;
-    let icons = icon_components()?;
+    let icons = ui_primitives;
     let dependencies = BrowserDependencies {
         react,
         react_dom,
         fragment,
+        chevron_left: required_property(&icons, "IconChevronLeftOutline14", "icons")?,
+        chevron_right: required_property(&icons, "IconChevronRightOutline14", "icons")?,
+        close_fill: required_property(&icons, "IconCloseFill14", "icons")?,
         close_outline: required_property(&icons, "IconCloseOutline16", "icons")?,
     };
     inject_all_styles()?;
@@ -65,6 +82,8 @@ pub fn configure_client_ui_attachment(react: JsValue, react_dom: JsValue) -> Res
     let image_gallery = browser_message::gallery_component(&dependencies, &message_image);
     CONFIGURED.with(|configured| {
         *configured.borrow_mut() = Some(Configured {
+            rail: browser_rail::component(&dependencies),
+            overlay: browser_overlay::component(&dependencies),
             lightbox,
             message_image,
             image_gallery,
@@ -87,6 +106,18 @@ macro_rules! component_face {
     };
 }
 
+component_face!(
+    attachment_rail_component,
+    "attachmentRailComponent",
+    rail,
+    "Returns compiled `AttachmentRail`."
+);
+component_face!(
+    drop_overlay_component,
+    "dropOverlayComponent",
+    overlay,
+    "Returns compiled `DropOverlay`."
+);
 component_face!(
     image_lightbox_component,
     "imageLightboxComponent",
@@ -116,6 +147,25 @@ fn configured() -> Result<Configured, JsValue> {
 }
 
 fn inject_all_styles() -> Result<(), JsValue> {
+    inject_style(
+        "AttachmentRail",
+        RAIL_CSS,
+        &[
+            "root",
+            "rail",
+            "item",
+            "thumbnail",
+            "remove",
+            "arrow",
+            "arrowLeft",
+            "arrowRight",
+        ],
+    )?;
+    inject_style(
+        "DropOverlay",
+        OVERLAY_CSS,
+        &["mask", "wrap", "illustration", "title", "desc"],
+    )?;
     inject_style(
         "ImageLightbox",
         LIGHTBOX_CSS,
