@@ -42504,7 +42504,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/DetailsPanel.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_details_panel.rs",
+        "crates/client-ui-conversation/tests/wasm_details_panel_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused DetailsPanel cases: 2 passed",
+        "four live WASM tests pin selection/session/material selectors, explicit runtime shallow equality, title and empty/window copy, close action, nested settled and running material, JSON pretty/verbatim input, CodeBlock labels, call-keyed output fragment, tool-slot owner cwd/block identity, text/JSON/error raw fallbacks, and error styling",
+        "compiled composition reuses findToolCall and configured CodeBlock faces; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx",
