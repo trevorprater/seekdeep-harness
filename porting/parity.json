@@ -42636,7 +42636,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/stores.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_chat_store.rs",
+        "crates/client-ui-conversation/tests/wasm_chat_store_parity.rs"
+      ],
+      "evidence": [
+        "pinned source createChatStore suite: 5 passed",
+        "three live WASM tests pin fresh init shape, compatibility persistence key dsh.conversation.chat, free defineStore invocation, exact four-field mutation actions including nullable resets, untouched-field retention, strict rejected-write failure, undefined action returns, and fresh declaration/init/actions/handle identity per factory call",
+        "compiled declaration consumes an explicit configured runtime defineStore face; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/css-modules.d.ts",
