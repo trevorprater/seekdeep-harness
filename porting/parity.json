@@ -42044,7 +42044,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/MessageIconActions.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_message_actions.rs",
+        "crates/client-ui-conversation/tests/wasm_message_actions_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused copy, clock-metric, branch, and midnight cases: 11 passed across two files",
+        "four live WASM tests pin clock side and metric order, parent class and extra-action composition, pending/copy gating, false settlement, one-second reset, epoch-guarded unmount, available and unavailable branch semantics, linked reason copy, and compiled primitive faces",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-conversation --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/MessageItem.module.css",
@@ -42184,7 +42193,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/use-calendar-day.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_message_actions.rs",
+        "crates/client-ui-conversation/tests/wasm_message_actions_parity.rs"
+      ],
+      "evidence": [
+        "pinned source local-midnight refresh case passed",
+        "live WASM timer test pins lazy local-day initialization, exact next-midnight scheduling, date-label widening after the boundary, recursive re-arm, and cleanup cancellation",
+        "wall-clock and timer access remain confined to the browser boundary while message-clock formatting keeps an injectable reference instant"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/use-throttled-visual-update.ts",

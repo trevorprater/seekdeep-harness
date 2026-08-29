@@ -13,6 +13,8 @@ mod browser_chat_seat;
 #[cfg(target_arch = "wasm32")]
 mod browser_command;
 #[cfg(target_arch = "wasm32")]
+mod browser_message_actions;
+#[cfg(target_arch = "wasm32")]
 mod browser_message_chrome;
 #[cfg(target_arch = "wasm32")]
 mod browser_reasoning;
@@ -32,6 +34,8 @@ pub use browser_assistant::*;
 pub use browser_chat_seat::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_command::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_message_actions::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_message_chrome::*;
 #[cfg(target_arch = "wasm32")]
