@@ -42295,7 +42295,15 @@
     {
       "source": "packages/client/ui-conversation/src/client/contract/chat-nodes.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_contract.rs",
+        "crates/client-ui-conversation/tests/conversation_contract_parity.rs"
+      ],
+      "evidence": [
+        "portable Rust currencies preserve extensible Chat renderer kinds, stable node identity/visibility, Assistant/Tool/compaction/retry/turn-tail payloads, and exhaustive Tool settlement guards",
+        "one focused portable contract test passes with strict native Clippy"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/contract/composer-submission.ts",
@@ -42330,7 +42338,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/contract/views.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_contract.rs",
+        "crates/client-ui-conversation/src/browser_chat_store.rs",
+        "crates/client-ui-conversation/tests/conversation_contract_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_chat_store_parity.rs"
+      ],
+      "evidence": [
+        "pinned source views/type-chain suite: 2 passed",
+        "portable nominal call/selection/view/store currencies preserve nullable selection, draft, view, and inspect channels; compiled createChatStore preserves the exact persisted browser shape and action fields",
+        "focused portable contract and live WASM chat-store tests pass"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/assistant.ts",
