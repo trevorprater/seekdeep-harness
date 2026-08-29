@@ -42441,7 +42441,19 @@
     {
       "source": "packages/client/ui-conversation/src/client/input/contract.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/input_contract.rs",
+        "crates/client-ui-conversation/src/browser_input_facade.rs",
+        "crates/client-ui-conversation/src/browser_input_hub.rs",
+        "crates/client-ui-conversation/tests/input_contract_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_hub_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-conversation client package typecheck passed",
+        "one portable Rust test pins nominal attachment/session ids, structural target/action/state/keyboard faces, submit modes, and the session-addressed resolver contract",
+        "the live WASM hub matrix pins ClientContext scopeOf authority for InputHub.for(actx), one resident SessionInput identity per scope, exact state/actions/keyboard faces, four scoped bail listeners, and scope-owned teardown; strict targeted WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/input/decorations.ts",
@@ -42477,7 +42489,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/input/hub.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_input_hub.rs",
+        "crates/client-ui-conversation/src/browser_input_facade.rs",
+        "crates/client-ui-conversation/src/browser_queue_face.rs",
+        "crates/client-ui-conversation/tests/wasm_input_hub_parity.rs"
+      ],
+      "evidence": [
+        "pinned source service-orchestration suite: 11 passed",
+        "one live WASM lifecycle matrix pins cached shell resolution by binding, id, and scoped ClientContext; exact missing-scope/binding/service failures; all four scoped mutation bails; disposer ordering and draft-image release; lazy controller/popup resolution; optimistic prompt commit; untouched/drifted/stale-shell rollback ownership; immediate first-row and sequential FIFO steering; queued-only filtering; silent steer-unavailable/queue-item-not-found convergence; and translated genuine-failure notices",
+        "strict targeted WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/input/machine.ts",
