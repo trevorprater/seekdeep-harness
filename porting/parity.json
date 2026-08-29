@@ -42533,7 +42533,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/ConversationSession.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_conversation_session.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_session_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused Session header/body cases: 9 passed",
+        "four live WASM tests pin view-ledger external-store binding, stale-id Chat fallback, subagent ancestry and equality callback, parent navigation, header action/utility slots, selected tabs, blank header hiding, active-view only dispatch, missing-inspect null rehydration and acknowledgement, mount-only draft seed/mirror, blank-body null after effects, unmirror cleanup, and per-session image release",
+        "complete ConversationRoot CSS-module mapping supports later resident-root assembly; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/DetailsPanel.module.css",
