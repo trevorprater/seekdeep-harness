@@ -5,10 +5,16 @@
 use seekdeep_attachment::ImageAttachmentLimits;
 use seekdeep_client_ui_conversation::{
     AssistantMetricNode, AssistantTiming, BusyEnterBehavior, ComposerSubmissionPolicy,
-    ComposerSubmitGesture, ImageCopyLocale, assistant_step_reading, attachment_error_text,
-    conversation_settings_schema, derive_turn_metrics, format_latency_seconds,
+    ComposerSubmitGesture, ContextPressureStats, ImageCopyLocale, TokenUsageStats,
+    WindowMetricNode, assistant_step_reading, attachment_error_text, billed_input_tokens,
+    cache_hit_percent, context_occupancy, conversation_settings_schema, derive_turn_metrics,
+    derive_window_stats, format_duration, format_latency_seconds, format_tokens,
     format_tokens_per_second, image_size_text,
 };
+
+fn assert_close(actual: f64, expected: f64) {
+    assert!((actual - expected).abs() < f64::EPSILON);
+}
 
 #[test]
 fn submission_policy_defaults_to_queue_and_accelerated_gesture_selects_the_opposite() {
@@ -182,6 +188,84 @@ fn turn_metrics_use_lowest_step_ttft_and_all_valid_decode_samples() {
     assert_eq!(format_tokens_per_second(9.96), "10");
     assert_eq!(format_tokens_per_second(3.14), "3.1");
     assert_eq!(format_tokens_per_second(-1.0), "0");
+}
+
+#[test]
+fn stats_strip_fallback_formatting_billing_and_occupancy_match_the_oracle() {
+    let timed = assistant(
+        1,
+        1,
+        Some(AssistantTiming {
+            step_start_time: Some(1_000.0),
+            first_token_time: Some(1_800.0),
+            completed_time: 4_800.0,
+        }),
+        Some(40.0),
+    );
+    let untimed = assistant(1, 2, None, None);
+    let next_turn = assistant(2, 3, None, None);
+    let stats = derive_window_stats(&[
+        WindowMetricNode::Assistant(timed),
+        WindowMetricNode::Assistant(untimed),
+        WindowMetricNode::ToolResult {
+            time: 7_000.0,
+            call_time: Some(4_000.0),
+        },
+        WindowMetricNode::ToolResult {
+            time: 9_000.0,
+            call_time: None,
+        },
+        WindowMetricNode::Assistant(next_turn),
+        WindowMetricNode::Other,
+    ]);
+    assert_eq!(stats.turns, 2);
+    assert_eq!(stats.steps, 3);
+    assert_close(stats.llm_ms, 3_800.0);
+    assert_close(stats.tool_ms, 3_000.0);
+    assert_close(stats.ttft_ms, 800.0);
+    assert_eq!(stats.ttft_steps, 1);
+    assert_close(stats.decode_ms, 3_000.0);
+    assert_close(stats.decode_tokens, 40.0);
+
+    assert_eq!(format_tokens(517.0), "517");
+    assert_eq!(format_tokens(12_240.0), "12.2K");
+    assert_eq!(format_tokens(517_000.0), "517K");
+    assert_eq!(format_tokens(1_230_000.0), "1.2M");
+    assert_eq!(format_duration(45_230.0), "45.2s");
+    assert_eq!(format_duration(162_000.0), "2m42s");
+
+    let usage = TokenUsageStats {
+        uncached_input_tokens: 10.0,
+        cache_read_tokens: 90.0,
+        cache_write_tokens: 100.0,
+        output_tokens: 7.0,
+    };
+    assert_close(billed_input_tokens(usage), 200.0);
+    assert_eq!(cache_hit_percent(usage), Some(45.0));
+    assert_eq!(cache_hit_percent(TokenUsageStats::default()), None);
+
+    assert_eq!(
+        context_occupancy(Some(ContextPressureStats {
+            pressure_tokens: Some(32_000.0),
+            projected_tokens: Some(6_000.0),
+            context_window: Some(128_000.0),
+        })),
+        Some(seekdeep_client_ui_conversation::ContextOccupancy {
+            percent: 5.0,
+            used_tokens: 6_000.0,
+            context_window: 128_000.0,
+        })
+    );
+    assert_eq!(
+        context_occupancy(Some(ContextPressureStats {
+            pressure_tokens: Some(300_000.0),
+            projected_tokens: None,
+            context_window: Some(128_000.0),
+        }))
+        .map(|occupancy| occupancy.percent),
+        Some(100.0)
+    );
+    assert_eq!(context_occupancy(None), None);
 }
 
 #[test]

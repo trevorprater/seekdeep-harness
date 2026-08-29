@@ -42110,7 +42110,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/StatsLine.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/metrics.rs",
+        "crates/client-ui-conversation/src/browser_stats_line.rs",
+        "crates/client-ui-conversation/tests/core_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_stats_line_parity.rs"
+      ],
+      "evidence": [
+        "pinned source chat-stats suite: 23 passed",
+        "portable Rust test pins fallback turn/step, LLM/tool, TTFT/decode folds plus compact token/duration formatting, cache billing, and projected context occupancy",
+        "five live WASM tests pin helper exports, settled-node identity memoization, durable sessionStats precedence, absent/zero/token-only/output-only gates, localized group and separator DOM, delayed tooltip contract, clipped-row measurement, ResizeObserver callbacks/cleanup, and missing-observer tolerance; strict native and WASM Clippy pass with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/TurnTailNodeView.module.css",

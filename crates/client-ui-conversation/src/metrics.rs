@@ -133,3 +133,180 @@ pub fn format_tokens_per_second(tokens_per_second: f64) -> String {
         ((value * 10.0).round() / 10.0).to_string()
     }
 }
+
+/// A settled conversation node that contributes to the composer stats strip.
+#[derive(Clone, Debug, PartialEq)]
+pub enum WindowMetricNode {
+    /// One settled assistant step.
+    Assistant(AssistantMetricNode),
+    /// One settled tool result and its optional call timestamp.
+    ToolResult {
+        /// Result timestamp.
+        time: f64,
+        /// Matching tool-call timestamp.
+        call_time: Option<f64>,
+    },
+    /// A node kind that contributes no stats.
+    Other,
+}
+
+/// Window-scoped fallback totals for assemblies without the durable projection.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WindowStats {
+    /// Distinct assistant turns.
+    pub turns: u64,
+    /// Settled assistant steps.
+    pub steps: u64,
+    /// Summed assistant request wall time.
+    pub llm_ms: f64,
+    /// Summed paired tool wall time.
+    pub tool_ms: f64,
+    /// Summed recorded first-token latency.
+    pub ttft_ms: f64,
+    /// Steps carrying first-token latency.
+    pub ttft_steps: u64,
+    /// Summed decode wall time for usage-carrying steps.
+    pub decode_ms: f64,
+    /// Summed output tokens over those decode-timed steps.
+    pub decode_tokens: f64,
+}
+
+/// Folds the loaded settled window into the stats-strip fallback.
+#[must_use]
+pub fn derive_window_stats(nodes: &[WindowMetricNode]) -> WindowStats {
+    use std::collections::BTreeSet;
+
+    let mut turns = BTreeSet::new();
+    let mut stats = WindowStats::default();
+    for node in nodes {
+        match node {
+            WindowMetricNode::ToolResult {
+                time,
+                call_time: Some(call_time),
+            } => stats.tool_ms += (time - call_time).max(0.0),
+            WindowMetricNode::ToolResult {
+                call_time: None, ..
+            }
+            | WindowMetricNode::Other => {}
+            WindowMetricNode::Assistant(node) => {
+                turns.insert(node.turn);
+                stats.steps += 1;
+                if let Some(AssistantTiming {
+                    step_start_time: Some(step_start_time),
+                    completed_time,
+                    ..
+                }) = node.timing
+                {
+                    stats.llm_ms += (completed_time - step_start_time).max(0.0);
+                }
+                let reading = assistant_step_reading(node);
+                if let Some(ttft_ms) = reading.ttft_ms {
+                    stats.ttft_ms += ttft_ms;
+                    stats.ttft_steps += 1;
+                }
+                if let (Some(decode_ms), Some(output_tokens)) =
+                    (reading.decode_ms, reading.output_tokens)
+                {
+                    stats.decode_ms += decode_ms;
+                    stats.decode_tokens += output_tokens;
+                }
+            }
+        }
+    }
+    stats.turns = turns.len() as u64;
+    stats
+}
+
+/// Compact token count used by the stats strip.
+#[must_use]
+pub fn format_tokens(tokens: f64) -> String {
+    fn scaled(value: f64) -> String {
+        if value >= 100.0 {
+            value.round().to_string()
+        } else {
+            ((value * 10.0).round() / 10.0).to_string()
+        }
+    }
+
+    if tokens < 1_000.0 {
+        tokens.to_string()
+    } else if tokens < 1_000_000.0 {
+        format!("{}K", scaled(tokens / 1_000.0))
+    } else {
+        format!("{}M", scaled(tokens / 1_000_000.0))
+    }
+}
+
+/// Compact duration used by the stats strip.
+#[must_use]
+pub fn format_duration(milliseconds: f64) -> String {
+    let seconds = milliseconds / 1_000.0;
+    if seconds < 60.0 {
+        format!("{}s", (seconds * 10.0).round() / 10.0)
+    } else {
+        let whole = seconds.round();
+        format!("{}m{}s", (whole / 60.0).floor(), whole % 60.0)
+    }
+}
+
+/// Durable token-usage projection fields consumed by the stats strip.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TokenUsageStats {
+    /// Uncached input tokens.
+    pub uncached_input_tokens: f64,
+    /// Cache-read tokens.
+    pub cache_read_tokens: f64,
+    /// Cache-write tokens.
+    pub cache_write_tokens: f64,
+    /// Output tokens.
+    pub output_tokens: f64,
+}
+
+/// Sums the three disjoint prompt-side billing buckets.
+#[must_use]
+pub const fn billed_input_tokens(usage: TokenUsageStats) -> f64 {
+    usage.uncached_input_tokens + usage.cache_read_tokens + usage.cache_write_tokens
+}
+
+/// Returns the rounded cache-read share of billed prompt input.
+#[must_use]
+pub fn cache_hit_percent(usage: TokenUsageStats) -> Option<f64> {
+    let denominator = billed_input_tokens(usage);
+    (denominator != 0.0).then(|| (usage.cache_read_tokens / denominator * 100.0).round())
+}
+
+/// Context-pressure projection fields used for the exported occupancy helper.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ContextPressureStats {
+    /// Last provider-reported prompt size.
+    pub pressure_tokens: Option<f64>,
+    /// Provider sample carried forward over subsequent surface movement.
+    pub projected_tokens: Option<f64>,
+    /// Last known model context capacity.
+    pub context_window: Option<f64>,
+}
+
+/// Resolved context occupancy.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ContextOccupancy {
+    /// Rounded occupancy, clamped only at the upper bound.
+    pub percent: f64,
+    /// Selected numerator.
+    pub used_tokens: f64,
+    /// Selected capacity.
+    pub context_window: f64,
+}
+
+/// Resolves context occupancy only after both numerator and capacity are known.
+#[must_use]
+pub fn context_occupancy(pressure: Option<ContextPressureStats>) -> Option<ContextOccupancy> {
+    let pressure = pressure?;
+    let used_tokens = pressure.projected_tokens.or(pressure.pressure_tokens)?;
+    let context_window = pressure.context_window?;
+    let percent = (used_tokens / context_window * 100.0).round().min(100.0);
+    Some(ContextOccupancy {
+        percent,
+        used_tokens,
+        context_window,
+    })
+}
