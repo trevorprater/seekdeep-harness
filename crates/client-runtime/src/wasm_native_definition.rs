@@ -3,7 +3,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use indexmap::IndexMap;
-use js_sys::{Array, Function, Object, Reflect};
+use js_sys::{Array, Function, Map, Object, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 
 use crate::{
@@ -188,9 +188,10 @@ fn browser_view_builder(builder: Box<dyn AssemblerViewBuilder>) -> Result<JsValu
     let replace_builder = builder.clone();
     let replace = Closure::wrap(Box::new(move |input: JsValue| -> Result<JsValue, JsValue> {
         let nodes = view_nodes_from_input(&input, "nodes")?;
+        let timeline = timeline_from_input(&input)?;
         replace_builder
             .borrow_mut()
-            .replace(&nodes, Rc::new(ConversationTimelineSnapshot::default()))
+            .replace(&nodes, timeline)
             .map_err(assembler_error)
             .and_then(|snapshot| json_to_js(&snapshot))
     })
@@ -200,9 +201,10 @@ fn browser_view_builder(builder: Box<dyn AssemblerViewBuilder>) -> Result<JsValu
     let apply_builder = builder;
     let apply = Closure::wrap(Box::new(move |input: JsValue| -> Result<JsValue, JsValue> {
         let nodes = view_nodes_from_input(&input, "upserts")?;
+        let timeline = timeline_from_input(&input)?;
         apply_builder
             .borrow_mut()
-            .apply(&nodes, Rc::new(ConversationTimelineSnapshot::default()))
+            .apply(&nodes, timeline)
             .map_err(assembler_error)
             .and_then(|snapshot| json_to_js(&snapshot))
     })
@@ -219,6 +221,30 @@ fn view_nodes_from_input(
         .iter()
         .map(|node| view_node_from_js(&node).map(Rc::new))
         .collect()
+}
+
+fn timeline_from_input(input: &JsValue) -> Result<Rc<ConversationTimelineSnapshot>, JsValue> {
+    let value = required(input, "timeline", "Conversation view builder input")?;
+    let order = Array::from(&required(&value, "turnOrder", "Conversation timeline")?)
+        .iter()
+        .map(|turn| js_safe_u64(&turn, "Conversation timeline turn"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let turns_value = required(&value, "turns", "Conversation timeline")?;
+    let turns_map = turns_value.dyn_into::<Map>()?;
+    let mut turns = IndexMap::new();
+    for turn in &order {
+        let value = turns_map.get(&JsValue::from_f64(u64_as_f64(*turn)));
+        if value.is_undefined() {
+            return Err(
+                js_sys::Error::new(&format!("Conversation timeline omitted Turn {turn}")).into(),
+            );
+        }
+        turns.insert(*turn, turn_from_js(&value)?);
+    }
+    Ok(Rc::new(ConversationTimelineSnapshot {
+        turn_order: Rc::new(order),
+        turns: Rc::new(turns),
+    }))
 }
 
 fn match_result_to_js(result: &ConversationMatchResult) -> Result<JsValue, JsValue> {
@@ -332,7 +358,7 @@ fn turn_from_js(value: &JsValue) -> Result<Rc<TurnLocation>, JsValue> {
         end: optional_event(value, "end")?,
         status: boundary_status(value)?,
         steps: Rc::new(steps),
-        data: Rc::new(ConversationLocationDataStore::default()),
+        data: data_store_from_js(value)?,
     }))
 }
 
@@ -343,8 +369,30 @@ fn step_from_js(value: &JsValue) -> Result<Rc<StepLocation>, JsValue> {
         start: optional_event(value, "start")?,
         end: optional_event(value, "end")?,
         status: boundary_status(value)?,
-        data: Rc::new(ConversationLocationDataStore::default()),
+        data: data_store_from_js(value)?,
     }))
+}
+
+fn data_store_from_js(value: &JsValue) -> Result<Rc<ConversationLocationDataStore>, JsValue> {
+    let Some(data) = optional(value, "data")? else {
+        return Ok(Rc::new(ConversationLocationDataStore::default()));
+    };
+    let entries = Reflect::get(&data, &JsValue::from_str("entries"))?;
+    if entries.is_undefined() || entries.is_null() {
+        return Ok(Rc::new(ConversationLocationDataStore::default()));
+    }
+    let iterator = js_sys::try_iter(&entries)?
+        .ok_or_else(|| js_sys::Error::new("Conversation Location data entries must be iterable"))?;
+    let mut values = IndexMap::new();
+    for entry in iterator {
+        let pair = Array::from(&entry?);
+        let key = pair
+            .get(0)
+            .as_string()
+            .ok_or_else(|| js_sys::Error::new("Conversation Location data key must be a string"))?;
+        values.insert(key, Rc::new(js_to_json(&pair.get(1))?));
+    }
+    Ok(Rc::new(ConversationLocationDataStore::from_values(values)))
 }
 
 fn boundary_status(value: &JsValue) -> Result<ConversationBoundaryStatus, JsValue> {
@@ -505,10 +553,14 @@ fn publication_name(publication: ConversationPublication) -> &'static str {
 
 fn required_u64(value: &JsValue, key: &str, owner: &str) -> Result<u64, JsValue> {
     let value = required(value, key, owner)?;
+    js_safe_u64(&value, &format!("{owner} {key:?}"))
+}
+
+fn js_safe_u64(value: &JsValue, owner: &str) -> Result<u64, JsValue> {
     let number = value
         .as_f64()
         .filter(|number| number.is_finite() && *number >= 0.0 && number.fract() == 0.0)
-        .ok_or_else(|| js_sys::Error::new(&format!("{owner} {key:?} must be a u64")))?;
+        .ok_or_else(|| js_sys::Error::new(&format!("{owner} must be a u64")))?;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     Ok(number as u64)
 }

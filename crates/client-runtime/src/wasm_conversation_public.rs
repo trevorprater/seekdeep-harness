@@ -1,5 +1,7 @@
 //! Public browser constructors for Conversation assembly and Location indexing.
 
+use std::{cell::RefCell, rc::Rc};
+
 use js_sys::{Array, Reflect, Set};
 use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 
@@ -18,6 +20,7 @@ use crate::{
 #[wasm_bindgen(js_name = ConversationNodeAssembler)]
 pub struct WasmConversationNodeAssembler {
     assembler: ConversationNodeAssembler,
+    chat_cache: RefCell<Option<(Rc<serde_json::Value>, JsValue)>>,
 }
 
 #[wasm_bindgen(js_class = ConversationNodeAssembler)]
@@ -34,6 +37,7 @@ impl WasmConversationNodeAssembler {
                 browser_event_definitions(events.core_registry()),
                 browser_view_definitions(views.core_registry()),
             ),
+            chat_cache: RefCell::new(None),
         }
     }
 
@@ -108,11 +112,27 @@ impl WasmConversationNodeAssembler {
     ///
     /// Returns JSON-to-JavaScript conversion failures.
     pub fn get(&self, target: &str) -> Result<JsValue, JsValue> {
-        self.assembler
-            .snapshot(target)
-            .map_or(Ok(JsValue::UNDEFINED), |value| {
-                crate::wasm_session::json_to_js(&value)
-            })
+        let Some(value) = self.assembler.snapshot(target) else {
+            return Ok(JsValue::UNDEFINED);
+        };
+        if target != "chat" {
+            return crate::wasm_session::json_to_js(&value);
+        }
+        let cache = self.chat_cache.borrow();
+        if let Some((current, rendered)) = &*cache
+            && Rc::ptr_eq(current, &value)
+        {
+            return Ok(rendered.clone());
+        }
+        let rendered = crate::wasm_session::chat_snapshot_to_js_reusing(
+            &value,
+            cache
+                .as_ref()
+                .map(|(previous, rendered)| (previous.as_ref(), rendered)),
+        )?;
+        drop(cache);
+        *self.chat_cache.borrow_mut() = Some((value, rendered.clone()));
+        Ok(rendered)
     }
 }
 

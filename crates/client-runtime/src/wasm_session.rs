@@ -1,13 +1,17 @@
 //! Browser `Session` facade and generated API/Remote transport adapter.
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use futures::{FutureExt, future::LocalBoxFuture};
 use indexmap::IndexMap;
-use js_sys::{Array, Function, Object, Promise, Reflect};
+use js_sys::{Array, Function, Map as JsMap, Object, Promise, Reflect};
 use seekdeep_identity::{MessageId, RpcId, SessionId};
 use serde::Serialize;
-use serde_json::{Map as JsonMap, Value};
+use serde_json::{Map as JsonMap, Value, json};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
 
@@ -632,7 +636,17 @@ fn views_face(session: &Rc<ClientSession>) -> Result<JsValue, JsValue> {
         {
             return Ok(value.clone());
         }
-        let value = json_to_js(&snapshot)?;
+        let previous = cache.borrow().get(&target).cloned();
+        let value = if target == "chat" {
+            chat_snapshot_to_js_reusing(
+                &snapshot,
+                previous
+                    .as_ref()
+                    .map(|(previous, value)| (previous.as_ref(), value)),
+            )?
+        } else {
+            json_to_js(&snapshot)?
+        };
         cache.borrow_mut().insert(target, (snapshot, value.clone()));
         Ok(value)
     }) as Box<dyn FnMut(String) -> Result<JsValue, JsValue>>);
@@ -747,6 +761,610 @@ pub(crate) fn empty_chat_snapshot() -> Result<JsValue, JsValue> {
     set(&chat, "timeline", &timeline)?;
     set(&chat, "legacy", &legacy)?;
     Ok(chat.into())
+}
+
+#[allow(clippy::too_many_lines)] // One atomic source-shaped Chat snapshot face.
+pub(crate) fn chat_snapshot_to_js_reusing(
+    chat: &Value,
+    previous: Option<(&Value, &JsValue)>,
+) -> Result<JsValue, JsValue> {
+    if chat.get("encoding").and_then(Value::as_str) != Some("seekdeep-chat-v1") {
+        return json_to_js(chat);
+    }
+    let timeline_data = chat
+        .get("timeline")
+        .ok_or_else(|| js_sys::Error::new("encoded Chat snapshot omitted timeline"))?;
+    let previous_timeline = previous.and_then(|(snapshot, rendered)| {
+        (snapshot.get("timeline") == Some(timeline_data))
+            .then(|| Reflect::get(rendered, &JsValue::from_str("timeline")).ok())
+            .flatten()
+    });
+    let (timeline, turns, steps) = if let Some(previous) = previous_timeline {
+        chat_timeline_faces_from_existing(timeline_data, previous)?
+    } else {
+        chat_timeline_to_js(timeline_data)?
+    };
+    let encoded_nodes = chat
+        .get("nodes")
+        .and_then(Value::as_array)
+        .ok_or_else(|| js_sys::Error::new("encoded Chat snapshot nodes must be an array"))?;
+    let previous_nodes = previous
+        .and_then(|(_, snapshot)| Reflect::get(snapshot, &JsValue::from_str("nodes")).ok())
+        .filter(|nodes| !nodes.is_undefined());
+    let previous_encoded = previous
+        .and_then(|(snapshot, _)| snapshot.get("nodes"))
+        .and_then(Value::as_array)
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter_map(|node| Some((node.get("key")?.as_str()?.to_owned(), node)))
+                .collect::<HashMap<_, _>>()
+        })
+        .unwrap_or_default();
+    let touched_keys = encoded_nodes
+        .iter()
+        .filter_map(|node| {
+            let key = node.get("key")?.as_str()?;
+            let previous = previous_encoded.get(key)?;
+            (previous != &node && same_chat_node_structure(previous, node)).then(|| key.to_owned())
+        })
+        .collect::<HashSet<_>>();
+    let node_values = Array::new();
+    let nodes_by_key = JsMap::new();
+    for encoded in encoded_nodes {
+        let key = encoded
+            .get("key")
+            .and_then(Value::as_str)
+            .ok_or_else(|| js_sys::Error::new("encoded Chat node omitted key"))?;
+        let previous_node = previous_nodes
+            .as_ref()
+            .and_then(|nodes| Reflect::get(nodes, &JsValue::from_str("get")).ok())
+            .and_then(|get| get.dyn_into::<Function>().ok())
+            .and_then(|get| {
+                get.call1(previous_nodes.as_ref().unwrap(), &JsValue::from_str(key))
+                    .ok()
+            })
+            .filter(|node| !node.is_undefined());
+        let node = if previous_encoded
+            .get(key)
+            .is_some_and(|previous| *previous == encoded)
+        {
+            previous_node.clone().unwrap_or(json_to_js(encoded)?)
+        } else {
+            let node = json_to_js(encoded)?;
+            if let (Some(previous), Some(previous_node), Some(next_data)) = (
+                previous_encoded.get(key),
+                previous_node.as_ref(),
+                encoded.get("data"),
+            ) && let Some(previous_data) = previous.get("data")
+            {
+                let previous_js = Reflect::get(previous_node, &JsValue::from_str("data"))?;
+                let data = json_to_js_reusing(previous_data, &previous_js, next_data)?;
+                set(node.unchecked_ref::<Object>(), "data", &data)?;
+            }
+            let location = normalized_chat_location(encoded.get("location"), &turns, &steps)?;
+            set(node.unchecked_ref::<Object>(), "location", &location)?;
+            node
+        };
+        node_values.push(&node);
+        nodes_by_key.set(&JsValue::from_str(key), &node);
+    }
+    let nodes = previous_nodes
+        .as_ref()
+        .and_then(|nodes| nodes.dyn_ref::<Object>())
+        .cloned()
+        .unwrap_or_else(Object::new);
+    set(&nodes, "__entries", &nodes_by_key)?;
+    set(&nodes, "__values", &node_values)?;
+    if Reflect::get(&nodes, &JsValue::from_str("get"))?.is_undefined() {
+        let owner = nodes.clone();
+        let get = Closure::wrap(Box::new(move |key: String| {
+            Reflect::get(&owner, &JsValue::from_str("__entries"))
+                .map(|entries| {
+                    entries
+                        .unchecked_into::<JsMap>()
+                        .get(&JsValue::from_str(&key))
+                })
+                .unwrap_or(JsValue::UNDEFINED)
+        }) as Box<dyn FnMut(String) -> JsValue>);
+        set(&nodes, "get", &get.into_js_value())?;
+        let owner = nodes.clone();
+        let values = Closure::wrap(Box::new(move || {
+            Reflect::get(&owner, &JsValue::from_str("__values"))
+                .map_or_else(|_| Array::new(), JsValue::unchecked_into::<Array>)
+        }) as Box<dyn FnMut() -> Array>);
+        set(&nodes, "values", &values.into_js_value())?;
+    }
+
+    let next_locations = chat
+        .get("locations")
+        .ok_or_else(|| js_sys::Error::new("encoded Chat snapshot omitted locations"))?;
+    let previous_locations = previous.and_then(|(snapshot, rendered)| {
+        Some((
+            snapshot.get("locations")?,
+            Reflect::get(rendered, &JsValue::from_str("locations")).ok()?,
+        ))
+    });
+    let locations = chat_locations_to_js(next_locations, previous_locations, &touched_keys)?;
+    let next_legacy = chat
+        .get("legacy")
+        .ok_or_else(|| js_sys::Error::new("encoded Chat snapshot omitted legacy"))?;
+    let previous_legacy = previous.and_then(|(snapshot, rendered)| {
+        Some((
+            snapshot.get("legacy")?,
+            Reflect::get(rendered, &JsValue::from_str("legacy")).ok()?,
+        ))
+    });
+    let legacy = chat_legacy_to_js(next_legacy, previous_legacy)?;
+    let value = Object::new();
+    let empty_order = Value::Array(Vec::new());
+    let next_order = chat.get("order").unwrap_or(&empty_order);
+    let order = if let Some((previous, previous_js)) = previous
+        && previous.get("order") == Some(next_order)
+    {
+        Reflect::get(previous_js, &JsValue::from_str("order"))?
+    } else {
+        json_to_js(next_order)?
+    };
+    set(&value, "order", &order)?;
+    set(&value, "nodes", &nodes)?;
+    set(&value, "locations", &locations)?;
+    set(&value, "timeline", &timeline)?;
+    set(&value, "legacy", &legacy)?;
+    Ok(value.into())
+}
+
+fn json_to_js_reusing(
+    previous: &Value,
+    previous_js: &JsValue,
+    next: &Value,
+) -> Result<JsValue, JsValue> {
+    if previous == next {
+        return Ok(previous_js.clone());
+    }
+    match (previous, next) {
+        (Value::Array(previous), Value::Array(next)) => {
+            let value = Array::new();
+            for (index, entry) in next.iter().enumerate() {
+                let entry = if let Some(previous) = previous.get(index) {
+                    json_to_js_reusing(
+                        previous,
+                        &Array::from(previous_js).get(u32::try_from(index).unwrap_or(u32::MAX)),
+                        entry,
+                    )?
+                } else {
+                    json_to_js(entry)?
+                };
+                value.push(&entry);
+            }
+            Ok(value.into())
+        }
+        (Value::Object(previous), Value::Object(next)) => {
+            let value = Object::new();
+            for (key, entry) in next {
+                let entry = if let Some(previous) = previous.get(key) {
+                    json_to_js_reusing(
+                        previous,
+                        &Reflect::get(previous_js, &JsValue::from_str(key))?,
+                        entry,
+                    )?
+                } else {
+                    json_to_js(entry)?
+                };
+                set(&value, key, &entry)?;
+            }
+            Ok(value.into())
+        }
+        _ => json_to_js(next),
+    }
+}
+
+fn same_chat_node_structure(previous: &Value, next: &Value) -> bool {
+    previous.get("anchorSeq") == next.get("anchorSeq")
+        && previous.get("visibility") == next.get("visibility")
+        && same_chat_location_identity(previous.get("location"), next.get("location"))
+}
+
+fn same_chat_location_identity(previous: Option<&Value>, next: Option<&Value>) -> bool {
+    for key in ["kind", "turn", "step"] {
+        if previous.and_then(|value| value.get(key)) != next.and_then(|value| value.get(key)) {
+            return false;
+        }
+    }
+    true
+}
+
+type ChatTimelineFaces = (JsValue, HashMap<u64, JsValue>, HashMap<String, JsValue>);
+
+fn chat_timeline_faces_from_existing(
+    encoded: &Value,
+    timeline: JsValue,
+) -> Result<ChatTimelineFaces, JsValue> {
+    let turns_map = Reflect::get(&timeline, &JsValue::from_str("turns"))?.dyn_into::<JsMap>()?;
+    let mut turns = HashMap::new();
+    let mut steps = HashMap::new();
+    for row in encoded
+        .get("turns")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let turn_number = row
+            .get("turn")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| js_sys::Error::new("encoded Chat Turn omitted turn"))?;
+        let turn = turns_map.get(&JsValue::from_f64(js_safe_number(turn_number)?));
+        if turn.is_undefined() {
+            return Err(js_sys::Error::new("cached Chat timeline omitted Turn").into());
+        }
+        for step in Array::from(&Reflect::get(&turn, &JsValue::from_str("steps"))?).iter() {
+            let step_number = Reflect::get(&step, &JsValue::from_str("step"))?
+                .as_f64()
+                .ok_or_else(|| js_sys::Error::new("cached Chat Step omitted step"))?;
+            steps.insert(format!("{turn_number}:{step_number}"), step);
+        }
+        turns.insert(turn_number, turn);
+    }
+    Ok((timeline, turns, steps))
+}
+
+fn chat_timeline_to_js(value: &Value) -> Result<ChatTimelineFaces, JsValue> {
+    let rows = value
+        .get("turns")
+        .and_then(Value::as_array)
+        .ok_or_else(|| js_sys::Error::new("encoded Chat timeline turns must be an array"))?;
+    let mut turns = HashMap::new();
+    let mut steps = HashMap::new();
+    let turns_map = JsMap::new();
+    for row in rows {
+        let turn_number = row
+            .get("turn")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| js_sys::Error::new("encoded Chat Turn omitted turn"))?;
+        let turn = Object::new();
+        set(
+            &turn,
+            "turn",
+            &JsValue::from_f64(js_safe_number(turn_number)?),
+        )?;
+        set_optional_json(&turn, "start", row.get("start"))?;
+        set_optional_json(&turn, "end", row.get("end"))?;
+        set(
+            &turn,
+            "status",
+            &JsValue::from_str(
+                row.get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown"),
+            ),
+        )?;
+        set(&turn, "data", &chat_data_store_to_js(row.get("data"))?)?;
+        let step_values = Array::new();
+        for step_row in row
+            .get("steps")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let step_number = step_row
+                .get("step")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| js_sys::Error::new("encoded Chat Step omitted step"))?;
+            let step = Object::new();
+            set(
+                &step,
+                "turn",
+                &JsValue::from_f64(js_safe_number(turn_number)?),
+            )?;
+            set(
+                &step,
+                "step",
+                &JsValue::from_f64(js_safe_number(step_number)?),
+            )?;
+            set_optional_json(&step, "start", step_row.get("start"))?;
+            set_optional_json(&step, "end", step_row.get("end"))?;
+            set(
+                &step,
+                "status",
+                &JsValue::from_str(
+                    step_row
+                        .get("status")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown"),
+                ),
+            )?;
+            set(&step, "data", &chat_data_store_to_js(step_row.get("data"))?)?;
+            let step_value: JsValue = step.into();
+            steps.insert(format!("{turn_number}:{step_number}"), step_value.clone());
+            step_values.push(&step_value);
+        }
+        set(&turn, "steps", &step_values)?;
+        let turn_value: JsValue = turn.into();
+        turns.insert(turn_number, turn_value.clone());
+        turns_map.set(
+            &JsValue::from_f64(js_safe_number(turn_number)?),
+            &turn_value,
+        );
+    }
+    let timeline = Object::new();
+    set(
+        &timeline,
+        "turnOrder",
+        &json_to_js(value.get("turnOrder").unwrap_or(&Value::Array(Vec::new())))?,
+    )?;
+    set(&timeline, "turns", &turns_map)?;
+    Ok((timeline.into(), turns, steps))
+}
+
+fn chat_data_store_to_js(value: Option<&Value>) -> Result<JsValue, JsValue> {
+    let data = value.cloned().unwrap_or_else(|| json!({}));
+    let store = Object::new();
+    let get = Closure::wrap(Box::new(move |key: String| -> Result<JsValue, JsValue> {
+        data.get(&key)
+            .filter(|value| !value.is_null())
+            .map(json_to_js)
+            .transpose()
+            .map(|value| value.unwrap_or(JsValue::UNDEFINED))
+    }) as Box<dyn FnMut(String) -> Result<JsValue, JsValue>>);
+    set(&store, "get", &get.into_js_value())?;
+    Ok(store.into())
+}
+
+fn normalized_chat_location(
+    encoded: Option<&Value>,
+    turns: &HashMap<u64, JsValue>,
+    steps: &HashMap<String, JsValue>,
+) -> Result<JsValue, JsValue> {
+    let encoded = encoded.unwrap_or(&Value::Null);
+    let kind = encoded
+        .get("kind")
+        .and_then(Value::as_str)
+        .unwrap_or("unresolved");
+    let value = Object::new();
+    set(&value, "kind", &JsValue::from_str(kind))?;
+    if matches!(kind, "turn" | "step") {
+        let turn_number = encoded
+            .get("turn")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| js_sys::Error::new("encoded Chat Location omitted turn"))?;
+        let turn = turns.get(&turn_number).ok_or_else(|| {
+            js_sys::Error::new(&format!(
+                "encoded Chat Location references unknown Turn {turn_number}"
+            ))
+        })?;
+        set(&value, "turn", turn)?;
+        if kind == "step" {
+            let step_number = encoded
+                .get("step")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| js_sys::Error::new("encoded Chat Location omitted step"))?;
+            let step = steps
+                .get(&format!("{turn_number}:{step_number}"))
+                .ok_or_else(|| {
+                    js_sys::Error::new(&format!(
+                        "encoded Chat Location references unknown Step {turn_number}:{step_number}"
+                    ))
+                })?;
+            set(&value, "step", step)?;
+        }
+    }
+    Ok(value.into())
+}
+
+#[allow(clippy::too_many_lines, clippy::needless_pass_by_value)]
+fn chat_locations_to_js(
+    value: &Value,
+    previous: Option<(&Value, JsValue)>,
+    touched_keys: &HashSet<String>,
+) -> Result<JsValue, JsValue> {
+    let turns = JsMap::new();
+    for row in value
+        .get("turns")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let pair = row
+            .as_array()
+            .ok_or_else(|| js_sys::Error::new("encoded Chat Turn index row must be an array"))?;
+        let turn = pair
+            .first()
+            .and_then(Value::as_u64)
+            .ok_or_else(|| js_sys::Error::new("encoded Chat Turn index omitted turn"))?;
+        let next_keys = pair
+            .get(1)
+            .cloned()
+            .unwrap_or_else(|| Value::Array(Vec::new()));
+        let keys = previous
+            .as_ref()
+            .and_then(|(previous, face)| {
+                let row = previous
+                    .get("turns")?
+                    .as_array()?
+                    .iter()
+                    .find(|row| row.get(0).and_then(Value::as_u64) == Some(turn))?;
+                (row.get(1) == Some(&next_keys) && !contains_touched_key(&next_keys, touched_keys))
+                    .then(|| {
+                        Reflect::get(face, &JsValue::from_str("getTurn"))
+                            .ok()?
+                            .dyn_into::<Function>()
+                            .ok()?
+                            .call1(face, &JsValue::from_f64(js_safe_number(turn).ok()?))
+                            .ok()
+                    })?
+            })
+            .unwrap_or(json_to_js(&next_keys)?);
+        turns.set(&JsValue::from_f64(js_safe_number(turn)?), &keys);
+    }
+    let steps = JsMap::new();
+    for row in value
+        .get("steps")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let fields = row
+            .as_array()
+            .ok_or_else(|| js_sys::Error::new("encoded Chat Step index row must be an array"))?;
+        let turn = fields
+            .first()
+            .and_then(Value::as_u64)
+            .ok_or_else(|| js_sys::Error::new("encoded Chat Step index omitted turn"))?;
+        let step = fields
+            .get(1)
+            .and_then(Value::as_u64)
+            .ok_or_else(|| js_sys::Error::new("encoded Chat Step index omitted step"))?;
+        let next_keys = fields
+            .get(2)
+            .cloned()
+            .unwrap_or_else(|| Value::Array(Vec::new()));
+        let keys = previous
+            .as_ref()
+            .and_then(|(previous, face)| {
+                let row = previous.get("steps")?.as_array()?.iter().find(|row| {
+                    row.get(0).and_then(Value::as_u64) == Some(turn)
+                        && row.get(1).and_then(Value::as_u64) == Some(step)
+                })?;
+                (row.get(2) == Some(&next_keys) && !contains_touched_key(&next_keys, touched_keys))
+                    .then(|| {
+                        Reflect::get(face, &JsValue::from_str("getStep"))
+                            .ok()?
+                            .dyn_into::<Function>()
+                            .ok()?
+                            .call2(
+                                face,
+                                &JsValue::from_f64(js_safe_number(turn).ok()?),
+                                &JsValue::from_f64(js_safe_number(step).ok()?),
+                            )
+                            .ok()
+                    })?
+            })
+            .unwrap_or(json_to_js(&next_keys)?);
+        steps.set(&JsValue::from_str(&format!("{turn}:{step}")), &keys);
+    }
+    let locations = previous
+        .as_ref()
+        .and_then(|(_, face)| face.dyn_ref::<Object>())
+        .cloned()
+        .unwrap_or_else(Object::new);
+    set(&locations, "__turns", &turns)?;
+    set(&locations, "__steps", &steps)?;
+    if Reflect::get(&locations, &JsValue::from_str("getTurn"))?.is_undefined() {
+        let owner = locations.clone();
+        let get_turn = Closure::wrap(Box::new(move |turn: f64| {
+            let index = Reflect::get(&owner, &JsValue::from_str("__turns"))
+                .map(JsValue::unchecked_into::<JsMap>);
+            let value = index.map_or(JsValue::UNDEFINED, |index| {
+                index.get(&JsValue::from_f64(turn))
+            });
+            if value.is_undefined() {
+                Array::new()
+            } else {
+                value.unchecked_into::<Array>()
+            }
+        }) as Box<dyn FnMut(f64) -> Array>);
+        set(&locations, "getTurn", &get_turn.into_js_value())?;
+        let owner = locations.clone();
+        let get_step = Closure::wrap(Box::new(move |turn: f64, step: f64| {
+            let index = Reflect::get(&owner, &JsValue::from_str("__steps"))
+                .map(JsValue::unchecked_into::<JsMap>);
+            let value = index.map_or(JsValue::UNDEFINED, |index| {
+                index.get(&JsValue::from_str(&format!("{turn}:{step}")))
+            });
+            if value.is_undefined() {
+                Array::new()
+            } else {
+                value.unchecked_into::<Array>()
+            }
+        }) as Box<dyn FnMut(f64, f64) -> Array>);
+        set(&locations, "getStep", &get_step.into_js_value())?;
+    }
+    Ok(locations.into())
+}
+
+fn contains_touched_key(keys: &Value, touched: &HashSet<String>) -> bool {
+    keys.as_array().is_some_and(|keys| {
+        keys.iter()
+            .filter_map(Value::as_str)
+            .any(|key| touched.contains(key))
+    })
+}
+
+#[allow(clippy::needless_pass_by_value)] // Owns the optional cached JS handle for this render.
+fn chat_legacy_to_js(
+    value: &Value,
+    previous: Option<(&Value, JsValue)>,
+) -> Result<JsValue, JsValue> {
+    let legacy = Object::new();
+    let empty = Value::Array(Vec::new());
+    let nodes = reused_legacy_member(value, previous.as_ref(), "nodes", &empty)?;
+    let partial = reused_legacy_member(value, previous.as_ref(), "partial", &Value::Null)?;
+    let running = reused_legacy_member(value, previous.as_ref(), "runningCalls", &empty)?;
+    let turn_timings: JsValue = reused_legacy_map(value, previous.as_ref(), "turnTimings")?;
+    let turn_ends: JsValue = reused_legacy_map(value, previous.as_ref(), "turnEnds")?;
+    set(&legacy, "nodes", &nodes)?;
+    set(&legacy, "turnTimings", &turn_timings)?;
+    set(&legacy, "turnEnds", &turn_ends)?;
+    set(&legacy, "partial", &partial)?;
+    set(&legacy, "runningCalls", &running)?;
+    Ok(legacy.into())
+}
+
+fn reused_legacy_member(
+    value: &Value,
+    previous: Option<&(&Value, JsValue)>,
+    key: &str,
+    fallback: &Value,
+) -> Result<JsValue, JsValue> {
+    let next = value.get(key).unwrap_or(fallback);
+    if let Some((previous, rendered)) = previous
+        && let Some(previous) = previous.get(key)
+    {
+        return json_to_js_reusing(
+            previous,
+            &Reflect::get(rendered, &JsValue::from_str(key))?,
+            next,
+        );
+    }
+    json_to_js(next)
+}
+
+fn reused_legacy_map(
+    value: &Value,
+    previous: Option<&(&Value, JsValue)>,
+    key: &str,
+) -> Result<JsValue, JsValue> {
+    if let Some((previous, rendered)) = previous
+        && previous.get(key) == value.get(key)
+    {
+        return Reflect::get(rendered, &JsValue::from_str(key));
+    }
+    pairs_to_map(value.get(key)).map(Into::into)
+}
+
+fn pairs_to_map(value: Option<&Value>) -> Result<JsMap, JsValue> {
+    let map = JsMap::new();
+    for row in value.and_then(Value::as_array).into_iter().flatten() {
+        let pair = row
+            .as_array()
+            .ok_or_else(|| js_sys::Error::new("encoded Chat map row must be an array"))?;
+        if pair.len() >= 2 {
+            map.set(&json_to_js(&pair[0])?, &json_to_js(&pair[1])?);
+        }
+    }
+    Ok(map)
+}
+
+fn set_optional_json(object: &Object, key: &str, value: Option<&Value>) -> Result<(), JsValue> {
+    set(
+        object,
+        key,
+        &value
+            .filter(|value| !value.is_null())
+            .map(json_to_js)
+            .transpose()?
+            .unwrap_or(JsValue::UNDEFINED),
+    )
 }
 
 pub(crate) fn parse_mux_frame(frame: &JsValue) -> Result<SessionMuxFrame, JsValue> {
@@ -1210,12 +1828,19 @@ impl WasmClientSession {
     }
 
     fn chat_value(&self, chat: &Rc<Value>) -> Result<JsValue, JsValue> {
-        if let Some((current, value)) = &*self.chat_cache.borrow()
+        let cache = self.chat_cache.borrow();
+        if let Some((current, value)) = &*cache
             && Rc::ptr_eq(current, chat)
         {
             return Ok(value.clone());
         }
-        let value = json_to_js(chat)?;
+        let value = chat_snapshot_to_js_reusing(
+            chat,
+            cache
+                .as_ref()
+                .map(|(previous, value)| (previous.as_ref(), value)),
+        )?;
+        drop(cache);
         *self.chat_cache.borrow_mut() = Some((chat.clone(), value.clone()));
         Ok(value)
     }

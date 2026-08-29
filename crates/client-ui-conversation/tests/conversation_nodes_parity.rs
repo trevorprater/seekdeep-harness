@@ -14,9 +14,11 @@ use seekdeep_client_runtime::{
 use seekdeep_client_ui_conversation::{
     CHAT_FINALIZED_FOLLOWUP_OFFSET, CHAT_INTERRUPTED_ASSISTANT_OFFSET,
     CHAT_INTERRUPTED_FOLLOWUP_OFFSET, CHAT_MAX_TOKENS_NOTICE_OFFSET,
+    conversation_assistant_definition, conversation_chat_view_definition,
     conversation_command_definition, conversation_compaction_definition, conversation_coordinate,
     conversation_inbox_definitions, conversation_message_definition, conversation_retry_definition,
-    conversation_turn_error_definition, conversation_turn_max_tokens_definition,
+    conversation_tool_definition, conversation_turn_error_definition,
+    conversation_turn_max_tokens_definition, conversation_turn_tail_definition,
     conversation_unknown_fallback_definition,
 };
 use serde_json::{Value, json};
@@ -44,6 +46,14 @@ impl AssemblerViewDefinitions for Views {
             target: "chat".to_owned(),
             create: Rc::new(|| Box::new(ChatBuilder::default())),
         })]
+    }
+}
+
+struct ProductionChatViews;
+
+impl AssemblerViewDefinitions for ProductionChatViews {
+    fn entries(&self) -> Vec<Rc<AssemblerViewDefinition>> {
+        vec![Rc::new(conversation_chat_view_definition())]
     }
 }
 
@@ -122,6 +132,22 @@ fn assembler(
 
 fn snapshot(value: &ConversationNodeAssembler) -> Rc<Value> {
     value.snapshot("chat").expect("chat snapshot")
+}
+
+fn production_chat_assembler(
+    definitions: Vec<AssemblerNodeDefinition>,
+    entries: &[ConversationEventInput],
+) -> ConversationNodeAssembler {
+    let mut value = ConversationNodeAssembler::new(
+        Rc::new(Events {
+            entries: definitions.into_iter().map(Rc::new).collect(),
+            fallback: None,
+        }),
+        Rc::new(ProductionChatViews),
+    );
+    value.replace_window(entries, false).unwrap();
+    value.flush().unwrap();
+    value
 }
 
 fn node<'a>(snapshot: &'a Value, kind: &str) -> Option<&'a Value> {
@@ -763,6 +789,315 @@ fn commands_keep_manual_and_automatic_compaction_ownership_separate() {
         true,
     );
     assert!(node(&snapshot(&legacy), "compaction").is_none());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One ordered fixture covers the cross-Definition lifecycle.
+fn assistant_tool_and_tail_share_location_data_and_interruption_ordering() {
+    let value = assembler(
+        vec![
+            conversation_assistant_definition(),
+            conversation_tool_definition(),
+            conversation_turn_tail_definition(),
+        ],
+        None,
+        &[
+            at(1, "turn/start", json!({"turn": 1})),
+            at(2, "step/start", json!({"turn": 1, "step": 1})),
+            at(
+                3,
+                "assistant/chunk",
+                json!({
+                    "turn": 1, "step": 1,
+                    "chunk": {"type": "text-delta", "index": 0, "text": "streaming"},
+                }),
+            ),
+            surface(
+                4,
+                "assistant/message",
+                json!({
+                    "turn": 1, "step": 1,
+                    "message": {
+                        "id": "assistant-1",
+                        "content": [{"type": "text", "text": "answer"}],
+                        "source": {"kind": "model", "provider": "fake", "model": "fake"},
+                    },
+                    "usage": {"inputTokens": 20, "outputTokens": 10},
+                }),
+                json!("append"),
+            ),
+            at(
+                5,
+                "tool/call",
+                json!({"turn": 1, "step": 1, "callId": "root", "name": "code", "arguments": "{}"}),
+            ),
+            at(
+                6,
+                "tool/code-dispatch-start",
+                json!({
+                    "rootCallId": "root", "parentCallId": "root", "subCallId": "child",
+                    "name": "read", "arguments": {"path": "README.md"},
+                }),
+            ),
+            at(
+                7,
+                "tool/code-dispatch",
+                json!({
+                    "rootCallId": "root", "parentCallId": "root", "subCallId": "child",
+                    "name": "read", "arguments": {"path": "README.md"}, "isError": false,
+                    "content": [{"type": "text", "text": "contents"}],
+                }),
+            ),
+            surface(
+                8,
+                "tool/result",
+                json!({
+                    "turn": 1, "step": 1,
+                    "message": {
+                        "source": {"kind": "tool", "callId": "root"},
+                        "content": [{
+                            "type": "tool-result", "toolCallId": "root", "isError": false,
+                            "content": [{"type": "text", "text": "done"}],
+                        }],
+                    },
+                    "meta": {"durationMs": 3},
+                }),
+                json!("append"),
+            ),
+            at(9, "step/end", json!({"turn": 1, "step": 1})),
+            at(
+                10,
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+            ),
+        ],
+        false,
+    );
+    let current = snapshot(&value);
+    let assistant = node(&current, "assistant-step").unwrap();
+    assert_eq!(assistant["data"]["status"], "settled");
+    assert_eq!(assistant["data"]["blocks"][0]["text"], "answer");
+    assert_eq!(
+        assistant["data"]["finalNode"]["timing"]["stepStartTime"],
+        1_700_000_000_002_i64
+    );
+    assert_eq!(
+        assistant["data"]["finalNode"]["timing"]["firstTokenTime"],
+        1_700_000_000_003_i64
+    );
+    let tool = node(&current, "tool-call").unwrap();
+    assert_eq!(tool["data"]["root"]["kind"], "tool-result");
+    assert_eq!(tool["data"]["root"]["subCalls"][0]["callId"], "child");
+    assert_eq!(
+        tool["data"]["root"]["subCalls"][0]["callTime"],
+        1_700_000_000_006_i64
+    );
+    let tail = node(&current, "turn-tail").unwrap();
+    assert_eq!(tail["anchorSeq"], 4.1);
+    assert_eq!(tail["data"]["closing"]["finalNode"]["seq"], 4);
+    assert_eq!(tail["data"]["branchUnavailable"], true);
+    assert_eq!(tail["data"]["ttftMs"], 1.0);
+    assert_eq!(tail["data"]["tokensPerSecond"], 10_000.0);
+
+    let interrupted = assembler(
+        vec![
+            conversation_assistant_definition(),
+            conversation_turn_tail_definition(),
+        ],
+        None,
+        &[
+            at(20, "turn/start", json!({"turn": 2})),
+            at(21, "step/start", json!({"turn": 2, "step": 1})),
+            at(
+                22,
+                "assistant/chunk",
+                json!({
+                    "turn": 2, "step": 1,
+                    "chunk": {"type": "text-delta", "index": 0, "text": "partial"},
+                }),
+            ),
+            at(23, "step/end", json!({"turn": 2, "step": 1})),
+            at(
+                24,
+                "turn/end",
+                json!({"turn": 2, "reason": {"kind": "completed"}}),
+            ),
+        ],
+        false,
+    );
+    let interrupted_snapshot = snapshot(&interrupted);
+    let assistant = node(&interrupted_snapshot, "assistant-step").unwrap();
+    assert_eq!(assistant["data"]["status"], "interrupted");
+    assert_eq!(assistant["anchorSeq"], 22.1);
+    let tail = node(&interrupted_snapshot, "turn-tail").unwrap();
+    assert_eq!(tail["anchorSeq"], 22.2);
+
+    let interrupted_tool = assembler(
+        vec![conversation_tool_definition()],
+        None,
+        &[
+            at(30, "turn/start", json!({"turn": 3})),
+            at(31, "step/start", json!({"turn": 3, "step": 1})),
+            at(
+                32,
+                "tool/call",
+                json!({
+                    "turn": 3, "step": 1, "callId": "interrupted", "name": "read",
+                    "arguments": "{}",
+                }),
+            ),
+            at(33, "step/end", json!({"turn": 3, "step": 1})),
+        ],
+        false,
+    );
+    let tool_snapshot = snapshot(&interrupted_tool);
+    let root = &node(&tool_snapshot, "tool-call").unwrap()["data"]["root"];
+    assert_eq!(root["kind"], "tool-result");
+    assert_eq!(root["seq"], 32.2);
+    assert_eq!(
+        root["error"],
+        json!({"name": "Interrupted", "code": "interrupted"})
+    );
+
+    let tool_only = assembler(
+        vec![conversation_assistant_definition()],
+        None,
+        &[
+            at(40, "step/start", json!({"turn": 4, "step": 1})),
+            surface(
+                41,
+                "assistant/message",
+                json!({
+                    "turn": 4, "step": 1,
+                    "message": {
+                        "id": "tool-only",
+                        "content": [{"type": "tool-call", "id": "call", "name": "read", "arguments": "{}"}],
+                    },
+                }),
+                json!("append"),
+            ),
+        ],
+        false,
+    );
+    assert_eq!(
+        node(&snapshot(&tool_only), "assistant-step").unwrap()["visibility"],
+        "hidden"
+    );
+}
+
+#[test]
+fn production_chat_builder_encodes_callable_faces_timeline_and_legacy_inputs() {
+    let value = production_chat_assembler(
+        vec![
+            conversation_assistant_definition(),
+            conversation_turn_tail_definition(),
+        ],
+        &[
+            at(1, "turn/start", json!({"turn": 1})),
+            at(2, "step/start", json!({"turn": 1, "step": 1})),
+            at(
+                3,
+                "assistant/chunk",
+                json!({
+                    "turn": 1, "step": 1,
+                    "chunk": {"type": "text-delta", "index": 0, "text": "answer"},
+                }),
+            ),
+            surface(
+                4,
+                "assistant/message",
+                json!({
+                    "turn": 1, "step": 1,
+                    "message": {"id": "a", "content": [{"type": "text", "text": "answer"}]},
+                    "usage": {"inputTokens": 2, "outputTokens": 1},
+                }),
+                json!("append"),
+            ),
+            at(5, "step/end", json!({"turn": 1, "step": 1})),
+            at(
+                6,
+                "turn/end",
+                json!({"turn": 1, "reason": {"kind": "completed"}}),
+            ),
+        ],
+    );
+    let snapshot = value.snapshot("chat").unwrap();
+    assert_eq!(snapshot["encoding"], "seekdeep-chat-v1");
+    assert_eq!(snapshot["order"].as_array().unwrap().len(), 2);
+    assert_eq!(snapshot["nodes"].as_array().unwrap().len(), 2);
+    assert_eq!(snapshot["locations"]["turns"][0][0], 1);
+    assert_eq!(snapshot["locations"]["steps"][0][0], 1);
+    assert_eq!(snapshot["timeline"]["turnOrder"], json!([1]));
+    assert_eq!(
+        snapshot["timeline"]["turns"][0]["data"]["turn-tail"]["closing"]["finalNode"]["seq"],
+        4
+    );
+    assert_eq!(snapshot["legacy"]["nodes"][0]["kind"], "assistant");
+    assert_eq!(snapshot["legacy"]["turnTimings"][0][0], 1);
+    assert_eq!(snapshot["legacy"]["turnEnds"][0], json!([1, 6]));
+}
+
+#[test]
+fn partial_windows_reconstruct_assistant_and_nested_tool_without_start_events() {
+    let value = assembler(
+        vec![
+            conversation_assistant_definition(),
+            conversation_tool_definition(),
+        ],
+        None,
+        &[
+            at(
+                1,
+                "assistant/chunk",
+                json!({
+                    "turn": 1, "step": 1,
+                    "chunk": {"type": "text-delta", "index": 0, "text": "loaded partial"},
+                }),
+            ),
+            at(2, "step/end", json!({"turn": 1, "step": 1})),
+            at(
+                10,
+                "tool/code-dispatch-start",
+                json!({
+                    "rootCallId": "history-root", "parentCallId": "history-root",
+                    "subCallId": "child", "name": "read", "arguments": {"path": "README.md"},
+                }),
+            ),
+            at(
+                11,
+                "tool/code-dispatch",
+                json!({
+                    "rootCallId": "history-root", "parentCallId": "history-root",
+                    "subCallId": "child", "name": "read", "arguments": {"path": "README.md"},
+                    "content": [{"type": "text", "text": "contents"}], "isError": false,
+                }),
+            ),
+            surface(
+                12,
+                "tool/result",
+                json!({
+                    "turn": 2, "step": 1,
+                    "message": {
+                        "source": {"kind": "tool", "callId": "history-root"},
+                        "content": [{
+                            "type": "tool-result", "toolCallId": "history-root", "isError": false,
+                            "content": [{"type": "text", "text": "root"}],
+                        }],
+                    },
+                }),
+                json!("append"),
+            ),
+        ],
+        true,
+    );
+    let current = snapshot(&value);
+    let assistant = node(&current, "assistant-step").unwrap();
+    assert_eq!(assistant["data"]["status"], "interrupted");
+    assert_eq!(assistant["data"]["blocks"][0]["text"], "loaded partial");
+    let root = &node(&current, "tool-call").unwrap()["data"]["root"];
+    assert_eq!(root["call"], Value::Null);
+    assert_eq!(root["subCalls"][0]["callId"], "child");
+    assert_eq!(root["subCalls"][0]["kind"], "tool-result");
 }
 
 #[test]

@@ -487,6 +487,11 @@ fn step_to_js(step: &StepLocation) -> Result<JsValue, JsValue> {
 
 fn data_store_to_js(store: Rc<ConversationLocationDataStore>) -> Result<JsValue, JsValue> {
     let value = Object::new();
+    let entries = Map::new();
+    for (key, entry) in store.snapshot_values() {
+        entries.set(&JsValue::from_str(&key), &json_to_js(&entry)?);
+    }
+    set(&value, "entries", &entries)?;
     let get = Closure::wrap(Box::new(move |key: String| -> Result<JsValue, JsValue> {
         store
             .get(&key)

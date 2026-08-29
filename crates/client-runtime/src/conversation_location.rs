@@ -121,6 +121,35 @@ impl ConversationLocationDataStore {
             .map(|entry| entry.value.clone())
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn snapshot_values(&self) -> IndexMap<String, Rc<Value>> {
+        self.entries
+            .borrow()
+            .iter()
+            .map(|(key, entry)| (key.clone(), entry.value.clone()))
+            .collect()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn from_values(values: IndexMap<String, Rc<Value>>) -> Self {
+        Self {
+            entries: RefCell::new(
+                values
+                    .into_iter()
+                    .map(|(key, value)| {
+                        (
+                            key,
+                            OwnedLocationData {
+                                owner: "native-definition-bridge".to_owned(),
+                                value,
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
     fn remove(&self, owner: &str, key: &str) -> bool {
         let mut entries = self.entries.borrow_mut();
         if entries

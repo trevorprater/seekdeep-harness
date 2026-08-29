@@ -42354,12 +42354,37 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/assistant.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/assistant.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler cases pin sparse chunk lanes, text/reasoning/tool deltas, first-token timing, settled and interrupted finals, usage, retry hiding, tool-only visibility, partial-window recovery, publication cadence, and Step Location data",
+        "live WASM cases pin compiled settlement, hidden retry state, stable business key/store/order identity, and the source-shaped normalized Chat face; strict native and wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/chat-snapshot-builder.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/chat_snapshot_builder.rs",
+        "crates/client-runtime/src/wasm_session.rs",
+        "crates/client-runtime/src/wasm_conversation_public.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs",
+        "crates/client-runtime/src/conversation_location.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable builder test pins encoded order, complete keyed nodes, Turn/Step indexes, shared timeline data, legacy nodes/timings/ends, and source-compatible compatibility folds",
+        "two live WASM tests pin callable nodes.get/values and locations.getTurn/getStep, Map timelines and legacy maps, stable store/order/location/timeline faces, content-only aggregate-index invalidation, unchanged node reuse, nested Tool-child identity, settlement identity, and complete registry teardown"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/command.ts",
@@ -42460,7 +42485,17 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/register.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/src/conversation_nodes/mod.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "live WASM registration installs all 11 native Definitions in exact source order, the append-surface fallback, and the Chat target builder through caller-owned registry faces",
+        "the assembled registry processes inbox, message, Assistant, Tool, command, compaction, retry, error, max-token, and turn-tail lifecycles in one real Rust assembler window",
+        "reverse effect teardown removes all event/view contributions and fallback; strict targeted wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/retry.ts",
@@ -42481,7 +42516,17 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/tool.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/tool.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler cases pin running-to-settled roots, call/result views, nested dispatch start/settle, JSON arguments, parent/cycle/depth admission, closed-boundary interruption, replacement exclusion, and result-only partial-window reconstruction",
+        "live WASM cases pin settled Tool projection, content-only child updates, stable node store/order and unchanged first-child identity after a second child arrives; strict native and wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/turn-error.ts",
@@ -42518,7 +42563,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/turn-tail.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/turn_tail.rs",
+        "crates/client-ui-conversation/src/metrics.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler cases pin completed-Turn-only publication, Assistant Step-data consumption, last text final selection, tool/retry/error branch suppression, finalized and interrupted follow-up anchors, TTFT/decode metrics, and Turn Location data",
+        "live WASM assembly pins closing Assistant and branch-unavailable data through the repaired native Location-data bridge and normalized timeline faces; strict native and wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/image-labels.ts",
@@ -43079,7 +43135,18 @@
     {
       "source": "packages/client/ui-conversation/tests/conversation-node-definitions.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-runtime/src/wasm_session.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/ui-conversation/tests/conversation-node-definitions.client.spec.ts: 19 passed against the pinned source",
+        "native Rust assembler matrix: 7 passed across all built-in Definition families, partial-window replay, Location data, snapshot encoding, identity-stable prepend/update behavior, and interruption ordering",
+        "live wasm-bindgen matrix: 2 passed across full registration, real assembler/view builder flow, callable Chat faces, settlement, nested child identity, stable stores/indexes/timeline, and teardown"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/coverage-tails.client.spec.tsx",
