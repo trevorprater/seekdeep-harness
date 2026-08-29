@@ -5351,6 +5351,7 @@ dependencies = [
  "seekdeep-attachment",
  "seekdeep-client-ui-primitives",
  "seekdeep-cordis",
+ "seekdeep-identity",
  "seekdeep-schemastery",
  "seekdeep-settings",
  "serde",

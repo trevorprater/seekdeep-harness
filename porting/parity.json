@@ -42425,7 +42425,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/input/blocks.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/input_blocks.rs",
+        "crates/client-ui-conversation/src/browser_input_blocks.rs",
+        "crates/client-ui-conversation/tests/input_blocks_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_blocks_parity.rs"
+      ],
+      "evidence": [
+        "pinned source service-orchestration suite: 11 passed",
+        "two portable Rust tests pin nominal per-session isolation, first-read/write creation, stable store identity, synchronous subscriptions, equal-reason and absent-clear idempotence, unsubscribe, forget, old-handle survival, and fresh rebirth",
+        "three live WASM tests pin the constructible ComposerBlockRegistry class, factory face, getSnapshot/update/set/subscribe store contract, JavaScript object identity, synchronous notifications, idempotence, clearing, isolation, unsubscribe, forget/rebirth, creation on absent clear, and loud invalid-session failures; strict native and WASM Clippy pass with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/input/contract.ts",
