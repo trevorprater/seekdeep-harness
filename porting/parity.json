@@ -42369,7 +42369,17 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/common.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/common.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler tests pin all four synthetic offsets, stable Chat identity/metadata, closing-tail max-token placement, and finite non-negative JavaScript-safe integer coordinates",
+        "live WASM registry-to-assembler matrix passed; strict targeted native and wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/compaction.ts",
@@ -42379,17 +42389,50 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/fallback.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/fallback.rs",
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler test pins unmatched append-only surface dispatch, exact unknown payload, replacement exclusion, stable target metadata, and fallback teardown",
+        "live WASM registry-to-assembler matrix materializes an unclaimed tool/result through the compiled fallback and retracts it through the caller-owned registry effect"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/inbox.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/inbox.rs",
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler test pins distinct cumulative next-turn/next-step state, splice insertion/removal/cancellation, next-step-only claiming, reinsertion release, publication none, and strict predecessor dependency replay after prepend",
+        "live WASM registry-to-assembler matrix executes both compiled state-only definitions through the production browser adapters"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/message.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/message.rs",
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler test pins append-surface gating, replacement/checkpoint exclusion, user versus claimed steering classification, durable context provenance/form projection, and identity-stable reclassification after older inbox history arrives",
+        "live WASM registry-to-assembler matrix materializes a claimed steering node through native-definition conversion and the production JavaScript Definition adapter"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/register.ts",
@@ -42399,7 +42442,18 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/retry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/retry.rs",
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler test pins non-empty RetryId correlation, first-attempt start, ordered schedules, attempt-specific started transition, latest current attempt, stable anchor, legacy rejection, and scheduled cancellation when the owning Step or Turn closes",
+        "live WASM registry-to-assembler matrix produces started/cancelled retry history through compiled browser callbacks; strict targeted native and wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/tool.ts",
@@ -42409,12 +42463,34 @@
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/turn-error.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/turn_error.rs",
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler test pins failure-display projection, code and last-Step fields, visible terminal error, retry suppression in partial windows, and hidden retention rather than withdrawal when a later retry supersedes a materialized error",
+        "live WASM registry-to-assembler matrix suppresses the failed Turn behind its compiled retry chain; strict targeted native and wasm32 Clippy passed"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/turn-max-tokens.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/turn_max_tokens.rs",
+        "crates/client-ui-conversation/src/browser_conversation_nodes.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-node Definition suite: 19 passed",
+        "portable Rust assembler test pins max-tokens-only matching, Turn/Step payload, partial-window reconstruction, ordinary closing-seq fallback, and placement at closing Assistant seq plus 0.05 from turn-tail Location data",
+        "live WASM registry-to-assembler matrix materializes the compiled max-token notice with its last Step through the production browser adapters"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/conversation-nodes/turn-tail.ts",

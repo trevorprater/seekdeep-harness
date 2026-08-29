@@ -1,6 +1,7 @@
 //! Conversation UI semantic core and Rust/WASM surfaces.
 
 mod conversation_contract;
+mod conversation_nodes;
 mod input_blocks;
 mod input_contract;
 mod input_decorations;
@@ -29,6 +30,8 @@ mod browser_context_body;
 mod browser_context_meter;
 #[cfg(target_arch = "wasm32")]
 mod browser_conversation_controller;
+#[cfg(target_arch = "wasm32")]
+mod browser_conversation_nodes;
 #[cfg(target_arch = "wasm32")]
 mod browser_conversation_root;
 #[cfg(target_arch = "wasm32")]
@@ -82,6 +85,7 @@ mod browser_turn_tail;
 mod host;
 
 pub use conversation_contract::*;
+pub use conversation_nodes::*;
 pub use input_blocks::*;
 pub use input_contract::*;
 pub use input_decorations::*;
@@ -110,6 +114,8 @@ pub use browser_context_body::*;
 pub use browser_context_meter::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_conversation_controller::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_conversation_nodes::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_conversation_root::*;
 #[cfg(target_arch = "wasm32")]

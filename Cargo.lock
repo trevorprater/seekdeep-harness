@@ -5353,6 +5353,7 @@ dependencies = [
  "seekdeep-client-runtime",
  "seekdeep-client-ui-primitives",
  "seekdeep-cordis",
+ "seekdeep-failure-display",
  "seekdeep-identity",
  "seekdeep-schemastery",
  "seekdeep-settings",
