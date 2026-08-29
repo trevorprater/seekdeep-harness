@@ -5357,6 +5357,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-bindgen-test",
 ]
 

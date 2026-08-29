@@ -41876,12 +41876,30 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/AssistantMarkdown.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_assistant.rs",
+        "crates/client-ui-conversation/tests/wasm_assistant_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused AssistantMarkdown and consumer cases: 11 passed across five files",
+        "three live WASM tests pin visible-shell gates, Markdown/reasoning/image/unknown dispatch ordering, consecutive gallery grouping, tool-head suppression, running-tail reasoning state, interruption copy, stable code labels, localized gallery labels, default loader rejection, and unknown JSON footer",
+        "compiled composition consumes seeded ui-primitives/ui-attachment modules and the same-crate ReasoningRow without duplicate WASM runtimes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/AssistantNodeView.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_assistant.rs",
+        "crates/client-ui-conversation/tests/wasm_assistant_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused AssistantMarkdown and consumer cases: 11 passed across five files",
+        "live WASM test pins turn/step location selection, closed-turn and matching-final-seq ownership, memoized file-mention resolver input, status-to-streaming/interrupted mapping, loadImage and locale forwarding",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-conversation --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx",

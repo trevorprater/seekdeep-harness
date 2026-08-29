@@ -372,7 +372,11 @@ fn latest_line(text: &str) -> String {
         .map_or(visible.clone(), |(_, tail)| tail.to_owned())
 }
 
-fn inject_style(name: &str, source: &str, replacements: &[(&str, &str)]) -> Result<(), JsValue> {
+pub(crate) fn inject_style(
+    name: &str,
+    source: &str,
+    replacements: &[(&str, &str)],
+) -> Result<(), JsValue> {
     let document = Reflect::get(&js_sys::global(), &JsValue::from_str("document"))?;
     if document.is_null() || document.is_undefined() {
         return Ok(());
