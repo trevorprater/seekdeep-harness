@@ -35,6 +35,8 @@ mod browser_queue_face;
 #[cfg(target_arch = "wasm32")]
 mod browser_reasoning;
 #[cfg(target_arch = "wasm32")]
+mod browser_todo_panel;
+#[cfg(target_arch = "wasm32")]
 mod browser_tool_node_reader;
 #[cfg(target_arch = "wasm32")]
 mod browser_turn_tail;
@@ -76,6 +78,8 @@ pub use browser_permission_select::*;
 pub use browser_queue_face::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_reasoning::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_todo_panel::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_tool_node_reader::*;
 #[cfg(target_arch = "wasm32")]

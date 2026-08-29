@@ -42631,7 +42631,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/TodoPanel.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_todo_panel.rs",
+        "crates/client-ui-conversation/tests/wasm_todo_panel_parity.rs"
+      ],
+      "evidence": [
+        "pinned source TodoPanel/TodoDock suite: 9 passed",
+        "five live WASM tests pin empty gating after Hook allocation, collapsed default and wide-space status counts, zero-segment omission, list toggle/order/status keys, stable status routing, exact completed/progress/pending SVGs and gradient identity, forged-status error, nullish projection fallback, original Todo list identity, and dock entry name/inject/options/locale/component registration",
+        "compiled composition consumes configured checklist/chevron faces and preserves per-item ProgressGlyph Hook ownership; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/stores.ts",
