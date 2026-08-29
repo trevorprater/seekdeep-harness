@@ -9,6 +9,8 @@ mod images;
 #[cfg(target_arch = "wasm32")]
 mod browser_assistant;
 #[cfg(target_arch = "wasm32")]
+mod browser_chat_seat;
+#[cfg(target_arch = "wasm32")]
 mod browser_reasoning;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -22,6 +24,8 @@ pub use images::*;
 
 #[cfg(target_arch = "wasm32")]
 pub use browser_assistant::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_chat_seat::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_reasoning::*;
 

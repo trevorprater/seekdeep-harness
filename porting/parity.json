@@ -41904,7 +41904,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_chat_seat.rs",
+        "crates/client-ui-conversation/tests/wasm_chat_seat_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ChatView keyed-business-node focus: 2 passed",
+        "three live WASM tests pin missing-node null output, exact one-key selector, dependency-keyed owner memo, routed node copy, flow anchors/kind, keyed slot name/entry/hook context, owner callbacks, and localized JsonBlock fallback/footer",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-conversation --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/ChatView.module.css",

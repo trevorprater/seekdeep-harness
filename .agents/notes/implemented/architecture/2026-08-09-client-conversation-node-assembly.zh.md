@@ -318,7 +318,7 @@ Chat 结构变化只由新 key、`anchorSeq`、visibility 或 Location identity 
 
 Builder 遇到结构变化时从 store 的当前 values 计算 visible order，并按未变化引用复用索引数组。Prepend 可以增加前部历史 key，append 可以增加尾部或按业务 anchor 落位，既有 key 不因排序变化而重命名。
 
-[`ChatView`](../../../../packages/client/ui-conversation/src/client/chat/ChatView.tsx) 只遍历 `order`。每个 [`ChatNodeSeat`](../../../../packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx) 以 Context key 固定在同一个父列表中，并按 `node.kind` 分发 `'conversation.chat.node'` keyed slot。
+[`ChatView`](../../../../packages/client/ui-conversation/src/client/chat/ChatView.tsx) 只遍历 `order`。每个 [`ChatNodeSeat`](../../../../packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx) 以 Context key 固定在同一个父列表中，并按 `node.kind` 分发 `'conversation.chat.node'` keyed slot。编译为 Rust/WASM 的 seat 位于 [`browser_chat_seat.rs`](../../../../crates/client-ui-conversation/src/browser_chat_seat.rs)，拥有单节点 selector、按依赖定键的 owner memo、routed-owner 副本、hook context、anchor metadata、keyed slot 调用与本地化 JsonBlock fallback；更广的 ChatView 遍历和 renderer 注册仍是独立待完成表面。
 
 [`ChatNodeDataMap`](../../../../packages/client/ui-conversation/src/client/contract/chat-nodes.ts) 是 declaration-merged 的 renderer payload registry。每个业务模块分别注册自己的 Definition 和 keyed renderer；`registerConversationNodes()` 与 `registerChatNodeRenderers()` 只负责装配这些独立贡献，不通过 closed union 或中心 switch 解释业务。内建实现仍位于 `ui-conversation`，但该类型和注册边界允许业务迁入独立 package 而不修改 Chat dispatcher。
 
