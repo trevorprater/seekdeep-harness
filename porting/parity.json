@@ -42748,7 +42748,20 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/InputBar.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_input_bar.rs",
+        "crates/client-ui-conversation/src/browser_input_decorations.rs",
+        "crates/client-ui-conversation/src/browser_image_labels.rs",
+        "crates/client-ui-conversation/src/browser_context_meter.rs",
+        "crates/client-ui-conversation/src/browser_permission_select.rs",
+        "crates/client-ui-conversation/tests/wasm_input_bar_parity.rs"
+      ],
+      "evidence": [
+        "pinned source InputBar suite: 65 passed",
+        "one live WASM React/DOM matrix pins constant hook order and resident textarea shape; placeholder and owner precedence; session, block, parent-offline, adjudicating/submitting, primary/subagent, plan/model seat, and whole-queue steering gates; IME, repeat, menu arbitration, Escape, Space, undo, change, copy/cut, mixed paste, and selection invalidation; attachment limit and format precedence, prompt/intake toasts, full-page drop, rail/lightbox, and notices; claim/chip/plain-reference/hint decorations; null ReactNode wrappers; focus, wheel chaining, caret restore, trailing-newline normalization, and CSS/slot assembly",
+        "strict targeted WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/PermissionSelect.module.css",

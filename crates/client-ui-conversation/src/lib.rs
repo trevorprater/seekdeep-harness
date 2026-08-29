@@ -37,6 +37,8 @@ mod browser_enter_behavior;
 #[cfg(target_arch = "wasm32")]
 mod browser_image_labels;
 #[cfg(target_arch = "wasm32")]
+mod browser_input_bar;
+#[cfg(target_arch = "wasm32")]
 mod browser_input_blocks;
 #[cfg(target_arch = "wasm32")]
 mod browser_input_decorations;
@@ -108,6 +110,8 @@ pub use browser_empty_hero::*;
 pub use browser_enter_behavior::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_image_labels::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_input_bar::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_input_blocks::*;
 #[cfg(target_arch = "wasm32")]
