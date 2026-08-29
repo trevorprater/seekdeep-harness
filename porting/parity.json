@@ -41921,7 +41921,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/ReasoningRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_reasoning.rs",
+        "crates/client-ui-conversation/tests/wasm_reasoning_parity.rs"
+      ],
+      "evidence": [
+        "pinned source reasoning-row suite: 3 passed",
+        "three live WASM tests pin latest-versus-first line selection, three-frame right-edge scroll and settled reset, running hidden copy/data state/follow-end, compiled DisclosureRow and Think icon composition, and plain-body expand/collapse",
+        "CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-ui-conversation --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/StatsLine.module.css",
@@ -42015,7 +42024,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/chat/use-throttled-visual-update.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_reasoning.rs",
+        "crates/client-ui-conversation/tests/wasm_reasoning_parity.rs"
+      ],
+      "evidence": [
+        "pinned source reasoning-row suite: 3 passed",
+        "live WASM hook test pins stable callback identity, duplicate-call coalescing, exact three-frame boundary, latest-update ref, pending-frame guard, completion reset, and unmount cancellation",
+        "WASM target isolation removes an unused client-runtime dependency, gates attachment/Host helpers and native core tests, and keeps portable metrics/submission plus browser reasoning free of Tokio/Mio"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/contract/chat-nodes.ts",
@@ -42512,7 +42530,14 @@
     {
       "source": "packages/client/ui-conversation/tests/reasoning-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_reasoning_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: 3 passed",
+        "compiled live WASM reasoning and throttle assertions: 3 passed"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/selection-survival.client.spec.tsx",

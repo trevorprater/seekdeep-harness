@@ -1,5 +1,7 @@
 //! Submission policy, image rejection, metrics, and Host settings parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use seekdeep_attachment::ImageAttachmentLimits;
 use seekdeep_client_ui_conversation::{
     AssistantMetricNode, AssistantTiming, BusyEnterBehavior, ComposerSubmissionPolicy,

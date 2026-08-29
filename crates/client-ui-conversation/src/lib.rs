@@ -1,15 +1,25 @@
 //! Conversation UI semantic core and Rust/WASM surfaces.
 
-mod images;
 mod metrics;
 mod submission;
 
 #[cfg(not(target_arch = "wasm32"))]
+mod images;
+
+#[cfg(target_arch = "wasm32")]
+mod browser_reasoning;
+
+#[cfg(not(target_arch = "wasm32"))]
 mod host;
 
-pub use images::*;
 pub use metrics::*;
 pub use submission::*;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use images::*;
+
+#[cfg(target_arch = "wasm32")]
+pub use browser_reasoning::*;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use host::*;

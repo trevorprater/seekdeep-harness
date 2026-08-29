@@ -12,18 +12,25 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 indexmap.workspace = true
-seekdeep-attachment = { path = "../attachment" }
-seekdeep-client-runtime = { path = "../client-runtime" }
 serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 anyhow.workspace = true
+seekdeep-attachment = { path = "../attachment" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-settings = { path = "../settings" }
 
-[dev-dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+seekdeep-client-ui-primitives = { path = "../client-ui-primitives" }
+wasm-bindgen.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio.workspace = true
 
 [lints]

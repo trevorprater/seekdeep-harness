@@ -5336,14 +5336,17 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "indexmap 2.14.0",
+ "js-sys",
  "seekdeep-attachment",
- "seekdeep-client-runtime",
+ "seekdeep-client-ui-primitives",
  "seekdeep-cordis",
  "seekdeep-schemastery",
  "seekdeep-settings",
  "serde",
  "serde_json",
  "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
