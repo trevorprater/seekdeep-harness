@@ -27,6 +27,8 @@ mod browser_context_body;
 #[cfg(target_arch = "wasm32")]
 mod browser_context_meter;
 #[cfg(target_arch = "wasm32")]
+mod browser_conversation_controller;
+#[cfg(target_arch = "wasm32")]
 mod browser_conversation_root;
 #[cfg(target_arch = "wasm32")]
 mod browser_conversation_session;
@@ -102,6 +104,8 @@ pub use browser_command::*;
 pub use browser_context_body::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_context_meter::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_conversation_controller::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_conversation_root::*;
 #[cfg(target_arch = "wasm32")]

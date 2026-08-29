@@ -25,6 +25,7 @@ seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-settings = { path = "../settings" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+base64.workspace = true
 js-sys.workspace = true
 seekdeep-client-ui-primitives = { path = "../client-ui-primitives" }
 wasm-bindgen.workspace = true

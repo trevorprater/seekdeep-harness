@@ -42577,7 +42577,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/service.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_conversation_controller.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_controller_parity.rs"
+      ],
+      "evidence": [
+        "pinned source service-orchestration suite: 11 passed",
+        "one live WASM controller matrix pins shared input/block faces and context-bound scope errors; text send, queue convergence/failure, cancel, and history pull; injected nominal draft ids and batch-first MIME validation; UnsupportedImageMediaTypeError name/message/mediaType; ordered base64 image content and prompt mode; optimistic draft URL ownership and release; historical Promise identity, authorized reads, generation invalidation, blob revocation, data-URL fallback, cache retry, unknown/disposed failures, and fiber teardown",
+        "strict targeted WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/settings/EnterBehaviorRow.module.css",
