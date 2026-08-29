@@ -42545,7 +42545,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/EmptyHero.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_empty_hero.rs",
+        "crates/client-ui-conversation/tests/wasm_empty_hero_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused HeroShell locale case passed",
+        "four live WASM tests pin mixed/trailing/separator-only workspace labels, placeholder versus named folder icons, ref/click/menu echo, chevron geometry, sanitized stable useId filter identity, exact glow SVG/filter reference, FishLogo geometry, localized headline/preview copy, empty body, and overlay-child forwarding",
+        "complete HeroShell CSS-module mapping supports later ConversationRoot consumers; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/HeroShell.module.css",
