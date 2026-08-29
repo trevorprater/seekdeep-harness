@@ -51,6 +51,8 @@ mod browser_input_facade;
 #[cfg(target_arch = "wasm32")]
 mod browser_input_hub;
 #[cfg(target_arch = "wasm32")]
+mod browser_locales;
+#[cfg(target_arch = "wasm32")]
 mod browser_message_actions;
 #[cfg(target_arch = "wasm32")]
 mod browser_message_chrome;
@@ -128,6 +130,8 @@ pub use browser_input_decorations::*;
 pub use browser_input_facade::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_input_hub::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_locales::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_message_actions::*;
 #[cfg(target_arch = "wasm32")]

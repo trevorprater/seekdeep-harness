@@ -42533,7 +42533,17 @@
     {
       "source": "packages/client/ui-conversation/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/data/conversation-locales.json",
+        "crates/client-ui-conversation/src/browser_locales.rs",
+        "crates/client-ui-conversation/tests/wasm_locales_parity.rs"
+      ],
+      "evidence": [
+        "the generated JSON artifact is evaluated directly from the pinned zh/en exports without hand transcription",
+        "one live WASM test pins namespace and module-level object identity, complete zh/en keyset equality, shared plan hint/placeholder copy, and representative Chinese/English exact strings",
+        "strict targeted WASM Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/queue/QueueDock.module.css",
@@ -42850,7 +42860,18 @@
     {
       "source": "packages/client/ui-conversation/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_reasoning.rs",
+        "crates/client-ui-conversation/src/browser_input_bar.rs",
+        "crates/client-ui-conversation/src/browser_conversation_root.rs",
+        "crates/client-ui-conversation/tests/wasm_input_bar_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_root_parity.rs"
+      ],
+      "evidence": [
+        "TypeScript CSS declarations are intentionally eliminated; compiled WASM embeds every package stylesheet and injects namespaced data-plugin-css assets without runtime CSS-module lookup",
+        "strict live InputBar, ConversationRoot, ChatView, queue, message, context, permission, details, and hero component suites pass through the shared compiled style configuration boundary"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/index.ts",
