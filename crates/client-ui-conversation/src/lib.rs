@@ -27,6 +27,8 @@ mod browser_message_actions;
 #[cfg(target_arch = "wasm32")]
 mod browser_message_chrome;
 #[cfg(target_arch = "wasm32")]
+mod browser_permission_select;
+#[cfg(target_arch = "wasm32")]
 mod browser_queue_face;
 #[cfg(target_arch = "wasm32")]
 mod browser_reasoning;
@@ -64,6 +66,8 @@ pub use browser_enter_behavior::*;
 pub use browser_message_actions::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_message_chrome::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_permission_select::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_queue_face::*;
 #[cfg(target_arch = "wasm32")]

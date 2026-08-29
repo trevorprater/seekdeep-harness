@@ -42606,7 +42606,16 @@
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/PermissionSelect.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_permission_select.rs",
+        "crates/client-ui-conversation/tests/wasm_permission_select_parity.rs"
+      ],
+      "evidence": [
+        "pinned source focused permission-control cases: 6 passed",
+        "five live WASM tests pin absent-capability nulling, four Hook states/reset effect, custom filtering, title-case and Full access labels, module-stable exact shield glyphs, Menu/trigger contract, optimistic busy echo, direct command resolve/reject settlement, Full access acknowledgement guard/confirm, cancel reset, and lock revocation",
+        "compiled composition consumes configured Menu, RiskConfirmation, and chevron faces; CARGO_INCREMENTAL=0 strict WASM Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/skeleton/TodoPanel.module.css",
