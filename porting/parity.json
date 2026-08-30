@@ -50347,22 +50347,63 @@
     {
       "source": "packages/client/ui-tool/src/client/apply.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_apply.rs",
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM assembly test pins both declaration injections, seven child plugins, ten keyed atomic registrations, exact locale/child specs, and teardown",
+        "optimized classic ModuleLoader smoke exposes exactly apply/inject and strict targeted native/wasm32 Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/contract/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_apply.rs",
+        "crates/client-ui-tool/src/browser_tree.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed including the compile-time type-chain negatives",
+        "live WASM preserves the open keyed tool-name currency, original ToolCallBlock object identity, cwd/open/inspect owner fields, and session child declaration",
+        "generated compatibility declarations preserve ToolCallOwnerProps, ToolCallViewProps, ToolTreeProps, ToolDetailsProps, and the SlotMap augmentation"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_apply.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "optimized classic ModuleLoader execution returns exactly the source value face: apply and inject",
+        "generated client declarations retain the four source type exports without exporting internal renderer values",
+        "npm pack dry-run lists the intended ten published files"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/locale.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_apply.rs",
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "compiled whole-Tool, details, and all ten atomic registrations use the exact conversation locale namespace",
+        "live WASM drives terminal, row, bash, ask, todo, and details translation seats"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/ToolCallTree.module.css",
@@ -50378,7 +50419,16 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/ToolCallTree.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_tree.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM recursively renders root and subcalls through the same keyed slot, pins selection/anchors/nesting, and forwards original block identity",
+        "React useMemo preserves owner identity across unchanged renders and inspect targets the exact call id"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/ToolDetails.module.css",
@@ -50394,7 +50444,17 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/ToolDetails.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_details.rs",
+        "crates/client-ui-tool/src/browser_model.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM pins terminal/read/diff/search/Web precedence, Web raw-body retention, running placeholder, and error-marked generic pre fallback",
+        "card narrowing delegates to the verified target-portable Rust models"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/components/ToolRow.module.css",
@@ -50410,7 +50470,16 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/components/ToolRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_row.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM drives click/Enter expansion, file-link propagation isolation, state substitution, IN/OUT bodies, structured card precedence, and Inspect",
+        "source CSS is compiled into the WASM package with module-specific class replacement and strict wasm32 Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/models/diff-card-model.ts",
@@ -50493,12 +50562,31 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/GenericToolCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/src/browser_model.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM pins variant icon/title selection, terminal/search title precedence, terminal failure state, single-file posture, all structured card kinds, and generic fallback",
+        "native Rust semantic models pass 10/10 and the compiled renderer passes strict wasm32 Clippy"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/ask-question-row.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ask-question row cases pass inside the 224-test oracle suite",
+        "live WASM pins waiting, answered counts, skipped answers, cancellation, interruption, malformed fallback, and keyed registration",
+        "compiled row retains the shared ToolRow lifecycle and inspect behavior"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/bash-sample.module.css",
@@ -50514,12 +50602,30 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/bash-sample.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source bash and terminal cases pass inside the 224-test oracle suite",
+        "live WASM pins session-cwd resolution, terminal title/description/output/status, whole-row expansion, generic error fallback, and Inspect",
+        "bespoke bash CSS and exact keyed registrant lifecycle are compiled into WASM"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/file-mutation-row.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source diff/file-mutation cases pass inside the 224-test oracle suite",
+        "live WASM pins edit/write diff rendering, path-link currency, error fallback, lifecycle state, and dual-key registration",
+        "verified Rust diff and row models remain the sole derivation path"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/plan-summary.ts",
@@ -50537,27 +50643,73 @@
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/read-row.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source read cases pass inside the 224-test oracle suite",
+        "live WASM pins workspace-relative label, host-open path, result-only ReadBlock expansion, fallback output, and read-key registration",
+        "verified Rust read and row models remain the sole derivation path"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/search-row.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source search cases pass inside the 224-test oracle suite",
+        "live WASM pins Grep/Glob title selection, replacement summary, grouped card, capped recovery footer, fallback output, and both registrations",
+        "verified Rust search narrowing rejects unknown and malformed wire shapes"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/todo-row.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/src/plan.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source todo cases pass inside the 224-test oracle suite",
+        "live WASM pins done/total copy, first active item, non-shrinking parallel suffix, generic malformed fallback, and todo_write registration",
+        "native Rust plan summary and compiled WASM row share one derivation"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/client/tool/toolviews/web-row.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_views.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source Web cases pass inside the 224-test oracle suite",
+        "live WASM pins Search/Fetch title/icon choice, result-only WebBlock expansion, fallback output, and both registrations",
+        "verified Rust Web narrowing preserves search/fetch data and rejects unknown kinds"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_row.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust includes the four verified CSS Module sources and replaces every referenced class with a package-unique compiled name",
+        "live WASM configuration installs exactly four owned styles without handwritten CSS-module imports",
+        "generated client declarations replace the source declaration-only build shim"
+      ]
     },
     {
       "source": "packages/client/ui-tool/src/index.ts",
@@ -50591,82 +50743,228 @@
     {
       "source": "packages/client/ui-tool/tests/ask-question-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/wasm_parity.rs",
+        "crates/client-ui-tool/src/browser_views.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM covers waiting, answered/skipped counts, cancellation, interruption, malformed fallback, and registration",
+        "strict targeted wasm32 Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/assembly-surfaces.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/wasm_parity.rs",
+        "crates/client-ui-tool/src/browser_apply.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM applies the compiled component roster and pins both owner slots plus all built-in atomic registrations and disposal",
+        "optimized classic ModuleLoader executes the exact production factory"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/chat-code-subcalls.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/wasm_parity.rs",
+        "crates/client-ui-tool/src/browser_tree.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM recursively dispatches nested run_code/read blocks through the same keyed slot and preserves original block/owner identity",
+        "selected descendant anchors without selecting its ancestors"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/coverage-tails.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed including defensive tail arms",
+        "native Rust semantic suite passes 10/10 and live WASM suite passes 5/5",
+        "unknown/malformed card, truncated call, blank output, and generic fallback paths remain covered"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/diff-card.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "native Rust pins call/result authority and malformed fallback; live WASM pins row, specialized mutation, and details DiffBlock rendering",
+        "edit/write dual registration and teardown are observed"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/read-card.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "native Rust pins result-only narrowing and relative labels; live WASM pins generic/specialized row and details ReadBlock rendering",
+        "read registration and host-open path currency are observed"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/search-card.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "native Rust pins matches/paths narrowing, malformed arms, title, and recovery; live WASM pins SearchRow and details rendering",
+        "grep/glob dual registration and capped-result recovery remain observable"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/terminal-card.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "native Rust pins replacement title, failure status, cross-platform cwd normalization, and truncation; live WASM pins all three render sites",
+        "terminal labels and infinite in-row output cap are driven through the injected primitive face"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/todo-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "native Rust pins plan counts/first-active/parallel-extra semantics; live WASM pins localized summary and suffix geometry",
+        "todo_write keyed registration and malformed generic fallback remain covered"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/tool-call-tree.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/wasm_parity.rs",
+        "crates/client-ui-tool/src/browser_tree.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM pins root marker, generic truncation fallback, nested markers, selection, memoized owners, exact keys, and inspect",
+        "original ToolCallBlock identities cross the external keyed slot unchanged"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/tool-details-render.client.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/wasm_parity.rs",
+        "crates/client-ui-tool/src/browser_details.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM supplies the shared details harness with structured and generic blocks directly",
+        "running/error/Web-body and card-kind paths are observed without a fake semantic model"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/tool-row-styles.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_row.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM installs all four verified CSS sources with unique class names and preserves row state/data attributes",
+        "source ToolRow and bash CSS assets remain byte-owned inputs to the Rust bundle"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/tool-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "native Rust pins classification/title/summary/path/body/output/state semantics; live WASM pins row gestures, cards, error and inspect behavior",
+        "native and wasm32 strict targeted Clippy pass with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/toolview-slot.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_apply.rs",
+        "crates/client-ui-tool/src/browser_tree.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "live WASM observes declaration injection, keyed dispatch/fallback, ten registrations, original owner data, and reverse teardown",
+        "slot lifecycle is exercised through the compiled apply and child-plugin objects"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/toolview-type-chain.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/src/browser_tree.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source compile-time type-chain negative suite passes inside the 224-test oracle run",
+        "generated declarations retain source PropsRuntime/PropsRenderSlots/PropsLocale composition and SlotMap owner currency",
+        "live WASM pins the same owner fields and open keyed dispatch at runtime"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tests/web-card.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-tool/tests/model_parity.rs",
+        "crates/client-ui-tool/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source ui-tool suite: 15 files and 224 tests passed",
+        "native Rust pins result-only search/fetch narrowing and unknown-kind fallback; live WASM pins row and details WebBlock rendering",
+        "raw fetched body retention and web_search/web_fetch dual registration remain observable"
+      ]
     },
     {
       "source": "packages/client/ui-tool/tsconfig.json",
@@ -50682,7 +50980,16 @@
     {
       "source": "packages/client/ui-tool/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-tool/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle/watch scripts invoke cargo xtask wasm-package for seekdeep-client-ui-tool",
+        "optimized release bundle built and executed through the classic ModuleLoader with exact apply/inject exports and React/primitives requires",
+        "generated index/invariant/client declarations and npm pack dry-run preserve the source package entry layout"
+      ]
     },
     {
       "source": "packages/client/ui-trajectory/README.i18n.yaml",

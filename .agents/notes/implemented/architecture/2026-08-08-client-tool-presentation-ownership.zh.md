@@ -16,11 +16,13 @@ Client 运行时已经按 `callId` 配对工具调用/结果事件，并能从 C
 
 Conversation 数据组装遵循后续的 [Conversation 业务节点决策](2026-08-09-client-conversation-node-assembly.md)。`ui-conversation` 的工具 Definition 从会话事件配对 root call/result，把 Code Dispatch edge fold 成递归 `ToolCallBlock.subCalls`，并生成一个稳定的 `tool-call` Chat Node；这里的数据职责只处理官方工具 identity 和拓扑，不解释具体工具名称的展示。
 
-[`ChatView`](../../../../packages/client/ui-conversation/src/client/chat/ChatView.tsx) 只按 Chat 快照的 `order` 放置通用 [`ChatNodeSeat`](../../../../packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx)。Seat 以 `node.kind` 分发 `'conversation.chat.node'`；[`ui-tool`](../../../../packages/client/ui-tool/src/client/apply.ts) 注册 `tool-call` entry，并由 [`ToolCallTree`](../../../../packages/client/ui-tool/src/client/tool/ToolCallTree.tsx) 递归遍历 root block。每一层 root 或 child 都通过同一个 keyed/session `'tool.call.toolview'` 子 slot 以 `entryKey: toolName` 分发，缺少注册时渲染 `GenericToolCard`。
+[`ChatView`](../../../../crates/client-ui-conversation/src/browser_chat_view.rs) 只按 Chat 快照的 `order` 放置通用 [`ChatNodeSeat`](../../../../crates/client-ui-conversation/src/browser_chat_seat.rs)。Seat 以 `node.kind` 分发 `'conversation.chat.node'`；[`ui-tool`](../../../../crates/client-ui-tool/src/browser_apply.rs) 注册 `tool-call` entry，并由 [`ToolCallTree`](../../../../crates/client-ui-tool/src/browser_tree.rs) 递归遍历 root block。每一层 root 或 child 都通过同一个 keyed/session `'tool.call.toolview'` 子 slot 以 `entryKey: toolName` 分发，缺少注册时渲染 `GenericToolCard`。
 
 业务工具插件接收一个标准 `ToolCallBlock`、identity、workspace cwd 和宿主动作，不读取会话、上下文或 Conversation assembler。skill（技能）仍是普通工具；它和其他业务工具使用同一 keyed slot 注册路径。
 
 details panel 是第二个工具展示点，但不是调用树所有者。`ui-conversation` 定位 selected call，并通过 `'conversation.details.tool'` 委托 output body；`ui-tool` 复用 card model，插件缺席时 conversation fallback 保留 raw result text。
+
+生产 `ui-tool` 包由 Rust/WASM 实现。跨构建目标的 Rust core 从冻结的 wire value 派生通用 row，以及 terminal、diff、read、search、Web 与 todo card 数据。浏览器 binding 通过页面注入的 React 与 `ui-primitives` face 渲染，把原始 `ToolCallBlock` 对象原样传给 keyed 原子注册方，并让 slot 注册与资源释放（dispose）跟随调用方 fiber；包 face 不导出手写 JavaScript renderer 或依赖值。
 
 ## 运行时与渲染路径
 
@@ -47,7 +49,7 @@ Session Event window
 
 ## 验证
 
-`ui-conversation` 测试固定工具 Definition 的 call/result 配对、Code Dispatch、interruption 和 running-to-settled keyed identity，不导入 `ui-tool` 的生产 renderer。`ui-tool` 测试挂载真实 conversation 宿主，固定 root/subcall 递归、keyed dispatch、Generic fallback、selection、details 和具体工具 card。组装后的 Web 测试覆盖两个插件共同装载的路径。
+`ui-conversation` 测试固定工具 Definition 的 call/result 配对、Code Dispatch、interruption 和 running-to-settled keyed identity，不导入 `ui-tool` 的生产 renderer。`ui-tool` 的固定源码测试套件与 live WASM 测试套件分别固定 TypeScript oracle 和编译实现；WASM 测试驱动 row 交互与 card 优先级、所有内置注册方、递归 owner identity、details fallback、注册及资源释放。优化后的 classic bundle 冒烟测试固定精确的 `apply`/`inject` face，以及运行时 React/primitive 依赖隔离。组装后的 Web 测试覆盖两个插件共同装载的路径。
 
 ## 考虑过的替代方案
 

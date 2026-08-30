@@ -941,6 +941,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-input-trigger" => "client-ui-input-trigger-invariant",
         "@seekdeep-ai/seekdeep-client-ui-commands" => "client-ui-commands-invariant",
         "@seekdeep-ai/seekdeep-client-ui-conversation" => "client-ui-conversation-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-tool" => "client-ui-tool-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -1125,6 +1126,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-conversation" {
         return ui_conversation_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-tool" {
+        return ui_tool_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
@@ -1287,6 +1291,12 @@ fn ui_conversation_module_factory(global: &str) -> String {
         .replace("__GLOBAL__", global)
 }
 
+fn ui_tool_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ {global}.configureClientUiTool(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); return {{ apply: {global}.applyClientUiTool, inject: ['slots'] }}; }}"
+    )
+}
+
 #[allow(clippy::too_many_lines)] // Closed module-specific declaration dispatch stays auditable here.
 fn compatibility_declarations(module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
@@ -1390,6 +1400,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-conversation" {
         return ui_conversation_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-tool" {
+        return ui_tool_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
@@ -2125,6 +2138,36 @@ export interface PlanReview {
   plan: string;
   approve: { label: string; description?: string };
   decline?: { label: string; description?: string };
+}
+"
+    .to_owned()
+}
+
+fn ui_tool_declarations() -> String {
+    r"
+import type { ToolCallBlock } from '@seekdeep-ai/seekdeep-client-runtime/client';
+import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@seekdeep-ai/seekdeep-client-ui-slots';
+import type {} from '@seekdeep-ai/seekdeep-client-ui-conversation/client';
+import type {} from '@seekdeep-ai/seekdeep-client-locale/client';
+export const apply: typeof wasm_bindgen.applyClientUiTool;
+export const inject: readonly ['slots'];
+export interface ToolCallOwnerProps {
+  callId: string;
+  toolName: string;
+  block: ToolCallBlock;
+  cwd?: string | undefined;
+  openFile(path: string): void;
+  inspect?: (() => void) | undefined;
+}
+export type ToolCallViewProps = PropsRuntime<'tool.call.toolview'>;
+export type ToolTreeProps = PropsRuntime<'conversation.chat.node', 'tool-call'>
+  & PropsRenderSlots<'tool.call.toolview'>
+  & PropsLocale<'conversation'>;
+export type ToolDetailsProps = PropsRuntime<'conversation.details.tool'> & PropsLocale<'conversation'>;
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface SlotMap {
+    'tool.call.toolview': { kind: 'keyed'; scope: 'session'; owner: ToolCallOwnerProps };
+  }
 }
 "
     .to_owned()
@@ -3096,6 +3139,44 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-conversation-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-conversation"));
+    }
+
+    #[test]
+    fn ui_tool_bundle_configures_renderers_and_exact_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_tool_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-tool",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiTool(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_tool_wasm.applyClientUiTool",
+            "inject: ['slots']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-tool");
+        for expected in [
+            "interface ToolCallOwnerProps",
+            "type ToolCallViewProps",
+            "type ToolTreeProps",
+            "type ToolDetailsProps",
+            "'tool.call.toolview'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-tool",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-tool-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-tool"));
     }
 
     #[test]

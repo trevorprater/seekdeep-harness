@@ -16,11 +16,13 @@ Tool is a first-class Client UI presentation concept. `@seekdeep-ai/seekdeep-cli
 
 Conversation data assembly follows the later [Conversation business-node decision](2026-08-09-client-conversation-node-assembly.md). The `ui-conversation` Tool Definition pairs root call/result Session Events, folds Code Dispatch edges into recursive `ToolCallBlock.subCalls`, and emits one stable `tool-call` Chat Node. This data responsibility handles only official Tool identity and topology; it does not interpret presentation for concrete Tool names.
 
-[`ChatView`](../../../../packages/client/ui-conversation/src/client/chat/ChatView.tsx) only places generic [`ChatNodeSeat`](../../../../packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx) entries in Chat snapshot `order`. A Seat dispatches `'conversation.chat.node'` by `node.kind`; [`ui-tool`](../../../../packages/client/ui-tool/src/client/apply.ts) registers the `tool-call` entry, and [`ToolCallTree`](../../../../packages/client/ui-tool/src/client/tool/ToolCallTree.tsx) recursively traverses the root block. Every root or child level dispatches through the same keyed/session `'tool.call.toolview'` child slot with `entryKey: toolName`, falling back to `GenericToolCard` when no registration exists.
+[`ChatView`](../../../../crates/client-ui-conversation/src/browser_chat_view.rs) only places generic [`ChatNodeSeat`](../../../../crates/client-ui-conversation/src/browser_chat_seat.rs) entries in Chat snapshot `order`. A Seat dispatches `'conversation.chat.node'` by `node.kind`; [`ui-tool`](../../../../crates/client-ui-tool/src/browser_apply.rs) registers the `tool-call` entry, and [`ToolCallTree`](../../../../crates/client-ui-tool/src/browser_tree.rs) recursively traverses the root block. Every root or child level dispatches through the same keyed/session `'tool.call.toolview'` child slot with `entryKey: toolName`, falling back to `GenericToolCard` when no registration exists.
 
 A business Tool plugin receives one standard `ToolCallBlock`, identity, workspace cwd, and host actions; it does not read Session, Context, or the Conversation assembler. Skill remains an ordinary Tool and uses the same keyed-slot registration path as other business Tools.
 
 The details panel is a second Tool presentation point, not the call-tree owner. `ui-conversation` locates the selected call and delegates its output body through `'conversation.details.tool'`; `ui-tool` reuses the card model, while the conversation fallback retains raw result text when the plugin is absent.
+
+The production `ui-tool` package is Rust/WASM. Its target-portable Rust core derives generic rows and terminal, diff, read, search, Web, and todo card data from frozen wire values. The browser binding renders through the page's injected React and `ui-primitives` faces, forwards the original `ToolCallBlock` object unchanged to keyed atomic registrants, and owns Slot registration and disposal through the caller fiber; the package face exports no handwritten JavaScript renderer or dependency value.
 
 ## Runtime and render path
 
@@ -47,7 +49,7 @@ Session Event window
 
 ## Verification
 
-`ui-conversation` tests pin the Tool Definition's call/result pairing, Code Dispatch, interruption, and running-to-settled keyed identity without importing production `ui-tool` renderers. `ui-tool` tests mount the real conversation host and pin root/subcall recursion, keyed dispatch, Generic fallback, selection, details, and concrete Tool cards. Assembled Web tests cover the path with both plugins loaded.
+`ui-conversation` tests pin the Tool Definition's call/result pairing, Code Dispatch, interruption, and running-to-settled keyed identity without importing production `ui-tool` renderers. `ui-tool`'s pinned source suite and live WASM suite independently pin the TypeScript oracle and compiled implementation; the WASM suite drives row gestures and card precedence, every built-in registrant, recursive owner identity, details fallback, registration, and teardown. An optimized classic-bundle smoke test pins the exact `apply`/`inject` face and runtime React/primitive dependency isolation. Assembled Web tests cover the path with both plugins loaded.
 
 ## Alternatives considered
 
