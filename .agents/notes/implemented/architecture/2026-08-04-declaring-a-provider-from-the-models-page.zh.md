@@ -26,6 +26,8 @@ Status: implemented
 
 **Provider ID** 是创建卡片上唯一保持固定的字段，原因不是没做控件。它是 `providers.<route>` 这个字典键，因此改它是一次搬移而非一次编辑，而编辑器正是由那次搬移会作废的 `settingsPath` 寻址的。它还被本 namespace 之外引用——`agent-default-model` 存着一个 `provider` 字符串，每条会话日志里的每个 `request/header` 也都已经记下了一个——因此重命名会悄悄抽空这个页面看不见的那些引用。它同时是派生凭据引用的词干：页面写得了密钥却永远读不回来，因此无法把 `OLD_API_KEY` 搬到 `NEW_API_KEY`，重命名要么让已存密钥成为孤儿，要么让 profile 指向一个仍带旧名的引用。声明新路由再删掉旧的，把这三件事都显式做了一遍，而页面本就提供这两半。
 
+生产 `ui-settings-models` 包由 Rust/WASM 实现。跨构建目标的 Rust 负责提供方／settings／凭据 join、最新 generation 结算、welcome 确认、readiness、API 密钥判断、容量拼写、模型校验、setup 姿态、提供方 identity 与最小 path operation。浏览器 binding 通过页面注入的 React、`ui-primitives`、schema-form 与 selector face 渲染；Rust 控制器拥有可观察快照与写入顺序。包的公开 Client face 仍精确保持为 `apply`、`inject` 与 `refreshIfLoaded`。
+
 ## Alternatives considered
 
 **在 `ProviderEditor` 上加字段来声明提供方。** 两张卡片变一张，但编辑器由 `settingsPath` 寻址，而正在被命名的路由还没有路径。逐次按键重算路径会让卡片重新挂载并丢掉草稿；推迟计算则意味着编辑器的整条写入路径不再描述它正在编辑的东西。
@@ -48,4 +50,4 @@ Status: implemented
 
 ## Testing
 
-`packages/client/ui-settings-models/tests/provider-form.client.spec.tsx` 在脚本化的协议面之上驱动渲染后的页面：添加、编辑与移除行；被清空的可选字段离开 profile、非整数容量从不进入；询问携带已修改的端点、未保存的密钥，以及 profile 自身的协议；选择框的默认选中、勾选切换、取消，以及「采纳保留已调优的行」；空列表、被拒、传输被拒三条路径；创建写入一份 profile 加其凭据；创建按钮上的每一道门控；以及只读姿态。`protocolChoices` 针对「声明了该 union」与「没有声明」两种 schema 都有覆盖。样式 gate 读取本包自己的源码，任何只取 `.input` 而不取 `.selectInput` 的 `<select>` 都会失败——否则它保留的系统箭头会紧贴 `select.input` 所设 240px 上限的右边缘。编辑器自身的字段清单按路由种类各有断言——内置目录路由止于密钥与端点，已声明路由还带着协议——同时覆盖协议改动只以单条 `api` path op 传出、改名只以单条 `displayName` path op 传出、清空名称是取消设置而不是存入适配器会拒绝的空串，以及不写协议的已声明 profile 什么都不选中、而非选中第一个候选。`apps/web/tests/models-settings.e2e.ts` 经真实协议层重新打开这条已声明路由，捕获该卡片，并断言选定的协议与新名称都抵达了 `settings.yaml`、该行也以新名重新注册。
+固定源包的 219 项测试在脚本化的协议面之上驱动渲染后的页面：添加、编辑与移除行；被清空的可选字段离开 profile、非整数容量从不进入；询问携带已修改的端点、未保存的密钥，以及 profile 自身的协议；选择框的默认选中、勾选切换、取消，以及「采纳保留已调优的行」；空列表、被拒、传输被拒三条路径；创建写入一份 profile 加其凭据；创建按钮上的每一道门控；以及只读姿态。原生 Rust 测试固定跨构建目标的 join、readiness、welcome、容量、校验、path operation、setup、identity 与路由分区。live WASM 测试通过注册、失效通知、modal lifecycle、buffer reindex、discovery adoption、settings 先于凭据的重试、休眠提供方采纳与凭据优先删除来驱动编译后的 store 和组件。优化后的 classic bundle 冒烟测试固定精确的模块 face 与依赖隔离。`protocolChoices` 针对「声明了该 union」与「没有声明」两种 schema 都有覆盖。样式 gate 读取本包自己的源码，任何只取 `.input` 而不取 `.selectInput` 的 `<select>` 都会失败——否则它保留的系统箭头会紧贴 `select.input` 所设 240px 上限的右边缘。编辑器自身的字段清单按路由种类各有断言——内置目录路由止于密钥与端点，已声明路由还带着协议——同时覆盖协议改动只以单条 `api` path op 传出、改名只以单条 `displayName` path op 传出、清空名称是取消设置而不是存入适配器会拒绝的空串，以及不写协议的已声明 profile 什么都不选中、而非选中第一个候选。组装后的 Web 场景经真实协议层重新打开这条已声明路由，捕获该卡片，并断言选定的协议与新名称都抵达了 `settings.yaml`、该行也以新名重新注册。

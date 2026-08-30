@@ -942,6 +942,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-commands" => "client-ui-commands-invariant",
         "@seekdeep-ai/seekdeep-client-ui-conversation" => "client-ui-conversation-invariant",
         "@seekdeep-ai/seekdeep-client-ui-tool" => "client-ui-tool-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-settings-models" => "client-ui-settings-models-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -1129,6 +1130,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-tool" {
         return ui_tool_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-models" {
+        return ui_settings_models_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
@@ -1297,6 +1301,12 @@ fn ui_tool_module_factory(global: &str) -> String {
     )
 }
 
+fn ui_settings_models_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ const webReact = require('@seekdeep-ai/seekdeep-client-web-react'); {global}.configureClientUiSettingsModels(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), require('@seekdeep-ai/seekdeep-client-schema-form'), webReact.bindSnapshotSelector); return {{ apply: {global}.applyClientUiSettingsModels, inject: ['slots', 'locale', 'connection', 'remote'], refreshIfLoaded: {global}.refreshModelsIfLoaded }}; }}"
+    )
+}
+
 #[allow(clippy::too_many_lines)] // Closed module-specific declaration dispatch stays auditable here.
 fn compatibility_declarations(module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
@@ -1403,6 +1413,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-tool" {
         return ui_tool_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-models" {
+        return ui_settings_models_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
@@ -2168,6 +2181,67 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface SlotMap {
     'tool.call.toolview': { kind: 'keyed'; scope: 'session'; owner: ToolCallOwnerProps };
   }
+}
+"
+    .to_owned()
+}
+
+fn ui_settings_models_declarations() -> String {
+    r"
+import type { ConfigurableProviderView, CredentialView, IApiClient, SettingsNamespaceView } from '@seekdeep-ai/seekdeep-api-remotes/client';
+import type { SnapshotSelectorHook } from '@seekdeep-ai/seekdeep-client-web-react';
+import type { SnapshotStore } from '@seekdeep-ai/seekdeep-client-runtime/client';
+export const apply: typeof wasm_bindgen.applyClientUiSettingsModels;
+export const inject: readonly ['slots', 'locale', 'connection', 'remote'];
+export const refreshIfLoaded: typeof wasm_bindgen.refreshModelsIfLoaded;
+export interface ProviderRow {
+  entry: ConfigurableProviderView;
+  configured: boolean;
+  removable: boolean;
+  apiKeyEnv: string | undefined;
+  credential: CredentialView | undefined;
+}
+export interface ModelsSettingsState {
+  status: 'idle' | 'loading' | 'ready' | 'error';
+  error: string | null;
+  credentialError: string | null;
+  writable: boolean;
+  rows: readonly ProviderRow[];
+  namespaces: ReadonlyMap<string, SettingsNamespaceView>;
+}
+interface ModelsSettingsStore {
+  readonly store: SnapshotStore<ModelsSettingsState>;
+  load(): Promise<void>;
+}
+export interface ModelsSectionInjected {
+  controller: ModelsSettingsStore;
+  useSnapshot: SnapshotSelectorHook<ModelsSettingsState>;
+  api: Pick<IApiClient, 'settings' | 'credentials' | 'llm'>;
+  t(key: ModelsKey): string;
+}
+export type ModelsSectionProps = Partial<ModelsSectionInjected>;
+export type ModelsKey =
+  | 'nav' | 'title' | 'intro' | 'edit' | 'editProvider' | 'remove' | 'removeProvider'
+  | 'deleteTitle' | 'deleteDescription' | 'deleteDescriptionWithCredential' | 'deleteConfirm'
+  | 'deleting' | 'add' | 'provider' | 'close' | 'cancel' | 'apply' | 'applying'
+  | 'savedProvider' | 'credentialConfigured' | 'credentialMissing' | 'readOnly' | 'loadFailed'
+  | 'conflict' | 'retry' | 'keyInput' | 'keyPlaceholder' | 'keyPlaceholderNative'
+  | 'codexOAuth' | 'keyStored' | 'keyEnvLocked' | 'customized' | 'baseUrl' | 'baseUrlDefault'
+  | 'models' | 'modelsInherited' | 'modelsCustomized' | 'resetModels' | 'model' | 'modelId'
+  | 'modelName' | 'modelNamePlaceholder' | 'contextWindow' | 'contextWindowPlaceholder'
+  | 'maxTokens' | 'maxTokensPlaceholder' | 'modelAdvanced' | 'addModel' | 'removeModel'
+  | 'modelsEmpty' | 'keyBlank' | 'keyBlankNew' | 'keyIllegalCharacters' | 'modelIdRequired'
+  | 'modelIdDuplicate' | 'modelNameInvalid' | 'modelContextInvalid' | 'modelMaxTokensInvalid'
+  | 'advancedHint' | 'modelCapacityInvalid' | 'modelDuplicate' | 'modelContextWindow'
+  | 'modelMaxTokens' | 'fetchModels' | 'fetching' | 'fetchNeedsBaseUrl' | 'fetchEmpty'
+  | 'fetchTitle' | 'fetchDescription' | 'fetchAdopt' | 'customAdd' | 'customTitle'
+  | 'customTag' | 'customRoute' | 'customRouteHint' | 'customRouteInvalid' | 'customRouteTaken'
+  | 'customDisplayName' | 'customApi' | 'customApiUnset' | 'customNeedsBaseUrl'
+  | 'customNeedsModels' | 'create' | 'creating' | 'welcomeTitle' | 'welcomeBody'
+  | 'welcomeContinue' | 'welcomeError' | 'onboardingTitle' | 'onboardingDescription'
+  | 'onboardingLater' | 'onboardingSave' | 'onboardingSaving' | 'keyRequired';
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { 'settings.models': ModelsKey }
 }
 "
     .to_owned()
@@ -3177,6 +3251,47 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-tool-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-tool"));
+    }
+
+    #[test]
+    fn ui_settings_models_bundle_configures_forms_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_settings_models_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-settings-models",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiSettingsModels(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "require('@seekdeep-ai/seekdeep-client-schema-form')",
+            "webReact.bindSnapshotSelector",
+            "apply: __seekdeep_client_ui_settings_models_wasm.applyClientUiSettingsModels",
+            "refreshIfLoaded: __seekdeep_client_ui_settings_models_wasm.refreshModelsIfLoaded",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-settings-models");
+        for expected in [
+            "interface ProviderRow",
+            "interface ModelsSettingsState",
+            "interface ModelsSectionInjected",
+            "type ModelsSectionProps",
+            "type ModelsKey",
+            "'settings.models'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-settings-models",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-settings-models-invariant"));
     }
 
     #[test]

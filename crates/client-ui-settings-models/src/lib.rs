@@ -1,14 +1,32 @@
 //! Model-provider settings and first-run onboarding semantic core.
 
 mod api_key;
+mod editor;
 mod models;
 mod onboarding;
 mod welcome;
 
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(target_arch = "wasm32")]
+mod browser_apply;
+#[cfg(target_arch = "wasm32")]
+mod browser_components;
+#[cfg(target_arch = "wasm32")]
+mod browser_store;
+
 pub use api_key::*;
+pub use editor::*;
 pub use models::*;
 pub use onboarding::*;
 pub use welcome::*;
+
+#[cfg(target_arch = "wasm32")]
+pub use browser_apply::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_components::*;
+#[cfg(target_arch = "wasm32")]
+pub use browser_store::*;
 
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-settings-models";

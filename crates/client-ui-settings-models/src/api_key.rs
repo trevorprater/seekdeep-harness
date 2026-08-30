@@ -40,6 +40,16 @@ fn ecmascript_whitespace(character: char) -> bool {
     )
 }
 
+/// Removes exactly the leading and trailing whitespace stripped by JavaScript `String.trim`.
+#[must_use]
+pub fn trim_api_key(draft: &str) -> &str {
+    trim_ecmascript_whitespace(draft)
+}
+
+pub(crate) fn trim_ecmascript_whitespace(value: &str) -> &str {
+    value.trim_matches(ecmascript_whitespace)
+}
+
 fn environment_line(value: &str) -> bool {
     let mut bytes = value.bytes();
     let Some(first) = bytes.next() else {
@@ -78,7 +88,7 @@ pub fn api_key_failure(draft: &str) -> Option<ApiKeyFailureKey> {
     if draft.is_empty() {
         return None;
     }
-    let value = draft.trim_matches(ecmascript_whitespace);
+    let value = trim_api_key(draft);
     if value.is_empty() {
         return Some(ApiKeyFailureKey::KeyBlank);
     }

@@ -48157,12 +48157,32 @@
     {
       "source": "packages/client/ui-settings-models/src/client/CustomProviderCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_apply.rs",
+        "crates/client-ui-settings-models/src/editor.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins route/base/protocol/model/key gates, derived credential reference, settings-before-credential creation, trimmed keys, committed-profile retry, and cancel posture",
+        "Rust route, API-key, model-validation, capacity, and write-order logic passes strict wasm32 Clippy"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/DeepSeekModelsEditor.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/src/editor.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "native Rust pins capacity parsing/formatting and catalog validation; live WASM pins row add/edit/remove, disclosure, invalid text retention, blur settlement, reset, and index rekeying",
+        "hidden model fields survive object-copy edits and strict native/wasm32 Clippy passes"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.module.css",
@@ -48178,17 +48198,46 @@
     {
       "source": "packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/src/models.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM drives shared Models readiness, load/complete effects, exact official-row selection, credential-only required editor, configure-later, and modal composition",
+        "native readiness matrix covers adapter/provider/credential/settings failure partitions"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/EditorFooter.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "compiled footer preserves busy-only cancel locking, owner-supplied submit refusal, default/override labels, and callback ownership",
+        "live provider/custom/onboarding transactions execute through this footer"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/ModelListEditor.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/src/editor.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins askability, live-form discovery request, failure/empty posture, candidate defaults/toggle/cancel/adopt, tuned-row precedence, capacity buffers, and row index rekeying",
+        "native Rust catalog validation and capacity vocabulary are shared with the DeepSeek editor"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/ModelsSection.module.css",
@@ -48204,7 +48253,17 @@
     {
       "source": "packages/client/ui-settings-models/src/client/ModelsSection.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_apply.rs",
+        "crates/client-ui-settings-models/src/models.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins idle/error/read-only states, setup/card rows, credential badges, editor exclusivity, dormant adoption, custom declaration, session dismissal, and confirmation-gated deletion",
+        "managed credential deletion is observed before profile unset and post-write reload"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/OnboardingModal.module.css",
@@ -48220,12 +48279,31 @@
     {
       "source": "packages/client/ui-settings-models/src/client/OnboardingModal.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins headless blocking Modal chrome, app-root inert ownership/restoration, no implicit dismissal, title focus, and absent-root fallback",
+        "welcome and credential onboarding share the compiled wrapper"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/ProviderEditor.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_apply.rs",
+        "crates/client-ui-settings-models/src/editor.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins schema-address resolution, curated families, credential probe/lock/OAuth, minimal path ops, conflict/failure posture, identity/protocol edits, models, and required credential onboarding",
+        "settings success advances revision/draft baselines before credential retry; the second attempt emits only credentials.set"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/WelcomeNotice.module.css",
@@ -48241,7 +48319,17 @@
     {
       "source": "packages/client/ui-settings-models/src/client/WelcomeNotice.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/src/welcome.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins exact two-paragraph copy, version-gated rendering, load/acknowledge effects, saving refusal, error copy, one-shot completion, and focused blocking modal",
+        "native welcome controller pins Host and memory persistence plus latest-operation-wins"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/apiKey.ts",
@@ -48252,35 +48340,87 @@
         "crates/client-ui-settings-models/tests/core_parity.rs"
       ],
       "evidence": [
-        "pinned source components suite passed within 103/103 selected ui-settings-models tests",
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
         "Rust parity covers empty input, ECMAScript-whitespace blank input, printable ASCII, trimmed input, environment-line heuristic, matching quote wrappers, partial quotes, base64 padding, control bytes, and non-ASCII rejection",
-        "CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-ui-settings-models --all-features -- --test-threads=1"
+        "fresh native Rust suite: 8 tests passed under CARGO_INCREMENTAL=0"
       ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_apply.rs",
+        "crates/client-ui-settings-models/src/browser_store.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live WASM apply pins exact slots/locale/connection/remote inject order, dictionaries, three declaration injections, controllers, invalidations, and disposal",
+        "optimized classic ModuleLoader execution exposes exactly apply/inject/refreshIfLoaded",
+        "generated declarations preserve ModelsSection, ProviderRow, state, ModelsKey, and LocaleNamespaceMap types"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/data/models-locales.json",
+        "crates/client-ui-settings-models/src/browser_apply.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "compiled zh/en settings.models dictionaries preserve the complete source key set with required SeekDeep identity renames",
+        "live apply registers one owned namespace and label/inject faces share its bound translator",
+        "welcome/onboarding/provider/model copy is driven through compiled components"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/models.rs",
+        "crates/client-ui-settings-models/src/browser_store.rs",
+        "crates/client-ui-settings-models/tests/core_parity.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "native Rust joins provider/settings/credential layers, preserves last-good rows, degrades credential enrichment, de-duplicates refs, and fences stale generations",
+        "live WASM drives real generated RPC envelopes and reference-stable observable snapshots with idle refresh gating"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/client/welcome-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/welcome.rs",
+        "crates/client-ui-settings-models/src/browser_store.rs",
+        "crates/client-ui-settings-models/tests/core_parity.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "native and live WASM pin exact version acknowledgement, missing/malformed namespace, business/transport errors, latest-generation containment, loaded-only refresh, and memory persistence",
+        "Host mutation uses exact ui-onboarding/welcomeNoticeVersion path and current copy version"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser.rs",
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust embeds all four verified CSS Module sources and prefixes their class selectors under one package identity",
+        "live configuration installs exactly the package-owned styles and compiled components use the prefixed classes",
+        "generated Client declarations replace the TypeScript CSS declaration shim"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/src/index.ts",
@@ -48325,27 +48465,77 @@
     {
       "source": "packages/client/ui-settings-models/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_apply.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins exact service inject order, declaration-before/after registration, locale thunk, three entries, HMR-style disposal, loopback/memory welcome selection, and pushed invalidations",
+        "compiled apply shares one Models controller across section and onboarding"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/components.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_apply.rs",
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM drives section states, setup/row cards, badges, editors, model validation/capacities, provider writes/retry, read-only posture, add paths, and ordered deletion",
+        "native Rust independently pins pure route/key/model/path/setup/identity partitions"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned-source invariant and no-op Host assertions pass inside the 219-test oracle suite",
+        "generated package invariant registers client-ui-settings-models-invariant under the exact package name",
+        "node-half Rust Host plugin remains dependency-free and no-op"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/onboarding-dialog.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/src/models.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins modal inert/focus/implicit-dismiss behavior, credential-required save, failure retention, configure-later, unavailable/ready skip, and external refresh closure",
+        "native readiness covers every closed diagnostic reason"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/provider-form.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_apply.rs",
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/src/editor.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "native and live WASM cover schema protocol choices, capacity vocabulary, row buffers/reindex, discovery picker, provider field inventory, custom creation gates, API-key matrix, minimal path ops, conflicts, transport/business failures, and retry ordering",
+        "optimized browser implementation passes strict native and wasm32 Clippy"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/readiness.client.spec.ts",
@@ -48363,22 +48553,66 @@
     {
       "source": "packages/client/ui-settings-models/tests/store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/models.rs",
+        "crates/client-ui-settings-models/src/browser_store.rs",
+        "crates/client-ui-settings-models/tests/core_parity.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "native and live WASM pin joins, credential degradation/rejection, last-good rows, stale response fencing, malformed/non-object profiles, empty-ref skip, non-Error messages, and stable snapshots",
+        "browser transport executes the generated RPC envelope path"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/styles.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.module.css",
+        "packages/client/ui-settings-models/src/client/ModelsSection.module.css",
+        "packages/client/ui-settings-models/src/client/OnboardingModal.module.css",
+        "packages/client/ui-settings-models/src/client/WelcomeNotice.module.css",
+        "crates/client-ui-settings-models/src/browser.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source style suite passes inside the 219-test oracle run",
+        "verified CSS assets retain theme-token-only colors, closed blocks, separate row/editor cards, and shared select chevrons",
+        "Rust prefixes every class selector and live configuration installs four owned styles"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/welcome-notice.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/browser_components.rs",
+        "crates/client-ui-settings-models/src/onboarding.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "live WASM pins both locale copies, blocking one-action modal, title focus, committed-only completion, acknowledged skip, saving disablement, and refused-write alert",
+        "compiled notice consumes the exact versioned Rust copy constants"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tests/welcome-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-models/src/welcome.rs",
+        "crates/client-ui-settings-models/src/browser_store.rs",
+        "crates/client-ui-settings-models/tests/core_parity.rs",
+        "crates/client-ui-settings-models/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source settings-models suite: 10 files and 219 tests passed",
+        "native and live WASM cover memory, exact version, idempotent mutation, load/save failures, missing/malformed durable values, stale settlements, and loaded-only refresh",
+        "observable snapshots remain reference-stable between state replacements"
+      ]
     },
     {
       "source": "packages/client/ui-settings-models/tsconfig.json",
@@ -48394,7 +48628,16 @@
     {
       "source": "packages/client/ui-settings-models/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-settings-models/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle/watch scripts invoke cargo xtask wasm-package for seekdeep-client-ui-settings-models",
+        "optimized classic ModuleLoader execution configures React/primitives/schema-form/web-react and exposes exact apply/inject/refreshIfLoaded values",
+        "generated index/invariant/client declarations and npm pack dry-run preserve the ten-file source package layout"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugin-inventory/README.i18n.yaml",

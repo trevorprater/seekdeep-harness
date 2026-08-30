@@ -5602,11 +5602,17 @@ name = "seekdeep-client-ui-settings-models"
 version = "0.1.0-rc.5"
 dependencies = [
  "futures",
+ "indexmap 2.14.0",
+ "js-sys",
+ "ryu-js",
  "seekdeep-client-runtime",
  "seekdeep-cordis",
  "serde",
  "serde_json",
  "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

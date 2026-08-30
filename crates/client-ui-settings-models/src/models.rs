@@ -3,8 +3,9 @@
 use std::{cell::Cell, collections::BTreeMap, rc::Rc};
 
 use futures::future::LocalBoxFuture;
+use indexmap::IndexMap;
 use seekdeep_client_runtime::{SnapshotStore, StoreFlushMode, StoreFlushScheduler, StoreLogger};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 /// One configurable provider-directory entry.
@@ -19,8 +20,14 @@ pub struct ConfigurableProviderView {
     pub settings_ns: String,
     /// Path from namespace root to this provider profile.
     pub settings_path: Vec<String>,
+    /// Authentication setup declared by the owning adapter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authentication: Option<String>,
     /// Whether an adapter currently serves the route.
     pub active: bool,
+    /// Whether the adapter knows this route only from user configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared: Option<bool>,
 }
 
 /// One credential-reference description.
@@ -36,6 +43,56 @@ pub struct CredentialView {
     pub source: Option<String>,
 }
 
+/// JSON field that distinguishes wire omission from an explicit `null` value.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum OptionalJsonValue {
+    /// The property was absent from the wire object.
+    #[default]
+    Missing,
+    /// The property was present, including when its value was JSON `null`.
+    Present(Value),
+}
+
+impl OptionalJsonValue {
+    fn is_missing(&self) -> bool {
+        matches!(self, Self::Missing)
+    }
+
+    fn as_value(&self) -> Option<&Value> {
+        match self {
+            Self::Missing => None,
+            Self::Present(value) => Some(value),
+        }
+    }
+}
+
+impl From<Value> for OptionalJsonValue {
+    fn from(value: Value) -> Self {
+        Self::Present(value)
+    }
+}
+
+impl Serialize for OptionalJsonValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Missing => serializer.serialize_unit(),
+            Self::Present(value) => value.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for OptionalJsonValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Value::deserialize(deserializer).map(Self::Present)
+    }
+}
+
 /// One settings namespace view used by the Models editor.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -49,11 +106,20 @@ pub struct SettingsNamespaceView {
     #[serde(default)]
     pub value: Value,
     /// Composition base layer.
-    #[serde(default)]
-    pub base: Value,
+    #[serde(default, skip_serializing_if = "OptionalJsonValue::is_missing")]
+    pub base: OptionalJsonValue,
     /// User-owned layer.
+    #[serde(default, skip_serializing_if = "OptionalJsonValue::is_missing")]
+    pub user: OptionalJsonValue,
+    /// Whether changes apply live or require restart.
     #[serde(default)]
-    pub user: Value,
+    pub applies: String,
+    /// Redacted schema-declared secret slots.
+    #[serde(default)]
+    pub secrets: Vec<Value>,
+    /// Monotonic raw user-section revision.
+    #[serde(default)]
+    pub revision: u64,
 }
 
 /// One joined provider row rendered by the page.
@@ -99,7 +165,7 @@ pub struct ModelsSettingsState {
     /// Joined provider rows.
     pub rows: Vec<ProviderRow>,
     /// Namespace views by id.
-    pub namespaces: BTreeMap<String, SettingsNamespaceView>,
+    pub namespaces: IndexMap<String, SettingsNamespaceView>,
 }
 
 struct NoopScheduler;
@@ -171,24 +237,25 @@ impl ModelsSettingsStore {
             state.status = ModelsStatus::Loading;
             state.error = None;
         });
-        let (providers, settings) =
-            futures::future::join(self.transport.providers(), self.transport.settings()).await;
-        let (providers, (writable, views)) = match (providers, settings) {
-            (Ok(providers), Ok(settings)) => (providers, settings),
-            (Err(error), _) | (_, Err(error)) => {
-                if self.generation.get() == generation {
-                    self.store.update(|state| {
-                        state.status = ModelsStatus::Error;
-                        state.error = Some(error);
-                    });
+        let (providers, (writable, views)) =
+            match futures::future::try_join(self.transport.providers(), self.transport.settings())
+                .await
+            {
+                Ok(loaded) => loaded,
+                Err(error) => {
+                    if self.generation.get() == generation {
+                        self.store.update(|state| {
+                            state.status = ModelsStatus::Error;
+                            state.error = Some(error);
+                        });
+                    }
+                    return;
                 }
-                return;
-            }
-        };
+            };
         let namespaces = views
             .into_iter()
             .map(|view| (view.ns.clone(), view))
-            .collect::<BTreeMap<_, _>>();
+            .collect::<IndexMap<_, _>>();
         let mut rows = providers
             .into_iter()
             .map(|entry| join_row(entry, &namespaces))
@@ -235,7 +302,7 @@ fn path_value<'a>(value: &'a Value, path: &[String]) -> Option<&'a Value> {
 
 fn join_row(
     entry: ConfigurableProviderView,
-    namespaces: &BTreeMap<String, SettingsNamespaceView>,
+    namespaces: &IndexMap<String, SettingsNamespaceView>,
 ) -> ProviderRow {
     let namespace = namespaces.get(&entry.settings_ns);
     let configured = namespace.is_some_and(|namespace| {
@@ -244,8 +311,16 @@ fn join_row(
     });
     let removable = namespace.is_some_and(|namespace| {
         !entry.settings_path.is_empty()
-            && path_value(&namespace.user, &entry.settings_path).is_some()
-            && path_value(&namespace.base, &entry.settings_path).is_none()
+            && namespace
+                .user
+                .as_value()
+                .and_then(|user| path_value(user, &entry.settings_path))
+                .is_some()
+            && namespace
+                .base
+                .as_value()
+                .and_then(|base| path_value(base, &entry.settings_path))
+                .is_none()
     });
     let api_key_env = namespace
         .and_then(|namespace| path_value(&namespace.value, &entry.settings_path))
@@ -270,7 +345,7 @@ pub fn derive_key_ref(provider: &str) -> String {
     let mut separator = false;
     for character in provider.chars().flat_map(char::to_uppercase) {
         if character.is_ascii_uppercase() || character.is_ascii_digit() {
-            if separator && !result.is_empty() {
+            if separator {
                 result.push('_');
             }
             separator = false;
@@ -278,6 +353,9 @@ pub fn derive_key_ref(provider: &str) -> String {
         } else {
             separator = true;
         }
+    }
+    if separator {
+        result.push('_');
     }
     result.push_str("_API_KEY");
     result
