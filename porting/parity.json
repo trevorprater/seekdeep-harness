@@ -41854,13 +41854,27 @@
         "packages/client/ui-conversation/package.json"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "mechanical rename port (dsh to seekdeep)",
+        "bundle/watch now invoke cargo xtask wasm-package for seekdeep-client-ui-conversation; optimized build, classic ModuleLoader handoff, exact three-value public export surface, generated declarations, invariant companion and npm pack dry-run all passed"
       ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/apply.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_apply.rs",
+        "crates/client-ui-conversation/src/browser_conversation_controller.rs",
+        "crates/client-ui-conversation/src/browser_input_hub.rs",
+        "crates/client-ui-conversation/src/browser_input_blocks.rs",
+        "crates/client-ui-conversation/src/browser_chat_store.rs",
+        "crates/client-ui-conversation/tests/wasm_apply_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source chat-apply and apply-inject suites: 15 passed",
+        "two live WASM apply tests pin exact 10-service inject order, full Definition/view/renderer registration, locale/provider/service ownership, deferred Settings registration, all core Slot declarations, one shared store, Todo/Queue plugins, root/session/header/composer/chat/details inject faces, scoped controller provision, UTF-16 menu position, and reverse teardown",
+        "attachment admission returns localized copy, stop/fork/open failures preserve source failure posture, and strict targeted wasm32 Clippy passes with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/chat/AssistantMarkdown.module.css",
@@ -42333,7 +42347,22 @@
     {
       "source": "packages/client/ui-conversation/src/client/contract/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_contract.rs",
+        "crates/client-ui-conversation/src/input_contract.rs",
+        "crates/client-ui-conversation/src/browser_conversation_root.rs",
+        "crates/client-ui-conversation/src/browser_conversation_session.rs",
+        "crates/client-ui-conversation/src/browser_input_bar.rs",
+        "crates/client-ui-conversation/src/browser_chat_view.rs",
+        "crates/client-ui-conversation/src/browser_chat_seat.rs",
+        "crates/client-ui-conversation/src/browser_details_panel.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source views/type-chain suite: 2 passed",
+        "portable Rust contracts brand call, selection, session, input, attachment, view-tab, Chat-node and store currencies while compiled component boundaries consume the exact hook/action/owner/slot property names",
+        "the owning live WASM component suites cover ConversationRoot, Session/Header, InputBar, ChatView/Seat, DetailsPanel, TurnTail, message actions, queue/todo docks, and renderer-child contracts"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/contract/views.ts",
@@ -42594,7 +42623,19 @@
     {
       "source": "packages/client/ui-conversation/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_apply.rs",
+        "crates/client-ui-conversation/src/browser_approval_panel.rs",
+        "crates/client-ui-conversation/src/browser_conversation_controller.rs",
+        "xtask/src/main.rs",
+        "packages/client/ui-conversation/package.json"
+      ],
+      "evidence": [
+        "optimized classic ModuleLoader handoff configures the complete compiled component graph and exposes exactly apply, inject, and ConversationController with no dependency or implementation exports",
+        "generated client declarations carry the public conversation service, nominal ids, Chat data, store/view and slot contract type names",
+        "npm pack --dry-run includes exactly the three runtime entries, three declaration entries, package metadata and documentation"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/src/client/input/blocks.ts",
@@ -43090,47 +43131,124 @@
     {
       "source": "packages/client/ui-conversation/tests/apply-inject.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_apply_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_hub_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_controller_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source apply-inject suite passed as part of 15 focused apply tests",
+        "live WASM inject fixture drives provider shell materialization, scoped stop and command, workspace selection, shared view list, details selection/close, cwd-relative open, history paging and fork; owning InputHub/controller suites cover optimistic send rollback and attachment lifecycle"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/assembly-surfaces.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_apply_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_root_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_bar_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 27 files and 416 tests passed",
+        "live apply/root/input tests cover the resident shell, Hero-to-session continuity, compiled composer and authorized child-slot assembly"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/chat-apply.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_apply_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_register_node_renderers_parity.rs"
+      ],
+      "evidence": [
+        "fresh pinned-source chat-apply suite passed as part of 15 focused apply tests",
+        "live WASM apply ledger pins service, Chat ring/keyed child, all shared-store entries, root child authorization, stats dock, deliberate Tool-row omission, deferred registration and complete unload cascade"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/chat-branch-tails.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_message_item_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_context_body_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_turn_tail_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "owning live WASM message/context/turn-tail suites cover every branch-tail projection and action gate"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/chat-snapshot-fixture.client.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_nodes/chat_snapshot_builder.rs",
+        "crates/client-ui-conversation/tests/conversation_nodes_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_nodes_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "portable and live Chat builder matrices preserve fixture order, node/location/timeline/legacy faces and reference stability"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/chat-stats.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_stats_line_parity.rs",
+        "crates/client-ui-conversation/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "portable metric folds and five live StatsLine WASM cases cover the source branches"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/chat-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_chat_store_parity.rs",
+        "crates/client-ui-conversation/tests/conversation_contract_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live WASM chat-store tests pin declaration, persistence, actions and fresh identities"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/chat-view.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_chat_view_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_chat_seat_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live ChatView and keyed-seat WASM suites cover scrolling, paging, follow state, selection and row dispatch"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/context-meter.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_context_meter_parity.rs",
+        "crates/client-ui-conversation/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live ContextMeter and portable occupancy tests cover every source gate and interaction"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/conversation-node-definitions.client.spec.ts",
@@ -43151,17 +43269,44 @@
     {
       "source": "packages/client/ui-conversation/tests/coverage-tails.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_message_item_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_approval_panel_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_permission_select_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_details_panel_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "compiled branch-tail owners have focused live WASM coverage including newly ported PendingApproval receipt behavior"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/enter-behavior-row.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_enter_behavior_parity.rs",
+        "crates/client-ui-conversation/tests/core_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live row interaction and portable submission-policy matrices preserve source behavior"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/gate-branch-tails.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_approval_panel_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_permission_select_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_message_actions_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "focused live gate/approval/permission/action suites cover every source gate tail"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/host.client.spec.ts",
@@ -43179,32 +43324,81 @@
     {
       "source": "packages/client/ui-conversation/tests/image-labels.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_image_labels_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "four live WASM image-label cases preserve formatting, errors, lightbox, drop and rail copy"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/input-bar.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_input_bar_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_apply_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live InputBar matrix and assembled apply inject cover the complete source keyboard/attachment/composer surface"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/input-machine.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/input_machine_port_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_machine_port_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "portable and live WASM reducer matrices cover submission, references, clipboard, undo/paste, attempt and isolation behavior"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/input-matrix.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_input_bar_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_facade_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_decorations_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live bar/facade/decoration matrices cover the source input cross-product"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/input-scenarios.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_input_bar_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_hub_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_apply_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live bar/hub/assembled apply tests preserve scenario choreography and failure ownership"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/queue-dock.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_queue_dock_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_queue_face_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live QueueDock and queue-read-face suites cover source rendering, editing, actions, races and registration"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/reasoning-row.client.spec.tsx",
@@ -43221,17 +43415,46 @@
     {
       "source": "packages/client/ui-conversation/tests/selection-survival.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_chat_store_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_session_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_details_panel_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "shared compiled store plus Session/Details consumers preserve selection across view and panel lifecycles"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/service-orchestration.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_conversation_controller_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_hub_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_blocks_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_apply_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live controller/hub/block/apply suites cover root and scope service orchestration, queue/prompt failures, attachment ownership and teardown"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/skeleton.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_conversation_root_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_session_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_empty_hero_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_approval_panel_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "live Root/Session/Hero/Approval matrices cover the complete skeleton branches and lifecycle"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/submission-policy.client.spec.ts",
@@ -43248,7 +43471,14 @@
     {
       "source": "packages/client/ui-conversation/tests/todo-panel.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/tests/wasm_todo_panel_parity.rs"
+      ],
+      "evidence": [
+        "fresh full pinned ui-conversation suite: 416 passed",
+        "five live WASM Todo panel/dock tests preserve source gating, counts, glyphs, list state and registration"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tests/turn-metrics.client.spec.ts",
@@ -43265,7 +43495,18 @@
     {
       "source": "packages/client/ui-conversation/tests/views-type-chain.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/conversation_contract.rs",
+        "crates/client-ui-conversation/src/input_contract.rs",
+        "crates/client-ui-conversation/tests/conversation_contract_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_session_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_chat_view_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run packages/client/ui-conversation/tests/views-type-chain.client.spec.tsx: 2 passed against the pinned source",
+        "portable contract tests and live Session/Chat component tests preserve the type chain at the compiled Rust/WASM boundary"
+      ]
     },
     {
       "source": "packages/client/ui-conversation/tsconfig.json",
@@ -43281,7 +43522,15 @@
     {
       "source": "packages/client/ui-conversation/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-conversation/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally eliminated; bundle/watch run cargo xtask wasm-package for the compiled Rust/WASM artifact",
+        "optimized release package built successfully, focused xtask factory/declaration/invariant test passed, classic ModuleLoader handoff passed, and npm dry-run listed the complete publish set"
+      ]
     },
     {
       "source": "packages/client/ui-deliverables/README.i18n.yaml",

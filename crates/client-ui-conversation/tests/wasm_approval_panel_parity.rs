@@ -2,12 +2,17 @@
 
 #![cfg(target_arch = "wasm32")]
 
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
+
 use js_sys::{Array, Function, Object, Promise, Reflect};
 use seekdeep_client_ui_conversation::{
-    approval_flow_component, approval_panel_component, command_of_browser,
+    BrowserPendingApproval, approval_flow_component, approval_panel_component, command_of_browser,
     configure_client_ui_conversation_approval_panel,
 };
-use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
+use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -173,6 +178,77 @@ fn tool_node(root: JsValue) -> Object {
         ("kind", JsValue::from_str("tool-call")),
         ("data", object(&[("root", root)]).into()),
     ])
+}
+
+#[wasm_bindgen_test(async)]
+async fn pending_approval_forwards_fields_payload_and_rejected_receipts() {
+    let captured = Rc::new(RefCell::new(None::<JsValue>));
+    let accepted = Rc::new(Cell::new(true));
+    let respond_captured = captured.clone();
+    let respond_accepted = accepted.clone();
+    let respond = Closure::wrap(Box::new(move |value: JsValue| -> Promise {
+        *respond_captured.borrow_mut() = Some(value);
+        let receipt: JsValue = object(&[
+            ("accepted", JsValue::from_bool(respond_accepted.get())),
+            ("reason", JsValue::from_str("stale")),
+        ])
+        .into();
+        Promise::resolve(&receipt)
+    }) as Box<dyn FnMut(JsValue) -> Promise>);
+    let wait = object(&[
+        ("key", JsValue::from_str("approval:1")),
+        ("sessionId", JsValue::from_str("s1")),
+        (
+            "payload",
+            object(&[
+                ("approvalId", JsValue::from_str("a1")),
+                ("toolName", JsValue::from_str("bash")),
+                ("reason", JsValue::from_str("inspect")),
+                ("callId", JsValue::from_str("call:1")),
+            ])
+            .into(),
+        ),
+        ("respond", respond.into_js_value()),
+    ]);
+    let approval = BrowserPendingApproval::new(wait.into());
+    assert_eq!(approval.key().unwrap(), "approval:1");
+    assert_eq!(approval.tool_name().unwrap(), "bash");
+    assert_eq!(
+        approval.reason().unwrap().as_string().as_deref(),
+        Some("inspect")
+    );
+    assert_eq!(
+        approval.call_id().unwrap().as_string().as_deref(),
+        Some("call:1")
+    );
+    JsFuture::from(approval.answer("allowed-once".to_owned()))
+        .await
+        .unwrap();
+    let response = captured.borrow().clone().unwrap();
+    assert_eq!(property(&response, "ok").as_bool(), Some(true));
+    let value = property(&response, "value");
+    assert_eq!(
+        property(&value, "sessionId").as_string().as_deref(),
+        Some("s1")
+    );
+    assert_eq!(
+        property(&value, "approvalId").as_string().as_deref(),
+        Some("a1")
+    );
+    assert_eq!(
+        property(&value, "outcome").as_string().as_deref(),
+        Some("allowed-once")
+    );
+    accepted.set(false);
+    let error = JsFuture::from(approval.answer("rejected".to_owned()))
+        .await
+        .unwrap_err();
+    assert!(
+        property(&error, "message")
+            .as_string()
+            .unwrap()
+            .contains("approval response rejected: stale")
+    );
 }
 
 async fn flush_microtasks() {

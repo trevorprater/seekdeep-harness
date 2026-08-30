@@ -13,6 +13,8 @@ mod submission;
 mod images;
 
 #[cfg(target_arch = "wasm32")]
+mod browser_apply;
+#[cfg(target_arch = "wasm32")]
 mod browser_approval_panel;
 #[cfg(target_arch = "wasm32")]
 mod browser_assistant;
@@ -96,6 +98,8 @@ pub use submission::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub use images::*;
 
+#[cfg(target_arch = "wasm32")]
+pub use browser_apply::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_approval_panel::*;
 #[cfg(target_arch = "wasm32")]

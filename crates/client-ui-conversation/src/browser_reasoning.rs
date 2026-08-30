@@ -3,7 +3,6 @@
 use std::{cell::RefCell, rc::Rc};
 
 use js_sys::{Array, Function, JsString, Object, Reflect};
-use seekdeep_client_ui_primitives::{disclosure_row_component, icon_components};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 const REASONING_CSS: &str = include_str!(
@@ -33,7 +32,10 @@ struct BrowserModules {
 /// Returns on missing React hooks, missing primitive configuration, or stylesheet failure.
 #[wasm_bindgen(js_name = configureClientUiConversationReasoning)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn configure_client_ui_conversation_reasoning(react: JsValue) -> Result<(), JsValue> {
+pub fn configure_client_ui_conversation_reasoning(
+    react: JsValue,
+    ui_primitives: JsValue,
+) -> Result<(), JsValue> {
     for method in [
         "createElement",
         "useCallback",
@@ -45,9 +47,8 @@ pub fn configure_client_ui_conversation_reasoning(react: JsValue) -> Result<(), 
         required_function(&react, method, "React")?;
     }
     let fragment = required_property(&react, "Fragment", "React")?;
-    let disclosure_row = disclosure_row_component()?;
-    let icons = icon_components()?;
-    let think_icon = required_property(&icons, "IconThinkOutline14", "ui-primitives icons")?;
+    let disclosure_row = required_property(&ui_primitives, "DisclosureRow", "ui-primitives")?;
+    let think_icon = required_property(&ui_primitives, "IconThinkOutline14", "ui-primitives")?;
     inject_style(
         "ReasoningRow",
         REASONING_CSS,

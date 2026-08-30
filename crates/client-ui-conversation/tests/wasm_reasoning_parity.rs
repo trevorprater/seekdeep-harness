@@ -11,7 +11,7 @@ use seekdeep_client_ui_conversation::{
 };
 use seekdeep_client_ui_primitives::{
     configure_client_ui_primitive_atoms, configure_client_ui_primitive_dialogs,
-    configure_client_ui_primitive_icons,
+    configure_client_ui_primitive_icons, disclosure_row_component, icon_components,
 };
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -116,7 +116,7 @@ export function installReasoningBench() {
     useEffect(effect, dependencies) { effectHook(effect, dependencies, queuedEffects) },
   }
   const ReactDOM = { createPortal(child) { return child } }
-  return { React, ReactDOM }
+  return { React, ReactDOM, uiPrimitives: { DisclosureRow: 'DisclosureRow', IconThinkOutline14: 'Think' } }
 }
 export function reasoningRender(component, props) {
   cursor = 0
@@ -195,7 +195,20 @@ fn setup() -> (JsValue, JsValue, u32) {
     configure_client_ui_primitive_dialogs(react.clone(), react_dom).unwrap();
     configure_client_ui_primitive_icons(react.clone());
     let base_styles = reasoningStyles().length();
-    configure_client_ui_conversation_reasoning(react).unwrap();
+    let primitives = Object::new();
+    Reflect::set(
+        &primitives,
+        &JsValue::from_str("DisclosureRow"),
+        &disclosure_row_component().unwrap(),
+    )
+    .unwrap();
+    Reflect::set(
+        &primitives,
+        &JsValue::from_str("IconThinkOutline14"),
+        &property(&icon_components().unwrap(), "IconThinkOutline14"),
+    )
+    .unwrap();
+    configure_client_ui_conversation_reasoning(react, primitives.into()).unwrap();
     (bench, reasoning_row_component().unwrap(), base_styles)
 }
 

@@ -2,6 +2,7 @@
 
 use std::{
     collections::BTreeMap,
+    fmt::Write as _,
     path::{Path, PathBuf},
     process::Command as ProcessCommand,
     time::{Duration, UNIX_EPOCH},
@@ -794,7 +795,7 @@ export function createHighlightBackend() {
 }
 
 fn ui_primitives_markdown_backend() -> &'static str {
-    r#"import katex from 'katex';
+    r"import katex from 'katex';
 import { normalizeUri } from 'micromark-util-sanitize-uri';
 
 export function createMarkdownBackend(cssUrl) {
@@ -804,7 +805,7 @@ export function createMarkdownBackend(cssUrl) {
     renderTex(value, options) { return katex.renderToString(value, options); },
   };
 }
-"#
+"
 }
 
 fn ui_primitives_esm_wrapper() -> String {
@@ -866,10 +867,12 @@ export const useAnchoredMaxHeight = wasm.useAnchoredMaxHeight;
     .to_owned();
     for definition in seekdeep_client_ui_primitives::ICON_DEFINITIONS {
         debug_assert!(is_javascript_identifier(definition.name));
-        wrapper.push_str(&format!(
-            "export const {name} = iconComponents.{name};\n",
+        writeln!(
+            wrapper,
+            "export const {name} = iconComponents.{name};",
             name = definition.name
-        ));
+        )
+        .expect("writing to String cannot fail");
     }
     wrapper
 }
@@ -937,6 +940,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-model-selection" => "client-ui-model-selection-invariant",
         "@seekdeep-ai/seekdeep-client-ui-input-trigger" => "client-ui-input-trigger-invariant",
         "@seekdeep-ai/seekdeep-client-ui-commands" => "client-ui-commands-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-conversation" => "client-ui-conversation-invariant",
         _ => return Ok(()),
     };
     std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
@@ -1118,6 +1122,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-commands" {
         return ui_commands_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-conversation" {
+        return ui_conversation_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return format!(
             "require => {{ {global}.configureClientUiMessageFeedback(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiMessageFeedback, inject: ['slots', 'remote', 'remote.messageFeedback', 'locale'] }}); return {global}; }}"
@@ -1214,6 +1221,70 @@ fn ui_commands_module_factory(global: &str) -> String {
     format!(
         "require => {{ {global}.configureClientUiCommands(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}.__CommandUiRuntime, {{ inject: ['inputTriggers', 'sessions', 'remote', 'remote.commands'] }}); Object.assign({global}, {{ apply: {global}.applyClientUiCommands, inject: ['inputTriggers', 'sessions', 'remote', 'remote.commands', 'locale'], CommandUiRuntime: {global}.__CommandUiRuntime, CommandDirectory: {global}.__CommandDirectory, PopupSelectController: {global}.__PopupSelectController, PopupSelectView: {global}.popupSelectViewComponent() }}); return {global}; }}"
     )
+}
+
+fn ui_conversation_module_factory(global: &str) -> String {
+    r"require => {
+  const g = __GLOBAL__;
+  const React = require('react');
+  const primitives = require('@seekdeep-ai/seekdeep-client-ui-primitives');
+  const attachment = require('@seekdeep-ai/seekdeep-client-ui-attachment');
+  const runtime = require('@seekdeep-ai/seekdeep-client-runtime/client');
+  g.configureClientUiConversationReasoning(React, primitives);
+  g.configureClientUiConversationMessageActions(React, primitives);
+  g.configureClientUiConversationCommand(React, primitives);
+  g.configureClientUiConversationContextBodies(React, primitives);
+  g.configureClientUiConversationMessageItem(React, primitives, attachment, {
+    MessageIconActions: g.messageIconActionsComponent(),
+    CompactionItem: g.compactionItemComponent(),
+    ContextInjectionRow: g.contextInjectionRowComponent(),
+  });
+  g.configureClientUiConversationAssistant(React, primitives, attachment);
+  g.configureClientUiConversationChatSeat(React, primitives);
+  g.configureClientUiConversationTurnTail(React);
+  g.configureClientUiConversationChatView(React, primitives, {
+    ChatNodeSeat: g.chatNodeSeatComponent(),
+    PendingSteeringBubble: g.pendingSteeringBubbleComponent(),
+  });
+  g.configureClientUiConversationRoot(React, primitives);
+  g.configureClientUiConversationSession(React);
+  g.configureClientUiConversationDetailsPanel(React, primitives, runtime.shallowEqual);
+  g.configureClientUiConversationEnterBehavior(React, primitives);
+  g.configureClientUiConversationInputBar(React, primitives, attachment);
+  g.configureClientUiConversationQueueDock(React, primitives);
+  g.configureClientUiConversationStatsLine(React, primitives);
+  g.configureClientUiConversationTodoPanel(React, primitives);
+  g.configureClientUiConversationApprovalPanel(React, primitives, g.PendingApproval);
+  const components = {
+    ConversationRoot: g.conversationRootComponent(),
+    ConversationSession: g.conversationSessionComponent(),
+    ConversationSessionHeader: g.conversationSessionHeaderComponent(),
+    InputBar: g.inputBarComponent(), ApprovalPanel: g.approvalPanelComponent(),
+    ChatView: g.chatViewComponent(), StatsLine: g.statsLineComponent(),
+    DetailsPanel: g.detailsPanelComponent(), EnterBehaviorRow: g.enterBehaviorRowComponent(),
+    todoDockEntry: g.todoDockEntry(), queueDockEntry: g.queueDockEntry(),
+    UserMessageNodeView: g.userMessageNodeViewComponent(),
+    ContextMessageNodeView: g.contextMessageNodeViewComponent(),
+    AssistantNodeView: g.assistantNodeViewComponent(),
+    CommandNodeView: g.commandNodeViewComponent(),
+    ManualCompactionNodeView: g.manualCompactionNodeViewComponent(),
+    CompactionNodeView: g.compactionNodeViewComponent(),
+    RetryNodeView: g.retryNodeViewComponent(), TurnErrorNodeView: g.turnErrorNodeViewComponent(),
+    TurnMaxTokensNodeView: g.turnMaxTokensNodeViewComponent(),
+    TurnTailNodeView: g.turnTailNodeViewComponent(), UnknownNodeView: g.unknownNodeViewComponent(),
+  };
+  g.configureClientUiConversationApply(
+    components,
+    runtime.defineStore,
+    () => globalThis.crypto.randomUUID(),
+  );
+  return {
+    apply: g.applyClientUiConversation,
+    inject: ['slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope', 'conversationEvents', 'conversationViews'],
+    ConversationController: g.ConversationController,
+  };
+}"
+        .replace("__GLOBAL__", global)
 }
 
 #[allow(clippy::too_many_lines)] // Closed module-specific declaration dispatch stays auditable here.
@@ -1316,6 +1387,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-commands" {
         return ui_commands_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-conversation" {
+        return ui_conversation_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-message-feedback" {
         return ui_message_feedback_declarations();
@@ -1596,6 +1670,7 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
     .to_owned()
 }
 
+#[allow(clippy::too_many_lines)] // Public command UI contract is one closed declaration surface.
 fn ui_commands_declarations() -> String {
     r"
 import type { ClientContext, SessionId } from '@seekdeep-ai/seekdeep-client-runtime/client';
@@ -1733,6 +1808,75 @@ export interface PluginInventorySettingsTabProps extends PluginInventorySettings
 }
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { 'settings.pluginInventory': PluginInventoryLocaleKey }
+}
+"
+    .to_owned()
+}
+
+fn ui_conversation_declarations() -> String {
+    r"
+export const apply: typeof wasm_bindgen.applyClientUiConversation;
+export const inject: readonly ['slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope', 'conversationEvents', 'conversationViews'];
+export const ConversationController: typeof wasm_bindgen.ConversationController;
+export type DraftAttachmentId = string & { readonly __draftAttachmentId: unique symbol };
+export type CallId = string & { readonly __callId: unique symbol };
+export interface SelectionTarget { turnSeq: number; stepSeq?: number; callId?: CallId; toolName?: string }
+export interface ChatStoreState { selection: SelectionTarget | null; draft: string; view: string | null; inspect: CallId | null }
+export interface ViewTab { id: string; label: string }
+export type ConversationKey = string;
+export type ChatNodeKind = string;
+export interface ChatNodeDataMap {
+  user: unknown; steering: unknown; context: unknown; 'assistant-step': AssistantChatData;
+  command: unknown; 'manual-compaction': ManualCompactionChatData; compaction: unknown;
+  'model-retry': RetryChatData; 'turn-error': unknown; 'turn-max-tokens': unknown;
+  'turn-tail': TurnTailChatData; unknown: unknown;
+}
+export interface ChatNode<Kind extends keyof ChatNodeDataMap = keyof ChatNodeDataMap> {
+  key: string; kind: Kind; id: string; target: 'chat'; anchorSeq: number;
+  location: unknown; visibility: 'visible' | 'hidden'; data: ChatNodeDataMap[Kind];
+}
+export interface AssistantChatData {
+  status: 'running' | 'settled' | 'interrupted'; turn: number; step: number;
+  blocks: readonly unknown[]; time: number; usage?: unknown; finalNode?: unknown;
+}
+export interface ToolChatData { root: unknown }
+export interface ManualCompactionChatData { command: unknown; compaction: unknown | null }
+export interface RetryChatData { attempts: readonly unknown[]; current: unknown }
+export interface TurnTailChatData {
+  turn: number; seq: number; time: number; closing: AssistantChatData | null;
+  branchUnavailable: boolean; ttftMs?: number; tokensPerSecond?: number;
+}
+export interface IConversation {
+  readonly input: unknown; readonly blocks: unknown;
+  send(text: string): Promise<void>; cancel(): Promise<void>; loadOlder(): Promise<void>;
+  updateQueue(itemId: string, action: unknown): Promise<void>;
+}
+export type ChatFileMentions = Record<string, unknown>;
+export type ChatNodeOwnerProps = Record<string, unknown>;
+export type ChatNodeViewProps = Record<string, unknown>;
+export type ChatStore = Record<string, unknown>;
+export type ChatViewInjected = Record<string, unknown>;
+export type ChatViewSlotProps = Record<string, unknown>;
+export type CommandRowOwnerProps = Record<string, unknown>;
+export type CommandRowProps = Record<string, unknown>;
+export type ComposerBarInjected = Record<string, unknown>;
+export type ComposerAttachment = Record<string, unknown>;
+export type ComposerChainProps = Record<string, unknown>;
+export type ConversationInjected = Record<string, unknown>;
+export type ConversationSessionHeaderInjected = Record<string, unknown>;
+export type ConversationSessionInjected = Record<string, unknown>;
+export type ConversationSlotProps = Record<string, unknown>;
+export type ConvViewOwnerProps = Record<string, unknown>;
+export type ConvViewProps = Record<string, unknown>;
+export type DetailsInjected = Record<string, unknown>;
+export type DetailsSlotProps = Record<string, unknown>;
+export type DetailsToolOwnerProps = Record<string, unknown>;
+export type EmptyWorkspaceOwnerProps = Record<string, unknown>;
+export type TurnTailOwnerProps = Record<string, unknown>;
+export type UseChatNodeTurnData = (key: string) => unknown;
+declare module '@seekdeep-ai/cordis' { interface Context { conversation: IConversation } }
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { conversation: ConversationKey }
 }
 "
     .to_owned()
@@ -2909,6 +3053,49 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-commands-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-commands"));
+    }
+
+    #[test]
+    fn ui_conversation_bundle_configures_assembly_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_conversation_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-conversation",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiConversationReasoning(React, primitives)",
+            "configureClientUiConversationMessageItem(React, primitives, attachment",
+            "configureClientUiConversationApply(",
+            "apply: g.applyClientUiConversation",
+            "ConversationController: g.ConversationController",
+            "conversationEvents', 'conversationViews'",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-conversation");
+        for expected in [
+            "interface IConversation",
+            "interface ChatNodeDataMap",
+            "interface AssistantChatData",
+            "interface TurnTailChatData",
+            "type DraftAttachmentId",
+            "ConversationController",
+            "interface LocaleNamespaceMap",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-conversation",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-conversation-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-conversation"));
     }
 
     #[test]

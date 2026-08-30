@@ -2,8 +2,9 @@
 
 use std::cell::RefCell;
 
-use js_sys::{Array, Function, Object, Reflect};
+use js_sys::{Array, Function, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
+use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 use crate::{browser_reasoning::inject_style, root_tool_call_browser};
 
@@ -21,6 +22,121 @@ struct BrowserModules {
     react: JsValue,
     button: JsValue,
     pending_approval: Function,
+}
+
+/// Approval domain face over one pending runtime carrier.
+#[wasm_bindgen(js_name = PendingApproval)]
+pub struct BrowserPendingApproval {
+    wait: JsValue,
+}
+
+#[wasm_bindgen(js_class = PendingApproval)]
+#[allow(clippy::needless_pass_by_value)]
+impl BrowserPendingApproval {
+    /// Mints a domain face for one pending approval wait.
+    #[wasm_bindgen(constructor)]
+    pub fn new(wait: JsValue) -> Self {
+        Self { wait }
+    }
+
+    /// Opaque render identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns when the carrier omits its string key.
+    #[wasm_bindgen(getter)]
+    pub fn key(&self) -> Result<String, JsValue> {
+        required_string(&self.wait, "key", "Approval wait")
+    }
+
+    /// Tool name from the approval payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns when the carrier payload omits its string Tool name.
+    #[wasm_bindgen(getter, js_name = toolName)]
+    pub fn tool_name(&self) -> Result<String, JsValue> {
+        required_string(
+            &approval_payload(&self.wait)?,
+            "toolName",
+            "Approval payload",
+        )
+    }
+
+    /// Optional human-readable reason.
+    ///
+    /// # Errors
+    ///
+    /// Returns when JavaScript property access fails.
+    #[wasm_bindgen(getter)]
+    pub fn reason(&self) -> Result<JsValue, JsValue> {
+        optional_member(&approval_payload(&self.wait)?, "reason")
+    }
+
+    /// Optional paired Tool call identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns when JavaScript property access fails.
+    #[wasm_bindgen(getter, js_name = callId)]
+    pub fn call_id(&self) -> Result<JsValue, JsValue> {
+        optional_member(&approval_payload(&self.wait)?, "callId")
+    }
+
+    /// Delivers one allowed-once or rejected outcome and fails on a rejected receipt.
+    pub fn answer(&self, outcome: String) -> Promise {
+        let wait = self.wait.clone();
+        future_to_promise(async move {
+            if !matches!(outcome.as_str(), "allowed-once" | "rejected") {
+                return Err(js_sys::TypeError::new("approval outcome is invalid").into());
+            }
+            let payload = approval_payload(&wait)?;
+            let value = Object::new();
+            Reflect::set(
+                &value,
+                &JsValue::from_str("sessionId"),
+                &required_property(&wait, "sessionId", "Approval wait")?,
+            )?;
+            Reflect::set(
+                &value,
+                &JsValue::from_str("approvalId"),
+                &required_property(&payload, "approvalId", "Approval payload")?,
+            )?;
+            Reflect::set(
+                &value,
+                &JsValue::from_str("outcome"),
+                &JsValue::from_str(&outcome),
+            )?;
+            let response = Object::new();
+            Reflect::set(&response, &JsValue::from_str("ok"), &JsValue::TRUE)?;
+            Reflect::set(&response, &JsValue::from_str("value"), &value)?;
+            let respond = required_function(&wait, "respond", "Approval wait")?;
+            let returned = respond.call1(&wait, &response)?;
+            let receipt = JsFuture::from(Promise::resolve(&returned)).await?;
+            if Reflect::get(&receipt, &JsValue::from_str("accepted"))?.as_bool() != Some(true) {
+                let reason = Reflect::get(&receipt, &JsValue::from_str("reason"))?
+                    .as_string()
+                    .unwrap_or_else(|| "unknown".to_owned());
+                return Err(
+                    js_sys::Error::new(&format!("approval response rejected: {reason}")).into(),
+                );
+            }
+            Ok(JsValue::UNDEFINED)
+        })
+    }
+}
+
+fn approval_payload(wait: &JsValue) -> Result<JsValue, JsValue> {
+    required_property(wait, "payload", "Approval wait")
+}
+
+fn optional_member(value: &JsValue, key: &str) -> Result<JsValue, JsValue> {
+    let value = Reflect::get(value, &JsValue::from_str(key))?;
+    Ok(if value.is_undefined() {
+        JsValue::UNDEFINED
+    } else {
+        value
+    })
 }
 
 /// Configures the compiled approval takeover over React, Button, and its domain constructor.
@@ -353,6 +469,12 @@ fn class_props(class_name: &str) -> Result<Object, JsValue> {
 
 fn required_function(value: &JsValue, key: &str, owner: &str) -> Result<Function, JsValue> {
     required_property(value, key, owner)?.dyn_into()
+}
+
+fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, JsValue> {
+    required_property(value, key, owner)?
+        .as_string()
+        .ok_or_else(|| js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into())
 }
 
 fn required_property(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {

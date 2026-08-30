@@ -9,7 +9,7 @@ use seekdeep_client_ui_conversation::{
 };
 use seekdeep_client_ui_primitives::{
     configure_client_ui_primitive_atoms, configure_client_ui_primitive_dialogs,
-    configure_client_ui_primitive_icons,
+    configure_client_ui_primitive_icons, disclosure_row_component, icon_components,
 };
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
@@ -42,7 +42,7 @@ export function installAssistantBench() {
     useEffect() { cursor += 1 }, useLayoutEffect() { cursor += 1 },
   }
   const ReactDOM = { createPortal(child) { return child } }
-  return { React, ReactDOM, uiPrimitives: { MarkdownText, JsonBlock }, uiAttachment: { ImageGallery } }
+  return { React, ReactDOM, uiPrimitives: { MarkdownText, JsonBlock, DisclosureRow: 'DisclosureRow', IconThinkOutline14: 'Think' }, uiAttachment: { ImageGallery } }
 }
 export function assistantRender(component, props) { cursor = 0; return component(props) }
 export function assistantObject(entries) { return Object.fromEntries(entries) }
@@ -104,7 +104,20 @@ fn setup() -> (JsValue, JsValue, JsValue) {
     configure_client_ui_primitive_atoms(react.clone(), react_dom.clone()).unwrap();
     configure_client_ui_primitive_dialogs(react.clone(), react_dom).unwrap();
     configure_client_ui_primitive_icons(react.clone());
-    configure_client_ui_conversation_reasoning(react.clone()).unwrap();
+    let primitives = property(&bench, "uiPrimitives");
+    Reflect::set(
+        &primitives,
+        &JsValue::from_str("DisclosureRow"),
+        &disclosure_row_component().unwrap(),
+    )
+    .unwrap();
+    Reflect::set(
+        &primitives,
+        &JsValue::from_str("IconThinkOutline14"),
+        &property(&icon_components().unwrap(), "IconThinkOutline14"),
+    )
+    .unwrap();
+    configure_client_ui_conversation_reasoning(react.clone(), primitives).unwrap();
     configure_client_ui_conversation_assistant(
         react,
         property(&bench, "uiPrimitives"),
