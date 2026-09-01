@@ -6,7 +6,8 @@ use js_sys::{Array, Function, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use crate::browser::{
-    call, css, element, function, inject_style, object, optional, rejection_text, required, tag,
+    BrowserModules, call, component, css, element, function, inject_style, object, optional,
+    rejection_text, required, tag, use_state,
 };
 
 const PICKER_CSS: &str =
@@ -14,20 +15,7 @@ const PICKER_CSS: &str =
 const ADD_WORKSPACE: &str = "::add-workspace";
 
 thread_local! {
-    static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
     static COMPONENTS: RefCell<Option<Components>> = const { RefCell::new(None) };
-}
-
-#[derive(Clone)]
-struct BrowserModules {
-    react: JsValue,
-    primitives: JsValue,
-}
-
-impl BrowserModules {
-    fn primitive(&self, name: &str) -> Result<JsValue, JsValue> {
-        required(&self.primitives, name, "UI primitives")
-    }
 }
 
 #[derive(Clone)]
@@ -50,16 +38,25 @@ pub fn configure_client_ui_workspace(react: JsValue, primitives: JsValue) -> Res
     required(&react, "Fragment", "React")?;
     for primitive in [
         "Button",
+        "HoverCard",
+        "IconArchiveOutline20",
+        "IconBranchOutline16",
+        "IconEditOutline16",
+        "IconEllipsisOutline16",
         "IconFolderClose16",
+        "IconFolderOpen16",
         "IconPlusOutline16",
+        "IconTrashOutline16",
+        "IconTriangleRightFill14",
         "Menu",
         "Modal",
+        "StateDot",
     ] {
         required(&primitives, primitive, "UI primitives")?;
     }
     inject_style("WorkspacePicker", PICKER_CSS)?;
     let modules = BrowserModules { react, primitives };
-    MODULES.with(|configured| *configured.borrow_mut() = Some(modules.clone()));
+    crate::browser_rows::configure_rows(&modules)?;
     COMPONENTS.with(|configured| {
         *configured.borrow_mut() = Some(Components {
             picker: component(&modules, render_picker),
@@ -67,15 +64,6 @@ pub fn configure_client_ui_workspace(react: JsValue, primitives: JsValue) -> Res
         });
     });
     Ok(())
-}
-
-type Renderer = fn(&BrowserModules, &JsValue) -> Result<JsValue, JsValue>;
-
-fn component(modules: &BrowserModules, renderer: Renderer) -> JsValue {
-    let modules = modules.clone();
-    Closure::wrap(Box::new(move |props: JsValue| renderer(&modules, &props))
-        as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>)
-    .into_js_value()
 }
 
 fn configured_components() -> Result<Components, JsValue> {
@@ -105,11 +93,6 @@ pub fn workspace_picker_component() -> Result<JsValue, JsValue> {
 #[wasm_bindgen(js_name = workspacePickFlowComponent)]
 pub fn workspace_pick_flow_component() -> Result<JsValue, JsValue> {
     Ok(configured_components()?.flow)
-}
-
-fn use_state(react: &JsValue, initial: &JsValue) -> Result<(JsValue, Function), JsValue> {
-    let pair = Array::from(&function(react, "useState", "React")?.call1(react, initial)?);
-    Ok((pair.get(0), pair.get(1).dyn_into()?))
 }
 
 fn use_effect(react: &JsValue, effect: JsValue, deps: &Array) -> Result<(), JsValue> {

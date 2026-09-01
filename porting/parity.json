@@ -52932,7 +52932,17 @@
     {
       "source": "packages/client/ui-workspace/src/client/rows/Rows.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/browser.rs",
+        "crates/client-ui-workspace/src/browser_rows.rs",
+        "crates/client-ui-workspace/tests/wasm_rows_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Workspace row suite: 24 passed",
+        "four live compiled React/WASM matrices pin project, search-result, session, blank/flat, status-priority, menu, hover payload, relative-time, localization, selection, action, and row-half drag/drop behavior plus prefixed Rows CSS",
+        "strict wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/client/stores.ts",
@@ -53018,7 +53028,14 @@
     {
       "source": "packages/client/ui-workspace/tests/rows.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/tests/wasm_rows_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Workspace row suite: 24 passed",
+        "four live compiled React/WASM row matrices passed"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tests/tree.client.spec.ts",

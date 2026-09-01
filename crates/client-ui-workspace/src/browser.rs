@@ -1,9 +1,30 @@
 //! Shared browser bindings for Workspace surfaces.
 
 use js_sys::{Array, Function, Object, Reflect};
-use wasm_bindgen::{JsCast as _, JsValue};
+use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 
 pub(crate) const PACKAGE_ID: &str = "@seekdeep-ai/seekdeep-client-ui-workspace";
+
+#[derive(Clone)]
+pub(crate) struct BrowserModules {
+    pub(crate) react: JsValue,
+    pub(crate) primitives: JsValue,
+}
+
+impl BrowserModules {
+    pub(crate) fn primitive(&self, name: &str) -> Result<JsValue, JsValue> {
+        required(&self.primitives, name, "UI primitives")
+    }
+}
+
+pub(crate) type Renderer = fn(&BrowserModules, &JsValue) -> Result<JsValue, JsValue>;
+
+pub(crate) fn component(modules: &BrowserModules, renderer: Renderer) -> JsValue {
+    let modules = modules.clone();
+    Closure::wrap(Box::new(move |props: JsValue| renderer(&modules, &props))
+        as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>)
+    .into_js_value()
+}
 
 pub(crate) fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
     let value = Object::new();
@@ -31,6 +52,34 @@ pub(crate) fn function(value: &JsValue, key: &str, owner: &str) -> Result<Functi
     required(value, key, owner)?
         .dyn_into::<Function>()
         .map_err(|_| js_sys::TypeError::new(&format!("{owner} {key} must be a function")).into())
+}
+
+pub(crate) fn use_state(
+    react: &JsValue,
+    initial: &JsValue,
+) -> Result<(JsValue, Function), JsValue> {
+    let pair = Array::from(&function(react, "useState", "React")?.call1(react, initial)?);
+    Ok((pair.get(0), pair.get(1).dyn_into()?))
+}
+
+pub(crate) fn translated(
+    translate: &Function,
+    key: &str,
+    variables: Option<&Object>,
+) -> Result<JsValue, JsValue> {
+    variables.map_or_else(
+        || translate.call1(&JsValue::UNDEFINED, &JsValue::from_str(key)),
+        |variables| translate.call2(&JsValue::UNDEFINED, &JsValue::from_str(key), variables),
+    )
+}
+
+pub(crate) fn class(names: &[(&str, bool)]) -> String {
+    names
+        .iter()
+        .filter(|(_, enabled)| *enabled)
+        .map(|(name, _)| css(name))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub(crate) fn call(
