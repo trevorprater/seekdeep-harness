@@ -8,13 +8,15 @@ use seekdeep_client_runtime::{SnapshotStore, SnapshotStoreSubscription};
 use seekdeep_identity::SessionId;
 use serde::Serialize;
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen_futures::{future_to_promise, spawn_local};
 
 use crate::{
     AgentPresetSeatController, AgentPresetSeatTransport, AgentPresetSectionController,
     AgentPresetSectionTransport, AgentPresetSettingsController, AgentPresetSettingsTransport,
-    PresetOpenResult, PresetReadValue, RosterValue, SeatSessionSummary,
+    CopyDraft, DraftBlocker, PresetOpenResult, PresetReadValue, RosterPreset, RosterValue,
+    SeatSessionSummary,
     browser::{call_async, from_js, object, optional, rejection_text, required, rpc_value, to_js},
+    draft_blocker,
 };
 
 #[derive(Clone)]
@@ -476,4 +478,39 @@ pub fn create_agent_preset_section_controller(
     }) as Box<dyn FnMut(String)>);
     set_method(&output, "makeDefault", make_default.into_js_value())?;
     Ok(output.into())
+}
+
+/// Source-compatible client-side copy-draft blocker.
+///
+/// # Errors
+///
+/// Returns JSON conversion failures for malformed drafts or roster rows.
+#[wasm_bindgen(js_name = agentPresetDraftBlocker)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn agent_preset_draft_blocker_js(draft: JsValue, rows: JsValue) -> Result<JsValue, JsValue> {
+    let draft: CopyDraft = serde_wasm_bindgen::from_value(draft)
+        .map_err(|error| js_sys::TypeError::new(&error.to_string()))?;
+    let rows: Vec<RosterPreset> = serde_wasm_bindgen::from_value(rows)
+        .map_err(|error| js_sys::TypeError::new(&error.to_string()))?;
+    Ok(
+        draft_blocker(&draft, &rows).map_or(JsValue::UNDEFINED, |blocker| {
+            JsValue::from_str(match blocker {
+                DraftBlocker::IdRequired => "idRequired",
+                DraftBlocker::IdInvalid => "idInvalid",
+                DraftBlocker::IdTaken => "idTaken",
+            })
+        }),
+    )
+}
+
+/// Source-compatible default-preset writer resolving to failure copy or `undefined`.
+#[wasm_bindgen(js_name = writeAgentPresetDefault)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn write_agent_preset_default_js(api: JsValue, id: String) -> js_sys::Promise {
+    future_to_promise(async move {
+        let settings = required(&api, "settings", "generated API")?;
+        Ok(update_default(settings, id)
+            .await
+            .map_or_else(|error| JsValue::from_str(&error), |()| JsValue::UNDEFINED))
+    })
 }

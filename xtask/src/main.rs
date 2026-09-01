@@ -932,6 +932,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory" => {
             "client-ui-settings-plugin-inventory-invariant"
         }
+        "@seekdeep-ai/seekdeep-client-ui-agent-preset" => "client-ui-agent-preset-invariant",
         "@seekdeep-ai/seekdeep-client-ui-settings-plugins" => {
             "client-ui-settings-plugins-invariant"
         }
@@ -1106,6 +1107,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
         return format!(
             "require => {{ {global}.configureClientUiSettingsPluginInventory(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSettingsPluginInventory, inject: ['slots', 'locale', 'remote', 'remote.pluginInventory'] }}); return {global}; }}"
         );
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-agent-preset" {
+        return ui_agent_preset_module_factory(global);
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-plugins" {
         return ui_settings_plugins_module_factory(global);
@@ -1319,6 +1323,12 @@ fn ui_settings_plugins_module_factory(global: &str) -> String {
     )
 }
 
+fn ui_agent_preset_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ {global}.configureClientUiAgentPreset(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiAgentPreset, inject: ['slots', 'locale', 'connection', 'remote'], AGENT_PRESET_SETTINGS_NS: 'agent-presets', writeDefaultPreset: {global}.writeAgentPresetDefault, draftBlocker: {global}.agentPresetDraftBlocker }}); return {global}; }}"
+    )
+}
+
 #[allow(clippy::too_many_lines)] // Closed module-specific declaration dispatch stays auditable here.
 fn compatibility_declarations(module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
@@ -1401,6 +1411,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory" {
         return ui_settings_plugin_inventory_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-agent-preset" {
+        return ui_agent_preset_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-plugins" {
         return ui_settings_plugins_declarations();
@@ -1894,6 +1907,32 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { 'settings.plugins': PluginsSettingsLocaleKey }
   interface SlotMap { 'settings.plugin.item': { kind: 'list'; scope: 'root'; owner: SettingsPluginItemOwnerProps } }
 }
+"
+    .to_owned()
+}
+
+fn ui_agent_preset_declarations() -> String {
+    r"
+import type { SnapshotStore } from '@seekdeep-ai/seekdeep-client-runtime/client';
+export const apply: typeof wasm_bindgen.applyClientUiAgentPreset;
+export const inject: readonly ['slots', 'locale', 'connection', 'remote'];
+export const AGENT_PRESET_SETTINGS_NS: 'agent-presets';
+export function writeDefaultPreset(api: unknown, id: string): Promise<string | undefined>;
+export function draftBlocker(draft: CopyDraft, rows: readonly PresetRow[]): 'idRequired' | 'idInvalid' | 'idTaken' | undefined;
+export type PresetTrust = 'system' | 'user';
+export interface AgentPresetOption { id: string; trust: PresetTrust; name?: string; description?: string }
+export interface PresetRow extends AgentPresetOption { isDefault: boolean; broken?: string }
+export interface CopyDraft { from: string; fromTitle: string; id: string; name: string; saving: boolean; error: string | null }
+export interface PresetView { id: string; title: string; content: string }
+export interface AgentPresetSettingsState { status: 'idle' | 'loading' | 'ready' | 'saving' | 'unavailable' | 'error'; error: string | null; writable: boolean; currentValue: string; options: readonly AgentPresetOption[] }
+export interface AgentPresetSeatState { options: readonly AgentPresetOption[]; current: string; error: string | null; busy: boolean; introduce: boolean }
+export interface AgentPresetSectionState { status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error'; error: string | null; authorable: boolean; hasDocument: boolean; rows: readonly PresetRow[]; copy: CopyDraft | null; view: PresetView | null; pendingDelete: string | null; deleting: boolean; revealedPaths: Readonly<Record<string, string>> }
+export interface AgentPresetRowInjected { hooks: { agentPreset: SnapshotStore<AgentPresetSettingsState> }; load(): Promise<void>; select(id: string): Promise<void> }
+export interface AgentPresetSeatInjected { hooks: { agentPresetSeat: SnapshotStore<AgentPresetSeatState> }; load(): Promise<void>; select(id: string): Promise<void>; introduced(): void }
+export interface AgentPresetLabelInjected { hooks: { agentPresets: SnapshotStore<AgentPresetSettingsState> }; load(): Promise<void> }
+export interface AgentPresetSectionInjected { hooks: { agentPresetSection: SnapshotStore<AgentPresetSectionState> }; load(): Promise<void>; view(id: string): Promise<void>; closeView(): void; beginCopy(id: string): void; cancelCopy(): void; setCopyId(id: string): void; setCopyName(name: string): void; confirmCopy(): Promise<void>; openLocation(id: string): Promise<void>; startCreatorDraft?(): void; confirmDelete(id: string | null): void; remove(): Promise<void>; makeDefault(id: string): Promise<void> }
+export type AgentPresetSettingsKey = string;
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' { interface LocaleNamespaceMap { 'settings.agentPreset': AgentPresetSettingsKey } }
 "
     .to_owned()
 }
@@ -3019,6 +3058,49 @@ mod tests {
         .unwrap();
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-settings-plugins-invariant"));
+    }
+
+    #[test]
+    fn ui_agent_preset_bundle_configures_surfaces_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_agent_preset_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-agent-preset",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiAgentPreset(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_agent_preset_wasm.applyClientUiAgentPreset",
+            "inject: ['slots', 'locale', 'connection', 'remote']",
+            "AGENT_PRESET_SETTINGS_NS: 'agent-presets'",
+            "writeDefaultPreset: __seekdeep_client_ui_agent_preset_wasm.writeAgentPresetDefault",
+            "draftBlocker: __seekdeep_client_ui_agent_preset_wasm.agentPresetDraftBlocker",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-agent-preset");
+        for expected in [
+            "interface AgentPresetSettingsState",
+            "interface AgentPresetSeatState",
+            "interface AgentPresetSectionState",
+            "interface AgentPresetRowInjected",
+            "function writeDefaultPreset",
+            "function draftBlocker",
+            "'settings.agentPreset'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-agent-preset",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-agent-preset-invariant"));
     }
 
     #[test]

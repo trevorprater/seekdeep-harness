@@ -41061,10 +41061,12 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-agent-preset/package.json"
+        "packages/client/ui-agent-preset/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package metadata preserves client/types/default exports and migrates bundle/watch to cargo xtask wasm-package",
+        "optimized Rust/WASM build, classic ModuleLoader smoke, public helper smoke, and generated declaration/invariant test passed"
       ]
     },
     {
@@ -41154,7 +41156,17 @@
     {
       "source": "packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/browser_section.rs",
+        "crates/client-ui-agent-preset/src/browser_components.rs",
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source section component suite: 38 passed",
+        "live WASM matrix pins grouped trust/default/broken cards, row action routing, creator flow, revealed paths, copy validation/fields/refusal/saving, viewer/delete modals, unavailable/error/retry surfaces, and ResizeObserver overflow Tooltip behavior",
+        "strict wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
@@ -41172,12 +41184,35 @@
     {
       "source": "packages/client/ui-agent-preset/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/browser_apply.rs",
+        "crates/client-ui-agent-preset/src/browser_stores.rs",
+        "crates/client-ui-agent-preset/src/browser_components.rs",
+        "crates/client-ui-agent-preset/tests/wasm_apply_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source apply suite: 19 passed",
+        "live WASM Cordis/Slot test pins exact root inject, late Settings declarations, shared settings/section roster convergence, nested scoped seat/header rows, Session-list application, creator stage/start handoff, settings/reset/selected events, locale effect, ordering, and complete teardown",
+        "optimized classic ModuleLoader and public value smoke passed"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/data/locales.json",
+        "crates/client-ui-agent-preset/src/browser_apply.rs",
+        "crates/client-ui-agent-preset/src/browser_components.rs",
+        "crates/client-ui-agent-preset/src/browser_section.rs",
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "generated dictionaries match every pinned zh/en value and key with source zh-before-en insertion order",
+        "live components pin built-in localization versus user-authored metadata and assembled settings.agentPreset registration"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/seat-store.ts",
@@ -41231,7 +41266,17 @@
     {
       "source": "packages/client/ui-agent-preset/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/browser.rs",
+        "crates/client-ui-agent-preset/src/browser_components.rs",
+        "crates/client-ui-agent-preset/src/browser_section.rs",
+        "packages/client/ui-agent-preset/lib/types/client/index.d.ts"
+      ],
+      "evidence": [
+        "TypeScript CSS declarations are eliminated by compiled prefixing and one-time data-plugin-css injection for all four source stylesheets",
+        "live WASM label/row/seat/section matrices render through compiled class names without runtime CSS-module lookup"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/index.ts",
@@ -41265,22 +41310,53 @@
     {
       "source": "packages/client/ui-agent-preset/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/tests/wasm_apply_parity.rs"
+      ],
+      "evidence": [
+        "pinned source apply suite: 19 passed",
+        "live compiled late-root/scoped/apply/events/creator/teardown matrix passed"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/tests/components.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source component suite: 28 passed",
+        "live compiled label/shared-menu/default-row/seat interaction and motion matrix passed"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned source invariant suite: 2 passed",
+        "pinned-source no-op invariant catalog differential remains exact"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/tests/locales.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/data/locales.json",
+        "crates/client-ui-agent-preset/tests/model_parity.rs",
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source locale suite passed",
+        "exact dictionary differential and portable/live built-in versus file-authored display-copy cases passed"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/tests/section-store.client.spec.ts",
@@ -41298,7 +41374,14 @@
     {
       "source": "packages/client/ui-agent-preset/tests/section.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source section component suite: 38 passed",
+        "live compiled management cards/dialogs/actions/layout matrix passed"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/tests/settings-store.client.spec.ts",
@@ -41328,7 +41411,15 @@
     {
       "source": "packages/client/ui-agent-preset/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-agent-preset/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally eliminated; bundle/watch invoke cargo xtask wasm-package",
+        "xtask compatibility test, optimized Rust/WASM build, real ModuleLoader smoke, public helpers, generated declarations, and invariant entry passed"
+      ]
     },
     {
       "source": "packages/client/ui-attachment/README.i18n.yaml",

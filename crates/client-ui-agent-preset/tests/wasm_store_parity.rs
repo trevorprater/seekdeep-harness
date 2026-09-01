@@ -4,8 +4,9 @@
 
 use js_sys::{Array, Function, Object, Promise, Reflect};
 use seekdeep_client_ui_agent_preset::{
-    create_agent_preset_seat_controller, create_agent_preset_section_controller,
-    create_agent_preset_settings_controller,
+    agent_preset_draft_blocker_js, create_agent_preset_seat_controller,
+    create_agent_preset_section_controller, create_agent_preset_settings_controller,
+    write_agent_preset_default_js,
 };
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::JsFuture;
@@ -248,4 +249,36 @@ async fn section_face_views_copies_reveals_deletes_and_writes_default() {
         entry.get(0).as_string().as_deref() == Some("update")
             && property(&entry.get(1), "ns").as_string().as_deref() == Some("agent-presets")
     }));
+}
+
+#[wasm_bindgen_test(async)]
+async fn public_helpers_preserve_draft_blockers_and_settings_only_writer_boundary() {
+    let draft = js_sys::JSON::parse(
+        r#"{"from":"standard","fromTitle":"Standard","id":"UPPER","name":"","saving":false,"error":null}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        agent_preset_draft_blocker_js(draft, Array::new().into())
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("idInvalid")
+    );
+    let api = js_sys::JSON::parse(r#"{"settings":{}}"#).unwrap();
+    let settings = property(&api, "settings");
+    let update = Closure::wrap(Box::new(move |_request: JsValue| {
+        Promise::resolve(&js_sys::JSON::parse(r#"{"result":{"ok":true,"value":{}}}"#).unwrap())
+    }) as Box<dyn FnMut(JsValue) -> Promise>);
+    Reflect::set(
+        &settings,
+        &JsValue::from_str("update"),
+        &update.into_js_value(),
+    )
+    .unwrap();
+    assert!(
+        JsFuture::from(write_agent_preset_default_js(api, "minimal".to_owned()))
+            .await
+            .unwrap()
+            .is_undefined()
+    );
 }

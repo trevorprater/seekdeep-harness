@@ -28,13 +28,13 @@ thread_local! {
 }
 
 #[derive(Clone)]
-struct BrowserModules {
-    react: JsValue,
-    primitives: JsValue,
+pub(crate) struct BrowserModules {
+    pub(crate) react: JsValue,
+    pub(crate) primitives: JsValue,
 }
 
 impl BrowserModules {
-    fn primitive(&self, name: &str) -> Result<JsValue, JsValue> {
+    pub(crate) fn primitive(&self, name: &str) -> Result<JsValue, JsValue> {
         required(&self.primitives, name, "UI primitives")
     }
 }
@@ -45,6 +45,7 @@ struct Components {
     menu: JsValue,
     row: JsValue,
     seat: JsValue,
+    section: JsValue,
 }
 
 /// Configures page-owned React, primitives, and compiled styles.
@@ -58,20 +59,36 @@ pub fn configure_client_ui_agent_preset(
     react: JsValue,
     primitives: JsValue,
 ) -> Result<(), JsValue> {
-    for method in ["createElement", "useEffect", "useState"] {
+    for method in [
+        "createElement",
+        "useEffect",
+        "useLayoutEffect",
+        "useRef",
+        "useState",
+    ] {
         required_function(&react, method, "React")?;
     }
     for primitive in [
+        "Button",
         "IconAgentPresetOutline16",
+        "IconBrowseOutline16",
         "IconChevronDownOutline14",
+        "IconCopyOutline16",
+        "IconFolderOpenOutline16",
+        "IconPlusOutline16",
+        "IconTrashOutline16",
         "Menu",
+        "Modal",
+        "Tooltip",
     ] {
         required(&primitives, primitive, "UI primitives")?;
     }
+    required(&react, "Fragment", "React")?;
     inject_prefixed_style("AgentPresetLabel", LABEL_CSS)?;
     inject_prefixed_style("AgentPresetRow", ROW_CSS)?;
     inject_prefixed_style("AgentPresetSeat", SEAT_CSS)?;
     let modules = BrowserModules { react, primitives };
+    let section = crate::browser_section::configure_section_component(&modules)?;
     MODULES.with(|configured| *configured.borrow_mut() = Some(modules.clone()));
     COMPONENTS.with(|configured| {
         *configured.borrow_mut() = Some(Components {
@@ -79,6 +96,7 @@ pub fn configure_client_ui_agent_preset(
             menu: component(&modules, render_preset_menu),
             row: component(&modules, render_row),
             seat: component(&modules, render_seat),
+            section,
         });
     });
     Ok(())
@@ -139,6 +157,12 @@ component_getter!(
     seat,
     "AgentPresetSeat"
 );
+component_getter!(
+    agent_preset_section_component,
+    "agentPresetSectionComponent",
+    section,
+    "AgentPresetSection"
+);
 
 fn identity_selector() -> JsValue {
     Closure::wrap(Box::new(move |value: JsValue| value) as Box<dyn FnMut(JsValue) -> JsValue>)
@@ -158,7 +182,7 @@ fn use_effect(react: &JsValue, effect: JsValue, dependencies: &Array) -> Result<
     result
 }
 
-fn preset_text(
+pub(crate) fn preset_text(
     option: &JsValue,
     translate: &Function,
 ) -> Result<(String, Option<String>), JsValue> {

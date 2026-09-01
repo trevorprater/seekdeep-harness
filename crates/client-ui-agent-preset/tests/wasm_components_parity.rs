@@ -5,7 +5,7 @@
 use js_sys::{Array, Function, Object, Reflect};
 use seekdeep_client_ui_agent_preset::{
     agent_preset_label_component, agent_preset_row_component, agent_preset_seat_component,
-    configure_client_ui_agent_preset,
+    agent_preset_section_component, configure_client_ui_agent_preset,
 };
 use wasm_bindgen::{JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -15,19 +15,25 @@ const flatten = values => values.flat(Infinity).filter(value => value !== null &
 let cached
 export function makeAgentPresetComponentBench() {
   if (cached) { cached.reset(); return cached }
-  const states=[], effects=[], timers=[], styles=[]
-  let si=0,ei=0,reduced=false,timerId=0
+  const states=[], refs=[], effects=[], layouts=[], timers=[], styles=[], observers=[]
+  let si=0,ri=0,ei=0,li=0,reduced=false,timerId=0,overflow=false
+  const Fragment=Symbol('Fragment')
   const React={
-    createElement(kind,supplied,...children){const flat=flatten(children);const props={...(supplied??{})};if(flat.length===1)props.children=flat[0];else if(flat.length>1)props.children=flat;return{kind,props,children:flat,focused:false,focus(){this.focused=true}}},
+    Fragment,
+    createElement(kind,supplied,...children){const flat=flatten(children);const props={...(supplied??{})};if(flat.length===1)props.children=flat[0];else if(flat.length>1)props.children=flat;const node={kind,props,children:flat,focused:false,get scrollHeight(){return overflow?400:80},get clientHeight(){return 80},focus(){this.focused=true}};if(typeof props.ref==='function')props.ref(node);else if(props.ref&&typeof props.ref==='object')props.ref.current=node;return node},
     useState(initial){const at=si++;if(!(at in states))states[at]=typeof initial==='function'?initial():initial;return[states[at],value=>{states[at]=typeof value==='function'?value(states[at]):value}]},
+    useRef(initial){const at=ri++;if(!(at in refs))refs[at]={current:initial};return refs[at]},
     useEffect(run,deps){const at=ei++;const old=effects[at];const same=old&&old.deps.length===deps.length&&deps.every((v,i)=>Object.is(v,old.deps[i]));if(!same){old?.cleanup?.();const cleanup=run();effects[at]={deps:[...deps],cleanup:typeof cleanup==='function'?cleanup:undefined}}},
+    useLayoutEffect(run,deps){const at=li++;const old=layouts[at];const same=old&&old.deps.length===deps.length&&deps.every((v,i)=>Object.is(v,old.deps[i]));if(!same)layouts[at]={deps:[...deps],run,pending:true,cleanup:old?.cleanup}},
   }
-  function resolve(value){if(Array.isArray(value))return flatten(value.map(resolve));if(value===null||value===undefined||value===false||typeof value!=='object')return value;if(!('kind'in value))return value;if(typeof value.kind==='function')return resolve(value.kind(value.props));return{...value,children:flatten(value.children.map(resolve))}}
+  function resolve(value){if(Array.isArray(value))return flatten(value.map(resolve));if(value===null||value===undefined||value===false||typeof value!=='object')return value;if(!('kind'in value))return value;if(typeof value.kind==='function')return resolve(value.kind(value.props));if(value.kind===Fragment)return{kind:'Fragment',props:value.props,children:flatten(value.children.map(resolve))};return{...value,children:flatten(value.children.map(resolve))}}
   globalThis.window={matchMedia(){return{matches:reduced}},setTimeout(callback,delay){const row={id:++timerId,callback,delay,cleared:false};timers.push(row);return row.id},clearTimeout(id){const row=timers.find(row=>row.id===id);if(row)row.cleared=true}}
+  globalThis.ResizeObserver=class{constructor(callback){this.callback=callback;this.connected=true;observers.push(this)}observe(){}disconnect(){this.connected=false}}
   globalThis.document={head:{appendChild(node){styles.push(node);return node}},createElement(kind){return{kind,attrs:{},setAttribute(k,v){this.attrs[k]=v},textContent:''}},querySelector(selector){const match=selector.match(/data-plugin-css="([^"]+)"/);return match?styles.find(row=>row.attrs['data-plugin-css']===match[1])??null:null}}
   const primitive=name=>props=>React.createElement(name,props,props.children)
-  const copy={headerHint:'Session agent preset',title:'Agent preset',description:'Preset for new sessions.',loading:'Loading…',userTrust:'Local',seatHint:'Preset for the next session',noDescription:'No description',presetStandardName:'Standard',presetStandardDescription:'Full coding agent.',presetMinimalName:'Minimal',presetMinimalDescription:'Minimal agent.',presetCodeName:'Code',presetCodeDescription:'Code agent.',presetCordisName:'Cordis',presetCordisDescription:'Self-authoring agent.'}
-  cached={React,primitives:{IconAgentPresetOutline16:primitive('IconAgentPresetOutline16'),IconChevronDownOutline14:primitive('IconChevronDownOutline14'),Menu:primitive('Menu')},styles,t:key=>copy[key]??key,render(component,props){si=0;ei=0;return resolve(React.createElement(component,props))},reset(){for(const effect of effects.reverse())effect?.cleanup?.();states.length=0;effects.length=0;timers.length=0;reduced=false},timers,setReduced(value){reduced=value},runTimers(){for(const row of timers.splice(0))if(!row.cleared)row.callback()}}
+  const copy={headerHint:'Session agent preset',title:'Agent preset',description:'Preset for new sessions.',loading:'Loading…',userTrust:'Local',builtIn:'Built-in',inUse:'In use',setDefault:'Use by default',builtInGroup:'Built-in presets',customGroup:'Your presets',sectionIntro:'Create presets by copying one or using Creator mode.',creatorDraft:'Create with Creator mode',duplicateUnavailable:'No writable preset root.',brokenBadge:'Broken',brokenNoCopy:'Fix before copying',view:'View',openLocation:'Open location',showLocation:'Show location',duplicate:'Duplicate',delete:'Delete',revealedPathLabel:'Preset directory',error:'Could not load presets.',retry:'Retry',copyTitle:'Copy preset',copyOf:'Copy of',copyIntro:'Choose an id and optional display name.',close:'Close',cancel:'Cancel',create:'Create',creating:'Creating…',presetId:'Preset id',presetIdPlaceholder:'my-preset',displayName:'Display name',displayNamePlaceholder:'My preset',idRequired:'Enter an id.',idInvalid:'Use lowercase letters, digits, and hyphens.',idTaken:'That id is already in use.',composition:'Composition',deleteTitle:'Delete preset',deleteDescription:'This removes the preset files.',deleteConfirm:'Delete',deleting:'Deleting…',seatHint:'Preset for the next session',noDescription:'No description',presetStandardName:'Standard',presetStandardDescription:'Full coding agent.',presetMinimalName:'Minimal',presetMinimalDescription:'Minimal agent.',presetCodeName:'Code',presetCodeDescription:'Code agent.',presetCordisName:'Cordis',presetCordisDescription:'Self-authoring agent.'}
+  const primitives={Button:primitive('Button'),IconAgentPresetOutline16:primitive('IconAgentPresetOutline16'),IconBrowseOutline16:primitive('IconBrowseOutline16'),IconChevronDownOutline14:primitive('IconChevronDownOutline14'),IconCopyOutline16:primitive('IconCopyOutline16'),IconFolderOpenOutline16:primitive('IconFolderOpenOutline16'),IconPlusOutline16:primitive('IconPlusOutline16'),IconTrashOutline16:primitive('IconTrashOutline16'),Menu:primitive('Menu'),Modal:primitive('Modal'),Tooltip:primitive('Tooltip')}
+  cached={React,primitives,styles,t:key=>copy[key]??key,render(component,props){si=0;ri=0;ei=0;li=0;const tree=resolve(React.createElement(component,props));for(const row of layouts){if(row?.pending){row.cleanup?.();const cleanup=row.run();row.cleanup=typeof cleanup==='function'?cleanup:undefined;row.pending=false}}return tree},reset(){for(const effect of effects.reverse())effect?.cleanup?.();for(const layout of layouts.reverse())layout?.cleanup?.();states.length=0;refs.length=0;effects.length=0;layouts.length=0;timers.length=0;observers.length=0;reduced=false;overflow=false},timers,setReduced(value){reduced=value},setOverflow(value){overflow=value;for(const observer of observers)if(observer.connected)observer.callback()},runTimers(){for(const row of timers.splice(0))if(!row.cleared)row.callback()}}
   return cached
 }
 function walk(root,out=[]){if(!root||typeof root!=='object')return out;if(Array.isArray(root)){root.forEach(value=>walk(value,out));return out}if('kind'in root)out.push(root);(root.children??[]).forEach(value=>walk(value,out));return out}
@@ -40,6 +46,12 @@ export function apSelect(menu,id){return menu.props.onSelect(id)}
 export function apProp(node,key){return node?.props?.[key]}
 export function apRunTimers(bench){bench.runTimers()}
 export function apSetReduced(bench,value){bench.setReduced(value)}
+export function apSetOverflow(bench,value){bench.setOverflow(value)}
+export function apFindText(root,text){return walk(root).find(node=>{const parts=[];const visit=value=>{if(typeof value==='string'||typeof value==='number')parts.push(String(value));else if(Array.isArray(value))value.forEach(visit);else if(value&&typeof value==='object')(value.children??[]).forEach(visit)};visit(node);return parts.join('')===text})}
+export function apChange(node,value){return node.props.onChange?.({target:{value}})}
+export function makeAgentPresetSectionProps(bench,state){const calls=[];const record=name=>(...args)=>{calls.push([name,...args]);return Promise.resolve()};return{calls,props:{t:bench.t,useAgentPresetSection:selector=>selector(state),load:record('load'),close:record('close'),startCreatorDraft:record('startCreatorDraft'),view:record('view'),closeView:record('closeView'),beginCopy:record('beginCopy'),cancelCopy:record('cancelCopy'),setCopyId:record('setCopyId'),setCopyName:record('setCopyName'),confirmCopy:record('confirmCopy'),openLocation:record('openLocation'),confirmDelete:record('confirmDelete'),remove:record('remove'),makeDefault:record('makeDefault')}}}
+export function apCalls(value){return value.calls}
+export function apFindKinds(root,kind){return walk(root).filter(node=>node.kind===kind)}
 "#)]
 extern "C" {
     fn makeAgentPresetComponentBench() -> JsValue;
@@ -52,6 +64,12 @@ extern "C" {
     fn apProp(node: &JsValue, key: &str) -> JsValue;
     fn apRunTimers(bench: &JsValue);
     fn apSetReduced(bench: &JsValue, value: bool);
+    fn apSetOverflow(bench: &JsValue, value: bool);
+    fn apFindText(root: &JsValue, text: &str) -> JsValue;
+    fn apChange(node: &JsValue, value: &str) -> JsValue;
+    fn makeAgentPresetSectionProps(bench: &JsValue, state: &JsValue) -> JsValue;
+    fn apCalls(value: &JsValue) -> Array;
+    fn apFindKinds(root: &JsValue, kind: &str) -> Array;
 }
 
 fn property(value: &JsValue, key: &str) -> JsValue {
@@ -263,4 +281,150 @@ fn seat_renders_described_items_and_acknowledges_motion_and_reduced_motion() {
     .unwrap();
     let _ = apRender(&bench, &agent_preset_seat_component().unwrap(), &props);
     assert_eq!(introductions.length(), 2);
+}
+
+#[wasm_bindgen_test]
+#[allow(clippy::too_many_lines)] // One composed fixture pins cards, dialogs, actions, and layout effects.
+fn management_section_composes_cards_actions_dialogs_and_overflow_tooltips() {
+    let bench = configure();
+    let state = js_sys::JSON::parse(
+        r#"{
+          "status":"ready","error":null,"authorable":true,"hasDocument":true,
+          "rows":[
+            {"id":"standard","trust":"system","isDefault":true,"name":"File ignored","description":"File description ignored"},
+            {"id":"cordis","trust":"system","isDefault":false},
+            {"id":"mine","trust":"user","isDefault":false,"name":"Mine","description":"My local preset"}
+          ],
+          "copy":null,"view":null,"pendingDelete":null,"deleting":false,
+          "revealedPaths":{"mine":"/presets/mine"}
+        }"#,
+    )
+    .unwrap();
+    let frame = makeAgentPresetSectionProps(&bench, &state);
+    let props = property(&frame, "props");
+    let component = agent_preset_section_component().unwrap();
+    let tree = apRender(&bench, &component, &props);
+    assert!(apText(&tree).contains("Built-in presets"));
+    assert!(apText(&tree).contains("Your presets"));
+    assert!(apText(&tree).contains("/presets/mine"));
+    assert_eq!(
+        apProp(
+            &apFindProp(&tree, "aria-label", &JsValue::from_str("In use: Standard")),
+            "disabled"
+        ),
+        JsValue::TRUE
+    );
+    for (label, method) in [
+        ("Use by default: Mine", "makeDefault"),
+        ("Open location: Mine", "openLocation"),
+        ("Duplicate: Mine", "beginCopy"),
+        ("Delete: Mine", "confirmDelete"),
+        ("View: Standard", "view"),
+    ] {
+        apClick(&apFindProp(&tree, "aria-label", &JsValue::from_str(label)));
+        assert!(
+            apCalls(&frame)
+                .iter()
+                .any(|call| { Array::from(&call).get(0).as_string().as_deref() == Some(method) })
+        );
+    }
+    apClick(&apFindText(&tree, "Create with Creator mode"));
+    assert!(apCalls(&frame).iter().any(|call| {
+        Array::from(&call).get(0).as_string().as_deref() == Some("startCreatorDraft")
+    }));
+    assert!(
+        apCalls(&frame)
+            .iter()
+            .any(|call| { Array::from(&call).get(0).as_string().as_deref() == Some("close") })
+    );
+
+    Reflect::set(
+        &state,
+        &JsValue::from_str("copy"),
+        &js_sys::JSON::parse(
+            r#"{"from":"standard","fromTitle":"Standard","id":"Upper Case","name":"","saving":false,"error":null}"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let copy_tree = apRender(&bench, &component, &props);
+    let copy_modal = apFindKinds(&copy_tree, "Modal").get(0);
+    assert_eq!(apProp(&copy_modal, "open"), JsValue::TRUE);
+    assert!(
+        apProp(&copy_modal, "title")
+            .as_string()
+            .unwrap()
+            .contains("Copy of Standard")
+    );
+    assert!(apText(&copy_tree).contains("Use lowercase letters, digits, and hyphens."));
+    let id_input = apFindProp(&copy_tree, "placeholder", &JsValue::from_str("my-preset"));
+    apChange(&id_input, "my-copy");
+    assert!(apCalls(&frame).iter().any(|call| {
+        let call = Array::from(&call);
+        call.get(0).as_string().as_deref() == Some("setCopyId")
+            && call.get(1).as_string().as_deref() == Some("my-copy")
+    }));
+
+    Reflect::set(&state, &JsValue::from_str("copy"), &JsValue::NULL).unwrap();
+    Reflect::set(
+        &state,
+        &JsValue::from_str("view"),
+        &js_sys::JSON::parse(
+            r#"{"id":"retired","title":"Retired mode","content":"- id: tool-bash\n"}"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    Reflect::set(
+        &state,
+        &JsValue::from_str("pendingDelete"),
+        &JsValue::from_str("mine"),
+    )
+    .unwrap();
+    let modal_tree = apRender(&bench, &component, &props);
+    let modals = apFindKinds(&modal_tree, "Modal");
+    assert_eq!(modals.length(), 3);
+    assert!(apText(&modal_tree).contains("- id: tool-bash\n"));
+    assert_eq!(
+        apProp(&modals.get(2), "title").as_string().as_deref(),
+        Some("Delete preset")
+    );
+
+    apSetOverflow(&bench, true);
+    let _ = apRender(&bench, &component, &props);
+    let overflow_tree = apRender(&bench, &component, &props);
+    assert_eq!(
+        apProp(&apFindKind(&overflow_tree, "Tooltip"), "disabled"),
+        JsValue::FALSE
+    );
+
+    Reflect::set(
+        &state,
+        &JsValue::from_str("status"),
+        &JsValue::from_str("unavailable"),
+    )
+    .unwrap();
+    assert!(apRender(&bench, &component, &props).is_null());
+    Reflect::set(
+        &state,
+        &JsValue::from_str("status"),
+        &JsValue::from_str("error"),
+    )
+    .unwrap();
+    Reflect::set(
+        &state,
+        &JsValue::from_str("error"),
+        &JsValue::from_str("roster unavailable"),
+    )
+    .unwrap();
+    let error_tree = apRender(&bench, &component, &props);
+    assert!(apText(&error_tree).contains("roster unavailable"));
+    apClick(&apFindText(&error_tree, "Retry"));
+    assert!(
+        apCalls(&frame)
+            .iter()
+            .filter(|call| { Array::from(call).get(0).as_string().as_deref() == Some("load") })
+            .count()
+            >= 2
+    );
 }

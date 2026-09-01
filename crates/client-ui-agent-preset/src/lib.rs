@@ -7,7 +7,11 @@ mod settings_store;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
+mod browser_apply;
+#[cfg(target_arch = "wasm32")]
 mod browser_components;
+#[cfg(target_arch = "wasm32")]
+mod browser_section;
 #[cfg(target_arch = "wasm32")]
 mod browser_stores;
 
@@ -15,6 +19,8 @@ pub use seat_store::*;
 pub use section_store::*;
 pub use settings_store::*;
 
+#[cfg(target_arch = "wasm32")]
+pub use browser_apply::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_components::*;
 #[cfg(target_arch = "wasm32")]
@@ -143,7 +149,7 @@ pub fn preset_options(presets: &[RosterPreset]) -> Vec<AgentPresetOption> {
 }
 
 /// Open duplicate-preset draft.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyDraft {
     /// Immutable source preset id.
