@@ -945,6 +945,9 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-input-trigger" => "client-ui-input-trigger-invariant",
         "@seekdeep-ai/seekdeep-client-ui-commands" => "client-ui-commands-invariant",
         "@seekdeep-ai/seekdeep-client-ui-workspace" => "client-ui-workspace-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-directory-picker-browse" => {
+            "client-ui-directory-picker-browse-invariant"
+        }
         "@seekdeep-ai/seekdeep-session-log-export" => "session-log-export-invariant",
         "@seekdeep-ai/seekdeep-client-ui-conversation" => "client-ui-conversation-invariant",
         "@seekdeep-ai/seekdeep-client-ui-tool" => "client-ui-tool-invariant",
@@ -1161,6 +1164,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-workspace" {
         return ui_workspace_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-directory-picker-browse" {
+        return ui_directory_picker_browse_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-session-log-export" {
         return session_log_export_module_factory(global);
     }
@@ -1274,6 +1280,12 @@ fn ui_commands_module_factory(global: &str) -> String {
 fn ui_workspace_module_factory(global: &str) -> String {
     format!(
         "require => {{ const runtime = require('@seekdeep-ai/seekdeep-client-runtime/client'); {global}.configureClientUiWorkspace(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); {global}.configureClientUiWorkspaceApply(runtime.defineStore); Object.assign({global}, {{ apply: {global}.applyClientUiWorkspace, inject: ['slots', 'sessions', 'workspaces', 'locale'], FLAT_SESSION_ORDER_KEY: {global}.flatSessionOrderKey() }}); return {global}; }}"
+    )
+}
+
+fn ui_directory_picker_browse_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ {global}.configureClientUiDirectoryPickerBrowse(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiDirectoryPickerBrowse, inject: ['slots', 'workspaces', 'locale'] }}); return {global}; }}"
     )
 }
 
@@ -1503,6 +1515,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-workspace" {
         return ui_workspace_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-directory-picker-browse" {
+        return ui_directory_picker_browse_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-session-log-export" {
         return session_log_export_declarations();
@@ -1993,6 +2008,41 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps };
     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps };
   }
+}
+"
+    .to_owned()
+}
+
+fn ui_directory_picker_browse_declarations() -> String {
+    r"
+import type { DirectoryEntry, DirectoryListing } from '@seekdeep-ai/seekdeep-client-runtime/client';
+import type { DirectoryFlowOwnerProps } from '@seekdeep-ai/seekdeep-client-ui-workspace/client';
+export const apply: typeof wasm_bindgen.applyClientUiDirectoryPickerBrowse;
+export const inject: readonly ['slots', 'workspaces', 'locale'];
+export interface BrowseFlowInjected {
+  listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing>;
+  createDirectory(path: string, name: string): Promise<string>;
+  t(key: DirectoryBrowserKey, values?: Record<string, unknown>): string;
+}
+export interface DirectoryBrowserProps extends BrowseFlowInjected {
+  open: boolean;
+  busy: boolean;
+  onOpen(path: string): void;
+  onClose(): void;
+}
+export type BrowseDirectoryFlowProps = DirectoryFlowOwnerProps & BrowseFlowInjected;
+export type DirectoryBrowserKey =
+  | 'browser.title' | 'browser.home' | 'browser.newFolder' | 'browser.folderName'
+  | 'browser.createIn' | 'browser.untitledFolder' | 'browser.create' | 'browser.cancel'
+  | 'browser.open' | 'browser.editPath' | 'browser.loading' | 'browser.truncated'
+  | 'browser.showHidden';
+export interface DirectoryBrowserStateController {
+  snapshot(): unknown;
+  dispatch(action: string, payload?: unknown): unknown;
+}
+export const createDirectoryBrowserStateController: () => DirectoryBrowserStateController;
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { 'directory-browser': DirectoryBrowserKey }
 }
 "
     .to_owned()
@@ -3601,6 +3651,50 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-workspace-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-workspace"));
+    }
+
+    #[test]
+    fn ui_directory_picker_browse_bundle_configures_flow_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_directory_picker_browse_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-directory-picker-browse",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiDirectoryPickerBrowse(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "apply: __seekdeep_client_ui_directory_picker_browse_wasm.applyClientUiDirectoryPickerBrowse",
+            "inject: ['slots', 'workspaces', 'locale']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-directory-picker-browse");
+        for expected in [
+            "interface BrowseFlowInjected",
+            "interface DirectoryBrowserProps",
+            "type BrowseDirectoryFlowProps",
+            "type DirectoryBrowserKey",
+            "interface DirectoryBrowserStateController",
+            "'directory-browser'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-directory-picker-browse",
+            output.path(),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(output.path().join("index.js")).unwrap(),
+            "export function apply() {}\n"
+        );
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-directory-picker-browse-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-directory-picker-browse"));
     }
 
     #[test]

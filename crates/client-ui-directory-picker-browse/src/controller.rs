@@ -4,9 +4,11 @@ use crate::{
     DirectoryEntry, DirectoryListing, DraftRead, ScannedDirectory, read_draft, resolve_landing,
     target_path,
 };
+use serde::{Deserialize, Serialize};
 
 /// Whether a landing closes the editor and reports target failure.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LandingOptions {
     /// Retire the path editor after a successful landing.
     pub close_editor: bool,
@@ -28,7 +30,8 @@ impl LandingOptions {
 }
 
 /// One Host listing request plus deterministic ownership tokens.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ListingLaunch {
     /// Newer intent invalidates this sequence.
     pub seq: u64,
@@ -39,7 +42,8 @@ pub struct ListingLaunch {
 }
 
 /// Parent leg requested after a target listing lands.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ParentLeg {
     /// Same supersession sequence as the target leg.
     pub seq: u64,
@@ -63,7 +67,8 @@ pub enum TargetLanding {
 }
 
 /// Draft-preview debounce identity.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PreviewToken {
     /// Supersession sequence at the keystroke.
     pub seq: u64,
@@ -72,7 +77,8 @@ pub struct PreviewToken {
 }
 
 /// One child-directory creation request.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateLaunch {
     /// Open/close generation fencing stale settlements.
     pub generation: u64,
@@ -83,7 +89,8 @@ pub struct CreateLaunch {
 }
 
 /// One post-create relist and the child it must select.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreationRelist {
     /// Relist request.
     pub listing: ListingLaunch,
@@ -94,7 +101,8 @@ pub struct CreationRelist {
 }
 
 /// Focus destination requested after a render-invalidating transition.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum FocusRequest {
     /// No controller-directed focus move.
     #[default]
@@ -108,7 +116,8 @@ pub enum FocusRequest {
 }
 
 /// Render-facing browser state. Async handles and timers stay outside this model.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[allow(clippy::struct_excessive_bools)] // Independent source UI axes, not one closed phase enum.
 pub struct DirectoryBrowserState {
     /// Owner visibility.
@@ -216,6 +225,16 @@ impl DirectoryBrowserController {
         self.bump_seq()
     }
 
+    /// Invalidates every settlement owned by an unmounted component instance.
+    pub fn dispose(&mut self) {
+        self.state.open_generation = self.state.open_generation.wrapping_add(1);
+        self.bump_seq();
+        self.state.open = false;
+        self.state.loading = false;
+        self.state.slow_scan = false;
+        self.state.focus = FocusRequest::None;
+    }
+
     /// Opens fresh at Host home and returns the initial target listing.
     pub fn open(&mut self) -> ListingLaunch {
         self.state.open_generation = self.state.open_generation.wrapping_add(1);
@@ -259,7 +278,11 @@ impl DirectoryBrowserController {
     fn settle_landing(&mut self, options: LandingOptions) {
         self.state.loading = false;
         if options.close_editor {
+            let closed_editor = self.state.path_draft.is_some();
             self.state.path_draft = None;
+            if closed_editor {
+                self.state.focus = FocusRequest::EditZone;
+            }
         } else {
             self.state.error = None;
             self.state.focus = FocusRequest::PathInput;
@@ -495,7 +518,6 @@ impl DirectoryBrowserController {
         if draft.trim().is_empty() {
             return None;
         }
-        self.state.focus = FocusRequest::EditZone;
         self.state.preview_suspended = true;
         Some(self.begin_landing(Some(draft), LandingOptions::SUBMITTED))
     }

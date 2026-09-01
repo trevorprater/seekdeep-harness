@@ -40,13 +40,10 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-directory-picker-browse --artifact seekdeep_client_ui_directory_picker_browse --module-id @seekdeep-ai/seekdeep-client-ui-directory-picker-browse --out-dir packages/client/ui-directory-picker-browse/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-directory-picker-browse --artifact seekdeep_client_ui_directory_picker_browse --module-id @seekdeep-ai/seekdeep-client-ui-directory-picker-browse --out-dir packages/client/ui-directory-picker-browse/lib --watch"
   },
   "license": "MIT",
-  "dependencies": {
-    "clsx": "^2.0.0"
-  },
   "peerDependencies": {
     "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
     "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",

@@ -43980,27 +43980,71 @@
     {
       "source": "packages/client/ui-directory-picker-browse/src/client/DirectoryBrowser.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-browse/src/model.rs",
+        "crates/client-ui-directory-picker-browse/src/controller.rs",
+        "crates/client-ui-directory-picker-browse/src/browser.rs",
+        "crates/client-ui-directory-picker-browse/src/browser_ui.rs"
+      ],
+      "evidence": [
+        "pinned source directory-browser suite: 81 passed",
+        "portable Rust tests pin POSIX and Windows path interpretation, hidden and prefix filtering, selection-anchored landings, deterministic navigation races, creation relists, focus requests, and open/unmount generation fences",
+        "live WASM tests pin React rendering, wire aborts, slow-scan windows, path preview, IME guards, nested-dialog and busy fences, focus re-parking, creation, reopen, and dead-component settlement rejection",
+        "strict native and wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/src/client/flow.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-browse/src/browser_ui.rs",
+        "crates/client-ui-directory-picker-browse/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "compiled BrowseDirectoryFlow maps owner pick and cancellation onto DirectoryBrowser and leaves the owner error arm untouched",
+        "live WASM flow adaptation test passed"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-browse/src/browser_apply.rs",
+        "crates/client-ui-directory-picker-browse/src/locales.rs",
+        "crates/client-ui-directory-picker-browse/tests/wasm_apply_parity.rs"
+      ],
+      "evidence": [
+        "exact slots, workspaces, locale injection; 13-entry zh and en dictionaries; and transactional two-hole Slot assembly are compiled in Rust/WASM",
+        "live WASM tests passed for declaration ordering, injected browse calls, pair teardown, Slot conflict rollback, and locale conflict rollback"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-browse/src/browser_ui.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "Rust embeds and prefixes the verified CSS module without a TypeScript CSS import",
+        "generated client declarations parse under TypeScript bundler resolution"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "wasm-package compatibility output preserves the exact inert node apply seat",
+        "focused xtask package compatibility test passed"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/src/invariant.ts",
@@ -44019,12 +44063,31 @@
     {
       "source": "packages/client/ui-directory-picker-browse/tests/client-flow.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-browse/tests/wasm_apply_parity.rs",
+        "crates/client-ui-directory-picker-browse/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "pinned source client-flow suite: 10 passed",
+        "live WASM apply and flow tests cover exact injection, early and late declarations, transactional rollback, teardown, browse-call routing, owner adaptation, and closed rendering"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/tests/directory-browser.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-directory-picker-browse/tests/model_parity.rs",
+        "crates/client-ui-directory-picker-browse/tests/controller_parity.rs",
+        "crates/client-ui-directory-picker-browse/tests/wasm_controller_parity.rs",
+        "crates/client-ui-directory-picker-browse/tests/wasm_ui_parity.rs"
+      ],
+      "evidence": [
+        "pinned source directory-browser suite: 81 passed",
+        "12 native Rust model and controller tests passed",
+        "14 live WASM controller and UI tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-browse/tsconfig.json",
@@ -44040,7 +44103,16 @@
     {
       "source": "packages/client/ui-directory-picker-browse/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-directory-picker-browse/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "package bundle and watch scripts delegate to cargo xtask wasm-package",
+        "optimized classic WASM bundle built and ModuleLoader smoke passed with 9 exact isolated exports",
+        "generated compatibility declarations parse under TypeScript"
+      ]
     },
     {
       "source": "packages/client/ui-directory-picker-native/README.i18n.yaml",

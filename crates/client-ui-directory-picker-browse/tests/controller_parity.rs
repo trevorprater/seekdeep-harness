@@ -151,7 +151,7 @@ fn submitted_path_suspends_preview_and_preserves_untrimmed_text() {
     assert_eq!(submitted.path.as_deref(), Some("/home/u/Documents  "));
     assert!(controller.state().preview_suspended);
     assert!(controller.preview_elapsed(&token).is_none());
-    assert_eq!(controller.consume_focus(), FocusRequest::EditZone);
+    assert_eq!(controller.consume_focus(), FocusRequest::None);
     assert!(controller.target_failed(
         submitted.seq,
         LandingOptions::SUBMITTED,
@@ -162,6 +162,25 @@ fn submitted_path_suspends_preview_and_preserves_untrimmed_text() {
         Some("/home/u/Documents  ")
     );
     assert_eq!(controller.state().error.as_deref(), Some("unreadable"));
+}
+
+#[test]
+fn submitted_editor_focus_is_requested_only_when_success_unmounts_the_input() {
+    let mut controller = DirectoryBrowserController::new();
+    let launch = controller.open();
+    controller.target_landed(&launch, home(), LandingOptions::SUBMITTED);
+    controller.open_path_editor();
+    controller.edit_path(DOCS.to_owned());
+    let submitted = controller.submit_path().unwrap();
+    assert_eq!(controller.consume_focus(), FocusRequest::None);
+    let TargetLanding::Parent(parent) =
+        controller.target_landed(&submitted, docs(), LandingOptions::SUBMITTED)
+    else {
+        panic!("submitted docs landing should request its parent");
+    };
+    assert!(controller.parent_landed(parent.seq, home()));
+    assert_eq!(controller.state().path_draft, None);
+    assert_eq!(controller.consume_focus(), FocusRequest::EditZone);
 }
 
 #[test]
@@ -221,4 +240,17 @@ fn slow_scan_window_and_close_reopen_reset_do_not_leak_indicator_state() {
     let reopened = controller.open();
     assert!(!controller.state().slow_scan);
     assert_ne!(reopened.scan_window, second.scan_window);
+}
+
+#[test]
+fn dispose_retires_the_open_generation_and_slow_scan_gate() {
+    let mut controller = DirectoryBrowserController::new();
+    let launch = controller.open();
+    let generation = controller.state().open_generation;
+    controller.dispose();
+    assert!(!controller.state().open);
+    assert!(!controller.state().loading);
+    assert!(!controller.state().slow_scan);
+    assert_ne!(controller.state().open_generation, generation);
+    assert!(!controller.slow_scan_elapsed(launch.scan_window));
 }

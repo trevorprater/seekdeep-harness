@@ -3,11 +3,11 @@
 use serde::{Deserialize, Serialize};
 
 /// Slow-scan silence window before the loading indicator appears.
-pub const SLOW_SCAN_DELAY_MS: u64 = 300;
+pub const SLOW_SCAN_DELAY_MS: u32 = 300;
 /// Maximum submitted-navigation wait for the parent listing leg.
-pub const PARENT_LEG_WAIT_MS: u64 = 200;
+pub const PARENT_LEG_WAIT_MS: u32 = 200;
 /// Draft-following debounce before scanning an unlisted level.
-pub const DRAFT_PREVIEW_DEBOUNCE_MS: u64 = 250;
+pub const DRAFT_PREVIEW_DEBOUNCE_MS: u32 = 250;
 
 /// One directory row: a listing child or breadcrumb ancestor.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,7 +58,8 @@ impl PathSeparator {
 }
 
 /// Draft directory text and the Host-spelled level it produced.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScannedDirectory {
     /// Draft directory part sent to the Host.
     pub directory: String,
