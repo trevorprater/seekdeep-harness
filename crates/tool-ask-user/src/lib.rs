@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use seekdeep_cordis::{Context, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_llm::ContentBlock;
 use seekdeep_tools::{DefineToolOptions, DefineToolOutput, TOOLS, ToolRuntime, define_tool};
@@ -15,6 +15,10 @@ use serde_json::{Value, json};
 
 /// Stable public tool name.
 pub const TOOL_NAME: &str = "ask_user_question";
+/// Loader plugin name.
+pub const NAME: &str = "tool-ask-user";
+/// Loader service dependencies.
+pub const INJECT: &[&str] = &["tools", "userQuestions"];
 
 const DESCRIPTION: &str = "Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. Send one or more questions, each with a stable id that will be echoed in the answer.";
 
@@ -183,6 +187,17 @@ pub fn apply(context: &Context) -> anyhow::Result<EffectHandle> {
         .get(USER_QUESTIONS)
         .ok_or_else(|| anyhow::anyhow!("tool-ask-user requires userQuestions"))?;
     tools.register(context, definition(user_questions)?)
+}
+
+/// Builds the Loader-compatible user-question tool plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, _| {
+        Box::pin(async move {
+            apply(&context)?;
+            Ok(())
+        })
+    })
 }
 
 /// Registers the package's explained empty invariant companion.

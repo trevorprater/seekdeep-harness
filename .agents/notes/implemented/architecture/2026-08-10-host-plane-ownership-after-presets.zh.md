@@ -24,7 +24,7 @@ Status: implemented
 
 ## 测试
 
-`apps/cli/tests/web-agent-presets.e2e.ts` 在本文件中任何 preset 挂载**之前**，于已启动的 Web 组装上读取 `ctx.get('tokenMeter')`——preset 侧的 meter 会待在 `isolate` realm 里，对 `ctx.get` 不可见，因此这次读取是一次所有权断言而不是挂载顺序的巧合——随后断言一个 `minimal` 会话的快照带齐三个单元。
+[`apps/seekdeep/tests/shipped_cli_contracts.rs`](../../../../apps/seekdeep/tests/shipped_cli_contracts.rs)启动只禁用外部副作用的已编译随附 Web profile，在任何 preset 挂载之前读取 `tokenMeter`，并断言 `minimal` 会话的快照带齐三个单元。同一测试会预检四份随附 preset 文件，同时挂载 `minimal`、`standard`、`code` 与 `cordis`，检查各自具有区分力的精确工具姿态，并证明一个 preset 的释放不会破坏其他 preset，且全局工具层保持为空。
 
 `packages/preset/agent-presets/tests/mount.spec.ts` 断言警告对裸 agent 恰好触发一次、对已加入的 agent 完全不触发。`tests/invariant.spec.ts` 承担负控：未加入 agent 的组装被拒绝，而已加入 agent 的组装与不带作用域的宿主组装都通过。
 

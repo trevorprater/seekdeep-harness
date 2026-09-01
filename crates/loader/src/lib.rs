@@ -1260,7 +1260,7 @@ fn effective_disabled(
             catalog
                 .expressions
                 .evaluate(context, expression)
-                .map(expression::javascript_truthy)
+                .map(|value| value.is_some_and(expression::javascript_truthy))
                 .map_err(|error| entry_failure(entry, error))
         })
 }

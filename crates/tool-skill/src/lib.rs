@@ -566,7 +566,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
 
     tools.register(context, definition(context)?)?;
     let skill_tool = tools
-        .get("skill", None)
+        .get("skill", seekdeep_scope::scope_of(context))
         .ok_or_else(|| anyhow::anyhow!("tool-skill registered tool missing"))?;
 
     {

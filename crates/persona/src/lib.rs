@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use seekdeep_cordis::{Context, Fiber, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Fiber, Plugin, fiber::EffectHandle};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_system_prompt::{PromptSection, SystemPrompt};
 use serde::{Deserialize, Serialize};
@@ -12,9 +12,14 @@ pub use seekdeep_system_prompt::PERSONA_ORDER;
 /// Re-export of the registry-owned, shadowable persona slot name.
 pub use seekdeep_system_prompt::PERSONA_SECTION;
 
+/// Loader plugin name.
+pub const NAME: &str = "persona";
+/// Loader service dependency.
+pub const INJECT: &[&str] = &["systemPrompt"];
+
 /// Per-agent persona composition.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PersonaConfig {
     /// Persona prose contributed to the deployment persona slot.
     pub text: String,
@@ -54,6 +59,21 @@ impl PersonaConfig {
 
 const fn default_true() -> bool {
     true
+}
+
+/// Builds the Loader-compatible scoped persona plugin.
+#[must_use]
+pub fn plugin() -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), |context, value| {
+        Box::pin(async move {
+            let prompt = context
+                .get(seekdeep_system_prompt::SYSTEM_PROMPT)
+                .ok_or_else(|| anyhow::anyhow!("persona requires systemPrompt"))?;
+            let config: PersonaConfig = serde_json::from_value(value)?;
+            install(&context, &prompt, config).await?;
+            Ok(())
+        })
+    })
 }
 
 /// Installs a persona in the mounting context's scope.

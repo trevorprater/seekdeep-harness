@@ -243,3 +243,37 @@ fn launcher_help_and_version_do_not_read_the_invoking_directory_env_file() {
         }
     );
 }
+
+#[test]
+fn missing_profile_and_invalid_overlay_fail_loud_through_the_compiled_entry() {
+    let missing = run_seekdeep(&["--profile", "nope"], None);
+    assert_eq!(missing.code, Some(1));
+    assert_eq!(missing.stdout, "");
+    assert!(missing.stderr.contains("profile \"nope\" does not exist"));
+    assert!(
+        missing
+            .stderr
+            .contains("seekdeep plugin --profile nope add")
+    );
+
+    let sandbox = tempfile::tempdir().unwrap();
+    let home = sandbox.path().join("home");
+    let workspace = sandbox.path().join("workspace");
+    std::fs::create_dir_all(&workspace).unwrap();
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../cli/tests/fixtures/invalid-provider.cordis.yml");
+    let output = Command::new(env!("CARGO_BIN_EXE_seekdeep"))
+        .current_dir(&workspace)
+        .args(["web", "--patch"])
+        .arg(fixture)
+        .env_clear()
+        .env("SEEKDEEP_HOME", home)
+        .env("DEEPSEEK_API_KEY", "keyless-invalid-config")
+        .env("SEEKDEEP_TELEMETRY_DISABLED", "1")
+        .output()
+        .unwrap();
+    let invalid = process_result(output);
+    assert_eq!(invalid.code, Some(1));
+    assert_eq!(invalid.stdout, "");
+    assert!(invalid.stderr.contains("llm-pi-ai"), "{}", invalid.stderr);
+}

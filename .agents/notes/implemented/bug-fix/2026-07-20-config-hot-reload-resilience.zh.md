@@ -22,6 +22,8 @@ HMR 收容实时刷新 rejection。其 `registerConfig(filename, refresh)` 方�
 
 Rust 实现通过 `seekdeep-loader`、`seekdeep-cordis` 与 `seekdeep-app-boot` 保留同一补偿事务。活动的 `loader` 服务会列出已配置条目，并串行执行创建、更新、移动、移除与文件代际对账。它会在修改活动条目前解析每个已启用的替换项，保留未受影响的 fiber，在后续条目失败时恢复先前的更新与新增项，并只在补偿完成后发布结算结果。原始 `!!js` 节点保留在条目配置中；Rust 自有求值器会在已声明服务激活后解析它们，服务替换则会针对新的依赖代际重新求值。文件支持的 JavaScript 插件在 Rust 自有的专用解释器 worker 中运行；其模块 realm 会跨配置重启保留，effect disposer 则会加入 fiber 拆卸并等待完成。Host HMR 会记录 ESM 与 CJS 依赖文件，在活动代际继续服务时准备所有受影响的 worker，按 Loader 顺序替换条目，在应用失败后恢复先前 worker，在源码可见的 HMR 边界收容旧代际 disposer 失败，并为启动器依赖返回完整重启决策。确切路径 watcher 会收容失败的刷新、保留上一份完好代际，并在 dispose 完成前排空已接纳的工作。
 
+表达式求值会保留 JavaScript `undefined`，直到配置插值按其位置作出决定。对象属性的表达式返回 `undefined` 时，该属性会被省略，从而让消费方的 schema 默认值生效；显式 `null` 仍是一个值，而顶层和数组位置由于无法省略，会使用 JSON `null`。原始表达式节点不会改变，写回与后续代际仍使用它。
+
 ## Alternatives considered
 
 **在 `Include.refresh()` 内收容失败。** 已否决，因为这会使 HMR 宿主无法广播失败，却仍允许 Loader 对账掩盖部分应用。Include 负责候选内容的解析与提交；HMR 负责收容和观察。

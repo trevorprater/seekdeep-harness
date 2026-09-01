@@ -80,6 +80,8 @@ async fn javascript_expressions_use_an_injected_process_facade_and_preserve_raw_
                 "    cwd: !!js process.cwd()\n",
                 "    executable: !!js process.execPath\n",
                 "    home: !!js seekdeepHomePath('sessions')\n",
+                "    omitted: !!js process.env.SEEKDEEP_MISSING\n",
+                "    array: [!!js process.env.SEEKDEEP_MISSING]\n",
             ),
         )
         .await
@@ -92,6 +94,7 @@ async fn javascript_expressions_use_an_injected_process_facade_and_preserve_raw_
             "cwd": "/workspace",
             "executable": "/bin/seekdeep",
             "home": "/state/seekdeep/sessions",
+            "array": [null],
         }))
     );
     assert_eq!(

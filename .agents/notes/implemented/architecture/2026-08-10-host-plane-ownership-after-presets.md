@@ -24,7 +24,7 @@ Three limits stay open and are recorded where they bite rather than fixed here: 
 
 ## Testing
 
-`apps/cli/tests/web-agent-presets.e2e.ts` reads `ctx.get('tokenMeter')` on the booted Web composition before any preset in the file mounts — a preset-side meter sits behind an `isolate` realm and is invisible to `ctx.get`, so the read is an ownership assertion rather than a mount-order coincidence — then asserts a `minimal` session's snapshot carries all three units.
+[`apps/seekdeep/tests/shipped_cli_contracts.rs`](../../../../apps/seekdeep/tests/shipped_cli_contracts.rs) boots the compiled shipped Web profile with only external side effects disabled, reads `tokenMeter` before any preset mounts, and asserts a `minimal` session snapshot carries all three units. The same test preflights all four shipped preset files, mounts `minimal`, `standard`, `code`, and `cordis` together, checks their exact distinguishing tool postures, and proves one preset's disposal leaves the others and the empty global tool layer intact.
 
 `packages/preset/agent-presets/tests/mount.spec.ts` asserts the warning fires exactly once for a bare agent and not at all for a joined one. `tests/invariant.spec.ts` carries the negative control: an unjoined agent's assembly rejects, while a joined agent's assembly and a scopeless host assembly both pass.
 

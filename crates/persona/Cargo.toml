@@ -11,10 +11,10 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 seekdeep-scope = { path = "../scope" }
-serde_json.workspace = true
 tokio.workspace = true
 
 [lints]

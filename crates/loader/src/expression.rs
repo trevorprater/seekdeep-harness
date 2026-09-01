@@ -104,7 +104,11 @@ impl ExpressionEnvironment {
         })
     }
 
-    pub(crate) fn evaluate(&self, context: &Context, expression: &str) -> anyhow::Result<Value> {
+    pub(crate) fn evaluate(
+        &self,
+        context: &Context,
+        expression: &str,
+    ) -> anyhow::Result<Option<Value>> {
         let services = context.expression_service_snapshot();
         let scope = serde_json::to_string(&services)?;
         let environment = serde_json::to_string(&self.environment)?;
@@ -186,7 +190,6 @@ impl ExpressionEnvironment {
         result
             .to_json(&mut javascript)
             .map_err(|error| anyhow::anyhow!(error.to_string()))
-            .map(|value| value.unwrap_or(Value::Null))
     }
 }
 
@@ -195,12 +198,21 @@ pub(crate) fn interpolate_config(
     context: &Context,
     value: &Value,
 ) -> anyhow::Result<Value> {
+    Ok(interpolate_value(environment, context, value)?.unwrap_or(Value::Null))
+}
+
+fn interpolate_value(
+    environment: &ExpressionEnvironment,
+    context: &Context,
+    value: &Value,
+) -> anyhow::Result<Option<Value>> {
     match value {
         Value::Array(values) => values
             .iter()
-            .map(|value| interpolate_config(environment, context, value))
+            .map(|value| Ok(interpolate_value(environment, context, value)?.unwrap_or(Value::Null)))
             .collect::<Result<Vec<_>, _>>()
-            .map(Value::Array),
+            .map(Value::Array)
+            .map(Some),
         Value::Object(values) if values.contains_key(EXPRESSION_KEY) => {
             let expression = values
                 .get(EXPRESSION_KEY)
@@ -210,15 +222,17 @@ pub(crate) fn interpolate_config(
         }
         Value::Object(values) => values
             .iter()
-            .map(|(name, value)| {
-                Ok((
-                    name.clone(),
-                    interpolate_config(environment, context, value)?,
-                ))
-            })
+            .filter_map(
+                |(name, value)| match interpolate_value(environment, context, value) {
+                    Ok(Some(value)) => Some(Ok((name.clone(), value))),
+                    Ok(None) => None,
+                    Err(error) => Some(Err(error)),
+                },
+            )
             .collect::<Result<Map<_, _>, anyhow::Error>>()
-            .map(Value::Object),
-        scalar => Ok(scalar.clone()),
+            .map(Value::Object)
+            .map(Some),
+        scalar => Ok(Some(scalar.clone())),
     }
 }
 

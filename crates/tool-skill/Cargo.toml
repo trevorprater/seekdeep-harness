@@ -15,6 +15,7 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-skill = { path = "../skill" }
+seekdeep-scope = { path = "../scope" }
 seekdeep-tools = { path = "../tools" }
 serde.workspace = true
 serde_json.workspace = true

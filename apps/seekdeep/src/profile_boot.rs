@@ -23,6 +23,7 @@ use seekdeep_loader::{
     Entry, EntryId, EntryParent, ExpressionEnvironment, LOADER, PluginCatalog, PluginSpecifier,
     profile_patch::{ProfileEntry, ProfileNode, ProfilePatch, ProfilePatchWarning},
 };
+use seekdeep_typert_loader::TypertArtifactRegistry;
 use seekdeep_util::launch_environment::{LaunchEnvironmentSnapshot, SEEKDEEP_LAUNCH_ENVIRONMENT};
 
 use crate::{process_shutdown::ProcessShutdown, profile_support};
@@ -506,6 +507,10 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             "seekdeep-agent-presets",
             seekdeep_agent_presets::plugin(catalog.clone()),
         ),
+        (
+            "seekdeep-agent-tool-presentation",
+            seekdeep_agent_tool_presentation::plugin(),
+        ),
         ("seekdeep-api-gateway", seekdeep_api_gateway::plugin()),
         ("seekdeep-api-remotes", seekdeep_api_remotes::host_plugin()),
         (
@@ -536,6 +541,14 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         (
             "seekdeep-client-ui-cordis",
             seekdeep_client_ui_cordis::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-directory-picker-browse",
+            seekdeep_client_ui_directory_picker_browse::host_plugin(),
+        ),
+        (
+            "seekdeep-client-ui-directory-picker-native",
+            seekdeep_client_ui_directory_picker_native::host_plugin(),
         ),
         (
             "seekdeep-client-ui-agent-preset",
@@ -679,6 +692,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             "seekdeep-fs-observation-policy",
             seekdeep_fs_observation_policy::plugin(),
         ),
+        ("seekdeep-fs-local", seekdeep_fs_local::plugin()),
         ("seekdeep-fs-sandbox", seekdeep_fs_sandbox::plugin()),
         ("seekdeep-goal", seekdeep_goal::plugin()),
         (
@@ -688,6 +702,14 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         (
             "seekdeep-host-directory-picker-auto",
             seekdeep_host_directory_picker_auto::plugin(),
+        ),
+        (
+            "seekdeep-host-directory-picker-browse",
+            seekdeep_host_directory_picker_browse::plugin(),
+        ),
+        (
+            "seekdeep-host-directory-picker-native",
+            seekdeep_host_directory_picker_native::plugin(),
         ),
         ("seekdeep-host-apiproxy", seekdeep_host_apiproxy::plugin()),
         ("seekdeep-host-webserver", seekdeep_host_webserver::plugin()),
@@ -703,10 +725,12 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             "seekdeep-message-feedback",
             seekdeep_message_feedback::plugin(),
         ),
+        ("seekdeep-mcp-client", seekdeep_mcp_client::plugin()),
         (
             "seekdeep-permission-presets",
             seekdeep_permission_presets::plugin(),
         ),
+        ("seekdeep-persona", seekdeep_persona::plugin()),
         ("seekdeep-plan-mode", seekdeep_plan_mode::plugin()),
         ("seekdeep-pwsh-sandbox", seekdeep_pwsh_sandbox::plugin()),
         (
@@ -777,13 +801,22 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_subprocess_local::plugin(),
         ),
         ("seekdeep-system-prompt", seekdeep_system_prompt::plugin()),
+        ("seekdeep-terminal", seekdeep_terminal::plugin()),
+        ("seekdeep-terminal-bash", seekdeep_terminal_bash::plugin()),
         ("seekdeep-token-meter", seekdeep_token_meter::plugin()),
+        ("seekdeep-tool-ask-user", seekdeep_tool_ask_user::plugin()),
         ("seekdeep-tool-bash", seekdeep_tool_bash::plugin()),
+        (
+            "seekdeep-tool-bash-persistent",
+            seekdeep_tool_bash_persistent::plugin(),
+        ),
+        ("seekdeep-tool-cordis", seekdeep_tool_cordis::plugin()),
         ("seekdeep-tool-fs", seekdeep_tool_fs::plugin()),
         ("seekdeep-tool-fs-search", seekdeep_tool_fs_search::plugin()),
         ("seekdeep-tool-goal", seekdeep_tool_goal::index::plugin()),
         ("seekdeep-tool-jobs", seekdeep_tool_jobs::index::plugin()),
         ("seekdeep-tool-pwsh", seekdeep_tool_pwsh::plugin()),
+        ("seekdeep-tool-ralph", seekdeep_tool_ralph::plugin()),
         ("seekdeep-tool-skill", seekdeep_tool_skill::plugin()),
         (
             "seekdeep-tool-str-replace-editor",
@@ -804,6 +837,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_tool_timeout_policy::plugin(),
         ),
         ("seekdeep-tool-web", seekdeep_tool_web::plugin()),
+        ("seekdeep-tool-workflow", seekdeep_tool_workflow::plugin()),
         ("seekdeep-tools", seekdeep_tools::plugin()),
         ("seekdeep-typert-loader", seekdeep_typert_loader::plugin()),
         (
@@ -1094,6 +1128,7 @@ pub async fn run_profile_process(
         Box::pin(async move {
             application.publish_context(context.clone()).await?;
             context.provide(SEEKDEEP_LAUNCH_ENVIRONMENT, Arc::new(environment))?;
+            TypertArtifactRegistry::install(&context)?;
             provide_cmdline(
                 &context,
                 CmdlineHost::new(arguments, move |code| {

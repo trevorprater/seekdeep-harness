@@ -24105,7 +24105,21 @@
     {
       "source": "apps/cli/src/bin.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/main.rs",
+        "apps/seekdeep/src/args.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/src/process_shutdown.rs",
+        "apps/seekdeep/tests/source_launch_compat.rs",
+        "apps/seekdeep/tests/headless_signal_process.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/built-bin.e2e.ts (pinned source: 18 passed)",
+        "cargo test -p seekdeep --all-features (Rust: 89 passed across the compiled launcher, real process, profile, and application suites)",
+        "cargo clippy -p seekdeep -p seekdeep-loader -p seekdeep-persona -p seekdeep-tool-skill -p seekdeep-tool-ask-user -p seekdeep-tool-ralph -p seekdeep-tool-workflow --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the compiled Rust entry owns launcher parsing, profile boot, plugin forwarding, config dumps, headless execution, signal shutdown, and exact exit-code propagation"
     },
     {
       "source": "apps/cli/src/dump-config.ts",
@@ -24156,7 +24170,24 @@
     {
       "source": "apps/cli/src/profile-boot.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/Cargo.toml",
+        "apps/seekdeep/tests/profile_boot_parity.rs",
+        "apps/seekdeep/tests/shipped_cli_contracts.rs",
+        "crates/loader/src/expression.rs",
+        "crates/loader/src/lib.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/built-bin.e2e.ts (pinned source: 18 passed)",
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/web-agent-presets.e2e.ts (pinned source: 30 passed)",
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including a real compiled Web boot and independent mounts of all 4 shipped presets)",
+        "cargo test -p seekdeep --all-features (Rust: 89 passed)",
+        "cargo test -p seekdeep-loader --all-features (37 integration tests passed)",
+        "cargo clippy -p seekdeep -p seekdeep-loader -p seekdeep-persona -p seekdeep-tool-skill -p seekdeep-tool-ask-user -p seekdeep-tool-ralph -p seekdeep-tool-workflow --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the Rust boot catalog now contains every plugin required by the shipped Web tree and all four preset compositions, installs typert artifact ownership before Loader activation, preserves JavaScript undefined omission/null rules, and tears down isolated agent scopes independently"
     },
     {
       "source": "apps/cli/tests/args.spec.ts",
@@ -24176,12 +24207,34 @@
     {
       "source": "apps/cli/tests/built-bin.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/tests/dump_config_process.rs",
+        "apps/seekdeep/tests/headless_process.rs",
+        "apps/seekdeep/tests/layered_env_process.rs",
+        "apps/seekdeep/tests/plugin_process.rs",
+        "apps/seekdeep/tests/source_launch_compat.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/built-bin.e2e.ts (pinned source: 18 passed)",
+        "cargo test -p seekdeep --all-features (Rust: 89 passed, including real built-binary config, plugin, headless, environment, help, version, and failure paths)",
+        "cargo clippy -p seekdeep --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "apps/cli/tests/dsh-badge.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/skill-badge/tests/badge_parity.rs",
+        "apps/seekdeep/tests/shipped_cli_contracts.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.snapshot.config.ts apps/cli/tests/dsh-badge.snapshot.ts (pinned source: 1 passed)",
+        "cargo test -p seekdeep-skill-badge --all-features (2 passed)",
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including the disabled-by-default and enabled compiled-profile badge contracts)"
+      ],
+      "note": "the renamed SeekDeep badge snapshot is represented by the Rust projection and exact badge parity assertions rather than executable TypeScript"
     },
     {
       "source": "apps/cli/tests/fixtures/dsh-badge/cordis.yml",
@@ -24208,7 +24261,14 @@
     {
       "source": "apps/cli/tests/fixtures/dsh-badge/snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/skill-badge/tests/badge_parity.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.snapshot.config.ts apps/cli/tests/dsh-badge.snapshot.ts (pinned source: 1 passed)",
+        "cargo test -p seekdeep-skill-badge --all-features (2 passed, including exact snapshot state)"
+      ]
     },
     {
       "source": "apps/cli/tests/fixtures/invalid-provider.cordis.yml",
@@ -24235,12 +24295,30 @@
     {
       "source": "apps/cli/tests/fixtures/never-dispose.mjs",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/tests/headless_signal_process.rs",
+        "apps/seekdeep/src/process_shutdown.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/headless-shutdown.e2e.ts (pinned source: 1 passed)",
+        "cargo test -p seekdeep --test headless_signal_process --all-features (4 passed, including a Rust test process whose disposer never settles)"
+      ],
+      "note": "the production-compatible Rust process fixture holds disposal pending without retaining a JavaScript runtime shim"
     },
     {
       "source": "apps/cli/tests/headless-shutdown.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/process_shutdown.rs",
+        "apps/seekdeep/tests/headless_signal_process.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/headless-shutdown.e2e.ts (pinned source: 1 passed)",
+        "cargo test -p seekdeep --test headless_signal_process --all-features (4 passed: SIGINT 130, SIGTERM 0, forced second SIGINT, and the fixture process)",
+        "cargo test -p seekdeep --lib process_shutdown::tests --all-features (16 passed)"
+      ]
     },
     {
       "source": "apps/cli/tests/lazy-search-startup.compat.spec.ts",
@@ -24250,7 +24328,17 @@
     {
       "source": "apps/cli/tests/memory-mcp-configs.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/tests/shipped_cli_contracts.rs",
+        "crates/mcp-client/src/lib.rs",
+        "crates/mcp-client/tests"
+      ],
+      "evidence": [
+        "pnpm exec vitest run apps/cli/tests/memory-mcp-configs.spec.ts (pinned source: 6 passed)",
+        "cargo test -p seekdeep-mcp-client --all-features (24 passed across config, apply, transport, and real-process suites)",
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including all 3 pinned secret-free memory overlays against the compiled catalog)"
+      ]
     },
     {
       "source": "apps/cli/tests/process-shutdown.spec.ts",
@@ -24268,7 +24356,14 @@
     {
       "source": "apps/cli/tests/source-launch.compat.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/tests/source_launch_compat.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run apps/cli/tests/source-launch.compat.spec.ts (pinned source: 2 passed)",
+        "cargo test -p seekdeep --test source_launch_compat --all-features (6 passed, including real compiled-entry missing-profile and invalid-overlay failures)"
+      ]
     },
     {
       "source": "apps/cli/tests/telemetry-switch.spec.ts",
@@ -24288,12 +24383,29 @@
     {
       "source": "apps/cli/tests/web-agent-presets.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/shipped_cli_contracts.rs",
+        "crates/agent-presets"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/web-agent-presets.e2e.ts (pinned source: 30 passed)",
+        "cargo test -p seekdeep-agent-presets --all-features (33 passed)",
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including concurrent real mounts for minimal, standard, code, and cordis with exact scoped tools, projections, prompt collapse, and independent disposal)"
+      ]
     },
     {
       "source": "apps/cli/tests/windows-shell.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/tests/shipped_cli_contracts.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run apps/cli/tests/windows-shell.spec.ts (pinned source: 6 passed)",
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including exact JavaScript process.platform gates for both shipped shell stacks and minimal-preset omission)"
+      ]
     },
     {
       "source": "apps/cli/tsconfig.json",
@@ -37959,9 +38071,11 @@
       "evidence": [
         "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo test -p seekdeep-cordis -p seekdeep-util -p seekdeep-loader -p seekdeep-app-boot -p seekdeep-headless --all-features",
         "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260822 cargo clippy -p seekdeep-cordis -p seekdeep-util -p seekdeep-loader -p seekdeep-app-boot -p seekdeep-headless --all-targets --all-features -- -D warnings",
-        "pnpm exec vitest run packages/boot/app-boot/tests/config-reload.spec.ts packages/boot/app-boot/tests/user-patches.spec.ts (28 source tests at commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+        "pnpm exec vitest run packages/boot/app-boot/tests/config-reload.spec.ts packages/boot/app-boot/tests/user-patches.spec.ts (28 source tests at commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)",
+        "cargo test -p seekdeep-loader --all-features (37 integration tests passed, including undefined interpolation omission/null placement)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings"
       ],
-      "note": "optional patch parsing, raw expression preservation, injection-ready interpolation, disabled expressions, root Include patch layering, exact-path add/change/remove, failed-candidate retention, parse recovery, default and custom composition, required Loader/Include checks, duplicate registration, ownership-race no-op, and joined disposal are pinned"
+      "note": "optional patch parsing, raw expression preservation, injection-ready interpolation, exact JavaScript undefined handling (omit object properties, preserve array/top-level null positions, and treat disabled undefined as false), disabled expressions, root Include patch layering, exact-path add/change/remove, failed-candidate retention, parse recovery, default and custom composition, required Loader/Include checks, duplicate registration, ownership-race no-op, and joined disposal are pinned"
     },
     {
       "source": "packages/boot/app-boot/tsconfig.json",
@@ -65195,13 +65309,17 @@
       "targets": [
         "crates/tool-ask-user/src/lib.rs",
         "crates/user-questions/src/lib.rs",
-        "crates/tools/src/runtime.rs"
+        "crates/tools/src/runtime.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/shipped_cli_contracts.rs"
       ],
       "evidence": [
         "pnpm exec vitest run packages/interaction/tool-ask-user/tests/tool-ask-user.spec.ts",
         "cargo test -p seekdeep-tool-ask-user --all-targets --all-features",
-        "cargo clippy --workspace --all-targets --all-features -- -D warnings"
-      ]
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including the shipped preset Loader mount)",
+        "cargo clippy -p seekdeep -p seekdeep-tool-ask-user --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the package-owned Rust implementation exposes the source plugin identity and inject contract directly, and the compiled CLI catalog mounts it through the shipped preset tree"
     },
     {
       "source": "packages/interaction/tool-ask-user/src/invariant.ts",
@@ -69082,12 +69200,16 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/persona/src/lib.rs"
+        "crates/persona/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/shipped_cli_contracts.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-persona",
-        "cargo clippy -p seekdeep-persona --all-targets --all-features -- -D warnings"
-      ]
+        "cargo test -p seekdeep-persona --all-features (8 passed)",
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including all 4 shipped preset mounts)",
+        "cargo clippy -p seekdeep -p seekdeep-persona --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the package-owned Rust Loader wrapper accepts the source camelCase configuration, supplies systemPrompt injection metadata, and is registered in the compiled CLI catalog"
     },
     {
       "source": "packages/preset/persona/src/invariant.ts",
@@ -75467,12 +75589,16 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/tool-skill/src/lib.rs"
+        "crates/tool-skill/src/lib.rs",
+        "crates/tool-skill/Cargo.toml",
+        "apps/seekdeep/tests/shipped_cli_contracts.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-skill -p seekdeep-tool-skill -p seekdeep-command-feedback --all-features"
+        "cargo test -p seekdeep-tool-skill --all-features (6 passed)",
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including scoped standard-preset skill registration)",
+        "cargo clippy -p seekdeep -p seekdeep-tool-skill --all-targets --all-features -- -D warnings"
       ],
-      "note": "catalog rendering/types (SkillCatalogSource, CatalogEntry, Config), catalogSourceEntries, catalogDescription, digestCatalogEntries, renderCatalogEntries/renderCatalogMessage/renderCatalogUpdate, readCatalogEntries, catalogMessage, invokedSkillNames, the skill loader tool (definition()/register_skill_tool with typed args/output, schema, render, execute, and presentCall), apply(), and the two agent/pre-step listeners (user /name injection and durable catalog publish/replace with catalogHistory identity) are ported"
+      "note": "catalog rendering/types (SkillCatalogSource, CatalogEntry, Config), catalogSourceEntries, catalogDescription, digestCatalogEntries, renderCatalogEntries/renderCatalogMessage/renderCatalogUpdate, readCatalogEntries, catalogMessage, invokedSkillNames, the skill loader tool (definition()/register_skill_tool with typed args/output, schema, render, execute, and presentCall), apply(), and the two agent/pre-step listeners (user /name injection and durable catalog publish/replace with catalogHistory identity) are ported; tool lookup follows the active Agent scope rather than leaking through the root layer"
     },
     {
       "source": "packages/skill/tool-skill/src/invariant.ts",
@@ -83103,12 +83229,16 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/tool-ralph/src/index.rs"
+        "crates/tool-ralph/src/index.rs",
+        "crates/tool-ralph/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-tool-ralph --all-features",
-        "cargo clippy -p seekdeep-tool-ralph --all-targets --all-features -- -D warnings"
-      ]
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including the shipped cordis preset mount)",
+        "cargo clippy -p seekdeep -p seekdeep-tool-ralph --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the package-owned Rust Loader wrapper delegates the source plugin configuration to the compiled apply path and is present in the shipped CLI catalog"
     },
     {
       "source": "packages/workflow/tool-ralph/src/invariant.ts",
@@ -83211,11 +83341,16 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/tool-workflow/src/index.rs"
+        "crates/tool-workflow/src/index.rs",
+        "crates/tool-workflow/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-tool-workflow --all-features && cargo clippy -p seekdeep-tool-workflow --all-targets --all-features -- -D warnings"
-      ]
+        "cargo test -p seekdeep-tool-workflow --all-features (5 passed)",
+        "cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including the shipped workflow catalog mount)",
+        "cargo clippy -p seekdeep -p seekdeep-tool-workflow --all-targets --all-features -- -D warnings"
+      ],
+      "note": "the package-owned Rust Loader wrapper delegates configuration to the compiled apply path and is present in the shipped CLI catalog"
     },
     {
       "source": "packages/workflow/tool-workflow/src/invariant.ts",

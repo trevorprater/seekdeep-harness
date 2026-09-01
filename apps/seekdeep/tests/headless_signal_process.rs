@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use seekdeep::DEFAULT_MODEL;
+use seekdeep::{DEFAULT_MODEL, process_shutdown::ProcessShutdown};
 use serde_json::Value;
 use tokio::{
     io::{AsyncRead, AsyncReadExt as _},
@@ -409,4 +409,90 @@ async fn first_sigterm_during_inflight_request_disposes_and_exits_zero() -> anyh
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn first_sigint_during_inflight_request_disposes_and_exits_130() -> anyhow::Result<()> {
     run_first_signal_case("INT", 130).await
+}
+
+const SHUTDOWN_FIXTURE_ENV: &str = "SEEKDEEP_SHUTDOWN_FIXTURE";
+const SHUTDOWN_READY_ENV: &str = "SEEKDEEP_SHUTDOWN_READY";
+const SHUTDOWN_DRAINING_ENV: &str = "SEEKDEEP_SHUTDOWN_DRAINING";
+
+#[tokio::test(flavor = "current_thread")]
+async fn second_interrupt_fixture_process() -> anyhow::Result<()> {
+    if std::env::var_os(SHUTDOWN_FIXTURE_ENV).as_deref() != Some(std::ffi::OsStr::new("1")) {
+        return Ok(());
+    }
+    let ready = std::env::var_os(SHUTDOWN_READY_ENV)
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("shutdown fixture ready path missing"))?;
+    let draining = std::env::var_os(SHUTDOWN_DRAINING_ENV)
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| anyhow::anyhow!("shutdown fixture draining path missing"))?;
+    let shutdown = ProcessShutdown::new(
+        || async {
+            std::future::pending::<()>().await;
+            Ok(())
+        },
+        std::process::exit,
+        |_| {},
+    );
+    let mut signals = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+    std::fs::write(ready, b"ready\n")?;
+    signals
+        .recv()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("SIGINT stream ended before the first signal"))?;
+    shutdown.interrupt_sigint();
+    std::fs::write(draining, b"draining\n")?;
+    signals
+        .recv()
+        .await
+        .ok_or_else(|| anyhow::anyhow!("SIGINT stream ended before the second signal"))?;
+    shutdown.interrupt_sigint();
+    std::future::pending::<()>().await;
+    Ok(())
+}
+
+async fn wait_for_marker(path: &std::path::Path, label: &str) -> anyhow::Result<()> {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while !path.exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("timed out waiting for {label}"))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn second_sigint_forces_exit_while_the_first_is_draining() -> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let ready = temporary.path().join("ready");
+    let draining = temporary.path().join("draining");
+    let executable = std::env::current_exe()?;
+    let mut child = Command::new(executable)
+        .args(["--exact", "second_interrupt_fixture_process", "--nocapture"])
+        .env(SHUTDOWN_FIXTURE_ENV, "1")
+        .env(SHUTDOWN_READY_ENV, &ready)
+        .env(SHUTDOWN_DRAINING_ENV, &draining)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()?;
+    let pid = child
+        .id()
+        .ok_or_else(|| anyhow::anyhow!("shutdown fixture has no process id"))?;
+    if let Err(error) = wait_for_marker(&ready, "shutdown fixture readiness").await {
+        let output = force_reap(&mut child).await;
+        return Err(anyhow::anyhow!("{error:#}; cleanup: {output:#?}"));
+    }
+    send_signal(pid, "INT").await?;
+    if let Err(error) = wait_for_marker(&draining, "first SIGINT disposal").await {
+        let output = force_reap(&mut child).await;
+        return Err(anyhow::anyhow!("{error:#}; cleanup: {output:#?}"));
+    }
+    send_signal(pid, "INT").await?;
+    let status = tokio::time::timeout(REAP_TIMEOUT, child.wait())
+        .await
+        .map_err(|_| anyhow::anyhow!("second SIGINT did not force bounded exit"))??;
+    assert_eq!(status.code(), Some(130));
+    Ok(())
 }
