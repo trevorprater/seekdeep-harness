@@ -29,6 +29,7 @@ pub enum SessionLogDownloadStatus {
 
 /// One Session's current download-dialog state.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionLogDownloadEntry {
     /// Whether the shared modal is visible.
     pub open: bool,
@@ -40,6 +41,7 @@ pub struct SessionLogDownloadEntry {
 
 /// Download states keyed by Session id.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionLogDownloadState {
     /// Per-session state.
     pub by_session: BTreeMap<String, SessionLogDownloadEntry>,
@@ -87,9 +89,36 @@ pub struct SessionLogDownloadController {
     state: RefCell<SessionLogDownloadState>,
     active: RefCell<BTreeMap<SessionId, ActiveDownload>>,
     disposed: Cell<bool>,
+    listeners: RefCell<BTreeMap<u64, Rc<dyn Fn()>>>,
+    next_listener_id: Cell<u64>,
     fetcher: DownloadFetcher,
     save: DownloadSaver,
     host_base: String,
+}
+
+/// One reversible snapshot listener registration.
+pub struct SessionLogDownloadSubscription {
+    controller: Weak<SessionLogDownloadController>,
+    listener_id: u64,
+    disposed: Cell<bool>,
+}
+
+impl SessionLogDownloadSubscription {
+    /// Removes the listener once.
+    pub fn dispose(&self) {
+        if self.disposed.replace(true) {
+            return;
+        }
+        if let Some(controller) = self.controller.upgrade() {
+            controller.listeners.borrow_mut().remove(&self.listener_id);
+        }
+    }
+}
+
+impl Drop for SessionLogDownloadSubscription {
+    fn drop(&mut self) {
+        self.dispose();
+    }
 }
 
 #[derive(Default)]
@@ -161,6 +190,8 @@ impl SessionLogDownloadController {
             state: RefCell::new(SessionLogDownloadState::default()),
             active: RefCell::new(BTreeMap::new()),
             disposed: Cell::new(false),
+            listeners: RefCell::new(BTreeMap::new()),
+            next_listener_id: Cell::new(1),
             fetcher,
             save,
             host_base: host_base(origin),
@@ -176,6 +207,20 @@ impl SessionLogDownloadController {
     /// Replaces state, mirroring an external snapshot-store clear.
     pub fn set_state(&self, state: SessionLogDownloadState) {
         *self.state.borrow_mut() = state;
+        self.notify();
+    }
+
+    /// Subscribes to every immutable state replacement.
+    #[must_use]
+    pub fn subscribe(self: &Rc<Self>, listener: Rc<dyn Fn()>) -> SessionLogDownloadSubscription {
+        let listener_id = self.next_listener_id.get();
+        self.next_listener_id.set(listener_id.saturating_add(1));
+        self.listeners.borrow_mut().insert(listener_id, listener);
+        SessionLogDownloadSubscription {
+            controller: Rc::downgrade(self),
+            listener_id,
+            disposed: Cell::new(false),
+        }
     }
 
     /// Downloads one Session tree; concurrent gestures share one operation.
@@ -323,6 +368,19 @@ impl SessionLogDownloadController {
             .borrow_mut()
             .by_session
             .insert(session_id.as_str().to_owned(), entry);
+        self.notify();
+    }
+
+    fn notify(&self) {
+        let listeners = self
+            .listeners
+            .borrow()
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        for listener in listeners {
+            listener();
+        }
     }
 }
 
@@ -340,7 +398,7 @@ pub fn session_log_zip_filename(session_id: &SessionId) -> String {
             }
         })
         .collect::<String>();
-    format!("dsh-session-{safe}.zip")
+    format!("seekdeep-session-{safe}.zip")
 }
 
 /// Resolves the browser Host base with the null-origin fallback.
@@ -348,7 +406,7 @@ pub fn session_log_zip_filename(session_id: &SessionId) -> String {
 pub fn host_base(origin: Option<&str>) -> String {
     match origin {
         Some(origin) if origin != "null" => origin.to_owned(),
-        _ => "http://dsh.internal".to_owned(),
+        _ => "http://seekdeep.internal".to_owned(),
     }
 }
 

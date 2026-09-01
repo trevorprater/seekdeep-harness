@@ -7627,11 +7627,13 @@ dependencies = [
  "seekdeep-scope",
  "seekdeep-system-prompt",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "tokio",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-bindgen-test",
  "web-sys",
 ]
 

@@ -19,7 +19,10 @@
     "./package.json": "./package.json"
   },
   "files": ["lib/index.js", "lib/invariant.js", "lib/client.js", "lib/types/**/*.d.ts"],
-  "scripts": { "bundle": "tsdown", "watch": "tsdown --watch" },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-session-log-export --artifact seekdeep_session_log_export --module-id @seekdeep-ai/seekdeep-session-log-export --out-dir packages/session-query/session-log-export/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-session-log-export --artifact seekdeep_session_log_export --module-id @seekdeep-ai/seekdeep-session-log-export --out-dir packages/session-query/session-log-export/lib --watch"
+  },
   "license": "MIT",
   "peerDependencies": {
     "@seekdeep-ai/cordis": "workspace:^",

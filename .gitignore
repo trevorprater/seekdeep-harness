@@ -1,5 +1,6 @@
 /target/
 /packages/client/*/lib/
+/packages/session-query/session-log-export/lib/
 /.seekdeep/
 *.profraw
 *.profdata

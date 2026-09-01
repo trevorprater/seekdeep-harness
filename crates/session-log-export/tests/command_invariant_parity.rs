@@ -1,5 +1,7 @@
 //! Host command lifecycle and invariant identity parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::Arc;
 
 use seekdeep_agent::{Agent, AgentOptions, Inbox, NoopInboxNotifications};
@@ -69,7 +71,7 @@ async fn invariant_reserves_and_releases_exact_package_identity() {
         register_invariant(&registry)
             .unwrap_err()
             .to_string()
-            .contains("@deepseek-ai/seekdeep-session-log-export")
+            .contains("@seekdeep-ai/seekdeep-session-log-export")
     );
     registration.dispose().await.unwrap();
     register_invariant(&registry)

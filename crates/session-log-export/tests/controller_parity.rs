@@ -1,5 +1,7 @@
 //! Browser controller, helper, and lifecycle parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{cell::RefCell, rc::Rc};
 
 use futures::{FutureExt as _, channel::oneshot};
@@ -50,7 +52,7 @@ async fn downloads_exact_head_url_and_publishes_success() {
         saves.borrow().as_slice(),
         [(
             request.url.clone(),
-            "dsh-session-session-export-controller.zip".to_owned()
+            "seekdeep-session-session-export-controller.zip".to_owned()
         )]
     );
     let entry = &controller.state().by_session["session-export-controller"];
@@ -186,10 +188,10 @@ async fn disposal_aborts_fetches_joins_them_and_ignores_late_requests() {
 fn sanitizes_filenames_and_resolves_null_origin() {
     assert_eq!(
         session_log_zip_filename(&id("a/b:中")),
-        "dsh-session-a_b__.zip"
+        "seekdeep-session-a_b__.zip"
     );
-    assert_eq!(host_base(Some("null")), "http://dsh.internal");
-    assert_eq!(host_base(None), "http://dsh.internal");
+    assert_eq!(host_base(Some("null")), "http://seekdeep.internal");
+    assert_eq!(host_base(None), "http://seekdeep.internal");
     assert_eq!(
         host_base(Some("https://harness.example")),
         "https://harness.example"

@@ -70855,7 +70855,15 @@
     {
       "source": "packages/session-query/session-log-export/src/client/Dialog.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/browser.rs",
+        "crates/session-log-export/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source session-log-export package: 7 files and 18 tests passed",
+        "live compiled React/WASM test pins preparing, success, detailed error, fallback error, close, and dismissal postures"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/src/client/HeaderAction.module.css",
@@ -70871,7 +70879,15 @@
     {
       "source": "packages/session-query/session-log-export/src/client/HeaderAction.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/browser.rs",
+        "crates/session-log-export/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source session-log-export package: 18 passed",
+        "live compiled Header test pins capsule copy, icon, busy/disabled state, shared request, and nested dialog"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/src/client/controller.ts",
@@ -70891,7 +70907,18 @@
     {
       "source": "packages/session-query/session-log-export/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/browser.rs",
+        "crates/session-log-export/tests/wasm_parity.rs",
+        "packages/session-query/session-log-export/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source client apply suite passed in the 18-test package run",
+        "live apply test pins controller provision, exact inject order, command-event gating, locale registration, delayed Header Slot registration, request/dismiss face, and async disposal",
+        "optimized classic ModuleLoader smoke passed"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/src/client/locales.ts",
@@ -70907,7 +70934,14 @@
     {
       "source": "packages/session-query/session-log-export/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/browser.rs"
+      ],
+      "evidence": [
+        "HeaderAction CSS is compiled into one package-owned prefixed runtime style",
+        "optimized Rust/WASM package build passed without TypeScript CSS shims"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/src/index.ts",
@@ -70939,7 +70973,14 @@
     {
       "source": "packages/session-query/session-log-export/tests/client-apply.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source session-log-export package: 18 passed",
+        "live compiled apply lifecycle and event-routing matrix passed"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/tests/command.client.spec.ts",
@@ -70967,12 +71008,26 @@
     {
       "source": "packages/session-query/session-log-export/tests/dialog.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source dialog suite passed in the 18-test package run",
+        "live compiled dialog status/fallback/dismissal matrix passed"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/tests/header-action.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Header action suite passed in the 18-test package run",
+        "live compiled Header action and shared-controller matrix passed"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/tests/invariant.client.spec.ts",
@@ -70989,7 +71044,17 @@
     {
       "source": "packages/session-query/session-log-export/tests/loader-composition.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-log-export/src/command.rs",
+        "crates/session-log-export/tests/command_invariant_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source Loader composition passed in the 18-test package run",
+        "native real CommandRuntime test pins /export execution and disposal",
+        "generated root ESM smoke pins command metadata and success/path-refusal results"
+      ]
     },
     {
       "source": "packages/session-query/session-log-export/tsconfig.json",
@@ -71005,7 +71070,15 @@
     {
       "source": "packages/session-query/session-log-export/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/session-query/session-log-export/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally eliminated; bundle/watch invoke cargo xtask wasm-package",
+        "xtask compatibility test, optimized build, declaration parse, classic ModuleLoader smoke, generated root command, and invariant entry passed"
+      ]
     },
     {
       "source": "packages/session-query/session-query-sqlite/README.i18n.yaml",

@@ -945,12 +945,31 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-input-trigger" => "client-ui-input-trigger-invariant",
         "@seekdeep-ai/seekdeep-client-ui-commands" => "client-ui-commands-invariant",
         "@seekdeep-ai/seekdeep-client-ui-workspace" => "client-ui-workspace-invariant",
+        "@seekdeep-ai/seekdeep-session-log-export" => "session-log-export-invariant",
         "@seekdeep-ai/seekdeep-client-ui-conversation" => "client-ui-conversation-invariant",
         "@seekdeep-ai/seekdeep-client-ui-tool" => "client-ui-tool-invariant",
         "@seekdeep-ai/seekdeep-client-ui-settings-models" => "client-ui-settings-models-invariant",
         _ => return Ok(()),
     };
-    std::fs::write(out_dir.join("index.js"), "export function apply() {}\n")?;
+    std::fs::write(
+        out_dir.join("index.js"),
+        if module_id == "@seekdeep-ai/seekdeep-session-log-export" {
+            r"export const name = 'session-log-download';
+export const inject = ['commands'];
+export function apply(ctx) {
+  ctx.effect(() => ctx.commands.register({
+    name: 'export',
+    description: 'Download this Session log as a ZIP archive',
+    handler: invocation => Promise.resolve(invocation.rawInput.trim() === ''
+      ? { kind: 'success', text: 'Session log download requested.' }
+      : { kind: 'error', text: 'The Web /export command does not accept a path.' }),
+  }), 'session-log-download: command');
+}
+"
+        } else {
+            "export function apply() {}\n"
+        },
+    )?;
     std::fs::write(
         out_dir.join("invariant.js"),
         format!(
@@ -966,7 +985,11 @@ export const apply = ctx => Promise.resolve(ctx.invariants.register(PACKAGE_NAME
     std::fs::create_dir_all(&type_dir)?;
     std::fs::write(
         type_dir.join("index.d.ts"),
-        "export declare function apply(): void;\n",
+        if module_id == "@seekdeep-ai/seekdeep-session-log-export" {
+            "export declare const name: 'session-log-download';\nexport declare const inject: readonly ['commands'];\nexport declare function apply(ctx: unknown): void;\n"
+        } else {
+            "export declare function apply(): void;\n"
+        },
     )?;
     std::fs::write(
         type_dir.join("invariant.d.ts"),
@@ -1138,6 +1161,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-workspace" {
         return ui_workspace_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-session-log-export" {
+        return session_log_export_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-conversation" {
         return ui_conversation_module_factory(global);
     }
@@ -1249,6 +1275,35 @@ fn ui_workspace_module_factory(global: &str) -> String {
     format!(
         "require => {{ const runtime = require('@seekdeep-ai/seekdeep-client-runtime/client'); {global}.configureClientUiWorkspace(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); {global}.configureClientUiWorkspaceApply(runtime.defineStore); Object.assign({global}, {{ apply: {global}.applyClientUiWorkspace, inject: ['slots', 'sessions', 'workspaces', 'locale'], FLAT_SESSION_ORDER_KEY: {global}.flatSessionOrderKey() }}); return {global}; }}"
     )
+}
+
+fn session_log_export_module_factory(global: &str) -> String {
+    r"require => {
+  const g = __GLOBAL__;
+  g.configureSessionLogExport(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives'));
+  class SessionLogDownloadController {
+    constructor(fetcher, saver) {
+      const face = g.createSessionLogDownloadController(fetcher, saver);
+      Object.setPrototypeOf(face, new.target.prototype);
+      return face;
+    }
+  }
+  g.configureSessionLogExportApply(SessionLogDownloadController);
+  const downloadUrl = (url, filename) => {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+  };
+  Object.assign(g, {
+    apply: g.applySessionLogExport,
+    inject: ['slots', 'locale'],
+    SessionLogDownloadController,
+    downloadUrl,
+  });
+  return g;
+}"
+        .replace("__GLOBAL__", global)
 }
 
 fn ui_conversation_module_factory(global: &str) -> String {
@@ -1448,6 +1503,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-workspace" {
         return ui_workspace_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-session-log-export" {
+        return session_log_export_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-conversation" {
         return ui_conversation_declarations();
@@ -1935,6 +1993,45 @@ declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps };
     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps };
   }
+}
+"
+    .to_owned()
+}
+
+fn session_log_export_declarations() -> String {
+    r"
+import type { ObservableSnapshot, SessionId } from '@seekdeep-ai/seekdeep-client-runtime/client';
+import type { PropsLocale, PropsRuntime } from '@seekdeep-ai/seekdeep-client-ui-slots';
+export const apply: typeof wasm_bindgen.applySessionLogExport;
+export const inject: readonly ['slots', 'locale'];
+export type SessionLogDownloadStatus = 'downloading' | 'success' | 'error';
+export interface SessionLogDownloadEntry { readonly open: boolean; readonly status: SessionLogDownloadStatus; readonly error: string | null }
+export interface SessionLogDownloadState { bySession: Record<string, SessionLogDownloadEntry | undefined> }
+export interface SessionLogDownloadDialogInjected {
+  hooks: { sessionLogDownload: ObservableSnapshot<SessionLogDownloadState> };
+  request(sessionId: SessionId): Promise<void>;
+  dismiss(sessionId: SessionId): void;
+}
+export type SessionLogDownloadKey =
+  | 'dialog.preparingTitle' | 'dialog.preparingDescription'
+  | 'dialog.successTitle' | 'dialog.successDescription'
+  | 'dialog.errorTitle' | 'dialog.commandFailed' | 'dialog.close';
+export type SessionLogDownloadDialogProps = PropsRuntime<'conversation.session.header.utilities'>
+  & PropsLocale<'session-log-download'>
+  & SessionLogDownloadDialogInjected;
+export interface SnapshotStore<T> { getSnapshot(): T; subscribe(listener: () => void): () => void; set(value: T): void }
+export class SessionLogDownloadController {
+  constructor(fetcher?: Function, saver?: Function);
+  readonly store: SnapshotStore<SessionLogDownloadState>;
+  download(sessionId: SessionId): Promise<void>;
+  dismiss(sessionId: SessionId): void;
+  dispose(): Promise<void>;
+}
+export const sessionLogZipFilename: (sessionId: SessionId) => string;
+export const downloadUrl: (url: string, filename: string) => void;
+declare module '@seekdeep-ai/cordis' { interface Context { sessionLogDownload: SessionLogDownloadController } }
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { 'session-log-download': SessionLogDownloadKey }
 }
 "
     .to_owned()
@@ -3504,6 +3601,59 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-workspace-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-workspace"));
+    }
+
+    #[test]
+    fn session_log_export_bundle_configures_controller_apply_and_root_command() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_session_log_export_wasm",
+            "@seekdeep-ai/seekdeep-session-log-export",
+        )
+        .unwrap();
+        for expected in [
+            "configureSessionLogExport(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "class SessionLogDownloadController",
+            "configureSessionLogExportApply(SessionLogDownloadController)",
+            "apply: g.applySessionLogExport",
+            "inject: ['slots', 'locale']",
+            "downloadUrl",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-session-log-export");
+        for expected in [
+            "type SessionLogDownloadStatus",
+            "interface SessionLogDownloadEntry",
+            "interface SessionLogDownloadState",
+            "interface SessionLogDownloadDialogInjected",
+            "class SessionLogDownloadController",
+            "const sessionLogZipFilename",
+            "'session-log-download'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-session-log-export",
+            output.path(),
+        )
+        .unwrap();
+        let index = std::fs::read_to_string(output.path().join("index.js")).unwrap();
+        for expected in [
+            "name = 'session-log-download'",
+            "inject = ['commands']",
+            "Download this Session log as a ZIP archive",
+            "Session log download requested.",
+            "does not accept a path",
+        ] {
+            assert!(index.contains(expected), "missing {expected:?}");
+        }
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("session-log-export-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-session-log-export"));
     }
 
     #[test]

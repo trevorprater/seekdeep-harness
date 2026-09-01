@@ -1,5 +1,7 @@
 //! Session-log ZIP command and browser download controller.
 
+#[cfg(target_arch = "wasm32")]
+mod browser;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod command;
 pub mod controller;
@@ -11,6 +13,8 @@ use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
+#[cfg(target_arch = "wasm32")]
+pub use browser::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub use command::{INJECT, NAME, apply, plugin};
 pub use controller::*;
@@ -25,7 +29,7 @@ pub fn register_invariant(
     registry: &Arc<InvariantRegistry>,
 ) -> anyhow::Result<InvariantRegistration> {
     registry.register(
-        "@deepseek-ai/seekdeep-session-log-export",
+        "@seekdeep-ai/seekdeep-session-log-export",
         InvariantInstaller::noop(),
     )
 }
