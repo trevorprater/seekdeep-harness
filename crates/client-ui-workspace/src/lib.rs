@@ -4,9 +4,17 @@ mod locales;
 mod state;
 mod tree;
 
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(target_arch = "wasm32")]
+mod browser_picker;
+
 pub use locales::*;
 pub use state::*;
 pub use tree::*;
+
+#[cfg(target_arch = "wasm32")]
+pub use browser_picker::*;
 
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-workspace";

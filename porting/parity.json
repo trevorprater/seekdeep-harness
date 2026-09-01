@@ -52883,7 +52883,17 @@
     {
       "source": "packages/client/ui-workspace/src/client/WorkspacePicker.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/browser.rs",
+        "crates/client-ui-workspace/src/browser_picker.rs",
+        "crates/client-ui-workspace/tests/wasm_picker_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Workspace picker suite: 16 passed",
+        "live WASM tests pin existing-workspace items, pinned add footer, selection, anchor rectangle, pending status, occupied-flow gating and withdrawal, single-add auto-open, add-only semantics, adoption busy/success/refusal, retry Modal, no-flow empty posture, and exact hero directory-flow Slot forwarding",
+        "strict wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/client/contract/slots.ts",
@@ -53030,7 +53040,14 @@
     {
       "source": "packages/client/ui-workspace/tests/workspace-picker.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/tests/wasm_picker_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Workspace picker suite: 16 passed",
+        "three live compiled picker/directory-flow matrices passed"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tsconfig.json",
