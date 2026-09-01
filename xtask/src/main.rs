@@ -944,6 +944,7 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-model-selection" => "client-ui-model-selection-invariant",
         "@seekdeep-ai/seekdeep-client-ui-input-trigger" => "client-ui-input-trigger-invariant",
         "@seekdeep-ai/seekdeep-client-ui-commands" => "client-ui-commands-invariant",
+        "@seekdeep-ai/seekdeep-client-ui-workspace" => "client-ui-workspace-invariant",
         "@seekdeep-ai/seekdeep-client-ui-conversation" => "client-ui-conversation-invariant",
         "@seekdeep-ai/seekdeep-client-ui-tool" => "client-ui-tool-invariant",
         "@seekdeep-ai/seekdeep-client-ui-settings-models" => "client-ui-settings-models-invariant",
@@ -1134,6 +1135,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-client-ui-commands" {
         return ui_commands_module_factory(global);
     }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-workspace" {
+        return ui_workspace_module_factory(global);
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-conversation" {
         return ui_conversation_module_factory(global);
     }
@@ -1238,6 +1242,12 @@ fn ui_input_trigger_module_factory(global: &str) -> String {
 fn ui_commands_module_factory(global: &str) -> String {
     format!(
         "require => {{ {global}.configureClientUiCommands(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}.__CommandUiRuntime, {{ inject: ['inputTriggers', 'sessions', 'remote', 'remote.commands'] }}); Object.assign({global}, {{ apply: {global}.applyClientUiCommands, inject: ['inputTriggers', 'sessions', 'remote', 'remote.commands', 'locale'], CommandUiRuntime: {global}.__CommandUiRuntime, CommandDirectory: {global}.__CommandDirectory, PopupSelectController: {global}.__PopupSelectController, PopupSelectView: {global}.popupSelectViewComponent() }}); return {global}; }}"
+    )
+}
+
+fn ui_workspace_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ const runtime = require('@seekdeep-ai/seekdeep-client-runtime/client'); {global}.configureClientUiWorkspace(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); {global}.configureClientUiWorkspaceApply(runtime.defineStore); Object.assign({global}, {{ apply: {global}.applyClientUiWorkspace, inject: ['slots', 'sessions', 'workspaces', 'locale'], FLAT_SESSION_ORDER_KEY: {global}.flatSessionOrderKey() }}); return {global}; }}"
     )
 }
 
@@ -1435,6 +1445,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-commands" {
         return ui_commands_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-workspace" {
+        return ui_workspace_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-conversation" {
         return ui_conversation_declarations();
@@ -1833,6 +1846,95 @@ declare module '@seekdeep-ai/cordis' {
 }
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { command: CommandKey }
+}
+"
+    .to_owned()
+}
+
+#[allow(clippy::too_many_lines)] // Public Workspace UI contract is one closed declaration surface.
+fn ui_workspace_declarations() -> String {
+    r"
+import type { SessionId, SessionSearchResultItem, WorkspaceId, WorkspaceView } from '@seekdeep-ai/seekdeep-client-runtime/client';
+import type { HostObservable, PropsLocale, PropsRenderSlots, PropsRuntime, SnapshotSelectorHook } from '@seekdeep-ai/seekdeep-client-ui-slots';
+export const apply: typeof wasm_bindgen.applyClientUiWorkspace;
+export const inject: readonly ['slots', 'sessions', 'workspaces', 'locale'];
+export const FLAT_SESSION_ORDER_KEY: '__flat_session_order__';
+export interface DirectoryFlowOwnerProps {
+  open: boolean;
+  busy: boolean;
+  onPicked(path: string): void;
+  onCancel(): void;
+  onError(message: string): void;
+}
+export type DirectoryFlowSlotName = 'conversation.hero.workspace.directoryFlow' | 'sidebar.workspaces.directoryFlow';
+export interface DirectoryPickingInjected { hooks: { directoryFlow: HostObservable<boolean> } }
+export interface DirectoryPickingHooks { useDirectoryFlow: SnapshotSelectorHook<boolean> }
+export interface WorkspaceBrowserInjected extends DirectoryPickingInjected {
+  startSession(workspaceId?: WorkspaceId): void;
+  open(sessionId: SessionId): void;
+  searchSessions(query: string, signal: AbortSignal): Promise<{ items: readonly SessionSearchResultItem[]; hasMore: boolean }>;
+  searchResultLimit: number;
+  renameSession(sessionId: SessionId, title: string): Promise<void>;
+  forkSession(sessionId: SessionId): void;
+  renameWorkspace(workspaceId: WorkspaceId, title: string): Promise<void>;
+  deleteWorkspace(workspaceId: WorkspaceId): Promise<void>;
+  insertWorkspaceBefore(workspaceId: WorkspaceId, beforeWorkspaceId?: WorkspaceId): Promise<void>;
+  archiveSession(sessionId: SessionId): Promise<void>;
+  insertSessionBefore(workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;
+  createWorkspace(input: { path: string }): Promise<WorkspaceView>;
+}
+export interface WorkspaceViewState {
+  groupBy: 'workspace' | 'flat';
+  orderBy: 'manual' | 'updated';
+  groupExpansion: Readonly<Record<string, boolean>>;
+  sessionOrderByAccount: Readonly<Record<string, readonly string[]>>;
+  sessionUpdatedAtByAccount: Readonly<Record<string, Readonly<Record<string, number>>>>;
+}
+export interface WorkspaceViewActions {
+  setGroupBy(mode: 'workspace' | 'flat'): void;
+  setOrderBy(mode: 'manual' | 'updated'): void;
+  setGroupExpanded(key: string, expanded: boolean): void;
+  retainAccountKeys(keys: readonly string[]): void;
+  syncSessionOrderAccount(key: string, order: string[], updatedAt: Record<string, number>): void;
+  setSessionOrder(key: string, order: string[]): void;
+}
+export type WorkspaceBrowserProps = PropsRuntime<'sidebar.workspaces'>
+  & PropsRenderSlots<'sidebar.workspaces.directoryFlow'>
+  & PropsLocale<'workspace'>
+  & Omit<WorkspaceBrowserInjected, 'hooks'>
+  & DirectoryPickingHooks
+  & { useStore: SnapshotSelectorHook<WorkspaceViewState>; actions: WorkspaceViewActions };
+export interface WorkspacePickerInjected extends DirectoryPickingInjected {
+  createWorkspace(input: { path: string }): Promise<WorkspaceView>;
+}
+export type WorkspacePickerProps = PropsRuntime<'conversation.hero.workspace'>
+  & PropsRenderSlots<'conversation.hero.workspace.directoryFlow'>
+  & PropsLocale<'workspace'>
+  & Omit<WorkspacePickerInjected, 'hooks'>
+  & DirectoryPickingHooks;
+export type WorkspaceKey =
+  | 'group.ungrouped' | 'session.new' | 'section.workspaces' | 'section.sessions'
+  | 'viewOptions.label' | 'groupBy.label' | 'groupBy.workspace' | 'groupBy.flat'
+  | 'orderBy.label' | 'orderBy.manual' | 'orderBy.updated' | 'sessions.expand'
+  | 'sessions.collapse' | 'empty.none' | 'empty.noMatches' | 'workspace.add'
+  | 'search.sessions.aria' | 'search.placeholder' | 'search.clear' | 'search.results.aria'
+  | 'search.pending' | 'search.unavailable' | 'search.noMatches' | 'search.hasMore'
+  | 'menu.addWorkspace' | 'picker.loading' | 'conflict.named' | 'folderError.title'
+  | 'folderError.retry' | 'rename' | 'rename.workspace.title' | 'rename.session.title'
+  | 'field.workspaceName' | 'field.sessionName' | 'delete.workspace' | 'delete.desc'
+  | 'delete.pending' | 'menu.fork' | 'menu.archiveSession' | 'sessions.count.one'
+  | 'sessions.count.other' | 'actions.workspace.aria' | 'actions.session.aria'
+  | 'actions.newSession.aria' | 'status.running' | 'status.subagentsRunning.one'
+  | 'status.subagentsRunning.other' | 'status.idle' | 'status.waitingApproval'
+  | 'status.planReview' | 'status.waitingAnswer' | 'status.completed' | 'hover.created'
+  | 'hover.copied' | 'date.ymd' | 'time.now' | 'time.minutes' | 'time.hours'
+  | 'time.days' | 'time.months' | 'time.years' | 'time.ago';
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { workspace: WorkspaceKey }
+  interface SlotMap {
+    'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps };
+    'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps };
+  }
 }
 "
     .to_owned()
@@ -3354,6 +3456,54 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-commands-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-commands"));
+    }
+
+    #[test]
+    fn ui_workspace_bundle_configures_browser_apply_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_workspace_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-workspace",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiWorkspace(require('react')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "configureClientUiWorkspaceApply(runtime.defineStore)",
+            "apply: __seekdeep_client_ui_workspace_wasm.applyClientUiWorkspace",
+            "inject: ['slots', 'sessions', 'workspaces', 'locale']",
+            "FLAT_SESSION_ORDER_KEY: __seekdeep_client_ui_workspace_wasm.flatSessionOrderKey()",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations = compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-workspace");
+        for expected in [
+            "interface DirectoryFlowOwnerProps",
+            "type DirectoryFlowSlotName",
+            "interface WorkspaceBrowserInjected",
+            "type WorkspaceBrowserProps",
+            "interface WorkspacePickerInjected",
+            "type WorkspacePickerProps",
+            "type WorkspaceKey",
+            "'sidebar.workspaces.directoryFlow'",
+            "'conversation.hero.workspace.directoryFlow'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-workspace",
+            output.path(),
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(output.path().join("index.js")).unwrap(),
+            "export function apply() {}\n"
+        );
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-workspace-invariant"));
+        assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-workspace"));
     }
 
     #[test]

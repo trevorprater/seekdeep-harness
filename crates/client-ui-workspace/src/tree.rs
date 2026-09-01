@@ -11,6 +11,7 @@ use seekdeep_client_runtime::{
     index_subagent_descendants,
 };
 use seekdeep_identity::{SessionId, WorkspaceId};
+use serde::Serialize;
 use serde_json::Value;
 
 /// Group key for Sessions outside every Workspace.
@@ -19,7 +20,8 @@ pub const UNGROUPED_KEY: &str = "";
 pub const UNGROUPED_LABEL: &str = "Ungrouped";
 
 /// One top-level Session row in a group or flat list.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionNode {
     /// Stable Session identity.
     pub id: SessionId,
@@ -28,6 +30,7 @@ pub struct SessionNode {
     /// Whether this is the provisional blank Session.
     pub blank: bool,
     /// Current blocking interaction.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pending_interaction: Option<Value>,
     /// Exact running bit.
     pub running: bool,
@@ -40,15 +43,19 @@ pub struct SessionNode {
 }
 
 /// One Workspace group header plus optionally expanded Session rows.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GroupNode {
     /// Workspace identity or [`UNGROUPED_KEY`].
     pub key: String,
     /// Backing Workspace, absent for Ungrouped.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<WorkspaceId>,
     /// Workspace directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cwd: Option<String>,
     /// Parsed creation epoch milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at: Option<f64>,
     /// Workspace title or Ungrouped.
     pub label: String,
@@ -63,7 +70,8 @@ pub struct GroupNode {
 }
 
 /// One flat search row combining list metadata and optional content match.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResultNode {
     /// Stable Session identity.
     pub id: SessionId,
@@ -72,6 +80,7 @@ pub struct SearchResultNode {
     /// Workspace title or cwd basename.
     pub workspace: String,
     /// Current blocking interaction.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pending_interaction: Option<Value>,
     /// Exact running bit.
     pub running: bool,
@@ -80,6 +89,7 @@ pub struct SearchResultNode {
     /// Unread completion reminder.
     pub completed: bool,
     /// Ranked Host content excerpt.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
 }
 
@@ -102,7 +112,8 @@ pub struct SessionSearchPage {
 }
 
 /// Bounded merged search projection.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResultSet {
     /// Local-first merged rows.
     pub items: Vec<SearchResultNode>,

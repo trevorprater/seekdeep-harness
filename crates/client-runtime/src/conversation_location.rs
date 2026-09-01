@@ -121,7 +121,7 @@ impl ConversationLocationDataStore {
             .map(|entry| entry.value.clone())
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
     pub(crate) fn snapshot_values(&self) -> IndexMap<String, Rc<Value>> {
         self.entries
             .borrow()
@@ -130,7 +130,7 @@ impl ConversationLocationDataStore {
             .collect()
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
     pub(crate) fn from_values(values: IndexMap<String, Rc<Value>>) -> Self {
         Self {
             entries: RefCell::new(

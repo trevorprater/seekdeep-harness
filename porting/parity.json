@@ -52867,7 +52867,21 @@
     {
       "source": "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/browser_logic.rs",
+        "crates/client-ui-workspace/src/browser_model.rs",
+        "crates/client-ui-workspace/src/browser_lists.rs",
+        "crates/client-ui-workspace/src/browser_workspace.rs",
+        "crates/client-ui-workspace/tests/browser_logic_parity.rs",
+        "crates/client-ui-workspace/tests/wasm_browser_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-workspace package: 8 files and 121 tests passed",
+        "five portable ordering/query/drop tests and six live compiled browser matrices passed",
+        "live matrices pin grouped/flat ordering, current-group expansion, overflow, row verbs, Ungrouped, debounced cancellable search, rail/add flow, all drag axes, rename/delete failure states, and committed-delete echo closure",
+        "strict native and wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/client/WorkspacePicker.module.css",
@@ -52898,12 +52912,36 @@
     {
       "source": "packages/client/ui-workspace/src/client/contract/slots.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/browser_apply.rs",
+        "crates/client-ui-workspace/src/browser_picker.rs",
+        "crates/client-ui-workspace/src/browser_workspace.rs",
+        "crates/client-ui-workspace/tests/wasm_apply_parity.rs",
+        "crates/client-ui-workspace/tests/wasm_browser_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source ui-workspace package: 121 passed",
+        "two live apply/assembly tests and six live browser matrices preserve both single directory-flow holes, owner conversations, occupancy hooks, injected actions, and owner shares",
+        "generated public declarations parsed with TypeScript and preserve both SlotMap merges"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/browser_apply.rs",
+        "crates/client-ui-workspace/tests/wasm_apply_parity.rs",
+        "packages/client/ui-workspace/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source apply suite and full ui-workspace package passed",
+        "live apply test pins delayed Slot declarations, exact inject order, locales, fresh Store lifetime, browser/picker registrations, service routing, business-error rejection, occupancy, and teardown",
+        "optimized classic ModuleLoader smoke passed"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/client/locales.ts",
@@ -52974,7 +53012,18 @@
     {
       "source": "packages/client/ui-workspace/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/browser.rs",
+        "crates/client-ui-workspace/src/browser_rows.rs",
+        "crates/client-ui-workspace/src/browser_workspace.rs",
+        "crates/client-ui-workspace/tests/wasm_rows_parity.rs"
+      ],
+      "evidence": [
+        "pinned source browser-style suite passed in the 121-test package run",
+        "compiled picker, row, and browser CSS injects as three package-owned prefixed styles",
+        "optimized Rust/WASM package build passed without TypeScript CSS shims"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/src/index.ts",
@@ -53008,22 +53057,56 @@
     {
       "source": "packages/client/ui-workspace/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/tests/wasm_apply_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-workspace package: 121 passed",
+        "two live compiled apply and assembled-rename tests passed"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tests/browser-styles.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/browser.rs",
+        "crates/client-ui-workspace/src/browser_rows.rs",
+        "crates/client-ui-workspace/src/browser_workspace.rs",
+        "crates/client-ui-workspace/tests/wasm_rows_parity.rs"
+      ],
+      "evidence": [
+        "pinned source browser-style suite passed in the 121-test package run",
+        "live prefixed Rows CSS assertion, three-style ModuleLoader assertion, and optimized package build passed"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/src/lib.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source invariant and no-op Host tests passed in the 121-test package run",
+        "xtask compatibility test pins no-op index entry and client-ui-workspace-invariant registration"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tests/rename-assembly.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/tests/wasm_apply_parity.rs",
+        "crates/client-ui-workspace/tests/wasm_browser_parity.rs"
+      ],
+      "evidence": [
+        "pinned source assembled rename suite passed in the 121-test package run",
+        "live assembled row-menu to dialog to injected sessions.binding().session.rename() to list-echo relabel path passed",
+        "live browser matrices pin initial draft, trimming, unchanged-session acceptance, and rejection error posture"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tests/rows.client.spec.tsx",
@@ -53052,7 +53135,15 @@
     {
       "source": "packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-workspace/tests/browser_logic_parity.rs",
+        "crates/client-ui-workspace/tests/wasm_browser_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-workspace package: 121 passed",
+        "five portable browser-logic tests and six live compiled WorkspaceBrowser matrices passed"
+      ]
     },
     {
       "source": "packages/client/ui-workspace/tests/workspace-picker.client.spec.tsx",
@@ -53080,7 +53171,15 @@
     {
       "source": "packages/client/ui-workspace/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-workspace/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally eliminated; bundle/watch invoke cargo xtask wasm-package",
+        "xtask compatibility test, optimized build, generated declaration parse, classic ModuleLoader smoke, and dependency-export isolation passed"
+      ]
     },
     {
       "source": "packages/client/web-react/README.i18n.yaml",

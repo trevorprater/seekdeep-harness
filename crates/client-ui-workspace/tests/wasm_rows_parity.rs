@@ -18,7 +18,7 @@ export function makeWorkspaceRowsBench(){
   if(cached){cached.reset();return cached}
   const states=[],styles=[];let si=0
   const Fragment=Symbol('Fragment')
-  const React={Fragment,createElement(kind,supplied,...children){const flat=flatten(children);const props={...(supplied??{})};if(flat.length===1)props.children=flat[0];else if(flat.length>1)props.children=flat;return{kind,props,children:flat}},useState(initial){const at=si++;if(!(at in states))states[at]=typeof initial==='function'?initial():initial;return[states[at],value=>{states[at]=typeof value==='function'?value(states[at]):value}]},useCallback(callback){return callback},useEffect(run){run()}}
+  const React={Fragment,createElement(kind,supplied,...children){const flat=flatten(children);const props={...(supplied??{})};if(flat.length===1)props.children=flat[0];else if(flat.length>1)props.children=flat;return{kind,props,children:flat}},useState(initial){const at=si++;if(!(at in states))states[at]=typeof initial==='function'?initial():initial;return[states[at],value=>{states[at]=typeof value==='function'?value(states[at]):value}]},useCallback(callback){return callback},useEffect(run){run()},useMemo(factory){return factory()},useRef(initial){return{current:initial}}}
   function resolve(value){if(Array.isArray(value))return flatten(value.map(resolve));if(value===null||value===undefined||value===false||typeof value!=='object')return value;if(!('kind'in value))return value;if(typeof value.kind==='function')return resolve(value.kind(value.props));if(value.kind===Fragment)return{kind:'Fragment',props:value.props,children:flatten(value.children.map(resolve))};return{...value,children:flatten(value.children.map(resolve))}}
   const copy={
     'group.ungrouped':'Ungrouped','session.new':'New Session','rename':'Rename','delete.workspace':'Delete workspace',
@@ -35,7 +35,7 @@ export function makeWorkspaceRowsBench(){
   const t=(key,vars={})=>Object.entries(vars).reduce((text,[name,value])=>text.replaceAll(`{${name}}`,String(value)),copy[key]??key)
   globalThis.document={head:{appendChild(node){styles.push(node);return node}},createElement(){return{setAttribute(){},textContent:''}},querySelector(){return null}}
   const primitives={}
-  for(const name of ['Button','HoverCard','IconArchiveOutline20','IconBranchOutline16','IconEditOutline16','IconEllipsisOutline16','IconFolderClose16','IconFolderOpen16','IconPlusOutline16','IconTrashOutline16','IconTriangleRightFill14','Menu','Modal','StateDot'])primitives[name]=name
+  for(const name of ['Button','HoverCard','IconArchiveOutline20','IconBranchOutline16','IconCloseFill14','IconEditOutline16','IconEllipsisOutline16','IconFolderClose16','IconFolderOpen16','IconPersonalizationOutline16','IconPlusOutline16','IconProjectAddOutline16','IconSearchOutline16','IconTrashOutline16','IconTriangleRightFill14','Menu','Modal','StateDot','Tooltip'])primitives[name]=name
   cached={React,primitives,t,styles,render(component,props){si=0;return resolve(React.createElement(component,props))},reset(){states.length=0;styles.length=0}}
   return cached
 }
@@ -189,7 +189,7 @@ fn project_row_preserves_actions_hover_payload_active_state_and_ungrouped_postur
     assert!(rowsFindText(&ungrouped_tree, "Ungrouped").is_object());
     assert!(rowsFindKind(&ungrouped_tree, "Menu").is_undefined());
     let styles = Array::from(&property(&bench, "styles"));
-    assert_eq!(styles.length(), 2);
+    assert_eq!(styles.length(), 3);
     assert!(
         property(&styles.get(1), "textContent")
             .as_string()

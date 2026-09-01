@@ -32,7 +32,14 @@ struct Components {
 #[wasm_bindgen(js_name = configureClientUiWorkspace)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn configure_client_ui_workspace(react: JsValue, primitives: JsValue) -> Result<(), JsValue> {
-    for method in ["createElement", "useCallback", "useEffect", "useState"] {
+    for method in [
+        "createElement",
+        "useCallback",
+        "useEffect",
+        "useMemo",
+        "useRef",
+        "useState",
+    ] {
         function(&react, method, "React")?;
     }
     required(&react, "Fragment", "React")?;
@@ -41,22 +48,28 @@ pub fn configure_client_ui_workspace(react: JsValue, primitives: JsValue) -> Res
         "HoverCard",
         "IconArchiveOutline20",
         "IconBranchOutline16",
+        "IconCloseFill14",
         "IconEditOutline16",
         "IconEllipsisOutline16",
         "IconFolderClose16",
         "IconFolderOpen16",
+        "IconPersonalizationOutline16",
         "IconPlusOutline16",
+        "IconProjectAddOutline16",
+        "IconSearchOutline16",
         "IconTrashOutline16",
         "IconTriangleRightFill14",
         "Menu",
         "Modal",
         "StateDot",
+        "Tooltip",
     ] {
         required(&primitives, primitive, "UI primitives")?;
     }
     inject_style("WorkspacePicker", PICKER_CSS)?;
     let modules = BrowserModules { react, primitives };
     crate::browser_rows::configure_rows(&modules)?;
+    crate::browser_workspace::configure_workspace_browser(&modules)?;
     COMPONENTS.with(|configured| {
         *configured.borrow_mut() = Some(Components {
             picker: component(&modules, render_picker),

@@ -10,11 +10,15 @@ description = "React-free Rust/WASM Client object layer and runtime services"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["wasm-bindings"]
+wasm-bindings = ["seekdeep-client-ui-slots/wasm-bindings"]
+
 [dependencies]
 base64.workspace = true
 indexmap.workspace = true
 futures.workspace = true
-seekdeep-client-ui-slots = { path = "../client-ui-slots" }
+seekdeep-client-ui-slots = { path = "../client-ui-slots", default-features = false }
 seekdeep-client-settings-contract = { path = "../client-settings-contract" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-identity = { path = "../identity" }
