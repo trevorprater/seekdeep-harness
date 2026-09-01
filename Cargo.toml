@@ -30,6 +30,7 @@ members = [
   "crates/client-ui-conversation",
   "crates/client-ui-commands",
   "crates/client-ui-deliverables",
+  "crates/client-ui-directory-picker-browse",
   "crates/client-ui-directory-picker-native",
   "crates/client-ui-goal",
   "crates/client-ui-input-trigger",
