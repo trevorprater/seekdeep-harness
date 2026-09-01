@@ -81,10 +81,11 @@ fn fiber_labels_platform_words_and_shell_assets_are_exact() {
     assert_eq!(WebFiberState::Failed as u8, 3);
     assert_eq!(WebFiberState::Disposed as u8, 4);
     assert_eq!(WebFiberState::Unloading as u8, 5);
-    assert_eq!(PLATFORM_MODULES.len(), 10);
+    assert_eq!(PLATFORM_MODULES.len(), 11);
     assert_eq!(PLATFORM_MODULES[0], "react");
+    assert_eq!(PLATFORM_MODULES[4], "immer");
     assert_eq!(
-        PLATFORM_MODULES[6],
+        PLATFORM_MODULES[7],
         "@seekdeep-ai/seekdeep-client-web-react"
     );
     assert_eq!(APP_SHELL_ID, "@seekdeep-ai/seekdeep-client-app-shell");

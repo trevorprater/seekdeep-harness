@@ -23,7 +23,11 @@ use crate::{
 };
 
 /// Boxed plugin startup computation.
+#[cfg(not(target_arch = "wasm32"))]
 pub type PluginFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>>;
+/// Browser plugin startup stays on the page's single-threaded local executor.
+#[cfg(target_arch = "wasm32")]
+pub type PluginFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'static>>;
 
 type PluginCallback = Arc<dyn Fn(Context, Value) -> PluginFuture + Send + Sync>;
 type ConfigValidator = Arc<dyn Fn(&Value) -> anyhow::Result<Value> + Send + Sync>;
@@ -849,7 +853,7 @@ fn spawn_background(future: impl Future<Output = ()> + Send + 'static) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn spawn_background(future: impl Future<Output = ()> + Send + 'static) {
+fn spawn_background(future: impl Future<Output = ()> + 'static) {
     wasm_bindgen_futures::spawn_local(future);
 }
 

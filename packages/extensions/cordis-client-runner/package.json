@@ -41,8 +41,8 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-cordis-client-runner --artifact seekdeep_cordis_client_runner --module-id @seekdeep-ai/seekdeep-cordis-client-runner --out-dir packages/extensions/cordis-client-runner/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-cordis-client-runner --artifact seekdeep_cordis_client_runner --module-id @seekdeep-ai/seekdeep-cordis-client-runner --out-dir packages/extensions/cordis-client-runner/lib --watch"
   },
   "license": "MIT",
   "peerDependencies": {

@@ -14,6 +14,8 @@ pub mod plugin;
 pub mod service;
 /// Identity-disposable and error-composition utility substrate.
 pub mod utils;
+#[cfg(target_arch = "wasm32")]
+mod wasm;
 
 pub use context::{Context, DynamicValue, MixinHandle, MixinMember};
 pub use events::{
@@ -28,3 +30,5 @@ pub use logger::{
 pub use plugin::{Plugin, PluginFiber, PluginRegistry, PluginRuntimeSnapshot};
 pub use service::{Service, ServiceKey, ServiceProviderSnapshot};
 pub use utils::{DisposableList, DisposableListHandle, compose_error, is_json_object_like};
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;

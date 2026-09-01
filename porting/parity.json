@@ -24323,7 +24323,19 @@
     {
       "source": "apps/cli/tests/lazy-search-startup.compat.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/src/profile_boot.rs",
+        "apps/seekdeep/tests/shipped_cli_contracts.rs",
+        "crates/web-app/src/lib.rs",
+        "packages/bundle/base/cordis.patch.yml",
+        "packages/bundle/web-app/cordis.patch.yml"
+      ],
+      "evidence": [
+        "DSH_REQUIRE_BUILT_CLI_SMOKE=1 pnpm exec vitest run apps/cli/tests/lazy-search-startup.compat.spec.ts (pinned source: 1 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep --test shipped_cli_contracts --all-features (5 passed, including the Web/base openAt=never profile contract)",
+        "target/debug/seekdeep web --host 127.0.0.1 --port 0 compiled-process smoke (printed the settled URL, SIGTERM exit 0, empty stderr, and no SQLite ExperimentalWarning)"
+      ]
     },
     {
       "source": "apps/cli/tests/memory-mcp-configs.spec.ts",
@@ -24481,12 +24493,38 @@
     {
       "source": "apps/web/src/main.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/web/index.html",
+        "apps/web/package.json",
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/tests/wasm_boot_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/vite-entry.e2e.ts apps/web/tests/pwa-manifest.e2e.ts (pinned source: 4 passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-web --target wasm32-unknown-unknown --test wasm_boot_parity --all-features (3 passed)",
+        "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run build (target: 159 modules transformed with the compiled Rust/WASM AppWebEntry)",
+        "target/debug/seekdeep web browser smoke rendered the shipped Sidebar and Conversation shell through one root Slot with no .seekdeep-web-failed node"
+      ],
+      "note": "xtask generates the source-compatible mount binding; the boot graph, activation gate, and shell lifecycle delegate to compiled Rust/WASM, leaving no tracked TypeScript runtime"
     },
     {
       "source": "apps/web/src/node-module-stub.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/web/package.json",
+        "crates/client-loader/src/wasm.rs",
+        "crates/client-loader/tests/wasm_loader_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-loader --target wasm32-unknown-unknown --test wasm_loader_parity --all-features (1 passed)",
+        "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run build (target: 159 modules transformed without a node:module alias)",
+        "recursive search of apps/web/dist found no node:module, createRequire, or browser stub diagnostic"
+      ],
+      "note": "the source browser stub is intentionally absent: the compiled Rust/WASM Loader has no Node load-hook import to browserize"
     },
     {
       "source": "apps/web/stress-tests/reasoning-chunks.stress.ts",
@@ -24835,7 +24873,17 @@
     {
       "source": "apps/web/tests/pwa-manifest.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/web/public/manifest.webmanifest",
+        "crates/host-frontend-static/tests/frontend_static_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/vite-entry.e2e.ts apps/web/tests/pwa-manifest.e2e.ts (pinned source: 4 passed)",
+        "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run build plus cmp apps/web/public/manifest.webmanifest apps/web/dist/manifest.webmanifest (target build passed; bytes identical)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-host-frontend-static --all-features (3 passed, including application/manifest+json over a real socket)"
+      ]
     },
     {
       "source": "apps/web/tests/pwsh-terminal.e2e.ts",
@@ -26415,7 +26463,21 @@
     {
       "source": "apps/web/tests/vite-entry.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/web/index.html",
+        "apps/web/package.json",
+        "crates/client-web/src/wasm.rs",
+        "crates/client-web/tests/wasm_boot_parity.rs",
+        "crates/host-frontend-static/src/lib.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/vite-entry.e2e.ts apps/web/tests/pwa-manifest.e2e.ts (pinned source: 4 passed)",
+        "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run build (target: 159 modules transformed and optimized WASM assets emitted)",
+        "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run dev (expected failure before listen with the exact non-standalone guidance)",
+        "target/debug/seekdeep web browser smoke loaded WASM with application/wasm and rendered the shipped Sidebar and Conversation shell"
+      ]
     },
     {
       "source": "apps/web/tests/web-search-round.e2e.ts",
@@ -26446,7 +26508,20 @@
     {
       "source": "apps/web/vite.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/web/index.html",
+        "apps/web/package.json",
+        "crates/client-web/src/wasm.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pnpm exec vitest run --config vitest.web.config.ts apps/web/tests/vite-entry.e2e.ts apps/web/tests/pwa-manifest.e2e.ts (pinned source: 4 passed)",
+        "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run build (target: 159 modules transformed; vendor, lazy grammar, font, source-map, and Rust/WASM assets emitted)",
+        "pnpm --filter @seekdeep-ai/seekdeep-web-frontend run dev (expected failure before listen with the exact __SEEKDEEP_BOOT__ guidance)",
+        "recursive search of the optimized dist confirmed the obsolete node:module browser stub is absent"
+      ],
+      "note": "the tracked Vite implementation is Rust: cargo xtask web-frontend generates the ephemeral JavaScript configuration consumed by the package scripts"
     },
     {
       "source": "assets/community-wechat-official-account.png",

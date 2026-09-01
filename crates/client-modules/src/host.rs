@@ -15,7 +15,9 @@ use hyper::{Method, Response, StatusCode, header};
 use indexmap::{IndexMap, IndexSet};
 use parking_lot::RwLock;
 use percent_encoding::percent_decode_str;
-use seekdeep_cordis::{Context, EventOptions, Plugin, PluginFiber, ServiceKey};
+use seekdeep_cordis::{
+    Context, EventOptions, Plugin, PluginFiber, ServiceKey, fiber::EffectHandle,
+};
 use seekdeep_host_webserver::{WEB_SERVER, WebBody, WebHandler, WebRoute, WebRouteKind, WebServer};
 use seekdeep_loader::{LOADER, LoaderEntrySnapshot};
 use serde_json::Value;
@@ -31,10 +33,21 @@ pub const CLIENT_MODULES_NAME: &str = "client-modules";
 /// Host Cordis plugin that derives package resolution from the Loader base URL.
 #[must_use]
 pub fn client_modules_host_plugin() -> Plugin {
+    client_modules_host_plugin_with_fallbacks(Vec::new())
+}
+
+/// Host Cordis plugin with explicit package-resolution fallback roots.
+///
+/// Installed profiles remain first in lookup order. A compiled checkout uses
+/// this seam to expose its generated Client packages without pretending the
+/// temporary profile directory owns them.
+#[must_use]
+pub fn client_modules_host_plugin_with_fallbacks(fallbacks: Vec<PathBuf>) -> Plugin {
     Plugin::new(
         CLIENT_MODULES_NAME,
         ["loader", "webServer"],
-        |context, _| {
+        move |context, _| {
+            let fallbacks = fallbacks.clone();
             Box::pin(async move {
                 let base_url = context
                     .meta("loader.base_url")
@@ -52,7 +65,9 @@ pub fn client_modules_host_plugin() -> Plugin {
                             "client-modules: loader.base_url must be a file URL, received {base_url:?}"
                         )
                     })?;
-                install_client_module_host(&context, base_dir)?;
+                let resolver =
+                    FilesystemClientPackageResolver::new(base_dir).with_fallback_roots(fallbacks);
+                install_client_module_host_with_resolver(&context, Arc::new(resolver))?;
                 Ok(())
             })
         },
@@ -94,7 +109,8 @@ pub trait ClientPackageResolver: Send + Sync + 'static {
 /// Node-compatible `node_modules` resolver rooted at the Loader config directory.
 #[derive(Clone, Debug)]
 pub struct FilesystemClientPackageResolver {
-    base_dir: PathBuf,
+    roots: Vec<PathBuf>,
+    workspace_packages: HashMap<String, PathBuf>,
 }
 
 impl FilesystemClientPackageResolver {
@@ -102,8 +118,36 @@ impl FilesystemClientPackageResolver {
     #[must_use]
     pub fn new(base_dir: impl Into<PathBuf>) -> Self {
         Self {
-            base_dir: base_dir.into(),
+            roots: vec![base_dir.into()],
+            workspace_packages: HashMap::new(),
         }
+    }
+
+    /// Appends lower-priority package-resolution roots.
+    #[must_use]
+    pub fn with_fallback_roots(
+        mut self,
+        roots: impl IntoIterator<Item = impl Into<PathBuf>>,
+    ) -> Self {
+        for root in roots.into_iter().map(Into::into) {
+            for package_json in workspace_package_manifests(&root) {
+                let Some(name) = fs::read(&package_json)
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                    .and_then(|manifest| {
+                        manifest
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .map(str::to_owned)
+                    })
+                else {
+                    continue;
+                };
+                self.workspace_packages.entry(name).or_insert(package_json);
+            }
+            self.roots.push(root);
+        }
+        self
     }
 
     fn package_json(&self, package: &ClientModuleId) -> Option<PathBuf> {
@@ -111,14 +155,52 @@ impl FilesystemClientPackageResolver {
             .as_str()
             .split('/')
             .fold(PathBuf::new(), |path, part| path.join(part));
-        self.base_dir.ancestors().find_map(|ancestor| {
-            let candidate = ancestor
-                .join("node_modules")
-                .join(&package_path)
-                .join("package.json");
-            candidate.exists().then_some(candidate)
-        })
+        self.roots
+            .iter()
+            .find_map(|root| {
+                root.ancestors().find_map(|ancestor| {
+                    let candidate = ancestor
+                        .join("node_modules")
+                        .join(&package_path)
+                        .join("package.json");
+                    candidate.exists().then_some(candidate)
+                })
+            })
+            .or_else(|| self.workspace_packages.get(package.as_str()).cloned())
     }
+}
+
+fn workspace_package_manifests(root: &std::path::Path) -> Vec<PathBuf> {
+    let mut manifests = Vec::new();
+    for family in ["vendor", "apps"] {
+        manifests.extend(
+            read_directories(&root.join(family))
+                .into_iter()
+                .map(|directory| directory.join("package.json"))
+                .filter(|path| path.is_file()),
+        );
+    }
+    for group in read_directories(&root.join("packages")) {
+        manifests.extend(
+            read_directories(&group)
+                .into_iter()
+                .map(|directory| directory.join("package.json"))
+                .filter(|path| path.is_file()),
+        );
+    }
+    manifests.sort();
+    manifests
+}
+
+fn read_directories(root: &std::path::Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .map(|entry| entry.path())
+        .collect()
 }
 
 impl ClientPackageResolver for FilesystemClientPackageResolver {
@@ -511,6 +593,21 @@ pub fn install_client_module_host(
     context: &Context,
     base_dir: impl Into<PathBuf>,
 ) -> anyhow::Result<Arc<ClientModuleHost>> {
+    install_client_module_host_with_resolver(
+        context,
+        Arc::new(FilesystemClientPackageResolver::new(base_dir)),
+    )
+}
+
+/// Installs the Host graph over an explicit package resolver.
+///
+/// # Errors
+///
+/// Returns missing Host services, composition, route, or Cordis ownership failures.
+pub fn install_client_module_host_with_resolver(
+    context: &Context,
+    resolver: Arc<dyn ClientPackageResolver>,
+) -> anyhow::Result<Arc<ClientModuleHost>> {
     let loader = context
         .get(LOADER)
         .ok_or_else(|| anyhow::anyhow!("client-modules requires loader"))?;
@@ -520,7 +617,7 @@ pub fn install_client_module_host(
     let snapshots = loader.entries()?;
     let entries = host_entries(&snapshots);
     let host = ClientModuleHost::new(
-        Arc::new(FilesystemClientPackageResolver::new(base_dir)),
+        resolver,
         &entries,
         Arc::new(|message| tracing::warn!(%message, "client module composition warning")),
     )?;
@@ -551,6 +648,37 @@ pub fn install_client_module_host(
         },
         EventOptions::default(),
     )?;
+    let settled_host = host.clone();
+    let settled_loader = loader;
+    let reconcile = tokio::spawn(async move {
+        if settled_loader.wait().await.is_err() {
+            return;
+        }
+        let Ok(snapshots) = settled_loader.entries() else {
+            return;
+        };
+        let entries = host_entries(&snapshots);
+        let names = entries
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect::<Vec<_>>();
+        for name in names {
+            settled_host.reconcile(name, &entries);
+        }
+    });
+    context.own(EffectHandle::new(
+        "client-modules: post-settlement reconciliation",
+        move || {
+            reconcile.abort();
+            Box::pin(async move {
+                match reconcile.await {
+                    Ok(()) => Ok(()),
+                    Err(error) if error.is_cancelled() => Ok(()),
+                    Err(error) => Err(anyhow::anyhow!(error.to_string())),
+                }
+            })
+        },
+    ))?;
     Ok(host)
 }
 

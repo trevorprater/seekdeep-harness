@@ -165,8 +165,12 @@ impl EventReply {
 }
 
 /// Boxed listener computation.
+#[cfg(not(target_arch = "wasm32"))]
 pub type ListenerFuture =
     Pin<Box<dyn Future<Output = anyhow::Result<EventReply>> + Send + 'static>>;
+/// Browser listeners stay on the page's single-threaded local executor.
+#[cfg(target_arch = "wasm32")]
+pub type ListenerFuture = Pin<Box<dyn Future<Output = anyhow::Result<EventReply>> + 'static>>;
 
 /// Immediate value or promise-like result returned by synchronous bail dispatch.
 pub enum BailReply {
@@ -843,7 +847,7 @@ fn spawn_detached(future: impl Future<Output = ()> + Send + 'static) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn spawn_detached(future: impl Future<Output = ()> + Send + 'static) {
+fn spawn_detached(future: impl Future<Output = ()> + 'static) {
     wasm_bindgen_futures::spawn_local(future);
 }
 

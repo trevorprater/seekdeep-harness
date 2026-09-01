@@ -31,6 +31,7 @@ seekdeep-invariants = { path = "../invariants" }
 seekdeep-loader = { path = "../loader" }
 sha1.workspace = true
 tracing.workspace = true
+tokio.workspace = true
 url.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -50,7 +51,6 @@ web-sys = { workspace = true, features = [
 ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tokio.workspace = true
 tempfile.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]

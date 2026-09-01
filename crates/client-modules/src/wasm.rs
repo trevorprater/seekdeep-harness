@@ -308,9 +308,23 @@ fn materialize_js_factory(
                 .map_err(|error| js_sys::Error::new(&error.to_string()).into())
         }) as Box<dyn FnMut(String) -> Result<JsValue, JsValue>>,
     );
-    factory
+    let exports = factory
         .call1(&JsValue::UNDEFINED, &callback.into_js_value())
-        .map_err(|error| js_error(&error))
+        .map_err(|error| js_error(&error))?;
+    normalize_factory_exports(exports).map_err(|error| js_error(&error))
+}
+
+fn normalize_factory_exports(exports: JsValue) -> Result<JsValue, JsValue> {
+    if !exports.is_function()
+        || !Object::has_own(&Object::from(exports.clone()), &JsValue::from_str("apply"))
+    {
+        return Ok(exports);
+    }
+    let normalized = Object::new();
+    for key in Object::keys(&Object::from(exports.clone())) {
+        Reflect::set(&normalized, &key, &Reflect::get(&exports, &key)?)?;
+    }
+    Ok(normalized.into())
 }
 
 fn object_entries(value: JsValue) -> Result<Vec<(String, JsValue)>, JsValue> {

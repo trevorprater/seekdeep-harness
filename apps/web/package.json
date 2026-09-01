@@ -20,9 +20,9 @@
     "!dist/**/*.map"
   ],
   "scripts": {
-    "build": "vite build",
-    "dev": "vite",
-    "watch": "vite build --watch"
+    "build": "cargo xtask web-frontend && vite build --config generated/vite.config.mjs",
+    "dev": "cargo xtask web-frontend && vite --config generated/vite.config.mjs",
+    "watch": "cargo xtask web-frontend && vite build --watch --config generated/vite.config.mjs"
   },
   "license": "MIT",
   "dependencies": {

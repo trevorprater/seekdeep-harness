@@ -148,7 +148,11 @@ fn connection_sinks(
         call_method(&session_face, "handleMuxEnvelope", &[envelope])
             .unwrap_or_else(|error| wasm_bindgen::throw_val(error));
     }) as Box<dyn FnMut(JsValue)>);
-    set(&sinks, "onMuxEnvelope", &mux.into_js_value())?;
+    set(
+        &sinks,
+        "onMuxEnvelope",
+        &labeled(mux.into_js_value(), "onMuxEnvelope")?,
+    )?;
 
     let session_face = sessions.clone();
     let workspace_face = workspaces.clone();
@@ -180,7 +184,11 @@ fn connection_sinks(
                 .unwrap_or_else(|error| wasm_bindgen::throw_val(error));
         }
     }) as Box<dyn FnMut(JsValue)>);
-    set(&sinks, "onHostEnvelope", &host.into_js_value())?;
+    set(
+        &sinks,
+        "onHostEnvelope",
+        &labeled(host.into_js_value(), "onHostEnvelope")?,
+    )?;
 
     let session_face = sessions.clone();
     let workspace_face = workspaces.clone();
@@ -197,7 +205,11 @@ fn connection_sinks(
         )
         .unwrap_or_else(|error| wasm_bindgen::throw_val(error));
     }) as Box<dyn FnMut(JsValue)>);
-    set(&sinks, "onConnected", &connected.into_js_value())?;
+    set(
+        &sinks,
+        "onConnected",
+        &labeled(connected.into_js_value(), "onConnected")?,
+    )?;
 
     let session_face = sessions.clone();
     let state_change = Closure::wrap(Box::new(move |state: String| {
@@ -206,8 +218,21 @@ fn connection_sinks(
                 .unwrap_or_else(|error| wasm_bindgen::throw_val(error));
         }
     }) as Box<dyn FnMut(String)>);
-    set(&sinks, "onStateChange", &state_change.into_js_value())?;
+    set(
+        &sinks,
+        "onStateChange",
+        &labeled(state_change.into_js_value(), "onStateChange")?,
+    )?;
     Ok(sinks.into())
+}
+
+fn labeled(value: JsValue, label: &str) -> Result<JsValue, JsValue> {
+    Reflect::set(
+        &value,
+        &JsValue::from_str("__seekdeepSinkLabel"),
+        &JsValue::from_str(label),
+    )?;
+    Ok(value)
 }
 
 fn install_typert_agent_identity(root: &JsValue, sessions: &JsValue) -> Result<(), JsValue> {

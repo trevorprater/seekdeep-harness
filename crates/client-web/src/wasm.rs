@@ -605,10 +605,8 @@ async fn run_plugin_boot(
     status: &JsValue,
     prefetch: Promise,
 ) -> Result<(), JsValue> {
-    JsFuture::from(
-        call_method(ctx, "plugin", std::slice::from_ref(&modules.loader))?.dyn_into::<Promise>()?,
-    )
-    .await?;
+    let loader_mount = call_method(ctx, "plugin", std::slice::from_ref(&modules.loader))?;
+    JsFuture::from(Promise::resolve(&loader_mount)).await?;
     let loader = required_property(ctx, "loader", "Client Context")?;
     Reflect::set(&loader, &JsValue::from_str("internal"), system)?;
     let status_face = status.clone();

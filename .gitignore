@@ -1,6 +1,9 @@
 /target/
+/apps/web/dist/
+/apps/web/generated/
 /packages/client/*/lib/
 /packages/session-query/session-log-export/lib/
+/vendor/*/lib/
 /.seekdeep/
 *.profraw
 *.profdata

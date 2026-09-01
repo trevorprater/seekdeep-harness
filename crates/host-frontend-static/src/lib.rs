@@ -112,6 +112,7 @@ fn mime_for(extension: Option<&str>) -> &'static str {
         Some("js") => "text/javascript; charset=utf-8",
         Some("css") => "text/css; charset=utf-8",
         Some("svg") => "image/svg+xml",
+        Some("wasm") => "application/wasm",
         Some("json" | "map") => "application/json",
         Some("webmanifest") => "application/manifest+json",
         _ => "application/octet-stream",

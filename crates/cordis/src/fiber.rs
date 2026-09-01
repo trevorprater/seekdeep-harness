@@ -15,7 +15,11 @@ use tokio::sync::Notify;
 use uuid::Uuid;
 
 /// Boxed asynchronous disposer result.
+#[cfg(not(target_arch = "wasm32"))]
 pub type DisposeFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>>;
+/// Browser disposers stay on the page's single-threaded local executor.
+#[cfg(target_arch = "wasm32")]
+pub type DisposeFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'static>>;
 
 type Disposer = Box<dyn FnOnce() -> DisposeFuture + Send + 'static>;
 

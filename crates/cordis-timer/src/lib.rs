@@ -11,13 +11,18 @@ use std::{
     time::Duration,
 };
 
-use futures::future::BoxFuture;
+#[cfg(not(target_arch = "wasm32"))]
+use futures::future::BoxFuture as TimerFuture;
+#[cfg(target_arch = "wasm32")]
+use futures::future::LocalBoxFuture as TimerFuture;
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
+#[cfg(not(target_arch = "wasm32"))]
+use seekdeep_cordis::Plugin;
+use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
 use serde_json::Value;
 
 /// Asynchronous callback executed by one timer.
-pub type TimerCallback = Arc<dyn Fn() -> BoxFuture<'static, ()> + Send + Sync>;
+pub type TimerCallback = Arc<dyn Fn() -> TimerFuture<'static, ()> + Send + Sync>;
 
 /// Prepared timer that cannot fire before [`PreparedTimer::start`].
 pub trait PreparedTimer: Send + Sync + 'static {
@@ -135,7 +140,7 @@ impl TimerService {
                     let _ = effect.dispose().await;
                 }
                 callback().await;
-            }) as BoxFuture<'static, ()>
+            }) as TimerFuture<'static, ()>
         });
         let timer = self.driver.prepare_timeout(delay, callback);
         let cancellation = timer.clone();
@@ -192,7 +197,7 @@ impl TimerService {
                 if let Some(sender) = sender.lock().take() {
                     let _ = sender.send(Ok(()));
                 }
-            }) as BoxFuture<'static, ()>
+            }) as TimerFuture<'static, ()>
         });
         let timer = self.driver.prepare_timeout(delay, callback);
         let cancellation = timer.clone();
@@ -275,7 +280,7 @@ impl TimerService {
                 {
                     let _ = sender.send(Ok(TimerTick::Tick));
                 }
-            }) as BoxFuture<'static, ()>
+            }) as TimerFuture<'static, ()>
         });
         let timer = self.driver.prepare_interval(delay, callback);
         let cancellation = timer.clone();
@@ -451,7 +456,8 @@ impl TimerTicks {
 }
 
 /// Callback accepted by throttle and debounce helpers.
-pub type ValueTimerCallback = Arc<dyn Fn(Value) -> BoxFuture<'static, ()> + Send + Sync + 'static>;
+pub type ValueTimerCallback =
+    Arc<dyn Fn(Value) -> TimerFuture<'static, ()> + Send + Sync + 'static>;
 
 /// Fiber-owned debounced callback.
 pub struct Debounced {

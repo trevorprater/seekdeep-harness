@@ -56,6 +56,8 @@ members = [
   "crates/client-ui-workflow-run",
   "crates/client-ui-workspace",
   "crates/client-ui-slots",
+  "crates/client-loader",
+  "crates/client-foundation-wasm",
   "crates/client-web",
   "crates/client-web-react",
   "crates/client-runtime",

@@ -4,7 +4,7 @@
 
 use js_sys::{Array, Function, Object, Reflect};
 use seekdeep_client_modules::*;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -208,6 +208,7 @@ return { got: dep.helper, react, shell };
         &Reflect::get(&first, &JsValue::from_str("shell")).unwrap(),
         &shell
     ));
+
     let record = system.load_cache().get(&JsValue::from_str("a"));
     let styles: Array = field(&record, "styles");
     assert_eq!(styles.length(), 2);
@@ -215,6 +216,36 @@ return { got: dep.helper, react, shell };
     assert_eq!(styles.get(1).as_string().as_deref(), Some("sheet-1"));
     let edges: js_sys::Set = field(&record, "edges");
     assert!(edges.has(&JsValue::from_str("b/client")));
+
+    let initialized_global = Function::new_no_args(
+        "function __wbg_init() { return { wrong: true } }; Object.assign(__wbg_init, { apply() {}, marker: 'compiled' }); return __wbg_init;",
+    )
+    .call0(&JsValue::UNDEFINED)
+    .unwrap();
+    let compiled = initialized_global.clone();
+    let compiled_factory =
+        Closure::wrap(Box::new(move |_require: JsValue| compiled.clone())
+            as Box<dyn FnMut(JsValue) -> JsValue>);
+    system.invalidate("a".to_owned());
+    set_factory
+        .call2(
+            &transport,
+            &JsValue::from_str("a"),
+            &compiled_factory.into_js_value(),
+        )
+        .unwrap();
+    let normalized = system
+        .import_module("a".to_owned(), String::new(), Object::new().into())
+        .await
+        .unwrap();
+    assert!(!normalized.is_function());
+    assert_eq!(
+        Reflect::get(&normalized, &JsValue::from_str("marker"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("compiled")
+    );
 
     let generation = Function::new_no_args(
         "let generation = 0; return require => ({ generation: ++generation });",

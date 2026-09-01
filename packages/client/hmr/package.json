@@ -37,6 +37,10 @@
     }
   },
   "license": "MIT",
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-hmr --artifact seekdeep_client_hmr --module-id @seekdeep-ai/seekdeep-client-hmr --out-dir packages/client/hmr/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-hmr --artifact seekdeep_client_hmr --module-id @seekdeep-ai/seekdeep-client-hmr --out-dir packages/client/hmr/lib --watch"
+  },
   "dependencies": {
     "@seekdeep-ai/schemastery": "workspace:^"
   },

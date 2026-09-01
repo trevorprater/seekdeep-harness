@@ -5194,6 +5194,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-foundation-wasm"
+version = "0.1.0-rc.5"
+dependencies = [
+ "js-sys",
+ "parking_lot",
+ "seekdeep-cordis",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+]
+
+[[package]]
 name = "seekdeep-client-hmr"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5219,6 +5232,18 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
+]
+
+[[package]]
+name = "seekdeep-client-loader"
+version = "0.1.0-rc.5"
+dependencies = [
+ "js-sys",
+ "parking_lot",
+ "seekdeep-cordis",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
@@ -6119,15 +6144,19 @@ dependencies = [
  "async-trait",
  "futures",
  "indexmap 2.14.0",
+ "js-sys",
  "parking_lot",
  "seekdeep-schemastery",
  "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
  "uuid",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

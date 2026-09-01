@@ -1,5 +1,7 @@
 //! Boot manifest and target-neutral lazy module-table parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     collections::BTreeMap,
     sync::{

@@ -90,39 +90,54 @@ pub fn client_plugin_descriptor(react: JsValue) -> Result<JsValue, JsValue> {
 #[wasm_bindgen(js_name = applyCordisClientRunner)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn apply_client_plugin(ctx: JsValue, react: JsValue) -> Result<(), JsValue> {
-    install_wasm_client_timer(&ctx)?;
-    let remote = required_service(&ctx, "remote")?;
-    let namespace = required_service(&ctx, "remote.dynamicCordisRunner")?;
-    let loader = required_service(&ctx, "loader")?;
-    let modules = required_service(&ctx, "modules")?;
-    let slots = required_service(&ctx, "slots")?;
+    install_wasm_client_timer(&ctx).map_err(|error| apply_stage("timer install", error))?;
+    let remote =
+        required_service(&ctx, "remote").map_err(|error| apply_stage("remote lookup", error))?;
+    let namespace = required_service(&ctx, "remote.dynamicCordisRunner")
+        .map_err(|error| apply_stage("dynamic Remote lookup", error))?;
+    let loader =
+        required_service(&ctx, "loader").map_err(|error| apply_stage("Loader lookup", error))?;
+    let modules = required_service(&ctx, "modules")
+        .map_err(|error| apply_stage("module table lookup", error))?;
+    let slots = required_service(&ctx, "slots")
+        .map_err(|error| apply_stage("Slot registry lookup", error))?;
 
     let inspect = crate::ClientCordisInspectRegistry::new(
         Arc::new(WasmClientInspectHost::new(namespace.clone())),
         Arc::new(WasmClientMicrotaskScheduler),
         Arc::new(WasmClientTaskSpawner),
     );
-    let inspect_service = inspect_service(&inspect)?;
+    let inspect_service = inspect_service(&inspect)
+        .map_err(|error| apply_stage("inspect service construction", error))?;
     call_method(
         &ctx,
         "provide",
         &[JsValue::from_str("cordisInspect"), inspect_service],
-    )?;
+    )
+    .map_err(|error| apply_stage("inspect service publication", error))?;
     let providers = client_inspect_providers(wasm_client_inspect_sources(ctx.clone()))
         .into_iter()
         .map(|provider| inspect.register(provider))
         .collect::<anyhow::Result<Vec<_>>>()
-        .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+        .map_err(|error| {
+            apply_stage(
+                "inspect provider registration",
+                js_sys::Error::new(&error.to_string()).into(),
+            )
+        })?;
 
-    let engine = Arc::new(WasmClientMountEngine::new(
-        ctx.clone(),
-        loader,
-        modules,
-        &slots,
-        react,
-        wasm_host_invoke(namespace.clone()),
-        wasm_guard_reporter(namespace.clone()),
-    )?);
+    let engine = Arc::new(
+        WasmClientMountEngine::new(
+            ctx.clone(),
+            loader,
+            modules,
+            &slots,
+            react,
+            wasm_host_invoke(namespace.clone()),
+            wasm_guard_reporter(namespace.clone()),
+        )
+        .map_err(|error| apply_stage("Slot crash supervision", error))?,
+    );
     let runtime = DynamicCordisClientRuntime::new(
         engine,
         Arc::new(WasmClientTaskSpawner),
@@ -134,24 +149,41 @@ pub fn apply_client_plugin(ctx: JsValue, react: JsValue) -> Result<(), JsValue> 
         Arc::new(WasmClientTaskSpawner),
         wasm_orchestrator_logger(),
     );
-    let face = runner_face(&runtime, &orchestrator)?;
+    let face = runner_face(&runtime, &orchestrator)
+        .map_err(|error| apply_stage("runtime face construction", error))?;
     call_method(
         &ctx,
         "provide",
         &[JsValue::from_str("dynamicCordisRunner"), face],
-    )?;
+    )
+    .map_err(|error| apply_stage("runtime service publication", error))?;
 
     let mut subscriptions = Vec::new();
-    subscriptions.push(connection_reset(&ctx, &inspect)?);
-    subscriptions.extend(remote_events(&remote, &runtime, &orchestrator, &inspect)?);
+    subscriptions.push(
+        connection_reset(&ctx, &inspect)
+            .map_err(|error| apply_stage("connection reset subscription", error))?,
+    );
+    subscriptions.extend(
+        remote_events(&remote, &runtime, &orchestrator, &inspect)
+            .map_err(|error| apply_stage("Remote event subscriptions", error))?,
+    );
     let state = Arc::new(WasmClientPluginState {
         runtime,
         providers,
         subscriptions: Mutex::new(subscriptions),
         disposed: AtomicBool::new(false),
     });
-    own_state(&ctx, state)?;
+    own_state(&ctx, state).map_err(|error| apply_stage("lifecycle ownership", error))?;
     Ok(())
+}
+
+#[allow(clippy::needless_pass_by_value)]
+fn apply_stage(stage: &str, error: JsValue) -> JsValue {
+    let message = js_sys::Reflect::get(&error, &JsValue::from_str("message"))
+        .ok()
+        .and_then(|value| value.as_string())
+        .unwrap_or_else(|| format!("{error:?}"));
+    js_sys::Error::new(&format!("cordis-client-runner: {stage}: {message}")).into()
 }
 
 fn required_service(ctx: &JsValue, name: &str) -> Result<JsValue, JsValue> {

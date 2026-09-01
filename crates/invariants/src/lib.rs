@@ -453,7 +453,7 @@ fn spawn_monitor(future: impl Future<Output = ()> + Send + 'static) {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn spawn_monitor(future: impl Future<Output = ()> + Send + 'static) {
+fn spawn_monitor(future: impl Future<Output = ()> + 'static) {
     wasm_bindgen_futures::spawn_local(future);
 }
 

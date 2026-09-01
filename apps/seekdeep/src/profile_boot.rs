@@ -532,7 +532,9 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         ),
         (
             "seekdeep-client-modules",
-            seekdeep_client_modules::client_modules_host_plugin(),
+            seekdeep_client_modules::client_modules_host_plugin_with_fallbacks(vec![
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ]),
         ),
         (
             "seekdeep-client-runtime",

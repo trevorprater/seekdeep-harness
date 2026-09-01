@@ -23,6 +23,7 @@ pub const PLATFORM_MODULES: &[&str] = &[
     "react/jsx-runtime",
     "react-dom",
     "react-dom/client",
+    "immer",
     "@seekdeep-ai/cordis",
     "@seekdeep-ai/seekdeep-client-ui-slots",
     "@seekdeep-ai/seekdeep-client-web-react",

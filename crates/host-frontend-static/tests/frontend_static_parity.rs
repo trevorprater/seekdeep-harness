@@ -60,6 +60,7 @@ async fn serves_assets_spa_fallback_taps_traversal_and_method_gate() {
     let index = dist.join("index.html");
     std::fs::write(&index, "<head></head><body>shell</body>").expect("index");
     std::fs::write(dist.join("app.js"), "export {}").expect("app");
+    std::fs::write(dist.join("app.wasm"), b"\0asm").expect("wasm");
     std::fs::write(dist.join("blob.bin"), "BLOB").expect("blob");
     std::fs::write(dist.join("manifest.webmanifest"), "{}").expect("manifest");
 
@@ -81,6 +82,12 @@ async fn serves_assets_spa_fallback_taps_traversal_and_method_gate() {
     assert_eq!(status(&javascript), 200);
     assert!(headers(&javascript).contains("content-type: text/javascript; charset=utf-8"));
     assert_eq!(body(&javascript), b"export {}");
+
+    let wasm = raw_request(server.port(), "GET", "/app.wasm")
+        .await
+        .expect("wasm");
+    assert!(headers(&wasm).contains("content-type: application/wasm"));
+    assert_eq!(body(&wasm), b"\0asm");
 
     let manifest = raw_request(server.port(), "GET", "/manifest.webmanifest")
         .await

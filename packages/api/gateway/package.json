@@ -44,8 +44,8 @@
     }
   },
   "scripts": {
-    "bundle": "tsdown",
-    "watch": "tsdown --watch"
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-foundation-wasm --artifact seekdeep_client_foundation_wasm --module-id @seekdeep-ai/seekdeep-api-gateway --out-dir packages/api/gateway/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-foundation-wasm --artifact seekdeep_client_foundation_wasm --module-id @seekdeep-ai/seekdeep-api-gateway --out-dir packages/api/gateway/lib --watch"
   },
   "files": [
     "lib/index.js",

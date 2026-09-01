@@ -23,6 +23,18 @@ thread_local! {
     static COMPONENTS: RefCell<Option<Components>> = const { RefCell::new(None) };
 }
 
+/// Compiled class-name join for this package's string-or-false call sites.
+#[wasm_bindgen(js_name = settingsPluginsClassNames)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn settings_plugins_class_names(values: Array) -> String {
+    values
+        .iter()
+        .filter_map(|value| value.as_string())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[derive(Clone)]
 pub(crate) struct BrowserModules {
     pub(crate) react: JsValue,

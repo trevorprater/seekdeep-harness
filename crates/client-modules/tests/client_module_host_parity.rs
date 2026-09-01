@@ -1,5 +1,7 @@
 //! Host package composition, diagnostics, graph, route, and index parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{fs, path::PathBuf, sync::Arc};
 
 use parking_lot::Mutex;
@@ -89,6 +91,43 @@ fn sibling_seekdeep_roles_compose_one_client_graph_row() {
     assert_eq!(host.graph().entries.len(), 1);
     assert_eq!(host.graph().entries[0].id.as_str(), name);
     assert_eq!(host.client_path(&ClientModuleId::new(name)), Some(path));
+}
+
+#[test]
+fn installed_profile_resolution_precedes_explicit_compiled_fallbacks() {
+    let installed = Fixture::new();
+    let compiled = Fixture::new();
+    let name = "@fixture/fallback-order";
+    let installed_path =
+        installed.write_package(name, &serde_json::json!({"client": {"platform": "web"}}));
+    let compiled_path =
+        compiled.write_package(name, &serde_json::json!({"client": {"platform": "web"}}));
+    for (path, body) in [(&installed_path, "installed"), (&compiled_path, "compiled")] {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, body).unwrap();
+    }
+    let resolver = Arc::new(
+        FilesystemClientPackageResolver::new(installed.root.path())
+            .with_fallback_roots([compiled.root.path()]),
+    );
+    let (_, sink) = logger();
+    let host = ClientModuleHost::new(resolver, &[entry(name)], sink).unwrap();
+    assert_eq!(
+        host.client_path(&ClientModuleId::new(name)),
+        Some(installed_path)
+    );
+
+    let absent = tempfile::tempdir().unwrap();
+    let resolver = Arc::new(
+        FilesystemClientPackageResolver::new(absent.path())
+            .with_fallback_roots([compiled.root.path()]),
+    );
+    let (_, sink) = logger();
+    let host = ClientModuleHost::new(resolver, &[entry(name)], sink).unwrap();
+    assert_eq!(
+        host.client_path(&ClientModuleId::new(name)),
+        Some(compiled_path)
+    );
 }
 
 #[test]

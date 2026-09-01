@@ -233,6 +233,6 @@ fn app_shell_installs_renderer_provides_lazy_service_and_renders_title_plus_root
         &get_static_modules().unwrap(),
         &property(&bench, "staticModules")
     ));
-    assert_eq!(platform_modules().length(), 10);
+    assert_eq!(platform_modules().length(), 11);
     assert!(build_render_app(Object::new().into()).is_err());
 }

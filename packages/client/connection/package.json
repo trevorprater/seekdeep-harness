@@ -1,0 +1,28 @@
+{
+  "name": "@seekdeep-ai/seekdeep-client-connection",
+  "description": "Rust/WASM browser Connection transport and compiled Host bridge",
+  "version": "0.1.0-rc.5",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/client/connection"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    "./client": { "types": "./lib/types/client/index.d.ts", "default": "./lib/client.js" },
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": { "platform": "web", "inject": [], "immediately": true }
+  },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-foundation-wasm --artifact seekdeep_client_foundation_wasm --module-id @seekdeep-ai/seekdeep-client-connection --out-dir packages/client/connection/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-foundation-wasm --artifact seekdeep_client_foundation_wasm --module-id @seekdeep-ai/seekdeep-client-connection --out-dir packages/client/connection/lib --watch"
+  },
+  "files": ["lib/client.js", "lib/types/**/*.d.ts"],
+  "license": "MIT"
+}

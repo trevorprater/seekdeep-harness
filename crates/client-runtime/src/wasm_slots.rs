@@ -507,6 +507,25 @@ fn service_face(state: &Rc<BrowserState>, caller: &JsValue) -> Result<JsValue, J
         prune_state.registry.prune_store_scope(&session_id);
     }) as Box<dyn FnMut(String)>);
     set(&face, "pruneStoreScope", &prune.into_js_value())?;
+    let error_core = state.registry.core().clone();
+    let on_entry_error = Closure::wrap(Box::new(move |listener: Function| -> Function {
+        let subscription =
+            error_core.on_entry_error(Rc::new(move |key, entry, error, abdicated| {
+                let info = Object::new();
+                let _ = set(&info, "abdicated", &JsValue::from_bool(abdicated));
+                call_or_throw(listener.call4(
+                    &JsValue::UNDEFINED,
+                    &JsValue::from_str(key.as_str()),
+                    &entry.payload.component.stored,
+                    error,
+                    &info,
+                ));
+            }));
+        Closure::wrap(Box::new(move || subscription.dispose()) as Box<dyn FnMut()>)
+            .into_js_value()
+            .unchecked_into()
+    }) as Box<dyn FnMut(Function) -> Function>);
+    set(&face, "onEntryError", &on_entry_error.into_js_value())?;
     add_ledger_methods(&face, state)?;
     Ok(face.into())
 }
