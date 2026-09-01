@@ -131,6 +131,7 @@ members = [
   "crates/core",
   "crates/invariants",
   "crates/identity",
+  "crates/issue-policy",
   "crates/jobs",
   "crates/jobs-local",
   "crates/landlock-run",

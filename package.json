@@ -34,7 +34,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "test:issue-management": "node .github/issue-management/policy.test.mjs",
+    "test:issue-management": "cargo test -p seekdeep-issue-policy",
     "test:snapshot": "vitest run --config vitest.snapshot.config.ts",
     "test:snapshot:record": "SEEKDEEP_SNAPSHOT=record vitest run --config vitest.snapshot.config.ts --update",
     "test:snapshot:refresh": "SEEKDEEP_SNAPSHOT=refresh vitest run --config vitest.snapshot.config.ts",

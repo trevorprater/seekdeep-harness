@@ -18,11 +18,13 @@ Ordinary subscribed pull-request events remain forward-only implementation signa
 
 The handler resolves only exact same-repository `Fixes`, `Closes`, or `Resolves` references. It does not alter terminal statuses, add an Issue with no Project status, depend on PR metadata validity, query `reviewDecision`, reconstruct review rounds, look up pull requests from Issues, or run a scheduled reconciler.
 
+The compiled Rust `seekdeep-issue-policy` command owns both validation and lifecycle effects. Its GitHub REST/GraphQL client uses typed Issue and Project identities, while an injected transport keeps policy and mutation ordering deterministic in tests.
+
 [Issue lifecycle](../../../../.github/workflows/issue-lifecycle.yml) remains unsubscribed from `pull_request.ready_for_review`; neither event command depends on that action. [Issue policy](../../../../.github/workflows/issue-policy.yml) retains `ready_for_review` because it owns required-check enforcement when a human pull request enters review.
 
 ## Verification
 
-[Issue-management tests](../../../../.github/issue-management/policy.test.mjs) pin the event-to-command mapping, the repeated-review-request transition after a changes-requested command, the changes-requested regression, terminal protection, and human override preservation. [Workflow tests](../../../../scripts/ci-workflow.spec.ts) pin the subscribed events, the changes-requested job condition, and the separate `ready_for_review` policy trigger.
+[Issue-management tests](../../../../crates/issue-policy/tests/policy_parity.rs) pin the event-to-command mapping, the repeated-review-request transition after a changes-requested command, the changes-requested regression, terminal protection, and human override preservation. [Runtime tests](../../../../crates/issue-policy/tests/runtime_parity.rs) pin REST/GraphQL snapshots, Project mutations, audit comments, and HTTP headers. [Workflow tests](../../../../crates/issue-policy/tests/workflow_parity.rs) pin the subscribed events, the changes-requested job condition, the separate `ready_for_review` policy trigger, and the Rust command entry path.
 
 ## Alternatives considered
 

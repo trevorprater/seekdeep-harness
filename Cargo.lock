@@ -6784,6 +6784,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-issue-policy"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "regex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-jobs"
 version = "0.1.0-rc.5"
 dependencies = [

@@ -18,11 +18,13 @@ Issue 生命周期工作流把评审 webhook 视为命令。`pull_request.review
 
 处理器仅解析同一仓库内严格匹配的 `Fixes`、`Closes` 或 `Resolves` 引用。它不会更改终态、将没有 Project 状态的 Issue 添加到 Project、依赖 PR 元数据是否有效、查询 `reviewDecision`、重建评审轮次、从 Issue 反向查找 PR，或运行定时协调器。
 
+编译后的 Rust 命令 `seekdeep-issue-policy` 同时负责校验和生命周期副作用。其 GitHub REST/GraphQL 客户端使用带类型的 Issue 与 Project 标识；测试通过注入传输层，确定性地验证策略和变更顺序。
+
 [Issue 生命周期](../../../../.github/workflows/issue-lifecycle.yml)仍不订阅 `pull_request.ready_for_review`；两条事件命令均不依赖该动作。[Issue 策略](../../../../.github/workflows/issue-policy.yml)保留 `ready_for_review`，因为人工提交的 PR 进入评审时，该工作流负责执行必需检查门禁。
 
 ## 验证
 
-[Issue 管理测试](../../../../.github/issue-management/policy.test.mjs)锁定事件到命令的映射、请求修改命令后重复请求评审所触发的状态转换、请求修改后的状态回退、终态保护，以及保留人工覆盖状态。[工作流测试](../../../../scripts/ci-workflow.spec.ts)锁定订阅事件、请求修改作业的条件，以及独立的 `ready_for_review` 策略触发器。
+[Issue 管理测试](../../../../crates/issue-policy/tests/policy_parity.rs)锁定事件到命令的映射、请求修改命令后重复请求评审所触发的状态转换、请求修改后的状态回退、终态保护，以及保留人工覆盖状态。[运行时测试](../../../../crates/issue-policy/tests/runtime_parity.rs)锁定 REST/GraphQL 快照、Project 变更、审计评论和 HTTP 标头。[工作流测试](../../../../crates/issue-policy/tests/workflow_parity.rs)锁定订阅事件、请求修改作业的条件、独立的 `ready_for_review` 策略触发器，以及 Rust 命令入口。
 
 ## 考虑过的替代方案
 

@@ -23489,12 +23489,35 @@
     {
       "source": ".github/issue-management/policy.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/issue-policy/src/config.rs",
+        "crates/issue-policy/src/policy.rs",
+        "crates/issue-policy/src/runtime.rs",
+        "crates/issue-policy/src/transport.rs",
+        "crates/issue-policy/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source Issue policy suite: 23 passed",
+        "24 Rust policy tests pin visible-unit and details parsing, Owner rules, Issue metadata, PR labels and priorities, same-repository resolving references, and event-directed Project status transitions",
+        "5 assembled runtime tests pin REST and GraphQL snapshots, Project mutations, audit comment ownership, PR reference filtering, lazy lifecycle effects, a real local HTTP header and JSON exchange, and the complete built PR command path",
+        "built CLI tests pin usage, event-file, token-read, and irrelevant-event ordering",
+        "strict seekdeep-issue-policy Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": ".github/issue-management/policy.test.mjs",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/issue-policy/tests/policy_parity.rs",
+        "crates/issue-policy/tests/runtime_parity.rs",
+        "crates/issue-policy/tests/workflow_parity.rs"
+      ],
+      "evidence": [
+        "pinned source Issue policy suite: 23 passed",
+        "32 Rust policy, runtime, workflow, configuration, and built-command tests passed"
+      ]
     },
     {
       "source": ".github/pull_request_template.md",
@@ -23578,10 +23601,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        ".github/workflows/issue-lifecycle.yml"
+        ".github/workflows/issue-lifecycle.yml",
+        "crates/issue-policy/src/main.rs",
+        "crates/issue-policy/tests/workflow_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "trusted default-branch checkout installs Rust 1.93.1 and runs the compiled lifecycle command with the locked dependency graph and CARGO_INCREMENTAL=0",
+        "workflow tests pin event subscriptions, changes-requested job guard, app-token wiring, and the Rust command entry path"
       ]
     },
     {
@@ -23589,10 +23615,13 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        ".github/workflows/issue-policy.yml"
+        ".github/workflows/issue-policy.yml",
+        "crates/issue-policy/src/main.rs",
+        "crates/issue-policy/tests/workflow_parity.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "trusted default-branch checkout installs Rust 1.93.1 and runs the compiled PR policy command with the locked dependency graph and CARGO_INCREMENTAL=0",
+        "workflow tests pin ready-for-review enforcement, review-request subscriptions, token scope, and the Rust command entry path"
       ]
     },
     {
@@ -36716,9 +36745,10 @@
         "pnpm --silent run verify-skill-invocation-metadata delegates to the verified Rust cross-product policy",
         "pnpm --silent run verify-doc-budgets delegates to the verified Rust documentation policy",
         "pnpm --silent run verify-vendored-links delegates to the verified Rust lockfile policy",
-        "demo:acp, demo:code-mode, and demo:cordis delegate only to compiled Rust entrypoints"
+        "demo:acp, demo:code-mode, and demo:cordis delegate only to compiled Rust entrypoints",
+        "test:issue-management delegates to the verified seekdeep-issue-policy crate"
       ],
-      "note": "root package metadata preserves source command names while compiled Rust owns the repository demos, change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
+      "note": "root package metadata preserves source command names while compiled Rust owns the repository demos, Issue policy, change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
     },
     {
       "source": "packages/AGENTS.md",
