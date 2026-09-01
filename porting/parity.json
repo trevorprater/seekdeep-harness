@@ -24433,7 +24433,18 @@
     {
       "source": "apps/cli/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/Cargo.toml",
+        "apps/seekdeep/src/main.rs",
+        "apps/seekdeep/tests/source_launch_compat.rs"
+      ],
+      "evidence": [
+        "pnpm --filter @deepseek-ai/dsh exec tsdown plus node apps/cli/lib/bin.js --version (pinned source: ESM executable bundle built from lib/types/bin.js and printed 0.1.0-rc.5)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo build -p seekdeep --bin seekdeep --all-features plus target/debug/seekdeep --version (native arm64 executable built and printed 0.1.0-rc.5)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep --test source_launch_compat --all-features (6 passed through the compiled binary entry)"
+      ],
+      "note": "the Rust-only target replaces the source ESM bundler entry with Cargo's [[bin]] target; the executable behavior remains owned by compiled Rust"
     },
     {
       "source": "apps/web/.npmignore",
