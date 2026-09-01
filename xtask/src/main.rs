@@ -932,6 +932,9 @@ fn write_wasm_package_compatibility_entries(module_id: &str, out_dir: &Path) -> 
         "@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory" => {
             "client-ui-settings-plugin-inventory-invariant"
         }
+        "@seekdeep-ai/seekdeep-client-ui-settings-plugins" => {
+            "client-ui-settings-plugins-invariant"
+        }
         "@seekdeep-ai/seekdeep-client-ui-skill" => "client-ui-skill-invariant",
         "@seekdeep-ai/seekdeep-client-ui-subagent" => "client-ui-subagent-invariant",
         "@seekdeep-ai/seekdeep-client-ui-permission-presets" => {
@@ -1103,6 +1106,9 @@ fn module_factory(global: &str, module_id: &str) -> String {
         return format!(
             "require => {{ {global}.configureClientUiSettingsPluginInventory(require('react'), require('@seekdeep-ai/seekdeep-client-ui-primitives')); Object.assign({global}, {{ apply: {global}.applyClientUiSettingsPluginInventory, inject: ['slots', 'locale', 'remote', 'remote.pluginInventory'] }}); return {global}; }}"
         );
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-plugins" {
+        return ui_settings_plugins_module_factory(global);
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-skill" {
         return format!(
@@ -1307,6 +1313,12 @@ fn ui_settings_models_module_factory(global: &str) -> String {
     )
 }
 
+fn ui_settings_plugins_module_factory(global: &str) -> String {
+    format!(
+        "require => {{ const slots = require('@seekdeep-ai/seekdeep-client-ui-slots'); {global}.configureClientUiSettingsPlugins(require('react'), require('clsx'), require('@seekdeep-ai/seekdeep-client-ui-primitives'), slots.resolveSlotLabel); return {{ apply: {global}.applyClientUiSettingsPlugins, inject: ['slots', 'locale', 'connection', 'remote', 'settingsScope'] }}; }}"
+    )
+}
+
 #[allow(clippy::too_many_lines)] // Closed module-specific declaration dispatch stays auditable here.
 fn compatibility_declarations(module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
@@ -1389,6 +1401,9 @@ export type SettingsDocumentActionProps = SettingsDocumentActionInjected & { t(k
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory" {
         return ui_settings_plugin_inventory_declarations();
+    }
+    if module_id == "@seekdeep-ai/seekdeep-client-ui-settings-plugins" {
+        return ui_settings_plugins_declarations();
     }
     if module_id == "@seekdeep-ai/seekdeep-client-ui-skill" {
         return ui_skill_declarations();
@@ -1834,6 +1849,50 @@ export interface PluginInventorySettingsTabProps extends PluginInventorySettings
 }
 declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
   interface LocaleNamespaceMap { 'settings.pluginInventory': PluginInventoryLocaleKey }
+}
+"
+    .to_owned()
+}
+
+fn ui_settings_plugins_declarations() -> String {
+    r"
+import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@seekdeep-ai/seekdeep-client-ui-slots';
+import type { SnapshotStore } from '@seekdeep-ai/seekdeep-client-runtime/client';
+export const apply: typeof wasm_bindgen.applyClientUiSettingsPlugins;
+export const inject: readonly ['slots', 'locale', 'connection', 'remote', 'settingsScope'];
+export type FieldWrite = { kind: 'set'; value: unknown } | { kind: 'clear' };
+export interface CardFieldSpec { field: string; format(value: unknown): string; parse(text: string): FieldWrite | undefined }
+export interface CardSecretSpec { field: string; write(text: string): Promise<boolean> }
+export interface CardFieldState { text: string; overridden: boolean; invalid: boolean }
+export interface CardShell { available: boolean; writable: boolean; dirty: boolean; invalid: boolean; saving: boolean; failed: boolean }
+export interface CardActions { edit(field: string, text: string): void; resetField(field: string): void; save(): void; discard(): void }
+export interface PluginsSettingsTabEntry { id: string; order: number; label: string }
+export interface PluginsSettingsSectionInjected { hooks: { tabs: HostObservable<readonly PluginsSettingsTabEntry[]> } }
+export type PluginsSettingsSectionProps = PropsRuntime<'settings.section'> & PropsLocale<'settings.plugins'> & PropsRenderSlots<'settings.plugins.tab'> & InjectFace<PluginsSettingsSectionInjected>;
+export interface ConfigurablePluginsTabInjected { cardCount: number }
+export type ConfigurablePluginsTabProps = PropsRuntime<'settings.plugins.tab'> & PropsLocale<'settings.plugins'> & PropsRenderSlots<'settings.plugin.item'> & InjectFace<ConfigurablePluginsTabInjected>;
+export interface PluginCardProps { t(key: PluginsSettingsLocaleKey): string; titleKey: PluginsSettingsLocaleKey; descriptionKey: PluginsSettingsLocaleKey; state: CardShell; onSave(): void; onDiscard(): void; children: unknown }
+export interface FieldProps { id: string; label: string; hint: string; text: string; overridden: boolean; invalid: boolean; overriddenLabel: string; resetLabel: string; invalidLabel: string; disabled: boolean; onEdit(text: string): void; onReset(): void }
+export interface AgentLoopCardState extends CardShell { maxParallelToolCalls: CardFieldState }
+export interface BashCardState extends CardShell { timeoutMs: CardFieldState; maxOutputBytes: CardFieldState }
+export interface WebSearchCardState extends CardShell { baseURL: CardFieldState; maxUses: CardFieldState; apiKey: CardFieldState; apiKeyConfigured: boolean; apiKeyWritable: boolean }
+export interface AgentLoopCardFace extends CardActions { hooks: { agentLoopCard: SnapshotStore<AgentLoopCardState> } }
+export interface BashCardFace extends CardActions { hooks: { bashCard: SnapshotStore<BashCardState> } }
+export interface WebSearchCardFace extends CardActions { hooks: { webSearchCard: SnapshotStore<WebSearchCardState> } }
+export interface SettingsPluginItemOwnerProps { children?: never }
+export type PluginsSettingsLocaleKey =
+  | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'empty'
+  | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
+  | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
+  | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
+  | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
+  | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
+  | 'webSearchTitle' | 'webSearchDescription' | 'webSearchApiKey' | 'webSearchApiKeyHint'
+  | 'webSearchApiKeySet' | 'webSearchApiKeyUnset' | 'webSearchBaseUrl'
+  | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint';
+declare module '@seekdeep-ai/seekdeep-client-ui-slots' {
+  interface LocaleNamespaceMap { 'settings.plugins': PluginsSettingsLocaleKey }
+  interface SlotMap { 'settings.plugin.item': { kind: 'list'; scope: 'root'; owner: SettingsPluginItemOwnerProps } }
 }
 "
     .to_owned()
@@ -2917,6 +2976,49 @@ mod tests {
         let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
         assert!(invariant.contains("client-ui-settings-plugin-inventory-invariant"));
         assert!(invariant.contains("@seekdeep-ai/seekdeep-client-ui-settings-plugin-inventory"));
+    }
+
+    #[test]
+    fn ui_settings_plugins_bundle_configures_cards_and_public_contract() {
+        let bundle = classic_module_bundle(
+            "let wasm_bindgen = {};",
+            &[1],
+            "__seekdeep_client_ui_settings_plugins_wasm",
+            "@seekdeep-ai/seekdeep-client-ui-settings-plugins",
+        )
+        .unwrap();
+        for expected in [
+            "configureClientUiSettingsPlugins(require('react')",
+            "require('clsx')",
+            "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
+            "slots.resolveSlotLabel",
+            "apply: __seekdeep_client_ui_settings_plugins_wasm.applyClientUiSettingsPlugins",
+            "inject: ['slots', 'locale', 'connection', 'remote', 'settingsScope']",
+        ] {
+            assert!(bundle.contains(expected), "missing {expected:?}");
+        }
+        let declarations =
+            compatibility_declarations("@seekdeep-ai/seekdeep-client-ui-settings-plugins");
+        for expected in [
+            "interface CardShell",
+            "interface CardActions",
+            "interface PluginsSettingsSectionInjected",
+            "type PluginsSettingsSectionProps",
+            "interface BashCardState",
+            "interface WebSearchCardState",
+            "type PluginsSettingsLocaleKey",
+            "'settings.plugin.item'",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
+        let output = tempfile::tempdir().unwrap();
+        write_wasm_package_compatibility_entries(
+            "@seekdeep-ai/seekdeep-client-ui-settings-plugins",
+            output.path(),
+        )
+        .unwrap();
+        let invariant = std::fs::read_to_string(output.path().join("invariant.js")).unwrap();
+        assert!(invariant.contains("client-ui-settings-plugins-invariant"));
     }
 
     #[test]

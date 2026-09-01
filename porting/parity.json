@@ -48890,26 +48890,57 @@
       "kind": "configuration",
       "status": "verified",
       "targets": [
-        "packages/client/ui-settings-plugins/package.json"
+        "packages/client/ui-settings-plugins/package.json",
+        "xtask/src/main.rs"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "package metadata assertions preserve the client/types/default export map and migrate bundle/watch to cargo xtask wasm-package",
+        "optimized Rust/WASM package build and real classic ModuleLoader smoke passed"
       ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/AgentLoopCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/src/controllers.rs",
+        "crates/client-ui-settings-plugins/tests/form_controller_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-settings-plugins suites: 77 passed",
+        "native controller tests and live WASM matrix pin maxParallelToolCalls staging, shell posture, expansion, save/discard, and card chrome"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/BashCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/src/controllers.rs",
+        "crates/client-ui-settings-plugins/tests/form_controller_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-settings-plugins suites: 77 passed",
+        "live WASM test pins timeout/output fields, accessible expansion, unsaved state, save, reset, read-back refusal, and localized failure copy"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/ConfigurablePluginsTab.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/src/browser_apply.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-settings-plugins suites: 77 passed",
+        "live WASM test pins empty deployment copy versus settings.plugin.item rendering from authoritative cardCount"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/PluginCard.module.css",
@@ -48925,7 +48956,15 @@
     {
       "source": "packages/client/ui-settings-plugins/src/client/PluginCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-settings-plugins suites: 77 passed",
+        "live compiled card cases pin collapse state, read-only/saving/dirty/invalid gates, save/discard actions, aria state, failure and override chrome"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/PluginsSettingsSection.module.css",
@@ -48941,27 +48980,78 @@
     {
       "source": "packages/client/ui-settings-plugins/src/client/PluginsSettingsSection.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/src/browser_apply.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source section suite: 25 passed",
+        "live WASM test pins sorted live tabs, stable snapshots, visited panel retention, keyboard navigation, aria selection, and Slot rendering"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/WebSearchCard.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/src/controllers.rs",
+        "crates/client-ui-settings-plugins/tests/form_controller_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-settings-plugins suites: 77 passed",
+        "native and live WASM tests pin endpoint/search-budget staging, write-only API key posture, configured/writable state, reference switching, save/read-back, and invalidation refresh"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/agent-loop-card-controller.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/controllers.rs",
+        "crates/client-ui-settings-plugins/src/browser_controllers.rs",
+        "crates/client-ui-settings-plugins/tests/form_controller_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source stores suite: 33 passed",
+        "portable and browser controllers preserve the agent-loop namespace, reference-stable store, scoped form actions, synchronous projection, and Host read-back"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/bash-card-controller.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/controllers.rs",
+        "crates/client-ui-settings-plugins/src/browser_controllers.rs",
+        "crates/client-ui-settings-plugins/tests/form_controller_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source stores suite: 33 passed",
+        "portable and live browser controllers preserve the shell namespace, two-field projection, staged actions, synchronous subscriptions, save/reset, and refusal posture"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/card-form.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/form.rs",
+        "crates/client-ui-settings-plugins/src/browser_controllers.rs",
+        "crates/client-ui-settings-plugins/tests/field_parity.rs",
+        "crates/client-ui-settings-plugins/tests/form_controller_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source stores and fields suites: 42 passed",
+        "eight native tests pin ECMAScript number/text conversion, staging order, reset inheritance, invalid refusal, saving/failure state, Host read-back authority, secret transactions, discard, and loud unknown fields",
+        "strict native and wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/fields.module.css",
@@ -48977,32 +49067,92 @@
     {
       "source": "packages/client/ui-settings-plugins/src/client/fields.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/src/form.rs",
+        "crates/client-ui-settings-plugins/tests/field_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source fields suite: 9 passed",
+        "live WASM field test pins label/hint linkage, numeric inputMode, aria-invalid, override/reset state, password type, configured secret copy, disabled posture, and callback forwarding"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_apply.rs",
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/src/browser_controllers.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "pinned source apply suite: 8 passed",
+        "live WASM assembly test pins exact five-service inject, late Slot declarations, section/tab/card ordering, settings scope bindings, locale and credential effects, stable tab currency, and complete teardown",
+        "optimized classic ModuleLoader smoke passed"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/locales.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/data/locales.json",
+        "crates/client-ui-settings-plugins/src/browser_apply.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "generated JSON dictionaries match the pinned zh/en source values and complete keysets; live registration preserves source zh-before-en insertion order",
+        "live WASM components and registration consume the compiled settings.plugins namespace"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/slot-contract.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_apply.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "live WASM apply test pins settings.plugin.item as a root-scoped list declared by the configurable tab and populated in source order",
+        "generated compatibility declarations preserve the empty owner face and SlotMap contract"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/client/web-search-card-controller.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/controllers.rs",
+        "crates/client-ui-settings-plugins/src/browser_controllers.rs",
+        "crates/client-ui-settings-plugins/tests/form_controller_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source stores suite: 33 passed",
+        "native and live WASM tests pin default/custom credential references, eager and invalidation reads, stale-reference suppression, read failure containment, write/read-back truth, configured/writable projection, and secret non-disclosure"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/css-modules.d.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser.rs",
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs",
+        "packages/client/ui-settings-plugins/lib/types/client/index.d.ts"
+      ],
+      "evidence": [
+        "TypeScript CSS declarations are eliminated by compiled class prefixing and one-time data-plugin-css injection for all three source stylesheets",
+        "live WASM component matrix renders through the compiled class map without runtime CSS-module lookup"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/src/index.ts",
@@ -49036,27 +49186,69 @@
     {
       "source": "packages/client/ui-settings-plugins/tests/apply.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_apply.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source apply suite: 8 passed",
+        "live compiled apply/late-declaration/invalidation/teardown matrix passed"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/tests/fields.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/tests/field_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source fields suite: 9 passed",
+        "native conversion tests: 2 passed; live compiled field/component matrix passed"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/tests/invariant.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/invariants/src/noop.rs",
+        "crates/invariants/src/noop/catalog.rs"
+      ],
+      "evidence": [
+        "pinned source invariant suite: 2 passed",
+        "pinned-source catalog differential preserves the exact no-op invariant descriptor"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/tests/section.client.spec.tsx",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/browser_components.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source section suite: 25 passed",
+        "live compiled tab navigation, panel retention, empty/card, and card chrome cases passed"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/tests/stores.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-settings-plugins/src/form.rs",
+        "crates/client-ui-settings-plugins/src/controllers.rs",
+        "crates/client-ui-settings-plugins/tests/form_controller_parity.rs",
+        "crates/client-ui-settings-plugins/tests/wasm_parity.rs"
+      ],
+      "evidence": [
+        "pinned source stores suite: 33 passed",
+        "native staged-form/controller tests: 6 passed; live controller tests passed through the browser Settings and credentials boundaries"
+      ]
     },
     {
       "source": "packages/client/ui-settings-plugins/tsconfig.json",
@@ -49072,7 +49264,15 @@
     {
       "source": "packages/client/ui-settings-plugins/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "packages/client/ui-settings-plugins/package.json",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "tsdown is intentionally eliminated; bundle/watch invoke cargo xtask wasm-package",
+        "xtask compatibility test, optimized Rust/WASM build, classic ModuleLoader smoke, generated public declarations, and invariant entry passed"
+      ]
     },
     {
       "source": "packages/client/ui-settings/README.i18n.yaml",

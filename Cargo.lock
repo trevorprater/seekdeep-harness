@@ -5634,8 +5634,20 @@ dependencies = [
 name = "seekdeep-client-ui-settings-plugins"
 version = "0.1.0-rc.5"
 dependencies = [
+ "futures",
+ "indexmap 2.14.0",
+ "js-sys",
+ "ryu-js",
+ "seekdeep-client-runtime",
+ "seekdeep-client-settings-contract",
  "seekdeep-cordis",
+ "serde",
+ "serde-wasm-bindgen",
  "serde_json",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
