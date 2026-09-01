@@ -41081,7 +41081,16 @@
     {
       "source": "packages/client/ui-agent-preset/src/client/AgentPresetLabel.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/browser_components.rs",
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-agent-preset suites: 157 passed",
+        "live WASM test pins session-only load gating, roster option lookup, built-in localization, id fallback, description/header hint, exact icon size, and missing-preset null output",
+        "strict wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/AgentPresetRow.module.css",
@@ -41097,7 +41106,15 @@
     {
       "source": "packages/client/ui-agent-preset/src/client/AgentPresetRow.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/browser_components.rs",
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-agent-preset component suite: 28 passed",
+        "live WASM test pins load effect, unavailable nulling, loading/saving/read-only gates, localized current/fallback/error copy, forced menu close, and close-before-select forwarding"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/AgentPresetSeat.module.css",
@@ -41113,7 +41130,15 @@
     {
       "source": "packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/browser_components.rs",
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-agent-preset component suite: 28 passed",
+        "live WASM test pins ready gating, described menu rows, busy/title state, functional menu toggle, start alignment, character-aware bounded stagger, timer cleanup/acknowledgement, and reduced-motion acknowledgement"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/AgentPresetSection.module.css",
@@ -41134,7 +41159,15 @@
     {
       "source": "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/browser_components.rs",
+        "crates/client-ui-agent-preset/tests/wasm_components_parity.rs"
+      ],
+      "evidence": [
+        "pinned source ui-agent-preset component suite: 28 passed",
+        "live WASM row/seat cases pin roster order, localized built-in names, local-trust suffix, selected identity, caller-owned classes, disabled/open/aria state, close-before-select, alignment, portal, and chevron composition"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/index.ts",

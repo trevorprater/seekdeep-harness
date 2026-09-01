@@ -7,12 +7,16 @@ mod settings_store;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
+mod browser_components;
+#[cfg(target_arch = "wasm32")]
 mod browser_stores;
 
 pub use seat_store::*;
 pub use section_store::*;
 pub use settings_store::*;
 
+#[cfg(target_arch = "wasm32")]
+pub use browser_components::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_stores::*;
 

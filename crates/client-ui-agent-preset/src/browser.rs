@@ -5,6 +5,8 @@ use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::{JsCast as _, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
+pub(crate) const PACKAGE_ID: &str = "@seekdeep-ai/seekdeep-client-ui-agent-preset";
+
 pub(crate) fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
     let value = Object::new();
     for (key, entry) in entries {
@@ -100,4 +102,147 @@ pub(crate) fn to_js(value: &impl Serialize) -> Result<JsValue, JsValue> {
         &serde_json::to_string(value)
             .map_err(|error| js_sys::TypeError::new(&error.to_string()))?,
     )
+}
+
+pub(crate) fn create_element(
+    react: &JsValue,
+    kind: &JsValue,
+    props: Option<&Object>,
+    children: &[JsValue],
+) -> Result<JsValue, JsValue> {
+    let args = Array::new();
+    args.push(kind);
+    args.push(props.map_or(&JsValue::NULL, Object::as_ref));
+    for child in children {
+        args.push(child);
+    }
+    required_function(react, "createElement", "React")?.apply(react, &args)
+}
+
+pub(crate) fn tag(
+    react: &JsValue,
+    name: &str,
+    props: Option<&Object>,
+    children: &[JsValue],
+) -> Result<JsValue, JsValue> {
+    create_element(react, &JsValue::from_str(name), props, children)
+}
+
+pub(crate) fn translated(translate: &Function, key: &str) -> Result<JsValue, JsValue> {
+    translate.call1(&JsValue::UNDEFINED, &JsValue::from_str(key))
+}
+
+pub(crate) fn css(name: &str) -> String {
+    format!("seekdeep-agent-preset-{name}")
+}
+
+pub(crate) fn class(name: &str) -> Result<Object, JsValue> {
+    object(&[("className", JsValue::from_str(&css(name)))])
+}
+
+pub(crate) fn inject_prefixed_style(name: &str, source: &str) -> Result<(), JsValue> {
+    let css = prefix_css_classes(source, "seekdeep-agent-preset-");
+    let document = Reflect::get(&js_sys::global(), &JsValue::from_str("document"))?;
+    if document.is_null() || document.is_undefined() {
+        return Ok(());
+    }
+    let identity = format!("{PACKAGE_ID}/{name}.module.css");
+    if let Ok(query) = Reflect::get(&document, &JsValue::from_str("querySelector"))
+        .and_then(wasm_bindgen::JsCast::dyn_into::<Function>)
+        && !query
+            .call1(
+                &document,
+                &JsValue::from_str(&format!("[data-plugin-css=\"{identity}\"]")),
+            )?
+            .is_null()
+    {
+        return Ok(());
+    }
+    let style = call_method(&document, "createElement", &[JsValue::from_str("style")])?;
+    for (attribute, value) in [
+        ("data-plugin-css", identity.as_str()),
+        ("data-plugin", PACKAGE_ID),
+    ] {
+        call_method(
+            &style,
+            "setAttribute",
+            &[JsValue::from_str(attribute), JsValue::from_str(value)],
+        )?;
+    }
+    Reflect::set(
+        &style,
+        &JsValue::from_str("textContent"),
+        &JsValue::from_str(&css),
+    )?;
+    call_method(
+        &required(&document, "head", "document")?,
+        "appendChild",
+        &[style],
+    )?;
+    Ok(())
+}
+
+fn prefix_css_classes(source: &str, prefix: &str) -> String {
+    let bytes = source.as_bytes();
+    let mut output = Vec::with_capacity(source.len() + 256);
+    let mut offset = 0;
+    let mut quote = None;
+    let mut comment = false;
+    while offset < bytes.len() {
+        if comment {
+            output.push(bytes[offset]);
+            if bytes[offset] == b'*' && bytes.get(offset + 1) == Some(&b'/') {
+                output.push(b'/');
+                offset += 2;
+                comment = false;
+            } else {
+                offset += 1;
+            }
+            continue;
+        }
+        if let Some(delimiter) = quote {
+            output.push(bytes[offset]);
+            if bytes[offset] == b'\\' && offset + 1 < bytes.len() {
+                output.push(bytes[offset + 1]);
+                offset += 2;
+            } else {
+                if bytes[offset] == delimiter {
+                    quote = None;
+                }
+                offset += 1;
+            }
+            continue;
+        }
+        if bytes[offset] == b'/' && bytes.get(offset + 1) == Some(&b'*') {
+            output.extend_from_slice(b"/*");
+            offset += 2;
+            comment = true;
+            continue;
+        }
+        if matches!(bytes[offset], b'\'' | b'"') {
+            quote = Some(bytes[offset]);
+            output.push(bytes[offset]);
+            offset += 1;
+            continue;
+        }
+        if bytes[offset] == b'.'
+            && bytes
+                .get(offset + 1)
+                .is_some_and(|byte| byte.is_ascii_alphabetic() || matches!(*byte, b'_' | b'-'))
+        {
+            output.push(b'.');
+            output.extend_from_slice(prefix.as_bytes());
+            offset += 1;
+            while offset < bytes.len()
+                && (bytes[offset].is_ascii_alphanumeric() || matches!(bytes[offset], b'_' | b'-'))
+            {
+                output.push(bytes[offset]);
+                offset += 1;
+            }
+            continue;
+        }
+        output.push(bytes[offset]);
+        offset += 1;
+    }
+    String::from_utf8(output).expect("CSS prefixing preserves UTF-8")
 }
