@@ -10,6 +10,7 @@ fn row(id: &str, trust: PresetTrust) -> RosterPreset {
     RosterPreset {
         id: id.to_owned(),
         trust,
+        is_default: false,
         name: None,
         description: None,
         broken: None,
@@ -93,8 +94,11 @@ fn broken_filter_and_duplicate_id_blockers_match_the_source() {
     let rows = [row("taken", PresetTrust::User)];
     let draft = |id: &str| CopyDraft {
         source_id: "standard".to_owned(),
+        source_title: "Standard".to_owned(),
         id: id.to_owned(),
         name: String::new(),
+        saving: false,
+        error: None,
     };
     assert_eq!(
         draft_blocker(&draft(""), &rows),

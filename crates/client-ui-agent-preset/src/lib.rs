@@ -1,12 +1,31 @@
 //! Agent preset identity and management UI semantics.
 
+mod seat_store;
+mod section_store;
+mod settings_store;
+
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(target_arch = "wasm32")]
+mod browser_stores;
+
+pub use seat_store::*;
+pub use section_store::*;
+pub use settings_store::*;
+
+#[cfg(target_arch = "wasm32")]
+pub use browser_stores::*;
+
+use serde::{Deserialize, Serialize};
+
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-agent-preset";
 /// Settings namespace resolved at Session creation.
 pub const AGENT_PRESET_SETTINGS_NS: &str = "agent-presets";
 
 /// Preset trust boundary.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PresetTrust {
     /// Deployment-shipped preset.
     System,
@@ -73,7 +92,8 @@ pub fn preset_display_text(preset: &PresetDisplaySource) -> PresetDisplayText {
 }
 
 /// One selectable roster option.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentPresetOption {
     /// Preset id.
     pub id: String,
@@ -86,12 +106,15 @@ pub struct AgentPresetOption {
 }
 
 /// One exact Host roster row.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RosterPreset {
     /// Preset id.
     pub id: String,
     /// Trust boundary.
     pub trust: PresetTrust,
+    /// Whether this preset is the deployment default.
+    pub is_default: bool,
     /// Optional name.
     pub name: Option<String>,
     /// Optional description.
@@ -116,14 +139,23 @@ pub fn preset_options(presets: &[RosterPreset]) -> Vec<AgentPresetOption> {
 }
 
 /// Open duplicate-preset draft.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CopyDraft {
     /// Immutable source preset id.
+    #[serde(rename = "from")]
     pub source_id: String,
+    /// Source display name shown in the dialog title.
+    #[serde(rename = "fromTitle")]
+    pub source_title: String,
     /// New preset id.
     pub id: String,
     /// Optional display name.
     pub name: String,
+    /// Whether the copy call is in flight.
+    pub saving: bool,
+    /// Latest copy-specific failure.
+    pub error: Option<String>,
 }
 
 /// Client-side duplicate dialog blocker.

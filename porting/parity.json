@@ -41149,17 +41149,51 @@
     {
       "source": "packages/client/ui-agent-preset/src/client/seat-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/seat_store.rs",
+        "crates/client-ui-agent-preset/src/browser_stores.rs",
+        "crates/client-ui-agent-preset/tests/store_parity.rs",
+        "crates/client-ui-agent-preset/tests/wasm_store_parity.rs"
+      ],
+      "evidence": [
+        "pinned source settings/seat store suite: 30 passed",
+        "native tests pin default opening, broken filtering, pre-session staging, blank-session nominal select, one-shot spending, started/same-composition drops, Host refusal fallback, refresh preservation, applied callback, and introduction cue",
+        "live WASM RPC/store test executes staging and one blank-Session application through source-shaped envelopes; strict native and wasm32 Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/section-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/section_store.rs",
+        "crates/client-ui-agent-preset/src/browser_stores.rs",
+        "crates/client-ui-agent-preset/tests/store_parity.rs",
+        "crates/client-ui-agent-preset/tests/wasm_store_parity.rs"
+      ],
+      "evidence": [
+        "pinned source section-store suite: 35 passed",
+        "native tests pin load/unavailable/error capability states, read-only viewer, copy blockers and trimmed names, roster reload/broadcast, desktop-open/path reveal and pruning, delete confirmation/settlement, default writes, and failure ownership",
+        "live WASM test executes view/copy/path/delete/default lifecycles through the generated API boundary"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/client/settings-store.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/src/settings_store.rs",
+        "crates/client-ui-agent-preset/src/browser_stores.rs",
+        "crates/client-ui-agent-preset/tests/model_parity.rs",
+        "crates/client-ui-agent-preset/tests/store_parity.rs",
+        "crates/client-ui-agent-preset/tests/wasm_store_parity.rs"
+      ],
+      "evidence": [
+        "pinned source settings/seat store suite: 30 passed",
+        "portable tests pin roster folding, optional metadata, broken filtering, empty versus failed deployments, describe writability, first/default selection, optimistic saving, exact agent-presets.default write, Host re-read, and rollback",
+        "live WASM test pins source-shaped list/describe/update envelopes and rejected default restoration"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/src/css-modules.d.ts",
@@ -41218,7 +41252,15 @@
     {
       "source": "packages/client/ui-agent-preset/tests/section-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/tests/store_parity.rs",
+        "crates/client-ui-agent-preset/tests/wasm_store_parity.rs"
+      ],
+      "evidence": [
+        "pinned source section-store suite: 35 passed",
+        "native management-store cases and live compiled RPC/store lifecycle passed"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/tests/section.client.spec.tsx",
@@ -41228,7 +41270,16 @@
     {
       "source": "packages/client/ui-agent-preset/tests/settings-store.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-agent-preset/tests/model_parity.rs",
+        "crates/client-ui-agent-preset/tests/store_parity.rs",
+        "crates/client-ui-agent-preset/tests/wasm_store_parity.rs"
+      ],
+      "evidence": [
+        "pinned source settings/seat store suite: 30 passed",
+        "native model/store tests and live compiled default/seat controller cases passed"
+      ]
     },
     {
       "source": "packages/client/ui-agent-preset/tsconfig.json",

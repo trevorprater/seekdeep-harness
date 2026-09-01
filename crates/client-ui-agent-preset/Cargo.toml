@@ -10,6 +10,23 @@ description = "Rust/WASM Agent preset identity and management UI semantics"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[dependencies]
+futures.workspace = true
+indexmap.workspace = true
+seekdeep-client-runtime = { path = "../client-runtime" }
+seekdeep-identity = { path = "../identity" }
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.77"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 seekdeep-cordis = { path = "../cordis" }
 

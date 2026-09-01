@@ -5306,7 +5306,18 @@ dependencies = [
 name = "seekdeep-client-ui-agent-preset"
 version = "0.1.0-rc.5"
 dependencies = [
+ "futures",
+ "indexmap 2.14.0",
+ "js-sys",
+ "seekdeep-client-runtime",
  "seekdeep-cordis",
+ "seekdeep-identity",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
