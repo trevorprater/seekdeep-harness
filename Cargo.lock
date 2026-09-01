@@ -1814,6 +1814,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
+
+[[package]]
 name = "google-cloud-auth"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7321,10 +7327,13 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "chrono",
+ "clap",
+ "glob",
  "hex",
  "indexmap 2.14.0",
  "markdown",
  "nix 0.30.1",
+ "num-traits",
  "oxc_allocator",
  "oxc_parser",
  "oxc_span",

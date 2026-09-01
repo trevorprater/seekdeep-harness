@@ -23319,10 +23319,12 @@
       "kind": "documentation",
       "status": "verified",
       "targets": [
-        ".agents/skills/record-browser-gif/SKILL.md"
+        ".agents/skills/record-browser-gif/SKILL.md",
+        "crates/repository-tools/src/bin/encode-browser-gif.rs"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "Rust ownership deviation: the skill invokes the compiled encoder directly with CARGO_INCREMENTAL=0",
+        "browser GIF evidence-chain Agent Note updated in both languages and pairing re-recorded"
       ]
     },
     {
@@ -23339,7 +23341,18 @@
     {
       "source": ".agents/skills/record-browser-gif/scripts/encode_gif.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/browser_gif.rs",
+        "crates/repository-tools/src/bin/encode-browser-gif.rs",
+        "crates/repository-tools/tests/browser_gif_parity.rs"
+      ],
+      "evidence": [
+        "pinned Python and Rust encoders produced byte-identical GIFs from the same real PNG frames and options",
+        "focused Rust tests pin numeric and duration parsing, ffconcat quoting and final-frame hold, lexical nonrecursive discovery, media command projection, every output verification bound, stable ASCII JSON, and CLI validation",
+        "real ffmpeg and ffprobe smoke passed with 2 source frames, 12 encoded frames, 64x48 dimensions, 1.2 second duration, and 1275 bytes",
+        "strict seekdeep-repository-tools Clippy passed with CARGO_INCREMENTAL=0"
+      ]
     },
     {
       "source": ".claude/skills",

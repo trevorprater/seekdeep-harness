@@ -4,6 +4,8 @@
 pub mod agent_note_tree;
 /// Frozen Agent Note archive triplets, seals, and append-only verification.
 pub mod archived_agent_notes;
+/// Deterministic browser-frame GIF encoding and verification.
+pub mod browser_gif;
 pub mod built_package_invariants;
 pub mod clean;
 pub mod client_domain_graph;

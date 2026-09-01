@@ -50,13 +50,15 @@ Use the browser's own screenshot API. When it returns image bytes, save those by
 
 ## Encode the GIF
 
-Require `python3`, `ffmpeg`, and `ffprobe`. If either media binary is missing, report the dependency instead of installing software without authorization.
+Require the repository Rust toolchain, `ffmpeg`, and `ffprobe`. If either media binary is missing, report the dependency instead of installing software without authorization.
 
-Export `GIF_SKILL_DIR` as this skill's absolute directory on its own line before the python command — an inline `GIF_SKILL_DIR=... python3 "$GIF_SKILL_DIR/..."` assignment fails, because the argument expands before the assignment takes effect:
+Export the repository root on its own line, then invoke the compiled repository command with incremental compilation disabled:
 
 ```sh
-export GIF_SKILL_DIR=/absolute/path/to/this/skill
-python3 "$GIF_SKILL_DIR/scripts/encode_gif.py" \
+export SEEKDEEP_REPOSITORY_ROOT=/absolute/path/to/seekdeep-harness
+CARGO_INCREMENTAL=0 cargo run --quiet \
+  --manifest-path "$SEEKDEEP_REPOSITORY_ROOT/Cargo.toml" \
+  -p seekdeep-repository-tools --bin encode-browser-gif -- \
   /absolute/path/to/frames \
   /absolute/path/to/demo.gif \
   --durations 1.5,1.5,1.5,3.5 \
