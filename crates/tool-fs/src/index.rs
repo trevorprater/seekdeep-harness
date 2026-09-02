@@ -2,8 +2,9 @@
 
 use std::sync::Arc;
 
+use parking_lot::Mutex;
 use seekdeep_attachment::ATTACHMENTS;
-use seekdeep_cordis::{Context, Plugin};
+use seekdeep_cordis::{Context, Fiber, Plugin, fiber::EffectHandle};
 use serde::{Deserialize, Serialize};
 
 use crate::edit::apply_edit_tool;
@@ -80,13 +81,72 @@ pub fn apply(ctx: &Context, config: &Config) -> anyhow::Result<()> {
     // read_image is composition-conditional: without a mounted attachment
     // store the deployment cannot durably commit image bytes, so the tool never
     // registers. The execute body keeps a defensive re-check for direct callers.
-    if ctx.get(ATTACHMENTS).is_some() {
-        apply_read_image_tool(ctx)?;
-    }
+    install_optional_read_image(ctx)?;
     // One escalation API shared by both mutating tools.
     let sandbox = Arc::new(FsSandboxController::new(ctx)?);
     apply_write_tool(ctx, &sandbox)?;
     apply_edit_tool(ctx, &sandbox)?;
+    Ok(())
+}
+
+#[derive(Default)]
+struct ImageBinding {
+    provider: Option<usize>,
+    fiber: Option<Arc<Fiber>>,
+}
+
+fn install_optional_read_image(context: &Context) -> anyhow::Result<()> {
+    let binding = Arc::new(Mutex::new(ImageBinding::default()));
+    reconcile_read_image(context, &binding)?;
+    let watched_context = context.clone();
+    let watched_binding = binding.clone();
+    context.on_service_change_checked(move |name| {
+        if name == ATTACHMENTS.name() {
+            reconcile_read_image(&watched_context, &watched_binding)?;
+        }
+        Ok(())
+    })?;
+    context.own(EffectHandle::new(
+        "tool-fs optional read_image",
+        move || {
+            Box::pin(async move {
+                let fiber = binding.lock().fiber.take();
+                if let Some(fiber) = fiber {
+                    fiber.dispose().await?;
+                }
+                Ok(())
+            })
+        },
+    ))?;
+    Ok(())
+}
+
+fn reconcile_read_image(
+    context: &Context,
+    binding: &Arc<Mutex<ImageBinding>>,
+) -> anyhow::Result<()> {
+    let attachments = context.get_relaxed(ATTACHMENTS);
+    let provider = attachments
+        .as_ref()
+        .map(|service| Arc::as_ptr(service).cast::<()>() as usize);
+    let mut binding = binding.lock();
+    if binding.provider == provider {
+        return Ok(());
+    }
+    if let Some(fiber) = binding.fiber.take() {
+        futures::executor::block_on(fiber.dispose())?;
+    }
+    binding.provider = None;
+    if attachments.is_some() {
+        let fiber = Fiber::active_child("tool-fs read_image");
+        let child = context.with_fiber(fiber.clone());
+        if let Err(error) = apply_read_image_tool(&child) {
+            futures::executor::block_on(fiber.dispose()).ok();
+            return Err(error);
+        }
+        binding.provider = provider;
+        binding.fiber = Some(fiber);
+    }
     Ok(())
 }
 

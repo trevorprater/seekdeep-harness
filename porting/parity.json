@@ -32312,7 +32312,7 @@
       "kind": "snapshot",
       "status": "verified",
       "targets": [
-        "examples/acp-agent/tests/snapshots/hanseekdeepake/input.json"
+        "examples/acp-agent/tests/snapshots/handshake/input.json"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)"
@@ -32323,7 +32323,7 @@
       "kind": "snapshot",
       "status": "verified",
       "targets": [
-        "examples/acp-agent/tests/snapshots/hanseekdeepake/session.jsonl"
+        "examples/acp-agent/tests/snapshots/handshake/session.jsonl"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)"
@@ -32334,7 +32334,7 @@
       "kind": "snapshot",
       "status": "verified",
       "targets": [
-        "examples/acp-agent/tests/snapshots/hanseekdeepake/stdout.expected.jsonl"
+        "examples/acp-agent/tests/snapshots/handshake/stdout.expected.jsonl"
       ],
       "evidence": [
         "mechanical rename port (dsh to seekdeep)"

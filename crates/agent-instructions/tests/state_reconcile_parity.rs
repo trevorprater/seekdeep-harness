@@ -40,7 +40,7 @@ fn agent(id: &str, cwd: &std::path::Path) -> Arc<Agent> {
 
 fn resolved(home: &std::path::Path, max_bytes: u64) -> seekdeep_agent_instructions::ResolvedConfig {
     resolve_config(&Config {
-        dsh_home: Some(home.to_string_lossy().into_owned()),
+        seekdeep_home: Some(home.to_string_lossy().into_owned()),
         max_bytes,
         ..Config::default()
     })

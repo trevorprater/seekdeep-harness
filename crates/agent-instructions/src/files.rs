@@ -453,7 +453,7 @@ pub async fn load_baseline_instruction_set(
         return Ok(None);
     }
     let config = resolve_discovery_config(&Config {
-        dsh_home: options.dsh_home.clone(),
+        seekdeep_home: options.dsh_home.clone(),
         project_root_markers: options.project_root_markers.clone(),
         max_bytes,
         max_source_bytes: Some(max_source_bytes),
@@ -673,7 +673,7 @@ pub async fn discover_baseline_instruction_files(
     file_system: Option<&dyn FileSystem>,
 ) -> anyhow::Result<Vec<InstructionFile>> {
     let config = resolve_discovery_config(&Config {
-        dsh_home: options.dsh_home.clone(),
+        seekdeep_home: options.dsh_home.clone(),
         project_root_markers: options.project_root_markers.clone(),
         max_bytes: 0,
         max_source_bytes: None,

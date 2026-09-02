@@ -334,10 +334,23 @@ async fn process_main_async() -> anyhow::Result<()> {
 pub fn register_compiled_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> {
     for (name, plugin) in [
         ("seekdeep-acp-demo", plugin()),
+        (
+            "seekdeep-attachment-local",
+            seekdeep_attachment_local::plugin(),
+        ),
+        ("seekdeep-bash-local", seekdeep_bash_local::plugin()),
         ("seekdeep-bash-sandbox", seekdeep_bash_sandbox::plugin()),
+        (
+            "seekdeep-code-runtime-worker-thread",
+            seekdeep_code_runtime_worker_thread::plugin(),
+        ),
         (
             "seekdeep-compaction-basic",
             seekdeep_compaction_basic::index::plugin(),
+        ),
+        (
+            "seekdeep-cordis-host-runner",
+            seekdeep_cordis_host_runner::plugin(),
         ),
         (
             "seekdeep-fs-observation-policy",
@@ -351,6 +364,9 @@ pub fn register_compiled_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> 
         ("seekdeep-hooks-codex", seekdeep_hooks_codex::plugin()),
         ("seekdeep-llm-deepseek", seekdeep_llm_deepseek::plugin()),
         ("seekdeep-llm-replay", seekdeep_llm_replay::plugin()),
+        ("seekdeep-lsp", seekdeep_lsp::plugin()),
+        ("seekdeep-lsp-stdio", seekdeep_lsp_stdio::provider::plugin()),
+        ("seekdeep-pwsh-local", seekdeep_pwsh_local::plugin()),
         (
             "seekdeep-repeat-tool-reminder",
             seekdeep_repeat_tool_reminder::plugin(),
@@ -361,7 +377,19 @@ pub fn register_compiled_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> 
             "seekdeep-session-projection",
             seekdeep_session_projection::plugin(),
         ),
+        (
+            "seekdeep-session-title-first-prompt-llm",
+            seekdeep_session_title_first_prompt_llm::index::plugin(),
+        ),
+        ("seekdeep-shell-env", seekdeep_shell_env::plugin()),
+        ("seekdeep-spill-local", seekdeep_spill_local::plugin()),
+        ("seekdeep-spill-policy", seekdeep_spill_policy::plugin()),
         ("seekdeep-subagent", seekdeep_subagent::index::plugin()),
+        (
+            "seekdeep-subagent-claude-code",
+            seekdeep_subagent_claude_code::plugin(),
+        ),
+        ("seekdeep-subagent-codex", seekdeep_subagent_codex::plugin()),
         (
             "seekdeep-subagent-fork-in-process",
             seekdeep_subagent_fork_in_process::plugin(),
@@ -374,12 +402,29 @@ pub fn register_compiled_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> 
             "seekdeep-subprocess-local",
             seekdeep_subprocess_local::plugin(),
         ),
+        ("seekdeep-terminal", seekdeep_terminal::plugin()),
+        (
+            "seekdeep-terminal-bash",
+            seekdeep_terminal_bash::backend::plugin(),
+        ),
         (
             "seekdeep-token-meter",
             seekdeep_token_meter::runtime::plugin(),
         ),
+        ("seekdeep-tool-ask-user", seekdeep_tool_ask_user::plugin()),
+        (
+            "seekdeep-tool-cordis",
+            seekdeep_tool_cordis::index::plugin(),
+        ),
         ("seekdeep-tool-fs", seekdeep_tool_fs::index::plugin()),
+        ("seekdeep-tool-fs-search", seekdeep_tool_fs_search::plugin()),
+        ("seekdeep-tool-lsp", seekdeep_tool_lsp::plugin()),
+        ("seekdeep-tool-pwsh", seekdeep_tool_pwsh::plugin()),
         ("seekdeep-tool-ralph", seekdeep_tool_ralph::plugin()),
+        (
+            "seekdeep-tool-session-query",
+            seekdeep_tool_session_query::plugin(),
+        ),
         ("seekdeep-tool-subagent", seekdeep_tool_subagent::plugin()),
         (
             "seekdeep-tool-subagent-control",
@@ -389,9 +434,21 @@ pub fn register_compiled_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> 
             "seekdeep-tool-subagent-report",
             seekdeep_tool_subagent_report::plugin(),
         ),
+        ("seekdeep-tool-terminal", seekdeep_tool_terminal::plugin()),
+        (
+            "seekdeep-tool-call-timeout-policy",
+            seekdeep_tool_timeout_policy::plugin(),
+        ),
         ("seekdeep-tool-todo", seekdeep_tool_todo::plugin()),
+        ("seekdeep-tool-web", seekdeep_tool_web::plugin()),
         ("seekdeep-tool-workflow", seekdeep_tool_workflow::plugin()),
         ("seekdeep-user-approval", seekdeep_user_approval::plugin()),
+        ("seekdeep-user-questions", seekdeep_user_questions::plugin()),
+        ("seekdeep-web", seekdeep_web::index::plugin()),
+        (
+            "seekdeep-web-fetch-http",
+            seekdeep_web_fetch_http::index::plugin(),
+        ),
         (
             "seekdeep-workflow-worker-thread",
             seekdeep_workflow_worker_thread::index::plugin(),
@@ -407,6 +464,38 @@ pub fn register_compiled_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> 
     catalog.register_named(
         "./tests/fixtures/subagent-settlement-marker.ts",
         snapshot_fixtures::subagent_settlement_marker_plugin(),
+    )?;
+    catalog.register_named(
+        "./tests/fixtures/partial-landlock-sandbox.ts",
+        snapshot_fixtures::partial_landlock_sandbox_plugin(),
+    )?;
+    catalog.register_named(
+        "./tests/fixtures/parent-sandbox-override.ts",
+        snapshot_fixtures::parent_sandbox_override_plugin(),
+    )?;
+    catalog.register_named(
+        "./tests/fixtures/child-question-tripwire.ts",
+        snapshot_fixtures::child_question_tripwire_plugin(),
+    )?;
+    catalog.register_named(
+        "./web-fetch-fixture-server.mjs",
+        snapshot_fixtures::web_fetch_fixture_server_plugin(),
+    )?;
+    catalog.register_named(
+        "./pty-snapshot-backend.mjs",
+        snapshot_fixtures::pty_snapshot_backend_plugin(),
+    )?;
+    catalog.register_named(
+        "./tests/fixtures/workspace-context-compaction.ts",
+        snapshot_fixtures::workspace_context_compaction_plugin(),
+    )?;
+    catalog.register_named(
+        "./tests/fixtures/subagent-report-fence.ts",
+        snapshot_fixtures::subagent_report_fence_plugin(),
+    )?;
+    catalog.register_named(
+        "./tests/fixtures/subagent-durability-failure.ts",
+        snapshot_fixtures::subagent_durability_failure_plugin(),
     )?;
     Ok(())
 }

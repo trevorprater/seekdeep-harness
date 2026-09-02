@@ -112,7 +112,7 @@ async fn providerless_and_zero_budget_paths_leave_request_unchanged() {
             .plugin(
                 plugin(),
                 json!({
-                    "dshHome": root.path().join("home"),
+                    "seekdeepHome": root.path().join("home"),
                     "maxBytes": max_bytes
                 }),
             )
@@ -148,7 +148,7 @@ async fn baseline_enters_immediately_after_claimed_prompt_and_local_overlay() {
     let mounted = context
         .plugin(
             plugin(),
-            json!({"dshHome": root.path().join("home"), "maxBytes": 65536}),
+            json!({"seekdeepHome": root.path().join("home"), "maxBytes": 65536}),
         )
         .unwrap();
     mounted.await_settled().await.unwrap();
@@ -185,7 +185,7 @@ async fn session_cwds_are_isolated_and_listener_disposal_is_exact() {
     let mounted = context
         .plugin(
             plugin(),
-            json!({"dshHome": root.path().join("home"), "maxBytes": 65536}),
+            json!({"seekdeepHome": root.path().join("home"), "maxBytes": 65536}),
         )
         .unwrap();
     mounted.await_settled().await.unwrap();

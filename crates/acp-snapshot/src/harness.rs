@@ -1214,6 +1214,11 @@ async fn copy_workspace(source: &Path, destination: &Path) -> anyhow::Result<()>
                     std::fs::create_dir_all(parent)?;
                 }
                 std::fs::copy(entry.path(), target)?;
+            } else if entry.file_type().is_symlink() {
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                copy_symlink(entry.path(), &target)?;
             } else {
                 anyhow::bail!(
                     "snapshot-harness: workspace seed contains unsupported entry {}",
@@ -1224,6 +1229,23 @@ async fn copy_workspace(source: &Path, destination: &Path) -> anyhow::Result<()>
         Ok::<(), anyhow::Error>(())
     })
     .await??;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn copy_symlink(source: &Path, target: &Path) -> anyhow::Result<()> {
+    std::os::unix::fs::symlink(std::fs::read_link(source)?, target)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn copy_symlink(source: &Path, target: &Path) -> anyhow::Result<()> {
+    let link = std::fs::read_link(source)?;
+    if std::fs::metadata(source)?.is_dir() {
+        std::os::windows::fs::symlink_dir(link, target)?;
+    } else {
+        std::os::windows::fs::symlink_file(link, target)?;
+    }
     Ok(())
 }
 

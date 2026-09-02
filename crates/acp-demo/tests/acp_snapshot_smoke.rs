@@ -40,7 +40,7 @@ fn normalize_context(result: &seekdeep_acp_snapshot::RunResult) -> NormalizeCont
 #[tokio::test]
 async fn compiled_demo_replays_the_committed_handshake_contract() {
     let root = repository_root();
-    let scenario = root.join("examples/acp-agent/tests/snapshots/hanseekdeepake");
+    let scenario = root.join("examples/acp-agent/tests/snapshots/handshake");
     let input: InputScript =
         serde_json::from_slice(&std::fs::read(scenario.join("input.json")).unwrap()).unwrap();
     let result = run_scenario(

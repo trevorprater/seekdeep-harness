@@ -664,7 +664,7 @@ async fn workspace_instructions_precede_the_configured_skill_catalog() {
     let mut config = minimal();
     config.seekdeep_home = Some(root.path().join(".seekdeep").to_string_lossy().into_owned());
     config.workspace_context = OptionalFeature::Config(seekdeep_agent_instructions::Config {
-        dsh_home: Some(root.path().join(".seekdeep").to_string_lossy().into_owned()),
+        seekdeep_home: Some(root.path().join(".seekdeep").to_string_lossy().into_owned()),
         max_bytes: 65_536,
         ..seekdeep_agent_instructions::Config::default()
     });
@@ -752,7 +752,7 @@ async fn zero_workspace_budget_keeps_only_the_original_user_message() {
     let context = Context::new();
     let mut config = minimal();
     config.workspace_context = OptionalFeature::Config(seekdeep_agent_instructions::Config {
-        dsh_home: Some(root.path().join(".seekdeep").to_string_lossy().into_owned()),
+        seekdeep_home: Some(root.path().join(".seekdeep").to_string_lossy().into_owned()),
         max_bytes: 0,
         ..seekdeep_agent_instructions::Config::default()
     });

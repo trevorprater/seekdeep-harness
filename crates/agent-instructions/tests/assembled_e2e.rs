@@ -201,7 +201,7 @@ impl Harness {
         apply_instructions(
             &context,
             &InstructionConfig {
-                dsh_home: Some(home.to_string_lossy().into_owned()),
+                seekdeep_home: Some(home.to_string_lossy().into_owned()),
                 max_bytes: 65_536,
                 ..InstructionConfig::default()
             },

@@ -24,7 +24,8 @@ pub const DEFAULT_MAX_SOURCE_BYTES: u64 = 1_048_576;
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
     /// Harness home containing the fixed user-global AGENTS.md.
-    pub dsh_home: Option<String>,
+    #[serde(alias = "dshHome")]
+    pub seekdeep_home: Option<String>,
     /// Directory entries that identify the project root while walking upward.
     pub project_root_markers: Option<Vec<String>>,
     /// UTF-8 byte cap for one rendered baseline or dynamic batch.
@@ -42,7 +43,7 @@ pub struct Config {
 #[allow(clippy::cast_precision_loss)]
 pub fn config_schema() -> Schema {
     Schema::object([
-        ("dshHome", Schema::string()),
+        ("seekdeepHome", Schema::string()),
         (
             "projectRootMarkers",
             Schema::array(Schema::string()).with_default(json!([".git"])),
@@ -144,7 +145,7 @@ pub fn resolve_config(config: &Config) -> anyhow::Result<ResolvedConfig> {
 ///
 /// Returns when the operating-system or harness home cannot be resolved.
 pub fn resolve_discovery_config(config: &Config) -> anyhow::Result<ResolvedDiscoveryConfig> {
-    let home = resolve_process_seekdeep_home(config.dsh_home.as_deref().map(OsStr::new))?;
+    let home = resolve_process_seekdeep_home(config.seekdeep_home.as_deref().map(OsStr::new))?;
     Ok(ResolvedDiscoveryConfig {
         dsh_home: home.to_string_lossy().into_owned(),
         project_root_markers: config.project_root_markers.clone().unwrap_or_else(|| {
@@ -236,6 +237,23 @@ mod tests {
                 DEFAULT_INSTRUCTION_FILE_CANDIDATES,
             ),
             vec!["AGENTS.md"]
+        );
+    }
+
+    #[test]
+    fn target_config_uses_seekdeep_home_identity() {
+        let config: Config = serde_json::from_value(serde_json::json!({
+            "seekdeepHome": "/tmp/seekdeep-agent-instructions",
+            "maxBytes": 4096
+        }))
+        .expect("target-facing home field must deserialize");
+        assert_eq!(
+            config.seekdeep_home.as_deref(),
+            Some("/tmp/seekdeep-agent-instructions")
+        );
+        assert_eq!(
+            serde_json::to_value(config).expect("config serializes")["seekdeepHome"],
+            "/tmp/seekdeep-agent-instructions"
         );
     }
 }

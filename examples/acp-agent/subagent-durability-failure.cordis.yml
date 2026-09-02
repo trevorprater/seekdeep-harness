@@ -5,6 +5,8 @@
   config:
     path: ./cordis.yml
     patches:
+      - id: subagent-spawn-in-process
+        disabled: true
       - insert:
           - id: subagent-durability-failure
             name: './tests/fixtures/subagent-durability-failure.ts'

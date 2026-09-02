@@ -8,6 +8,8 @@
       - id: llm-deepseek
         name: '@seekdeep-ai/seekdeep-llm-deepseek'
         disabled: true
+      - id: subagent-spawn-in-process
+        disabled: true
       - id: acp-agent
         name: '@seekdeep-ai/seekdeep-acp-demo'
         config:
