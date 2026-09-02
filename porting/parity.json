@@ -80121,7 +80121,20 @@
     {
       "source": "packages/test-support/client-runtime/src/fixtures.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/src/fixtures.rs",
+        "crates/client-test-runtime/src/workspaces.rs",
+        "crates/client-test-runtime/tests/fixtures_parity.rs",
+        "crates/client-test-runtime/tests/wasm_fixtures_parity.rs"
+      ],
+      "evidence": [
+        "pinned source consumer: pnpm exec vitest run packages/test-support/client-runtime/tests/runtime.client.spec.tsx -t 'drives SessionProvider' (1 passed, 25 skipped)",
+        "pinned source consumer: pnpm exec vitest run packages/test-support/client-runtime/tests/runtime.client.spec.tsx -t 'workspaces' (3 passed, 23 skipped)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-test-runtime --test fixtures_parity --all-features (2 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-test-runtime --target wasm32-unknown-unknown --test wasm_fixtures_parity --all-features (1 passed)"
+      ],
+      "note": "Rust fixtures use production SessionSnapshot and RuntimeSessionSummary mutation types plus opaque behavior overrides and the shared stabilizer. WASM constructors preserve every source browser field, null/undefined distinction, Array/Map identity kind, quiescent Session defaults, and ready Workspace defaults."
     },
     {
       "source": "packages/test-support/client-runtime/src/index.ts",

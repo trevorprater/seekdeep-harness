@@ -12,6 +12,7 @@ use std::{
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, ServiceKey};
 
+mod fixtures;
 mod settings_scope;
 mod snapshot;
 mod translate;
@@ -24,6 +25,7 @@ mod wasm_workspaces;
 #[cfg(not(target_arch = "wasm32"))]
 mod workspaces;
 
+pub use fixtures::*;
 pub use settings_scope::*;
 pub use snapshot::*;
 pub use translate::*;

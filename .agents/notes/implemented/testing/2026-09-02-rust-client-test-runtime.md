@@ -20,9 +20,11 @@ The Workspaces double owns a production `SnapshotStore<RuntimeWorkspaceListState
 
 The snapshot normalizer folds only CSS-module tokens matching `_<local>_<lowercase-hash>`, computes the SVG `data-content` fingerprint with wrapping FNV-1a over JavaScript UTF-16 code units, mutates only a deep clone, and preserves childless SVG elements. Rust snapshot tests call the normalizer directly rather than installing a Vitest serializer.
 
+Session fixtures brand one identity and carry strongly typed mutations over the production `SessionSnapshot` and `RuntimeSessionSummary`, plus opaque behavior overrides. The native quiescent Session constructor follows the target object model, while the WASM constructor preserves every source browser field and its `null`, `undefined`, Array, and Map distinctions. Workspace fixture defaults are shared with the Workspaces double.
+
 ## Verification
 
-Focused source tests pin the Remote double, settings stub, translator consumers, browser-language consumers, Workspaces face, and snapshot normalization. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, translation conversion, Workspace stabilization, all action defaults and stubs, browse cancellation, archive publication, class folding, and UTF-16 fingerprinting; live WASM tests pin the Remote and Workspaces service faces, browser-language restoration, and clone-only DOM normalization. `cargo xtask parity` maps only helpers with direct source and target evidence; the remaining Session, fixture, and runtime assembly helpers stay pending.
+Focused source tests pin the Remote double, settings stub, translator consumers, browser-language consumers, Workspaces face, snapshot normalization, and fixture defaults. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, translation conversion, Workspace stabilization, all action defaults and stubs, browse cancellation, archive publication, class folding, UTF-16 fingerprinting, and target Session defaults; live WASM tests pin the Remote and Workspaces service faces, browser-language restoration, clone-only DOM normalization, and exact browser fixture shapes. `cargo xtask parity` maps only helpers with direct source and target evidence; the remaining Session and runtime assembly helpers stay pending.
 
 ## Alternatives considered
 

@@ -20,9 +20,11 @@ Workspaces 测试替身持有生产 `SnapshotStore<RuntimeWorkspaceListState>`�
 
 快照规范化器只折叠符合 `_<local>_<lowercase-hash>` 的 CSS-module token，按 JavaScript UTF-16 code unit 使用 wrapping FNV-1a 计算 SVG `data-content` 指纹，只修改深克隆，并保留没有 child 的 SVG 元素。Rust 快照测试直接调用该规范化器，而不安装 Vitest serializer。
 
+Session fixture 为一个 identity 加上品牌类型，并携带针对生产 `SessionSnapshot` 与 `RuntimeSessionSummary` 的强类型变更，以及不透明的行为 override。原生静稳 Session 构造器遵循目标 object model，WASM 构造器则保留源浏览器对象的每个字段，以及 `null`、`undefined`、Array 和 Map 区别。Workspace fixture 默认值与 Workspaces 测试替身共用。
+
 ## 验证
 
-聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方、浏览器语言消费方、Workspaces face 和快照规范化。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、全部 action 默认实现与 stub、浏览取消、archive 发布、class 折叠和 UTF-16 指纹；实时 WASM 测试固定 Remote 与 Workspaces 服务 face、浏览器语言恢复和只修改克隆的 DOM 规范化。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余 Session、fixture 和运行时 assembly helper 继续保持 pending。
+聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方、浏览器语言消费方、Workspaces face、快照规范化和 fixture 默认值。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、全部 action 默认实现与 stub、浏览取消、archive 发布、class 折叠、UTF-16 指纹和目标 Session 默认值；实时 WASM 测试固定 Remote 与 Workspaces 服务 face、浏览器语言恢复、只修改克隆的 DOM 规范化和精确浏览器 fixture 形状。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余 Session 和运行时 assembly helper 继续保持 pending。
 
 ## 曾考虑的替代方案
 
