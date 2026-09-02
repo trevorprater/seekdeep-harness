@@ -80188,7 +80188,20 @@
     {
       "source": "packages/test-support/client-runtime/src/sessions.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/src/wasm_sessions.rs",
+        "crates/client-test-runtime/tests/wasm_fixture_session_parity.rs",
+        "crates/client-test-runtime/tests/wasm_sessions_service_parity.rs",
+        "crates/client-runtime/src/wasm_provide.rs",
+        "crates/client-runtime/src/wasm_scope.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/client-runtime/tests/runtime.client.spec.tsx -t 'sessions|fixture session face' (8 passed, 18 skipped)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-test-runtime --target wasm32-unknown-unknown --test wasm_fixture_session_parity --test wasm_sessions_service_parity --test wasm_browser_languages_parity --test wasm_remote_parity --test wasm_workspaces_parity --test wasm_snapshot_parity --test wasm_fixtures_parity --all-features (8 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-client-test-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust/WASM double preserves source-shaped FixtureSession snapshots, stable per-key projections, listener identity, fail-loud behavior stubs, list and action semantics, injected stabilization, insertion-ordered provider rebuild and scope disposal, unknown-current no-session fallback, scope lifecycle, and search controls. Its provide roster, materialized bundles, and scoped Client contexts use the production Rust channel and scope machinery."
     },
     {
       "source": "packages/test-support/client-runtime/src/settings-scope.ts",

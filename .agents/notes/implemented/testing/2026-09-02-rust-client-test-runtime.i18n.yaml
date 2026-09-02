@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-02-rust-client-test-runtime.md
-2026-09-02-rust-client-test-runtime.md: ac3ef3b0eda6dc960171f6f534b27b78fe003022
-2026-09-02-rust-client-test-runtime.zh.md: ac9b38bab2dc541d5e55f80518d3b7326e3998b9
+2026-09-02-rust-client-test-runtime.md: da77f0aeb74e8c3c77c64be54c230bba1f606850
+2026-09-02-rust-client-test-runtime.zh.md: f841878a9c9eb68bb460a4bd19a214b50c926aab

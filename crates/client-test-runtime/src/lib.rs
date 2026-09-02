@@ -21,6 +21,8 @@ mod wasm_browser_languages;
 #[cfg(target_arch = "wasm32")]
 mod wasm_remote;
 #[cfg(target_arch = "wasm32")]
+mod wasm_sessions;
+#[cfg(target_arch = "wasm32")]
 mod wasm_workspaces;
 #[cfg(not(target_arch = "wasm32"))]
 mod workspaces;
@@ -33,6 +35,8 @@ pub use translate::*;
 pub use wasm_browser_languages::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_remote::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_sessions::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_workspaces::*;
 #[cfg(not(target_arch = "wasm32"))]

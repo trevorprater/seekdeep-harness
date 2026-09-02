@@ -22,9 +22,11 @@ The snapshot normalizer folds only CSS-module tokens matching `_<local>_<lowerca
 
 Session fixtures brand one identity and carry strongly typed mutations over the production `SessionSnapshot` and `RuntimeSessionSummary`, plus opaque behavior overrides. The native quiescent Session constructor follows the target object model, while the WASM constructor preserves every source browser field and its `null`, `undefined`, Array, and Map distinctions. Workspace fixture defaults are shared with the Workspaces double.
 
+The WASM Sessions double preserves stable fixture snapshots and projection faces, listener identity, fail-loud unstubbed behavior, observable list updates, action records, search controls, and injected stabilization. It creates and disposes real scoped Client contexts, prunes scoped Slot stores on removal, and delegates provider registration, materialized bundles, and current-Session publication to the production Rust provide channel so test assembly exercises the same roster and scope behavior as the product runtime.
+
 ## Verification
 
-Focused source tests pin the Remote double, settings stub, translator consumers, browser-language consumers, Workspaces face, snapshot normalization, and fixture defaults. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, translation conversion, Workspace stabilization, all action defaults and stubs, browse cancellation, archive publication, class folding, UTF-16 fingerprinting, and target Session defaults; live WASM tests pin the Remote and Workspaces service faces, browser-language restoration, clone-only DOM normalization, and exact browser fixture shapes. `cargo xtask parity` maps only helpers with direct source and target evidence; the remaining Session and runtime assembly helpers stay pending.
+Focused source tests pin the Remote double, settings stub, translator consumers, browser-language consumers, Workspaces face, snapshot normalization, fixture defaults, fixture Session face, and Sessions service. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, translation conversion, Workspace stabilization, all action defaults and stubs, browse cancellation, archive publication, class folding, UTF-16 fingerprinting, and target Session defaults; live WASM tests pin the Remote, Workspaces, and Sessions service faces, browser-language restoration, clone-only DOM normalization, exact browser fixture shapes, scoped Client contexts, production provide-roster rebuilding, list publication, removal cleanup, and search forwarding. `cargo xtask parity` maps only helpers with direct source and target evidence; the remaining runtime assembly helper stays pending.
 
 ## Alternatives considered
 
@@ -36,4 +38,4 @@ Focused source tests pin the Remote double, settings stub, translator consumers,
 
 ## Consequences
 
-Feature-test ports gain one reusable Rust owner for their controlled environment and compile against the same portable contracts as production. The crate adds an explicit test-only API that must track source helper changes and production face changes together. It does not make unported test-runtime helpers complete: their manifest rows remain pending until their Rust implementations and focused evidence land.
+Feature-test ports gain one reusable Rust owner for their controlled environment and compile against the same portable contracts as production. The crate adds an explicit test-only API that must track source helper changes and production face changes together. It does not make the unported runtime assembly helper complete: its manifest row remains pending until its Rust implementation and focused evidence land.

@@ -22,9 +22,11 @@ Workspaces 测试替身持有生产 `SnapshotStore<RuntimeWorkspaceListState>`�
 
 Session fixture 为一个 identity 加上品牌类型，并携带针对生产 `SessionSnapshot` 与 `RuntimeSessionSummary` 的强类型变更，以及不透明的行为 override。原生静稳 Session 构造器遵循目标 object model，WASM 构造器则保留源浏览器对象的每个字段，以及 `null`、`undefined`、Array 和 Map 区别。Workspace fixture 默认值与 Workspaces 测试替身共用。
 
+WASM Sessions 测试替身保留稳定的 fixture 快照与 projection face、listener identity、未提供 stub 时立即失败的行为、可观察列表更新、action 记录、搜索控制和注入的稳定化过程。它创建并 dispose 真实的带作用域 Client context，在移除 Session 时清理带作用域的 Slot store，并把 provider 注册、物化 bundle 和当前 Session 发布委托给生产 Rust provide channel，使测试组装运行与产品运行时相同的 roster 和 scope 行为。
+
 ## 验证
 
-聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方、浏览器语言消费方、Workspaces face、快照规范化和 fixture 默认值。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、全部 action 默认实现与 stub、浏览取消、archive 发布、class 折叠、UTF-16 指纹和目标 Session 默认值；实时 WASM 测试固定 Remote 与 Workspaces 服务 face、浏览器语言恢复、只修改克隆的 DOM 规范化和精确浏览器 fixture 形状。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余 Session 和运行时 assembly helper 继续保持 pending。
+聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方、浏览器语言消费方、Workspaces face、快照规范化、fixture 默认值、fixture Session face 和 Sessions 服务。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、全部 action 默认实现与 stub、浏览取消、archive 发布、class 折叠、UTF-16 指纹和目标 Session 默认值；实时 WASM 测试固定 Remote、Workspaces 与 Sessions 服务 face、浏览器语言恢复、只修改克隆的 DOM 规范化、精确浏览器 fixture 形状、带作用域 Client context、生产 provide roster 重建、列表发布、移除清理和搜索转发。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余运行时 assembly helper 继续保持 pending。
 
 ## 曾考虑的替代方案
 
@@ -36,4 +38,4 @@ Session fixture 为一个 identity 加上品牌类型，并携带针对生产 `S
 
 ## 后果
 
-功能测试移植获得一个可复用的 Rust 受控环境真源，并针对与生产相同的可移植约定编译。该 crate 增加了显式测试专用 API，必须与源 helper 变化和生产 face 变化同步维护。它不会让尚未移植的 test-runtime helper 自动完成；只有 Rust 实现与聚焦证据落地后，对应 manifest 行才会离开 pending。
+功能测试移植获得一个可复用的 Rust 受控环境真源，并针对与生产相同的可移植约定编译。该 crate 增加了显式测试专用 API，必须与源 helper 变化和生产 face 变化同步维护。它不会让尚未移植的运行时 assembly helper 自动完成；只有其 Rust 实现与聚焦证据落地后，对应 manifest 行才会离开 pending。
