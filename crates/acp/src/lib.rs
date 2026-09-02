@@ -57,7 +57,7 @@ pub fn apply_with_runtime(
     config: Config,
     runtime: AcpRuntime,
 ) -> anyhow::Result<Arc<AcpBridge>> {
-    apply_with_runtime_inner(context, config, runtime, None)
+    apply_with_runtime_inner(context, config, runtime, None, true)
 }
 
 /// Applies the ACP bridge with an exact assembled Agent registry.
@@ -68,7 +68,22 @@ pub fn apply_with_runtime_and_agents(
     runtime: AcpRuntime,
     agents: Arc<seekdeep_agent::AgentRegistry>,
 ) -> anyhow::Result<Arc<AcpBridge>> {
-    apply_with_runtime_inner(context, config, runtime, Some(agents))
+    apply_with_runtime_inner(context, config, runtime, Some(agents), true)
+}
+
+/// Prepares an ACP bridge whose input reader starts only when [`AcpBridge::start`] is called.
+///
+/// Application loaders use this form so plugins depending on services published
+/// by the bridge's owning composition can finish activation before client frames
+/// are accepted.
+#[doc(hidden)]
+pub fn apply_with_runtime_and_agents_deferred(
+    context: &Context,
+    config: Config,
+    runtime: AcpRuntime,
+    agents: Arc<seekdeep_agent::AgentRegistry>,
+) -> anyhow::Result<Arc<AcpBridge>> {
+    apply_with_runtime_inner(context, config, runtime, Some(agents), false)
 }
 
 fn apply_with_runtime_inner(
@@ -76,6 +91,7 @@ fn apply_with_runtime_inner(
     config: Config,
     runtime: AcpRuntime,
     agents: Option<Arc<seekdeep_agent::AgentRegistry>>,
+    start: bool,
 ) -> anyhow::Result<Arc<AcpBridge>> {
     let transport = JsonRpcLineTransport::from_boxed(runtime.input, runtime.output);
     let config = AcpBridgeConfig {
@@ -87,7 +103,9 @@ fn apply_with_runtime_inner(
         None => AcpBridge::new(context, &transport, config)?,
     };
     let marker = context.provide(ACP_BRIDGE, bridge.clone())?;
-    bridge.start();
+    if start {
+        bridge.start();
+    }
     let cleanup = Arc::clone(&bridge);
     let effect = EffectHandle::new("acp.connection", move || {
         Box::pin(async move { cleanup.shutdown().await })

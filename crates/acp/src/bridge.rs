@@ -13,7 +13,7 @@ use futures::future::{BoxFuture, join_all};
 use parking_lot::Mutex;
 use seekdeep_agent::{
     AGENTS, AgentCancelCause, AgentEvent, AgentHandle, AgentOptions, AgentRegistry, CancelOptions,
-    CreateAgentOptions,
+    CreateAgentOptions, ModelSelection, ModelSelectionRef, install_model_selection,
 };
 use seekdeep_agent_loop::{AgentErrorEvent, AgentInboxClaimed};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
@@ -21,6 +21,7 @@ use seekdeep_core::session::{Session, SessionEvent, SessionId};
 use seekdeep_llm::{MessageSource, ModelId, ProviderId, UserMessage};
 use seekdeep_sdk_protocol::{JsonRpcLineTransport, JsonRpcResponseError};
 use seekdeep_subagent::SUBAGENTS;
+use seekdeep_system_prompt::SYSTEM_PROMPT;
 use seekdeep_user_approval::{APPROVAL, ApprovalAnswer, ApprovalOutcome, ApprovalRequest};
 use serde_json::{Map, Value, json};
 use tokio::sync::{OnceCell, oneshot};
@@ -239,6 +240,36 @@ impl AcpBridge {
             max_tokens: None,
             subagent_depth: None,
         };
+        if let Some(system_prompt) = self.context.get(SYSTEM_PROMPT) {
+            let provider = self.config.provider.clone();
+            let model = self.config.model.clone();
+            let session_cwd = options.meta.cwd.clone().unwrap_or_default();
+            options.setup = Some(Arc::new(move |agent_context| {
+                let system_prompt = system_prompt.clone();
+                let provider = provider.clone();
+                let model = model.clone();
+                let session_cwd = session_cwd.clone();
+                Box::pin(async move {
+                    if let (Some(provider), Some(model)) = (provider, model) {
+                        let selection = Arc::new(parking_lot::RwLock::new(ModelSelectionRef {
+                            current: Some(ModelSelection {
+                                provider: ProviderId::new(provider),
+                                model: ModelId::new(model),
+                                reasoning_effort: None,
+                            }),
+                            assembled: None,
+                        }));
+                        let _ = install_model_selection(&agent_context, &system_prompt, selection)?;
+                    }
+                    system_prompt.variable(
+                        &agent_context,
+                        "cwd",
+                        Arc::new(move |_| Ok(Some(session_cwd.clone()))),
+                    )?;
+                    Ok(None)
+                })
+            }));
+        }
         let handle = Arc::new(self.agents.create(options).await?);
         if self.closed.load(Ordering::Acquire) {
             handle.dispose().await?;

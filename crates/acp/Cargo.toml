@@ -21,6 +21,7 @@ seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-sdk-protocol = { path = "../sdk-protocol" }
 seekdeep-subagent = { path = "../subagent" }
+seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-user-approval = { path = "../user-approval" }
 tokio.workspace = true
 tracing.workspace = true

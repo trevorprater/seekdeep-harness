@@ -455,7 +455,7 @@ pub fn install(
     seekdeep_cordis::fiber::EffectHandle,
 )> {
     let registry = context
-        .get(SKILLS)
+        .get_relaxed(SKILLS)
         .ok_or_else(|| anyhow::anyhow!("skill-filesystem requires skills"))?;
     let provider = FileSystemSkillProvider::new(context, &registry, config)?;
     let effect = registry.register_provider(context, provider.clone())?;

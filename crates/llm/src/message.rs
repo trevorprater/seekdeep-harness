@@ -73,8 +73,14 @@ impl Serialize for MessageSource {
     where
         S: Serializer,
     {
-        let mut object = self.fields.clone();
+        let mut object = Map::new();
         object.insert("kind".to_owned(), Value::String(self.kind.clone()));
+        object.extend(
+            self.fields
+                .iter()
+                .filter(|(field, _)| field.as_str() != "kind")
+                .map(|(field, value)| (field.clone(), value.clone())),
+        );
         Value::Object(object).serialize(serializer)
     }
 }
@@ -147,7 +153,7 @@ impl MessageSource {
 }
 
 /// One immutable identified provider-neutral message.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Message {
     /// Stable identity.
     id: MessageId,
@@ -161,6 +167,40 @@ pub struct Message {
     /// and routing boundaries.
     #[serde(flatten)]
     fields: Map<String, Value>,
+}
+
+impl Serialize for Message {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut object = Map::new();
+        let role = serde_json::to_value(self.role).map_err(serde::ser::Error::custom)?;
+        let content = serde_json::to_value(&self.content).map_err(serde::ser::Error::custom)?;
+        let source = serde_json::to_value(&self.source).map_err(serde::ser::Error::custom)?;
+        match self.role {
+            MessageRole::User if self.source.kind == "tool" => {
+                object.insert("source".to_owned(), source);
+                object.insert("content".to_owned(), content);
+                object.extend(self.fields.clone());
+                object.insert("role".to_owned(), role);
+            }
+            MessageRole::User => {
+                object.insert("content".to_owned(), content);
+                object.insert("source".to_owned(), source);
+                object.extend(self.fields.clone());
+                object.insert("role".to_owned(), role);
+            }
+            MessageRole::System | MessageRole::Assistant => {
+                object.insert("role".to_owned(), role);
+                object.insert("content".to_owned(), content);
+                object.insert("source".to_owned(), source);
+                object.extend(self.fields.clone());
+            }
+        }
+        object.insert("id".to_owned(), Value::String(self.id.as_str().to_owned()));
+        Value::Object(object).serialize(serializer)
+    }
 }
 
 /// User-role specialization of the shared immutable message representation.

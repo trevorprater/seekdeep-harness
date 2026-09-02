@@ -285,16 +285,16 @@ impl JobHooks for ShellJobHooks {
 pub fn apply(context: &Context, config: Config) -> anyhow::Result<()> {
     let background_enabled = config.enable_run_in_background.unwrap_or(true);
     let shell = context
-        .get(SHELL)
+        .get_relaxed(SHELL)
         .ok_or_else(|| anyhow::anyhow!("tool-bash requires shell"))?;
     let tools = context
-        .get(TOOLS)
+        .get_relaxed(TOOLS)
         .ok_or_else(|| anyhow::anyhow!("tool-bash requires tools"))?;
     let prompt = context
-        .get(SYSTEM_PROMPT)
+        .get_relaxed(SYSTEM_PROMPT)
         .ok_or_else(|| anyhow::anyhow!("tool-bash requires systemPrompt"))?;
     let shell_env = context
-        .get(SHELL_ENV)
+        .get_relaxed(SHELL_ENV)
         .ok_or_else(|| anyhow::anyhow!("tool-bash requires shellEnv"))?;
     let (escalation_modes, sandbox_policy) = sandbox_composition(context, &shell)?;
 

@@ -246,7 +246,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     let blocked_after = resolve_blocked_after(config)?;
 
     let prompt = context
-        .get(SYSTEM_PROMPT)
+        .get_relaxed(SYSTEM_PROMPT)
         .ok_or_else(|| anyhow::anyhow!("tool-goal requires systemPrompt"))?;
     prompt.section(
         context,
@@ -258,7 +258,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     )?;
 
     let tools = context
-        .get(TOOLS)
+        .get_relaxed(TOOLS)
         .ok_or_else(|| anyhow::anyhow!("tool-goal requires tools"))?;
 
     let execute_ctx = context.clone();

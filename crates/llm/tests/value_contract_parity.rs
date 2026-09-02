@@ -4,11 +4,11 @@ use std::{collections::BTreeMap, error::Error as _};
 
 use seekdeep_llm::{
     APP_IDENTITY, ApiKeyCheck, AppIdentity, CallId, ContentBlock, FinishReason,
-    INVALID_CREDENTIAL_CODE, LlmCallConfig, LlmError, Message, MessageRole, MessageSource,
-    ProviderRequestId, ReasoningEffortId, SessionId, assert_usable_api_key, attribution_headers,
-    attribution_headers_for, bound_context_summary, call_config_equals, content_has_image,
-    error_chain, is_context_window_exceeded_error, is_harness_error, is_quota_exceeded_error,
-    normalize_api_key, resolve_retry_policy, user_agent_for,
+    INVALID_CREDENTIAL_CODE, LlmCallConfig, LlmError, Message, MessageId, MessageRole,
+    MessageSource, ProviderRequestId, ReasoningEffortId, SessionId, assert_usable_api_key,
+    attribution_headers, attribution_headers_for, bound_context_summary, call_config_equals,
+    content_has_image, error_chain, is_context_window_exceeded_error, is_harness_error,
+    is_quota_exceeded_error, normalize_api_key, resolve_retry_policy, user_agent_for,
 };
 use serde_json::json;
 
@@ -248,6 +248,55 @@ fn message_construction_detaches_inputs_fixes_tags_and_correlates_tool_results()
     assert_eq!(
         serde_json::from_value::<SessionId>(json!("session-1")).unwrap(),
         session_id
+    );
+}
+
+#[test]
+fn message_and_block_json_preserve_the_constructor_wire_order() {
+    let user = Message::from_existing(
+        MessageId::new("user-id"),
+        MessageRole::User,
+        vec![ContentBlock::Text {
+            text: "hello".into(),
+        }],
+        MessageSource::user(),
+        serde_json::Map::new(),
+    );
+    assert_eq!(
+        serde_json::to_string(&user).unwrap(),
+        r#"{"content":[{"type":"text","text":"hello"}],"source":{"kind":"user"},"role":"user","id":"user-id"}"#
+    );
+
+    let assistant = Message::from_existing(
+        MessageId::new("assistant-id"),
+        MessageRole::Assistant,
+        vec![ContentBlock::Reasoning {
+            text: "because".into(),
+        }],
+        MessageSource::model("provider", "model"),
+        serde_json::Map::new(),
+    );
+    assert_eq!(
+        serde_json::to_string(&assistant).unwrap(),
+        r#"{"role":"assistant","content":[{"type":"reasoning","text":"because"}],"source":{"kind":"model","provider":"provider","model":"model"},"id":"assistant-id"}"#
+    );
+
+    let tool = Message::from_existing(
+        MessageId::new("tool-id"),
+        MessageRole::User,
+        vec![ContentBlock::ToolResult {
+            tool_call_id: CallId::new("call-1"),
+            content: vec![ContentBlock::Text {
+                text: "result".into(),
+            }],
+            is_error: Some(false),
+        }],
+        MessageSource::tool(&CallId::new("call-1")),
+        serde_json::Map::new(),
+    );
+    assert_eq!(
+        serde_json::to_string(&tool).unwrap(),
+        r#"{"source":{"kind":"tool","callId":"call-1"},"content":[{"type":"tool-result","toolCallId":"call-1","content":[{"type":"text","text":"result"}],"isError":false}],"role":"user","id":"tool-id"}"#
     );
 }
 

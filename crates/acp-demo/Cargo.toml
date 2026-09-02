@@ -21,15 +21,40 @@ seekdeep-acp = { path = "../acp" }
 seekdeep-agent-spine-demo = { path = "../agent-spine-demo" }
 seekdeep-agent-instructions = { path = "../agent-instructions" }
 seekdeep-app-boot = { path = "../app-boot" }
+seekdeep-bash-sandbox = { path = "../bash-sandbox" }
+seekdeep-compaction-basic = { path = "../compaction-basic" }
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-fs-observation-policy = { path = "../fs-observation-policy" }
+seekdeep-fs-sandbox = { path = "../fs-sandbox" }
+seekdeep-hooks-claude-code = { path = "../hooks-claude-code" }
+seekdeep-hooks-codex = { path = "../hooks-codex" }
 seekdeep-loader = { path = "../loader" }
 seekdeep-llm-deepseek = { path = "../llm-deepseek" }
+seekdeep-llm-replay = { path = "../llm-replay" }
+seekdeep-repeat-tool-reminder = { path = "../repeat-tool-reminder" }
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
 seekdeep-session-checkpoint-policy = { path = "../session-checkpoint-policy" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-session-query = { path = "../session-query" }
 seekdeep-session-query-sqlite = { path = "../session-query-sqlite" }
 seekdeep-session-title = { path = "../session-title" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subagent-fork-in-process = { path = "../subagent-fork-in-process" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-token-meter = { path = "../token-meter" }
+seekdeep-tool-fs = { path = "../tool-fs" }
+seekdeep-tool-ralph = { path = "../tool-ralph" }
+seekdeep-tool-subagent = { path = "../tool-subagent" }
+seekdeep-tool-subagent-control = { path = "../tool-subagent-control" }
+seekdeep-tool-subagent-report = { path = "../tool-subagent-report" }
+seekdeep-tool-todo = { path = "../tool-todo" }
+seekdeep-tool-workflow = { path = "../tool-workflow" }
+seekdeep-user-approval = { path = "../user-approval" }
+seekdeep-workflow-worker-thread = { path = "../workflow-worker-thread" }
 seekdeep-jobs-local = { path = "../jobs-local" }
 seekdeep-tool-bash = { path = "../tool-bash" }
 seekdeep-tool-jobs = { path = "../tool-jobs" }
@@ -49,6 +74,7 @@ seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-core = { path = "../core" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-sdk-protocol = { path = "../sdk-protocol" }
+seekdeep-acp-snapshot = { path = "../acp-snapshot", features = ["fixture-bins"] }
 tempfile.workspace = true
 zstd.workspace = true
 

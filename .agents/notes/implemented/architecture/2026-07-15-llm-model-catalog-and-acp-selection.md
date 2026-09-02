@@ -32,6 +32,8 @@ A selection is owned by the front end that offers it (today the TUI `/model` sel
 
 The ACP automation transport is not a catalog consumer. Its deployment config supplies one optional provider/model target for newly created agents, and it advertises no model selector or configuration-option interface.
 
+Each ACP-created agent installs that fixed deployment pair through the same agent-scoped prompt/request coupling and installs the Session cwd as a scoped prompt variable before publication. The compiled ACP application prepares its stdio bridge while the app plugin is loading but starts accepting frames only after the complete Loader tree settles, so a fast client cannot create a Session before dependent prompt and approval plugins activate. Programmatic `apply_with_runtime()` callers still receive the immediate-start contract because their composition is already explicit.
+
 ### Prompt/request consistency and durability
 
 `installModelSelection` (in `seekdeep-agent`) installs scoped `system-prompt/assemble` and `agent/request` listeners for a front-end-owned selection. Prompt assembly snapshots the selected pair once per step, overwrites the assembled `provider` and `model` variables after downstream prompt listeners, and the request listener applies that same snapshot after downstream request listeners. A selection during asynchronous assembly therefore starts on the next step rather than splitting prompt text from routing. Other call-config fields remain untouched.
@@ -59,4 +61,4 @@ The request header remains the durable source of truth. When a selection is actu
 
 ## Testing
 
-Unit coverage validates catalog detachment and malformed metadata, pi-ai and DeepSeek catalog projection, provider/model request routing, and prompt-variable alignment; per-agent isolation follows from installing the listeners on the agent-scoped context. ACP transport tests validate fixed provider/model forwarding independently of catalog discovery; the TUI suite covers selector interaction and header-based restoration.
+Unit coverage validates catalog detachment and malformed metadata, pi-ai and DeepSeek catalog projection, provider/model request routing, and prompt-variable alignment; per-agent isolation follows from installing the listeners on the agent-scoped context. ACP transport tests validate fixed provider/model forwarding independently of catalog discovery; compiled application snapshots drive both the protocol handshake and a persisted replayed model turn after full Loader settlement. The TUI suite covers selector interaction and header-based restoration.

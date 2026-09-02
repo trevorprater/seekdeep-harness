@@ -13,6 +13,8 @@ use seekdeep_loader::{ExpressionEnvironment, PluginCatalog};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+mod snapshot_fixtures;
+
 /// Loader and binary name.
 pub const NAME: &str = "acp-demo";
 /// App composition has no parent dependency.
@@ -103,6 +105,15 @@ pub async fn apply_with_runtime(
     config: Config,
     runtime: Option<AcpRuntime>,
 ) -> anyhow::Result<Arc<AcpDemoRuntime>> {
+    apply_with_runtime_mode(context, config, runtime, true).await
+}
+
+async fn apply_with_runtime_mode(
+    context: &Context,
+    config: Config,
+    runtime: Option<AcpRuntime>,
+    start_bridge: bool,
+) -> anyhow::Result<Arc<AcpDemoRuntime>> {
     validate_config(&config)?;
     let goals = config
         .goals
@@ -180,12 +191,21 @@ pub async fn apply_with_runtime(
         input: Box::pin(tokio::io::stdin()),
         output: Box::pin(tokio::io::stdout()),
     });
-    let bridge = seekdeep_acp::apply_with_runtime_and_agents(
-        context,
-        bridge_config,
-        runtime,
-        Arc::clone(&spine.agents),
-    )?;
+    let bridge = if start_bridge {
+        seekdeep_acp::apply_with_runtime_and_agents(
+            context,
+            bridge_config,
+            runtime,
+            Arc::clone(&spine.agents),
+        )?
+    } else {
+        seekdeep_acp::apply_with_runtime_and_agents_deferred(
+            context,
+            bridge_config,
+            runtime,
+            Arc::clone(&spine.agents),
+        )?
+    };
     Ok(Arc::new(AcpDemoRuntime { spine, bridge }))
 }
 
@@ -222,7 +242,16 @@ fn normalize_config(value: &Value) -> anyhow::Result<Value> {
 pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
         Box::pin(async move {
-            apply(&context, serde_json::from_value(config)?).await?;
+            apply_with_runtime_mode(
+                &context,
+                serde_json::from_value(config)?,
+                Some(AcpRuntime {
+                    input: Box::pin(tokio::io::stdin()),
+                    output: Box::pin(tokio::io::stdout()),
+                }),
+                false,
+            )
+            .await?;
             Ok(())
         })
     })
@@ -286,19 +315,106 @@ async fn process_main_async() -> anyhow::Result<()> {
                 home,
             ));
     }
-    let app = plugin();
-    catalog.register_named("@seekdeep-ai/seekdeep-acp-demo", app.clone())?;
-    catalog.register_named("seekdeep-acp-demo", app)?;
-    let deepseek = seekdeep_llm_deepseek::plugin();
-    catalog.register_named("@seekdeep-ai/seekdeep-llm-deepseek", deepseek.clone())?;
-    catalog.register_named("seekdeep-llm-deepseek", deepseek)?;
+    register_compiled_plugins(&catalog)?;
     let application = boot(NAME, &path, &catalog, BootOptions::default()).await?;
     let bridge = application
         .context()
         .get(ACP_BRIDGE)
         .ok_or_else(|| anyhow::anyhow!("seekdeep-acp-demo: config did not mount the ACP app"))?;
+    bridge.start();
     bridge.connection_closed_signal().cancelled().await;
     application.dispose().await
+}
+
+/// Registers the complete compiled plugin set used by the shipped ACP compositions.
+///
+/// # Errors
+///
+/// Returns invalid or duplicate catalog-name failures.
+pub fn register_compiled_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> {
+    for (name, plugin) in [
+        ("seekdeep-acp-demo", plugin()),
+        ("seekdeep-bash-sandbox", seekdeep_bash_sandbox::plugin()),
+        (
+            "seekdeep-compaction-basic",
+            seekdeep_compaction_basic::index::plugin(),
+        ),
+        (
+            "seekdeep-fs-observation-policy",
+            seekdeep_fs_observation_policy::plugin(),
+        ),
+        ("seekdeep-fs-sandbox", seekdeep_fs_sandbox::plugin()),
+        (
+            "seekdeep-hooks-claude-code",
+            seekdeep_hooks_claude_code::plugin(),
+        ),
+        ("seekdeep-hooks-codex", seekdeep_hooks_codex::plugin()),
+        ("seekdeep-llm-deepseek", seekdeep_llm_deepseek::plugin()),
+        ("seekdeep-llm-replay", seekdeep_llm_replay::plugin()),
+        (
+            "seekdeep-repeat-tool-reminder",
+            seekdeep_repeat_tool_reminder::plugin(),
+        ),
+        ("seekdeep-sandbox-local", seekdeep_sandbox_local::plugin()),
+        ("seekdeep-sandbox-policy", seekdeep_sandbox_policy::plugin()),
+        (
+            "seekdeep-session-projection",
+            seekdeep_session_projection::plugin(),
+        ),
+        ("seekdeep-subagent", seekdeep_subagent::index::plugin()),
+        (
+            "seekdeep-subagent-fork-in-process",
+            seekdeep_subagent_fork_in_process::plugin(),
+        ),
+        (
+            "seekdeep-subagent-spawn-in-process",
+            seekdeep_subagent_spawn_in_process::plugin(),
+        ),
+        (
+            "seekdeep-subprocess-local",
+            seekdeep_subprocess_local::plugin(),
+        ),
+        (
+            "seekdeep-token-meter",
+            seekdeep_token_meter::runtime::plugin(),
+        ),
+        ("seekdeep-tool-fs", seekdeep_tool_fs::index::plugin()),
+        ("seekdeep-tool-ralph", seekdeep_tool_ralph::plugin()),
+        ("seekdeep-tool-subagent", seekdeep_tool_subagent::plugin()),
+        (
+            "seekdeep-tool-subagent-control",
+            seekdeep_tool_subagent_control::plugin(),
+        ),
+        (
+            "seekdeep-tool-subagent-report",
+            seekdeep_tool_subagent_report::plugin(),
+        ),
+        ("seekdeep-tool-todo", seekdeep_tool_todo::plugin()),
+        ("seekdeep-tool-workflow", seekdeep_tool_workflow::plugin()),
+        ("seekdeep-user-approval", seekdeep_user_approval::plugin()),
+        (
+            "seekdeep-workflow-worker-thread",
+            seekdeep_workflow_worker_thread::index::plugin(),
+        ),
+    ] {
+        register_plugin_pair(catalog, name, plugin)?;
+    }
+    register_plugin_pair(
+        catalog,
+        "seekdeep-tool-subagent-control/list-agents",
+        seekdeep_tool_subagent_control::list_plugin(),
+    )?;
+    catalog.register_named(
+        "./tests/fixtures/subagent-settlement-marker.ts",
+        snapshot_fixtures::subagent_settlement_marker_plugin(),
+    )?;
+    Ok(())
+}
+
+fn register_plugin_pair(catalog: &PluginCatalog, name: &str, plugin: Plugin) -> anyhow::Result<()> {
+    catalog.register_named(name, plugin.clone())?;
+    catalog.register_named(&format!("@seekdeep-ai/{name}"), plugin)?;
+    Ok(())
 }
 
 fn parse_config_argument(arguments: &[String]) -> anyhow::Result<Option<String>> {

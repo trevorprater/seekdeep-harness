@@ -794,10 +794,10 @@ impl Driver {
 /// Returns missing-service or listener registration failures.
 pub fn apply(context: &Context) -> anyhow::Result<()> {
     let goals = context
-        .get(GOAL)
+        .get_relaxed(GOAL)
         .ok_or_else(|| anyhow::anyhow!("goal-round-driver requires goals"))?;
     let agents = context
-        .get(AGENTS)
+        .get_relaxed(AGENTS)
         .ok_or_else(|| anyhow::anyhow!("goal-round-driver requires agents"))?;
     let driver = Arc::new(Driver {
         context: context.clone(),

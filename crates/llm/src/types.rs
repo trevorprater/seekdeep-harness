@@ -77,6 +77,10 @@ impl Serialize for ContentBlock {
         S: Serializer,
     {
         let mut object = Map::new();
+        object.insert(
+            "type".to_owned(),
+            Value::String(self.block_type().to_owned()),
+        );
         match self {
             Self::Text { text } | Self::Reasoning { text } => {
                 object.insert("text".to_owned(), Value::String(text.clone()));
@@ -113,12 +117,13 @@ impl Serialize for ContentBlock {
                     object.insert("isError".to_owned(), Value::Bool(*is_error));
                 }
             }
-            Self::Unknown { fields, .. } => object.extend(fields.clone()),
+            Self::Unknown { fields, .. } => object.extend(
+                fields
+                    .iter()
+                    .filter(|(field, _)| field.as_str() != "type")
+                    .map(|(field, value)| (field.clone(), value.clone())),
+            ),
         }
-        object.insert(
-            "type".to_owned(),
-            Value::String(self.block_type().to_owned()),
-        );
         Value::Object(object).serialize(serializer)
     }
 }

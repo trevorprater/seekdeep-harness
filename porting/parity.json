@@ -37106,8 +37106,10 @@
       "evidence": [
         "pinned-source ACP and subagent-ACP unit suites passed 107/107",
         "Rust bridge tests drive real AgentLoop sessions over duplex JSON-RPC with committed output, cancellation, approvals, multi-session isolation, and quiescent teardown",
+        "compiled ACP demo snapshots prove fixed deployment provider/model and cwd variables are installed on each unpublished agent scope before the first request",
         "strict ACP and subagent-ACP Clippy passed with all targets and all features"
-      ]
+      ],
+      "note": "Programmatic ACP runtimes start their transport immediately. Loader-owned ACP applications prepare the bridge during plugin activation and start input only after the complete tree settles, so dependent prompt and approval services are active before a fast client can create a Session."
     },
     {
       "source": "packages/acp/acp/src/invariant.ts",
@@ -58534,12 +58536,16 @@
       "targets": [
         "crates/acp-demo/src/bin/seekdeep-acp-demo.rs",
         "crates/acp-demo/src/lib.rs",
-        "crates/acp-demo/tests/acp_demo_parity.rs"
+        "crates/acp-demo/src/snapshot_fixtures.rs",
+        "crates/acp-demo/tests/acp_demo_parity.rs",
+        "crates/acp-demo/tests/acp_snapshot_smoke.rs"
       ],
       "evidence": [
         "Rust binary parses strict --config and -c arguments, defaults to cordis.yml, applies snapshot config selection, freezes layered env outside replay, boots through Rust app-boot and Loader, reserves stdout for ACP, observes bridge EOF without a competing stdin reader, and joins disposal",
-        "compiled-binary acceptance negotiates ACP, creates a fresh session, and exits successfully on EOF"
-      ]
+        "compiled-binary acceptance negotiates ACP, creates a fresh session, and exits successfully on EOF",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-demo --test acp_snapshot_smoke --all-features (2 passed: committed handshake and persisted replayed model turn)"
+      ],
+      "note": "The binary registers every compiled plugin used by the base ACP composition and its replay overlay. It defers stdio intake until Loader settlement, while direct apply_with_runtime callers retain immediate start."
     },
     {
       "source": "packages/examples/acp-demo/src/index.ts",
@@ -58548,6 +58554,7 @@
       "targets": [
         "crates/acp-demo/src/lib.rs",
         "crates/acp-demo/tests/acp_composition_parity.rs",
+        "crates/acp-demo/tests/acp_snapshot_smoke.rs",
         "crates/agent-spine-demo/src/lib.rs",
         "crates/acp/src/bridge.rs",
         "crates/acp/src/lib.rs"
@@ -58556,7 +58563,8 @@
         "pinned-source ACP demo composition passed 12/12 and its built/load-path E2E suites passed 4/4",
         "Rust app composes the verified spine, JSONL persistence, loop resume backend, semantic checkpoint policy, SQLite query index, and exact-agent ACP bridge in teardown-safe registration order with no stdout logger",
         "Rust in-process real AgentLoop round trip emits committed ACP text and the compiled binary proves Loader and fresh-session behavior",
-        "Rust composition tests pin every forwarded default, opt-out, skill, job, tool, ordering, and plugin-shape branch from the source app suite"
+        "Rust composition tests pin every forwarded default, opt-out, skill, job, tool, ordering, and plugin-shape branch from the source app suite",
+        "compiled replay drives a committed model stream through exact prompt, approval, persistence, and ACP output assembly"
       ]
     },
     {
@@ -67243,6 +67251,7 @@
       "evidence": [
         "pnpm exec vitest run packages/llm/llm/tests --reporter=verbose",
         "cargo test -p seekdeep-llm --all-features",
+        "value_contract_parity pins exact constructor-order JSON for user, assistant, tool-result, MessageSource, and ContentBlock values",
         "cargo test --workspace --all-features --no-run"
       ]
     },

@@ -382,7 +382,7 @@ fn output_schema() -> Value {
 /// Returns a missing-skills-service or author-schema compilation failure.
 pub fn definition(context: &Context) -> anyhow::Result<ToolDefinition> {
     let skills: Arc<SkillRegistry> = context
-        .get(SKILLS)
+        .get_relaxed(SKILLS)
         .ok_or_else(|| anyhow::anyhow!("tool-skill requires skills"))?;
     let output = DefineToolOutput::new(
         output_schema(),
@@ -438,7 +438,7 @@ pub fn definition(context: &Context) -> anyhow::Result<ToolDefinition> {
 /// Returns missing-service or registration failures.
 pub fn register_skill_tool(context: &Context) -> anyhow::Result<EffectHandle> {
     let tools: Arc<ToolRuntime> = context
-        .get(TOOLS)
+        .get_relaxed(TOOLS)
         .ok_or_else(|| anyhow::anyhow!("tool-skill requires tools"))?;
     let definition = definition(context)?;
     tools.register(context, definition)
@@ -558,10 +558,10 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
         "tool-skill: catalogDescriptionMaxLength must be an integer greater than or equal to 3"
     );
     let skills: Arc<SkillRegistry> = context
-        .get(SKILLS)
+        .get_relaxed(SKILLS)
         .ok_or_else(|| anyhow::anyhow!("tool-skill requires skills"))?;
     let tools: Arc<ToolRuntime> = context
-        .get(TOOLS)
+        .get_relaxed(TOOLS)
         .ok_or_else(|| anyhow::anyhow!("tool-skill requires tools"))?;
 
     tools.register(context, definition(context)?)?;

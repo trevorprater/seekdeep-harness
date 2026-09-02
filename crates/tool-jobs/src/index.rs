@@ -452,7 +452,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     let wake_budget = wake_budget as u64;
 
     let jobs = context
-        .get(JOBS)
+        .get_relaxed(JOBS)
         .ok_or_else(|| anyhow::anyhow!("tool-jobs requires jobs"))?;
     let spent_wakes: Arc<Mutex<HashMap<usize, u64>>> = Arc::new(Mutex::new(HashMap::new()));
 
@@ -478,7 +478,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     let _ = jobs.attach_controller("tool-jobs");
 
     let prompt = context
-        .get(SYSTEM_PROMPT)
+        .get_relaxed(SYSTEM_PROMPT)
         .ok_or_else(|| anyhow::anyhow!("tool-jobs requires systemPrompt"))?;
     prompt.section(
         context,
@@ -520,7 +520,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
     }));
 
     let tools = context
-        .get(TOOLS)
+        .get_relaxed(TOOLS)
         .ok_or_else(|| anyhow::anyhow!("tool-jobs requires tools"))?;
 
     let finalize_ctx = context.clone();
