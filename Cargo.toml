@@ -62,6 +62,7 @@ members = [
   "crates/client-web-react",
   "crates/client-runtime",
   "crates/client-settings-contract",
+  "crates/client-test-runtime",
   "crates/change-scope",
   "crates/chunk-attribution",
   "crates/win32-durable-namespace",

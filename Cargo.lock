@@ -5351,6 +5351,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-client-test-runtime"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "futures",
+ "js-sys",
+ "parking_lot",
+ "ryu-js",
+ "seekdeep-client-settings-contract",
+ "seekdeep-cordis",
+ "serde_json",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-client-ui-agent-preset"
 version = "0.1.0-rc.5"
 dependencies = [

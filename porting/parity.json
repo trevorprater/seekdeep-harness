@@ -80145,12 +80145,32 @@
     {
       "source": "packages/test-support/client-runtime/src/locale-env.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/src/wasm_browser_languages.rs",
+        "crates/client-test-runtime/tests/wasm_browser_languages_parity.rs"
+      ],
+      "evidence": [
+        "pinned source consumer: pnpm exec vitest run packages/client/ui-theme/tests/apply.client.spec.ts (8 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-test-runtime --target wasm32-unknown-unknown --test wasm_browser_languages_parity --all-features (1 passed)"
+      ],
+      "note": "The WASM guard installs configurable own navigator language properties in preference order and idempotently deletes both so inherited browser accessors become visible again. Rust tests scope the guard per test instead of registering Vitest hooks."
     },
     {
       "source": "packages/test-support/client-runtime/src/remote.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/src/lib.rs",
+        "crates/client-test-runtime/src/wasm_remote.rs",
+        "crates/client-test-runtime/tests/wasm_remote_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/client-runtime/tests/remote.client.spec.ts (3 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-test-runtime --all-features (8 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-test-runtime --target wasm32-unknown-unknown --test wasm_remote_parity --all-features (1 passed)"
+      ],
+      "note": "The Rust double publishes the remote service, snapshots listeners in registration order, forwards opaque arguments, owns idempotent subscriptions, keeps unknown events inert, propagates listener failures deliberately, and rejects generated mounts with the source diagnostic."
     },
     {
       "source": "packages/test-support/client-runtime/src/sessions.ts",
@@ -80160,7 +80180,16 @@
     {
       "source": "packages/test-support/client-runtime/src/settings-scope.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/src/settings_scope.rs",
+        "crates/client-test-runtime/tests/settings_scope_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/client-runtime/tests/runtime.client.spec.tsx -t 'stubbed settings scope' (1 passed, 25 skipped)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-test-runtime --all-features (8 passed)"
+      ],
+      "note": "The Rust stub exposes the real portable settings-scope trait, exact loading/Host defaults, reference-replaced partial publications, listener counts and idempotent disposal, plus ordered set and unset call records."
     },
     {
       "source": "packages/test-support/client-runtime/src/snapshot.ts",
@@ -80170,7 +80199,16 @@
     {
       "source": "packages/test-support/client-runtime/src/translate.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/src/translate.rs",
+        "crates/client-test-runtime/tests/translate_parity.rs"
+      ],
+      "evidence": [
+        "pinned source consumer: pnpm exec vitest run packages/client/ui-goal/tests/goalbar.client.spec.tsx (14 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-test-runtime --all-features (8 passed)"
+      ],
+      "note": "The Rust helper preserves first-dictionary ownership, visible-key fallback, ASCII word placeholders, unmatched placeholders, and JavaScript-compatible parameter stringification including arrays and objects."
     },
     {
       "source": "packages/test-support/client-runtime/src/workspaces.ts",
@@ -80205,7 +80243,16 @@
     {
       "source": "packages/test-support/client-runtime/tests/remote.client.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/tests/remote_parity.rs",
+        "crates/client-test-runtime/tests/wasm_remote_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/client-runtime/tests/remote.client.spec.ts (3 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-test-runtime --all-features (8 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-test-runtime --target wasm32-unknown-unknown --test wasm_remote_parity --all-features (1 passed)"
+      ]
     },
     {
       "source": "packages/test-support/client-runtime/tests/runtime.client.spec.tsx",
