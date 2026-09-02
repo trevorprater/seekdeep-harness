@@ -24,9 +24,13 @@ Session fixture 为一个 identity 加上品牌类型，并携带针对生产 `S
 
 WASM Sessions 测试替身保留稳定的 fixture 快照与 projection face、listener identity、未提供 stub 时立即失败的行为、可观察列表更新、action 记录、搜索控制和注入的稳定化过程。它创建并 dispose 真实的带作用域 Client context，在移除 Session 时清理带作用域的 Slot store，并把 provider 注册、物化 bundle 和当前 Session 发布委托给生产 Rust provide channel，使测试组装运行与产品运行时相同的 roster 和 scope 行为。
 
+`SlotTestRuntime` 组装已编译 Cordis Context、生产 Rust Slot 与 Conversation registry、生产 Web React 渲染器，以及 Session 和 Workspace 测试替身，并让它们共用同一条稳定化与 teardown 轴。根声明和自动单 Slot frame 使用真实 registry；捕获 renderer Host 后可访问生产 Store instance；功能挂载会预检所需服务，并获得绑定到 Fiber 的 registry face，因此 entry、子声明、Conversation definition 与服务会随 owner 一起消失。
+
+本包是 ESM Rust/WASM 测试库，不再是 `tsdown` bundle。WASM 链接已编译 Cordis 与 Web React；生成的入口只把 React、Testing Library、Vitest 与 Immer 作为边界 adapter 注入，导出与 source 兼容的 class 和 helper 名，把 settings spy 与快照序列化委托给 Rust 状态和规范化逻辑，并避免在公开 export surface 泄漏依赖 binding。生成的 `lib/` byte 继续保持忽略状态。
+
 ## 验证
 
-聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方、浏览器语言消费方、Workspaces face、快照规范化、fixture 默认值、fixture Session face 和 Sessions 服务。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、全部 action 默认实现与 stub、浏览取消、archive 发布、class 折叠、UTF-16 指纹和目标 Session 默认值；实时 WASM 测试固定 Remote、Workspaces 与 Sessions 服务 face、浏览器语言恢复、只修改克隆的 DOM 规范化、精确浏览器 fixture 形状、带作用域 Client context、生产 provide roster 重建、列表发布、移除清理和搜索转发。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余运行时 assembly helper 继续保持 pending。
+完整的固定 source 运行时套件通过全部 26 项测试。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、每项 action 默认实现与 stub、浏览取消、archive 发布、class 折叠、UTF-16 指纹和目标 Session 默认值。14 项实时 WASM 测试覆盖每个可复用 helper，以及组装后的根启动顺序、renderer 更新、Session 选择、自动 Slot view、绑定调用方的 function、object 与 class 功能清理、Store identity 与清理、公开构造器、JavaScript 字符串转换、Vitest 形态 settings spy 和幂等 teardown。优化 ESM 包通过 `cargo xtask wasm-package` 构建；精简 export 不包含依赖 API，包元数据也可解析每项必需 artifact。专用构建产物门禁在真实 Vitest、React、Testing Library 与 jsdom 下导入生成的入口，在不发起 fetch 的情况下初始化嵌入式 WASM，检查 class identity 与 helper，创建实时运行时，挂载并 dispose class plugin、添加 Session，再将运行时 dispose。同一门禁还会对生成的 consumer 执行类型检查，证明公开 declaration 继续强制约束扩展后的 `SlotMap` key 与 owner prop。
 
 ## 曾考虑的替代方案
 
@@ -38,4 +42,4 @@ WASM Sessions 测试替身保留稳定的 fixture 快照与 projection face、li
 
 ## 后果
 
-功能测试移植获得一个可复用的 Rust 受控环境真源，并针对与生产相同的可移植约定编译。该 crate 增加了显式测试专用 API，必须与源 helper 变化和生产 face 变化同步维护。它不会让尚未移植的运行时 assembly helper 自动完成；只有其 Rust 实现与聚焦证据落地后，对应 manifest 行才会离开 pending。
+功能测试移植获得一个可复用的 Rust 受控环境真源，并针对与生产相同的可移植约定编译。该 crate 增加了显式测试专用 API，必须与 source helper 变化和生产 face 变化同步维护。全部 source 运行时 helper、组装运行时套件和原 `tsdown` 构建行现在都有直接 Rust/WASM 证据；下游功能套件可迁移到已编译包，而无需保留可执行 TypeScript 测试基础设施。

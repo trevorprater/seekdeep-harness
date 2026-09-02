@@ -3,6 +3,7 @@
 /apps/web/generated/
 /packages/client/*/lib/
 /packages/session-query/session-log-export/lib/
+/packages/test-support/client-runtime/lib/
 /vendor/*/lib/
 /.seekdeep/
 *.profraw

@@ -12,6 +12,7 @@ use base64::Engine as _;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
+mod client_test_runtime_built_smoke_driver;
 mod remote_built_smoke_driver;
 
 #[derive(Debug, Parser)]
@@ -69,6 +70,12 @@ enum Command {
     },
     /// Build and drive generated Goal Remotes through built WASM and a real Rust Host.
     RemoteBuiltSmoke,
+    /// Build and import the Client test runtime through real Vitest, React, and jsdom.
+    ClientTestRuntimeBuiltSmoke {
+        /// Pinned source checkout supplying the oracle's installed JavaScript test dependencies.
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
     /// Generate or verify the durable Session event catalog from the pinned source tree.
     PersistenceCatalog {
         /// Source checkout recorded in `SOURCE_SNAPSHOT`.
@@ -141,6 +148,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Parity { source, scope } => parity(&source, scope),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
+        Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {
             xtask::persistence_catalog::run(Path::new("."), &source, check)
         }
@@ -381,6 +389,162 @@ fn remote_built_smoke() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn client_test_runtime_built_smoke(source: &Path) -> anyhow::Result<()> {
+    verify_source(source)?;
+    let metadata = cargo_metadata()?;
+    let root = &metadata.workspace_root;
+    wasm_package_once(
+        "seekdeep-client-test-runtime",
+        "seekdeep_client_test_runtime",
+        "@seekdeep-ai/seekdeep-client-test-runtime",
+        &root.join("packages/test-support/client-runtime/lib"),
+    )?;
+
+    let source_package = source.join("packages/test-support/client-runtime");
+    let smoke_dir = metadata
+        .target_directory
+        .join("xtask/client-test-runtime-built-smoke");
+    if smoke_dir.exists() {
+        std::fs::remove_dir_all(&smoke_dir)?;
+    }
+    std::fs::create_dir_all(&smoke_dir)?;
+    let config = client_test_runtime_vitest_config(source, &source_package, &smoke_dir)?;
+    let test = client_test_runtime_built_smoke_driver::TEST.replace(
+        "__RUNTIME_MODULE__",
+        &quoted_path(&root.join("packages/test-support/client-runtime/lib/index.js"))?,
+    );
+    let config_path = smoke_dir.join("vitest.config.mjs");
+    let typecheck_path = smoke_dir.join("typecheck.ts");
+    let tsconfig_path = smoke_dir.join("tsconfig.json");
+    let tsconfig = client_test_runtime_tsconfig(root, &source_package, &typecheck_path)?;
+    std::fs::write(&config_path, config)?;
+    std::fs::write(smoke_dir.join("runtime.test.mjs"), test)?;
+    std::fs::write(
+        &typecheck_path,
+        client_test_runtime_built_smoke_driver::TYPECHECK,
+    )?;
+    std::fs::write(&tsconfig_path, tsconfig)?;
+
+    let vitest = source.join("node_modules/.bin/vitest");
+    anyhow::ensure!(
+        vitest.is_file(),
+        "pinned source has no installed Vitest binary at {}",
+        vitest.display()
+    );
+    let status = ProcessCommand::new(vitest)
+        .current_dir(root)
+        .args(["run", "--config"])
+        .arg(config_path)
+        .status()?;
+    anyhow::ensure!(status.success(), "built Client test runtime smoke failed");
+    let tsc = source.join("node_modules/.bin/tsc");
+    anyhow::ensure!(
+        tsc.is_file(),
+        "pinned source has no installed TypeScript compiler at {}",
+        tsc.display()
+    );
+    let status = ProcessCommand::new(tsc)
+        .current_dir(root)
+        .args(["-p"])
+        .arg(tsconfig_path)
+        .status()?;
+    anyhow::ensure!(
+        status.success(),
+        "built Client test runtime declaration smoke failed"
+    );
+    Ok(())
+}
+
+fn client_test_runtime_vitest_config(
+    source: &Path,
+    source_package: &Path,
+    smoke_dir: &Path,
+) -> anyhow::Result<String> {
+    Ok(client_test_runtime_built_smoke_driver::CONFIG
+        .replace(
+            "__REACT__",
+            &quoted_path(&source_package.join("node_modules/react/index.js"))?,
+        )
+        .replace(
+            "__REACT_DOM__",
+            &quoted_path(&source_package.join("node_modules/react-dom/index.js"))?,
+        )
+        .replace(
+            "__TESTING_REACT__",
+            &quoted_path(
+                &source_package.join("node_modules/@testing-library/react/dist/index.js"),
+            )?,
+        )
+        .replace(
+            "__TESTING_DOM__",
+            &quoted_path(&source_package.join("node_modules/@testing-library/dom/dist/index.js"))?,
+        )
+        .replace(
+            "__VITEST__",
+            &quoted_path(&source_package.join("node_modules/vitest/dist/index.js"))?,
+        )
+        .replace(
+            "__IMMER__",
+            &quoted_path(
+                &source.join("packages/client/runtime/node_modules/immer/dist/immer.mjs"),
+            )?,
+        )
+        .replace(
+            "__TEST_FILE__",
+            &quoted_path(&smoke_dir.join("runtime.test.mjs"))?,
+        ))
+}
+
+fn client_test_runtime_tsconfig(
+    root: &Path,
+    source_package: &Path,
+    typecheck_path: &Path,
+) -> anyhow::Result<String> {
+    Ok(client_test_runtime_built_smoke_driver::TSCONFIG
+        .replace("__ROOT__", &quoted_path(root)?)
+        .replace(
+            "__CORDIS_TYPES__",
+            &quoted_path(&root.join("vendor/cordis/lib/types/index.d.ts"))?,
+        )
+        .replace(
+            "__RUNTIME_TYPES__",
+            &quoted_path(&root.join("packages/client/runtime/lib/types/client/index.d.ts"))?,
+        )
+        .replace(
+            "__SLOT_TYPES__",
+            &quoted_path(&root.join("packages/client/ui-slots/lib/types/index.d.ts"))?,
+        )
+        .replace(
+            "__TEST_RUNTIME_TYPES__",
+            &quoted_path(&root.join("packages/test-support/client-runtime/lib/types/index.d.ts"))?,
+        )
+        .replace(
+            "__TESTING_DOM_TYPES__",
+            &quoted_path(
+                &source_package.join("node_modules/@testing-library/dom/types/index.d.ts"),
+            )?,
+        )
+        .replace(
+            "__TESTING_REACT_TYPES__",
+            &quoted_path(
+                &source_package.join("node_modules/@testing-library/react/types/index.d.ts"),
+            )?,
+        )
+        .replace(
+            "__REACT_TYPES__",
+            &quoted_path(&source_package.join("node_modules/@types/react/index.d.ts"))?,
+        )
+        .replace(
+            "__VITEST_TYPES__",
+            &quoted_path(&source_package.join("node_modules/vitest/dist/index.d.ts"))?,
+        )
+        .replace("__TYPECHECK_FILE__", &quoted_path(typecheck_path)?))
+}
+
+fn quoted_path(path: &Path) -> anyhow::Result<String> {
+    Ok(serde_json::to_string(&path.to_string_lossy())?)
+}
+
 fn wasm_package(
     package: &str,
     artifact: &str,
@@ -482,6 +646,7 @@ fn wasm_package_once(
         "@seekdeep-ai/seekdeep-client-ui-slots"
             | "@seekdeep-ai/seekdeep-client-schema-form"
             | "@seekdeep-ai/seekdeep-client-web-react"
+            | "@seekdeep-ai/seekdeep-client-test-runtime"
     ) {
         return wasm_foundation_esm_package(&metadata, artifact, module_id, out_dir, &wasm);
     }
@@ -696,7 +861,21 @@ fn wasm_foundation_esm_package(
             client_web_react_esm_declarations(),
             "client-web-react-invariant",
         ),
+        "@seekdeep-ai/seekdeep-client-test-runtime" => (
+            client_test_runtime_esm_wrapper(),
+            client_test_runtime_esm_declarations(),
+            "client-test-runtime-invariant",
+        ),
         _ => anyhow::bail!("unsupported foundation ESM package {module_id}"),
+    };
+    let wrapper = if wrapper.contains("__SEEKDEEP_WASM_BASE64__") {
+        wrapper.replace(
+            "__SEEKDEEP_WASM_BASE64__",
+            &base64::engine::general_purpose::STANDARD
+                .encode(std::fs::read(staging.join("wasm_bg.wasm"))?),
+        )
+    } else {
+        wrapper.to_owned()
     };
     std::fs::write(out_dir.join("index.js"), wrapper)?;
     std::fs::write(
@@ -829,6 +1008,448 @@ export declare class SlotAssemblyError extends Error {}
 export declare class StaleAuthorizationError extends Error {}
 export declare class SlotOwnershipError extends Error {}
 export type UseSession<Snap extends object = object> = SnapshotSelectorHook<Snap>;
+"
+}
+
+#[allow(clippy::too_many_lines)] // The self-contained ESM boundary stays reviewable as one artifact.
+fn client_test_runtime_esm_wrapper() -> &'static str {
+    r"import * as wasm from './wasm.js';
+import * as React from 'react';
+import { act, render } from '@testing-library/react';
+import { within } from '@testing-library/dom';
+import { afterEach, beforeEach, expect, vi } from 'vitest';
+import { produce } from 'immer';
+
+const binary = atob('__SEEKDEEP_WASM_BASE64__');
+wasm.initSync({ module: Uint8Array.from(binary, value => value.charCodeAt(0)) });
+
+const FILTER = Symbol.for('cordis.filter');
+const EFFECT = Symbol.for('cordis.effect');
+const ISOLATE = Symbol.for('cordis.isolate');
+const INTERCEPT = Symbol.for('cordis.intercept');
+const SERVICE_TRACKER = Symbol.for('cordis.service.tracker');
+const INIT_HOOKS = Symbol.for('cordis.initHooks');
+const INIT = Symbol.for('cordis.init');
+const CHECK_PROTO = Symbol.for('cordis.checkProto');
+const GeneratorFunction = function* () {}.constructor;
+const AsyncGeneratorFunction = async function* () {}.constructor;
+function isConstructor(value) {
+  if (!value.prototype) return false;
+  if (value instanceof GeneratorFunction) return false;
+  if (AsyncGeneratorFunction !== Function && value instanceof AsyncGeneratorFunction) return false;
+  return true;
+}
+function invokePlugin(plugin, ctx, config) {
+  if (typeof plugin !== 'function') return plugin.apply(ctx, config);
+  if (!isConstructor(plugin)) return plugin(ctx, config);
+  const instance = new plugin(ctx, config);
+  for (const hook of instance?.[INIT_HOOKS] ?? []) hook();
+  return instance?.[INIT]?.();
+}
+function resolveInject(inject, result = Object.create(null)) {
+  if (!inject) return Object.keys(result);
+  if (Array.isArray(inject)) {
+    for (const name of inject) result[name] = null;
+  } else if (Reflect.has(inject, CHECK_PROTO)) {
+    resolveInject(Object.getPrototypeOf(inject), result);
+    for (const name of Object.keys(inject)) result[name] = inject[name] ?? null;
+  } else {
+    for (const name of Object.keys(inject)) result[name] = inject[name] ?? null;
+  }
+  return Object.keys(result);
+}
+function traceService(ctx, value) {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[SERVICE_TRACKER] !== true) return value;
+  let proxy;
+  proxy = new Proxy(value, {
+    get(target, key, receiver) {
+      if (key === 'ctx') return ctx;
+      const inner = Reflect.get(target, key, receiver);
+      return typeof inner === 'function' ? (...args) => Reflect.apply(inner, proxy, args) : inner;
+    },
+    set(target, key, next, receiver) {
+      if (key === 'ctx') return false;
+      return Reflect.set(target, key, next, receiver);
+    },
+  });
+  return proxy;
+}
+function wrapContext(core) {
+  let context;
+  context = new Proxy(core, {
+    get(target, key, receiver) {
+      if (key === 'emit') return (name, ...args) => target.emitArgs(name, args);
+      if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args);
+      if (key === 'serial') return (name, ...args) => target.serialArgs(name, args);
+      if (key === 'bail') return (name, ...args) => target.bailArgs(name, args);
+      if (key === 'get') return name => traceService(context, target.get(name));
+      if (key === 'constructor') return wasm.WasmContext;
+      if (Reflect.has(target, key)) {
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+      const metadata = target.metaGet(key);
+      if (metadata !== undefined) return metadata;
+      return typeof key === 'string' ? traceService(context, target.get(key)) : undefined;
+    },
+    set(target, key, value, receiver) {
+      if (Reflect.has(target, key) || typeof key !== 'string') return Reflect.set(target, key, value, receiver);
+      return target.setProperty(key, value);
+    },
+    has(target, key) {
+      if (Reflect.has(target, key)) return true;
+      if (target.metaGet(key) !== undefined) return true;
+      return typeof key === 'string' && target.get(key) !== undefined;
+    },
+  });
+  return context;
+}
+Object.defineProperties(wasm.WasmContext, {
+  filter: { value: FILTER },
+  effect: { value: EFFECT },
+  isolate: { value: ISOLATE },
+  intercept: { value: INTERCEPT },
+});
+wasm.configureContextWrapper(wrapContext);
+
+export const domSnapshotSerializer = {
+  test(value) {
+    return typeof Element !== 'undefined'
+      && value instanceof Element
+      && wasm.snapshotNeedsNormalization(value);
+  },
+  serialize(value, config, indentation, depth, refs, printer) {
+    return printer(wasm.normalizeDomSnapshot(value), config, indentation, depth, refs);
+  },
+};
+
+let serializerRegistered = false;
+export function registerDomSnapshotSerializer() {
+  if (serializerRegistered) return;
+  serializerRegistered = true;
+  expect.addSnapshotSerializer(domSnapshotSerializer);
+}
+
+const stabilize = async callback => {
+  await act(async () => { await callback(); });
+};
+
+wasm.configureClientTestRuntime({
+  createContext: () => wasm.createContext(),
+  stabilize,
+  act,
+  produce,
+  react: React,
+  render,
+  within,
+  registerSnapshotSerializer: registerDomSnapshotSerializer,
+  clearStorage: () => localStorage.clear(),
+  isHtmlElement: value => typeof HTMLElement !== 'undefined' && value instanceof HTMLElement,
+  invokePlugin,
+  resolveInject,
+});
+
+const adopt = (face, target) => {
+  Object.setPrototypeOf(face, target.prototype);
+  return face;
+};
+
+export class TestRemote {
+  constructor(ctx) { return adopt(wasm.installTestRemote(ctx), new.target); }
+}
+
+export class FixtureSession {
+  constructor(sessionId, store, overrides = {}) {
+    return adopt(wasm.createFixtureSessionFromStore(sessionId, store, overrides), new.target);
+  }
+}
+wasm.configureFixtureSessionPrototype(FixtureSession.prototype);
+
+export class TestSessions {
+  constructor(stabilizer, rootCtx) {
+    return adopt(wasm.createTestSessions(stabilizer, rootCtx, produce), new.target);
+  }
+}
+
+export class TestWorkspaces {
+  constructor(stabilizer) {
+    return adopt(wasm.createTestWorkspaces(stabilizer, produce), new.target);
+  }
+}
+
+export class TestRoot {
+  constructor(slots, stabilizer) {
+    return adopt(wasm.createTestRoot(slots, stabilizer), new.target);
+  }
+}
+
+export class SlotTestRuntime extends wasm.SlotTestRuntime {
+  static async create() {
+    const runtime = await wasm.SlotTestRuntime.create();
+    adopt(runtime.root, TestRoot);
+    adopt(runtime.sessions, TestSessions);
+    adopt(runtime.workspaces, TestWorkspaces);
+    return adopt(runtime, this);
+  }
+}
+export const conversationSnapshot = wasm.conversationSnapshot;
+export const workspaceListState = wasm.workspaceListState;
+export const stubSettingsScope = () => wasm.createStubSettingsScope(implementation => vi.fn(implementation));
+export const makeTranslate = (...dictionaries) => wasm.makeTranslate(Array.from(dictionaries));
+
+export function usePinnedBrowserLanguages(primary, ...rest) {
+  let pin;
+  beforeEach(() => { pin = new wasm.WasmBrowserLanguagePin(primary, Array.from(rest)); });
+  afterEach(() => { pin?.dispose(); pin = undefined; });
+}
+"
+}
+
+#[allow(clippy::too_many_lines)] // The source-compatible declaration surface is one closed artifact.
+fn client_test_runtime_esm_declarations() -> &'static str {
+    r"import type { Context, Fiber, Plugin } from '@seekdeep-ai/cordis';
+import type { BoundFunctions, queries } from '@testing-library/dom';
+import type { RenderResult } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import type { Mock, SnapshotSerializer } from 'vitest';
+import type {
+  SessionId,
+  SessionListState,
+  SessionSummary,
+  SettingsScope,
+  SettingsScopeSnapshot,
+  WorkspaceId,
+} from '@seekdeep-ai/seekdeep-client-runtime/client';
+import type { SlotMap } from '@seekdeep-ai/seekdeep-client-ui-slots';
+
+export type Stabilizer = (callback: () => void | Promise<void>) => Promise<void>;
+export interface ObservableSnapshot<T> {
+  getSnapshot(): T;
+  subscribe(listener: () => void): () => void;
+}
+export interface ConversationSnapshot extends Record<string, unknown> {
+  sessionId: SessionId;
+  running: boolean;
+}
+export interface SessionBehaviorOverrides extends Record<string, unknown> {
+  prompt?: Function;
+  readAttachment?: Function;
+  updateQueue?: Function;
+  cancel?: Function;
+  command?: Function;
+  loadOlder?: Function;
+  rename?: Function;
+}
+export interface SessionFixture {
+  id: string;
+  snapshot?: Partial<Omit<ConversationSnapshot, 'sessionId'>>;
+  summary?: Partial<Omit<SessionSummary, 'id'>>;
+  session?: SessionBehaviorOverrides;
+}
+export interface SessionProvideInfo {
+  sessionId: SessionId;
+  hooks: Record<string, ObservableSnapshot<unknown>>;
+  props: Record<string, unknown>;
+  projections?: { faceOf(key: string): ObservableSnapshot<unknown> };
+}
+export interface SessionMaybeProvideInfo {
+  sessionId: SessionId | undefined;
+  hooks: Record<string, ObservableSnapshot<unknown> | undefined>;
+  props: Record<string, unknown | undefined>;
+  projections?: { faceOf(key: string): ObservableSnapshot<unknown> };
+}
+export interface SessionProvideDescriptor {
+  hooks?: readonly string[];
+  props?: readonly string[];
+  resolve(binding: TestSessionBinding): {
+    hooks?: Record<string, ObservableSnapshot<unknown>>;
+    props?: Record<string, unknown>;
+  };
+}
+export interface SessionSearchResultItem extends Record<string, unknown> {
+  sessionId: SessionId;
+  snippet: string;
+}
+export interface SubagentAddress extends Record<string, unknown> {
+  parentSessionId: SessionId;
+  childSessionId: SessionId;
+}
+export interface WorkspaceView extends Record<string, unknown> {
+  workspaceId: WorkspaceId;
+  title: string;
+  path: string;
+  sessionIds: SessionId[];
+}
+export interface WorkspaceListState extends Record<string, unknown> {
+  items: WorkspaceView[];
+  archivedSessionIds: SessionId[];
+  state: string;
+  phase: string;
+  error: unknown;
+  baselinesReady: boolean;
+  recentWorkspaceId?: WorkspaceId;
+}
+export interface DirectoryListing extends Record<string, unknown> {
+  path: string;
+  home: string;
+  crumbs: unknown[];
+  entries: unknown[];
+}
+export interface StubSettingsScope<T> {
+  scope: SettingsScope<T>;
+  set: Mock;
+  unset: Mock;
+  listenerCount(): number;
+  publish(next: Partial<SettingsScopeSnapshot<T>>): void;
+}
+export declare class TestRemote {
+  constructor(ctx: Context);
+  $dispatch(event: string, args: readonly unknown[]): void;
+  $on(event: string, listener: (...args: never[]) => void): () => void;
+  $mount(): Promise<() => Promise<void>>;
+}
+export declare class FixtureSession implements ObservableSnapshot<ConversationSnapshot> {
+  constructor(sessionId: SessionId, store: ObservableSnapshot<ConversationSnapshot>, overrides: SessionBehaviorOverrides);
+  readonly sessionId: SessionId;
+  readonly projections: {
+    faceOf(key: string): ObservableSnapshot<unknown>;
+    set(key: string, value: unknown): void;
+  };
+  getSnapshot(): ConversationSnapshot;
+  subscribe(listener: () => void): () => void;
+  prompt(...args: unknown[]): never;
+  readAttachment(...args: unknown[]): never;
+  updateQueue(...args: unknown[]): never;
+  cancel(...args: unknown[]): never;
+  command(...args: unknown[]): never;
+  loadOlder(...args: unknown[]): never;
+  rename(...args: unknown[]): never;
+}
+export interface TestSessionBinding {
+  readonly sessionId: SessionId;
+  readonly session: FixtureSession;
+  readonly ctx: Context;
+}
+export declare class TestSessions {
+  constructor(stabilizer: Stabilizer, rootCtx: Context);
+  readonly list: ObservableSnapshot<SessionListState>;
+  readonly currentProvideInfo: ObservableSnapshot<SessionMaybeProvideInfo>;
+  readonly calls: {
+    method: 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents' | 'clear' | 'search' | 'fork';
+    args: unknown[];
+  }[];
+  readonly searchResultLimit: number;
+  add(fixture: SessionFixture, options?: { current?: boolean }): Promise<SessionId>;
+  updateSnapshot(id: string, mutate: (draft: ConversationSnapshot) => void): Promise<void>;
+  updateSummary(id: string, patch: Partial<Omit<SessionSummary, 'id'>>): Promise<void>;
+  setCurrent(id: string | undefined): Promise<void>;
+  remove(id: string): Promise<void>;
+  provide(descriptor: SessionProvideDescriptor): () => void;
+  provideInfo(id: string): SessionProvideInfo | undefined;
+  maybeProvideInfo(id: string | undefined): SessionMaybeProvideInfo;
+  scope(id: string): Context | undefined;
+  binding(id: string): TestSessionBinding | undefined;
+  scopeOf(ctx: Context): SessionId | undefined;
+  sessionOf(ctx: Context): FixtureSession | undefined;
+  open(id: SessionId): void;
+  openSubagent(address: SubagentAddress): void;
+  subagentAddress(id: SessionId): SubagentAddress | undefined;
+  setSubagentCatalogOpen(parentSessionId: SessionId, open: boolean): void;
+  refreshSubagents(parentSessionId: SessionId): Promise<void>;
+  noteAgentPreset(sessionId: SessionId, agentPreset: string): void;
+  clear(): void;
+  stubSearch(implementation: (query: string, signal: AbortSignal) => { items: SessionSearchResultItem[]; hasMore: boolean }): void;
+  search(query: string, signal: AbortSignal): Promise<{ ok: true; value: { items: SessionSearchResultItem[]; hasMore: boolean } }>;
+  fork(options: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>;
+  behavior(id: string): FixtureSession;
+  disposeScopes(): Promise<void>;
+}
+export declare class TestWorkspaces {
+  constructor(stabilizer: Stabilizer);
+  readonly list: ObservableSnapshot<WorkspaceListState>;
+  readonly calls: { method: string; args: unknown[] }[];
+  stub(method: string, implementation: (...args: unknown[]) => unknown): void;
+  update(mutator: (draft: WorkspaceListState) => void): Promise<void>;
+  connectWorkspace(workspaceId: WorkspaceId): Promise<SessionId>;
+  startSession(workspaceId?: WorkspaceId): void;
+  create(input: { path: string }): Promise<WorkspaceView>;
+  openPath(path: string): Promise<void>;
+  pickDirectory(): Promise<string | null>;
+  listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing>;
+  createDirectory(path: string, name: string): Promise<string>;
+  rename(workspaceId: WorkspaceId, title: string): Promise<WorkspaceView>;
+  delete(workspaceId: WorkspaceId): Promise<void>;
+  insertBefore(workspaceId: WorkspaceId, beforeWorkspaceId?: WorkspaceId): Promise<void>;
+  insertSessionBefore(workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId): Promise<WorkspaceView>;
+  archiveSession(sessionId: SessionId): Promise<void>;
+}
+export type SlotKind = 'single' | 'list' | 'keyed' | 'chain';
+export type SlotScope = 'root' | 'session-maybe' | 'session';
+export interface ChildSlotDeclaration {
+  kind: SlotKind;
+  scope: SlotScope;
+  inject?: unknown;
+}
+export type ChildrenDecl = Record<string, ChildSlotDeclaration>;
+export type SlotKey = keyof SlotMap & string;
+export type OwnerOf<K extends SlotKey> = SlotMap[K] extends { owner: infer Owner } ? Owner : object;
+export type SlotComponent<Props extends object = object> = (props: Props) => ReactNode;
+export interface ComposedProps<Children extends SlotKey = never> {
+  renderSlot<K extends Children>(key: K, owner: OwnerOf<K>, options?: Record<string, unknown>): ReactNode;
+  renderSlotChain<K extends Children>(key: K, owner: OwnerOf<K>, options?: Record<string, unknown>): ReactNode;
+  SessionProvider: SlotComponent<Record<string, unknown>>;
+}
+export interface StoreInstanceLike<State = unknown> extends ObservableSnapshot<State> {
+  readonly actions: Record<string, Function>;
+  clearPersisted?(): void;
+}
+export interface SlotRegistry {
+  register(options: { name: string; [key: string]: unknown }, component: unknown): () => void;
+  entries(key: string): unknown[];
+  spec(key: string): ChildSlotDeclaration | undefined;
+  renderSlot(key: string, owner: object): ReactNode;
+  pruneStoreScope(sessionId: string): void;
+}
+export declare class TestRoot {
+  constructor(slots: SlotRegistry, stabilizer: Stabilizer);
+  declare<const D extends ChildrenDecl>(
+    children: D,
+    frame: SlotComponent<ComposedProps<keyof NoInfer<D> & SlotKey>>,
+  ): Promise<void>;
+  release(): void;
+}
+export interface FeatureHandle {
+  readonly fiber: Fiber;
+  dispose(): Promise<void>;
+}
+export interface SlotView<K extends SlotKey> {
+  readonly container: HTMLElement;
+  readonly view: BoundFunctions<typeof queries>;
+  update(owner: OwnerOf<K>): void;
+}
+export declare class SlotTestRuntime {
+  static create(): Promise<SlotTestRuntime>;
+  readonly ctx: Context;
+  readonly slots: SlotRegistry;
+  readonly root: TestRoot;
+  readonly sessions: TestSessions;
+  readonly workspaces: TestWorkspaces;
+  provide<K extends string>(name: K, value: K extends keyof Context ? Partial<Context[K]> : unknown): void;
+  mount(plugin: Plugin): Promise<FeatureHandle>;
+  renderRoot(): RenderResult;
+  declare(children: ChildrenDecl): Promise<void>;
+  renderSlot<K extends SlotKey>(key: K, owner: OwnerOf<K>): SlotView<K>;
+  storeOf(key: SlotKey, scopeKey?: string): StoreInstanceLike;
+  flush(): Promise<void>;
+  dispose(): Promise<void>;
+}
+export declare const domSnapshotSerializer: SnapshotSerializer;
+export declare function registerDomSnapshotSerializer(): void;
+export declare function conversationSnapshot(sessionId: SessionId): ConversationSnapshot;
+export declare function workspaceListState(): WorkspaceListState;
+export declare function stubSettingsScope<T>(): StubSettingsScope<T>;
+export declare function makeTranslate(...dictionaries: readonly Record<string, string>[]): (key: string, params?: Record<string, unknown>) => string;
+export declare function usePinnedBrowserLanguages(primary: string, ...rest: string[]): void;
 "
 }
 
@@ -3959,6 +4580,7 @@ mod tests {
 
     use super::{
         classic_module_bundle, client_loader_esm_wrapper, client_modules_esm_wrapper,
+        client_test_runtime_esm_declarations, client_test_runtime_esm_wrapper,
         client_web_esm_declarations, client_web_esm_wrapper, compatibility_declarations,
         compatibility_prelude, copy_ui_attachment_type_declarations,
         copy_ui_primitives_katex_assets, copy_ui_primitives_type_declarations,
@@ -4158,7 +4780,7 @@ mod tests {
         .unwrap();
         for expected in [
             "configureClientUiSettingsPlugins(require('react')",
-            "require('clsx')",
+            "const clsx = (...values) => __seekdeep_client_ui_settings_plugins_wasm.settingsPluginsClassNames(values)",
             "require('@seekdeep-ai/seekdeep-client-ui-primitives')",
             "slots.resolveSlotLabel",
             "apply: __seekdeep_client_ui_settings_plugins_wasm.applyClientUiSettingsPlugins",
@@ -5363,6 +5985,46 @@ mod tests {
             )
             .contains("settingsPluginsClassNames(values)")
         );
+    }
+
+    #[test]
+    fn client_test_runtime_esm_wrapper_keeps_assembly_and_public_contract() {
+        let wrapper = client_test_runtime_esm_wrapper();
+        for expected in [
+            "wasm.initSync({ module: Uint8Array.from(binary",
+            "wasm.configureContextWrapper(wrapContext)",
+            "wasm.configureClientTestRuntime({",
+            "createContext: () => wasm.createContext()",
+            "invokePlugin",
+            "resolveInject",
+            "registerSnapshotSerializer: registerDomSnapshotSerializer",
+            "export class TestSessions",
+            "wasm.configureFixtureSessionPrototype(FixtureSession.prototype)",
+            "wasm.createTestSessions(stabilizer, rootCtx, produce)",
+            "export class TestWorkspaces",
+            "export class SlotTestRuntime extends wasm.SlotTestRuntime",
+            "export const stubSettingsScope",
+            "export const makeTranslate",
+            "new wasm.WasmBrowserLanguagePin",
+        ] {
+            assert!(wrapper.contains(expected), "missing {expected:?}");
+        }
+        let declarations = client_test_runtime_esm_declarations();
+        for expected in [
+            "export type Stabilizer",
+            "export declare class FixtureSession",
+            "export declare class TestSessions",
+            "export declare class TestWorkspaces",
+            "export declare class TestRoot",
+            "export declare class SlotTestRuntime",
+            "static create(): Promise<SlotTestRuntime>",
+            "export declare const domSnapshotSerializer",
+            "export declare function stubSettingsScope<T>()",
+            "export declare function makeTranslate",
+            "export declare function usePinnedBrowserLanguages",
+        ] {
+            assert!(declarations.contains(expected), "missing {expected:?}");
+        }
     }
 
     #[test]

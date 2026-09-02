@@ -11,6 +11,10 @@ use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 use crate::conversation_snapshot_js;
 
+thread_local! {
+    static FIXTURE_SESSION_PROTOTYPE: RefCell<Option<JsValue>> = const { RefCell::new(None) };
+}
+
 struct ProjectionState {
     values: RefCell<HashMap<String, JsValue>>,
     listeners: RefCell<HashMap<String, Vec<Function>>>,
@@ -44,6 +48,13 @@ struct BrowserSessionsState {
     channel: RefCell<Option<Rc<WasmSessionProvideChannel>>>,
 }
 
+/// Configures the compatibility prototype assigned to every browser fixture Session.
+#[wasm_bindgen(js_name = configureFixtureSessionPrototype)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn configure_fixture_session_prototype(prototype: JsValue) {
+    FIXTURE_SESSION_PROTOTYPE.with(|configured| *configured.borrow_mut() = Some(prototype));
+}
+
 /// Constructs and publishes the fixture-backed browser Sessions service as `ctx.sessions`.
 ///
 /// # Errors
@@ -53,6 +64,36 @@ struct BrowserSessionsState {
 #[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
 pub fn install_test_sessions(
     context: JsValue,
+    stabilizer: JsValue,
+    produce: JsValue,
+) -> Result<JsValue, JsValue> {
+    let face = sessions_face(&context, stabilizer, produce)?;
+    call_method(
+        &context,
+        "provide",
+        &[JsValue::from_str("sessions"), face.clone()],
+    )?;
+    Ok(face)
+}
+
+/// Constructs the public fixture-backed Sessions double without publishing it.
+///
+/// # Errors
+///
+/// Returns malformed Context, stabilization, draft, provide-channel, fixture, or action failures.
+#[wasm_bindgen(js_name = createTestSessions)]
+#[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
+pub fn create_test_sessions(
+    stabilizer: JsValue,
+    context: JsValue,
+    produce: JsValue,
+) -> Result<JsValue, JsValue> {
+    sessions_face(&context, stabilizer, produce)
+}
+
+#[allow(clippy::too_many_lines)]
+fn sessions_face(
+    context: &JsValue,
     stabilizer: JsValue,
     produce: JsValue,
 ) -> Result<JsValue, JsValue> {
@@ -92,11 +133,6 @@ pub fn install_test_sessions(
         ),
     )?;
     install_session_methods(&face, &state)?;
-    call_method(
-        &context,
-        "provide",
-        &[JsValue::from_str("sessions"), face.clone().into()],
-    )?;
     Ok(face.into())
 }
 
@@ -113,6 +149,49 @@ pub fn create_fixture_session(
     overrides: JsValue,
 ) -> Result<JsValue, JsValue> {
     let (session, _) = fixture_session(&session_id, snapshot, overrides)?;
+    Ok(session)
+}
+
+/// Creates a public fixture Session over an externally owned snapshot Store.
+///
+/// # Errors
+///
+/// Returns malformed Store, snapshot, override, projection-face, or subscription failures.
+#[wasm_bindgen(js_name = createFixtureSessionFromStore)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn create_fixture_session_from_store(
+    session_id: String,
+    store: JsValue,
+    overrides: JsValue,
+) -> Result<JsValue, JsValue> {
+    if !store.is_object() || store.is_null() {
+        return Err(js_sys::TypeError::new("FixtureSession store must be an object").into());
+    }
+    let snapshot = call_method(&store, "getSnapshot", &[])?;
+    let override_object = Object::from(overrides.clone());
+    let overrides_snapshot = Reflect::has(&override_object, &JsValue::from_str("getSnapshot"))?;
+    let overrides_subscribe = Reflect::has(&override_object, &JsValue::from_str("subscribe"))?;
+    let (session, _) = fixture_session(&session_id, snapshot, overrides)?;
+    let face = Object::from(session.clone());
+    if !overrides_snapshot {
+        let snapshot_store = store.clone();
+        let get_snapshot = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
+            call_method(&snapshot_store, "getSnapshot", &[])
+        })
+            as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
+        set(&face, "getSnapshot", &get_snapshot.into_js_value())?;
+    }
+    if !overrides_subscribe {
+        let subscribe_store = store;
+        let subscribe = Closure::wrap(Box::new(
+            move |listener: Function| -> Result<Function, JsValue> {
+                call_method(&subscribe_store, "subscribe", &[listener.into()])?
+                    .dyn_into::<Function>()
+            },
+        )
+            as Box<dyn FnMut(Function) -> Result<Function, JsValue>>);
+        set(&face, "subscribe", &subscribe.into_js_value())?;
+    }
     Ok(session)
 }
 
@@ -183,6 +262,17 @@ fn fixture_session(
         set(&face, method, &missing.into_js_value())?;
     }
     Object::assign(&face, &Object::from(overrides));
+    FIXTURE_SESSION_PROTOTYPE.with(|configured| {
+        if let Some(prototype) = configured.borrow().as_ref() {
+            let constructor = Reflect::get(&js_sys::global(), &JsValue::from_str("Object"))?
+                .dyn_into::<Function>()?;
+            let set_prototype =
+                Reflect::get(constructor.as_ref(), &JsValue::from_str("setPrototypeOf"))?
+                    .dyn_into::<Function>()?;
+            set_prototype.call2(&constructor, face.as_ref(), prototype)?;
+        }
+        Ok::<(), JsValue>(())
+    })?;
     Ok((face.into(), state))
 }
 

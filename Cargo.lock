@@ -5361,6 +5361,7 @@ dependencies = [
  "ryu-js",
  "seekdeep-client-runtime",
  "seekdeep-client-settings-contract",
+ "seekdeep-client-web-react",
  "seekdeep-cordis",
  "seekdeep-host-directory-picker",
  "seekdeep-identity",

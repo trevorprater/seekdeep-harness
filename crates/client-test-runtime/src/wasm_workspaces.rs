@@ -29,6 +29,28 @@ pub fn install_test_workspaces(
     stabilizer: JsValue,
     produce: JsValue,
 ) -> Result<JsValue, JsValue> {
+    let face = workspaces_face(stabilizer, produce)?;
+    call_method(
+        &context,
+        "provide",
+        &[JsValue::from_str("workspaces"), face.clone()],
+    )?;
+    Ok(face)
+}
+
+/// Constructs the public Workspaces double without publishing it.
+///
+/// # Errors
+///
+/// Returns malformed stabilization, draft, observable, or action failures.
+#[wasm_bindgen(js_name = createTestWorkspaces)]
+#[allow(clippy::needless_pass_by_value, clippy::too_many_lines)]
+pub fn create_test_workspaces(stabilizer: JsValue, produce: JsValue) -> Result<JsValue, JsValue> {
+    workspaces_face(stabilizer, produce)
+}
+
+#[allow(clippy::too_many_lines)]
+fn workspaces_face(stabilizer: JsValue, produce: JsValue) -> Result<JsValue, JsValue> {
     let stabilizer = stabilizer
         .dyn_into::<Function>()
         .map_err(|_| js_sys::TypeError::new("TestWorkspaces stabilize must be a function"))?;
@@ -235,11 +257,6 @@ pub fn install_test_workspaces(
     }) as Box<dyn FnMut(JsValue) -> Promise>);
     set(&face, "archiveSession", &archive.into_js_value())?;
 
-    call_method(
-        &context,
-        "provide",
-        &[JsValue::from_str("workspaces"), face.clone().into()],
-    )?;
     Ok(face.into())
 }
 
