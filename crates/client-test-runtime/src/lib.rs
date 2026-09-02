@@ -18,6 +18,10 @@ mod translate;
 mod wasm_browser_languages;
 #[cfg(target_arch = "wasm32")]
 mod wasm_remote;
+#[cfg(target_arch = "wasm32")]
+mod wasm_workspaces;
+#[cfg(not(target_arch = "wasm32"))]
+mod workspaces;
 
 pub use settings_scope::*;
 pub use translate::*;
@@ -25,6 +29,10 @@ pub use translate::*;
 pub use wasm_browser_languages::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_remote::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_workspaces::*;
+#[cfg(not(target_arch = "wasm32"))]
+pub use workspaces::*;
 
 /// Typed test-only seat corresponding to `ctx.remote`.
 pub const TEST_REMOTE: ServiceKey<TestRemote> = ServiceKey::new("remote");

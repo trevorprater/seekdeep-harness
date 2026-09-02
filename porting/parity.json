@@ -80213,7 +80213,20 @@
     {
       "source": "packages/test-support/client-runtime/src/workspaces.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/src/workspaces.rs",
+        "crates/client-test-runtime/tests/workspaces_parity.rs",
+        "crates/client-test-runtime/src/wasm_workspaces.rs",
+        "crates/client-test-runtime/tests/wasm_workspaces_parity.rs",
+        "crates/client-runtime/src/workspace_service.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/client-runtime/tests/runtime.client.spec.tsx -t 'workspaces' (3 passed, 23 skipped)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-test-runtime --all-features (11 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-test-runtime --target wasm32-unknown-unknown --test wasm_workspaces_parity --all-features (1 passed)"
+      ],
+      "note": "The native Rust double uses the production Workspace list snapshot and Store with typed calls and stubs; the live WASM face publishes ctx.workspaces with the browser object contract. Both preserve injected stabilization, exact cancellation-signal forwarding, source browse/action defaults, listener identity, and archive publication."
     },
     {
       "source": "packages/test-support/client-runtime/tests/__snapshots__/runtime.client.spec.tsx.snap",

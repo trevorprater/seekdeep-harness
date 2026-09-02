@@ -16,9 +16,11 @@ The Remote double publishes the `remote` Cordis service, delivers opaque forward
 
 The settings stub implements `ClientSettingsScope`, starts with the source loading/read-only/Host snapshot, records ordered `set` and `unset` calls, replaces only supplied publication fields, and synchronously notifies a listener snapshot. The translator uses first-dictionary ownership, visible-key fallback, ASCII word placeholders, and JavaScript-compatible parameter stringification. The WASM browser-language guard installs the same configurable own `navigator.languages` and `navigator.language` values and deletes both during idempotent cleanup so inherited accessors become visible again.
 
+The Workspaces double owns a production `SnapshotStore<RuntimeWorkspaceListState>`, routes list mutations through an injected stabilization owner, forwards the exact cancellation signal to directory stubs, and records every action as a typed ordered value. Its inert defaults preserve the source echoes, root-to-target home breadcrumbs, directory cancellation, and archive-list publication; typed replacement stubs keep action failures and coupled test behavior explicit.
+
 ## Verification
 
-Focused source tests pin the Remote double, settings stub, translator consumers, and browser-language consumers. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, and translation conversion; a live WASM test pins language preference order and inherited-accessor restoration. `cargo xtask parity` maps only helpers with direct source and target evidence; the remaining Session, Workspace, fixture, stabilizer, and snapshot helpers stay pending.
+Focused source tests pin the Remote double, settings stub, translator consumers, browser-language consumers, and Workspaces face. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, translation conversion, Workspace stabilization, all action defaults and stubs, browse cancellation, and archive publication; live WASM tests pin the Remote and Workspaces service faces plus browser-language restoration. `cargo xtask parity` maps only helpers with direct source and target evidence; the remaining Session, fixture, runtime assembly, and snapshot helpers stay pending.
 
 ## Alternatives considered
 

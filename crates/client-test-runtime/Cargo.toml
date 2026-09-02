@@ -11,8 +11,14 @@ futures.workspace = true
 parking_lot.workspace = true
 ryu-js.workspace = true
 seekdeep-client-settings-contract = { path = "../client-settings-contract" }
+seekdeep-client-runtime = { path = "../client-runtime" }
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-identity = { path = "../identity" }
 serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+seekdeep-host-directory-picker = { path = "../host-directory-picker" }
+seekdeep-llm = { path = "../llm" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys.workspace = true

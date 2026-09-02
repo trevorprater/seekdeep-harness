@@ -15,6 +15,7 @@ use crate::{
 };
 
 /// Workspace list plus two-baseline readiness and default-target projection.
+#[derive(Clone)]
 pub struct RuntimeWorkspaceListState {
     /// Host Workspace order.
     pub items: Rc<Vec<Rc<ClientWorkspaceView>>>,

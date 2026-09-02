@@ -16,9 +16,11 @@ Remote 测试替身发布 `remote` Cordis 服务，把不透明的转发参数�
 
 Settings stub 实现 `ClientSettingsScope`，以源实现的 loading、只读、Host 快照启动，按顺序记录 `set` 与 `unset` 调用，只替换发布时显式提供的字段，并同步通知 listener 快照。Translator 使用首个字典命中、保留未命中 key、ASCII word placeholder，以及与 JavaScript 一致的参数字符串转换。WASM 浏览器语言 guard 安装相同的可配置自有 `navigator.languages` 和 `navigator.language` 值，并在幂等清理时删除两者，从而重新显露继承的 accessor。
 
+Workspaces 测试替身持有生产 `SnapshotStore<RuntimeWorkspaceListState>`，通过注入的稳定化 owner 执行列表变更，把精确的取消 signal 转发给目录 stub，并把每项 action 记录成带类型的有序值。无动作默认实现保留源实现的 echo、从根到目标的 home breadcrumb、目录取消和 archive 列表发布；带类型的替换 stub 则显式表达 action 失败与联动测试行为。
+
 ## 验证
 
-聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方和浏览器语言消费方。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录，以及翻译转换；实时 WASM 测试固定语言偏好顺序和继承 accessor 恢复。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余 Session、Workspace、fixture、stabilizer 和快照 helper 继续保持 pending。
+聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方、浏览器语言消费方和 Workspaces face。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、全部 action 默认实现与 stub、浏览取消及 archive 发布；实时 WASM 测试固定 Remote 与 Workspaces 服务 face，以及浏览器语言恢复。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余 Session、fixture、运行时 assembly 和快照 helper 继续保持 pending。
 
 ## 曾考虑的替代方案
 
