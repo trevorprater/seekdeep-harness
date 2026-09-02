@@ -79403,7 +79403,21 @@
     {
       "source": "packages/test-support/acp-snapshot/src/index.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/src/lib.rs",
+        "crates/acp-snapshot/src/harness.rs",
+        "crates/acp-snapshot/src/launcher.rs",
+        "crates/acp-snapshot/src/normalize.rs",
+        "crates/acp-snapshot/src/suite.rs",
+        "crates/acp-snapshot/tests/suite_parity.rs"
+      ],
+      "evidence": [
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --all-features (96 passed)",
+        "suite_parity imports the public harness, launcher, normalizer, and suite contract from the seekdeep_acp_snapshot crate root",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-acp-snapshot --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust crate root re-exports the launcher, scenario harness, pure normalizers, and explicit AcpSnapshotSuite owner. Rust returns a validated suite value instead of importing Vitest and registering describe/it cases at module import time."
     },
     {
       "source": "packages/test-support/acp-snapshot/src/invariant.ts",
@@ -79457,7 +79471,20 @@
     {
       "source": "packages/test-support/acp-snapshot/src/suite.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/src/suite.rs",
+        "crates/acp-snapshot/tests/suite_parity.rs",
+        "crates/acp-snapshot/src/harness.rs",
+        "crates/acp-snapshot/src/normalize.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/suite.spec.ts (107 passed, 1 skipped)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --test suite_parity --all-features (23 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --all-features (96 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-acp-snapshot --all-targets --all-features -- -D warnings"
+      ],
+      "note": "AcpSnapshotSuite validates scenario names, header classes, sidecar owners, and the complete fixture inventory; polls replay scenarios concurrently to settlement; keeps record and refresh mutations serial; compares normalized stdout, logs, prompts, schemas, and live headers; rejects UNKNOWN_TOOL; writes record/refresh artifacts; and prunes only valid stale child fixtures. Pure refresh logic retains only unambiguous normalized-equivalent volatiles and message identities, aligns packed timing and inserted titles, and keeps fresh semantics authoritative. Rust exposes an explicit suite runner and aggregated diagnostics instead of Vitest collection-time registration."
     },
     {
       "source": "packages/test-support/acp-snapshot/tests/fixtures/fake-acp-agent.ts",
@@ -80034,7 +80061,17 @@
     {
       "source": "packages/test-support/acp-snapshot/tests/suite.spec.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/tests/suite_parity.rs",
+        "crates/acp-snapshot/src/suite.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/suite.spec.ts (107 passed, 1 skipped)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --test suite_parity --all-features (23 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-acp-snapshot --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Twenty-three Rust cases consolidate the source inventory across table validation, fixture guards, sidecar formatting, message-ID stability, spill and cwd replacement, normalized string bijections, packed timing, inserted events, and real replay/record/refresh subprocess suites."
     },
     {
       "source": "packages/test-support/acp-snapshot/tsconfig.json",

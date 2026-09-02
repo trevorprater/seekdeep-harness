@@ -20,6 +20,7 @@ regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 seekdeep-acp = { path = "../acp" }
+seekdeep-core = { path = "../core" }
 seekdeep-loader-smoke = { path = "../loader-smoke" }
 seekdeep-sdk-protocol = { path = "../sdk-protocol" }
 seekdeep-util = { path = "../util" }
@@ -47,6 +48,11 @@ required-features = ["fixture-bins"]
 [[test]]
 name = "harness_parity"
 path = "tests/harness_parity.rs"
+required-features = ["fixture-bins"]
+
+[[test]]
+name = "suite_parity"
+path = "tests/suite_parity.rs"
 required-features = ["fixture-bins"]
 
 [lints]
