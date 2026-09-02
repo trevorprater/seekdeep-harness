@@ -9,6 +9,7 @@ use std::{
 use parking_lot::Mutex;
 use seekdeep_agent::{AGENTS, Agent, AgentEvent, AgentEvents};
 use seekdeep_agent_loop::SessionStartEvent;
+use seekdeep_api_gateway::register_invocable_service_if_available;
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
 use seekdeep_session_projection::{
@@ -1109,6 +1110,7 @@ pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), move |context, config| {
         Box::pin(async move {
             GoalService::install(&context, parse_config(&config)?)?;
+            register_invocable_service_if_available(&context, GOAL)?;
             Ok(())
         })
     })

@@ -2,6 +2,7 @@
 
 mod inspect_registry;
 mod registry;
+mod remote;
 mod runner;
 mod sandbox;
 
@@ -33,6 +34,10 @@ pub fn plugin() -> seekdeep_cordis::Plugin {
                 serde_json::from_value(config)?
             };
             DynamicCordisRunner::try_install(&context, config)?;
+            seekdeep_api_gateway::register_invocable_service_if_available(
+                &context,
+                DYNAMIC_CORDIS_RUNNER,
+            )?;
             Ok(())
         })
     })

@@ -4,9 +4,10 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use js_sys::{Array, Function, Object, Reflect};
+use js_sys::{Array, Function, Object, Promise, Reflect};
 use seekdeep_client_runtime::WasmClientSlotRegistry;
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
 
 fn set(object: &Object, key: &str, value: &JsValue) {
@@ -157,6 +158,102 @@ fn declaration_injection_waits_cleans_and_reactivates_through_caller_effects() {
     assert_eq!(*setups.borrow(), 2);
     dispose_injection.call0(&JsValue::UNDEFINED).unwrap();
     assert_eq!(*cleanups.borrow(), 2);
+}
+
+#[wasm_bindgen_test]
+fn declaration_callback_can_reenter_the_shared_register_binding() {
+    let registry = WasmClientSlotRegistry::new(None);
+    let face = registry.face_for(caller("plugin-reentrant")).unwrap();
+    let registration_face = face.clone();
+    let callback = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
+        call(
+            &registration_face,
+            "register",
+            &[
+                options("t.host").into(),
+                JsValue::from_str("injected-entry"),
+            ],
+        )
+    }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
+    let dispose_injection = call(
+        &face,
+        "inject",
+        &[JsValue::from_str("t.host"), callback.into_js_value()],
+    )
+    .unwrap()
+    .dyn_into::<Function>()
+    .unwrap();
+    let dispose_root = call(
+        &face,
+        "register",
+        &[
+            root_options(&[("t.host", "single", "root")]).into(),
+            JsValue::from_str("frame"),
+        ],
+    )
+    .unwrap()
+    .dyn_into::<Function>()
+    .unwrap();
+    assert_eq!(registry.entries("t.host".to_owned()).length(), 1);
+    dispose_injection.call0(&JsValue::UNDEFINED).unwrap();
+    dispose_root.call0(&JsValue::UNDEFINED).unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+async fn caller_face_exposes_batched_ledger_subscriptions() {
+    let registry = WasmClientSlotRegistry::new(None);
+    let face = registry.face_for(caller("plugin-subscriber")).unwrap();
+    let notifications = Rc::new(RefCell::new(0_usize));
+    let observed = notifications.clone();
+    let listener = Closure::wrap(Box::new(move || {
+        *observed.borrow_mut() += 1;
+    }) as Box<dyn FnMut()>);
+    let unsubscribe = call(
+        &face,
+        "subscribe",
+        &[JsValue::from_str("t.host"), listener.into_js_value()],
+    )
+    .unwrap()
+    .dyn_into::<Function>()
+    .unwrap();
+
+    let dispose_root = call(
+        &face,
+        "register",
+        &[
+            root_options(&[("t.host", "single", "root")]).into(),
+            JsValue::from_str("frame"),
+        ],
+    )
+    .unwrap()
+    .dyn_into::<Function>()
+    .unwrap();
+    JsFuture::from(Promise::resolve(&JsValue::UNDEFINED))
+        .await
+        .unwrap();
+    JsFuture::from(Promise::resolve(&JsValue::UNDEFINED))
+        .await
+        .unwrap();
+    assert_eq!(*notifications.borrow(), 1);
+
+    unsubscribe.call0(&JsValue::UNDEFINED).unwrap();
+    let dispose_entry = call(
+        &face,
+        "register",
+        &[options("t.host").into(), JsValue::from_str("entry")],
+    )
+    .unwrap()
+    .dyn_into::<Function>()
+    .unwrap();
+    JsFuture::from(Promise::resolve(&JsValue::UNDEFINED))
+        .await
+        .unwrap();
+    JsFuture::from(Promise::resolve(&JsValue::UNDEFINED))
+        .await
+        .unwrap();
+    assert_eq!(*notifications.borrow(), 1);
+    dispose_entry.call0(&JsValue::UNDEFINED).unwrap();
+    dispose_root.call0(&JsValue::UNDEFINED).unwrap();
 }
 
 #[wasm_bindgen_test]

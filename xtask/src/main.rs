@@ -434,7 +434,7 @@ fn wasm_package_once(
         std::fs::remove_dir_all(&staging)?;
     }
     std::fs::create_dir_all(&staging)?;
-    let global = format!("__{}_wasm", artifact.replace('-', "_"));
+    let global = wasm_package_global(artifact, module_id);
     let status = ProcessCommand::new("wasm-bindgen")
         .args([
             "--target",
@@ -1076,7 +1076,7 @@ import * as UiAttachment from '@seekdeep-ai/seekdeep-client-ui-attachment';
 import * as SchemaForm from '@seekdeep-ai/seekdeep-client-schema-form';
 import './base.css';
 
-await init(new URL('./client_bg.wasm', import.meta.url));
+await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
 const staticModules = {
   'react': React,
   'react/jsx-runtime': ReactJsxRuntime,
@@ -1779,6 +1779,21 @@ fn classic_module_bundle(
     Ok(format!(
         "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n{compatibility}  window.__ModuleLoader__.load({{ id: {module_id}, factory: {factory} }});\n}})();\n"
     ))
+}
+
+fn wasm_package_global(artifact: &str, module_id: &str) -> String {
+    let artifact = artifact.replace('-', "_");
+    let module = module_id
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    format!("__{artifact}_{module}_wasm")
 }
 
 fn compatibility_prelude(global: &str, module_id: &str) -> String {
@@ -3819,8 +3834,8 @@ mod tests {
         is_generated_output, is_localization, module_factory, ui_attachment_esm_wrapper,
         ui_attachment_invariant_wrapper, ui_primitives_esm_wrapper,
         ui_primitives_highlight_backend, ui_primitives_internal_wrapper,
-        ui_primitives_invariant_wrapper, ui_primitives_markdown_backend, watch_snapshot,
-        write_wasm_package_compatibility_entries, write_web_frontend,
+        ui_primitives_invariant_wrapper, ui_primitives_markdown_backend, wasm_package_global,
+        watch_snapshot, write_wasm_package_compatibility_entries, write_web_frontend,
     };
 
     #[test]
@@ -3850,6 +3865,21 @@ mod tests {
         assert!(bundle.contains("__seekdeep_probe_wasm.initSync({ module: bytes })"));
         assert!(bundle.contains("id: \"@seekdeep-ai/probe\""));
         assert!(bundle.contains("factory: () => __seekdeep_probe_wasm"));
+    }
+
+    #[test]
+    fn classic_package_globals_include_module_identity_for_shared_artifacts() {
+        let connection = wasm_package_global(
+            "seekdeep_client_foundation_wasm",
+            "@seekdeep-ai/seekdeep-client-connection",
+        );
+        let gateway = wasm_package_global(
+            "seekdeep_client_foundation_wasm",
+            "@seekdeep-ai/seekdeep-api-gateway",
+        );
+        assert_ne!(connection, gateway);
+        assert!(super::is_javascript_identifier(&connection));
+        assert!(super::is_javascript_identifier(&gateway));
     }
 
     #[test]
@@ -5096,7 +5126,7 @@ mod tests {
             "import * as React from 'react'",
             "import Loader from '@seekdeep-ai/cordis-plugin-loader'",
             "import './base.css'",
-            "await init(new URL('./client_bg.wasm', import.meta.url))",
+            "await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) })",
             "'@seekdeep-ai/seekdeep-client-web-react': WebReact",
             "wasm.configureClientWeb(",
             "export const AppWebEntry = wasm.AppWebEntry",

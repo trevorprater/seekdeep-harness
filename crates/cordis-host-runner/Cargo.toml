@@ -16,9 +16,11 @@ parking_lot.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-cordis-dynamic-types = { path = "../cordis-dynamic-types" }
 seekdeep-agent = { path = "../agent" }
+seekdeep-api-gateway = { path = "../api-gateway" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-loader = { path = "../loader" }
 seekdeep-tools = { path = "../tools" }
+seekdeep-typert-protocol = { path = "../typert-protocol" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -28,6 +30,7 @@ tokio.workspace = true
 seekdeep-cordis-timer = { path = "../cordis-timer" }
 seekdeep-core = { path = "../core" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-typert-registry = { path = "../typert-registry" }
 
 [lints]
 workspace = true

@@ -10,6 +10,7 @@ use std::{
 
 use indexmap::IndexMap;
 use parking_lot::Mutex;
+use seekdeep_api_gateway::register_invocable_service_if_available;
 use seekdeep_cordis::{Context, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{
     SessionHeader, SessionId, derive_event_message, is_append_surface_event,
@@ -744,6 +745,7 @@ pub fn plugin() -> Plugin {
         Box::pin(async move {
             let config: Config = serde_json::from_value(config)?;
             MessageFeedbackService::install(&context, config.max_note_bytes).await?;
+            register_invocable_service_if_available(&context, MESSAGE_FEEDBACK)?;
             Ok(())
         })
     })

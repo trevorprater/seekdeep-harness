@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use seekdeep_api_gateway::TYPERT_SERVICES;
+use seekdeep_api_gateway::register_invocable_service_if_available;
 use seekdeep_cordis::{FiberState, Plugin, ServiceKey};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use seekdeep_loader::{LOADER, LoaderSettlement};
@@ -181,17 +181,7 @@ pub fn plugin() -> Plugin {
                 .ok_or_else(|| anyhow::anyhow!("plugin inventory requires loader"))?;
             let inventory = PluginInventoryService::new(loader);
             context.provide(PLUGIN_INVENTORY, inventory)?;
-            if let Some(directory) = context.get(TYPERT_SERVICES) {
-                directory.register(
-                    &context,
-                    NAME,
-                    Arc::new(|context| {
-                        context
-                            .get(PLUGIN_INVENTORY)
-                            .map(|service| service as Arc<dyn TypertInvocableService>)
-                    }),
-                )?;
-            }
+            register_invocable_service_if_available(&context, PLUGIN_INVENTORY)?;
             Ok(())
         })
     })

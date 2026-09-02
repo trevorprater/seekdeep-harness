@@ -282,7 +282,7 @@ fn snapshot_store_face(store: Rc<BrowserSnapshotStore>) -> Result<JsValue, JsVal
     set(&output, "update", &update.into_js_value())?;
     let setter = store;
     let set_state = Closure::wrap(Box::new(move |next: JsValue| setter.set(next))
-        as Box<dyn FnMut(JsValue) -> Result<(), JsValue>>);
+        as Box<dyn Fn(JsValue) -> Result<(), JsValue>>);
     set(&output, "set", &set_state.into_js_value())?;
     Ok(output.into())
 }

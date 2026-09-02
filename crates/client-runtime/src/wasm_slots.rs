@@ -397,7 +397,7 @@ fn service_face(state: &Rc<BrowserState>, caller: &JsValue) -> Result<JsValue, J
             )
         },
     )
-        as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
+        as Box<dyn Fn(JsValue, JsValue) -> Result<JsValue, JsValue>>);
     set(&face, "register", &register.into_js_value())?;
 
     let inject_state = state.clone();
@@ -531,6 +531,19 @@ fn service_face(state: &Rc<BrowserState>, caller: &JsValue) -> Result<JsValue, J
 }
 
 fn add_ledger_methods(face: &Object, state: &Rc<BrowserState>) -> Result<(), JsValue> {
+    let subscribe_core = state.registry.core().clone();
+    let subscribe = Closure::wrap(
+        Box::new(move |key: String, listener: Function| -> Function {
+            let subscription = subscribe_core.subscribe(
+                SlotName::new(key),
+                Rc::new(move || call_or_throw(listener.call0(&JsValue::UNDEFINED))),
+            );
+            Closure::wrap(Box::new(move || subscription.dispose()) as Box<dyn FnMut()>)
+                .into_js_value()
+                .unchecked_into()
+        }) as Box<dyn FnMut(String, Function) -> Function>,
+    );
+    set(face, "subscribe", &subscribe.into_js_value())?;
     let version_core = state.registry.core().clone();
     let version = Closure::wrap(Box::new(move |key: String| {
         u64_to_f64(version_core.version(&SlotName::new(key)))

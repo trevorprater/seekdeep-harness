@@ -121,7 +121,7 @@ impl ApiProxyRuntime for UnhandledDomains {
         _signal: seekdeep_llm::AbortSignal,
     ) -> ApiDownlinkStream<api::events::MuxFrame> {
         use futures::StreamExt as _;
-        futures::stream::once(async { anyhow::bail!("API mux has no composed domain") }).boxed()
+        futures::stream::empty().boxed()
     }
 
     fn host(
@@ -130,7 +130,7 @@ impl ApiProxyRuntime for UnhandledDomains {
         _signal: seekdeep_llm::AbortSignal,
     ) -> ApiDownlinkStream<api::events::HostFrame> {
         use futures::StreamExt as _;
-        futures::stream::once(async { anyhow::bail!("API host has no composed domain") }).boxed()
+        futures::stream::empty().boxed()
     }
 
     fn session_log(

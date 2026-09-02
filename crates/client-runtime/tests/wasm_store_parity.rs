@@ -86,6 +86,34 @@ fn snapshot_updates_preserve_untouched_identity_notify_sync_and_freeze_set() {
 }
 
 #[wasm_bindgen_test]
+fn snapshot_set_allows_synchronous_listener_reentry() {
+    install_test_produce();
+    let store = create_snapshot_store(JsValue::from_f64(0.0), options(None, None)).unwrap();
+    let calls = Rc::new(RefCell::new(0_usize));
+    let observed = calls.clone();
+    let reentrant_store = store.clone();
+    let listener = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
+        let call_number = {
+            let mut calls = observed.borrow_mut();
+            *calls += 1;
+            *calls
+        };
+        if call_number == 1 {
+            call(&reentrant_store, "set", &[JsValue::from_f64(2.0)])?;
+        }
+        Ok(())
+    }) as Box<dyn Fn() -> Result<(), JsValue>>);
+    call(&store, "subscribe", &[listener.into_js_value()]).unwrap();
+
+    call(&store, "set", &[JsValue::from_f64(1.0)]).unwrap();
+    assert_eq!(*calls.borrow(), 2);
+    assert_eq!(
+        call(&store, "getSnapshot", &[]).unwrap().as_f64(),
+        Some(2.0)
+    );
+}
+
+#[wasm_bindgen_test]
 fn frame_mode_coalesces_until_the_injected_animation_frame() {
     install_test_produce();
     let frames = Rc::new(RefCell::new(Vec::<Function>::new()));

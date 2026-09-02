@@ -169,6 +169,68 @@ impl TypertServiceDirectory {
     }
 }
 
+/// Registers one typed Cordis service with the Host Remote directory.
+///
+/// The resolver re-reads the calling Context on every invocation so scoped
+/// Cordis rebinding and provider replacement keep their source semantics.
+///
+/// # Errors
+///
+/// Returns when the Gateway directory is unavailable, the service key is
+/// already registered, or the current lifecycle owner is inactive.
+pub fn register_invocable_service<Service>(
+    context: &Context,
+    key: ServiceKey<Service>,
+) -> anyhow::Result<EffectHandle>
+where
+    Service: TypertInvocableService,
+{
+    let directory = context
+        .get(TYPERT_SERVICES)
+        .ok_or_else(|| anyhow::anyhow!("Typert service directory is unavailable"))?;
+    directory.register(
+        context,
+        key.name(),
+        Arc::new(move |context| {
+            context
+                .get(key)
+                .map(|service| service as Arc<dyn TypertInvocableService>)
+        }),
+    )
+}
+
+/// Registers one typed Cordis service when the Host Remote directory is live.
+///
+/// Domain plugins use this optional seam so their source-visible dependency
+/// lists and standalone behavior do not depend on the deployment's Gateway.
+///
+/// # Errors
+///
+/// Returns duplicate-service or inactive-owner failures when the directory is
+/// present; returns `Ok(None)` when this composition does not mount a Gateway.
+pub fn register_invocable_service_if_available<Service>(
+    context: &Context,
+    key: ServiceKey<Service>,
+) -> anyhow::Result<Option<EffectHandle>>
+where
+    Service: TypertInvocableService,
+{
+    let Some(directory) = context.get(TYPERT_SERVICES) else {
+        return Ok(None);
+    };
+    directory
+        .register(
+            context,
+            key.name(),
+            Arc::new(move |context| {
+                context
+                    .get(key)
+                    .map(|service| service as Arc<dyn TypertInvocableService>)
+            }),
+        )
+        .map(Some)
+}
+
 /// Dispatch failure produced outside the invoked business method.
 #[derive(Debug)]
 pub struct TypertGatewayError {

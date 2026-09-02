@@ -16,6 +16,7 @@ use std::{
 use futures::{FutureExt, future::Either};
 use regex::Regex;
 use seekdeep_agent::Agent;
+use seekdeep_api_gateway::register_invocable_service_if_available;
 pub use seekdeep_commands_contract::{CommandDescriptor, CommandInputDescriptor};
 use seekdeep_cordis::{Context, EventArgs, Plugin, ServiceKey, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, Session};
@@ -942,6 +943,7 @@ fn notify_change(context: &Context) {
 pub fn install(context: &Context) -> anyhow::Result<Arc<CommandRuntime>> {
     let runtime = CommandRuntime::new(context);
     runtime.provide(context)?;
+    register_invocable_service_if_available(context, COMMANDS)?;
     Ok(runtime)
 }
 

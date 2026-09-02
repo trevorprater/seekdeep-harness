@@ -32,7 +32,15 @@ export function foundationContextWrapper() {
 
 export function foundationInstallFetch() {
   const original = globalThis.fetch
+  const originalWebSocket = globalThis.WebSocket
   const calls = []
+  globalThis.WebSocket = class {
+    constructor(url) {
+      this.url = url
+      queueMicrotask(() => this.onopen?.({ type: 'open' }))
+    }
+    close() { this.onclose?.({ type: 'close' }) }
+  }
   globalThis.fetch = async request => {
     const body = await request.json()
     calls.push({ url: new URL(request.url).pathname, body })
@@ -47,11 +55,19 @@ export function foundationInstallFetch() {
       result: { ok: true, value },
     }), { status: 200, headers: { 'content-type': 'application/json' } })
   }
-  return { calls, restore() { globalThis.fetch = original } }
+  return {
+    calls,
+    restore() {
+      globalThis.fetch = original
+      globalThis.WebSocket = originalWebSocket
+    },
+  }
 }
 export function foundationPlugin(root, plugin) { return root.plugin(plugin).await() }
 export function foundationGet(root, name) { return root.get(name) }
 export function foundationCall(api) { return api.sessions.list({}) }
+export function foundationInventory(remote) { return remote.dynamicCordisRunner.inventory() }
+export function foundationCommands(remote) { return remote.commands.list('session-one') }
 export function foundationStart(connection, calls) {
   return connection.start({
     onStateChange(state) { calls.push(['state', state]) },
@@ -72,6 +88,8 @@ extern "C" {
     fn foundationPlugin(root: &JsValue, plugin: &JsValue) -> Promise;
     fn foundationGet(root: &JsValue, name: &str) -> JsValue;
     fn foundationCall(api: &JsValue) -> Promise;
+    fn foundationInventory(remote: &JsValue) -> Promise;
+    fn foundationCommands(remote: &JsValue) -> Promise;
     fn foundationStart(connection: &JsValue, calls: &JsValue) -> JsValue;
     fn foundationCalls() -> JsValue;
     fn foundationValues(values: &JsValue) -> js_sys::Array;
@@ -116,6 +134,36 @@ async fn foundations_publish_services_and_route_unary_calls() {
         Some("/api/session.list")
     );
 
+    let remote = foundationGet(&root, "remote");
+    JsFuture::from(foundationInventory(&remote)).await.unwrap();
+    JsFuture::from(foundationCommands(&remote)).await.unwrap();
+    let fetch_calls = foundationFetchCalls(&fetch);
+    assert_eq!(fetch_calls.length(), 3);
+    assert_eq!(
+        Reflect::get(&fetch_calls.get(1), &JsValue::from_str("url"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("/api/dynamicCordisRunner/inventory")
+    );
+    let command = Reflect::get(&fetch_calls.get(2), &JsValue::from_str("body")).unwrap();
+    assert_eq!(
+        Reflect::get(&command, &JsValue::from_str("method"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("commands/list")
+    );
+    let payload = Reflect::get(&command, &JsValue::from_str("payload")).unwrap();
+    let args = Reflect::get(&payload, &JsValue::from_str("args")).unwrap();
+    assert_eq!(
+        Reflect::get(&args, &JsValue::from_str("agentId"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("session-one")
+    );
+
     let callbacks = foundationCalls();
     let handle = foundationStart(&connection, &callbacks);
     JsFuture::from(foundationFlush()).await.unwrap();
@@ -129,7 +177,7 @@ async fn foundations_publish_services_and_route_unary_calls() {
             .collect::<Vec<_>>(),
         ["[\"state\",\"connected\"]", "[\"connected\",true]"]
     );
-    assert!(!foundationGet(&root, "remote").is_undefined());
+    assert!(!remote.is_undefined());
     assert!(!foundationGet(&root, "remote.commands").is_undefined());
     foundationStop(&handle);
     foundationRestore(&fetch);
