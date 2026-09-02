@@ -18,9 +18,11 @@ The settings stub implements `ClientSettingsScope`, starts with the source loadi
 
 The Workspaces double owns a production `SnapshotStore<RuntimeWorkspaceListState>`, routes list mutations through an injected stabilization owner, forwards the exact cancellation signal to directory stubs, and records every action as a typed ordered value. Its inert defaults preserve the source echoes, root-to-target home breadcrumbs, directory cancellation, and archive-list publication; typed replacement stubs keep action failures and coupled test behavior explicit.
 
+The snapshot normalizer folds only CSS-module tokens matching `_<local>_<lowercase-hash>`, computes the SVG `data-content` fingerprint with wrapping FNV-1a over JavaScript UTF-16 code units, mutates only a deep clone, and preserves childless SVG elements. Rust snapshot tests call the normalizer directly rather than installing a Vitest serializer.
+
 ## Verification
 
-Focused source tests pin the Remote double, settings stub, translator consumers, browser-language consumers, and Workspaces face. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, translation conversion, Workspace stabilization, all action defaults and stubs, browse cancellation, and archive publication; live WASM tests pin the Remote and Workspaces service faces plus browser-language restoration. `cargo xtask parity` maps only helpers with direct source and target evidence; the remaining Session, fixture, runtime assembly, and snapshot helpers stay pending.
+Focused source tests pin the Remote double, settings stub, translator consumers, browser-language consumers, Workspaces face, and snapshot normalization. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, translation conversion, Workspace stabilization, all action defaults and stubs, browse cancellation, archive publication, class folding, and UTF-16 fingerprinting; live WASM tests pin the Remote and Workspaces service faces, browser-language restoration, and clone-only DOM normalization. `cargo xtask parity` maps only helpers with direct source and target evidence; the remaining Session, fixture, and runtime assembly helpers stay pending.
 
 ## Alternatives considered
 

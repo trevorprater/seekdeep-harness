@@ -18,9 +18,11 @@ Settings stub 实现 `ClientSettingsScope`，以源实现的 loading、只读、
 
 Workspaces 测试替身持有生产 `SnapshotStore<RuntimeWorkspaceListState>`，通过注入的稳定化 owner 执行列表变更，把精确的取消 signal 转发给目录 stub，并把每项 action 记录成带类型的有序值。无动作默认实现保留源实现的 echo、从根到目标的 home breadcrumb、目录取消和 archive 列表发布；带类型的替换 stub 则显式表达 action 失败与联动测试行为。
 
+快照规范化器只折叠符合 `_<local>_<lowercase-hash>` 的 CSS-module token，按 JavaScript UTF-16 code unit 使用 wrapping FNV-1a 计算 SVG `data-content` 指纹，只修改深克隆，并保留没有 child 的 SVG 元素。Rust 快照测试直接调用该规范化器，而不安装 Vitest serializer。
+
 ## 验证
 
-聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方、浏览器语言消费方和 Workspaces face。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、全部 action 默认实现与 stub、浏览取消及 archive 发布；实时 WASM 测试固定 Remote 与 Workspaces 服务 face，以及浏览器语言恢复。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余 Session、fixture、运行时 assembly 和快照 helper 继续保持 pending。
+聚焦源测试固定 Remote 测试替身、settings stub、translator 消费方、浏览器语言消费方、Workspaces face 和快照规范化。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、全部 action 默认实现与 stub、浏览取消、archive 发布、class 折叠和 UTF-16 指纹；实时 WASM 测试固定 Remote 与 Workspaces 服务 face、浏览器语言恢复和只修改克隆的 DOM 规范化。`cargo xtask parity` 只映射具有直接源端与目标端证据的 helper；其余 Session、fixture 和运行时 assembly helper 继续保持 pending。
 
 ## 曾考虑的替代方案
 

@@ -13,6 +13,7 @@ use parking_lot::Mutex;
 use seekdeep_cordis::{Context, ServiceKey};
 
 mod settings_scope;
+mod snapshot;
 mod translate;
 #[cfg(target_arch = "wasm32")]
 mod wasm_browser_languages;
@@ -24,6 +25,7 @@ mod wasm_workspaces;
 mod workspaces;
 
 pub use settings_scope::*;
+pub use snapshot::*;
 pub use translate::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_browser_languages::*;

@@ -80194,7 +80194,18 @@
     {
       "source": "packages/test-support/client-runtime/src/snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-test-runtime/src/snapshot.rs",
+        "crates/client-test-runtime/tests/snapshot_parity.rs",
+        "crates/client-test-runtime/tests/wasm_snapshot_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/client-runtime/tests/runtime.client.spec.tsx -t 'folds class hashes|serializes childless svg' (2 passed, 24 skipped)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-client-test-runtime --test snapshot_parity --all-features (2 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-test-runtime --target wasm32-unknown-unknown --test wasm_snapshot_parity --all-features (1 passed)"
+      ],
+      "note": "The Rust normalizer folds only exact scoped-class tokens, fingerprints SVG markup over JavaScript UTF-16 code units with wrapping FNV-1a, normalizes a clone rather than the live tree, and leaves childless SVG elements untouched. Rust tests register and invoke this normalizer directly instead of installing a Vitest serializer."
     },
     {
       "source": "packages/test-support/client-runtime/src/translate.ts",
