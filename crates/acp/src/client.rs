@@ -111,16 +111,39 @@ impl AcpClient {
     ///
     /// Returns transport, remote validation, or missing-session-id failures.
     pub async fn new_session(&self, cwd: &str) -> anyhow::Result<AcpSessionId> {
+        self.new_session_with_additional_directories(cwd, None)
+            .await
+    }
+
+    /// Creates one remote Session with an explicitly widened workspace scope.
+    ///
+    /// # Errors
+    ///
+    /// Returns transport, remote validation, or missing-session-id failures.
+    pub async fn new_session_with_additional_directories(
+        &self,
+        cwd: &str,
+        additional_directories: Option<&[String]>,
+    ) -> anyhow::Result<AcpSessionId> {
+        let mut params = Map::from_iter([
+            ("cwd".to_owned(), Value::String(cwd.to_owned())),
+            ("mcpServers".to_owned(), json!([])),
+        ]);
+        if let Some(additional_directories) = additional_directories {
+            params.insert(
+                "additionalDirectories".to_owned(),
+                Value::Array(
+                    additional_directories
+                        .iter()
+                        .cloned()
+                        .map(Value::String)
+                        .collect(),
+                ),
+            );
+        }
         let value = self
             .transport
-            .request(
-                agent_methods::SESSION_NEW,
-                Map::from_iter([
-                    ("cwd".to_owned(), Value::String(cwd.to_owned())),
-                    ("mcpServers".to_owned(), json!([])),
-                ]),
-                None,
-            )
+            .request(agent_methods::SESSION_NEW, params, None)
             .await?;
         value
             .get("sessionId")

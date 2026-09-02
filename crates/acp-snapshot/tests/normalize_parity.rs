@@ -369,13 +369,16 @@ fn session_log_scrubs_fixed_snapshot_spills() {
 
 #[test]
 fn session_log_scrubs_scenario_owned_snapshot_spills() {
-    let path = "/tmp/dsh-acp-snap-012345678/session-c22bc3f1d2af/8a7b6c5d4e3f-bash.txt";
-    let output = normalized_log(
-        &format!("{}\n{}\n", header(&[]), spill_event(path)),
-        &context(),
-    );
-    assert!(output.contains("{{spillLocator:bash.txt}}"));
-    assert!(!output.contains("/tmp/dsh-acp-snap-012345678"));
+    for product in ["dsh", "seekdeep"] {
+        let path =
+            format!("/tmp/{product}-acp-snap-012345678/session-c22bc3f1d2af/8a7b6c5d4e3f-bash.txt");
+        let output = normalized_log(
+            &format!("{}\n{}\n", header(&[]), spill_event(&path)),
+            &context(),
+        );
+        assert!(output.contains("{{spillLocator:bash.txt}}"));
+        assert!(!output.contains(&format!("/tmp/{product}-acp-snap-012345678")));
+    }
 }
 
 #[test]

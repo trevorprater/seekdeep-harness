@@ -16,6 +16,7 @@ use std::{
     time::Duration,
 };
 
+use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use seekdeep_acp::{AcpClient, AcpPermissionHandler, AcpSessionUpdate, AcpUpdateObserver};
 use seekdeep_loader_smoke::{
@@ -191,19 +192,24 @@ impl LaunchedAcpTestAgent {
     /// # Errors
     ///
     /// Returns predicate failure or the source close-before-match diagnostic.
-    pub async fn wait_for_update(&self, predicate: AcpUpdatePredicate) -> anyhow::Result<Value> {
+    pub fn wait_for_update(
+        &self,
+        predicate: AcpUpdatePredicate,
+    ) -> BoxFuture<'static, anyhow::Result<Value>> {
         let receiver = {
             let mut state = self.inner.updates.lock();
             if state.stream_closed {
-                anyhow::bail!(UPDATE_STREAM_CLOSED);
+                return Box::pin(async { Err(anyhow::anyhow!(UPDATE_STREAM_CLOSED)) });
             }
             let (sender, receiver) = oneshot::channel();
             state.waiters.push(UpdateWaiter { predicate, sender });
             receiver
         };
-        receiver
-            .await
-            .map_err(|_| anyhow::anyhow!(UPDATE_STREAM_CLOSED))?
+        Box::pin(async move {
+            receiver
+                .await
+                .map_err(|_| anyhow::anyhow!(UPDATE_STREAM_CLOSED))?
+        })
     }
 
     /// Closes stdin or signals the process, then drains inherited stdio and protocol callbacks.

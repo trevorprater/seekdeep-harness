@@ -13,22 +13,24 @@ fixture-bins = []
 
 [dependencies]
 anyhow.workspace = true
+futures.workspace = true
 indexmap.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 seekdeep-acp = { path = "../acp" }
 seekdeep-loader-smoke = { path = "../loader-smoke" }
 seekdeep-sdk-protocol = { path = "../sdk-protocol" }
 seekdeep-util = { path = "../util" }
+sha2.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+walkdir.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 nix.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
 
 [[bin]]
 name = "acp-snapshot-launcher-fixture"
@@ -40,6 +42,11 @@ required-features = ["fixture-bins"]
 [[test]]
 name = "launcher_parity"
 path = "tests/launcher_parity.rs"
+required-features = ["fixture-bins"]
+
+[[test]]
+name = "harness_parity"
+path = "tests/harness_parity.rs"
 required-features = ["fixture-bins"]
 
 [lints]

@@ -526,7 +526,7 @@ fn snapshot_spill_path_re() -> &'static Regex {
     static VALUE: OnceLock<Regex> = OnceLock::new();
     regex(
         &VALUE,
-        r"(?P<path>(?:[A-Za-z]:)?[\\/](?:tmp|t)[\\/](?:dsh-acp-snap-[0-9a-f]{9}|dsh-acp-snapshot-spill)[\\/]session-[0-9a-f]{12}[\\/][0-9a-f]{12}-(?P<name>[A-Za-z0-9._~-]+?))(?P<boundary>\. Use read with offset/limit|[\s)]|$)",
+        r"(?P<path>(?:[A-Za-z]:)?[\\/](?:tmp|t)[\\/](?:(?:dsh|seekdeep)-acp-snap-[0-9a-f]{9}|(?:dsh|seekdeep)-acp-snapshot-spill)[\\/]session-[0-9a-f]{12}[\\/][0-9a-f]{12}-(?P<name>[A-Za-z0-9._~-]+?))(?P<boundary>\. Use read with offset/limit|[\s)]|$)",
     )
 }
 

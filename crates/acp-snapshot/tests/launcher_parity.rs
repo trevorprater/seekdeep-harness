@@ -37,6 +37,27 @@ fn update_text(update: &Value) -> Option<&str> {
 }
 
 #[tokio::test]
+async fn fake_agent_issues_a_distinct_deterministic_identity_per_session() {
+    let cwd = tempfile::tempdir().unwrap();
+    let launched = launch_acp_test_agent(options(&cwd)).unwrap();
+    launched.client().initialize().await.unwrap();
+    let first = launched
+        .client()
+        .new_session(&cwd.path().to_string_lossy())
+        .await
+        .unwrap();
+    let second = launched
+        .client()
+        .new_session(&cwd.path().to_string_lossy())
+        .await
+        .unwrap();
+    assert_ne!(first, second);
+    assert!(first.as_str().starts_with("11111111-2222-4333-8444-"));
+    assert!(second.as_str().starts_with("11111111-2222-4333-8444-"));
+    launched.close(None).await.unwrap();
+}
+
+#[tokio::test]
 async fn launch_drives_real_acp_and_drains_late_inherited_stdio() {
     let cwd = tempfile::tempdir().unwrap();
     let mut options = options(&cwd);

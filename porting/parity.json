@@ -79384,7 +79384,21 @@
     {
       "source": "packages/test-support/acp-snapshot/src/harness.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/src/harness.rs",
+        "crates/acp-snapshot/src/launcher.rs",
+        "crates/acp-snapshot/src/bin/launcher_fixture.rs",
+        "crates/acp-snapshot/tests/harness_parity.rs",
+        "crates/acp/src/client.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/harness.spec.ts (60 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --all-features (73 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp --all-features (24 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-acp -p seekdeep-acp-snapshot --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust scenario owner implements every closed input operation, early-armed update waits, isolated workspace seeding and preparation, replay/record environment forwarding, FIFO permission selection, durable parent and child waits, primary-first harvest, stderr attachment, and failure-safe cleanup. Closed Rust enums reject unknown input operations while decoding at the earliest resolvable point. Rust combines scenario and cleanup failures into one anyhow diagnostic rather than a JavaScript AggregateError while retaining every underlying message."
     },
     {
       "source": "packages/test-support/acp-snapshot/src/index.ts",
@@ -79418,7 +79432,7 @@
       ],
       "evidence": [
         "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/harness.spec.ts (60 passed)",
-        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --test launcher_parity --all-features (9 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --test launcher_parity --all-features (10 passed)",
         "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --lib --all-features (1 passed)",
         "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp --all-features (24 passed)",
         "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-acp -p seekdeep-acp-snapshot --all-targets --all-features -- -D warnings"
@@ -79448,7 +79462,18 @@
     {
       "source": "packages/test-support/acp-snapshot/tests/fixtures/fake-acp-agent.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/src/bin/launcher_fixture.rs",
+        "crates/acp-snapshot/tests/harness_parity.rs",
+        "crates/acp-snapshot/tests/launcher_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/harness.spec.ts (60 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --test harness_parity --test launcher_parity --all-features (28 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-acp-snapshot --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust NDJSON fake implements every behavior.json field, template substitution, permission request sequencing, parked-turn durability, final log/noise handling, and inherited stdio drain probe. It issues distinct deterministic UUID-shaped Session identities instead of using the source fake's ambient randomUUID; both identities are volatile at the normalizer boundary."
     },
     {
       "source": "packages/test-support/acp-snapshot/tests/fixtures/record-suite/rec-child/behavior.json",
@@ -79981,7 +80006,17 @@
     {
       "source": "packages/test-support/acp-snapshot/tests/harness.spec.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/tests/harness_parity.rs",
+        "crates/acp-snapshot/tests/launcher_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/harness.spec.ts (60 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --all-features (73 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp --all-features (24 passed)"
+      ],
+      "note": "Eighteen Rust harness cases and ten real-process launcher cases cover every input shape, session precondition, environment and workspace wiring, prompt and cancellation lifecycle, durable wait family, permission queue outcome, harvest ordering/defaults/noise, deterministic fake identity, launch failures, inherited stdio, and idempotent shutdown."
     },
     {
       "source": "packages/test-support/acp-snapshot/tests/normalize.spec.ts",

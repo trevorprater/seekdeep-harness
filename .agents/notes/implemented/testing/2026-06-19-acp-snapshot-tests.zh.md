@@ -59,7 +59,9 @@ Status: implemented
 
 在 Rust 移植中，`seekdeep-acp-snapshot` 持有这条纯规范化边界：ACP id 编序与 stdout 纯度、cwd 别名与分隔符 mode、spill locator、event-read 易变值、Session 与打包行计时、fixture cwd token 化，以及可组合的请求头清理。44 项 source normalizer case 均有对应 Rust 测试。
 
-该 crate 也持有原生 launcher 边界。它通过 `seekdeep-loader-smoke` 选择已编译 source artifact 或发布形态 artifact，在调用方环境之后应用隔离的 SeekDeep 与 agent home，把精确 stdout byte 分流给 Rust ACP client，捕获 stderr，提供按逆序运行的未来 update waiter 与异步 permission policy，并通过 stdin EOF 或显式 signal 关闭进程，再依次汇合进程、继承的 stdio、parser 和在途 permission callback。Rust 会从 `launch_acp_test_agent` 同步报告 spawn 失败，不再暴露 Node 的异步 `spawned` promise；因此该失败更早得到解析，但 teardown 不会弱化。9 项真实进程与 runtime 预检测试加上 1 项计时 seam 测试覆盖该 owner，共享 ACP bridge 则保留其 24 项测试。场景 interpreter、套件注册与写回机制，以及完整的数据驱动 fake agent 继续保持 pending。
+该 crate 也持有原生 launcher 与场景 harness 边界。launcher 通过 `seekdeep-loader-smoke` 选择已编译 source artifact 或发布形态 artifact，在调用方环境之后应用隔离的 SeekDeep 与 agent home，把精确 stdout byte 分流给 Rust ACP client，捕获 stderr，提供按逆序运行的未来 update waiter 与异步 permission policy，并通过 stdin EOF 或显式 signal 关闭进程，再依次汇合进程、继承的 stdio、parser 和在途 permission callback。Rust 会从 `launch_acp_test_agent` 同步报告 spawn 失败，不再暴露 Node 的异步 `spawned` promise；因此该失败更早得到解析，但 teardown 不会弱化。
+
+场景 owner 会解释每一项封闭的 `input.json` 操作，在发送 prompt 前注册 update waiter，创建并准备隔离的 workspace，转发 replay 或 record 环境，等待 parent 和 child 的持久边界，按 kind 消耗 permission 选择，以 primary 优先顺序采集日志，附加 stderr，并尝试每一项归属自己的清理。数据驱动 Rust fake 与 `behavior.json` 的每个字段一致。它不使用环境随机源，而是发放互不相同、确定性且形状为 UUID 的 Session identity；其 identity 易变值仍在与 source fake 随机 UUID 相同的边界归一化。Rust 用一条 `anyhow` 诊断表示场景与清理的组合失败，而不是 JavaScript 的 `AggregateError`，但会保留每条底层诊断。18 项真实进程场景测试、10 项 launcher 测试和 1 项 launcher 计时 seam 测试覆盖这些 owner；共享 ACP bridge 则保留其 24 项测试。套件注册、fixture guard、输出比较以及 record 或 refresh 写回仍保持 pending。
 
 ### 隔离：当前靠归一化，后续可加沙箱
 
