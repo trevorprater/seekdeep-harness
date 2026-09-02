@@ -4745,6 +4745,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-acp-snapshot"
+version = "0.1.0-rc.5"
+dependencies = [
+ "indexmap 2.14.0",
+ "regex",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "seekdeep-agent"
 version = "0.1.0-rc.5"
 dependencies = [

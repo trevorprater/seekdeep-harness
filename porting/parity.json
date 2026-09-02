@@ -79413,7 +79413,17 @@
     {
       "source": "packages/test-support/acp-snapshot/src/normalize.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/src/normalize.rs",
+        "crates/acp-snapshot/tests/normalize_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/normalize.spec.ts (44 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --all-features (44 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-acp-snapshot --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The Rust normalizer preserves first-seen ACP id mapping, stdout JSON purity, boundary-aware cwd and alias replacement, canonical or native separators, generated text markers, local and snapshot spill locators, event-read-only volatile fields, UUID scrubbing, Session and packed-row timing, cwd fixture tokenization, last-path-wins spill extraction, and composable byte-preserving request-header scrubbers."
     },
     {
       "source": "packages/test-support/acp-snapshot/src/suite.ts",
@@ -79961,7 +79971,15 @@
     {
       "source": "packages/test-support/acp-snapshot/tests/normalize.spec.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/tests/normalize_parity.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/normalize.spec.ts (44 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --all-features (44 passed)"
+      ],
+      "note": "Forty-four Rust tests mirror the complete source case inventory across stdout, Session logs, three platform cwd forms, spill extraction, and the three independent request-header scrubbers."
     },
     {
       "source": "packages/test-support/acp-snapshot/tests/suite.spec.ts",
