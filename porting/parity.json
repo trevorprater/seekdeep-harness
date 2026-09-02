@@ -79408,7 +79408,22 @@
     {
       "source": "packages/test-support/acp-snapshot/src/launcher.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/src/launcher.rs",
+        "crates/acp-snapshot/src/bin/launcher_fixture.rs",
+        "crates/acp-snapshot/tests/launcher_parity.rs",
+        "crates/acp/src/client.rs",
+        "crates/loader-smoke/src/process.rs"
+      ],
+      "evidence": [
+        "pinned source: pnpm exec vitest run packages/test-support/acp-snapshot/tests/harness.spec.ts (60 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --test launcher_parity --all-features (9 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp-snapshot --lib --all-features (1 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test -p seekdeep-acp --all-features (24 passed)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo clippy -p seekdeep-acp -p seekdeep-acp-snapshot --all-targets --all-features -- -D warnings"
+      ],
+      "note": "The native Rust launcher selects compiled source or library artifacts, owns isolated homes and environment precedence, tees raw stdout into the Rust ACP parser, captures stderr and updates, preserves reverse waiter ordering and async permission handling, and joins process, inherited stdio, parser, and request callbacks on graceful or signalled close. Rust spawn failures return synchronously instead of using Node's spawned promise; the 250 ms asynchronous exit-marker grace and fallback termination policy remain explicit."
     },
     {
       "source": "packages/test-support/acp-snapshot/src/normalize.ts",

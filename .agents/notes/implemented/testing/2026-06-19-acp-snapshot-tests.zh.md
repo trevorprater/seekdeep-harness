@@ -57,7 +57,9 @@ Status: implemented
 
 规范化会替换会话、cwd、协议 id、时间戳、路径和进程易变值，同时保留确定性序号。录制与刷新还会在回放 fixture 中将生成的 workspace 及其文件系统解析出的别名存储为 `{{cwd}}`，使平台临时根目录和随机 basename 不影响录制结果；手工编写的临时路径与显式 `workspaceParent` 下的 cwd 值仍保留字面值。场景把真实 bash 使用限制在稳定命令上。stdout 预期输出仍是符合协议格式的 JSONL，每个原始行都必须可解析为 JSON。普通 Vitest 快照更新只写入 stdout 预期输出；回放 fixture 的写入由显式 `record` 和 `refresh` 模式负责。
 
-在 Rust 移植中，`seekdeep-acp-snapshot` 持有这条纯规范化边界：ACP id 编序与 stdout 纯度、cwd 别名与分隔符 mode、spill locator、event-read 易变值、Session 与打包行计时、fixture cwd token 化，以及可组合的请求头清理。44 项 source normalizer case 均有对应 Rust 测试。子进程 launcher、场景 harness，以及套件注册与写回机制继续保持 pending，直到其独立生命周期移植落地。
+在 Rust 移植中，`seekdeep-acp-snapshot` 持有这条纯规范化边界：ACP id 编序与 stdout 纯度、cwd 别名与分隔符 mode、spill locator、event-read 易变值、Session 与打包行计时、fixture cwd token 化，以及可组合的请求头清理。44 项 source normalizer case 均有对应 Rust 测试。
+
+该 crate 也持有原生 launcher 边界。它通过 `seekdeep-loader-smoke` 选择已编译 source artifact 或发布形态 artifact，在调用方环境之后应用隔离的 SeekDeep 与 agent home，把精确 stdout byte 分流给 Rust ACP client，捕获 stderr，提供按逆序运行的未来 update waiter 与异步 permission policy，并通过 stdin EOF 或显式 signal 关闭进程，再依次汇合进程、继承的 stdio、parser 和在途 permission callback。Rust 会从 `launch_acp_test_agent` 同步报告 spawn 失败，不再暴露 Node 的异步 `spawned` promise；因此该失败更早得到解析，但 teardown 不会弱化。9 项真实进程与 runtime 预检测试加上 1 项计时 seam 测试覆盖该 owner，共享 ACP bridge 则保留其 24 项测试。场景 interpreter、套件注册与写回机制，以及完整的数据驱动 fake agent 继续保持 pending。
 
 ### 隔离：当前靠归一化，后续可加沙箱
 

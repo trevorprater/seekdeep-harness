@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use bridge::{AcpBridge, AcpBridgeConfig, AcpContinuableDrainHook};
-pub use client::{AcpClient, AcpUpdateObserver};
+pub use client::{AcpClient, AcpPermissionHandler, AcpUpdateObserver};
 pub use codec::{
     acp_content_text, acp_prompt_to_text, acp_stop_reason, prompt_has_unsupported_content,
     to_acp_prompt, turn_end_to_stop_reason,

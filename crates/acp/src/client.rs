@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Weak};
 
+use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use seekdeep_sdk_protocol::{BoxedJsonRpcInput, BoxedJsonRpcOutput, JsonRpcLineTransport};
 use serde_json::{Map, Value, json};
@@ -14,10 +15,14 @@ use crate::types::{
 /// Observer for server-to-client session updates.
 pub type AcpUpdateObserver = Arc<dyn Fn(&AcpSessionUpdate) + Send + Sync>;
 
+/// Caller-supplied asynchronous policy for one ACP permission request.
+pub type AcpPermissionHandler =
+    Arc<dyn Fn(Map<String, Value>) -> BoxFuture<'static, anyhow::Result<Value>> + Send + Sync>;
+
 /// Baseline ACP client with automatic permission policy.
 pub struct AcpClient {
     transport: Arc<JsonRpcLineTransport>,
-    permission: PermissionPolicy,
+    permission: AcpPermissionHandler,
     observer: Mutex<Option<AcpUpdateObserver>>,
 }
 
@@ -36,6 +41,15 @@ impl AcpClient {
     /// Creates and wires one client role; call [`Self::start`] after handlers are installed.
     #[must_use]
     pub fn new(transport: &Arc<JsonRpcLineTransport>, permission: PermissionPolicy) -> Arc<Self> {
+        Self::new_with_permission_handler(transport, permission_handler(permission))
+    }
+
+    /// Creates a client with a caller-owned asynchronous permission policy.
+    #[must_use]
+    pub fn new_with_permission_handler(
+        transport: &Arc<JsonRpcLineTransport>,
+        permission: AcpPermissionHandler,
+    ) -> Arc<Self> {
         let client = Arc::new(Self {
             transport: Arc::clone(transport),
             permission,
@@ -57,7 +71,7 @@ impl AcpClient {
                 let Some(client) = weak.upgrade() else {
                     anyhow::bail!("ACP client is closed");
                 };
-                client.handle_request(&method, &params)
+                client.handle_request(&method, params).await
             })
         }));
         client
@@ -191,29 +205,41 @@ impl AcpClient {
         }
     }
 
-    fn handle_request(&self, method: &str, params: &Map<String, Value>) -> anyhow::Result<Value> {
+    async fn handle_request(
+        &self,
+        method: &str,
+        params: Map<String, Value>,
+    ) -> anyhow::Result<Value> {
         if method != client_methods::SESSION_REQUEST_PERMISSION {
             anyhow::bail!("method not found: {method}");
         }
-        let options = params
-            .get("options")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let selected = match self.permission {
-            PermissionPolicy::Reject => None,
-            PermissionPolicy::Allow => options.iter().find(|option| {
-                matches!(
-                    option.get("kind").and_then(Value::as_str),
-                    Some("allow_once" | "allow_always")
-                )
-            }),
-        };
-        Ok(selected
-            .and_then(|option| option.get("optionId").and_then(Value::as_str))
-            .map_or_else(
-                || json!({"outcome":{"outcome":"cancelled"}}),
-                |option| json!({"outcome":{"outcome":"selected","optionId":option}}),
-            ))
+        (self.permission)(params).await
     }
+}
+
+fn permission_handler(permission: PermissionPolicy) -> AcpPermissionHandler {
+    Arc::new(move |params| {
+        Box::pin(async move {
+            let options = params
+                .get("options")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let selected = match permission {
+                PermissionPolicy::Reject => None,
+                PermissionPolicy::Allow => options.iter().find(|option| {
+                    matches!(
+                        option.get("kind").and_then(Value::as_str),
+                        Some("allow_once" | "allow_always")
+                    )
+                }),
+            };
+            Ok(selected
+                .and_then(|option| option.get("optionId").and_then(Value::as_str))
+                .map_or_else(
+                    || json!({"outcome":{"outcome":"cancelled"}}),
+                    |option| json!({"outcome":{"outcome":"selected","optionId":option}}),
+                ))
+        })
+    })
 }
