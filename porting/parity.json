@@ -37574,15 +37574,20 @@
     {
       "source": "packages/api/remotes/tests/built-lib.e2e.ts",
       "kind": "test",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        "crates/api-remotes-client/tests/wasm_mount_parity.rs"
+        "crates/api-remotes-client/tests/wasm_mount_parity.rs",
+        "xtask/src/remote_built_smoke_driver.rs",
+        "crates/client-foundation-wasm/src/wasm_remote.rs",
+        "crates/api-remotes/src/agent_lookup.rs",
+        "xtask/src/main.rs"
       ],
       "evidence": [
         "pinned source: pnpm exec vitest run --config vitest.e2e.config.ts packages/api/remotes/tests/built-lib.e2e.ts (1 passed)",
-        "Rust/WASM mount lifecycle is live, but target evidence does not yet cross the complete generated Goal Remote through a built browser bundle and real /api HTTP route"
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo xtask remote-built-smoke (exit 0; invalid generated input rejected before transport; explicit create/edit and Agent-context create crossed built Rust/WASM bundles and the real Rust /api Host)",
+        "CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-api-remotes-client --target wasm32-unknown-unknown --test wasm_mount_parity --all-features (4 passed)"
       ],
-      "note": "Keep pending until the target built-package chain drives root and Agent-scoped generated calls over the actual Rust Host gateway; mount-only evidence cannot substitute for that integration"
+      "note": "The self-contained xtask gate builds the native Host and all required Rust/WASM packages, launches a fresh isolated Web Host, drives the generated Goal Remote through plain-Node bundle handoffs over real HTTP, and proves teardown."
     },
     {
       "source": "packages/api/remotes/tsconfig.client.json",

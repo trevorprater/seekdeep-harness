@@ -12,6 +12,8 @@ use base64::Engine as _;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
+mod remote_built_smoke_driver;
+
 #[derive(Debug, Parser)]
 struct Args {
     #[command(subcommand)]
@@ -65,6 +67,8 @@ enum Command {
         #[arg(long, value_enum, default_value_t = Scope::All)]
         scope: Scope,
     },
+    /// Build and drive generated Goal Remotes through built WASM and a real Rust Host.
+    RemoteBuiltSmoke,
     /// Generate or verify the durable Session event catalog from the pinned source tree.
     PersistenceCatalog {
         /// Source checkout recorded in `SOURCE_SNAPSHOT`.
@@ -136,6 +140,7 @@ fn main() -> anyhow::Result<()> {
             xtask::session_fixture_layout::run(&root, rewrite)
         }
         Command::Parity { source, scope } => parity(&source, scope),
+        Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::PersistenceCatalog { source, check } => {
             xtask::persistence_catalog::run(Path::new("."), &source, check)
         }
@@ -315,6 +320,67 @@ fn default_macos_platform_tag() -> anyhow::Result<String> {
         .ok_or_else(|| anyhow::anyhow!("python runtime platform manifest has no macos-arm64 tag"))
 }
 
+fn remote_built_smoke() -> anyhow::Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("xtask has a workspace parent");
+    let status = ProcessCommand::new("cargo")
+        .current_dir(root)
+        .env("CARGO_BUILD_JOBS", "2")
+        .env("CARGO_INCREMENTAL", "0")
+        .args(["build", "-p", "seekdeep"])
+        .status()?;
+    anyhow::ensure!(status.success(), "native SeekDeep Host build failed");
+
+    for (package, artifact, module_id, out_dir) in [
+        (
+            "seekdeep-cordis",
+            "seekdeep_cordis",
+            "@seekdeep-ai/cordis",
+            "vendor/cordis/lib",
+        ),
+        (
+            "seekdeep-client-foundation-wasm",
+            "seekdeep_client_foundation_wasm",
+            "@seekdeep-ai/seekdeep-client-connection",
+            "packages/client/connection/lib",
+        ),
+        (
+            "seekdeep-client-foundation-wasm",
+            "seekdeep_client_foundation_wasm",
+            "@seekdeep-ai/seekdeep-typert-registry",
+            "packages/typert/registry/lib",
+        ),
+        (
+            "seekdeep-client-foundation-wasm",
+            "seekdeep_client_foundation_wasm",
+            "@seekdeep-ai/seekdeep-api-gateway",
+            "packages/api/gateway/lib",
+        ),
+        (
+            "seekdeep-api-remotes-client",
+            "seekdeep_api_remotes_client",
+            "@seekdeep-ai/seekdeep-api-remotes",
+            "packages/api/remotes/lib",
+        ),
+    ] {
+        wasm_package_once(package, artifact, module_id, &root.join(out_dir))?;
+    }
+
+    let node = std::env::var_os("npm_node_execpath").unwrap_or_else(|| "node".into());
+    let driver_dir = root.join("target/xtask/remote-built-smoke");
+    std::fs::create_dir_all(&driver_dir)?;
+    let driver = driver_dir.join("built_remote_chain.mjs");
+    std::fs::write(&driver, remote_built_smoke_driver::DRIVER)?;
+    let status = ProcessCommand::new(node)
+        .current_dir(root)
+        .arg(&driver)
+        .status()?;
+    std::fs::remove_file(driver)?;
+    anyhow::ensure!(status.success(), "built Goal Remote chain failed");
+    Ok(())
+}
+
 fn wasm_package(
     package: &str,
     artifact: &str,
@@ -378,6 +444,8 @@ fn wasm_package_once(
 ) -> anyhow::Result<()> {
     let metadata = cargo_metadata()?;
     let status = ProcessCommand::new("cargo")
+        .env("CARGO_BUILD_JOBS", "2")
+        .env("CARGO_INCREMENTAL", "0")
         .args([
             "build",
             "-p",
@@ -883,21 +951,43 @@ const FILTER = Symbol.for('cordis.filter');
 const EFFECT = Symbol.for('cordis.effect');
 const ISOLATE = Symbol.for('cordis.isolate');
 const INTERCEPT = Symbol.for('cordis.intercept');
+const SERVICE_TRACKER = Symbol.for('cordis.service.tracker');
+
+function traceService(ctx, value) {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[SERVICE_TRACKER] !== true) return value;
+  let proxy;
+  proxy = new Proxy(value, {
+    get(target, key, receiver) {
+      if (key === 'ctx') return ctx;
+      const inner = Reflect.get(target, key, receiver);
+      return typeof inner === 'function'
+        ? (...args) => Reflect.apply(inner, proxy, args)
+        : inner;
+    },
+    set(target, key, next, receiver) {
+      if (key === 'ctx') return false;
+      return Reflect.set(target, key, next, receiver);
+    },
+  });
+  return proxy;
+}
 
 function wrapContext(core) {
-  return new Proxy(core, {
+  let context;
+  context = new Proxy(core, {
     get(target, key, receiver) {
       if (key === 'emit') return (name, ...args) => target.emitArgs(name, args);
       if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args);
       if (key === 'serial') return (name, ...args) => target.serialArgs(name, args);
       if (key === 'bail') return (name, ...args) => target.bailArgs(name, args);
+      if (key === 'get') return name => traceService(context, target.get(name));
       if (Reflect.has(target, key)) {
         const value = Reflect.get(target, key, receiver);
         return typeof value === 'function' ? value.bind(target) : value;
       }
       const metadata = target.metaGet(key);
       if (metadata !== undefined) return metadata;
-      return typeof key === 'string' ? target.get(key) : undefined;
+      return typeof key === 'string' ? traceService(context, target.get(key)) : undefined;
     },
     set(target, key, value, receiver) {
       if (Reflect.has(target, key) || typeof key !== 'string') {
@@ -911,6 +1001,7 @@ function wrapContext(core) {
       return typeof key === 'string' && target.get(key) !== undefined;
     },
   });
+  return context;
 }
 
 Object.defineProperties(wasm.WasmContext, {
@@ -941,6 +1032,7 @@ export class Service {
   constructor(ctx, name) {
     this.ctx = ctx;
     this.name = name;
+    Object.defineProperty(this, SERVICE_TRACKER, { value: true });
     ctx.provide(name, this);
   }
 }
@@ -1819,7 +1911,47 @@ fn module_factory(global: &str, module_id: &str) -> String {
         return format!("() => {global}.clientTypertRegistryPlugin()");
     }
     if module_id == "@seekdeep-ai/seekdeep-api-gateway" {
-        return format!("() => {global}.clientApiGatewayPlugin()");
+        return format!(
+            r"() => {{
+  const tracker = Symbol.for('cordis.service.tracker');
+  const namespaces = ['commands', 'goals', 'dynamicCordisRunner', 'pluginInventory', 'messageFeedback'];
+  const remoteFactory = (ctx, core) => {{
+    const service = {{
+      ctx,
+      $mount(contribution) {{ return core.mount(this.ctx, contribution); }},
+      $on(event, listener) {{ return core.on(this.ctx, event, listener); }},
+      $dispatch(event, args) {{ return core.dispatch(event, args); }},
+    }};
+    Object.defineProperty(service, tracker, {{ value: true }});
+    for (const namespace of namespaces) {{
+      Object.defineProperty(service, namespace, {{
+        get() {{ return this.ctx.get('remote.' + namespace); }},
+      }});
+    }}
+    ctx.provide('remote', service);
+    return service;
+  }};
+  const namespaceFactory = (ctx, namespace, invoke) => {{
+    const service = {{
+      ctx,
+      namespace,
+      install(method) {{
+        Object.defineProperty(this, method, {{
+          configurable: true,
+          value: function (...args) {{ return invoke(this.ctx, method, args); }},
+        }});
+      }},
+      remove(method) {{ delete this[method]; }},
+    }};
+    Object.defineProperty(service, tracker, {{ value: true }});
+    Object.defineProperty(service, 'invokeRemote', {{ value: invoke }});
+    const dispose = ctx.provide('remote.' + namespace, service);
+    return {{ service, dispose }};
+  }};
+  {global}.configureClientApiGateway(remoteFactory, namespaceFactory);
+  return {global}.clientApiGatewayPlugin();
+}}"
+        );
     }
     if module_id == "@seekdeep-ai/seekdeep-client-runtime" {
         return format!(
@@ -1839,7 +1971,7 @@ fn module_factory(global: &str, module_id: &str) -> String {
     }
     if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
         return format!(
-            "() => {{ {global}.configureApiRemotes([{{}}, {{}}, {{}}, {{}}, {{}}]); return {{ name: 'api-remotes', apply: {global}.applyApiRemotes, inject: ['remote'] }}; }}"
+            "() => {{ {global}.configureApiRemotes({global}.generatedApiRemotes()); return {{ name: 'api-remotes', apply: {global}.applyApiRemotes, inject: ['remote'] }}; }}"
         );
     }
     if module_id == "@seekdeep-ai/seekdeep-client-locale" {
@@ -5153,7 +5285,10 @@ mod tests {
         for expected in [
             "await init({ module_or_path:",
             "wasm.configureContextWrapper(wrapContext)",
+            "traceService(context, target.get(key))",
+            "if (key === 'get') return name => traceService(context, target.get(name))",
             "constructor() { return wasm.createContext(); }",
+            "Object.defineProperty(this, SERVICE_TRACKER",
             "ctx.provide(name, this)",
         ] {
             assert!(cordis.contains(expected), "missing Cordis {expected:?}");
@@ -5393,11 +5528,7 @@ mod tests {
         )
         .unwrap();
         for expected in [
-            "configureApiRemotes([require('@seekdeep-ai/seekdeep-commands/remote')",
-            "require('@seekdeep-ai/seekdeep-goal/remote')",
-            "require('@seekdeep-ai/seekdeep-cordis-host-runner/remote')",
-            "require('@seekdeep-ai/seekdeep-host-plugin-inventory/remote')",
-            "require('@seekdeep-ai/seekdeep-message-feedback/remote')",
+            "configureApiRemotes(__seekdeep_api_remotes_client_wasm.generatedApiRemotes())",
             "apply: __seekdeep_api_remotes_client_wasm.applyApiRemotes",
             "inject: ['remote']",
         ] {

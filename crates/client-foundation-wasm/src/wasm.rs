@@ -2,6 +2,7 @@
 
 use std::{
     cell::{Cell, RefCell},
+    collections::HashMap,
     rc::Rc,
 };
 
@@ -17,7 +18,6 @@ thread_local! {
         r"
 const namespaces = new Map();
 const prefixes = { sessions: 'session', subagents: 'subagent', skills: 'skill', agentPresets: 'agentPreset' };
-const remotes = new Set(['commands', 'goals', 'dynamicCordisRunner', 'pluginInventory', 'messageFeedback']);
 return new Proxy({}, {
   get(target, namespace, receiver) {
     if (Reflect.has(target, namespace)) return Reflect.get(target, namespace, receiver);
@@ -34,9 +34,6 @@ return new Proxy({}, {
             async *[Symbol.asyncIterator]() { onOpen?.(); },
           });
         }
-        if (remotes.has(namespace)) {
-          return (...args) => client.callRemote(namespace, method, args);
-        }
         return (payload = {}, signal) => client.call((prefixes[namespace] ?? namespace) + '.' + method, payload, signal);
       },
     }));
@@ -45,6 +42,7 @@ return new Proxy({}, {
 });
 ",
     );
+    static CLIENT_REMOTE_FACTORIES: RefCell<Option<(Function, Function)>> = const { RefCell::new(None) };
 }
 
 type Listeners = Rc<Mutex<Vec<(u64, Function)>>>;
@@ -136,34 +134,24 @@ impl WasmBrowserApiClient {
         })
     }
 
-    /// Invokes one generated Typert Remote endpoint.
-    #[wasm_bindgen(js_name = callRemote)]
+    /// Invokes one Client Gateway RPC using its generated payload.
+    #[wasm_bindgen(js_name = callRpc)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn call_remote(&self, namespace: String, method: String, values: Array) -> Promise {
+    pub fn call_rpc(
+        &self,
+        _channel: String,
+        endpoint: String,
+        payload: JsValue,
+        signal: JsValue,
+    ) -> Promise {
         let listeners = self.listeners.clone();
         future_to_promise(async move {
-            let names = remote_argument_names(&namespace, &method).ok_or_else(|| {
-                js_sys::Error::new(&format!(
-                    "client api: Remote method {namespace}/{method} is not mounted"
-                ))
-            })?;
-            let (signal, value_count) = remote_signal(&values, names.len());
-            let args = Object::new();
-            for (index, name) in names.iter().enumerate() {
-                set(
-                    &args,
-                    name,
-                    &values.get(u32::try_from(index).unwrap_or(u32::MAX)),
-                )?;
-            }
-            anyhow_remote_arity(&namespace, &method, value_count, names.len())?;
-            let endpoint = format!("{namespace}/{method}");
             let rpc_id = random_uuid()?;
             let request = object(&[
                 ("type", JsValue::from_str("client-request")),
                 ("rpcId", JsValue::from_str(&rpc_id)),
                 ("method", JsValue::from_str(&endpoint)),
-                ("payload", object(&[("args", args.into())])?.into()),
+                ("payload", payload),
             ])?;
             notify(&listeners, &request.clone().into());
             let response = post_json(&format!("/api/{endpoint}"), request.into(), signal).await?;
@@ -368,9 +356,33 @@ pub fn client_connection_plugin() -> Result<JsValue, JsValue> {
             .and_then(|location| Reflect::get(&location, &JsValue::from_str("hostname")).ok())
             .and_then(|hostname| hostname.as_string())
             .unwrap_or_default();
+        let rpc_client = client.clone();
+        let rpc_call = Closure::wrap(Box::new(
+            move |channel: String,
+                  endpoint: String,
+                  payload: JsValue,
+                  signal: JsValue|
+                  -> Promise {
+                match call_method(
+                    &rpc_client,
+                    "callRpc",
+                    &[
+                        JsValue::from_str(&channel),
+                        JsValue::from_str(&endpoint),
+                        payload,
+                        signal,
+                    ],
+                ) {
+                    Ok(value) => Promise::resolve(&value),
+                    Err(error) => Promise::reject(&error),
+                }
+            },
+        )
+            as Box<dyn FnMut(String, String, JsValue, JsValue) -> Promise>);
+        let rpc = object(&[("call", rpc_call.into_js_value())])?;
         let connection = object(&[
             ("api", api),
-            ("rpc", Object::new().into()),
+            ("rpc", rpc.into()),
             (
                 "isLoopback",
                 JsValue::from_bool(is_loopback_hostname(&hostname)),
@@ -387,23 +399,173 @@ pub fn client_connection_plugin() -> Result<JsValue, JsValue> {
     })
 }
 
+/// Configures the thin Cordis Service bindings around the Rust Client Remote core.
+///
+/// # Errors
+///
+/// Returns when either factory is not callable.
+#[wasm_bindgen(js_name = configureClientApiGateway)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn configure_client_api_gateway(
+    remote_factory: JsValue,
+    namespace_factory: JsValue,
+) -> Result<(), JsValue> {
+    let remote_factory = remote_factory
+        .dyn_into::<Function>()
+        .map_err(|_| js_sys::TypeError::new("Client Remote service factory must be callable"))?;
+    let namespace_factory = namespace_factory
+        .dyn_into::<Function>()
+        .map_err(|_| js_sys::TypeError::new("Remote namespace factory must be callable"))?;
+    CLIENT_REMOTE_FACTORIES.with(|factories| {
+        *factories.borrow_mut() = Some((remote_factory, namespace_factory));
+    });
+    Ok(())
+}
+
 /// Compiled Client Typert registry plugin descriptor.
 ///
 /// # Errors
 ///
 /// Returns JavaScript face-construction failures.
 #[wasm_bindgen(js_name = clientTypertRegistryPlugin)]
+#[allow(clippy::too_many_lines)]
 pub fn client_typert_registry_plugin() -> Result<JsValue, JsValue> {
     plugin("typert-registry", &[], |context| {
-        let register = Closure::wrap(Box::new(move |_name: String, _descriptor: JsValue| {
-            let dispose = Closure::wrap(Box::new(|| {}) as Box<dyn FnMut()>);
-            dispose.into_js_value().unchecked_into::<Function>()
-        }) as Box<dyn FnMut(String, JsValue) -> Function>);
-        let contexts = object(&[("registerClient", register.into_js_value())])?;
+        let binders = Rc::new(RefCell::new(HashMap::<String, (u64, JsValue)>::new()));
+        let next_binder = Rc::new(Cell::new(0_u64));
+        let register_binders = binders.clone();
+        let register_next = next_binder;
+        let register = Closure::wrap(Box::new(
+            move |name: String, descriptor: JsValue| -> Result<Function, JsValue> {
+                if name.is_empty() {
+                    return Err(js_sys::Error::new(
+                        "typert context name must be a non-empty string",
+                    )
+                    .into());
+                }
+                let identity = Reflect::get(&descriptor, &JsValue::from_str("identity"))?;
+                if !identity.is_function() {
+                    return Err(js_sys::TypeError::new(&format!(
+                        "Client Context binder {name:?} requires an identity function"
+                    ))
+                    .into());
+                }
+                if register_binders.borrow().contains_key(&name) {
+                    return Err(js_sys::Error::new(&format!(
+                        "Client Context binder {name:?} is already registered"
+                    ))
+                    .into());
+                }
+                let id = register_next
+                    .get()
+                    .checked_add(1)
+                    .ok_or_else(|| js_sys::Error::new("Client Context binder ids exhausted"))?;
+                register_next.set(id);
+                register_binders
+                    .borrow_mut()
+                    .insert(name.clone(), (id, descriptor));
+                let disposal_binders = register_binders.clone();
+                let dispose = Closure::wrap(Box::new(move || {
+                    if disposal_binders
+                        .borrow()
+                        .get(&name)
+                        .is_some_and(|(current, _)| *current == id)
+                    {
+                        disposal_binders.borrow_mut().remove(&name);
+                    }
+                }) as Box<dyn FnMut()>);
+                Ok(dispose.into_js_value().unchecked_into())
+            },
+        )
+            as Box<dyn FnMut(String, JsValue) -> Result<Function, JsValue>>);
+        let get_binders = binders;
+        let get = Closure::wrap(Box::new(move |name: String| {
+            get_binders
+                .borrow()
+                .get(&name)
+                .map_or(JsValue::UNDEFINED, |(_, descriptor)| descriptor.clone())
+        }) as Box<dyn FnMut(String) -> JsValue>);
+        let contexts = object(&[
+            ("registerClient", register.into_js_value()),
+            ("getClient", get.into_js_value()),
+        ])?;
+        let remote_rows = Rc::new(RefCell::new(Vec::<(u64, String, JsValue)>::new()));
+        let next_remote = Rc::new(Cell::new(0_u64));
+        let register_rows = remote_rows.clone();
+        let register_next = next_remote;
+        let register_remote = Closure::wrap(Box::new(
+            move |contribution: JsValue| -> Result<Function, JsValue> {
+                let descriptors = Reflect::get(&contribution, &JsValue::from_str("descriptors"))?;
+                if !Array::is_array(&descriptors) {
+                    return Err(js_sys::TypeError::new(
+                        "Typert Remote contribution descriptors must be an array",
+                    )
+                    .into());
+                }
+                let id = register_next.get().checked_add(1).ok_or_else(|| {
+                    js_sys::Error::new("Typert Remote registration ids exhausted")
+                })?;
+                register_next.set(id);
+                let mut pending = Vec::new();
+                for descriptor in Array::from(&descriptors).iter() {
+                    let namespace = required_string(&descriptor, "namespace", "Remote descriptor")?;
+                    let method = required_string(&descriptor, "method", "Remote descriptor")?;
+                    let endpoint = format!("{namespace}/{method}");
+                    if pending
+                        .iter()
+                        .any(|(candidate, _): &(String, JsValue)| candidate == &endpoint)
+                        || register_rows
+                            .borrow()
+                            .iter()
+                            .any(|(_, candidate, _)| candidate == &endpoint)
+                    {
+                        return Err(js_sys::Error::new(&format!(
+                            "Typert Remote endpoint {endpoint:?} is already registered"
+                        ))
+                        .into());
+                    }
+                    pending.push((endpoint, descriptor));
+                }
+                register_rows.borrow_mut().extend(
+                    pending
+                        .iter()
+                        .map(|(endpoint, descriptor)| (id, endpoint.clone(), descriptor.clone())),
+                );
+                let disposal_rows = register_rows.clone();
+                let dispose = Closure::wrap(Box::new(move || {
+                    disposal_rows
+                        .borrow_mut()
+                        .retain(|(owner, _, _)| *owner != id);
+                }) as Box<dyn FnMut()>);
+                Ok(dispose.into_js_value().unchecked_into())
+            },
+        )
+            as Box<dyn FnMut(JsValue) -> Result<Function, JsValue>>);
+        let get_rows = remote_rows.clone();
+        let get_remote = Closure::wrap(Box::new(move |endpoint: String| {
+            get_rows
+                .borrow()
+                .iter()
+                .find(|(_, candidate, _)| candidate == &endpoint)
+                .map_or(JsValue::UNDEFINED, |(_, _, descriptor)| descriptor.clone())
+        }) as Box<dyn FnMut(String) -> JsValue>);
+        let list_rows = remote_rows;
+        let list_remote = Closure::wrap(Box::new(move || -> Array {
+            list_rows
+                .borrow()
+                .iter()
+                .map(|(_, _, descriptor)| descriptor.clone())
+                .collect()
+        }) as Box<dyn FnMut() -> Array>);
+        let remotes = object(&[
+            ("register", register_remote.into_js_value()),
+            ("get", get_remote.into_js_value()),
+            ("list", list_remote.into_js_value()),
+        ])?;
         let typert = object(&[
             ("contexts", contexts.into()),
             ("local", Object::new().into()),
-            ("remotes", Object::new().into()),
+            ("remotes", remotes.into()),
             ("lookups", Object::new().into()),
         ])?;
         call_method(
@@ -424,37 +586,22 @@ pub fn client_typert_registry_plugin() -> Result<JsValue, JsValue> {
 pub fn client_api_gateway_plugin() -> Result<JsValue, JsValue> {
     plugin("api-gateway", &["connection", "typert"], |context| {
         let connection = call_method(&context, "get", &[JsValue::from_str("connection")])?;
-        let api = Reflect::get(&connection, &JsValue::from_str("api"))?;
-        let mount = Closure::wrap(Box::new(move |_contribution: JsValue| -> Promise {
-            let dispose = Closure::wrap(Box::new(|| {}) as Box<dyn FnMut()>);
-            Promise::resolve(&dispose.into_js_value())
-        }) as Box<dyn FnMut(JsValue) -> Promise>);
-        Reflect::set(&api, &JsValue::from_str("$mount"), &mount.into_js_value())?;
-        let dispatch = Closure::wrap(Box::new(|_event: JsValue| {}) as Box<dyn FnMut(JsValue)>);
-        Reflect::set(
-            &api,
-            &JsValue::from_str("$dispatch"),
-            &dispatch.into_js_value(),
-        )?;
-        let on = Closure::wrap(
-            Box::new(move |_event: String, _listener: Function| -> Function {
-                Closure::wrap(Box::new(|| {}) as Box<dyn FnMut()>)
-                    .into_js_value()
-                    .unchecked_into()
-            }) as Box<dyn FnMut(String, Function) -> Function>,
-        );
-        Reflect::set(&api, &JsValue::from_str("$on"), &on.into_js_value())?;
-        provide(&context, "remote", &api)?;
-        for namespace in [
-            "commands",
-            "goals",
-            "dynamicCordisRunner",
-            "pluginInventory",
-            "messageFeedback",
-        ] {
-            let service = Reflect::get(&api, &JsValue::from_str(namespace))?;
-            provide(&context, &format!("remote.{namespace}"), &service)?;
-        }
+        let typert = call_method(&context, "get", &[JsValue::from_str("typert")])?;
+        let (remote_factory, namespace_factory) = CLIENT_REMOTE_FACTORIES
+            .with(|factories| factories.borrow().clone())
+            .ok_or_else(|| {
+                js_sys::Error::new(
+                    "Client API Gateway module factory did not configure Cordis Service bindings",
+                )
+            })?;
+        let core: JsValue = crate::WasmClientRemoteCore::new(
+            context.clone(),
+            connection,
+            typert,
+            namespace_factory,
+        )?
+        .into();
+        remote_factory.call2(&JsValue::UNDEFINED, &context, &core)?;
         Ok(())
     })
 }
@@ -475,15 +622,6 @@ fn plugin(
     set(&plugin, "inject", &dependencies.into())?;
     set(&plugin, "apply", &apply.into_js_value())?;
     Ok(plugin.into())
-}
-
-fn provide(context: &JsValue, name: &str, value: &JsValue) -> Result<(), JsValue> {
-    call_method(
-        context,
-        "provide",
-        &[JsValue::from_str(name), value.clone()],
-    )?;
-    Ok(())
 }
 
 async fn post_json(path: &str, body: JsValue, signal: JsValue) -> Result<JsValue, JsValue> {
@@ -537,72 +675,6 @@ fn is_loopback_hostname(hostname: &str) -> bool {
                 && part.bytes().all(|byte| byte.is_ascii_digit())
                 && part.parse::<u16>().is_ok_and(|value| value <= 255)
         })
-}
-
-fn remote_argument_names(namespace: &str, method: &str) -> Option<&'static [&'static str]> {
-    match (namespace, method) {
-        ("commands", "list") => Some(&["agentId"]),
-        ("commands", "execute") => Some(&["agentId", "line"]),
-        ("goals", "create") => Some(&["agentId", "request"]),
-        ("goals", "edit") => Some(&["agentId", "ref", "request"]),
-        ("goals", "pause" | "resume" | "complete" | "clear") => Some(&["agentId", "ref"]),
-        ("pluginInventory", "list") | ("dynamicCordisRunner", "inventory") => Some(&[]),
-        ("messageFeedback", "list" | "put" | "delete") => Some(&["request"]),
-        ("dynamicCordisRunner", "undefineFromPanel" | "stopFromPanel") => {
-            Some(&["agentId", "pluginId"])
-        }
-        ("dynamicCordisRunner", "runHostHalf") => Some(&[
-            "agentId",
-            "pluginId",
-            "packageId",
-            "mode",
-            "requestId",
-            "approveFutureVersions",
-        ]),
-        ("dynamicCordisRunner", "getClientCode") => Some(&["agentId", "pluginId", "pluginRunId"]),
-        ("dynamicCordisRunner", "resolveRequestRun") => Some(&["requestId", "resolution"]),
-        ("dynamicCordisRunner", "settleUserRun") => Some(&["agentId", "pluginId", "resolution"]),
-        ("dynamicCordisRunner", "syncInspectManifest") => Some(&["providers"]),
-        ("dynamicCordisRunner", "resolveInspectQuery") => {
-            Some(&["agentId", "requestId", "resolution"])
-        }
-        ("dynamicCordisRunner", "reportRenderFailure" | "reportClientGuardFailure") => {
-            Some(&["agentId", "pluginId", "pluginRunId", "failure"])
-        }
-        ("dynamicCordisRunner", "invoke") => Some(&["pluginId", "pluginRunId", "method", "args"]),
-        _ => None,
-    }
-}
-
-fn remote_signal(values: &Array, expected: usize) -> (JsValue, usize) {
-    let actual = usize::try_from(values.length()).unwrap_or(usize::MAX);
-    if actual == expected {
-        return (JsValue::UNDEFINED, actual);
-    }
-    if actual != expected.saturating_add(1) {
-        return (JsValue::UNDEFINED, actual);
-    }
-    let signal = values.get(u32::try_from(expected).unwrap_or(u32::MAX));
-    if !signal.is_instance_of::<web_sys::AbortSignal>() {
-        return (JsValue::UNDEFINED, actual);
-    }
-    (signal, expected)
-}
-
-fn anyhow_remote_arity(
-    namespace: &str,
-    method: &str,
-    actual: usize,
-    expected: usize,
-) -> Result<(), JsValue> {
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(js_sys::Error::new(&format!(
-            "client api: {namespace}/{method} expected {expected} business argument(s) plus an optional AbortSignal, got {actual}"
-        ))
-        .into())
-    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -833,6 +905,12 @@ fn call_method(value: &JsValue, name: &str, arguments: &[JsValue]) -> Result<JsV
     let method = Reflect::get(value, &JsValue::from_str(name))?.dyn_into::<Function>()?;
     let arguments: Array = arguments.iter().cloned().collect();
     method.apply(value, &arguments)
+}
+
+fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, JsValue> {
+    Reflect::get(value, &JsValue::from_str(key))?
+        .as_string()
+        .ok_or_else(|| js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into())
 }
 
 fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {

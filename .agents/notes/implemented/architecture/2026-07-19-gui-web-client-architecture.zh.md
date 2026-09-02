@@ -56,6 +56,8 @@ Rust/WASM `SessionRuntime` 端到端拥有这条 axis：manager 投影单一 lis
 
 Rust/WASM `applyClientRuntime` assembly 提供 Slot、Conversation registry、Session 与 Workspace face，安装 Slot standard feed 与 Typert Agent identity resolver，并通过 root Cordis effect 拥有唯一 connection loop。Mux frame 进入 Sessions；Host frame 进入 Sessions 与 Workspaces；只有 `host/remote-event` 到达 `Remote.$dispatch`；每个 connected generation 发出 `connection/reset`；`reconnecting` 在后续 frame 之前丢弃 generation-scoped interaction；fiber disposal 精确停止 loop 一次。模型编写的 JavaScript Conversation callback 通过单一 WASM adapter 进入 Rust-owned Definition 与 per-target builder：完整的 extension-bearing SessionEvent object 保持可见，`reader.previous` 只记录实际请求的 kind，而 replay、Context 与 Location ownership、publication scheduling、dependency repair 和 snapshot identity 仍由 Rust 持有。
 
+Rust/WASM Client Remote core 把 Rust 生成的 descriptor contribution 作为唯一 method authority 挂载。它在 transport 前应用每个 descriptor 的 codec，发布带 tracing 的 Cordis namespace service，依据调用方 Context 选择 direct 或 Agent-context overload，把得到的 wire field 经 `connection.rpc` 发送到 Host Gateway，隔离 forwarded-event listener failure，并按 mount 的逆序撤销 method 与 namespace。Cordis 对属性读取与显式 `ctx.get()` 读取都执行 tracing，而 root browser Fiber face 也暴露与 child Fiber 相同的异步 disposal 边界。
+
 公开 browser Slot face 从执行 mutation 的同一个 Rust ledger 读取每个 key 的 version。Client Runtime invariant 观察全局 `internal/dispatch`，忽略无关 event 与 slots-less boot，并拒绝不带非空 string key 或该 key version 仍为零的 `slots/changed`；notification ordering 因而直接对 mutation authority 检查，而不依赖第二份 mirror。
 
 ## 数据对象层（`packages/client/runtime/src/client/sessions/`）

@@ -5022,6 +5022,8 @@ version = "0.1.0-rc.5"
 dependencies = [
  "futures",
  "js-sys",
+ "seekdeep-client-foundation-wasm",
+ "seekdeep-cordis",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",

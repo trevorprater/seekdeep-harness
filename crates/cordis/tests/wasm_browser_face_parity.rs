@@ -129,4 +129,8 @@ async fn browser_context_keeps_plugin_services_events_and_cleanup_in_rust() {
             .unwrap()
             .is_object()
     );
+    let root_fiber = Reflect::get(&root, &JsValue::from_str("fiber")).unwrap();
+    JsFuture::from(cordisFiberDispose(&root_fiber))
+        .await
+        .unwrap();
 }

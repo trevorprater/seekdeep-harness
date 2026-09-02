@@ -12,10 +12,10 @@ use seekdeep_core::session::{SessionEvent, SessionHeader, SessionId, SessionOrig
 use seekdeep_core::session_store::SESSIONS;
 use seekdeep_session_persistence::{SESSION_PERSISTENCE, SessionInspection};
 use seekdeep_typert_protocol::{
-    TypertBoundaryValue, TypertContextRegistry as _, TypertHostObject, TypertLookupFailure,
-    TypertLookupRegistry as _, TypertLookupResolver,
+    TypertBoundaryValue, TypertContextRegistry as _, TypertHostContextProvider, TypertHostObject,
+    TypertLookupFailure, TypertLookupProvider, TypertLookupRegistry as _, TypertLookupResolver,
 };
-use seekdeep_typert_registry::TYPERT;
+use seekdeep_typert_registry::{TYPERT, TypertRegistry};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -345,6 +345,12 @@ fn install_typert_resolvers(
     ctx: &Context,
     resolver: &Arc<dyn Fn(SessionId) -> BoxFuture<'static, ApiRemoteAgentResult> + Send + Sync>,
 ) {
+    if let Some(typert) = ctx.get(TYPERT) {
+        if let Err(error) = configure_typert_resolvers(ctx, &typert, resolver) {
+            tracing::warn!(%error, "API Remote Typert resolver mount failed");
+        }
+        return;
+    }
     let agent_resolver = resolver.clone();
     let plugin = Plugin::new(
         "api-remote-agent-resolvers",
@@ -355,63 +361,7 @@ fn install_typert_resolvers(
                 let typert = context
                     .get(TYPERT)
                     .ok_or_else(|| anyhow::anyhow!("api-remotes requires typert"))?;
-                let resolve_agent = {
-                    let agent_resolver = agent_resolver.clone();
-                    Arc::new(move |value: TypertBoundaryValue| {
-                        let agent_resolver = agent_resolver.clone();
-                        Box::pin(async move {
-                            let session_id = boundary_session_id(value)?;
-                            match agent_resolver(session_id).await {
-                                ApiRemoteAgentResult::Agent(agent) => {
-                                    Ok(Some(agent as TypertHostObject))
-                                }
-                                ApiRemoteAgentResult::Error(error) => {
-                                    Err(TypertLookupFailure::new(serde_json::to_value(error)?)
-                                        .into())
-                                }
-                            }
-                        }) as seekdeep_typert_protocol::TypertLookupFuture
-                    }) as TypertLookupResolver
-                };
-                typert
-                    .lookups()
-                    .configure(&context, "agent", resolve_agent.clone())?;
-                let session_resolver = Arc::new(move |value: TypertBoundaryValue| {
-                    let resolve_agent = resolve_agent.clone();
-                    Box::pin(async move {
-                        let agent = resolve_agent(value).await?;
-                        Ok(agent.and_then(|object| {
-                            Arc::downcast::<seekdeep_agent::Agent>(object)
-                                .ok()
-                                .map(|agent| agent.session().clone() as TypertHostObject)
-                        }))
-                    }) as seekdeep_typert_protocol::TypertLookupFuture
-                });
-                typert
-                    .lookups()
-                    .configure(&context, "session", session_resolver)?;
-                let context_resolver = {
-                    let agent_resolver = agent_resolver.clone();
-                    Arc::new(move |value: TypertBoundaryValue| {
-                        let agent_resolver = agent_resolver.clone();
-                        Box::pin(async move {
-                            let session_id = boundary_session_id(value)?;
-                            match agent_resolver(session_id).await {
-                                ApiRemoteAgentResult::Agent(agent) => {
-                                    Ok(Some(agent.context().clone()))
-                                }
-                                ApiRemoteAgentResult::Error(error) => {
-                                    Err(TypertLookupFailure::new(serde_json::to_value(error)?)
-                                        .into())
-                                }
-                            }
-                        })
-                            as seekdeep_typert_protocol::TypertHostContextFuture
-                    })
-                };
-                typert
-                    .contexts()
-                    .configure_host(&context, "agent", context_resolver)?;
+                configure_typert_resolvers(&context, &typert, &agent_resolver)?;
                 Ok(())
             })
         },
@@ -419,6 +369,97 @@ fn install_typert_resolvers(
     if let Err(error) = ctx.plugin(plugin, serde_json::Value::Null) {
         tracing::warn!(%error, "API Remote Typert resolver mount failed");
     }
+}
+
+fn configure_typert_resolvers(
+    context: &Context,
+    typert: &Arc<TypertRegistry>,
+    agent_resolver: &Arc<
+        dyn Fn(SessionId) -> BoxFuture<'static, ApiRemoteAgentResult> + Send + Sync,
+    >,
+) -> anyhow::Result<()> {
+    let resolve_agent = {
+        let agent_resolver = agent_resolver.clone();
+        Arc::new(move |value: TypertBoundaryValue| {
+            let agent_resolver = agent_resolver.clone();
+            Box::pin(async move {
+                let session_id = boundary_session_id(value)?;
+                match agent_resolver(session_id).await {
+                    ApiRemoteAgentResult::Agent(agent) => Ok(Some(agent as TypertHostObject)),
+                    ApiRemoteAgentResult::Error(error) => {
+                        Err(TypertLookupFailure::new(serde_json::to_value(error)?).into())
+                    }
+                }
+            }) as seekdeep_typert_protocol::TypertLookupFuture
+        }) as TypertLookupResolver
+    };
+    if typert
+        .lookups()
+        .definitions()
+        .iter()
+        .any(|definition| definition.key == "agent")
+    {
+        typert
+            .lookups()
+            .configure(context, "agent", resolve_agent.clone())?;
+    } else {
+        typert.lookups().register(
+            context,
+            "agent",
+            TypertLookupProvider {
+                parameter: "agent".to_owned(),
+                wire: "agentId".to_owned(),
+                host_type_symbol: "@seekdeep-ai/seekdeep-agent#Agent".to_owned(),
+                wire_type_symbol: "@seekdeep-ai/seekdeep-session/types#SessionId".to_owned(),
+                resolve: resolve_agent.clone(),
+            },
+        )?;
+    }
+    let session_resolver = Arc::new(move |value: TypertBoundaryValue| {
+        let resolve_agent = resolve_agent.clone();
+        Box::pin(async move {
+            let agent = resolve_agent(value).await?;
+            Ok(agent.and_then(|object| {
+                Arc::downcast::<seekdeep_agent::Agent>(object)
+                    .ok()
+                    .map(|agent| agent.session().clone() as TypertHostObject)
+            }))
+        }) as seekdeep_typert_protocol::TypertLookupFuture
+    });
+    typert
+        .lookups()
+        .configure(context, "session", session_resolver)?;
+    let context_resolver = {
+        let agent_resolver = agent_resolver.clone();
+        Arc::new(move |value: TypertBoundaryValue| {
+            let agent_resolver = agent_resolver.clone();
+            Box::pin(async move {
+                let session_id = boundary_session_id(value)?;
+                match agent_resolver(session_id).await {
+                    ApiRemoteAgentResult::Agent(agent) => Ok(Some(agent.context().clone())),
+                    ApiRemoteAgentResult::Error(error) => {
+                        Err(TypertLookupFailure::new(serde_json::to_value(error)?).into())
+                    }
+                }
+            }) as seekdeep_typert_protocol::TypertHostContextFuture
+        })
+    };
+    if typert.contexts().get_host("agent").is_some() {
+        typert
+            .contexts()
+            .configure_host(context, "agent", context_resolver)?;
+    } else {
+        typert.contexts().register_host(
+            context,
+            "agent",
+            TypertHostContextProvider {
+                wire: "agentId".to_owned(),
+                wire_type_symbol: "@seekdeep-ai/seekdeep-session/types#SessionId".to_owned(),
+                resolve: context_resolver,
+            },
+        )?;
+    }
+    Ok(())
 }
 
 fn boundary_session_id(value: TypertBoundaryValue) -> anyhow::Result<SessionId> {

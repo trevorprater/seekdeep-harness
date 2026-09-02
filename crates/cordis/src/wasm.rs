@@ -49,9 +49,10 @@ pub fn create_context() -> Result<JsValue, JsValue> {
         root_face.clone(),
         fiber_face.clone(),
     );
+    let root_fiber = context.inner.fiber().clone();
     let face = wrap_context(context)?;
     *root_face.lock() = Some(face.clone());
-    *fiber_face.lock() = Some(root_fiber_face(&face)?);
+    *fiber_face.lock() = Some(root_fiber_face(&face, root_fiber)?);
     Ok(face)
 }
 
@@ -701,11 +702,22 @@ fn wrap_context(context: WasmContext) -> Result<JsValue, JsValue> {
     })
 }
 
-fn root_fiber_face(context: &JsValue) -> Result<JsValue, JsValue> {
+fn root_fiber_face(context: &JsValue, fiber: Arc<crate::Fiber>) -> Result<JsValue, JsValue> {
     let face = Object::new();
     set(&face, "uid", &JsValue::from_f64(0.0))?;
     set(&face, "state", &JsValue::from_f64(2.0))?;
     set(&face, "ctx", context)?;
+    let dispose = Closure::wrap(Box::new(move || -> Promise {
+        let fiber = fiber.clone();
+        future_to_promise(async move {
+            fiber
+                .dispose()
+                .await
+                .map(|()| JsValue::UNDEFINED)
+                .map_err(|error| js_sys::Error::new(&error.to_string()).into())
+        })
+    }) as Box<dyn FnMut() -> Promise>);
+    set(&face, "dispose", &dispose.into_js_value())?;
     Ok(face.into())
 }
 
