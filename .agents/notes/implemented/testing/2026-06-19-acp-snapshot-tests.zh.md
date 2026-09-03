@@ -67,6 +67,8 @@ Status: implemented
 
 Target 专属的适配保持显式。job 准入场景使用 target 原生的 `jobs` 配置，而不是 source fixture 中陈旧的 `tasks` key，因此配置的限制会在第二个 job 启动前拒绝它。SeekDeep 更长的产品名和临时路径名只会改变受 byte 上限约束的 spill 预览、省略 byte 数和保留的 PTY 后缀。原生 Rust 进程启动会报告操作系统的 `ENOENT` 文本，并可能在当前 step 关闭前发布一个立即失败的后台 job，而不是等待 Node 后续的 spawn 事件。LSP 场景从 `PATH` 运行已编译的 Rust stdio fixture，并且只在自身归属的临时 workspace 中创建 `subject.ts`，因此无需保存 Node 或 TypeScript 实现文件也能保留 source wire 与 location 行为。PTY 指引使用内部半步顺序，在 Cordis 串行激活下保留 source 提示词顺序。
 
+无需 credential 的已编译二进制测试会以 world effect 补充 replay。一个本地 DeepSeek 兼容 SSE server 会脚本化相同的模型 tool turn，同时真实 ACP 子进程、Loader、bash provider、sandbox、approval service 与 hook bridge 仍处于执行路径中。测试会证明普通写入确实落盘、Claude pre-tool hook 会阻止该写入、allow-once escalation 只会在首次 read-only 拒绝后写入，并且 reject-once escalation 会让文件保持不存在。每个 case 还会检查 stdout 始终为 JSON-RPC，且 ACP 只发布已提交的 assistant chunk。
+
 ### 隔离：当前靠归一化，后续可加沙箱
 
 工具确定性来自生成的 cwd、清理后的环境、全新的非登录 shell、受限命令和规范化。cwd 默认为平台临时目录；当临时目录是始终可写的策略根，而行为需要独立项目位置时，场景可以改为提供其父目录。并发回放运行各自拥有独立 cwd、持久化目录和定长且按场景键区分的 spill 根目录，因此一个场景的清理操作无法删除另一个场景仍在进行的完整输出恢复，同时真实路径预览预算保持稳定。该层不声称提供 OS 级隔离。如果需要更强层级，沙箱执行器可以通过现有[能力 seam](../architecture/2026-06-13-capability-seams.md)替换本地后端。

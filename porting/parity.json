@@ -30781,7 +30781,13 @@
     {
       "source": "examples/acp-agent/tests/acp.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/acp_demo_parity.rs"
+      ],
+      "evidence": [
+        "compiled binary negotiates ACP over real stdio, creates a session, accepts a locally served DeepSeek tool-call stream, writes the requested file through bash, and emits only JSON-RPC assistant updates"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/acp.snapshot.ts",
@@ -30823,7 +30829,13 @@
     {
       "source": "examples/acp-agent/tests/escalation.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/acp_demo_parity.rs"
+      ],
+      "evidence": [
+        "real compiled subprocess tests drive read-only denial then an exact workspace-write retry through ACP allow-once and reject-once policies; approved write lands and rejected write remains absent"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/child-question-tripwire.ts",
@@ -31187,7 +31199,13 @@
     {
       "source": "examples/acp-agent/tests/hooks.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/acp_demo_parity.rs"
+      ],
+      "evidence": [
+        "compiled ACP subprocess loads the shipped Claude hook bridge, blocks a model-issued bash write, proves the file stays absent, completes the turn, and emits only committed assistant updates"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/lsp.cordis.snapshot.yml",
