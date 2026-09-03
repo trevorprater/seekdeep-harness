@@ -6629,6 +6629,7 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-loader",
+ "seekdeep-loader-smoke",
  "seekdeep-schemastery",
  "seekdeep-session-persistence",
  "seekdeep-session-persistence-jsonl",

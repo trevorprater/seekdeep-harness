@@ -17,14 +17,18 @@ use seekdeep_agent_loop::{
 };
 use seekdeep_bash_local::Config as BashConfig;
 use seekdeep_cordis::Context;
-use seekdeep_core::{session::SessionEvent, session_store::SessionStore};
+use seekdeep_core::{
+    session::{SessionEvent, SessionHeader, SessionId, SurfaceOp},
+    session_store::SessionStore,
+};
 use seekdeep_headless::{HeadlessRunResult, HeadlessRunner};
 use seekdeep_llm::{
     AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LlmAdapter, LlmRuntime,
-    MessageSource, ModelId, ProviderId, StreamChunk, UserMessage,
+    Message, MessageRole, MessageSource, ModelId, ProviderId, StreamChunk, UserMessage,
 };
-use seekdeep_session_persistence::SESSION_PERSISTENCE;
-use seekdeep_session_persistence_jsonl::JsonlConfig;
+use seekdeep_loader_smoke::{FixtureTurnOptions, run_fixture_turn};
+use seekdeep_session_persistence::{SESSION_PERSISTENCE, SessionPersistence as _};
+use seekdeep_session_persistence_jsonl::{JsonlCompression, JsonlConfig, JsonlSessionPersistence};
 use seekdeep_shell_env::ShellEnvConfig;
 use seekdeep_system_prompt::{SystemPromptConfig, install as install_system_prompt};
 use seekdeep_tool_bash::Config as ToolBashConfig;
@@ -99,12 +103,26 @@ impl CodingHarness {
         persistence_root: PathBuf,
         responses: Vec<Vec<StreamChunk>>,
     ) -> anyhow::Result<Self> {
+        Self::new_with_compression(
+            workspace,
+            persistence_root,
+            responses,
+            JsonlCompression::Zstd,
+        )
+        .await
+    }
+
+    async fn new_with_compression(
+        workspace: &Path,
+        persistence_root: PathBuf,
+        responses: Vec<Vec<StreamChunk>>,
+        compression: JsonlCompression,
+    ) -> anyhow::Result<Self> {
         let root = Context::new();
         let sessions = SessionStore::install(&root)?;
-        let persistence = seekdeep_session_persistence_jsonl::install(
-            &root,
-            JsonlConfig::new(&persistence_root),
-        )?;
+        let mut persistence_config = JsonlConfig::new(&persistence_root);
+        persistence_config.compression = compression;
+        let persistence = seekdeep_session_persistence_jsonl::install(&root, persistence_config)?;
         persistence.await_settled().await?;
         let persistence = root
             .get(SESSION_PERSISTENCE)
@@ -425,4 +443,145 @@ async fn cold_resume_rehydrates_the_prior_fact_into_the_next_model_request() -> 
     }));
     handle.dispose().await?;
     second.shutdown().await
+}
+
+fn seeded_event(event_type: &str, seq: u64, data: Value, surface: bool) -> SessionEvent {
+    SessionEvent {
+        event_type: event_type.to_owned(),
+        seq,
+        time: i64::try_from(seq).expect("fixture sequence fits i64") + 10,
+        data,
+        source_event_seqs: None,
+        surface_op: surface.then(SurfaceOp::append),
+        ignorable: None,
+    }
+}
+
+async fn seed_unknown_tool_outcome(
+    persistence_root: &Path,
+    workspace: &Path,
+) -> anyhow::Result<SessionId> {
+    let context = Context::new();
+    let sessions = SessionStore::install(&context)?;
+    let mut config = JsonlConfig::new(persistence_root);
+    config.compression = JsonlCompression::None;
+    let persistence = JsonlSessionPersistence::new(sessions, config)?;
+    let id = SessionId::new("semantic-checkpoint-unknown-outcome");
+    let mut header = SessionHeader::new(id.clone());
+    header.cwd = Some(workspace.to_string_lossy().into_owned());
+    persistence.create(&header).await?;
+    let user = UserMessage::new(
+        vec![ContentBlock::Text {
+            text: "Perform one side-effecting remote mutation.".to_owned(),
+        }],
+        MessageSource::user(),
+    );
+    let assistant = Message::new(
+        MessageRole::Assistant,
+        vec![ContentBlock::ToolCall {
+            id: CallId::new("unknown-outcome-call"),
+            name: "write_remote".to_owned(),
+            arguments: "{\"value\":1}".to_owned(),
+        }],
+        MessageSource::model("deepseek-official", "deepseek-v4-flash"),
+    );
+    persistence
+        .append(
+            &id,
+            &[
+                seeded_event("turn/start", 0, json!({"turn":1}), false),
+                seeded_event("user/message", 1, serde_json::to_value(user)?, true),
+                seeded_event("step/start", 2, json!({"turn":1,"step":1}), false),
+                seeded_event(
+                    "assistant/message",
+                    3,
+                    json!({"turn":1,"step":1,"message":assistant}),
+                    true,
+                ),
+                seeded_event(
+                    "tool/call",
+                    4,
+                    json!({
+                        "turn":1,
+                        "step":1,
+                        "callId":"unknown-outcome-call",
+                        "name":"write_remote",
+                        "arguments":"{\"value\":1}"
+                    }),
+                    false,
+                ),
+            ],
+        )
+        .await?;
+    context.fiber().dispose().await?;
+    Ok(id)
+}
+
+#[tokio::test]
+async fn semantic_checkpoint_repairs_unknown_tool_outcome_before_continuation() -> anyhow::Result<()>
+{
+    let temporary = tempfile::tempdir()?;
+    let workspace = temporary.path().join("workspace");
+    std::fs::create_dir(&workspace)?;
+    let persistence_root = temporary.path().join("sessions");
+    let session_id = seed_unknown_tool_outcome(&persistence_root, &workspace).await?;
+    let harness = CodingHarness::new_with_compression(
+        &workspace,
+        persistence_root,
+        vec![answer_response(
+            "I will verify the external state before deciding whether to retry the side-effecting operation.",
+        )],
+        JsonlCompression::None,
+    )
+    .await?;
+    let mut resume = ResumeAgentOptions::new(session_id.clone());
+    resume.agent_options = AgentOptions {
+        provider: Some(ProviderId::new("mock")),
+        model: Some(ModelId::new("model")),
+        max_tokens: None,
+        subagent_depth: None,
+    };
+    let handle = harness.agents.resume(resume).await?;
+    handle.agent.when_idle()?.await?;
+    let result = run_fixture_turn(
+        &harness.root,
+        FixtureTurnOptions {
+            task: "Continue safely from the interrupted operation.".to_owned(),
+            on_event: None,
+        },
+    )
+    .await?;
+    assert_eq!(result.session_id, session_id);
+    assert_eq!(
+        result.output,
+        "I will verify the external state before deciding whether to retry the side-effecting operation."
+    );
+    let events = handle.agent.session().events();
+    let repaired = events
+        .iter()
+        .find(|event| event.event_type == "tool/result")
+        .expect("resume repairs the unmatched tool call");
+    assert_eq!(repaired.data["error"]["name"], "ToolOutcomeUnknownError");
+    assert_eq!(repaired.data["error"]["code"], "TOOL_OUTCOME_UNKNOWN");
+    assert!(repaired.data.to_string().contains("Do not retry blindly."));
+    assert!(
+        events
+            .iter()
+            .any(|event| event.event_type == "session/end-seed")
+    );
+    assert_eq!(
+        events
+            .last()
+            .and_then(|event| event.data.pointer("/reason/kind"))
+            .and_then(Value::as_str),
+        Some("completed")
+    );
+    {
+        let requests = harness.requests.lock();
+        assert_eq!(requests.len(), 1);
+        let history = serde_json::to_string(&requests[0].messages)?;
+        assert!(history.contains("Do not retry blindly."));
+    }
+    handle.dispose().await?;
+    harness.shutdown().await
 }

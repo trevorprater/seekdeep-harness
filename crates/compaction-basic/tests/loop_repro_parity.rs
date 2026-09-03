@@ -731,6 +731,18 @@ async fn assert_overflow_recovery(delivery: OverflowDelivery) {
             .iter()
             .all(|event| event.seq > step_start.seq && event.seq < step_end.seq)
     );
+    let summary = compaction
+        .iter()
+        .find(|event| event.event_type == "compaction/summary")
+        .expect("compaction summary");
+    assert!(
+        summary.data["shadowedSeqs"]
+            .as_array()
+            .is_some_and(|seqs| !seqs.is_empty())
+    );
+    assert!(events.iter().any(|event| {
+        event.event_type == "assistant/message" && event.data.to_string().contains("recovered")
+    }));
     assert_eq!(events.last().unwrap().event_type, "turn/end");
     assert_eq!(events.last().unwrap().data["reason"]["kind"], "completed");
     harness.context.fiber().dispose().await.unwrap();
