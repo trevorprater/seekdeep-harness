@@ -276,6 +276,42 @@ async fn missing_failed_and_pending_plugins_never_return_a_half_boot() -> anyhow
 }
 
 #[tokio::test]
+async fn activation_error_fixture_preserves_its_deterministic_message_and_stack() {
+    const FAILURE: &str = concat!(
+        "startup activation snapshot failure\n",
+        "Error: startup activation snapshot failure\n",
+        "    at activation-error-fixture",
+    );
+    let catalog = PluginCatalog::new();
+    catalog
+        .register_named(
+            "activation-error",
+            Plugin::new("activation-error", std::iter::empty::<&str>(), |_, _| {
+                Box::pin(async { anyhow::bail!(FAILURE) })
+            }),
+        )
+        .unwrap();
+    let (_temporary, path) = config("- id: activation-error\n  name: activation-error\n");
+
+    let error = boot(
+        "headless-test-driver",
+        &path,
+        &catalog,
+        BootOptions::default(),
+    )
+    .await
+    .expect_err("activation fixture must fail startup");
+    let rendered = format!("{error:#}");
+    assert!(
+        rendered.starts_with(
+            "headless-test-driver: plugin tree failed to load: failed to apply loader entry activation-error (activation-error): startup activation snapshot failure"
+        ),
+        "{rendered}"
+    );
+    assert!(rendered.ends_with(FAILURE), "{rendered}");
+}
+
+#[tokio::test]
 async fn consumer_before_provider_is_active_at_the_final_audit() -> anyhow::Result<()> {
     let catalog = PluginCatalog::new();
     catalog.register_named(

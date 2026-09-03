@@ -26,6 +26,8 @@ Status: implemented
 
 包测试围绕脚本化 Agent 工厂使用真实的会话存储与 Agent 注册表，固定空闲态到空闲态的聚合、延迟异步完成、终止态模型诊断、其他未完成退出、直接失败、Loader 加载期间的 dispose（资源释放），以及退出前 flush 的顺序。Source 等价的 coding harness 会在确定性模型脚本周围加入真实本地 subprocess、Bash executor、shell environment、Bash tool、todo tool 与 JSONL 持久化。它会证明一次 Bash 往返、修复一个失败的 Node 程序并独立重跑其未改动的测试，以及记录精确的并行 todo 计划。Cold-resume 测试随后会关闭第一个 context，在第二个 context 中打开同一 JSONL 根目录，通过 AgentLoop 恢复精确 Session，并要求下一次模型请求同时包含此前两条 fact message。Semantic-checkpoint 覆盖会预置一个结果未匹配的副作用 tool call，在继续执行前验证持久化的 `TOOL_OUTCOME_UNKNOWN` 修复与安全指引，并交付 source 中的安全回答。真实 loop compaction 测试会为早期 surface node 加上 bracket 并将其 shadow，以 checkpoint 替换旧历史，同时仍产出最终 assistant message 与 completed turn。组装后的无密钥快照通过回放的工具往返驱动 `seekdeep --profile headless`，记录一条带 `source.kind: 'user'` 的 `user/message`，并在 stderr 暴露终止态模型失败。构建后二进制验收通过已发布入口访问 mock 提供方，并要求最终文本出现在 stdout、退出状态为 0 且 stderr 为空。配置转储验收排除随附 headless 树中的所有 Host、Web 与 Client 包；PTY 关闭覆盖要求不出现观察行，并在有界时间内完成 dispose。
 
+Rust 无密钥 Loader 冒烟测试挂载真实服务插件、执行 Bash、流式输出其持有的 Session 区间、聚合 source 中精确的 token 用量，并打开已 flush 的 Zstandard 头。Fixture 测试保留首次 pre-step 中仅在缺失时创建 goal 的种子及其唯一持久化变更、经 AppBoot 传递的原始激活消息与确定性堆栈，以及带 listener teardown 的根父级 settlement barrier。该 barrier 忽略子级与无关 inbox 事件，并在 manager notice 到达后保持开放。
+
 ## 考虑过的替代方案
 
 | 替代方案 | 约定不匹配之处 |

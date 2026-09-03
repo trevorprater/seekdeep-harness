@@ -35372,7 +35372,13 @@
     {
       "source": "examples/headless-agent/tests/fixtures/goal-domain/seed-goal.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/goal/tests/goal_e2e.rs"
+      ],
+      "evidence": [
+        "Rust seed_goal_plugin has the same goals dependency and first-pre-step create-if-absent behavior with the exact objective and maxGoalRounds 7; the real YAML HeadlessRunner test persists one goal/change and completes a tool round"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/headless-driver.ts",
@@ -35448,7 +35454,13 @@
     {
       "source": "examples/headless-agent/tests/fixtures/startup-activation-error/activation-error.mjs",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/app-boot/tests/boot_parity.rs"
+      ],
+      "evidence": [
+        "Rust AppBoot loads an activation-error fixture plugin that fails with the oracle's exact deterministic message and synthetic stack, and asserts the Loader/AppBoot chain preserves both through the user-facing startup error"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/startup-activation-error/cordis.yml",
@@ -35488,7 +35500,13 @@
     {
       "source": "examples/headless-agent/tests/fixtures/subagent-settlement-fence.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/tests/settlement_fence_fixture_parity.rs"
+      ],
+      "evidence": [
+        "Rust fixture holds root parent turn 1 step 2 through child and unrelated inbox events, releases only on the root parent's subagent-settled insertion, keeps the fence open thereafter, and removes both listeners on plugin disposal"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/telemetry-redact-rule.ts",
@@ -35578,7 +35596,13 @@
     {
       "source": "examples/headless-agent/tests/keyless-smoke.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/keyless_loader_smoke.rs"
+      ],
+      "evidence": [
+        "real Rust Loader tree mounts the service plugins, executes the actual Bash tool, streams one owned session interval with CLI_TOOL_ROUND_TRIP, aggregates exact usage 18 input/8 output/2 cache-read/1 reasoning tokens, and opens the flushed Zstandard session header"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/real-model.e2e.ts",
