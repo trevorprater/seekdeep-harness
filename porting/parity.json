@@ -36093,7 +36093,13 @@
     {
       "source": "examples/headless-agent/tests/subagent-inheritance.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-in-process-driver/tests/driver_parity.rs"
+      ],
+      "evidence": [
+        "assembled Rust child receives the parent's read-only override over a workspace-write deployment default, records sandbox/mode source delegation, sees the policy and delegation contexts, executes the real write tool through fs-sandbox, records FS_SANDBOX_DENIED, and leaves the physical file absent"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/todo-write.e2e.ts",
@@ -36153,7 +36159,13 @@
     {
       "source": "examples/headless-agent/tests/workspace-context-resume.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/agent-instructions/tests/assembled_e2e.rs"
+      ],
+      "evidence": [
+        "assembled Rust AgentLoop resumes completed-turn session seeds: compatible baseline identity appends one offline AGENTS.md replace transition without duplicating the baseline, while changed candidate precedence appends a second baseline that supersedes the first and orders AGENTS.md before CLAUDE.md; both contexts reach the model before its first resumed response"
+      ]
     },
     {
       "source": "examples/headless-agent/workspace-context-resume.cordis.snapshot.yml",

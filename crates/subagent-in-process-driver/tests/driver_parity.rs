@@ -11,7 +11,7 @@ use seekdeep_agent_loop_testkit::{
     AgentLoopTestDependencies, AgentLoopTestDependenciesOptions, mount_agent_loop_test_dependencies,
 };
 use seekdeep_cordis::Context;
-use seekdeep_core::session::{AppendOptions, SessionId, SessionOrigin};
+use seekdeep_core::session::{AppendOptions, SessionEvent, SessionId, SessionOrigin};
 use seekdeep_llm::{
     AbortSignal, AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LlmAdapter,
     ModelId, ProviderId, StreamChunk,
@@ -29,6 +29,11 @@ use serde_json::{Value, json};
 enum Reply {
     Text(String),
     Structured(String),
+    ToolCall {
+        id: &'static str,
+        name: &'static str,
+        arguments: String,
+    },
 }
 
 struct ScriptedAdapter {
@@ -62,6 +67,24 @@ impl LlmAdapter for ScriptedAdapter {
                     replay_state: None,
                 }),
             ],
+            Reply::ToolCall {
+                id,
+                name,
+                arguments,
+            } => vec![
+                Ok(StreamChunk::BlockEnd {
+                    index: 0,
+                    block: ContentBlock::ToolCall {
+                        id: CallId::new(id),
+                        name: name.to_owned(),
+                        arguments,
+                    },
+                }),
+                Ok(StreamChunk::Finish {
+                    reason: FinishReason::ToolCalls,
+                    replay_state: None,
+                }),
+            ],
         };
         AdapterStream::new(stream::iter(chunks))
     }
@@ -76,6 +99,10 @@ struct Harness {
 
 impl Harness {
     async fn new(replies: impl IntoIterator<Item = Reply>) -> Self {
+        Self::new_with_cwd(replies, "/project".to_owned()).await
+    }
+
+    async fn new_with_cwd(replies: impl IntoIterator<Item = Reply>, cwd: String) -> Self {
         let context = Context::new();
         let dependencies = mount_agent_loop_test_dependencies(
             &context,
@@ -104,7 +131,7 @@ impl Harness {
         .unwrap();
         dependencies.agents.set_factory(Arc::new(factory)).unwrap();
         let mut parent_options = CreateAgentOptions::new(SessionId::new("parent"));
-        parent_options.meta.cwd = Some("/project".to_owned());
+        parent_options.meta.cwd = Some(cwd);
         parent_options.agent_options = AgentOptions {
             provider: Some(ProviderId::new("mock")),
             model: Some(ModelId::new("mock")),
@@ -152,6 +179,57 @@ fn text(blocks: &[ContentBlock]) -> String {
             _ => None,
         })
         .collect()
+}
+
+fn assert_inherited_denial_events(events: &[SessionEvent]) {
+    let inherited_policy = events
+        .iter()
+        .find(|event| event.event_type == "sandbox/mode")
+        .expect("child inherits the parent sandbox override");
+    assert_eq!(
+        inherited_policy.data,
+        json!({"mode":"read-only","source":"delegation"})
+    );
+    let denial = events
+        .iter()
+        .find(|event| {
+            event.event_type == "tool/result"
+                && event.data.to_string().contains("FS_SANDBOX_DENIED")
+        })
+        .expect("child log contains the model-facing filesystem denial");
+    assert!(
+        denial
+            .data
+            .to_string()
+            .contains("[sandbox: file access denied under read-only mode]")
+    );
+}
+
+fn assert_inherited_policy_request(adapter: &ScriptedAdapter) {
+    let requests = adapter.requests.lock();
+    assert_eq!(requests.len(), 2);
+    let first_context = requests[0]
+        .messages
+        .iter()
+        .flat_map(seekdeep_llm::Message::content)
+        .filter_map(|block| match block {
+            ContentBlock::Text { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(first_context.contains(
+        "Any available operation enforced by the SeekDeep file sandbox cannot modify files in the standing mode."
+    ));
+    assert!(first_context.contains("You are a delegated subagent:"));
+    assert!(
+        requests[0]
+            .tools
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|tool| tool.name == "write")
+    );
 }
 
 #[tokio::test]
@@ -236,6 +314,75 @@ async fn published_fresh_child_inherits_route_cwd_depth_and_disposes_quiescently
 
     run.dispose().await.unwrap();
     assert!(harness.dependencies.agents.get(run.id()).is_none());
+    harness.parent.dispose().await.unwrap();
+    harness.context.root_fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn inherited_read_only_policy_confines_a_real_child_write_under_a_wider_default() {
+    let workspace = tempfile::tempdir().unwrap();
+    let inherited_path = workspace.path().join("inherited.txt");
+    let harness = Harness::new_with_cwd(
+        [
+            Reply::ToolCall {
+                id: "child-write",
+                name: "write",
+                arguments: json!({
+                    "file_path": "inherited.txt",
+                    "content": "escaped"
+                })
+                .to_string(),
+            },
+            Reply::Text(
+                "CHILD_DENIED [sandbox: file access denied under read-only mode]".to_owned(),
+            ),
+        ],
+        workspace.path().to_string_lossy().into_owned(),
+    )
+    .await;
+    let _policy = seekdeep_sandbox_policy::install(
+        &harness.context,
+        seekdeep_sandbox_policy::SandboxPolicyConfig {
+            mode: seekdeep_sandbox::SandboxMode::WorkspaceWrite,
+            workspace_root: Some(workspace.path().to_owned()),
+        },
+    )
+    .unwrap();
+    seekdeep_fs_sandbox::apply(
+        &harness.context,
+        seekdeep_fs_local::Config {
+            cwd: Some(workspace.path().to_string_lossy().into_owned()),
+            ..seekdeep_fs_local::Config::default()
+        },
+    )
+    .unwrap();
+    seekdeep_fs_observation_policy::apply(&harness.context).unwrap();
+    seekdeep_tool_fs::apply(&harness.context, &seekdeep_tool_fs::Config::default()).unwrap();
+    seekdeep_sandbox_policy::set_sandbox_mode(
+        harness.parent.agent.session(),
+        seekdeep_sandbox::SandboxMode::ReadOnly,
+    )
+    .unwrap();
+
+    let run = start_in_process_run(
+        harness.request(AbortSignal::default()),
+        InProcessRunOptions::default(),
+    )
+    .await
+    .unwrap();
+    let live = harness.dependencies.agents.get(run.id()).unwrap();
+    let result = run.result().await.unwrap();
+    assert_eq!(result.stop_reason, SubagentStopReason::Completed);
+    assert_eq!(
+        text(&result.output),
+        "CHILD_DENIED [sandbox: file access denied under read-only mode]"
+    );
+    assert!(!inherited_path.exists());
+
+    assert_inherited_denial_events(&live.session().events());
+    assert_inherited_policy_request(&harness.adapter);
+
+    run.dispose().await.unwrap();
     harness.parent.dispose().await.unwrap();
     harness.context.root_fiber().dispose().await.unwrap();
 }

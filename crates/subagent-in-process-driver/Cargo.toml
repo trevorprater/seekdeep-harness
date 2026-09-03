@@ -26,6 +26,13 @@ uuid.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-fs-observation-policy = { path = "../fs-observation-policy" }
+seekdeep-fs-sandbox = { path = "../fs-sandbox" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-tool-fs = { path = "../tool-fs" }
+tempfile.workspace = true
 
 [lints]
 workspace = true

@@ -68,6 +68,8 @@ There is intentionally no watcher. Detection occurs at the next successful struc
 
 The real-model source e2e defines three key-gated cases. A deterministic Rust mirror runs all three unconditionally through the production durable driver, system prompt, tool runtime, local filesystem, real read tool, Session store, and instruction runtime. It proves baseline visibility, descendant discovery after a real read, and a changed baseline appended as a replacement transition without rewriting the frozen prefix. The nested case also pins insertion at index zero when a downstream pre-step supplies no claimed message, matching JavaScript `findLastIndex()` returning `-1`.
 
+The assembled resume mirror seeds completed-turn history and verifies both first-request transitions. A compatible identity retains exactly one baseline and appends the offline `AGENTS.md` edit as `replace`; an incompatible candidate-precedence identity appends one complete superseding baseline with `AGENTS.md` before `CLAUDE.md`. In both cases, the current context reaches the model before its resumed response.
+
 The Rust unit layer groups 30 tests across configuration, discovery and precedence, local overlays, symlinks, content deduplication, UTF-8 byte budgets, tiny-budget fallbacks, provider-only files, bounded streams, cancellation, unavailable probes, session isolation, plugin disposal, dynamic set/replace/remove reconciliation, replay suppression, compaction re-arming, and version-update retention. Tiny-budget coverage prevents a zero-candidate binary-search loop, while provider tests require one failed metadata probe to remain local to that candidate and never hide an available sibling.
 
 ## Alternatives considered

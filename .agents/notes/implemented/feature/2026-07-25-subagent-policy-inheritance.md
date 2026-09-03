@@ -32,5 +32,5 @@ A confined child gets the ordinary denial marker, and an escalation request is r
 ## Consequences
 
 - Spawn, fork, and nested in-process children retain a parent's explicit sandbox override and are pinned to `'never'` approvals. The focused suite proves real filesystem denial, stale-fork precedence, delegation-time capture, the live-event boundary, default omission, and context disposal.
-- The keyless headless snapshot is the assembled regression: only the parent is `read-only`, the deployment default is `workspace-write`, and the child's persisted event plus denied disk write both fail if capture is removed.
+- The keyless source snapshot and deterministic Rust assembled-child regression both keep only the parent `read-only` under a `workspace-write` deployment default. The child's delegated event, model-facing policy context, and denied disk write fail together if capture is removed; the Rust sensitivity check then reaches the physical file under the wider default.
 - Each delegation adds at most two log-only events. `seekdeep-subagent` owns the optional peer types for the two policy services — its shared helpers hold the `ctx.get` consumption; compositions without either service behave unchanged. Out-of-process children retain their own deployment policy, and a running child does not follow later parent switches.
