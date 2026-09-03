@@ -110,6 +110,7 @@ tokio.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+regex.workspace = true
 seekdeep-goal = { path = "../goal" }
 seekdeep-jobs = { path = "../jobs" }
 seekdeep-shell = { path = "../shell" }

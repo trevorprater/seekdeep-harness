@@ -30800,12 +30800,25 @@
     {
       "source": "examples/acp-agent/tests/cleanup.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/src/harness.rs",
+        "crates/acp-snapshot/tests/harness_parity.rs"
+      ],
+      "evidence": [
+        "Rust cleanup tests preserve close-then-remove failure order and report both failures; real scenario test proves the owned workspace is removed"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/cleanup.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-snapshot/src/harness.rs"
+      ],
+      "evidence": [
+        "Rust scenario owner attempts process close plus every owned path removal and combines scenario and cleanup diagnostics without masking either"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/escalation.e2e.ts",
@@ -30908,12 +30921,24 @@
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-acp/driver.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-acp/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "compiled Rust Loader integration drives one real parent turn through a fresh ACP child and verifies the persisted result"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-acp/mock-delegating-llm.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-acp/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "compiled Rust adapter emits the source-equivalent delegation then completion sequence and proves child process cwd plus announced session cwd"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-claude-code/cordis.yml",
@@ -30929,12 +30954,25 @@
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-claude-code/driver.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/tests/loader_composition.rs",
+        "crates/subagent-codex/tests/run_parity.rs"
+      ],
+      "evidence": [
+        "Rust Loader tests inspect both opt-in providers and exact foreground tool schemas while proving neither product process starts"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-claude-code/fixture.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-claude-code/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "compiled counting subprocess tripwire proves the composition does not resolve or spawn Claude"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-codex/cordis.yml",
@@ -30950,12 +30988,24 @@
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-codex/driver.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/tests/run_parity.rs"
+      ],
+      "evidence": [
+        "Rust declarative Loader test verifies the Codex provider, no-start capabilities, exact tool parameters and zero process starts"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-codex/fixture.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent-codex/tests/run_parity.rs"
+      ],
+      "evidence": [
+        "compiled counting subprocess tripwire preserves the composition-only no-product-start invariant"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/workspace-context-compaction.ts",
@@ -31125,7 +31175,14 @@
     {
       "source": "examples/acp-agent/tests/goal.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/goal_snapshot_parity.rs",
+        "crates/tool-goal/src/index.rs"
+      ],
+      "evidence": [
+        "both compiled goal scenarios pass refresh then replay with exact normalized stdout/logs, semantic fold assertions, two-round cancellation and one wrap-up message"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/hooks.e2e.ts",
@@ -87730,7 +87787,14 @@
     {
       "source": "vitest.snapshot.config.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/acp_snapshot_suite.rs",
+        "crates/acp-snapshot/src/suite.rs"
+      ],
+      "evidence": [
+        "Rust snapshot owner defaults to replay, accepts record and refresh, validates the positive concurrency override, caps default replay concurrency at min(5, available parallelism), and serializes write modes"
+      ]
     },
     {
       "source": "vitest.web-stress.config.ts",

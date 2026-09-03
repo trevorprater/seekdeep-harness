@@ -94,7 +94,7 @@ impl<'de> Deserialize<'de> for MessageSource {
             return Err(D::Error::custom("message source must be an object"));
         };
         let kind = object
-            .remove("kind")
+            .shift_remove("kind")
             .and_then(|value| value.as_str().map(str::to_owned))
             .ok_or_else(|| D::Error::custom("message source kind must be a string"))?;
         Ok(Self {
@@ -405,5 +405,12 @@ mod tests {
             panic!("tool result block");
         };
         assert_eq!(tool_call_id.as_str(), "call-1");
+    }
+
+    #[test]
+    fn source_round_trip_preserves_kind_specific_field_order() {
+        let raw = r#"{"kind":"goal","goalId":"goal-1","revision":1,"round":2}"#;
+        let source: MessageSource = serde_json::from_str(raw).unwrap();
+        assert_eq!(serde_json::to_string(&source).unwrap(), raw);
     }
 }

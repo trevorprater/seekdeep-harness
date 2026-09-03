@@ -521,23 +521,29 @@ fn suite(mode: SnapshotSuiteMode) -> anyhow::Result<AcpSnapshotSuite> {
 }
 
 fn snapshot_max_concurrency() -> anyhow::Result<usize> {
-    let fallback = std::thread::available_parallelism()
+    let available = std::thread::available_parallelism()
         .map(std::num::NonZeroUsize::get)
-        .unwrap_or(1)
-        .min(5);
+        .unwrap_or(1);
     match std::env::var("SEEKDEEP_SNAPSHOT_MAX_CONCURRENCY") {
-        Err(std::env::VarError::NotPresent) => Ok(fallback),
+        Err(std::env::VarError::NotPresent) => parse_snapshot_max_concurrency(None, available),
         Err(error) => Err(error.into()),
-        Ok(raw) => raw
-            .parse::<usize>()
-            .ok()
-            .filter(|value| *value > 0)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "SEEKDEEP_SNAPSHOT_MAX_CONCURRENCY must be a positive integer, got {raw:?}"
-                )
-            }),
+        Ok(raw) => parse_snapshot_max_concurrency(Some(&raw), available),
     }
+}
+
+fn parse_snapshot_max_concurrency(raw: Option<&str>, available: usize) -> anyhow::Result<usize> {
+    let fallback = available.clamp(1, 5);
+    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
+        return Ok(fallback);
+    };
+    raw.parse::<usize>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "SEEKDEEP_SNAPSHOT_MAX_CONCURRENCY must be a positive integer, got {raw:?}"
+            )
+        })
 }
 
 fn has_pwsh() -> bool {
@@ -565,14 +571,18 @@ fn has_pwsh() -> bool {
 
 fn mode_from_environment() -> anyhow::Result<SnapshotSuiteMode> {
     match std::env::var("SEEKDEEP_SNAPSHOT") {
-        Err(std::env::VarError::NotPresent) => Ok(SnapshotSuiteMode::Replay),
+        Err(std::env::VarError::NotPresent) => parse_snapshot_mode(None),
         Err(error) => Err(error.into()),
-        Ok(value) => match value.as_str() {
-            "" | "replay" => Ok(SnapshotSuiteMode::Replay),
-            "record" => Ok(SnapshotSuiteMode::Record),
-            "refresh" => Ok(SnapshotSuiteMode::Refresh),
-            _ => anyhow::bail!("unknown SEEKDEEP_SNAPSHOT mode: {value}"),
-        },
+        Ok(value) => parse_snapshot_mode(Some(&value)),
+    }
+}
+
+fn parse_snapshot_mode(value: Option<&str>) -> anyhow::Result<SnapshotSuiteMode> {
+    match value.unwrap_or_default() {
+        "" | "replay" => Ok(SnapshotSuiteMode::Replay),
+        "record" => Ok(SnapshotSuiteMode::Record),
+        "refresh" => Ok(SnapshotSuiteMode::Refresh),
+        value => anyhow::bail!("unknown SEEKDEEP_SNAPSHOT mode: {value}"),
     }
 }
 
@@ -683,6 +693,38 @@ fn packed_fixture_keeps_all_chunk_rows_without_changing_the_logical_session() {
         logical_fixture_records(packed),
         logical_fixture_records(source)
     );
+}
+
+#[test]
+fn snapshot_runner_modes_and_concurrency_match_the_source_config() {
+    assert_eq!(parse_snapshot_max_concurrency(None, 12).unwrap(), 5);
+    assert_eq!(parse_snapshot_max_concurrency(Some(""), 2).unwrap(), 2);
+    assert_eq!(parse_snapshot_max_concurrency(Some("7"), 2).unwrap(), 7);
+    for invalid in ["0", "-1", "1.5", "no"] {
+        assert!(
+            parse_snapshot_max_concurrency(Some(invalid), 8)
+                .unwrap_err()
+                .to_string()
+                .contains("must be a positive integer")
+        );
+    }
+    assert_eq!(
+        parse_snapshot_mode(None).unwrap(),
+        SnapshotSuiteMode::Replay
+    );
+    assert_eq!(
+        parse_snapshot_mode(Some("replay")).unwrap(),
+        SnapshotSuiteMode::Replay
+    );
+    assert_eq!(
+        parse_snapshot_mode(Some("record")).unwrap(),
+        SnapshotSuiteMode::Record
+    );
+    assert_eq!(
+        parse_snapshot_mode(Some("refresh")).unwrap(),
+        SnapshotSuiteMode::Refresh
+    );
+    assert!(parse_snapshot_mode(Some("invalid")).is_err());
 }
 
 #[tokio::test]

@@ -160,7 +160,6 @@ fn present(title: &str, kind: ToolCallKind, raw_input: Option<Value>) -> ToolCal
 
 /// Raw schema-validated `create_goal` arguments.
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct CreateGoalArgs {
     objective: String,
     #[serde(default)]
@@ -173,7 +172,6 @@ struct GetGoalArgs {}
 
 /// Raw schema-validated `update_goal` arguments.
 #[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct UpdateGoalArgs {
     goal_id: String,
     revision: f64,

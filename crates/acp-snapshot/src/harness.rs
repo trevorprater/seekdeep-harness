@@ -1283,3 +1283,46 @@ fn finish_with_cleanup(
         Err(error) => anyhow::bail!("snapshot scenario and cleanup failed: {error}; {cleanup}"),
     }
 }
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+
+    fn successful_result() -> RunResult {
+        RunResult {
+            raw_stdout: String::new(),
+            stderr: String::new(),
+            session_id: None,
+            cwd: PathBuf::from("/owned/workspace"),
+            cwd_aliases: Vec::new(),
+            session_logs: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn cleanup_failures_are_reported_together_after_a_successful_scenario() {
+        let failures = [
+            anyhow::anyhow!("close failed"),
+            anyhow::anyhow!("remove failed"),
+        ];
+        let error = finish_with_cleanup(Ok(successful_result()), &failures).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "snapshot cleanup failed: close failed; remove failed"
+        );
+    }
+
+    #[test]
+    fn scenario_and_cleanup_failures_remain_independently_visible() {
+        let failures = [
+            anyhow::anyhow!("close failed"),
+            anyhow::anyhow!("remove failed"),
+        ];
+        let error =
+            finish_with_cleanup(Err(anyhow::anyhow!("scenario failed")), &failures).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "snapshot scenario and cleanup failed: scenario failed; close failed; remove failed"
+        );
+    }
+}

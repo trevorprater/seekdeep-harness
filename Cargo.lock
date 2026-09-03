@@ -4713,6 +4713,7 @@ dependencies = [
  "futures",
  "num-traits",
  "parking_lot",
+ "regex",
  "seekdeep-acp",
  "seekdeep-acp-snapshot",
  "seekdeep-agent",
