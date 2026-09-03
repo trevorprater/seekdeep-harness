@@ -35279,7 +35279,13 @@
     {
       "source": "examples/headless-agent/tests/code-mode.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/code_mode_parity.rs"
+      ],
+      "evidence": [
+        "five source keyless cases and seven deterministic Rust real-worker cases cover 100000-byte intermediate values, ToolCallError field isolation, background job IDs and cancellation ownership, foreground cancellation, exact Cordis versioned DTOs, run_code-only real-loop Bash dispatch with a physical joined-output file, and nested filesystem instruction projection before the next model request; the two source real-provider scenarios remain credential-gated"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/coding-task.e2e.ts",

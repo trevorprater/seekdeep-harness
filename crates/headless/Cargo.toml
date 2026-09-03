@@ -29,15 +29,25 @@ uuid.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 futures.workspace = true
+seekdeep-agent-instructions = { path = "../agent-instructions" }
 seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-bash-local = { path = "../bash-local" }
+seekdeep-code-runtime-worker-thread = { path = "../code-runtime-worker-thread" }
+seekdeep-cordis-host-runner = { path = "../cordis-host-runner" }
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-jobs = { path = "../jobs" }
+seekdeep-jobs-local = { path = "../jobs-local" }
 seekdeep-loader-smoke = { path = "../loader-smoke" }
+seekdeep-scope = { path = "../scope" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
 seekdeep-session-projection = { path = "../session-projection" }
 seekdeep-shell-env = { path = "../shell-env" }
 seekdeep-subprocess-local = { path = "../subprocess-local" }
 seekdeep-tool-bash = { path = "../tool-bash" }
+seekdeep-tool-cordis = { path = "../tool-cordis" }
+seekdeep-tool-fs = { path = "../tool-fs" }
+seekdeep-tool-jobs = { path = "../tool-jobs" }
 seekdeep-tool-todo = { path = "../tool-todo" }
 seekdeep-tools = { path = "../tools" }
 tempfile.workspace = true
