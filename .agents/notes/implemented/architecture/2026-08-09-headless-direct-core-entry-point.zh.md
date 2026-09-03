@@ -24,7 +24,7 @@ Status: implemented
 
 ## 验证
 
-包测试围绕脚本化 Agent 工厂使用真实的会话存储与 Agent 注册表，固定空闲态到空闲态的聚合、延迟异步完成、终止态模型诊断、其他未完成退出、直接失败、Loader 加载期间的 dispose（资源释放），以及退出前 flush 的顺序。Source 等价的 coding harness 会在确定性模型脚本周围加入真实本地 subprocess、Bash executor、shell environment、Bash tool、todo tool 与 JSONL 持久化。它会证明一次 Bash 往返、修复一个失败的 Node 程序并独立重跑其未改动的测试，以及记录精确的并行 todo 计划。组装后的无密钥快照通过回放的工具往返驱动 `seekdeep --profile headless`，记录一条带 `source.kind: 'user'` 的 `user/message`，并在 stderr 暴露终止态模型失败。构建后二进制验收通过已发布入口访问 mock 提供方，并要求最终文本出现在 stdout、退出状态为 0 且 stderr 为空。配置转储验收排除随附 headless 树中的所有 Host、Web 与 Client 包；PTY 关闭覆盖要求不出现观察行，并在有界时间内完成 dispose。
+包测试围绕脚本化 Agent 工厂使用真实的会话存储与 Agent 注册表，固定空闲态到空闲态的聚合、延迟异步完成、终止态模型诊断、其他未完成退出、直接失败、Loader 加载期间的 dispose（资源释放），以及退出前 flush 的顺序。Source 等价的 coding harness 会在确定性模型脚本周围加入真实本地 subprocess、Bash executor、shell environment、Bash tool、todo tool 与 JSONL 持久化。它会证明一次 Bash 往返、修复一个失败的 Node 程序并独立重跑其未改动的测试，以及记录精确的并行 todo 计划。Cold-resume 测试随后会关闭第一个 context，在第二个 context 中打开同一 JSONL 根目录，通过 AgentLoop 恢复精确 Session，并要求下一次模型请求同时包含此前两条 fact message。组装后的无密钥快照通过回放的工具往返驱动 `seekdeep --profile headless`，记录一条带 `source.kind: 'user'` 的 `user/message`，并在 stderr 暴露终止态模型失败。构建后二进制验收通过已发布入口访问 mock 提供方，并要求最终文本出现在 stdout、退出状态为 0 且 stderr 为空。配置转储验收排除随附 headless 树中的所有 Host、Web 与 Client 包；PTY 关闭覆盖要求不出现观察行，并在有界时间内完成 dispose。
 
 ## 考虑过的替代方案
 

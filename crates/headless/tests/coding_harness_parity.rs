@@ -11,7 +11,7 @@ use std::{
 use async_trait::async_trait;
 use futures::stream;
 use parking_lot::Mutex;
-use seekdeep_agent::{AgentRegistry, ModelSelection};
+use seekdeep_agent::{AgentOptions, AgentRegistry, ModelSelection, ResumeAgentOptions};
 use seekdeep_agent_loop::{
     AgentLoop, AgentLoopServices, DEFAULT_MAX_PARALLEL_TOOL_CALLS, install_request_invariant,
 };
@@ -21,7 +21,7 @@ use seekdeep_core::{session::SessionEvent, session_store::SessionStore};
 use seekdeep_headless::{HeadlessRunResult, HeadlessRunner};
 use seekdeep_llm::{
     AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LlmAdapter, LlmRuntime,
-    ModelId, ProviderId, StreamChunk,
+    MessageSource, ModelId, ProviderId, StreamChunk, UserMessage,
 };
 use seekdeep_session_persistence::SESSION_PERSISTENCE;
 use seekdeep_session_persistence_jsonl::JsonlConfig;
@@ -360,4 +360,69 @@ async fn todo_turn_records_the_exact_parallel_plan() -> anyhow::Result<()> {
         .expect("todo tool appends a durable event");
     assert_eq!(event.data["todos"], todos);
     harness.shutdown().await
+}
+
+#[tokio::test]
+async fn cold_resume_rehydrates_the_prior_fact_into_the_next_model_request() -> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let workspace = temporary.path().join("workspace");
+    std::fs::create_dir(&workspace)?;
+    let persistence_root = temporary.path().join("sessions");
+    let first = CodingHarness::new(
+        &workspace,
+        persistence_root.clone(),
+        vec![answer_response("Remembered fact: violet compass.")],
+    )
+    .await?;
+    let first_result = first
+        .runner
+        .run("Remember that the phrase is violet compass.")
+        .await;
+    assert_eq!(first_result.exit_code, 0, "{}", first_result.stderr);
+    let session_id = first_result
+        .session_id
+        .clone()
+        .expect("first headless run has a session id");
+    first.shutdown().await?;
+
+    let second = CodingHarness::new(
+        &workspace,
+        persistence_root,
+        vec![answer_response("The remembered phrase is violet compass.")],
+    )
+    .await?;
+    let mut resume = ResumeAgentOptions::new(session_id.clone());
+    resume.agent_options = AgentOptions {
+        provider: Some(ProviderId::new("mock")),
+        model: Some(ModelId::new("model")),
+        max_tokens: None,
+        subagent_depth: None,
+    };
+    let handle = second.agents.resume(resume).await?;
+    handle.agent.when_idle()?.await?;
+    handle.agent.followup(UserMessage::new(
+        vec![ContentBlock::Text {
+            text: "What phrase did I ask you to remember?".to_owned(),
+        }],
+        MessageSource::user(),
+    ))?;
+    handle.agent.when_idle()?.await?;
+    second.sessions.flush(handle.agent.session()).await?;
+    {
+        let requests = second.requests.lock();
+        assert_eq!(requests.len(), 1);
+        let history = serde_json::to_string(&requests[0].messages)?;
+        assert!(history.contains("Remember that the phrase is violet compass."));
+        assert!(history.contains("Remembered fact: violet compass."));
+    }
+    let events = handle.agent.session().events();
+    assert!(events.iter().any(|event| {
+        event.event_type == "assistant/message"
+            && event
+                .data
+                .to_string()
+                .contains("The remembered phrase is violet compass.")
+    }));
+    handle.dispose().await?;
+    second.shutdown().await
 }

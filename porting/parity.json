@@ -35561,7 +35561,14 @@
     {
       "source": "examples/headless-agent/tests/resume.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs",
+        "crates/agent-loop/src/factory.rs"
+      ],
+      "evidence": [
+        "two independent Rust contexts share one JSONL store: the first persists and shuts down, the second resumes the exact Session through AgentLoop, and its captured model request contains both prior fact messages before answering"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/semantic-checkpoint-snapshots/tool-outcome-unknown/replay.jsonl",
