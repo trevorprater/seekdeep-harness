@@ -84,7 +84,9 @@ enum EffectState {
 }
 
 struct EffectInner {
-    state: tokio::sync::Mutex<EffectState>,
+    // State transitions never await. Synchronous service-change cleanup must not
+    // yield to the enclosing executor just to claim or complete its disposer.
+    state: Mutex<EffectState>,
     notify: Notify,
     label: String,
 }
@@ -112,7 +114,7 @@ impl EffectHandle {
     ) -> Self {
         Self {
             inner: Arc::new(EffectInner {
-                state: tokio::sync::Mutex::new(EffectState::Pending(Some(Box::new(disposer)))),
+                state: Mutex::new(EffectState::Pending(Some(Box::new(disposer)))),
                 notify: Notify::new(),
                 label: label.into(),
             }),
@@ -134,6 +136,7 @@ impl EffectHandle {
     }
 
     /// Runs cleanup once and joins a cleanup already started by another owner.
+    /// An uncontended synchronous disposer completes without an executor handoff.
     ///
     /// # Errors
     ///
@@ -142,7 +145,7 @@ impl EffectHandle {
         loop {
             let notified = self.inner.notify.notified();
             let disposer = {
-                let mut state = self.inner.state.lock().await;
+                let mut state = self.inner.state.lock();
                 match &mut *state {
                     EffectState::Pending(disposer) => {
                         let Some(disposer) = disposer.take() else {
@@ -168,7 +171,7 @@ impl EffectHandle {
                     EffectOutcome::Ok => Ok(()),
                     EffectOutcome::Error(message) => Err(anyhow::anyhow!(message.clone())),
                 };
-                *self.inner.state.lock().await = EffectState::Done(outcome);
+                *self.inner.state.lock() = EffectState::Done(outcome);
                 self.inner.notify.notify_waiters();
                 return result;
             }
@@ -469,9 +472,32 @@ mod tests {
         time::Duration,
     };
 
+    use futures::FutureExt as _;
     use tokio::sync::oneshot;
 
     use super::*;
+
+    #[tokio::test]
+    async fn synchronous_disposal_is_ready_after_cooperative_budget_exhaustion() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let recorded = calls.clone();
+        let effect = EffectHandle::synchronous("synchronous registration", move || {
+            recorded.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        });
+        while tokio::task::coop::has_budget_remaining() {
+            tokio::task::consume_budget().await;
+        }
+        // Service-change callbacks synchronously withdraw registrations. Their cleanup
+        // cannot require the enclosing Tokio task to yield before returning.
+        let result = effect.dispose().now_or_never();
+        assert!(
+            matches!(result, Some(Ok(()))),
+            "synchronous disposal yielded: {result:?}"
+        );
+        assert!(matches!(effect.dispose().now_or_never(), Some(Ok(()))));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
 
     #[tokio::test]
     async fn concurrent_disposal_joins_quiescence_and_replays_the_same_failure() {

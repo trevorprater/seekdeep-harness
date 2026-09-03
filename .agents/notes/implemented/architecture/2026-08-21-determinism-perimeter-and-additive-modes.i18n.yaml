@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-21-determinism-perimeter-and-additive-modes.md
-2026-08-21-determinism-perimeter-and-additive-modes.md: c6c94dac8718466e8911ca5bdc583d38512583e6
-2026-08-21-determinism-perimeter-and-additive-modes.zh.md: 5493dff8bd81d895cc0798434694864a4c67ea2e
+2026-08-21-determinism-perimeter-and-additive-modes.md: db0ecd97a454036554e9ab5e114b120330f54589
+2026-08-21-determinism-perimeter-and-additive-modes.zh.md: a352ca1d8d69b85983b5f0536f718bff74416166
