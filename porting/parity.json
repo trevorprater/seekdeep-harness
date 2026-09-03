@@ -35371,7 +35371,16 @@
     {
       "source": "examples/headless-agent/tests/fixtures/headless-driver.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader-smoke/src/agent_turn.rs",
+        "crates/loader-smoke/tests/agent_turn_parity.rs",
+        "crates/headless/src/startup.rs",
+        "crates/headless/tests/loader_settlement.rs"
+      ],
+      "evidence": [
+        "Rust fixture turn driver gates on the exact inbox receipt, streams only owned Session events as canonical JSONL records, appends the exact result and usage envelope, flushes before return, validates task arguments, and waits for Loader settlement"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/headless-profile.cordis.yml",
@@ -35595,7 +35604,14 @@
     {
       "source": "examples/headless-agent/tests/session-format-guard.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/session-persistence-jsonl/tests/format_guard_parity.rs",
+        "crates/session-persistence-jsonl/src/backend.rs"
+      ],
+      "evidence": [
+        "Rust JSONL tests seed a future raw log version and unknown required event, then assert the exact upgrade/refusal diagnostics, raw path suffix, and materialized artifact"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/snapshots/advanced-toolchain/input.json",

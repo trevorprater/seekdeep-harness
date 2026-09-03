@@ -274,7 +274,7 @@ async fn observes_owned_interval_final_text_and_deduplicated_usage() {
             task: "prove the fixture".to_owned(),
             on_event: Some(Arc::new(move |session_id, event| {
                 sink.lock()
-                    .push((session_id.as_str().to_owned(), event.seq));
+                    .push((session_id.as_str().to_owned(), event.clone()));
             })),
         },
     )
@@ -300,6 +300,45 @@ async fn observes_owned_interval_final_text_and_deduplicated_usage() {
             .map(|(session, _)| session.as_str())
             .collect::<Vec<_>>(),
         ["fixture-0"; 5]
+    );
+    let mut stream = observed
+        .lock()
+        .iter()
+        .map(|(session_id, event)| {
+            json!({"type":"session_event","sessionId":session_id,"event":event})
+        })
+        .collect::<Vec<_>>();
+    stream.push(serde_json::to_value(&result).unwrap());
+    assert!(stream[..stream.len() - 1].iter().all(|record| {
+        record["type"] == "session_event"
+            && record["sessionId"] == "fixture-0"
+            && record["event"].is_object()
+    }));
+    assert_eq!(
+        stream.last().unwrap(),
+        &json!({
+            "type":"result",
+            "sessionId":"fixture-0",
+            "output":"final answer",
+            "usage":{
+                "inputTokens":5,
+                "outputTokens":7,
+                "cacheReadTokens":6,
+                "cacheWriteTokens":7,
+                "reasoningTokens":2
+            }
+        })
+    );
+    let jsonl = stream
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+        .join("\n");
+    assert!(
+        jsonl
+            .lines()
+            .all(|line| serde_json::from_str::<serde_json::Value>(line).is_ok())
     );
     assert_eq!(harness.idle_calls.load(Ordering::Acquire), 2);
     assert_eq!(harness.flushes.load(Ordering::Acquire), 1);
