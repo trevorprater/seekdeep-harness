@@ -21,7 +21,7 @@ Use the workflow tool ONLY when the user explicitly asks for a workflow or for l
 
 # Dynamic Cordis Plugins
 
-Dynamic Cordis plugins temporarily extend the current SEEKDEEP process. A Plugin uses apply(ctx) to consume Services, listen to Events, provide Services, register model Tools, or register browser UI in Slots.
+Dynamic Cordis plugins temporarily extend the current SeekDeep Harness process. A Plugin uses apply(ctx) to consume Services, listen to Events, provide Services, register model Tools, or register browser UI in Slots.
 
 - Plugin and Package definitions exist only in the current process. define itself does not modify repository source, configuration, or disk, and definitions do not survive a process restart.
 - The restricted execution environment prevents accidental misuse; it is not a security boundary for malicious code. Services obtained by dynamic code connect to the real runtime.
@@ -100,7 +100,7 @@ return {
 
 ### Data: do not serialize live data
 
-- Services, Events, Slots, Sessions, and their derived Cordis/SEEKDEEP objects are internal live data, not ordinary JSON that can be dumped.
+- Services, Events, Slots, Sessions, and their derived Cordis/SeekDeep Harness objects are internal live data, not ordinary JSON that can be dumped.
 - Do not apply JSON.stringify, structuredClone, recursive enumeration, full copying, or whole-object display to live data.
 - Read only the leaf fields required by the task, then construct the smallest owned data object without Host references.
 
@@ -112,7 +112,7 @@ return {
 
 ## Host and Client
 
-- Host runs in the SEEKDEEP Node.js process and is appropriate for files, networking, commands, Agent/Session access, Host Events, Services, model Tools, and JSON methods callable by the Client.
+- Host runs in the SeekDeep Harness Host process and is appropriate for files, networking, commands, Agent/Session access, Host Events, Services, model Tools, and JSON methods callable by the Client.
 - Client runs in the browser page and is appropriate for themes, layout, current page state, Tool cards, and Slot UI.
 - Host and Client communicate through Package-private JSON methods: Host uses harness.handle(method, handler), and Client uses host.call(method, args). The direction is Client→Host, and only lossless JSON may cross it.
 - Client UI must be registered in a queried Slot; apply() cannot directly return a React Element. Query Slots.listSubTree without root to choose from the compact purpose/topology tree, then query the exact root for its full registration contract and props before writing code.

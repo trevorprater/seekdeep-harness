@@ -8,22 +8,26 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
+    task::Poll,
 };
 
 use async_trait::async_trait;
+use futures::StreamExt as _;
 use parking_lot::Mutex;
+use seekdeep_agent::{AGENTS, AgentEvent};
+use seekdeep_agent_loop::AgentRequestEvent;
 use seekdeep_cordis::{
     Context, EventOptions, EventReply, FiberState, Plugin, ServiceKey, fiber::EffectHandle,
 };
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
-use seekdeep_core::session_store::SESSIONS;
+use seekdeep_core::session_store::{SESSIONS, SessionStore};
 use seekdeep_llm::{AbortSignal, GenerateOptions, LLM, is_agent_loop_request};
 use seekdeep_session_projection::{
     ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, oneshot};
 
 use crate::model::{
     Config, SessionTitleAutomaticMode, SessionTitleModelProvenance, SessionTitleProviderId,
@@ -219,7 +223,7 @@ struct ActiveProviderWork {
 /// Mutable concurrency state scoped to one live session.
 struct SessionTitleWorkState {
     revision: u64,
-    fallback: Option<AbortSignal>,
+    fallback: Option<Arc<tokio::sync::Mutex<()>>>,
     pending: Option<PendingAutomaticWork>,
     active: Option<ActiveProviderWork>,
 }
@@ -238,6 +242,7 @@ impl SessionTitleWorkState {
 /// Log-backed title fold plus asynchronous fallback generation.
 pub struct SessionTitleService {
     context: Context,
+    sessions: Arc<SessionStore>,
     config: Config,
     lifetime: AbortSignal,
     registration: Mutex<Option<Arc<ProviderRegistration>>>,
@@ -253,8 +258,12 @@ impl SessionTitleService {
     /// Returns config-validation, listener, or projection failures.
     pub fn new(context: &Context, config: Config) -> anyhow::Result<Arc<Self>> {
         validate_config(&config)?;
+        let sessions = context
+            .get_relaxed(SESSIONS)
+            .ok_or_else(|| anyhow::anyhow!("session-title requires sessions"))?;
         let service = Arc::new(Self {
             context: context.clone(),
+            sessions,
             config,
             lifetime: AbortSignal::default(),
             registration: Mutex::new(None),
@@ -514,6 +523,23 @@ impl SessionTitleService {
             },
             global_events(),
         )?;
+
+        let service = Arc::clone(self);
+        context.events().on_waterfall(
+            context,
+            "agent/request",
+            move |_, args, next| {
+                let event = args.get::<AgentEvent<AgentRequestEvent>>(0);
+                let service = Arc::clone(&service);
+                Box::pin(async move {
+                    let event = event
+                        .ok_or_else(|| anyhow::anyhow!("agent/request lacks its agent event"))?;
+                    service.ensure_fallback(event.agent.session()).await?;
+                    next.run().await
+                })
+            },
+            global_events(),
+        )?;
         Ok(())
     }
 
@@ -544,15 +570,26 @@ impl SessionTitleService {
     }
 
     fn register_stream_middleware(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
-        let Some(llm) = context.get(LLM) else {
+        let Some(llm) = context.get_relaxed(LLM) else {
             return Ok(());
         };
         let service = Arc::clone(self);
         llm.register_stream_middleware(
             context,
             Arc::new(move |options: GenerateOptions, next| {
-                service.on_main_request(&options);
-                next(options)
+                let barrier = service.on_main_request(&options);
+                let downstream = next(options);
+                match barrier {
+                    None => downstream,
+                    Some(barrier) => downstream.wrap(move |mut downstream| {
+                        Box::pin(async_stream::try_stream! {
+                            let _ = barrier.await;
+                            while let Some(chunk) = downstream.next().await {
+                                yield chunk?;
+                            }
+                        })
+                    }),
+                }
             }),
             true,
         )?;
@@ -600,6 +637,14 @@ impl SessionTitleService {
                 });
             }
         }
+        if self
+            .context
+            .get(AGENTS)
+            .and_then(|agents| agents.get(session.id()))
+            .is_some()
+        {
+            return;
+        }
         let service = Arc::clone(self);
         let session = Arc::clone(session);
         let inner = Arc::clone(&service);
@@ -614,6 +659,14 @@ impl SessionTitleService {
 
     fn on_request_header(self: &Arc<Self>, session: &Arc<Session>, event: &SessionEvent) {
         if !self.service_active() {
+            return;
+        }
+        if self
+            .context
+            .get(AGENTS)
+            .and_then(|agents| agents.get(session.id()))
+            .is_some()
+        {
             return;
         }
         let key = session_key(session);
@@ -639,47 +692,46 @@ impl SessionTitleService {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_owned();
-        self.start_pending(
+        let _ = self.start_pending(
             session,
             &state,
             pending,
             SessionTitleModelProvenance { provider, model },
+            false,
         );
     }
 
-    fn on_main_request(self: &Arc<Self>, options: &GenerateOptions) {
+    fn on_main_request(
+        self: &Arc<Self>,
+        options: &GenerateOptions,
+    ) -> Option<oneshot::Receiver<()>> {
         if !self.service_active() || options.session_id.is_none() || !is_agent_loop_request(options)
         {
-            return;
+            return None;
         }
         let session_id = options.session_id.as_ref().expect("checked above");
-        let Some(session) = self
-            .context
-            .get(SESSIONS)
-            .and_then(|store| store.get(session_id))
-        else {
-            return;
-        };
+        let session = self.sessions.get(session_id)?;
         let key = session_key(&session);
-        let Some(state) = self.work.lock().get(&key).cloned() else {
-            return;
-        };
-        let Some(pending) = state.lock().pending.clone() else {
-            return;
-        };
+        let state = self.work.lock().get(&key).cloned()?;
+        let pending = state.lock().pending.clone()?;
         let events = session.events();
         let boundary = events
             .iter()
             .rev()
             .find(|e| e.event_type == "step/start" || e.event_type == "step/end");
+        let request_header = events
+            .iter()
+            .rev()
+            .find(|event| event.event_type == "request/header");
         let route = session
             .request_header()
             .map(|h| SessionTitleModelProvenance {
                 provider: h.config.provider.as_str().to_owned(),
                 model: h.config.model.as_str().to_owned(),
             });
-        let boundary_ok =
-            boundary.is_some_and(|b| b.event_type == "step/start" && b.seq > pending.through_seq);
+        let boundary_ok = boundary.is_some_and(|event| {
+            event.event_type == "step/start" && event.seq > pending.through_seq
+        }) || request_header.is_some_and(|event| event.seq > pending.through_seq);
         if !boundary_ok
             || route
                 .as_ref()
@@ -688,7 +740,7 @@ impl SessionTitleService {
                 .as_ref()
                 .is_none_or(|r| r.model != options.model.as_str())
         {
-            return;
+            return None;
         }
         self.start_pending(
             &session,
@@ -698,7 +750,8 @@ impl SessionTitleService {
                 provider: options.provider.as_str().to_owned(),
                 model: options.model.as_str().to_owned(),
             },
-        );
+            true,
+        )
     }
 
     fn start_pending(
@@ -707,17 +760,24 @@ impl SessionTitleService {
         state: &Arc<Mutex<SessionTitleWorkState>>,
         pending: PendingAutomaticWork,
         route: SessionTitleModelProvenance,
-    ) {
+        wait_for_first_poll: bool,
+    ) -> Option<oneshot::Receiver<()>> {
         state.lock().pending = None;
         let service = Arc::clone(self);
         let session = Arc::clone(session);
         let state = Arc::clone(state);
         let inner = Arc::clone(&service);
-        service.defer(async move {
+        let task = async move {
             let current_registration = inner.registration.lock().clone();
-            if current_registration.as_ref().is_none_or(|r| !Arc::ptr_eq(r, &pending.registration))
+            if current_registration
+                .as_ref()
+                .is_none_or(|r| !Arc::ptr_eq(r, &pending.registration))
                 || pending.registration.closing.load(Ordering::Acquire)
-                || inner.work.lock().get(&session_key(&session)).is_none_or(|s| !Arc::ptr_eq(s, &state))
+                || inner
+                    .work
+                    .lock()
+                    .get(&session_key(&session))
+                    .is_none_or(|s| !Arc::ptr_eq(s, &state))
                 || state.lock().revision != pending.revision
             {
                 return;
@@ -728,7 +788,13 @@ impl SessionTitleService {
             {
                 tracing::warn!(session = %session.id(), %error, "automatic title generation failed");
             }
-        });
+        };
+        if wait_for_first_poll {
+            Some(service.defer_until_first_poll(task))
+        } else {
+            service.defer(task);
+            None
+        }
     }
 
     async fn start_provider(
@@ -871,9 +937,8 @@ impl SessionTitleService {
             .as_ref()
             .is_some_and(|r| Arc::ptr_eq(r, &work.pending.registration));
         let live = self
-            .context
-            .get(SESSIONS)
-            .and_then(|store| store.get(session.id()))
+            .sessions
+            .get(session.id())
             .is_some_and(|live| Arc::ptr_eq(&live, session));
         if !registration_matches || !active_matches || !live {
             anyhow::bail!("session title generation state changed without cancellation");
@@ -929,6 +994,29 @@ impl SessionTitleService {
         });
     }
 
+    fn defer_until_first_poll(
+        &self,
+        task: impl Future<Output = ()> + Send + 'static,
+    ) -> oneshot::Receiver<()> {
+        let guard = self.in_flight.guard();
+        let (started, barrier) = oneshot::channel();
+        let mut task = Box::pin(async move {
+            let _guard = guard;
+            task.await;
+        });
+        tokio::spawn(async move {
+            let pending = futures::future::poll_fn(|context| {
+                Poll::Ready(task.as_mut().poll(context) == Poll::Pending)
+            })
+            .await;
+            let _ = started.send(());
+            if pending {
+                task.await;
+            }
+        });
+        barrier
+    }
+
     fn append_fallback(&self, session: &Arc<Session>, first: &SessionTitleUserMessage) {
         let title = fallback_session_title(
             &first.text,
@@ -957,29 +1045,32 @@ impl SessionTitleService {
         if let Some(current) = self.get(session) {
             return Ok(Some(current));
         }
-        let messages = collect_session_title_messages(&session.events(), None);
-        let Some(first) = messages.first() else {
-            return Ok(None);
-        };
-        let title = fallback_session_title(
-            &first.text,
-            self.fallback_max_words(),
-            self.fallback_max_bytes(),
-        );
-        if title.is_empty() {
-            return Ok(None);
-        }
         let state = self.state_for(session);
-        if state.lock().fallback.is_some() {
-            return Ok(self.get(session));
-        }
-        let controller = AbortSignal::default();
-        state.lock().fallback = Some(controller.clone());
-        let result = async {
+        let gate = {
+            let mut state = state.lock();
+            state
+                .fallback
+                .get_or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                .clone()
+        };
+        let guard = gate.lock().await;
+        let result = (|| {
             self.assert_service_active()?;
             self.assert_live(session)?;
             if let Some(accepted) = self.get(session) {
                 return Ok(Some(accepted));
+            }
+            let messages = collect_session_title_messages(&session.events(), None);
+            let Some(first) = messages.first() else {
+                return Ok(None);
+            };
+            let title = fallback_session_title(
+                &first.text,
+                self.fallback_max_words(),
+                self.fallback_max_bytes(),
+            );
+            if title.is_empty() {
+                return Ok(None);
             }
             session.append(
                 "session/title",
@@ -991,10 +1082,17 @@ impl SessionTitleService {
                 AppendOptions::default(),
             )?;
             Ok(self.get(session))
-        }
-        .await;
+        })();
+        drop(guard);
         if let Some(state) = self.work.lock().get(&session_key(session)) {
-            state.lock().fallback = None;
+            let mut state = state.lock();
+            if state
+                .fallback
+                .as_ref()
+                .is_some_and(|current| Arc::ptr_eq(current, &gate))
+            {
+                state.fallback = None;
+            }
         }
         result
     }
@@ -1024,10 +1122,7 @@ impl SessionTitleService {
     }
 
     fn assert_live(&self, session: &Arc<Session>) -> anyhow::Result<()> {
-        let live = self
-            .context
-            .get(SESSIONS)
-            .and_then(|store| store.get(session.id()));
+        let live = self.sessions.get(session.id());
         if !live.as_ref().is_some_and(|live| Arc::ptr_eq(live, session)) {
             anyhow::bail!("session \"{}\" is not live in this store", session.id());
         }

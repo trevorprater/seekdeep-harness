@@ -7,8 +7,9 @@ use seekdeep_agent_loop::AgentPreStepEvent;
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin};
 use seekdeep_cordis_host_runner::{
     CORDIS_INSPECT, CordisDynamicPackageId, CordisDynamicPluginId, CordisInspectPlatform,
-    DYNAMIC_CORDIS_RUNNER, DynamicCordisCode, DynamicCordisDefineRequest,
-    DynamicCordisPluginSelector, DynamicCordisRunMode, DynamicCordisRunResponse,
+    CordisRunStatus, DYNAMIC_CORDIS_RUNNER, DynamicCordisCode, DynamicCordisDefineRequest,
+    DynamicCordisInventoryPackage, DynamicCordisPluginSelector, DynamicCordisReference,
+    DynamicCordisRunMode, DynamicCordisRunResponse, DynamicCordisRunSuccessStatus,
     DynamicCordisStopFailureReason, DynamicCordisStopResponse, DynamicCordisUndefineReceipt,
 };
 use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
@@ -21,6 +22,7 @@ use serde_json::{Value, json};
 
 use crate::{
     cordis_system_prompt,
+    inspect::{missing_services, provided_services},
     present::{
         define_call, inspect_list_call, inspect_query_call, inspect_self_call, run_call, stop_call,
         undefine_call,
@@ -257,6 +259,22 @@ fn tool_definition(
             }])
         }),
     );
+    let output = match name {
+        "cordis_define" => output.presentation_meta(Arc::new(|_, value| {
+            Ok(json!({
+                "pluginId": required_string(value, "pluginId")?,
+                "packageId": required_string(value, "packageId")?,
+            }))
+        })),
+        "cordis_run" => output.presentation_meta(Arc::new(|_, value| {
+            Ok(json!({
+                "pluginId": required_string(value, "pluginId")?,
+                "packageId": required_string(value, "packageId")?,
+                "pluginRunId": required_string(value, "pluginRunId")?,
+            }))
+        })),
+        _ => output,
+    };
     let Value::Object(parameter_map) = parameters else {
         anyhow::bail!("generated Cordis parameters must be an object")
     };
@@ -292,7 +310,7 @@ fn tool_definition(
 }
 
 async fn execute(
-    _context: &Context,
+    context: &Context,
     runner: &Arc<seekdeep_cordis_host_runner::DynamicCordisRunner>,
     inspect: &Arc<seekdeep_cordis_host_runner::CordisInspectRegistryService>,
     name: &str,
@@ -324,9 +342,9 @@ async fn execute(
                 "data":data,
             }))
         }
-        "cordis_inspect_self" => inspect_self(runner, execution, &args),
+        "cordis_inspect_self" => inspect_self(context, runner, execution, &args),
         "cordis_define" => define_package(runner, execution, &args),
-        "cordis_run" => run_package(runner, execution, &args).await,
+        "cordis_run" => run_package(context, runner, execution, &args).await,
         "cordis_stop" => stop_plugin(runner, execution, &args).await,
         "cordis_undefine" => undefine_plugin(runner, execution, &args).await,
         _ => anyhow::bail!("unknown Cordis tool {name}"),
@@ -398,6 +416,7 @@ fn define_package(
 }
 
 async fn run_package(
+    context: &Context,
     runner: &Arc<seekdeep_cordis_host_runner::DynamicCordisRunner>,
     execution: &ToolRunContext,
     args: &Value,
@@ -426,17 +445,76 @@ async fn run_package(
             next_package_id,
             mode,
             ..
-        } => Ok(json!({
-            "status":status,
-            "pluginId":plugin_id,
-            "packageId":package_id,
-            "pluginRunId":plugin_run_id,
-            "mode":mode,
-            "currentPackageId":current_package_id,
-            "nextPackageId":next_package_id,
-            "host":{"status":if waiting_for.is_empty(){"running"}else{"waiting"},"waitingFor":waiting_for},
-            "client":{"status":client_waiting_for.as_ref().map_or("absent",|waiting|if waiting.is_empty(){"running"}else{"waiting"}),"waitingFor":client_waiting_for.unwrap_or_default()},
-        })),
+        } => {
+            if status != DynamicCordisRunSuccessStatus::Running {
+                let mut result = serde_json::Map::from_iter([
+                    ("status".to_owned(), serde_json::to_value(status)?),
+                    ("pluginId".to_owned(), serde_json::to_value(plugin_id)?),
+                    ("packageId".to_owned(), serde_json::to_value(package_id)?),
+                    (
+                        "pluginRunId".to_owned(),
+                        serde_json::to_value(plugin_run_id)?,
+                    ),
+                    ("mode".to_owned(), serde_json::to_value(mode)?),
+                ]);
+                if let Some(current) = current_package_id {
+                    result.insert(
+                        "currentPackageId".to_owned(),
+                        serde_json::to_value(current)?,
+                    );
+                }
+                result.insert(
+                    "nextPackageId".to_owned(),
+                    serde_json::to_value(next_package_id)?,
+                );
+                return Ok(Value::Object(result));
+            }
+            let session = require_session(execution)?;
+            let active = runner
+                .snapshot(session)
+                .into_iter()
+                .find(|row| row.plugin_id == plugin_id)
+                .and_then(|row| row.active_run)
+                .filter(|active| active.plugin_run_id == plugin_run_id);
+            let fiber = active.as_ref().and_then(|active| active.fiber.as_ref());
+            let host_waiting =
+                fiber.map_or_else(Vec::new, |fiber| missing_services(context, fiber));
+            let host_provides =
+                fiber.map_or_else(Vec::new, |fiber| provided_services(context, fiber.fiber()));
+            let mut result = serde_json::Map::from_iter([
+                ("status".to_owned(), json!("running")),
+                ("pluginId".to_owned(), serde_json::to_value(plugin_id)?),
+                ("packageId".to_owned(), serde_json::to_value(package_id)?),
+                (
+                    "pluginRunId".to_owned(),
+                    serde_json::to_value(plugin_run_id)?,
+                ),
+                (
+                    "currentPackageId".to_owned(),
+                    serde_json::to_value(current_package_id)?,
+                ),
+            ]);
+            if let Some(next) = next_package_id {
+                result.insert("nextPackageId".to_owned(), serde_json::to_value(next)?);
+            }
+            result.insert(
+                "host".to_owned(),
+                json!({
+                    "status":if fiber.is_none(){"absent"}else if host_waiting.is_empty(){"running"}else{"waiting"},
+                    "provides":host_provides,
+                    "waitingFor":host_waiting,
+                }),
+            );
+            result.insert(
+                "client".to_owned(),
+                json!({
+                    "status":client_waiting_for.as_ref().map_or("absent",|waiting|if waiting.is_empty(){"running"}else{"waiting"}),
+                    "waitingFor":client_waiting_for.unwrap_or_default(),
+                }),
+            );
+            let _ = waiting_for;
+            Ok(Value::Object(result))
+        }
     }
 }
 
@@ -475,6 +553,7 @@ async fn undefine_plugin(
 }
 
 fn inspect_self(
+    context: &Context,
     runner: &Arc<seekdeep_cordis_host_runner::DynamicCordisRunner>,
     execution: &ToolRunContext,
     args: &Value,
@@ -494,40 +573,208 @@ fn inspect_self(
     let plugin_id = CordisDynamicPluginId::new(plugin);
     let Some(package) = package else {
         let inspected = runner.inspect_plugin(session, &plugin_id)?;
-        return Ok(json!({
-            "mode":"plugin",
-            "plugin":plugin_summary(&inspected),
-            "packages":inspected.packages,
-        }));
+        let mut result = plugin_summary(&inspected)
+            .as_object()
+            .cloned()
+            .expect("plugin summary is an object");
+        result.shift_insert(0, "mode".to_owned(), json!("plugin"));
+        result.insert(
+            "packages".to_owned(),
+            Value::Array(
+                inspected
+                    .packages
+                    .iter()
+                    .map(|package| package_summary(package, &inspected.reference))
+                    .collect(),
+            ),
+        );
+        return Ok(Value::Object(result));
     };
     let package_id = CordisDynamicPackageId::new(package);
-    let inspected = runner.inspect_package(session, &plugin_id, &package_id)?;
+    inspect_self_package(context, runner, session, &plugin_id, &package_id)
+}
+
+fn inspect_self_package(
+    context: &Context,
+    runner: &Arc<seekdeep_cordis_host_runner::DynamicCordisRunner>,
+    session: &seekdeep_llm::SessionId,
+    plugin_id: &CordisDynamicPluginId,
+    package_id: &CordisDynamicPackageId,
+) -> anyhow::Result<Value> {
+    let inspected = runner.inspect_package(session, plugin_id, package_id)?;
+    let row = runner
+        .snapshot(session)
+        .into_iter()
+        .find(|row| row.plugin_id == *plugin_id);
+    let package = row.as_ref().and_then(|row| {
+        row.packages
+            .iter()
+            .find(|item| item.package_id == *package_id)
+    });
+    let active = row
+        .as_ref()
+        .and_then(|row| row.active_run.as_ref())
+        .filter(|active| active.package_id == *package_id);
+    let latest = inspected
+        .reference
+        .latest_run
+        .as_ref()
+        .filter(|latest| latest.package_id == *package_id);
+    let host_waiting = active.and_then(|active| active.fiber.as_ref()).map_or_else(
+        || latest.map_or_else(Vec::new, |latest| latest.host.waiting_for.clone()),
+        |fiber| missing_services(context, fiber),
+    );
+    let host_status = if package.is_none_or(|package| !package.has_host_half) {
+        json!("absent")
+    } else if let Some(latest) = latest {
+        serde_json::to_value(latest.host.status)?
+    } else if active.is_none() {
+        json!("stopped")
+    } else if host_waiting.is_empty() {
+        json!("running")
+    } else {
+        json!("waiting")
+    };
+    let client_status = if package.is_none_or(|package| !package.has_client_half) {
+        json!("absent")
+    } else if let Some(latest) = latest {
+        serde_json::to_value(latest.client.status)?
+    } else {
+        json!("stopped")
+    };
+
+    let mut code = serde_json::Map::new();
+    if let Some(host) = inspected.code.host {
+        code.insert("host".to_owned(), json!(host));
+    }
+    if let Some(client) = inspected.code.client {
+        code.insert("client".to_owned(), json!(client));
+    }
+    let mut host = serde_json::Map::from_iter([
+        ("status".to_owned(), host_status),
+        (
+            "provides".to_owned(),
+            json!(
+                active
+                    .and_then(|active| active.fiber.as_ref())
+                    .map_or_else(Vec::new, |fiber| provided_services(context, fiber.fiber()))
+            ),
+        ),
+        ("waitingFor".to_owned(), json!(host_waiting)),
+        (
+            "handlers".to_owned(),
+            json!(active.map_or_else(Vec::new, |active| active.handlers.clone())),
+        ),
+    ]);
+    if let Some(error) = latest.and_then(|latest| latest.host.error.as_ref()) {
+        host.insert("error".to_owned(), json!(error));
+    }
+    let mut client = serde_json::Map::from_iter([
+        ("status".to_owned(), client_status),
+        (
+            "waitingFor".to_owned(),
+            json!(latest.map_or_else(Vec::new, |latest| latest.client.waiting_for.clone())),
+        ),
+    ]);
+    if let Some(error) = latest.and_then(|latest| latest.client.error.as_ref()) {
+        client.insert("error".to_owned(), json!(error));
+    }
+    if let Some(render_failure) = active.and_then(|active| active.render_failure.as_ref()) {
+        client.insert("renderFailure".to_owned(), json!(render_failure));
+    }
+
     Ok(json!({
         "mode":"package",
-        "plugin":reference_summary(&inspected.reference),
+        "plugin":reference_summary(&inspected.reference, 1),
         "packageId":package_id,
         "name":inspected.reference.name,
         "purpose":inspected.reference.purpose,
-        "code":{"host":inspected.code.host,"client":inspected.code.client},
+        "code":code,
+        "runtime":{
+            "state":self_state(&inspected.reference),
+            "host":host,
+            "client":client,
+        },
     }))
 }
 
 fn plugin_summary(value: &seekdeep_cordis_host_runner::DynamicCordisPluginInspection) -> Value {
-    let mut summary = reference_summary(&value.reference);
-    summary["packageCount"] = json!(value.packages.len());
-    summary
+    reference_summary(&value.reference, value.packages.len())
 }
 
-fn reference_summary(value: &seekdeep_cordis_host_runner::DynamicCordisReference) -> Value {
-    json!({
-        "pluginId":value.plugin_id,
-        "name":value.name,
-        "state":if value.active_run.is_some(){"running"}else if value.current_package_id.is_some(){"stopped"}else{"defined"},
-        "currentPackageId":value.current_package_id,
-        "nextPackageId":value.next_package_id,
-        "activeRun":value.active_run,
-        "latestRun":value.latest_run,
-    })
+fn reference_summary(value: &DynamicCordisReference, package_count: usize) -> Value {
+    let mut result = serde_json::Map::from_iter([
+        (
+            "pluginId".to_owned(),
+            serde_json::to_value(&value.plugin_id).unwrap(),
+        ),
+        ("name".to_owned(), json!(value.name)),
+        ("packageCount".to_owned(), json!(package_count)),
+        ("state".to_owned(), json!(self_state(value))),
+    ]);
+    if let Some(current) = &value.current_package_id {
+        result.insert("currentPackageId".to_owned(), json!(current));
+    }
+    if let Some(next) = &value.next_package_id {
+        result.insert("nextPackageId".to_owned(), json!(next));
+    }
+    if let Some(active) = &value.active_run {
+        result.insert("activeRun".to_owned(), json!(active));
+    }
+    if let Some(latest) = &value.latest_run
+        && latest.status == CordisRunStatus::AwaitingApproval
+    {
+        result.insert(
+            "pendingApproval".to_owned(),
+            json!({
+                "pluginRunId":latest.plugin_run_id,
+                "packageId":latest.package_id,
+                "mode":latest.mode,
+            }),
+        );
+    }
+    Value::Object(result)
+}
+
+fn self_state(value: &DynamicCordisReference) -> &'static str {
+    match value.latest_run.as_ref().map(|run| run.status) {
+        Some(CordisRunStatus::AwaitingApproval) => "awaiting-approval",
+        Some(CordisRunStatus::ClientPending | CordisRunStatus::StartingHost) => "client-pending",
+        Some(CordisRunStatus::Failed | CordisRunStatus::Rejected | CordisRunStatus::Cancelled) => {
+            "failed"
+        }
+        Some(CordisRunStatus::Waiting) => "waiting",
+        Some(CordisRunStatus::Running) => "running",
+        Some(CordisRunStatus::Stopped) | None => {
+            if value.active_run.is_some() {
+                "running"
+            } else if value.current_package_id.is_some() {
+                "stopped"
+            } else {
+                "defined"
+            }
+        }
+    }
+}
+
+fn package_summary(
+    package: &DynamicCordisInventoryPackage,
+    reference: &DynamicCordisReference,
+) -> Value {
+    let mut result = serde_json::to_value(package)
+        .expect("inventory package serializes")
+        .as_object()
+        .cloned()
+        .expect("inventory package is an object");
+    result.insert(
+        "isCurrent".to_owned(),
+        json!(reference.current_package_id.as_ref() == Some(&package.package_id)),
+    );
+    result.insert(
+        "isNext".to_owned(),
+        json!(reference.next_package_id.as_ref() == Some(&package.package_id)),
+    );
+    Value::Object(result)
 }
 
 fn render_value(name: &str, value: &Value) -> anyhow::Result<String> {

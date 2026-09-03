@@ -237,6 +237,7 @@ impl Serialize for FinishReason {
         S: Serializer,
     {
         let mut object = Map::new();
+        object.insert("kind".to_owned(), Value::String(self.kind().to_owned()));
         match self {
             Self::Aborted { failure } | Self::Error { failure } => {
                 object.insert(
@@ -244,10 +245,16 @@ impl Serialize for FinishReason {
                     serde_json::to_value(failure).map_err(serde::ser::Error::custom)?,
                 );
             }
-            Self::Unknown { fields, .. } => object.extend(fields.clone()),
+            Self::Unknown { fields, .. } => {
+                object.extend(
+                    fields
+                        .iter()
+                        .filter(|(name, _)| name.as_str() != "kind")
+                        .map(|(name, value)| (name.clone(), value.clone())),
+                );
+            }
             Self::Stop | Self::ToolCalls | Self::MaxTokens => {}
         }
-        object.insert("kind".to_owned(), Value::String(self.kind().to_owned()));
         Value::Object(object).serialize(serializer)
     }
 }
@@ -751,6 +758,34 @@ mod tests {
         assert_eq!(kind, "provider-policy");
         assert_eq!(fields["category"], "safety");
         assert_eq!(serde_json::to_value(reason).unwrap(), wire);
+        assert_eq!(
+            serde_json::to_value(FinishReason::Unknown {
+                kind: "provider-policy".to_owned(),
+                fields: serde_json::json!({"kind":"forged","category":"safety"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            })
+            .unwrap(),
+            serde_json::json!({"kind":"provider-policy","category":"safety"})
+        );
+    }
+
+    #[test]
+    fn failure_finish_reason_uses_source_json_field_order() {
+        let reason = FinishReason::Error {
+            failure: LlmFailure {
+                message: "empty".to_owned(),
+                code: "EMPTY_RESPONSE".to_owned(),
+                status: None,
+                provider_retry_after_ms: None,
+                request_id: None,
+            },
+        };
+        assert_eq!(
+            serde_json::to_string(&reason).unwrap(),
+            r#"{"kind":"error","failure":{"message":"empty","code":"EMPTY_RESPONSE"}}"#
+        );
     }
 
     #[test]

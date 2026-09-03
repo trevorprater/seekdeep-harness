@@ -542,7 +542,7 @@ fn typed_payload_round_trips_as_the_browser_safe_event_shape() {
             "mode":"always",
             "policyKey":"policy",
             "retry":3,
-            "delayMs":750.0,
+            "delayMs":750,
             "failure":{"message":"busy","code":"RATE_LIMIT","status":429}
         })
     );

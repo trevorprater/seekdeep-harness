@@ -107,6 +107,7 @@ fn options(
         scenarios,
         mode,
         has_pwsh: None,
+        replay_max_concurrency: 5,
     }
 }
 

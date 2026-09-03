@@ -331,6 +331,9 @@ async fn process_main_async() -> anyhow::Result<()> {
 /// # Errors
 ///
 /// Returns invalid or duplicate catalog-name failures.
+// The declarative catalog is intentionally kept in one place so every source and scoped alias is
+// reviewed as a complete shipped composition rather than fragmented across helper inventories.
+#[allow(clippy::too_many_lines)]
 pub fn register_compiled_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> {
     for (name, plugin) in [
         ("seekdeep-acp-demo", plugin()),

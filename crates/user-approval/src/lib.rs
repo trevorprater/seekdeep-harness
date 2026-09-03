@@ -276,20 +276,7 @@ impl ApprovalService {
         F: Fn(ApprovalRequest, ApprovalNext) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = anyhow::Result<ApprovalAnswer>> + Send + 'static,
     {
-        self.context.events().on_waterfall(
-            context,
-            "approval/request",
-            move |_, args, next| {
-                let Some(request) = args.get::<ApprovalRequest>(0) else {
-                    return Box::pin(async {
-                        Err(anyhow::anyhow!("approval/request is missing its request"))
-                    });
-                };
-                let future = answerer((*request).clone(), ApprovalNext(next));
-                Box::pin(async move { Ok(EventReply::Value(Arc::new(future.await?))) })
-            },
-            options,
-        )
+        register_approval_answerer_on(&self.context, context, answerer, options)
     }
 
     /// Asks one question, appending the sole durable asked/decided pair.
@@ -459,6 +446,53 @@ impl ApprovalService {
         )?;
         Ok(Some(effect))
     }
+}
+
+/// Registers a typed approval answerer without requiring the approval service
+/// to have been published yet.
+///
+/// This is the event-level contract used by hosts that load before the service
+/// provider. The eventual service dispatches through the same root event bus.
+///
+/// # Errors
+///
+/// Returns when the owner context is inactive.
+pub fn register_approval_answerer<F, Fut>(
+    context: &Context,
+    answerer: F,
+    options: EventOptions,
+) -> Result<EffectHandle, CordisError>
+where
+    F: Fn(ApprovalRequest, ApprovalNext) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = anyhow::Result<ApprovalAnswer>> + Send + 'static,
+{
+    register_approval_answerer_on(context, context, answerer, options)
+}
+
+fn register_approval_answerer_on<F, Fut>(
+    event_context: &Context,
+    owner_context: &Context,
+    answerer: F,
+    options: EventOptions,
+) -> Result<EffectHandle, CordisError>
+where
+    F: Fn(ApprovalRequest, ApprovalNext) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = anyhow::Result<ApprovalAnswer>> + Send + 'static,
+{
+    event_context.events().on_waterfall(
+        owner_context,
+        "approval/request",
+        move |_, args, next| {
+            let Some(request) = args.get::<ApprovalRequest>(0) else {
+                return Box::pin(async {
+                    Err(anyhow::anyhow!("approval/request is missing its request"))
+                });
+            };
+            let future = answerer((*request).clone(), ApprovalNext(next));
+            Box::pin(async move { Ok(EventReply::Value(Arc::new(future.await?))) })
+        },
+        options,
+    )
 }
 
 /// Installed approval service plus its reversible composition boundary.

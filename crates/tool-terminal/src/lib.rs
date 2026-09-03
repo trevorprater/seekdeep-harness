@@ -39,6 +39,11 @@ pub const DEFAULT_MAX_RESULT_BYTES: u64 = 256 * 1024;
 /// Smallest cap that retains registry-issued PTY and job ids.
 pub const MIN_MAX_RESULT_BYTES: u64 = 64;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+// The source's concurrent Cordis activation registers PTY guidance before the
+// equal-order jobs guidance. Rust activation is serialized, so an internal
+// half-step preserves the observable prompt order without crossing either
+// neighboring integer order band.
+const GUIDANCE_ORDER: f64 = 105.5;
 const GUIDANCE: &str = "Use a terminal session only when work needs persistent terminal state or interactive stdin; prefer shell/read/write/edit for bounded one-shot operations. Track every terminal session id and close sessions that no longer matter. An inferred_idle or timeout result does not prove the foreground command exited.";
 
 /// Terminal tool configuration.
@@ -868,7 +873,10 @@ pub fn apply(context: &Context, config: Config) -> anyhow::Result<()> {
         list_definition(terminals, max_bytes, finalize)?,
     ];
     let mut effects = Vec::new();
-    match prompt.section(context, PromptSection::new("tool:pty", 106.0, GUIDANCE)) {
+    match prompt.section(
+        context,
+        PromptSection::new("tool:pty", GUIDANCE_ORDER, GUIDANCE),
+    ) {
         Ok(effect) => effects.push(effect),
         Err(error) => return Err(error),
     }

@@ -2,6 +2,6 @@
   "steps": [
     { "op": "initialize" },
     { "op": "newSession" },
-    { "op": "prompt", "text": "Using ONE run_code program, call tools.read on nested/task.txt. After the program finishes, answer the workspace hanseekdeepake question using the newly discovered instructions: What is the Code Mode workspace hanseekdeepake?" }
+    { "op": "prompt", "text": "Using ONE run_code program, call tools.read on nested/task.txt. After the program finishes, answer the workspace handshake question using the newly discovered instructions: What is the Code Mode workspace handshake?" }
   ]
 }

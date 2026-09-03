@@ -8,7 +8,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use futures::future::join_all;
+use futures::{StreamExt as _, stream};
 use parking_lot::Mutex;
 use regex::Regex;
 use seekdeep_core::session::is_surface_eligible_type;
@@ -147,6 +147,8 @@ pub struct SnapshotSuiteOptions {
     pub mode: SnapshotSuiteMode,
     /// Result of the caller-owned `PowerShell` availability probe.
     pub has_pwsh: Option<bool>,
+    /// Maximum replay scenarios polled concurrently.
+    pub replay_max_concurrency: usize,
 }
 
 /// One stdout golden selected for a platform run.
@@ -230,6 +232,10 @@ pub struct SnapshotSuiteReport {
 pub fn define_acp_snapshot_suite(
     options: SnapshotSuiteOptions,
 ) -> anyhow::Result<AcpSnapshotSuite> {
+    anyhow::ensure!(
+        options.replay_max_concurrency > 0,
+        "acp-snapshot: replayMaxConcurrency must be a positive integer"
+    );
     let mut scenarios_by_name = BTreeMap::new();
     for (index, scenario) in options.scenarios.iter().enumerate() {
         if scenarios_by_name
@@ -326,17 +332,75 @@ impl AcpSnapshotSuite {
     ///
     /// Returns every scenario failure plus any fixture-guard failure in one diagnostic.
     pub async fn run(&self) -> anyhow::Result<SnapshotSuiteReport> {
+        self.run_scenarios(self.options.scenarios.iter().collect())
+            .await
+    }
+
+    /// Runs selected registered scenarios while retaining the complete fixture guards.
+    ///
+    /// Names are resolved in registration order so callers may use ordinary test
+    /// filters without changing shared pin ownership or write-back ordering.
+    ///
+    /// # Errors
+    ///
+    /// Returns for an empty selection, a duplicate or unknown name, any selected
+    /// scenario failure, or a complete-tree fixture-guard failure.
+    pub async fn run_named(&self, names: &[&str]) -> anyhow::Result<SnapshotSuiteReport> {
+        anyhow::ensure!(
+            !names.is_empty(),
+            "acp-snapshot: scenario selection is empty"
+        );
+        let requested = names.iter().copied().collect::<BTreeSet<_>>();
+        anyhow::ensure!(
+            requested.len() == names.len(),
+            "acp-snapshot: scenario selection contains duplicates"
+        );
+        let selected = self
+            .options
+            .scenarios
+            .iter()
+            .filter(|scenario| requested.contains(scenario.name.as_str()))
+            .collect::<Vec<_>>();
+        let found = selected
+            .iter()
+            .map(|scenario| scenario.name.as_str())
+            .collect::<BTreeSet<_>>();
+        let unknown = requested.difference(&found).copied().collect::<Vec<_>>();
+        anyhow::ensure!(
+            unknown.is_empty(),
+            "acp-snapshot: unknown selected scenarios: {unknown:?}"
+        );
+        self.run_scenarios(selected).await
+    }
+
+    async fn run_scenarios(
+        &self,
+        scenarios: Vec<&SnapshotScenario>,
+    ) -> anyhow::Result<SnapshotSuiteReport> {
         let prompt_claims = Arc::new(Mutex::new(BTreeMap::new()));
         let schema_claims = Arc::new(Mutex::new(BTreeMap::new()));
-        let mut reports = Vec::with_capacity(self.options.scenarios.len());
+        let mut reports = Vec::with_capacity(scenarios.len());
         let mut failures = Vec::new();
 
         if self.options.mode == SnapshotSuiteMode::Replay {
-            let results = join_all(self.options.scenarios.iter().map(|scenario| {
-                self.run_registered_scenario(scenario, prompt_claims.clone(), schema_claims.clone())
-            }))
-            .await;
-            for (scenario, result) in self.options.scenarios.iter().zip(results) {
+            let mut results =
+                stream::iter(scenarios.iter().enumerate().map(|(index, scenario)| {
+                    let prompt_claims = prompt_claims.clone();
+                    let schema_claims = schema_claims.clone();
+                    async move {
+                        (
+                            index,
+                            self.run_registered_scenario(scenario, prompt_claims, schema_claims)
+                                .await,
+                        )
+                    }
+                }))
+                .buffer_unordered(self.options.replay_max_concurrency)
+                .collect::<Vec<_>>()
+                .await;
+            results.sort_by_key(|(index, _)| *index);
+            for (index, result) in results {
+                let scenario = scenarios[index];
                 match result {
                     Ok(report) => reports.push(report),
                     Err(error) => {
@@ -349,7 +413,7 @@ impl AcpSnapshotSuite {
                 }
             }
         } else {
-            for scenario in &self.options.scenarios {
+            for scenario in scenarios {
                 match self
                     .run_registered_scenario(scenario, prompt_claims.clone(), schema_claims.clone())
                     .await
@@ -630,7 +694,7 @@ impl AcpSnapshotSuite {
             }
             let committed = tokio::fs::read_to_string(&path).await?;
             if stdout != committed {
-                anyhow::bail!("{} mismatch", expected.file);
+                anyhow::bail!(snapshot_mismatch(expected.file, &stdout, &committed));
             }
         }
 
@@ -657,7 +721,7 @@ impl AcpSnapshotSuite {
                     NormalizeOptions::default(),
                 )?;
                 if harvested != expected {
-                    anyhow::bail!("{file} mismatch");
+                    anyhow::bail!(snapshot_mismatch(file, &harvested, &expected));
                 }
             }
         }
@@ -2523,4 +2587,65 @@ fn js_number_value(number: f64) -> Value {
         return Value::from(integer);
     }
     Value::from(number)
+}
+
+fn snapshot_mismatch(file: &str, actual: &str, expected: &str) -> String {
+    let actual_lines = actual.lines().collect::<Vec<_>>();
+    let expected_lines = expected.lines().collect::<Vec<_>>();
+    let compared = actual_lines.len().max(expected_lines.len());
+    let first_difference =
+        (0..compared).find(|index| actual_lines.get(*index) != expected_lines.get(*index));
+    let index = first_difference.unwrap_or(compared);
+    let expected = expected_lines.get(index).copied().unwrap_or_else(|| {
+        if first_difference.is_none() && index == expected_lines.len() && expected.ends_with('\n') {
+            ""
+        } else {
+            "<missing>"
+        }
+    });
+    let actual = actual_lines.get(index).copied().unwrap_or_else(|| {
+        if first_difference.is_none() && index == actual_lines.len() && actual.ends_with('\n') {
+            ""
+        } else {
+            "<missing>"
+        }
+    });
+    format!(
+        "{file} mismatch at normalized line {}:\nexpected: {}\nactual: {}",
+        index + 1,
+        truncate_diagnostic(expected),
+        truncate_diagnostic(actual),
+    )
+}
+
+fn truncate_diagnostic(value: &str) -> String {
+    const LIMIT: usize = 1_000;
+    let mut chars = value.chars();
+    let prefix = chars.by_ref().take(LIMIT).collect::<String>();
+    if chars.next().is_some() {
+        format!("{prefix}…")
+    } else {
+        prefix
+    }
+}
+
+#[cfg(test)]
+mod mismatch_tests {
+    use super::snapshot_mismatch;
+
+    #[test]
+    fn mismatch_diagnostic_names_first_different_line_and_missing_rows() {
+        assert_eq!(
+            snapshot_mismatch("session.jsonl", "same\nactual\n", "same\nexpected\n"),
+            "session.jsonl mismatch at normalized line 2:\nexpected: expected\nactual: actual"
+        );
+        assert_eq!(
+            snapshot_mismatch("stdout.jsonl", "one\ntwo\n", "one\n"),
+            "stdout.jsonl mismatch at normalized line 2:\nexpected: <missing>\nactual: two"
+        );
+        assert_eq!(
+            snapshot_mismatch("prompt.md", "same", "same\n"),
+            "prompt.md mismatch at normalized line 2:\nexpected: \nactual: <missing>"
+        );
+    }
 }

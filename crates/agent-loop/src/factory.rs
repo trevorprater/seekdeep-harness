@@ -11,7 +11,7 @@ use seekdeep_agent::{
     Agent, AgentDetach, AgentEvents, AgentFactory, AgentHandle, AgentOptions, AgentRegistry,
     CreateAgentMeta, CreateAgentOptions, ResumeAgentOptions, SessionStartSource,
 };
-use seekdeep_cordis::{Context, fiber::EffectHandle};
+use seekdeep_cordis::{Context, Fiber, fiber::EffectHandle};
 use seekdeep_core::{
     preparation::SessionPreparation,
     session_store::{CreateSessionOptions, SessionStore},
@@ -34,6 +34,7 @@ struct FactoryInner {
     sessions: Arc<SessionStore>,
     agents: AgentRegistry,
     services: AgentLoopServices,
+    prompt_variables: EffectHandle,
     persistence: Mutex<Option<Arc<dyn SessionPersistence>>>,
     active: AtomicBool,
     signal: AbortSignal,
@@ -139,12 +140,15 @@ impl AgentLoop {
             services.max_parallel_tool_calls > 0,
             "maxParallelToolCalls must be a positive integer"
         );
+        let prompt_variables =
+            install_prompt_variables(&context, &services.system_prompt, &agents)?;
         Ok(Self {
             inner: Arc::new(FactoryInner {
                 context,
                 sessions,
                 agents,
                 services,
+                prompt_variables,
                 persistence: Mutex::new(None),
                 active: AtomicBool::new(true),
                 signal: AbortSignal::default(),
@@ -422,6 +426,9 @@ impl AgentLoop {
                 errors.push(format!("{error:#}"));
             }
         }
+        if let Err(error) = self.inner.prompt_variables.dispose().await {
+            errors.push(format!("prompt-variable teardown failed: {error:#}"));
+        }
         if errors.is_empty() {
             Ok(())
         } else {
@@ -436,6 +443,74 @@ impl AgentLoop {
         );
         Ok(())
     }
+}
+
+fn install_prompt_variables(
+    context: &Context,
+    system_prompt: &Arc<seekdeep_system_prompt::SystemPrompt>,
+    agents: &AgentRegistry,
+) -> anyhow::Result<EffectHandle> {
+    let fiber = Fiber::active_child("agent-loop prompt variables");
+    let owner = context.with_fiber(fiber.clone());
+    let install_result = (|| {
+        let provider_agents = agents.clone();
+        system_prompt.variable(
+            &owner,
+            "provider",
+            Arc::new(move |assemble| {
+                Ok(assemble
+                    .agent_session
+                    .as_ref()
+                    .and_then(|session| provider_agents.get(session.id()))
+                    .and_then(|agent| agent.options().provider.clone())
+                    .map(seekdeep_llm::ProviderId::into_string))
+            }),
+        )?;
+        let model_agents = agents.clone();
+        system_prompt.variable(
+            &owner,
+            "model",
+            Arc::new(move |assemble| {
+                Ok(assemble
+                    .agent_session
+                    .as_ref()
+                    .and_then(|session| model_agents.get(session.id()))
+                    .and_then(|agent| agent.options().model.clone())
+                    .map(seekdeep_llm::ModelId::into_string))
+            }),
+        )?;
+        let cwd_agents = agents.clone();
+        system_prompt.variable(
+            &owner,
+            "cwd",
+            Arc::new(move |assemble| {
+                Ok(assemble
+                    .agent_session
+                    .as_ref()
+                    .and_then(|session| cwd_agents.get(session.id()))
+                    .and_then(|agent| agent.session().header().cwd.clone()))
+            }),
+        )?;
+        Ok::<(), anyhow::Error>(())
+    })();
+    if let Err(error) = install_result {
+        return match futures::executor::block_on(fiber.dispose()) {
+            Ok(()) => Err(error),
+            Err(cleanup) => Err(anyhow::anyhow!("{error:#}: cleanup failed: {cleanup:#}")),
+        };
+    }
+
+    let cleanup_fiber = fiber.clone();
+    let effect = EffectHandle::new("agent-loop prompt variables", move || {
+        Box::pin(async move { cleanup_fiber.dispose().await })
+    });
+    if let Err(error) = context.own(effect.clone()) {
+        return match futures::executor::block_on(fiber.dispose()) {
+            Ok(()) => Err(error.into()),
+            Err(cleanup) => Err(anyhow::anyhow!("{error}: cleanup failed: {cleanup:#}")),
+        };
+    }
+    Ok(effect)
 }
 
 fn validate_agent_options(options: &AgentOptions) -> anyhow::Result<()> {
@@ -662,6 +737,35 @@ mod tests {
             subagent_depth: None,
         };
         options
+    }
+
+    #[tokio::test]
+    async fn dynamically_created_agents_supply_builtin_prompt_variables() {
+        let context = Context::new();
+        let (factory, _sessions, _agents, prompt) = factory(&context);
+        let mut request = options("dynamic-prompt-variables");
+        request.meta.cwd = Some("/work/dynamic-child".to_owned());
+        let handle = factory
+            .create_agent(&context, request)
+            .await
+            .expect("create dynamic agent");
+
+        let assembly = prompt
+            .assemble(seekdeep_agent::assemble_context_for(&handle.agent, None))
+            .await
+            .expect("assemble dynamic agent prompt");
+        assert_eq!(
+            assembly.variables,
+            indexmap::IndexMap::from([
+                ("provider".to_owned(), Some("mock".to_owned())),
+                ("model".to_owned(), Some("model".to_owned())),
+                ("cwd".to_owned(), Some("/work/dynamic-child".to_owned())),
+            ])
+        );
+
+        handle.dispose().await.expect("dispose dynamic agent");
+        factory.dispose().await.expect("dispose factory");
+        context.fiber().dispose().await.expect("dispose context");
     }
 
     #[tokio::test]

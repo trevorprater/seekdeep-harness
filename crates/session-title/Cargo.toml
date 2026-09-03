@@ -7,11 +7,15 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-stream.workspace = true
 async-trait.workspace = true
+futures.workspace = true
 parking_lot.workspace = true
 regress.workspace = true
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-session-projection = { path = "../session-projection" }
@@ -22,7 +26,6 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-futures.workspace = true
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
 seekdeep-session-persistence-sqlite = { path = "../session-persistence-sqlite" }

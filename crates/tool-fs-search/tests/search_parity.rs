@@ -11,6 +11,7 @@ use seekdeep_llm::{AbortSignal, CallId, ContentBlock};
 use seekdeep_scope::ScopeKey;
 use seekdeep_spill::{SaveTextSpill, SpillBackend, SpillLocator, SpillRef, SpillStore};
 use seekdeep_subprocess_local::LocalSubprocessRuntime;
+use seekdeep_system_prompt::{AssembleContext, SYSTEM_PROMPT};
 use seekdeep_tool_fs_search::{
     Config, GlobInput, GrepInput, RgPathCache, SearchError, SearchErrorCode, apply,
     build_glob_command, build_grep_command, parse_glob_args, parse_grep_args, parse_grep_matches,
@@ -316,6 +317,22 @@ async fn raw_output_overflow_and_zero_results_use_distinct_success_and_error_rou
 #[tokio::test]
 async fn config_timeout_and_plugin_disposal_preserve_loader_lifecycle() {
     let harness = harness(&config());
+    let prompt = harness
+        .context
+        .get(SYSTEM_PROMPT)
+        .unwrap()
+        .assemble(AssembleContext::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        prompt
+            .sections
+            .iter()
+            .find(|section| section.name == "tool:glob")
+            .unwrap()
+            .text,
+        "Use the glob tool — not shell find — to discover files by path pattern. A pattern with no \"/\" matches basenames at any depth, so \"*\" matches every file in the tree rather than its top level. Results are files only, never directories, and include hidden and ignored files: a result that fits comes back in modification-time order, while a larger one is sampled across top-level entries, so it spans the tree instead of one subtree."
+    );
     let schemas = harness.tools.schemas(None);
     assert_eq!(
         schemas

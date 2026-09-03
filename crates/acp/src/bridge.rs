@@ -22,9 +22,14 @@ use seekdeep_llm::{MessageSource, ModelId, ProviderId, UserMessage};
 use seekdeep_sdk_protocol::{JsonRpcLineTransport, JsonRpcResponseError};
 use seekdeep_subagent::SUBAGENTS;
 use seekdeep_system_prompt::SYSTEM_PROMPT;
-use seekdeep_user_approval::{APPROVAL, ApprovalAnswer, ApprovalOutcome, ApprovalRequest};
+use seekdeep_user_approval::{
+    ApprovalAnswer, ApprovalOutcome, ApprovalRequest, register_approval_answerer,
+};
 use serde_json::{Map, Value, json};
-use tokio::sync::{OnceCell, oneshot};
+use tokio::{
+    sync::{OnceCell, mpsc, oneshot},
+    task::JoinHandle,
+};
 
 use crate::{
     codec::{acp_prompt_to_text, prompt_has_unsupported_content, turn_end_to_stop_reason},
@@ -60,12 +65,86 @@ struct SessionRecord {
     inflight: Option<InflightPrompt>,
 }
 
+enum NotificationCommand {
+    Send(Map<String, Value>),
+    Flush(oneshot::Sender<()>),
+    Shutdown(oneshot::Sender<()>),
+}
+
+struct NotificationQueue {
+    sender: Mutex<Option<mpsc::UnboundedSender<NotificationCommand>>>,
+    task: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl NotificationQueue {
+    fn new(transport: Arc<JsonRpcLineTransport>) -> Self {
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let task = tokio::spawn(async move {
+            while let Some(command) = receiver.recv().await {
+                match command {
+                    NotificationCommand::Send(params) => {
+                        if let Err(error) = transport
+                            .notify(client_methods::SESSION_UPDATE, Some(params))
+                            .await
+                        {
+                            tracing::warn!(%error, "ACP session/update failed");
+                        }
+                    }
+                    NotificationCommand::Flush(done) => {
+                        let _ = done.send(());
+                    }
+                    NotificationCommand::Shutdown(done) => {
+                        let _ = done.send(());
+                        break;
+                    }
+                }
+            }
+        });
+        Self {
+            sender: Mutex::new(Some(sender)),
+            task: Mutex::new(Some(task)),
+        }
+    }
+
+    fn enqueue(&self, params: Map<String, Value>) {
+        if let Some(sender) = self.sender.lock().as_ref() {
+            let _ = sender.send(NotificationCommand::Send(params));
+        }
+    }
+
+    async fn flush(&self) {
+        let sender = self.sender.lock().clone();
+        let Some(sender) = sender else {
+            return;
+        };
+        let (done, waiting) = oneshot::channel();
+        if sender.send(NotificationCommand::Flush(done)).is_ok() {
+            let _ = waiting.await;
+        }
+    }
+
+    async fn shutdown(&self) {
+        let sender = self.sender.lock().take();
+        if let Some(sender) = sender {
+            let (done, waiting) = oneshot::channel();
+            if sender.send(NotificationCommand::Shutdown(done)).is_ok() {
+                let _ = waiting.await;
+            }
+        }
+        let task = self.task.lock().take();
+        if let Some(task) = task {
+            let _ = task.await;
+        }
+    }
+}
+
 /// One automation-only ACP connection and the exact agents it owns.
 pub struct AcpBridge {
     context: Context,
     config: AcpBridgeConfig,
     agents: Arc<AgentRegistry>,
     transport: Arc<JsonRpcLineTransport>,
+    notifications: NotificationQueue,
     sessions: Mutex<HashMap<AcpSessionId, SessionRecord>>,
     effects: Mutex<Vec<EffectHandle>>,
     continuable_drain_hook: Option<AcpContinuableDrainHook>,
@@ -128,6 +207,7 @@ impl AcpBridge {
             config,
             agents,
             transport: Arc::clone(transport),
+            notifications: NotificationQueue::new(Arc::clone(transport)),
             sessions: Mutex::new(HashMap::new()),
             effects: Mutex::new(Vec::new()),
             continuable_drain_hook,
@@ -368,6 +448,7 @@ impl AcpBridge {
         let reason = receiver
             .await
             .map_err(|_| internal_error("ACP prompt settlement channel closed"))??;
+        self.notifications.flush().await;
         Ok(json!({"stopReason":reason.as_str()}))
     }
 
@@ -507,6 +588,7 @@ impl AcpBridge {
         .filter_map(Result::err)
         .map(|error| format!("{error:#}"))
         .collect::<Vec<_>>();
+        self.notifications.shutdown().await;
         if failures.is_empty() {
             Ok(())
         } else {
@@ -564,23 +646,21 @@ impl AcpBridge {
             EventOptions::default(),
         )?;
         self.effects.lock().extend([session, claimed, error]);
-        if let Some(approval) = self.context.get(APPROVAL) {
-            let weak: Weak<Self> = Arc::downgrade(self);
-            let effect = approval.on_request(
-                &self.context,
-                move |request, next| {
-                    let weak = weak.clone();
-                    async move {
-                        let Some(bridge) = weak.upgrade() else {
-                            return next.run().await;
-                        };
-                        bridge.answer_approval(request, next).await
-                    }
-                },
-                EventOptions::default(),
-            )?;
-            self.effects.lock().push(effect);
-        }
+        let weak: Weak<Self> = Arc::downgrade(self);
+        let approval = register_approval_answerer(
+            &self.context,
+            move |request, next| {
+                let weak = weak.clone();
+                async move {
+                    let Some(bridge) = weak.upgrade() else {
+                        return next.run().await;
+                    };
+                    bridge.answer_approval(request, next).await
+                }
+            },
+            EventOptions::default(),
+        )?;
+        self.effects.lock().push(approval);
         Ok(())
     }
 
@@ -658,18 +738,9 @@ impl AcpBridge {
             (updates, error_sender)
         };
         for update in updates {
-            let transport = Arc::clone(&self.transport);
-            tokio::spawn(async move {
-                let Value::Object(params) = update else {
-                    return;
-                };
-                if let Err(error) = transport
-                    .notify(client_methods::SESSION_UPDATE, Some(params))
-                    .await
-                {
-                    tracing::warn!(%error, "ACP session/update failed");
-                }
-            });
+            if let Value::Object(params) = update {
+                self.notifications.enqueue(params);
+            }
         }
         if let Some((sender, error)) = error_sender {
             let _ = sender.send(Err(error));
@@ -799,17 +870,19 @@ fn required_string(params: &Map<String, Value>, name: &str) -> anyhow::Result<St
 }
 
 fn invalid_params(detail: impl Into<String>) -> anyhow::Error {
+    let detail = detail.into();
     anyhow::Error::new(JsonRpcResponseError {
         code: Some(-32602),
-        message: detail.into(),
+        message: format!("Invalid params: {detail}"),
         data: None,
     })
 }
 
 fn internal_error(detail: impl Into<String>) -> anyhow::Error {
+    let detail = detail.into();
     anyhow::Error::new(JsonRpcResponseError {
         code: Some(-32603),
-        message: detail.into(),
+        message: format!("Internal error: {detail}"),
         data: None,
     })
 }

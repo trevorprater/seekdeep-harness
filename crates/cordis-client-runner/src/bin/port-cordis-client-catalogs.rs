@@ -48,11 +48,14 @@ fn main() -> anyhow::Result<()> {
     write_json(&output.join("slot-catalog.json"), &slots)?;
 
     write_ui_catalogs(&target, &source)?;
+    write_host_catalogs(&target, &source)
+}
 
+fn write_host_catalogs(target: &Path, source: &Path) -> anyhow::Result<()> {
     let host_output = target.join("crates/tool-cordis/data");
     std::fs::create_dir_all(&host_output)?;
     let host_catalog = run_tsx(
-        &source,
+        source,
         concat!(
             "import {SERVICE_API,EVENT_API,TYPE_API,INHERITED_CTX_API} from ",
             "'./packages/extensions/tool-cordis/src/api-catalog.ts';",
@@ -60,9 +63,12 @@ fn main() -> anyhow::Result<()> {
             "types:TYPE_API,inheritedContext:INHERITED_CTX_API}))",
         ),
     )?;
-    write_json(&host_output.join("api-catalog.json"), &host_catalog)?;
+    write_json(
+        &host_output.join("api-catalog.json"),
+        &target_identity(&host_catalog)?,
+    )?;
     let host_fixtures = run_tsx(
-        &source,
+        source,
         concat!(
             "import {SERVICE_API,EVENT_API,queryServiceApi,queryEventApi} from ",
             "'./packages/extensions/tool-cordis/src/api-catalog.ts';",
@@ -75,21 +81,24 @@ fn main() -> anyhow::Result<()> {
             "x=>[x.name,queryEventApi(x.name,EVENT_API.filter(y=>!y.name.startsWith('cordis/')))]))}))",
         ),
     )?;
-    write_json(&host_output.join("api-query-fixtures.json"), &host_fixtures)?;
+    write_json(
+        &host_output.join("api-query-fixtures.json"),
+        &target_identity(&host_fixtures)?,
+    )?;
     let prompt = run_tsx(
-        &source,
+        source,
         concat!(
             "import {CORDIS_SYSTEM_PROMPT} from ",
             "'./packages/extensions/tool-cordis/src/prompt.ts';",
-            "process.stdout.write(CORDIS_SYSTEM_PROMPT",
-            ".replaceAll('DSH process','SeekDeep Harness process')",
-            ".replaceAll('DSH objects','SeekDeep Harness objects')",
-            ".replaceAll('DSH Node.js process','SeekDeep Harness Host process'))",
+            "process.stdout.write(CORDIS_SYSTEM_PROMPT)",
         ),
     )?;
-    write_text(&host_output.join("system-prompt.txt"), &prompt)?;
+    write_text(
+        &host_output.join("system-prompt.txt"),
+        &target_identity(&prompt)?,
+    )?;
     let tool_definitions = run_tsx(
-        &source,
+        source,
         concat!(
             "import {apply} from './packages/extensions/tool-cordis/src/index.ts';",
             "const definitions=[];const sections=[];",
@@ -104,9 +113,21 @@ fn main() -> anyhow::Result<()> {
     )?;
     write_json(
         &host_output.join("tool-definitions.json"),
-        &tool_definitions,
+        &target_identity(&tool_definitions)?,
     )?;
     Ok(())
+}
+
+fn target_identity(raw: &[u8]) -> anyhow::Result<Vec<u8>> {
+    Ok(String::from_utf8(raw.to_vec())?
+        .replace("DSH Node.js process", "SeekDeep Harness Host process")
+        .replace("DSH process", "SeekDeep Harness process")
+        .replace("DSH objects", "SeekDeep Harness objects")
+        .replace("@deepseek-ai/dsh-", "@seekdeep-ai/seekdeep-")
+        .replace("dsh-", "seekdeep-")
+        .replace("DshEnvironment", "SeekdeepEnvironment")
+        .replace("DSH_", "SEEKDEEP_")
+        .into_bytes())
 }
 
 fn verify_source(target: &Path, source: &Path) -> anyhow::Result<()> {
@@ -217,7 +238,19 @@ fn scope_css_classes(source: &str, prefix: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::scope_css_classes;
+    use super::{scope_css_classes, target_identity};
+
+    #[test]
+    fn host_catalog_identity_matches_the_target_public_surface() {
+        let source = b"@deepseek-ai/dsh-scope dsh-tools DSH_ENV_PREFIX \
+            __DSH_BOOT__ DshEnvironmentKey DSH Node.js process DSH objects";
+        assert_eq!(
+            String::from_utf8(target_identity(source).unwrap()).unwrap(),
+            "@seekdeep-ai/seekdeep-scope seekdeep-tools SEEKDEEP_ENV_PREFIX \
+            __SEEKDEEP_BOOT__ SeekdeepEnvironmentKey SeekDeep Harness Host process \
+            SeekDeep Harness objects"
+        );
+    }
 
     #[test]
     fn css_scoping_renames_classes_without_touching_decimals_or_utf8() {

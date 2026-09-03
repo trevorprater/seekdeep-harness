@@ -13,8 +13,8 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "text" },
-      { "type": "text-delta", "index": 0, "text": "**Code Mode workspace hanseekdeepake:** `CODE_MODE_CONTEXT_OK`" },
-      { "type": "block-end", "index": 0, "block": { "type": "text", "text": "**Code Mode workspace hanseekdeepake:** `CODE_MODE_CONTEXT_OK`" } },
+      { "type": "text-delta", "index": 0, "text": "**Code Mode workspace handshake:** `CODE_MODE_CONTEXT_OK`" },
+      { "type": "block-end", "index": 0, "block": { "type": "text", "text": "**Code Mode workspace handshake:** `CODE_MODE_CONTEXT_OK`" } },
       { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
       { "type": "finish", "reason": { "kind": "stop" } }
     ]

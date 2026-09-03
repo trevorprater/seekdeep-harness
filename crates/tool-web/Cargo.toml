@@ -10,7 +10,7 @@ description = "Model-facing web search and fetch tools"
 [dependencies]
 anyhow.workspace = true
 futures.workspace = true
-html2md-rs.workspace = true
+mdream.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
 serde.workspace = true

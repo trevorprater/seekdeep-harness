@@ -30594,7 +30594,13 @@
     {
       "source": "examples/acp-agent/pty-snapshot-backend.mjs",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust TerminalBackend fixture; pty-tools refresh and replay passed with the documented product-length truncation deviation"
+      ]
     },
     {
       "source": "examples/acp-agent/pty.cordis.snapshot.yml",
@@ -30780,7 +30786,16 @@
     {
       "source": "examples/acp-agent/tests/acp.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/acp_snapshot_suite.rs",
+        "crates/acp-snapshot/src/suite.rs"
+      ],
+      "evidence": [
+        "all 78 compiled ACP scenarios passed isolated refresh and repository replay at the source concurrency cap of 5",
+        "packed fixture retains all three chunk-row kinds and decodes to the independent source recording",
+        "338-file structural oracle audit left only documented identity, native-process, and target job-admission deviations"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/cleanup.e2e.ts",
@@ -30800,17 +30815,35 @@
     {
       "source": "examples/acp-agent/tests/fixtures/child-question-tripwire.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust fixture exercised by the 78-scenario ACP snapshot suite; full repository replay passed"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/parent-sandbox-override.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust fixture exercised by the 78-scenario ACP snapshot suite; full repository replay passed"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/partial-landlock-sandbox.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust sandbox fixture exercised by partial-landlock and missing-runner scenarios; refresh and repository replay passed"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/shell/tool-pwsh/cordis.yml",
@@ -30831,17 +30864,35 @@
     {
       "source": "examples/acp-agent/tests/fixtures/subagent-durability-failure.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust fixture preserves published-run and flush-failure fences; all subagent durability scenarios replayed successfully"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent-report-fence.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust parent-child ordering fence; subagent-report scenario refresh and repository replay passed"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent-settlement-marker.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust settlement marker exercised by the complete ACP scenario table; full repository replay passed"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent/subagent-acp/cordis.yml",
@@ -30909,7 +30960,13 @@
     {
       "source": "examples/acp-agent/tests/fixtures/workspace-context-compaction.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust post-execute compaction fixture; workspace-context scenario refresh and repository replay passed"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fs-diff-bound.cordis.snapshot.yml",
@@ -33069,12 +33126,26 @@
     {
       "source": "examples/acp-agent/tests/snapshots/lsp-definition/workspace/lsp-server.mjs",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/bin/seekdeep-acp-lsp-fixture.rs",
+        "examples/acp-agent/tests/lsp.cordis.yml",
+        "examples/acp-agent/tests/lsp.cordis.snapshot.yml"
+      ],
+      "evidence": [
+        "compiled Rust Content-Length fixture preserves initialize, definition, shutdown and exit behavior; lsp-definition replay returns subject.ts:1:7"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/snapshots/lsp-definition/workspace/subject.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/tests/acp_snapshot_suite.rs"
+      ],
+      "evidence": [
+        "Rust prepare-workspace hook materializes the exact TypeScript source only inside the owned temporary test workspace; lsp-definition replay returns the exact bounded location result"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/snapshots/missing-sandbox-runner/input.json",
@@ -34872,7 +34943,13 @@
     {
       "source": "examples/acp-agent/web-fetch-fixture-server.mjs",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/acp-demo/src/snapshot_fixtures.rs"
+      ],
+      "evidence": [
+        "compiled Rust loopback HTTP fixture; web-fetch refresh, replay, and structural oracle audit passed"
+      ]
     },
     {
       "source": "examples/acp-agent/web.cordis.snapshot.yml",

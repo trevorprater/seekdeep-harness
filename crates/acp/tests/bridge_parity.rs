@@ -286,7 +286,6 @@ impl Harness {
             },
         );
         dependencies.agents.set_factory(factory).unwrap();
-        let approval = install_approval(&context, ApprovalConfig::default()).unwrap();
         let (server_io, client_io) = tokio::io::duplex(256 * 1024);
         let (server_read, server_write) = tokio::io::split(server_io);
         let (client_read, client_write) = tokio::io::split(client_io);
@@ -306,6 +305,9 @@ impl Harness {
             None => AcpBridge::new(&context, &server_transport, bridge_config),
         }
         .unwrap();
+        // The production loader may publish the optional approval service after
+        // ACP. Event-level answerer registration must survive that load order.
+        let approval = install_approval(&context, ApprovalConfig::default()).unwrap();
         let client = AcpClient::new(&client_transport, permission);
         let updates = Arc::new(Mutex::new(Vec::new()));
         let observed = Arc::clone(&updates);

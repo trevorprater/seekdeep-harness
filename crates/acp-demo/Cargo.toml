@@ -13,10 +13,18 @@ path = "src/bin/seekdeep-acp-demo.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "seekdeep-acp-lsp-fixture"
+path = "src/bin/seekdeep-acp-lsp-fixture.rs"
+test = false
+bench = false
+doc = false
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+num-traits.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -99,6 +107,7 @@ seekdeep-tool-bash = { path = "../tool-bash" }
 seekdeep-tool-jobs = { path = "../tool-jobs" }
 seekdeep-util = { path = "../util" }
 tokio.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 seekdeep-goal = { path = "../goal" }

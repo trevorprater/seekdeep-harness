@@ -209,7 +209,7 @@ impl LoopController {
         }
     }
 
-    fn wake_driver(&self, wake_after_abort: bool) -> Result<(), AgentControlError> {
+    fn wake_driver(&self) -> Result<(), AgentControlError> {
         let (activity, status_changed) = {
             let mut state = self.state.lock();
             match &mut state.phase {
@@ -228,7 +228,7 @@ impl LoopController {
                         .and_then(|reason| reason.get("kind"))
                         .and_then(serde_json::Value::as_str)
                         == Some("disposed");
-                    if !disposed && wake_after_abort {
+                    if !disposed {
                         *wake_requested = true;
                     }
                     return Ok(());
@@ -303,7 +303,7 @@ impl LoopController {
                 .upgrade()
                 .is_some_and(|agent| agent.inbox().has_pending())
         {
-            let _ = self.wake_driver(false);
+            let _ = self.wake_driver();
         }
         let mut state = self.state.lock();
         state.completed_activity = state.completed_activity.max(activity);
@@ -341,7 +341,7 @@ impl LoopController {
                 .upgrade()
                 .is_some_and(|agent| agent.inbox().has_pending())
         {
-            let _ = self.wake_driver(false);
+            let _ = self.wake_driver();
         }
         let mut state = self.state.lock();
         state.completed_activity = state.completed_activity.max(activity);
@@ -358,7 +358,7 @@ impl AgentController for LoopController {
         target: InboxTarget,
         wakeup: bool,
     ) -> Result<(), AgentControlError> {
-        let (wake_after_abort, resolved_target) = {
+        let resolved_target = {
             let state = self.state.lock();
             if matches!(state.phase, Phase::Disposed { .. }) {
                 return Err(AgentControlError::Disposed(self.agent_id()));
@@ -370,14 +370,11 @@ impl AgentController for LoopController {
                 Phase::Idle { .. } | Phase::Disposed { .. } => false,
             };
             let wake_after_abort = wakeup && !matches!(state.phase, Phase::Idle { .. }) && aborted;
-            (
-                wake_after_abort,
-                if wake_after_abort {
-                    InboxTarget::NextTurn
-                } else {
-                    target
-                },
-            )
+            if wake_after_abort {
+                InboxTarget::NextTurn
+            } else {
+                target
+            }
         };
         let agent = self
             .agent
@@ -388,7 +385,7 @@ impl AgentController for LoopController {
             .splice(resolved_target, f64::INFINITY, 0.0, vec![message])
             .map_err(|error| AgentControlError::Inbox(error.to_string()))?;
         if wakeup {
-            self.wake_driver(wake_after_abort)?;
+            self.wake_driver()?;
         }
         Ok(())
     }
@@ -418,7 +415,7 @@ impl AgentController for LoopController {
                 wake_requested,
                 ..
             } => {
-                if !options.keep_inbox {
+                if !options.keep_inbox || !signal.is_aborted() {
                     *wake_requested = false;
                 }
                 signal.abort_with_reason(
@@ -609,9 +606,12 @@ fn spawn_detached(future: impl std::future::Future<Output = ()> + Send + 'static
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        time::Duration,
     };
 
     use seekdeep_agent::{AgentEvent, InboxTarget};
@@ -708,6 +708,40 @@ mod tests {
                 AgentStatus::Idle
             ]
         );
+        assert!(!loop_agent.agent.inbox().has_pending());
+    }
+
+    #[tokio::test]
+    async fn latches_live_wake_that_arrives_after_the_driver_claims() {
+        let context = Context::new();
+        let session =
+            Session::create(&SessionId::new("live-wake-latch"), None, None).expect("session");
+        let (started_tx, mut started_rx) = mpsc::unbounded_channel();
+        let releases = Arc::new(Semaphore::new(0));
+        let loop_agent = LoopAgent::new(
+            &context,
+            &session,
+            AgentOptions::default(),
+            None,
+            controlled_driver(started_tx, releases.clone()),
+        )
+        .expect("loop agent");
+
+        loop_agent.agent.followup(message("first")).expect("first");
+        assert_eq!(started_rx.recv().await, Some(1));
+        loop_agent
+            .agent
+            .steer(message("after final claim"))
+            .expect("late steer");
+        releases.add_permits(1);
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(1), started_rx.recv())
+                .await
+                .expect("latched wake must start a replacement driver"),
+            Some(2)
+        );
+        releases.add_permits(1);
+        loop_agent.agent.when_idle().expect("idle").await.unwrap();
         assert!(!loop_agent.agent.inbox().has_pending());
     }
 

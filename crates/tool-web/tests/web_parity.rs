@@ -344,7 +344,10 @@ fn pure_formatters_cover_empty_truncated_and_complete_output_caps() {
     assert!(bounded.encode_utf16().count() <= 100);
     assert!(bounded.contains("Content truncated"));
     assert_eq!(DEFAULT_FETCH_MAX_OUTPUT_CHARS, 200_000);
+}
 
+#[test]
+fn html_conversion_matches_turndown_entities_blocks_lists_tables_and_depth_fallback() {
     let converted = format_fetch_output(
         &WebFetchResult {
             url: "https://a.test/table".to_owned(),
@@ -362,6 +365,52 @@ fn pure_formatters_cover_empty_truncated_and_complete_output_caps() {
     assert!(converted.contains('V'));
     assert!(!converted.contains("hidden()"));
     assert!(!converted.contains(".x{}"));
+
+    let render_html = |content: &str| {
+        format_fetch_output(
+            &WebFetchResult {
+                url: "https://a.test".to_owned(),
+                status_code: 200,
+                body: WebFetchBody::Html {
+                    content: content.to_owned(),
+                },
+                truncated: false,
+            },
+            1_000_000,
+        )
+        .trim_start_matches("Fetched https://a.test (HTTP 200)\n\n")
+        .to_owned()
+    };
+    assert_eq!(
+        render_html(
+            "<style>.x{}</style><script>bad()</script><noscript>ns</noscript><p>Tom &amp; Jerry &copy; R&eacute;sum&eacute;</p><a href=\"https://a.test\">link</a>"
+        ),
+        "Tom & Jerry © Résumé\n\n[link](https://a.test)"
+    );
+    assert_eq!(
+        render_html("<h2>Heading</h2><ul><li>one</li><li>two</li></ul>"),
+        "## Heading\n\n-   one\n-   two"
+    );
+    assert_eq!(
+        render_html("<html><head><title>Menu</title></head><body><h1>Café menu</h1></body></html>"),
+        "Menu\n\n# Café menu"
+    );
+    assert_eq!(
+        render_html("<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>"),
+        "| A   | B   |\n| --- | --- |\n| 1   | 2   |"
+    );
+    assert_eq!(
+        render_html(
+            "<table><thead><tr><th align=\"left\">L</th><th align=\"right\">R</th><th style=\"text-align:center\">C</th></tr></thead><tbody><tr><td>1</td><td>2</td><td>3</td></tr></tbody></table>"
+        ),
+        "| L   | R   | C   |\n| :--- | ---: | :---: |\n| 1   | 2   | 3   |"
+    );
+    assert_eq!(
+        render_html(
+            "<p><strong>bold <em>italic</em></strong></p><blockquote><p>quoted</p></blockquote>"
+        ),
+        "**bold _italic_**\n\n> quoted"
+    );
 
     let deep = format!("{}x{}", "<div>".repeat(513), "</div>".repeat(513));
     let degraded = format_fetch_output(

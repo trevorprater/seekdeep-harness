@@ -196,6 +196,7 @@ pub struct ConfinedArgv {
 #[derive(Debug, thiserror::Error)]
 #[error("{inner}")]
 pub struct SandboxUnavailableError {
+    #[source]
     inner: HarnessError,
 }
 

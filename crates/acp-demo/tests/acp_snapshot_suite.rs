@@ -1,7 +1,7 @@
 //! Complete ACP example snapshot scenario registration and fixture guards.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ffi::OsString,
     fs,
     path::{Path, PathBuf},
@@ -40,14 +40,19 @@ fn repository_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+// These constructors match the optional fields accepted by the snapshot table macro and keep the
+// 78-row declaration free of repetitive `Some(...)` wrappers.
+#[allow(clippy::unnecessary_wraps)]
 fn config(root: &Path, file: &str) -> Option<PathBuf> {
     Some(root.join("examples/acp-agent").join(file))
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn class(name: &str) -> Option<String> {
     Some(name.to_owned())
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn source(name: &str) -> Option<String> {
     Some(name.to_owned())
 }
@@ -110,6 +115,34 @@ fn prepare_fs_search_workspace() -> seekdeep_acp_snapshot::PrepareWorkspace {
     })
 }
 
+fn prepare_lsp_workspace() -> seekdeep_acp_snapshot::PrepareWorkspace {
+    Arc::new(|cwd| {
+        Box::pin(async move {
+            tokio::fs::write(
+                cwd.join("subject.ts"),
+                "export const answer = 42\nconsole.log(answer)\n",
+            )
+            .await?;
+            Ok(())
+        })
+    })
+}
+
+fn lsp_fixture_environment() -> BTreeMap<OsString, OsString> {
+    let executable = Path::new(env!("CARGO_BIN_EXE_seekdeep-acp-lsp-fixture"));
+    let directory = executable
+        .parent()
+        .expect("the compiled LSP fixture has a parent directory");
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(directory.to_path_buf()).chain(std::env::split_paths(&inherited)),
+    )
+    .expect("the LSP fixture directory can be prepended to PATH");
+    BTreeMap::from([(OsString::from("PATH"), path)])
+}
+
+// One ordered table is the authority for scenario registration and the complete-directory guard.
+#[allow(clippy::too_many_lines)]
 fn scenarios(root: &Path) -> Vec<SnapshotScenario> {
     vec![
         snapshot!("handshake", false, false),
@@ -242,7 +275,9 @@ fn scenarios(root: &Path) -> Vec<SnapshotScenario> {
             false,
             pins_header = true,
             header_class = class("lsp"),
-            config_path = config(root, "tests/lsp.cordis.yml")
+            config_path = config(root, "tests/lsp.cordis.yml"),
+            environment = lsp_fixture_environment(),
+            prepare_workspace = Some(prepare_lsp_workspace())
         ),
         snapshot!(
             "web-fetch",
@@ -474,11 +509,35 @@ fn suite(mode: SnapshotSuiteMode) -> anyhow::Result<AcpSnapshotSuite> {
             config_path: root.join("examples/acp-agent/cordis.yml"),
             tsconfig_path: root.join("tsconfig.json"),
         },
-        snapshots_dir: root.join("examples/acp-agent/tests/snapshots"),
+        snapshots_dir: std::env::var_os("SEEKDEEP_SNAPSHOT_FIXTURES_DIR").map_or_else(
+            || root.join("examples/acp-agent/tests/snapshots"),
+            PathBuf::from,
+        ),
         scenarios: scenarios(&root),
         mode,
         has_pwsh: Some(has_pwsh()),
+        replay_max_concurrency: snapshot_max_concurrency()?,
     })
+}
+
+fn snapshot_max_concurrency() -> anyhow::Result<usize> {
+    let fallback = std::thread::available_parallelism()
+        .map(std::num::NonZeroUsize::get)
+        .unwrap_or(1)
+        .min(5);
+    match std::env::var("SEEKDEEP_SNAPSHOT_MAX_CONCURRENCY") {
+        Err(std::env::VarError::NotPresent) => Ok(fallback),
+        Err(error) => Err(error.into()),
+        Ok(raw) => raw
+            .parse::<usize>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "SEEKDEEP_SNAPSHOT_MAX_CONCURRENCY must be a positive integer, got {raw:?}"
+                )
+            }),
+    }
 }
 
 fn has_pwsh() -> bool {
@@ -517,6 +576,83 @@ fn mode_from_environment() -> anyhow::Result<SnapshotSuiteMode> {
     }
 }
 
+fn fixture_records(root: &Path, name: &str) -> Vec<serde_json::Value> {
+    fs::read_to_string(
+        root.join("examples/acp-agent/tests/snapshots")
+            .join(name)
+            .join("session.jsonl"),
+    )
+    .unwrap()
+    .lines()
+    .filter(|line| !line.trim().is_empty())
+    .map(|line| serde_json::from_str(line).unwrap())
+    .collect()
+}
+
+fn without_fixture_volatiles(mut record: serde_json::Value) -> serde_json::Value {
+    let Some(object) = record.as_object_mut() else {
+        return record;
+    };
+    object.remove("time");
+    match object.get("type").and_then(serde_json::Value::as_str) {
+        Some("agent/inbox/spliced") => {
+            if let Some(inserted) = object
+                .get_mut("data")
+                .and_then(serde_json::Value::as_object_mut)
+                .and_then(|data| data.get_mut("inserted"))
+                .and_then(serde_json::Value::as_array_mut)
+            {
+                for message in inserted {
+                    if let Some(message) = message.as_object_mut() {
+                        message.remove("id");
+                    }
+                }
+            }
+        }
+        Some("user/message") => {
+            if let Some(data) = object
+                .get_mut("data")
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                data.remove("id");
+            }
+        }
+        Some("assistant/message" | "tool/result") => {
+            if let Some(message) = object
+                .get_mut("data")
+                .and_then(serde_json::Value::as_object_mut)
+                .and_then(|data| data.get_mut("message"))
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                message.remove("id");
+            }
+        }
+        Some("hook/result") => {
+            if let Some(data) = object
+                .get_mut("data")
+                .and_then(serde_json::Value::as_object_mut)
+            {
+                data.remove("durationMs");
+            }
+        }
+        Some(_) | None => {}
+    }
+    record
+}
+
+fn logical_fixture_records(records: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
+    let mut records = records.into_iter();
+    let header = records.next().expect("fixture has a session header");
+    std::iter::once(header)
+        .chain(records.flat_map(|record| {
+            seekdeep_core::chunk_rows::decode_storage_record(record)
+                .expect("fixture storage record decodes")
+                .into_iter()
+                .map(without_fixture_volatiles)
+        }))
+        .collect()
+}
+
 #[test]
 fn complete_scenario_table_matches_every_committed_directory_and_fixture_guard() {
     let suite = suite(SnapshotSuiteMode::Replay).unwrap();
@@ -524,11 +660,46 @@ fn complete_scenario_table_matches_every_committed_directory_and_fixture_guard()
     suite.validate_fixtures().unwrap();
 }
 
+#[test]
+fn packed_fixture_keeps_all_chunk_rows_without_changing_the_logical_session() {
+    let root = repository_root();
+    let source = fixture_records(&root, "hook-cc-pretool-deny");
+    let packed = fixture_records(&root, "packed-chunks");
+    let row_types = packed
+        .iter()
+        .filter_map(|record| record.get("type").and_then(serde_json::Value::as_str))
+        .filter(|kind| {
+            matches!(
+                *kind,
+                "text-chunks" | "reasoning-chunks" | "tool-call-chunks"
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        row_types,
+        BTreeSet::from(["reasoning-chunks", "text-chunks", "tool-call-chunks"])
+    );
+    assert_eq!(
+        logical_fixture_records(packed),
+        logical_fixture_records(source)
+    );
+}
+
 #[tokio::test]
 async fn compiled_demo_runs_the_complete_snapshot_suite() {
-    suite(mode_from_environment().unwrap())
-        .unwrap()
-        .run()
-        .await
-        .unwrap();
+    let suite = suite(mode_from_environment().unwrap()).unwrap();
+    match std::env::var("SEEKDEEP_SNAPSHOT_SCENARIOS") {
+        Ok(selection) => {
+            let names = selection
+                .split(',')
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .collect::<Vec<_>>();
+            suite.run_named(&names).await.unwrap();
+        }
+        Err(std::env::VarError::NotPresent) => {
+            suite.run().await.unwrap();
+        }
+        Err(error) => panic!("invalid SEEKDEEP_SNAPSHOT_SCENARIOS: {error}"),
+    }
 }

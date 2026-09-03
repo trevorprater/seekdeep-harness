@@ -1997,12 +1997,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "html2md-rs"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a418ad68787497f9ca9bb77df0e5c7713db5b43f82f32d951ba90601719d5b3a"
-
-[[package]]
 name = "html5ever"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2848,6 +2842,12 @@ dependencies = [
  "tendril",
  "web_atoms",
 ]
+
+[[package]]
+name = "mdream"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ce3211e2e2ecc0167f9f4b2430eb4b5cd6491d93ea62fe7412291b96ac40799"
 
 [[package]]
 name = "memchr"
@@ -4711,6 +4711,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "num-traits",
  "parking_lot",
  "seekdeep-acp",
  "seekdeep-acp-snapshot",
@@ -4801,6 +4802,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "url",
  "zstd",
 ]
 
@@ -7165,6 +7167,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "num-traits",
  "parking_lot",
  "ryu-js",
  "seekdeep-agent",
@@ -8091,10 +8094,13 @@ name = "seekdeep-session-title"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "futures",
  "parking_lot",
  "regress 0.11.1",
+ "seekdeep-agent",
+ "seekdeep-agent-loop",
  "seekdeep-cordis",
  "seekdeep-core",
  "seekdeep-invariants",
@@ -9367,7 +9373,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
- "html2md-rs",
+ "mdream",
  "parking_lot",
  "regex",
  "seekdeep-agent-loop-testkit",

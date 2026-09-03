@@ -85,6 +85,40 @@ fn text(result: &ToolExecutionResult) -> String {
         .collect()
 }
 
+fn assert_defined_inspection(value: &Value, plugin_id: &str, package_id: &str) {
+    assert_eq!(
+        value,
+        &json!({
+            "mode":"package",
+            "plugin":{
+                "pluginId":plugin_id,
+                "name":"Demo Package",
+                "packageCount":1,
+                "state":"defined",
+            },
+            "packageId":package_id,
+            "name":"Demo Package",
+            "purpose":"Provide one temporary service.",
+            "code":{
+                "host":"return { apply(ctx) { ctx.provide('demoService', { ok: true }) } }",
+            },
+            "runtime":{
+                "state":"defined",
+                "host":{
+                    "status":"stopped",
+                    "provides":[],
+                    "waitingFor":[],
+                    "handlers":[],
+                },
+                "client":{
+                    "status":"absent",
+                    "waitingFor":[],
+                },
+            },
+        })
+    );
+}
+
 #[tokio::test]
 async fn registers_exact_source_tools_prompt_and_inspect_directory() {
     let harness = harness();
@@ -167,13 +201,7 @@ async fn define_run_inspect_stop_and_undefine_keep_one_plugin_identity() {
     )
     .await;
     assert!(!inspected.is_error(), "{}", text(&inspected));
-    assert_eq!(inspected.value().unwrap()["mode"], "package");
-    assert!(
-        inspected.value().unwrap()["code"]["host"]
-            .as_str()
-            .unwrap()
-            .contains("demoService")
-    );
+    assert_defined_inspection(inspected.value().unwrap(), &plugin_id, &package_id);
 
     let run = call(
         &harness,
@@ -184,6 +212,33 @@ async fn define_run_inspect_stop_and_undefine_keep_one_plugin_identity() {
     assert!(!run.is_error(), "{}", text(&run));
     assert_eq!(run.value().unwrap()["status"], "running");
     assert!(harness.context.has_named("demoService"));
+
+    let running = call(
+        &harness,
+        "cordis_inspect_self",
+        json!({"pluginId":plugin_id,"packageId":package_id}),
+    )
+    .await;
+    assert!(!running.is_error(), "{}", text(&running));
+    assert_eq!(running.value().unwrap()["plugin"]["state"], "running");
+    assert_eq!(
+        running.value().unwrap()["plugin"]["currentPackageId"],
+        package_id
+    );
+    assert_eq!(running.value().unwrap()["runtime"]["state"], "running");
+    assert_eq!(
+        running.value().unwrap()["runtime"]["host"],
+        json!({
+            "status":"running",
+            "provides":["demoService"],
+            "waitingFor":[],
+            "handlers":[],
+        })
+    );
+    assert_eq!(
+        running.value().unwrap()["runtime"]["client"],
+        json!({"status":"absent","waitingFor":[]})
+    );
 
     let stopped = call(&harness, "cordis_stop", json!({"pluginId":plugin_id})).await;
     assert!(!stopped.is_error(), "{}", text(&stopped));

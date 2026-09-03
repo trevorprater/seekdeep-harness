@@ -13,8 +13,8 @@
             config:
               servers:
                 fixture:
-                  command: !!js process.execPath
-                  args: ['./lsp-server.mjs']
+                  # The snapshot runner exposes this compiled Rust fixture on PATH.
+                  command: seekdeep-acp-lsp-fixture
                   extensionToLanguage:
                     '.ts': typescript
           - id: timeout-policy

@@ -222,7 +222,7 @@
         },
         {
           "signature": "async recompose(agentCtx: Context, id: string): Promise<AgentPreset>",
-          "description": "Re-link one agent to a different preset's standing composition.\n\nOnly valid while the agent has produced nothing: swapping tools mid conversation would leave logged tool calls the new composition cannot make. The CALLER owns that check — this method does not read session history.\n\nThe swap is a parent re-link, not an unmount: standing mounts are shared and permanent, so the old composition stays for its other agents and the new one is ensured BEFORE the link moves. An unknown or unusable preset therefore throws with the agent exactly as it was — there is no torn-down state to restore. The re-link runs through the binding this roster kept from the agent's mount — dsh-scope's only re-link authority. An agent that never composed one has nothing to re-link: the switch is then the agent's first bind, exactly a mount.",
+          "description": "Re-link one agent to a different preset's standing composition.\n\nOnly valid while the agent has produced nothing: swapping tools mid conversation would leave logged tool calls the new composition cannot make. The CALLER owns that check — this method does not read session history.\n\nThe swap is a parent re-link, not an unmount: standing mounts are shared and permanent, so the old composition stays for its other agents and the new one is ensured BEFORE the link moves. An unknown or unusable preset therefore throws with the agent exactly as it was — there is no torn-down state to restore. The re-link runs through the binding this roster kept from the agent's mount — seekdeep-scope's only re-link authority. An agent that never composed one has nothing to re-link: the switch is then the agent's first bind, exactly a mount.",
           "parameters": [
             {
               "name": "agentCtx",
@@ -257,7 +257,7 @@
     {
       "key": "agents",
       "summary": "Agent service (`ctx.agents`): tracks live agents and carries the initiating Agent through one process-local asynchronous driver chain.",
-      "description": "Agent service (`ctx.agents`): tracks live agents and carries the initiating Agent through one process-local asynchronous driver chain. Agent *creation* is provided by whichever plugin implements the AgentFactory (`@deepseek-ai/dsh-agent-loop`), registered via setFactory.\n\nInitiator methods provide same-process causal attribution only. Ambient presence is neither liveness proof nor authorization; subjects and owners remain explicit, as does identity at worker, process, persistence, and wire boundaries. Returned Promise boundaries drain during teardown, except a nested lineage that starts an owning-fiber unload is excluded from its own drain.",
+      "description": "Agent service (`ctx.agents`): tracks live agents and carries the initiating Agent through one process-local asynchronous driver chain. Agent *creation* is provided by whichever plugin implements the AgentFactory (`@seekdeep-ai/seekdeep-agent-loop`), registered via setFactory.\n\nInitiator methods provide same-process causal attribution only. Ambient presence is neither liveness proof nor authorization; subjects and owners remain explicit, as does identity at worker, process, persistence, and wire boundaries. Returned Promise boundaries drain during teardown, except a nested lineage that starts an owning-fiber unload is excluded from its own drain.",
       "methods": [
         {
           "signature": "currentInitiator(): Agent | undefined",
@@ -551,7 +551,7 @@
           "signature": "graph(): WebBootGraph",
           "description": "Current composed entry graph (stable object between changes).",
           "parameters": [],
-          "returns": "the graph served as `window.__DSH_BOOT__`."
+          "returns": "the graph served as `window.__SEEKDEEP_BOOT__`."
         },
         {
           "signature": "clientPath(id: string): string | undefined",
@@ -606,7 +606,7 @@
       "methods": [
         {
           "signature": "abstract readonly language: string",
-          "description": "The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `'typescript'` and `'python'`, those `dsh-tools` presents; only `'typescript'` has a published backend.",
+          "description": "The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `'typescript'` and `'python'`, those `seekdeep-tools` presents; only `'typescript'` has a published backend.",
           "parameters": []
         },
         {
@@ -2334,7 +2334,7 @@
       "methods": [
         {
           "signature": "create(id?: SessionId, options?: CreateSessionOptions): Session",
-          "description": "Create a session owned by the calling fiber: disposing that fiber stops event notification and removes the session from the store. `options.seed` populates the session with a copy of those events (replay/fork); `options.meta` attaches creation metadata (validated absolute `cwd`, seed and parent lineage, and delegation depth) as the immutable SessionHeader (the store fills `version`/`id`/`createdAt`).\n\nFor an agent whose session must be torn down IN ORDER with its loop (so the loop's final events are published before the store attachment ends), do NOT use this — fold the session lifecycle into the agent's own effect via prepare + enter + announce (see `dsh-agent-loop`'s creation transaction).",
+          "description": "Create a session owned by the calling fiber: disposing that fiber stops event notification and removes the session from the store. `options.seed` populates the session with a copy of those events (replay/fork); `options.meta` attaches creation metadata (validated absolute `cwd`, seed and parent lineage, and delegation depth) as the immutable SessionHeader (the store fills `version`/`id`/`createdAt`).\n\nFor an agent whose session must be torn down IN ORDER with its loop (so the loop's final events are published before the store attachment ends), do NOT use this — fold the session lifecycle into the agent's own effect via prepare + enter + announce (see `seekdeep-agent-loop`'s creation transaction).",
           "parameters": [
             {
               "name": "id",
@@ -2698,8 +2698,8 @@
     },
     {
       "key": "shellEnv",
-      "summary": "Registry (`ctx.shellEnv`) for trusted, per-execution `DSH_*` variables.",
-      "description": "Registry (`ctx.shellEnv`) for trusted, per-execution `DSH_*` variables. The namespace is rebuilt for every model shell call: ambient `DSH_*` values are discarded by the executor, then the registry's current snapshot is injected. Built-in shell facts remain owned by the registry itself while plugins can register additional, enumerable facts with effect-scoped disposal.",
+      "summary": "Registry (`ctx.shellEnv`) for trusted, per-execution `SEEKDEEP_*` variables.",
+      "description": "Registry (`ctx.shellEnv`) for trusted, per-execution `SEEKDEEP_*` variables. The namespace is rebuilt for every model shell call: ambient `SEEKDEEP_*` values are discarded by the executor, then the registry's current snapshot is injected. Built-in shell facts remain owned by the registry itself while plugins can register additional, enumerable facts with effect-scoped disposal.",
       "methods": [
         {
           "signature": "register(contributor: BashEnvContributor): () => void",
@@ -2713,8 +2713,8 @@
           "returns": "the disposer that unregisters the contribution."
         },
         {
-          "signature": "collect(execution: ToolExecution): DshEnvironment",
-          "description": "Build the trusted `DSH_*` snapshot for one shell tool execution.",
+          "signature": "collect(execution: ToolExecution): SeekdeepEnvironment",
+          "description": "Build the trusted `SEEKDEEP_*` snapshot for one shell tool execution.",
           "parameters": [
             {
               "name": "execution",
@@ -3971,7 +3971,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".agent - the newly registered agent with its live session and completed setup. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".agent - the newly registered agent with its live session and completed setup. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -3984,7 +3984,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".agent - the exact agent removed from the registry. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".agent - the exact agent removed from the registry. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -3997,7 +3997,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".error - the failure, verbatim. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".error - the failure, verbatim. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4010,7 +4010,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".turn - the owning turn. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".turn - the owning turn. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4023,7 +4023,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".message - the discarded message. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".message - the discarded message. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4036,7 +4036,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".message - the inserted message. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".message - the inserted message. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4049,7 +4049,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".signal - the current turn's cancellation signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".signal - the current turn's cancellation signal. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4062,7 +4062,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".signal - the current turn's explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".signal - the current turn's explicit abort signal. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4075,7 +4075,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".signal - the turn abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".signal - the turn abort signal. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4088,7 +4088,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".source - why the session started (fresh startup, resume, …). Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".source - why the session started (fresh startup, resume, …). Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4101,7 +4101,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".status - the status just entered (the transition's destination). Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".status - the status just entered (the transition's destination). Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4114,7 +4114,7 @@
       "parameters": [
         {
           "name": "payload",
-          "description": ".signal - the current turn's explicit abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent."
+          "description": ".signal - the current turn's explicit abort signal. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent."
         }
       ]
     },
@@ -4123,7 +4123,7 @@
       "mode": "waterfall",
       "signature": "'approval/request'(this: Scoped<ApprovalService>, req: ApprovalRequest, next: () => Promise<ApprovalOutcome>): Promise<ApprovalOutcome>",
       "summary": "Ask composed answerers for one decision.",
-      "description": "Ask composed answerers for one decision. Return an outcome to claim the request or call `next()`; failure yields the fail-closed default. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.",
+      "description": "Ask composed answerers for one decision. Return an outcome to claim the request or call `next()`; failure yields the fail-closed default. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent.",
       "parameters": [
         {
           "name": "req",
@@ -4301,9 +4301,9 @@
     {
       "name": "goal/changed",
       "mode": "emit",
-      "signature": "'goal/changed'(this: import('@deepseek-ai/dsh-scope').Scoped<Agent>, payload: { agent: Agent; change: GoalChanged }): void",
+      "signature": "'goal/changed'(this: import('@seekdeep-ai/seekdeep-scope').Scoped<Agent>, payload: { agent: Agent; change: GoalChanged }): void",
       "summary": "Goal mutation accepted by one live agent.",
-      "description": "Goal mutation accepted by one live agent. The matching `goal/change` session event has already committed. Listener failures are contained. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.",
+      "description": "Goal mutation accepted by one live agent. The matching `goal/change` session event has already committed. Listener failures are contained. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent.",
       "parameters": [
         {
           "name": "payload",
@@ -4350,7 +4350,7 @@
       "mode": "emit",
       "signature": "'session/created'(this: Scoped<Session>, session: Session): void",
       "summary": "Creation announcement during session publication.",
-      "description": "Creation announcement during session publication. A synchronous throw vetoes and rolls back with a paired disposal; detach requested during dispatch is deferred. A returned-promise rejection is logged but cannot retroactively veto this synchronous boundary. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only sessions entered through that agent's context.",
+      "description": "Creation announcement during session publication. A synchronous throw vetoes and rolls back with a paired disposal; detach requested during dispatch is deferred. A returned-promise rejection is logged but cannot retroactively veto this synchronous boundary. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only sessions entered through that agent's context.",
       "parameters": [
         {
           "name": "session",
@@ -4363,7 +4363,7 @@
       "mode": "emit",
       "signature": "'session/disposed'(this: Scoped<Session>, session: Session): void",
       "summary": "Emitted once when an announced session leaves the store, including publication rollback, but never for an entry whose creation announcement did not begin.",
-      "description": "Emitted once when an announced session leaves the store, including publication rollback, but never for an entry whose creation announcement did not begin. Listener failures are logged and contained. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`) reuses the owner scope.",
+      "description": "Emitted once when an announced session leaves the store, including publication rollback, but never for an entry whose creation announcement did not begin. Listener failures are logged and contained. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`) reuses the owner scope.",
       "parameters": [
         {
           "name": "session",
@@ -4376,7 +4376,7 @@
       "mode": "emit",
       "signature": "'session/event'(this: Scoped<Session>, session: Session, event: SessionEvent): void",
       "summary": "Post-commit, fire-and-forget append feed.",
-      "description": "Post-commit, fire-and-forget append feed. The listener snapshot resolves before the log push, but callbacks run after it; observer failures are logged and contained without making the committed append fail. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only events from sessions entered through that agent's context.",
+      "description": "Post-commit, fire-and-forget append feed. The listener snapshot resolves before the log push, but callbacks run after it; observer failures are logged and contained without making the committed append fail. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only events from sessions entered through that agent's context.",
       "parameters": [
         {
           "name": "session",
@@ -4393,7 +4393,7 @@
       "mode": "parallel",
       "signature": "'session/flush'(this: Scoped<Session>, session: Session): Promise<void> | void",
       "summary": "Awaited parallel durability checkpoint: every listener runs and the caller awaits all of them, with no waterfall veto.",
-      "description": "Awaited parallel durability checkpoint: every listener runs and the caller awaits all of them, with no waterfall veto. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`) reuses the session's owner scope.",
+      "description": "Awaited parallel durability checkpoint: every listener runs and the caller awaits all of them, with no waterfall veto. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`) reuses the session's owner scope.",
       "parameters": [
         {
           "name": "session",
@@ -4508,7 +4508,7 @@
       "mode": "waterfall",
       "signature": "'system-prompt/assemble'(this: Scoped<SystemPrompt>, assembly: PromptAssembly, context: AssembleContext, next: () => Promise<PromptAssembly>): Promise<PromptAssembly>",
       "summary": "Expert waterfall over the assembled sections, contexts, tools, and variables.",
-      "description": "Expert waterfall over the assembled sections, contexts, tools, and variables. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): scoped listeners receive only that scope's assemblies. The returned value is authoritative. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope's system prompt.",
+      "description": "Expert waterfall over the assembled sections, contexts, tools, and variables. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): scoped listeners receive only that scope's assemblies. The returned value is authoritative. A supplied signal controls only this explicit assembly request and must not be retained to control later turns. A registered complete section is restored after this waterfall, so listeners cannot add to or replace that scope's system prompt.",
       "parameters": [
         {
           "name": "assembly",
@@ -4541,7 +4541,7 @@
       "mode": "waterfall",
       "signature": "'tools/code-dispatch-log'(this: Scoped<ToolRuntime>, dispatch: CodeDispatchLog, next: () => Promise<ContentBlock[]>): Promise<ContentBlock[]>",
       "summary": "Allow a listener to replace content in the DURABLE LOG COPY of one `run_code` sub-dispatch outcome before the bridge appends its `tool/code-dispatch` event.",
-      "description": "Allow a listener to replace content in the DURABLE LOG COPY of one `run_code` sub-dispatch outcome before the bridge appends its `tool/code-dispatch` event. `next()` keeps the content unchanged; a listener may return replacement blocks (e.g. the spill policy's preview + locator for an oversized text result). Only the logged copy is affected — the program already received the complete value, and the model sees neither. A throwing listener is contained: the bridge falls back to logging the original settled content. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's dispatches.",
+      "description": "Allow a listener to replace content in the DURABLE LOG COPY of one `run_code` sub-dispatch outcome before the bridge appends its `tool/code-dispatch` event. `next()` keeps the content unchanged; a listener may return replacement blocks (e.g. the spill policy's preview + locator for an oversized text result). Only the logged copy is affected — the program already received the complete value, and the model sees neither. A throwing listener is contained: the bridge falls back to logging the original settled content. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent's dispatches.",
       "parameters": [
         {
           "name": "dispatch",
@@ -4554,7 +4554,7 @@
       "mode": "waterfall",
       "signature": "'tools/execute'(this: Scoped<ToolRuntime>, exec: ToolDispatchExecution, next: () => Promise<ToolExecutionResult>): Promise<ToolExecutionResult>",
       "summary": "Around-dispatch waterfall for timeout, retry, or metrics.",
-      "description": "Around-dispatch waterfall for timeout, retry, or metrics. `next()` returns a normalized result; wrappers may change only `exec.signal`, while call identity remains immutable. The registry re-fuses the original caller signal before the body, so replacement cannot detach caller cancellation; wrappers must still restore their signal and reach quiescence. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's calls.",
+      "description": "Around-dispatch waterfall for timeout, retry, or metrics. `next()` returns a normalized result; wrappers may change only `exec.signal`, while call identity remains immutable. The registry re-fuses the original caller signal before the body, so replacement cannot detach caller cancellation; wrappers must still restore their signal and reach quiescence. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent's calls.",
       "parameters": [
         {
           "name": "exec",
@@ -4567,7 +4567,7 @@
       "mode": "waterfall",
       "signature": "'tools/post-execute'(this: Scoped<ToolRuntime>, exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>): Promise<PostToolDecision>",
       "summary": "Accept, replace, enrich, or block a normalized dispatch result.",
-      "description": "Accept, replace, enrich, or block a normalized dispatch result. `next()` accepts it unchanged; thrown tools still reach this waterfall as errors. Async listeners must observe `exec.signal`; after they settle, caller cancellation replaces only a successful accepted outcome with the code selected by whether the tool body was invoked. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's calls.",
+      "description": "Accept, replace, enrich, or block a normalized dispatch result. `next()` accepts it unchanged; thrown tools still reach this waterfall as errors. Async listeners must observe `exec.signal`; after they settle, caller cancellation replaces only a successful accepted outcome with the code selected by whether the tool body was invoked. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent's calls.",
       "parameters": [
         {
           "name": "exec",
@@ -4584,7 +4584,7 @@
       "mode": "waterfall",
       "signature": "'tools/pre-execute'(this: Scoped<ToolRuntime>, exec: ToolExecution, next: () => Promise<PreToolDecision>): Promise<PreToolDecision>",
       "summary": "Allow, deny, or ask before dispatch.",
-      "description": "Allow, deny, or ask before dispatch. `next()` delegates to allow; missing approval support turns `ask` into denial. Async gates must observe `exec.signal`; the registry rechecks cancellation after they settle but never abandons their promise. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's calls.",
+      "description": "Allow, deny, or ask before dispatch. `next()` delegates to allow; missing approval support turns `ask` into denial. Async gates must observe `exec.signal`; the registry rechecks cancellation after they settle but never abandons their promise. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent's calls.",
       "parameters": [
         {
           "name": "exec",
@@ -4597,7 +4597,7 @@
       "mode": "emit",
       "signature": "'tools/result'(this: Scoped<ToolRuntime>, exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): undefined",
       "summary": "Observe the frozen, lossless-JSON final outcome.",
-      "description": "Observe the frozen, lossless-JSON final outcome. Listener failures are contained. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): keyed by `exec.agent`.",
+      "description": "Observe the frozen, lossless-JSON final outcome. Listener failures are contained. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): keyed by `exec.agent`.",
       "parameters": [
         {
           "name": "exec",
@@ -4819,7 +4819,7 @@
     },
     {
       "name": "BashEnvContributor",
-      "declaration": "export interface BashEnvContributor {\n    name: string;\n    variables: Readonly<Record<DshEnvironmentKey, BashEnvVariable>>;\n    resolve(execution: ToolExecution): Readonly<Partial<Record<DshEnvironmentKey, string>>>;\n}"
+      "declaration": "export interface BashEnvContributor {\n    name: string;\n    variables: Readonly<Record<SeekdeepEnvironmentKey, BashEnvVariable>>;\n    resolve(execution: ToolExecution): Readonly<Partial<Record<SeekdeepEnvironmentKey, string>>>;\n}"
     },
     {
       "name": "BashEnvVariable",
@@ -4827,7 +4827,7 @@
     },
     {
       "name": "BashEnvVariableInfo",
-      "declaration": "export interface BashEnvVariableInfo extends BashEnvVariable {\n    contributor: string;\n    key: DshEnvironmentKey;\n}"
+      "declaration": "export interface BashEnvVariableInfo extends BashEnvVariable {\n    contributor: string;\n    key: SeekdeepEnvironmentKey;\n}"
     },
     {
       "name": "Branded",
@@ -5098,12 +5098,12 @@
       "declaration": "export interface DownloadsApi {\n    sessionLog(request: {\n        sessionId: SessionId;\n        includeDescendants?: boolean;\n    }, signal: AbortSignal): Promise<Response>;\n}"
     },
     {
-      "name": "DshEnvironment",
-      "declaration": "export type DshEnvironment = Readonly<Record<DshEnvironmentKey, string>>;"
+      "name": "SeekdeepEnvironment",
+      "declaration": "export type SeekdeepEnvironment = Readonly<Record<SeekdeepEnvironmentKey, string>>;"
     },
     {
-      "name": "DshEnvironmentKey",
-      "declaration": "export type DshEnvironmentKey = `${typeof DSH_ENV_PREFIX}${string}`;"
+      "name": "SeekdeepEnvironmentKey",
+      "declaration": "export type SeekdeepEnvironmentKey = `${typeof SEEKDEEP_ENV_PREFIX}${string}`;"
     },
     {
       "name": "DynamicCordisPackage",
@@ -6087,11 +6087,11 @@
     },
     {
       "name": "ShellExecRequest",
-      "declaration": "export interface ShellExecRequest {\n    command: string;\n    workdir?: string | undefined;\n    timeoutMs?: number | undefined;\n    stdoutMaxBytes?: number | undefined;\n    signal?: AbortSignal | undefined;\n    stdin?: string | undefined;\n    env?: Record<string, string> | undefined;\n    dshEnv?: DshEnvironment | undefined;\n    sandboxPolicy?: SandboxExecutionPolicy | undefined;\n}"
+      "declaration": "export interface ShellExecRequest {\n    command: string;\n    workdir?: string | undefined;\n    timeoutMs?: number | undefined;\n    stdoutMaxBytes?: number | undefined;\n    signal?: AbortSignal | undefined;\n    stdin?: string | undefined;\n    env?: Record<string, string> | undefined;\n    dshEnv?: SeekdeepEnvironment | undefined;\n    sandboxPolicy?: SandboxExecutionPolicy | undefined;\n}"
     },
     {
       "name": "ShellExecSpec",
-      "declaration": "export interface ShellExecSpec {\n    command: string;\n    workdir: string;\n    timeoutMs: number;\n    stdoutMaxBytes: number;\n    signal?: AbortSignal | undefined;\n    stdin?: string | undefined;\n    env?: Record<string, string> | undefined;\n    dshEnv?: DshEnvironment | undefined;\n    sandboxPolicy: SandboxExecutionPolicy | undefined;\n}"
+      "declaration": "export interface ShellExecSpec {\n    command: string;\n    workdir: string;\n    timeoutMs: number;\n    stdoutMaxBytes: number;\n    signal?: AbortSignal | undefined;\n    stdin?: string | undefined;\n    env?: Record<string, string> | undefined;\n    dshEnv?: SeekdeepEnvironment | undefined;\n    sandboxPolicy: SandboxExecutionPolicy | undefined;\n}"
     },
     {
       "name": "ShellProcess",

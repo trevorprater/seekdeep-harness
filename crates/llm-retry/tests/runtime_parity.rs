@@ -217,7 +217,7 @@ async fn records_schedule_then_started_before_retrying_without_opening_a_new_ste
             "policyKey":"[\"normal\",2,[\"RATE_LIMIT\",\"SERVER\"],1,10000,1]",
             "retry":1,
             "maxRetries":2,
-            "delayMs":0.0,
+            "delayMs":0,
             "failure":{"message":"provider busy","code":"RATE_LIMIT","status":429}
         })
     );

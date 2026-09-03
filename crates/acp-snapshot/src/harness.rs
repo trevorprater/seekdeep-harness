@@ -387,8 +387,7 @@ pub async fn run_scenario(input: &InputScript, options: RunOptions) -> anyhow::R
         &spill_root,
         &mut launched,
     )
-    .await
-    .map_err(|error| attach_stderr(error, launched.as_ref()));
+    .await;
 
     let mut cleanup_failures = Vec::new();
     if let Some(active) = &launched
@@ -401,6 +400,7 @@ pub async fn run_scenario(input: &InputScript, options: RunOptions) -> anyhow::R
             cleanup_failures.push(error);
         }
     }
+    let outcome = outcome.map_err(|error| attach_stderr(error, launched.as_ref()));
     finish_with_cleanup(outcome, &cleanup_failures)
 }
 

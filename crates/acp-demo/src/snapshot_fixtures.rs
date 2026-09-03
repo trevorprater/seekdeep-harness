@@ -10,6 +10,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use num_traits::ToPrimitive as _;
 use parking_lot::Mutex;
 use seekdeep_agent::{AgentEvent, AgentLifecycleEvent};
 use seekdeep_agent_loop::{AgentInboxMessage, AgentPreStepEvent};
@@ -21,12 +22,12 @@ use seekdeep_sandbox::{
     ConfinedArgv, RunnerFailureRule, SandboxEnforcement, SandboxPolicy, SandboxProvider,
     SandboxService,
 };
-use seekdeep_subprocess::ProcessGroupId;
 use seekdeep_subagent::{
     ContinuableCreateRequest, ContinuableCreateSpec, ResolvedSubagentStartRequest, SUBAGENTS,
     SubagentCapabilities, SubagentFollowupOptions, SubagentProvider, SubagentRun,
 };
 use seekdeep_subagent_in_process_driver::{InProcessRunOptions, start_in_process_run};
+use seekdeep_subprocess::ProcessGroupId;
 use seekdeep_terminal::{
     TERMINALS, TerminalBackend, TerminalBackendRef, TerminalBackendSession,
     TerminalBackendSessionRef, TerminalBackendSpawnSpec, TerminalReadRequest, TerminalReadResult,
@@ -110,10 +111,7 @@ impl SandboxProvider for PartialLandlockSandbox {
             argv: [
                 "bash".to_owned(),
                 "-c".to_owned(),
-                format!(
-                    "printf '%s\\n' '{}' >&2; exec \"$@\"",
-                    PARTIAL_LANDLOCK_NOTICE
-                ),
+                format!("printf '%s\\n' '{PARTIAL_LANDLOCK_NOTICE}' >&2; exec \"$@\""),
                 "partial-landlock-run".to_owned(),
             ]
             .into_iter()
@@ -300,8 +298,8 @@ impl TerminalBackendSession for SnapshotTerminalSession {
     fn read(&self, request: TerminalReadRequest) -> TerminalResult<TerminalReadResult> {
         let scrollback = self.scrollback.lock();
         let lines = scrollback.split('\n').collect::<Vec<_>>();
-        let offset = request.offset.unwrap_or(0.0).max(0.0) as usize;
-        let count = request.count.unwrap_or(500.0).max(0.0) as usize;
+        let offset = terminal_index(request.offset, 0.0);
+        let count = terminal_index(request.count, 500.0);
         let end = lines.len().saturating_sub(offset);
         let start = end.saturating_sub(count);
         let text = lines[start..end].join("\n");
@@ -327,7 +325,7 @@ impl TerminalBackendSession for SnapshotTerminalSession {
         *self.status.lock() = serde_json::from_value(serde_json::json!({
             "kind":"exited","exitCode":0,"signal":null
         }))
-        .map_err(|error| seekdeep_terminal::TerminalFailure::new(error))?;
+        .map_err(seekdeep_terminal::TerminalFailure::new)?;
         Ok(())
     }
 }
@@ -337,7 +335,7 @@ struct SnapshotTerminalBackend;
 
 #[async_trait]
 impl TerminalBackend for SnapshotTerminalBackend {
-    fn backend_type(&self) -> &str {
+    fn backend_type(&self) -> &'static str {
         "shell"
     }
 
@@ -350,6 +348,14 @@ impl TerminalBackend for SnapshotTerminalBackend {
             status: Mutex::new(TerminalSessionStatus::Running),
         }))
     }
+}
+
+fn terminal_index(value: Option<f64>, fallback: f64) -> usize {
+    value
+        .unwrap_or(fallback)
+        .max(0.0)
+        .to_usize()
+        .unwrap_or(usize::MAX)
 }
 
 pub(crate) fn pty_snapshot_backend_plugin() -> Plugin {
@@ -573,13 +579,9 @@ impl DurabilityFixtureState {
     }
 
     async fn wait_followups(&self) {
-        while self.accepted.load(Ordering::Acquire) < 3
-            && !self.released.load(Ordering::Acquire)
-        {
+        while self.accepted.load(Ordering::Acquire) < 3 && !self.released.load(Ordering::Acquire) {
             let changed = self.accepted_changed.notified();
-            if self.accepted.load(Ordering::Acquire) >= 3
-                || self.released.load(Ordering::Acquire)
-            {
+            if self.accepted.load(Ordering::Acquire) >= 3 || self.released.load(Ordering::Acquire) {
                 break;
             }
             changed.await;
@@ -587,13 +589,10 @@ impl DurabilityFixtureState {
     }
 
     async fn wait_parent_closed(&self) {
-        while !self.parent_closed.load(Ordering::Acquire)
-            && !self.released.load(Ordering::Acquire)
+        while !self.parent_closed.load(Ordering::Acquire) && !self.released.load(Ordering::Acquire)
         {
             let changed = self.parent_closed_changed.notified();
-            if self.parent_closed.load(Ordering::Acquire)
-                || self.released.load(Ordering::Acquire)
-            {
+            if self.parent_closed.load(Ordering::Acquire) || self.released.load(Ordering::Acquire) {
                 break;
             }
             changed.await;
@@ -616,8 +615,11 @@ impl SubagentRun for PublishedFailureRun {
         self.inner.local_agent()
     }
 
-    fn result(&self) -> futures::future::BoxFuture<'static, anyhow::Result<seekdeep_subagent::SubagentResult>> {
-        Box::pin(async { anyhow::bail!("snapshot published run failed") })
+    fn result(
+        &self,
+    ) -> futures::future::BoxFuture<'static, anyhow::Result<seekdeep_subagent::SubagentResult>>
+    {
+        Box::pin(async { anyhow::bail!("Error: snapshot published run failed") })
     }
 
     fn dispose(&self) -> futures::future::BoxFuture<'static, anyhow::Result<()>> {
@@ -628,7 +630,7 @@ impl SubagentRun for PublishedFailureRun {
                 "snapshot published run failed".to_owned(),
             ));
             inner.dispose().await?;
-            anyhow::bail!("snapshot published handle disposal failed")
+            anyhow::bail!("Error: snapshot published handle disposal failed")
         })
     }
 }
@@ -652,7 +654,7 @@ impl SnapshotSpawnProvider {
 
 #[async_trait]
 impl SubagentProvider for SnapshotSpawnProvider {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "spawn"
     }
 
@@ -670,11 +672,17 @@ impl SubagentProvider for SnapshotSpawnProvider {
 
     async fn start(
         &self,
-        request: ResolvedSubagentStartRequest,
+        mut request: ResolvedSubagentStartRequest,
     ) -> anyhow::Result<Arc<dyn SubagentRun>> {
         let published_failure =
             std::env::var("SEEKDEEP_SUBAGENT_PUBLISHED_FAILURE").as_deref() == Ok("1");
-        let signal = request.request.signal.clone();
+        let signal = if published_failure {
+            let signal = AbortSignal::default();
+            request.request.signal = signal.clone();
+            signal
+        } else {
+            request.request.signal.clone()
+        };
         let run = start_in_process_run(request, InProcessRunOptions::default()).await?;
         if published_failure {
             Ok(Arc::new(PublishedFailureRun { inner: run, signal }))
@@ -707,6 +715,9 @@ fn coordinator_source(sender: &SessionId) -> MessageSource {
     }
 }
 
+// One cohesive fixture transaction owns all cross-event ordering fences; splitting it would hide
+// the shared state and teardown relationship that the source fixture makes explicit.
+#[allow(clippy::too_many_lines)]
 pub(crate) fn subagent_durability_failure_plugin() -> Plugin {
     Plugin::new(
         "subagent-durability-failure",
@@ -716,9 +727,9 @@ pub(crate) fn subagent_durability_failure_plugin() -> Plugin {
                 let subagents = context.get(SUBAGENTS).ok_or_else(|| {
                     anyhow::anyhow!("subagent-durability-failure requires subagents")
                 })?;
-                let tools = context.get(TOOLS).ok_or_else(|| {
-                    anyhow::anyhow!("subagent-durability-failure requires tools")
-                })?;
+                let tools = context
+                    .get(TOOLS)
+                    .ok_or_else(|| anyhow::anyhow!("subagent-durability-failure requires tools"))?;
                 let provider: Arc<dyn SubagentProvider> = SnapshotSpawnProvider::new();
                 context.own(subagents.register_provider(provider)?)?;
 
@@ -737,11 +748,11 @@ pub(crate) fn subagent_durability_failure_plugin() -> Plugin {
                     &context,
                     "agent/inbox/inserted",
                     move |_, args| {
-                        let event = args
-                            .get::<AgentEvent<AgentInboxMessage>>(0)
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("agent/inbox/inserted lacks its event")
-                            })?;
+                        let event =
+                            args.get::<AgentEvent<AgentInboxMessage>>(0)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!("agent/inbox/inserted lacks its event")
+                                })?;
                         if event.agent.session().header().parent_session.is_some() {
                             inbox_state.record_child_message(event.agent.id());
                         }
@@ -763,8 +774,7 @@ pub(crate) fn subagent_durability_failure_plugin() -> Plugin {
                             .ok_or_else(|| anyhow::anyhow!("session/event lacks its event"))?;
                         if session.header().parent_session.is_none()
                             && event.event_type == "turn/end"
-                            && event.data.get("turn").and_then(serde_json::Value::as_u64)
-                                == Some(1)
+                            && event.data.get("turn").and_then(serde_json::Value::as_u64) == Some(1)
                         {
                             session_state.mark_parent_closed();
                         }

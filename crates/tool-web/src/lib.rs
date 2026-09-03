@@ -313,64 +313,117 @@ fn render_body(body: &WebFetchBody, max_chars: usize) -> (String, bool) {
         WebFetchBody::Text { .. } => (content, truncated),
         WebFetchBody::Html { .. } if exceeds_conversion_depth(&content) => (content, truncated),
         WebFetchBody::Html { .. } => {
-            let config = html2md_rs::structs::ToMdConfig {
-                ignore_rendering: vec![
-                    html2md_rs::structs::NodeType::Script,
-                    html2md_rs::structs::NodeType::Style,
-                ],
-            };
-            let markdown =
-                html2md_rs::to_md::safe_from_html_to_md_with_config(content.clone(), &config)
-                    .map(|markdown| convert_raw_tables(&markdown).replace("\\&", "&"))
-                    .unwrap_or(content);
+            let (title, content_without_title) = extract_title(&content);
+            let normalized = promote_table_alignments(&content_without_title);
+            let converted = std::panic::catch_unwind(|| {
+                let body = mdream::html_to_markdown(
+                    &normalized,
+                    mdream::types::HTMLToMarkdownOptions::default(),
+                );
+                match title {
+                    None => body,
+                    Some(title) => {
+                        let title = mdream::html_to_markdown(
+                            &format!("<p>{title}</p>"),
+                            mdream::types::HTMLToMarkdownOptions::default(),
+                        );
+                        [title.trim(), body.trim()]
+                            .into_iter()
+                            .filter(|part| !part.is_empty())
+                            .collect::<Vec<_>>()
+                            .join("\n\n")
+                    }
+                }
+            });
+            let markdown = converted
+                .map(|markdown| normalize_turndown_markdown(&markdown))
+                .unwrap_or(content);
             (markdown, truncated)
         }
     }
 }
 
-fn convert_raw_tables(markdown: &str) -> String {
-    static TABLE: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"(?is)<table\b[^>]*>(.*?)</table>").unwrap());
-    static ROW: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"(?is)<tr\b[^>]*>(.*?)</tr>").unwrap());
+fn extract_title(html: &str) -> (Option<String>, String) {
+    static TITLE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?is)<title(?:\s[^>]*)?>(?P<body>.*?)</title\s*>").unwrap()
+    });
+    let title = TITLE
+        .captures(html)
+        .and_then(|captures| captures.name("body"))
+        .map(|body| body.as_str().to_owned());
+    let without_title = TITLE.replacen(html, 1, "").into_owned();
+    (title, without_title)
+}
+
+fn promote_table_alignments(html: &str) -> String {
     static CELL: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"(?is)<(?:th|td)\b[^>]*>(.*?)</(?:th|td)>").unwrap());
-    static TAG: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"(?is)<[^>]+>").unwrap());
-    TABLE
-        .replace_all(markdown, |table: &regex::Captures<'_>| {
-            let rows = ROW
-                .captures_iter(&table[1])
-                .map(|row| {
-                    CELL.captures_iter(&row[1])
-                        .map(|cell| {
-                            TAG.replace_all(&cell[1], "")
-                                .trim()
-                                .replace('|', "\\|")
-                                .replace(['\n', '\r'], "<br>")
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .filter(|row| !row.is_empty())
-                .collect::<Vec<_>>();
-            if rows.is_empty() {
-                return table[0].to_owned();
+        LazyLock::new(|| regex::Regex::new(r"(?is)<(?P<tag>th|td)(?P<attrs>[^>]*)>").unwrap());
+    static ALIGN: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?i)text-align\s*:\s*(?P<align>left|right|center)").unwrap()
+    });
+    CELL.replace_all(html, |cell: &regex::Captures<'_>| {
+        let attrs = &cell["attrs"];
+        if attrs.to_ascii_lowercase().contains("align=") {
+            return cell[0].to_owned();
+        }
+        let Some(alignment) = ALIGN.captures(attrs) else {
+            return cell[0].to_owned();
+        };
+        format!(
+            "<{} align=\"{}\"{}>",
+            &cell["tag"], &alignment["align"], attrs
+        )
+    })
+    .into_owned()
+}
+
+fn normalize_turndown_markdown(markdown: &str) -> String {
+    static UNORDERED: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?m)^(?P<indent>\s*)- ").unwrap());
+    static ORDERED: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?m)^(?P<indent>\s*)(?P<number>[0-9]+\.) ").unwrap());
+    let lists = UNORDERED.replace_all(markdown, "${indent}-   ");
+    let lists = ORDERED.replace_all(&lists, "${indent}${number}  ");
+    lists
+        .lines()
+        .map(pad_table_line)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn pad_table_line(line: &str) -> String {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with('|') || !trimmed.ends_with('|') {
+        return line.to_owned();
+    }
+    let prefix = &line[..line.len() - trimmed.len()];
+    let mut cells = Vec::new();
+    let mut current = String::new();
+    let mut escaped = false;
+    for character in trimmed[1..trimmed.len() - 1].chars() {
+        if character == '|' && !escaped {
+            cells.push(std::mem::take(&mut current));
+        } else {
+            current.push(character);
+        }
+        escaped = character == '\\' && !escaped;
+        if character != '\\' {
+            escaped = false;
+        }
+    }
+    cells.push(current);
+    let cells = cells
+        .into_iter()
+        .map(|cell| {
+            let mut cell = cell.trim().to_owned();
+            let width = cell.encode_utf16().count();
+            if width < 3 {
+                cell.push_str(&" ".repeat(3 - width));
             }
-            let width = rows.iter().map(Vec::len).max().unwrap_or(0);
-            let cells = |row: &[String]| {
-                (0..width)
-                    .map(|index| row.get(index).map_or("", String::as_str))
-                    .collect::<Vec<_>>()
-                    .join(" | ")
-            };
-            let mut lines = vec![
-                format!("| {} |", cells(&rows[0])),
-                format!("| {} |", vec!["---"; width].join(" | ")),
-            ];
-            lines.extend(rows.iter().skip(1).map(|row| format!("| {} |", cells(row))));
-            format!("\n{}\n", lines.join("\n"))
+            cell
         })
-        .into_owned()
+        .collect::<Vec<_>>();
+    format!("{prefix}| {} |", cells.join(" | "))
 }
 
 fn render_fetch(result: &WebFetchResult, max_chars: usize) -> RenderedFetch {

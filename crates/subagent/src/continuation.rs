@@ -21,8 +21,9 @@ use std::{
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use seekdeep_agent::{
-    AGENT, AGENTS, Agent, AgentCancelCause, AgentHandle, AgentOptions, AgentRegistry, AgentSetup,
-    AgentStatus, CancelOptions, CreateAgentMeta, CreateAgentOptions, ResumeAgentOptions,
+    AGENT, AGENTS, Agent, AgentCancelCause, AgentEvent, AgentHandle, AgentOptions, AgentRegistry,
+    AgentSetup, AgentStatus, CancelOptions, CreateAgentMeta, CreateAgentOptions,
+    ResumeAgentOptions,
 };
 use seekdeep_agent_loop::{AgentInboxClaimed, AgentInboxMessage};
 use seekdeep_cordis::{
@@ -1298,8 +1299,8 @@ impl SubagentContinuationManager {
                     child_agent.context(),
                     "agent/inbox/claimed",
                     move |_ctx, args| {
-                        if let Some(payload) = args.get::<AgentInboxClaimed>(0)
-                            && claimed.accepted.lock().remove(payload.message.id())
+                        if let Some(event) = args.get::<AgentEvent<AgentInboxClaimed>>(0)
+                            && claimed.accepted.lock().remove(event.payload.message.id())
                         {
                             claimed.wake();
                         }
@@ -1312,8 +1313,8 @@ impl SubagentContinuationManager {
                     child_agent.context(),
                     "agent/inbox/discarded",
                     move |_ctx, args| {
-                        if let Some(payload) = args.get::<AgentInboxMessage>(0)
-                            && discarded.accepted.lock().remove(payload.message.id())
+                        if let Some(event) = args.get::<AgentEvent<AgentInboxMessage>>(0)
+                            && discarded.accepted.lock().remove(event.payload.message.id())
                         {
                             discarded.wake();
                         }

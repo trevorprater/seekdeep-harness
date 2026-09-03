@@ -1230,7 +1230,21 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
         subprocess,
         rg_path: RgPathCache::default(),
     });
-    prompt.section(context, PromptSection::new("tool:glob", 103.0, seekdeep_system_prompt::PromptText::Static("Use the glob tool — not shell find — to discover files by path pattern. A pattern with no \"/\" matches basenames at any depth, so \"*\" matches every file in the tree rather than its top level. Results are files only, never directories, and include hidden and ignored files.".into())))?;
+    let over_cap_guidance = if caps.sample {
+        "while a larger one is sampled across top-level entries, so it spans the tree instead of one subtree."
+    } else {
+        "while a larger one keeps the modification-time-ordered head."
+    };
+    prompt.section(
+        context,
+        PromptSection::new(
+            "tool:glob",
+            103.0,
+            seekdeep_system_prompt::PromptText::Static(format!(
+                "Use the glob tool — not shell find — to discover files by path pattern. A pattern with no \"/\" matches basenames at any depth, so \"*\" matches every file in the tree rather than its top level. Results are files only, never directories, and include hidden and ignored files: a result that fits comes back in modification-time order, {over_cap_guidance}"
+            )),
+        ),
+    )?;
     prompt.section(context, PromptSection::new("tool:grep", 104.0, seekdeep_system_prompt::PromptText::Static("Use the grep tool — not shell grep or rg — to search file contents. Use read on a matched file when you need surrounding context.".into())))?;
 
     register_glob(context, tools.clone(), runtime.clone(), caps)?;

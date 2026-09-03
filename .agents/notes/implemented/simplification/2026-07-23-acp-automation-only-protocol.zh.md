@@ -14,7 +14,7 @@ ACP 仍有一个有用的职责：另一个 agent（智能体）或自动化控�
 
 ## 决策
 
-`seekdeep-acp` 通过仓库共享的换行分隔 JSON-RPC 传输层，负责固定 ACP 0.25.1 基线的两种带类型角色。agent 角色会创建精确的在线 Harness agent，将每条已接收消息与其被认领的轮次关联，只流式发送已提交的 assistant 文本，让提示词在整个 agent 进入 idle 后才结算，按同一 agent 身份和调用 id 路由一次性审批，隔离并发会话，排空可续接后代，并在断开连接或插件 dispose（资源释放）时等待所有由该连接拥有的 agent。client 角色与 `seekdeep-subagent-acp` 共享，因此方法名、带品牌的远端会话 id、权限选项、停止原因以及未来未知停止值都只有一个 Rust 责任方。
+`seekdeep-acp` 通过仓库共享的换行分隔 JSON-RPC 传输层，负责固定 ACP 0.25.1 基线的两种带类型角色。agent 角色会创建精确的在线 Harness agent，将每条已接收消息与其被认领的轮次关联，通过连接自有 FIFO 仅流式发送已提交的 assistant 文本，在提示词响应结算前刷出更早的 update，按同一 agent 身份和调用 id 路由一次性审批，隔离并发会话，排空可续接后代，并在断开连接或插件 dispose（资源释放）时等待所有由该连接拥有的 agent 与排队中的 notification。提示词仍在整个 agent 进入 idle 后才结算。client 角色与 `seekdeep-subagent-acp` 共享，因此方法名、带品牌的远端会话 id、权限选项、停止原因以及未来未知停止值都只有一个 Rust 责任方。
 
 免密钥 Rust 测试通过真实 `AgentLoop` 实例和双工 JSON-RPC 连接驱动桥接层，锁定协商、基线提示词校验与资源链接渲染、已提交输出、max-token 提示词语义、独立提示词槽、取消、审批归属、多会话隔离、重试与 pre-step 关联、传输失败、后代排空顺序以及整条连接的聚合拆除。固定源仓库的 107 个单元案例继续作为差分 oracle，其中 39 个聚焦审批、资源释放、输出边界和轮次生命周期的案例已由 Rust 一致性套件镜像覆盖。
 
@@ -24,7 +24,7 @@ ACP 仍有一个有用的职责：另一个 agent（智能体）或自动化控�
 
 桥接层只发出已提交的 `assistant/message` 文本。推理、原始分片、工具活动、待办事项、计划、标题、重试标记、终端元数据、diff、位置和资源链接仍保留在持久会话日志或 UI 专用传输层中。它不提供会话加载、列出与删除、命令、模式、配置选择器、模型切换、plan 评审或面向人类的询问。
 
-保留一次性 `session/request_permission`。它是为桥接层拥有的 agent 提供的机器策略通道，而不是面向人类的审批 UI：应答者只接受桥接层当前会话映射中登记的同一 agent 对象；不属于桥接层当前 agent 的请求或未关联具体调用的请求会继续委派；RPC 失败则映射为故障时默认拒绝的 `unavailable` 结果。客户端可选择允许一次、拒绝一次或取消，桥接层绝不会将该响应转换为持久授权。询问策略仍归审批 seam 及其生产者所有；[`seekdeep-subagent-acp`](../../../../packages/subagent/subagent-acp/README.md) 会以程序化方式使用该通道。
+保留一次性 `session/request_permission`。它是为桥接层拥有的 agent 提供的机器策略通道，而不是面向人类的审批 UI：桥接层会在自身 setup 期间直接向 `approval/request` 事件注册应答者，因此 provider 加载顺序不要求审批服务已存在。应答者只接受桥接层当前会话映射中登记的同一 agent 对象；不属于桥接层当前 agent 的请求或未关联具体调用的请求会继续委派；RPC 失败则映射为故障时默认拒绝的 `unavailable` 结果。客户端可选择允许一次、拒绝一次或取消，桥接层绝不会将该响应转换为持久授权。询问策略仍归审批 seam 及其生产者所有；[`seekdeep-subagent-acp`](../../../../packages/subagent/subagent-acp/README.md) 会以程序化方式使用该通道。
 
 应用组装包含 agent 主干、JSONL 持久化、检查点策略、供后端持久化使用的 SQLite 会话查询索引和 ACP 传输层。它不会为 ACP 挂载命令、会话引用、plan mode、权限选择器或用户交互服务，并且 ACP 协议不公开会话查询浏览方法。
 
