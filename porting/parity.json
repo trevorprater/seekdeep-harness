@@ -30884,7 +30884,15 @@
     {
       "source": "examples/acp-agent/tests/fixtures/shell/tool-pwsh/driver.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-pwsh/tests/plugin_lifecycle.rs",
+        "crates/tool-pwsh/tests/tool_pwsh_parity.rs",
+        "crates/pwsh-local/tests/executor_parity.rs"
+      ],
+      "evidence": [
+        "source Loader test self-skips because pwsh is unavailable on this host; Rust Loader lifecycle, schema/prompt, foreground/background job, output, process, and cleanup suites pass without requiring a PowerShell installation"
+      ]
     },
     {
       "source": "examples/acp-agent/tests/fixtures/subagent-durability-failure.ts",

@@ -69,6 +69,8 @@ Target 专属的适配保持显式。job 准入场景使用 target 原生的 `jo
 
 无需 credential 的已编译二进制测试会以 world effect 补充 replay。一个本地 DeepSeek 兼容 SSE server 会脚本化相同的模型 tool turn，同时真实 ACP 子进程、Loader、bash provider、sandbox、approval service 与 hook bridge 仍处于执行路径中。测试会证明普通写入确实落盘、Claude pre-tool hook 会阻止该写入、allow-once escalation 只会在首次 read-only 拒绝后写入，并且 reject-once escalation 会让文件保持不存在。每个 case 还会检查 stdout 始终为 JSON-RPC，且 ACP 只发布已提交的 assistant chunk。
 
+Source PowerShell Loader 测试仍以本地 `pwsh` 可执行文件为条件。Rust port 会把该证明拆分为 Loader 激活与释放、schema 与 prompt 断言、面向模型的前台/后台 job 行为，以及原生 executor 的进程、输出和清理套件。这样即使 host 没有 PowerShell，也能保留 driver 的完整约定；原生解析测试同时保留 Windows candidate 顺序与命令编码。
+
 ### 隔离：当前靠归一化，后续可加沙箱
 
 工具确定性来自生成的 cwd、清理后的环境、全新的非登录 shell、受限命令和规范化。cwd 默认为平台临时目录；当临时目录是始终可写的策略根，而行为需要独立项目位置时，场景可以改为提供其父目录。并发回放运行各自拥有独立 cwd、持久化目录和定长且按场景键区分的 spill 根目录，因此一个场景的清理操作无法删除另一个场景仍在进行的完整输出恢复，同时真实路径预览预算保持稳定。该层不声称提供 OS 级隔离。如果需要更强层级，沙箱执行器可以通过现有[能力 seam](../architecture/2026-06-13-capability-seams.md)替换本地后端。
