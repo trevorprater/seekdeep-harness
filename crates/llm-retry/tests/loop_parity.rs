@@ -343,7 +343,11 @@ async fn failed_partial_attempt_retries_inside_one_step_and_never_enters_model_h
     loop_agent.agent.followup(user("go")).unwrap();
     loop_agent.agent.when_idle().unwrap().await.unwrap();
 
-    assert_eq!(requests.lock().len(), 2);
+    {
+        let requests = requests.lock();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].messages, requests[1].messages);
+    }
     assert_failed_attempt_is_diagnostic_only(&session, &tool_executions);
 
     plugin.dispose().await.unwrap();

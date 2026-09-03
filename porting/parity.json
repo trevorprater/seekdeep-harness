@@ -35387,7 +35387,14 @@
     {
       "source": "examples/headless-agent/tests/fixtures/retry-snapshot-backend.mjs",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/llm-retry/tests/loop_parity.rs",
+        "crates/llm-retry/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "shipping retry loop applies the adapter-owned one-retry RATE_LIMIT policy, preserves identical model-visible messages across attempts, records one durable retry pair, and returns recovered text inside the same step"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/semantic-checkpoint-agent.ts",
@@ -35463,12 +35470,25 @@
     {
       "source": "examples/headless-agent/tests/fixtures/time-context-driver.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/time-context/tests/agent_loop_e2e.rs",
+        "crates/time-context/tests/loader_composition.rs"
+      ],
+      "evidence": [
+        "source Loader E2E passes; Rust real AgentLoop and declarative Loader tests persist one ordered time-context message per request, preserve two-turn baselines, exclude header leakage, and dispose listeners"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/time-context-mock-llm.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/time-context/tests/agent_loop_e2e.rs"
+      ],
+      "evidence": [
+        "compiled deterministic adapter drives real AgentLoop requests and the package suite validates exact persisted snapshot attribution and response sequencing"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/time-context.cordis.yml",
