@@ -35284,7 +35284,13 @@
     {
       "source": "examples/headless-agent/tests/coding-task.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs"
+      ],
+      "evidence": [
+        "deterministic model drives the real bash tool to repair add.js and run add.test.js; an external Node invocation passes afterward, the test file is byte-identical, and the subtraction bug is gone"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/compaction.e2e.ts",
@@ -35483,12 +35489,24 @@
     {
       "source": "examples/headless-agent/tests/full-loop.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs"
+      ],
+      "evidence": [
+        "scripted model runs real local bash through HeadlessRunner, the durable tool result contains e2e-ok, and final assistant output reports it"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/harness.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs"
+      ],
+      "evidence": [
+        "Rust test harness composes the real AgentLoop, local subprocess and bash providers, shell environment, bash and todo tools, JSONL persistence, and deterministic model seam"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/headless.snapshot.ts",
@@ -35503,7 +35521,13 @@
     {
       "source": "examples/headless-agent/tests/real-model.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs"
+      ],
+      "evidence": [
+        "credential-independent model script modifies a temporary workspace through the real bash process; independent filesystem and executable tests verify the result outside the agent"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/resume.e2e.ts",
@@ -35984,7 +36008,13 @@
     {
       "source": "examples/headless-agent/tests/todo-write.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs"
+      ],
+      "evidence": [
+        "deterministic model calls the real todo_write tool once and the durable event exactly preserves two in-progress tasks plus one pending task"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/workspace-context-resume-snapshots/offline-edit/replay.jsonl",

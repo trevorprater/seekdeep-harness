@@ -30,9 +30,13 @@ uuid.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-bash-local = { path = "../bash-local" }
 seekdeep-session-persistence = { path = "../session-persistence" }
 seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
 seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-shell-env = { path = "../shell-env" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-tool-bash = { path = "../tool-bash" }
 seekdeep-tool-todo = { path = "../tool-todo" }
 seekdeep-tools = { path = "../tools" }
 tempfile.workspace = true
