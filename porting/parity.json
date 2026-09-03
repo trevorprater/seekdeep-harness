@@ -35464,12 +35464,26 @@
     {
       "source": "examples/headless-agent/tests/fixtures/subagent-diagnostic-agent.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs",
+        "crates/agent-loop/src/factory.rs"
+      ],
+      "evidence": [
+        "Rust cold-resume fixtures load an exact persisted Session id through AgentLoop, publish one root handle for loader-smoke execution, and dispose that handle with the owning test context"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/subagent-inheritance-agent.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs",
+        "crates/agent-loop/src/factory.rs"
+      ],
+      "evidence": [
+        "shared compiled cold-resume owner preserves the persisted Session identity, seed boundary, model options, publication, and handle teardown used by the inheritance scenario"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/fixtures/subagent-settlement-fence.ts",
@@ -35525,7 +35539,14 @@
     {
       "source": "examples/headless-agent/tests/fixtures/workspace-context-resume-agent.ts",
       "kind": "fixture",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/headless/tests/coding_harness_parity.rs",
+        "crates/agent-loop/src/factory.rs"
+      ],
+      "evidence": [
+        "shared compiled cold-resume owner rehydrates the exact JSONL Session into a live Agent and binds disposal to the fixture lifetime"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/full-loop.e2e.ts",
@@ -36016,7 +36037,14 @@
     {
       "source": "examples/headless-agent/tests/subagent-diagnostic.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/tool-subagent-control/tests/control_parity.rs",
+        "crates/subagent/src/list_children.rs"
+      ],
+      "evidence": [
+        "real JSONL-only origin=subagent child without a descriptor is enumerated through the production projection and list_agents tool as the exact descriptorless-child [diagnostic: corrupt] row instead of being dropped"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/subagent-inheritance-snapshots/parent-override/child.expected.jsonl",

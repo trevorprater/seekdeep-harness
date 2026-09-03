@@ -9278,6 +9278,8 @@ dependencies = [
  "seekdeep-core",
  "seekdeep-llm",
  "seekdeep-scope",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
  "seekdeep-session-projection",
  "seekdeep-subagent",
  "seekdeep-tools",

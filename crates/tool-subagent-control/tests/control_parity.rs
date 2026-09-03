@@ -7,11 +7,13 @@ use seekdeep_agent::{
 };
 use seekdeep_cordis::Context;
 use seekdeep_core::{
-    session::{AppendOptions, SessionId, SessionOrigin},
+    session::{AppendOptions, SessionEvent, SessionHeader, SessionId, SessionOrigin},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock};
 use seekdeep_scope::{ScopeKey, create_scope, scope_of};
+use seekdeep_session_persistence::SESSION_PERSISTENCE;
+use seekdeep_session_persistence_jsonl::{JsonlCompression, JsonlConfig};
 use seekdeep_session_projection::SessionProjectionRegistry;
 use seekdeep_subagent::{
     SubagentDescriptorInput, SubagentRuntime, snapshot_subagent_descriptor,
@@ -383,6 +385,57 @@ async fn list_agents_observes_tool_cancellation() {
         .run_with_signal("list_agents", json!({ "scope": "descendants" }), signal)
         .await;
     assert!(result.is_error());
+}
+
+#[tokio::test]
+async fn list_agents_renders_a_cold_descriptorless_child_as_corrupt() {
+    let harness = Harness::empty();
+    let temporary = tempfile::tempdir().unwrap();
+    let mut config = JsonlConfig::new(temporary.path());
+    config.compression = JsonlCompression::None;
+    let persistence =
+        seekdeep_session_persistence_jsonl::install(&harness.context, config).unwrap();
+    persistence.await_settled().await.unwrap();
+    let persistence = harness.context.get(SESSION_PERSISTENCE).unwrap();
+    let child_id = SessionId::new("descriptorless-child");
+    let mut header = SessionHeader::new(child_id.clone());
+    header.cwd = Some("/project".to_owned());
+    header.parent_session = Some(harness.parent.id().clone());
+    header.origin = Some(SessionOrigin::Subagent);
+    header.delegation_depth = Some(1);
+    persistence.persistence().create(&header).await.unwrap();
+    persistence
+        .persistence()
+        .append(
+            &child_id,
+            &[
+                SessionEvent {
+                    event_type: "turn/start".to_owned(),
+                    seq: 0,
+                    time: 1,
+                    data: json!({"turn":1}),
+                    source_event_seqs: None,
+                    surface_op: None,
+                    ignorable: None,
+                },
+                SessionEvent {
+                    event_type: "turn/end".to_owned(),
+                    seq: 1,
+                    time: 2,
+                    data: json!({"turn":1,"reason":{"kind":"interrupted"}}),
+                    source_event_seqs: None,
+                    surface_op: None,
+                    ignorable: None,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+    install_list_agents(&harness.context).unwrap();
+    let result = harness.run("list_agents", json!({})).await;
+    assert!(!result.is_error(), "{}", text(&result));
+    assert_eq!(text(&result), "descriptorless-child [diagnostic: corrupt]");
+    harness.context.fiber().dispose().await.unwrap();
 }
 
 #[tokio::test]
