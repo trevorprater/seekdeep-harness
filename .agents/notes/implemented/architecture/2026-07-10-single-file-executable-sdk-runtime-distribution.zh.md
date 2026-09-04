@@ -32,6 +32,8 @@ exe 使用 [@yao-pkg/pkg](https://github.com/yao-pkg/pkg)（vercel/pkg 归档后
 
 Rust 进程 launcher 遵循 [JSON-RPC 启动就绪约定](../bug-fix/2026-08-25-rust-jsonrpc-startup-and-append-serialization.md)：stdio 传输层可在启动期间接收字节，但请求分发会保持排队，直到所选 Loader 组合全部激活。
 
+[Rust 打包运行时组合决策](2026-09-04-rust-packaged-sdk-runtime-assembly.md)负责已编译工厂的选择与自承载的工作流子进程。Python 载体安装和完整发布矩阵仍是本分发约定的独立要求。
+
 配置发现有两个通道，均缺失时立即报错：优先使用 `SEEKDEEP_CORDIS_CONFIG` 环境变量（SDK 客户端约定），其次使用 argv 位置参数；没有默认路径或内置回退——「实际启动的插件由外部 `cordis.yml` 决定」是硬语义。
 
 ### 插件解析：VFS 装载真实包树，闭包 manifest（元数据清单）就是部署根目录

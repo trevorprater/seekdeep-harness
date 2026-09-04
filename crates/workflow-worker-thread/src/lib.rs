@@ -15,7 +15,9 @@ pub mod types;
 pub mod worker;
 
 pub use host::WorkerRun;
-pub use index::{Config, INJECT, NAME, WorkerThreadWorkflowEngine, plugin};
+pub use index::{
+    Config, INJECT, NAME, WorkerThreadWorkflowEngine, plugin, plugin_with_integrated_worker_path,
+};
 pub use invariant::register_invariant;
 pub use meta::{validate_meta, validate_meta_value};
 pub use protocol::{HostToWorkerMessage, HostToWorkerType, WorkerToHostMessage, WorkerToHostType};

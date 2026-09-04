@@ -32,6 +32,8 @@ The deterministic protocol implementation (`server.ts` / `transport.ts`) lands a
 
 The Rust process launcher uses the [JSON-RPC startup-readiness contract](../bug-fix/2026-08-25-rust-jsonrpc-startup-and-append-serialization.md): stdio transport may accept bytes during boot, but request dispatch remains queued until the complete selected Loader composition is active.
 
+The [Rust packaged-runtime assembly decision](2026-09-04-rust-packaged-sdk-runtime-assembly.md) owns compiled factory selection and the self-hosted workflow worker. Python carrier installation and the complete release matrix remain independent requirements of this distribution contract.
+
 Config discovery has two channels and fails loudly when both are missing: the `SEEKDEEP_CORDIS_CONFIG` environment variable first (the SDK client convention), then an argv positional argument; no default path and no built-in fallback whatsoever — "the plugins actually booted are decided by an external cordis.yml" is a hard semantic.
 
 ### Plugin resolution: the VFS holds a real package tree, the closure manifest IS the deploy root

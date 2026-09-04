@@ -364,10 +364,41 @@ impl WorkflowEngine for WorkerThreadWorkflowEngine {
 /// Builds the loader-compatible workflow-worker-thread plugin.
 #[must_use]
 pub fn plugin() -> Plugin {
-    Plugin::new(NAME, INJECT.iter().copied(), |context, config| {
+    plugin_with_worker(None)
+}
+
+/// Builds a workflow plugin whose killable worker is a role of the owning executable.
+///
+/// The executable must handle `SEEKDEEP_INTERNAL_WORKFLOW_WORKER=1` before ordinary
+/// application boot. Its absolute path is retained across relocation-independent launches;
+/// no sibling helper or executable-name inference is used for this plugin.
+#[must_use]
+pub fn plugin_with_integrated_worker_path(worker_path: PathBuf) -> Plugin {
+    plugin_with_worker(Some(worker_path))
+}
+
+fn plugin_with_worker(worker_path: Option<PathBuf>) -> Plugin {
+    Plugin::new(NAME, INJECT.iter().copied(), move |context, config| {
+        let worker_path = worker_path.clone();
         Box::pin(async move {
             let config: Config = serde_json::from_value(config)?;
-            let engine = WorkerThreadWorkflowEngine::new(&context, config)?;
+            let engine = if let Some(path) = worker_path {
+                anyhow::ensure!(
+                    path.is_absolute() && path.is_file(),
+                    "integrated workflow executable is not an absolute file: {}",
+                    path.display()
+                );
+                WorkerThreadWorkflowEngine::new_with_optional_worker(
+                    &context,
+                    config,
+                    Some(WorkerCommand {
+                        path,
+                        integrated: true,
+                    }),
+                )?
+            } else {
+                WorkerThreadWorkflowEngine::new(&context, config)?
+            };
             WorkflowEngineService::new(engine).provide(&context)?;
             Ok(())
         })

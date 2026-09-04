@@ -29,8 +29,8 @@ use sha2::{Digest, Sha256};
 pub const DEFAULT_CATALOG_DESCRIPTION_MAX_LENGTH: usize = 500;
 /// Loader plugin identity.
 pub const PLUGIN_NAME: &str = "tool-skill";
-/// Skill tool requires both the skill and tool registries.
-pub const PLUGIN_INJECT: &[&str] = &["skills", "tools"];
+/// Skill publication requires the agent, tool, and skill registries.
+pub const PLUGIN_INJECT: &[&str] = &["agents", "tools", "skills"];
 
 /// One durable catalog entry: the skill name and its normalized description.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

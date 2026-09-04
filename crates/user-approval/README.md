@@ -10,6 +10,8 @@ Answerers are `approval/request` waterfall listeners. Return an outcome to answe
 
 `ApprovalPolicy` is `ask` or `never`. The effective value is the last `approval/policy` event, falling back to config; `set_approval_policy()` is the write path. `never` rejects before interactive dispatch. Both policies contribute their complete current meaning to the cache-safe runtime-context snapshot.
 
+Approval does not require a system-prompt provider. Its policy contribution follows an optional provider through late arrival, replacement, and withdrawal; losing presentation never replaces or disables the approval service. Disposal removes the contribution and its provider observer together.
+
 The tools pipeline routes `ask` decisions through this seam and fails closed when it is absent; the sandboxed shell tool also uses it for escalated retries. The ACP automation bridge answers calls for its own agents through the client's machine policy. Audit events remain log-only, so the model sees only the asking consumer's result. See the [approval-seam Agent Note](../../.agents/notes/implemented/feature/2026-07-06-approval-seam.md) and [sandbox Agent Note](../../.agents/notes/implemented/feature/2026-07-06-sandbox.md).
 
 ## Model Experience

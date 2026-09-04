@@ -729,6 +729,7 @@ pub struct PluginCatalog {
     compatibility_dependencies: Arc<RwLock<HashMap<String, BTreeSet<PathBuf>>>>,
     expressions: Arc<ExpressionEnvironment>,
     bare_module_base: Option<PathBuf>,
+    closed_bare_plugins: bool,
     hmr_externals: Arc<RwLock<BTreeSet<PathBuf>>>,
     hmr_transaction: Arc<tokio::sync::Mutex<()>>,
 }
@@ -755,6 +756,7 @@ impl Default for PluginCatalog {
             compatibility_dependencies: Arc::new(RwLock::new(HashMap::new())),
             expressions: Arc::new(ExpressionEnvironment::from_process()),
             bare_module_base: None,
+            closed_bare_plugins: false,
             hmr_externals: Arc::new(RwLock::new(BTreeSet::new())),
             hmr_transaction: Arc::new(tokio::sync::Mutex::new(())),
         }
@@ -789,6 +791,17 @@ impl PluginCatalog {
     #[must_use]
     pub fn with_bare_module_base(mut self, base: impl Into<PathBuf>) -> Self {
         self.bare_module_base = Some(base.into());
+        self
+    }
+
+    /// Restricts bare plugin names to explicitly registered implementations.
+    ///
+    /// Compiled distributions use this to prevent ambient package trees from
+    /// expanding their shipped plugin set. Explicit relative, absolute, and file-URL
+    /// compatibility modules retain their ordinary resolution behavior.
+    #[must_use]
+    pub fn with_closed_bare_plugins(mut self) -> Self {
+        self.closed_bare_plugins = true;
         self
     }
 
@@ -844,6 +857,13 @@ impl PluginCatalog {
                 plugin,
                 module_path: None,
             });
+        }
+        if self.closed_bare_plugins
+            && !Path::new(specifier.as_str()).is_absolute()
+            && !specifier.as_str().starts_with('.')
+            && url::Url::parse(specifier.as_str()).is_err()
+        {
+            return Err(LoaderError::UnknownPlugin(specifier.to_string()));
         }
         let path = resolve_plugin_path(
             context,

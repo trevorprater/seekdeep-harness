@@ -11,7 +11,6 @@ use std::{
 use seekdeep_app_boot::{
     BootOptions, BootedApplication, boot, load_layered_env, resolve_config_path,
 };
-use seekdeep_cordis::Plugin;
 use seekdeep_loader::{ExpressionEnvironment, PluginCatalog};
 use seekdeep_util::home_paths::{SEEKDEEP_HOME_ENV, resolve_process_seekdeep_home};
 use tokio::io::AsyncReadExt as _;
@@ -63,6 +62,15 @@ pub fn catalog(
     inherited: &BTreeMap<String, String>,
     bare_module_base: Option<&Path>,
 ) -> anyhow::Result<PluginCatalog> {
+    catalog_with_worker(cwd, inherited, bare_module_base, None)
+}
+
+fn catalog_with_worker(
+    cwd: &Path,
+    inherited: &BTreeMap<String, String>,
+    bare_module_base: Option<&Path>,
+    integrated_worker: Option<&Path>,
+) -> anyhow::Result<PluginCatalog> {
     let warning: seekdeep_app_boot::EnvironmentWarning = std::sync::Arc::new(|message: String| {
         let _ = writeln!(std::io::stderr(), "{message}");
     });
@@ -83,116 +91,13 @@ pub fn catalog(
         seekdeep_home,
     );
     let mut catalog = PluginCatalog::new().with_expression_environment(expressions);
-    register_plugins(&catalog)?;
+    crate::runtime_catalog::register(&catalog, bare_module_base.is_none(), integrated_worker)?;
     if let Some(base) = bare_module_base {
-        catalog = catalog.with_bare_module_base(base);
+        catalog = catalog
+            .with_bare_module_base(base)
+            .with_closed_bare_plugins();
     }
     Ok(catalog)
-}
-
-fn register_plugins(catalog: &PluginCatalog) -> anyhow::Result<()> {
-    register(
-        catalog,
-        "seekdeep-sdk-jsonrpc-server",
-        seekdeep_sdk_server::deferred_plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-llm-deepseek",
-        seekdeep_llm_deepseek::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-llm-replay",
-        seekdeep_llm_replay::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-subprocess-local",
-        seekdeep_subprocess_local::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-bash-local",
-        seekdeep_bash_local::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-agent-spine-demo",
-        seekdeep_agent_spine_demo::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-session-persistence-jsonl",
-        seekdeep_session_persistence_jsonl::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-session-checkpoint-policy",
-        seekdeep_session_checkpoint_policy::plugin(),
-    )?;
-    register(catalog, "seekdeep-subagent", seekdeep_subagent::plugin())?;
-    register(
-        catalog,
-        "seekdeep-subagent-spawn-in-process",
-        seekdeep_subagent_spawn_in_process::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-tool-subagent",
-        seekdeep_tool_subagent::plugin(),
-    )?;
-    register(catalog, "seekdeep-tool-todo", seekdeep_tool_todo::plugin())?;
-    register(catalog, "seekdeep-fs-local", seekdeep_fs_local::plugin())?;
-    register(
-        catalog,
-        "seekdeep-fs-observation-policy",
-        seekdeep_fs_observation_policy::plugin(),
-    )?;
-    register(catalog, "seekdeep-tool-fs", seekdeep_tool_fs::plugin())?;
-    register(
-        catalog,
-        "seekdeep-token-meter",
-        seekdeep_token_meter::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-compaction-basic",
-        seekdeep_compaction_basic::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-sandbox-local",
-        seekdeep_sandbox_local::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-sandbox-policy",
-        seekdeep_sandbox_policy::plugin(),
-    )?;
-    register(catalog, "seekdeep-terminal", seekdeep_terminal::plugin())?;
-    register(
-        catalog,
-        "seekdeep-terminal-bash",
-        seekdeep_terminal_bash::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-tool-bash-persistent",
-        seekdeep_tool_bash_persistent::plugin(),
-    )?;
-    register(
-        catalog,
-        "seekdeep-tool-str-replace-editor",
-        seekdeep_tool_str_replace_editor::plugin(),
-    )?;
-    Ok(())
-}
-
-fn register(catalog: &PluginCatalog, name: &str, plugin: Plugin) -> anyhow::Result<()> {
-    catalog.register_named(name, plugin.clone())?;
-    catalog.register_named(&format!("@seekdeep-ai/{name}"), plugin)?;
-    Ok(())
 }
 
 /// Boots the selected external configuration transactionally.
@@ -214,17 +119,27 @@ pub async fn boot_selected(
 /// Runs the process launcher and returns its selected exit status.
 pub fn process_main(packaged: bool) -> ExitCode {
     install_panic_reporter();
-    let runtime = match tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-    {
+    let internal_worker =
+        std::env::var_os("SEEKDEEP_INTERNAL_WORKFLOW_WORKER").as_deref() == Some(OsStr::new("1"));
+    let mut builder = if internal_worker {
+        tokio::runtime::Builder::new_current_thread()
+    } else {
+        tokio::runtime::Builder::new_multi_thread()
+    };
+    let runtime = match builder.enable_all().build() {
         Ok(runtime) => runtime,
         Err(error) => {
             let _ = writeln!(std::io::stderr(), "{NAME}: {error}");
             return ExitCode::FAILURE;
         }
     };
-    let result = runtime.block_on(process_main_async(packaged));
+    let result = if internal_worker {
+        runtime
+            .block_on(seekdeep_workflow_worker_thread::worker::run_stdio_worker())
+            .map(|()| 0)
+    } else {
+        runtime.block_on(process_main_async(packaged))
+    };
     match result {
         Ok(code) => ExitCode::from(u8::try_from(code.clamp(0, 255)).unwrap_or(1)),
         Err(error) => {
@@ -238,12 +153,11 @@ async fn process_main_async(packaged: bool) -> anyhow::Result<i32> {
     let cwd = std::env::current_dir()?;
     let environment = std::env::vars().collect::<BTreeMap<_, _>>();
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    let bare_module_base = packaged
-        .then(std::env::current_exe)
-        .transpose()?
-        .and_then(|path| path.parent().map(Path::to_owned));
-    let application =
-        boot_selected(&environment, &arguments, &cwd, bare_module_base.as_deref()).await?;
+    let executable = std::env::current_exe()?;
+    let bare_module_base = packaged.then(|| executable.parent()).flatten();
+    let path = selected_config_path(&environment, &arguments, &cwd)?;
+    let catalog = catalog_with_worker(&cwd, &environment, bare_module_base, Some(&executable))?;
+    let application = boot(NAME, &path, &catalog, BootOptions::default()).await?;
     if let Some(server) = application
         .context()
         .get(seekdeep_sdk_server::SDK_JSONRPC_SERVER)

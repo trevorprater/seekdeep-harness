@@ -59233,11 +59233,20 @@
       "status": "verified",
       "targets": [
         "crates/jsonrpc-demo/src/bin/seekdeep-jsonrpc-agent-packaged.rs",
-        "crates/jsonrpc-demo/tests/launcher_parity.rs"
+        "crates/jsonrpc-demo/src/runner.rs",
+        "crates/jsonrpc-demo/src/runtime_catalog.rs",
+        "crates/loader/src/lib.rs",
+        "crates/jsonrpc-demo/tests/launcher_parity.rs",
+        "crates/jsonrpc-demo/tests/runtime_catalog_parity.rs",
+        "crates/jsonrpc-demo/examples/catalog_source_parity.rs",
+        "crates/jsonrpc-demo/examples/packaged_source_smoke.rs"
       ],
       "evidence": [
-        "Rust packaged executable anchors unknown bare compatibility plugins at its installed executable directory while relative plugins remain config-relative",
-        "packaged-binary acceptance passes the same required-config, environment precedence, boot, and EOF lifecycle"
+        "Rust packaged executable selects concrete factories from the runtime manifest and refuses ambient fallback for unregistered bare names while explicit compatibility files retain source resolution",
+        "packaged-binary acceptance passes the same required-config, environment precedence, boot, and EOF lifecycle",
+        "76 concrete factory registrations match pinned-source required-service declarations",
+        "relocated executable runs its integrated workflow worker with an empty environment and no sibling helper",
+        "native SQLite composition persists and reopens the exact session"
       ]
     },
     {
@@ -85245,7 +85254,13 @@
     {
       "source": "scripts/build-exe-for-python-sdk.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/jsonrpc-demo/src/runtime_catalog.rs",
+        "crates/jsonrpc-demo/src/runner.rs",
+        "crates/jsonrpc-demo/tests/runtime_catalog_parity.rs"
+      ],
+      "note": "native compiled factory selection and relocatable workflow worker are implemented; executable build orchestration, development carrier assembly, and release platform validation remain pending"
     },
     {
       "source": "scripts/build-python-release.py",
@@ -86368,7 +86383,11 @@
     {
       "source": "scripts/smoke-python-runtime.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/jsonrpc-demo/examples/packaged_source_smoke.rs"
+      ],
+      "note": "source-model custom-config text/code/workflow turns have a native executable driver; complete Python binding, installed-wheel, minimal, direct-protocol, and advanced snapshot coverage remains pending"
     },
     {
       "source": "scripts/snapshots/python-sdk-single-exe/advanced/result.json",

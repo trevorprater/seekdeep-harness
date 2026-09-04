@@ -387,3 +387,94 @@ async fn hostile_answer_variant_still_normalizes_under_ask_policy() {
         ApprovalOutcome::Unavailable
     );
 }
+
+#[tokio::test]
+async fn loader_approval_is_available_without_a_system_prompt_provider() {
+    let context = Context::new();
+    let fiber = context
+        .plugin(seekdeep_user_approval::plugin(), json!({}))
+        .unwrap();
+    fiber.await_settled().await.unwrap();
+    let approval = context
+        .get(seekdeep_user_approval::APPROVAL)
+        .expect("approval is not contingent on prompt presentation");
+    assert_eq!(
+        approval.request(request(session())).await.unwrap(),
+        ApprovalOutcome::Unavailable
+    );
+    fiber.dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn optional_prompt_contribution_tracks_late_provider_replacement_and_owner_teardown() {
+    let context = Context::new();
+    let approval = install(&context, ApprovalConfig::default()).unwrap();
+    let exact_service = context.get(seekdeep_user_approval::APPROVAL).unwrap();
+    let first_owner = seekdeep_cordis::Fiber::active_child("first-prompt");
+    let first = install_prompt(
+        &context.with_fiber(first_owner.clone()),
+        SystemPromptConfig::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        policy_context(&first, Some(session())).await.as_deref(),
+        Some(ASK_SENTENCE)
+    );
+    first_owner.dispose().await.unwrap();
+    assert!(policy_context(&first, Some(session())).await.is_none());
+    assert!(Arc::ptr_eq(
+        &exact_service,
+        &context.get(seekdeep_user_approval::APPROVAL).unwrap()
+    ));
+    let second_owner = seekdeep_cordis::Fiber::active_child("second-prompt");
+    let second = install_prompt(
+        &context.with_fiber(second_owner.clone()),
+        SystemPromptConfig::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        policy_context(&second, Some(session())).await.as_deref(),
+        Some(ASK_SENTENCE)
+    );
+    approval.dispose().await.unwrap();
+    assert!(policy_context(&second, Some(session())).await.is_none());
+    second_owner.dispose().await.unwrap();
+    let last = install_prompt(&context, SystemPromptConfig::default()).unwrap();
+    assert!(policy_context(&last, Some(session())).await.is_none());
+}
+
+#[test]
+fn prompt_change_observers_can_publish_an_unrelated_service_reentrantly() {
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let context = Context::new();
+        let _prompt = install_prompt(&context, SystemPromptConfig::default()).unwrap();
+        let observed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let notified = observed.clone();
+        let publisher = context.clone();
+        context
+            .events()
+            .on_sync(
+                &context,
+                "system-prompt/change",
+                move |_, _| {
+                    if !notified.swap(true, Ordering::SeqCst) {
+                        publisher.provide(
+                            seekdeep_cordis::ServiceKey::new("prompt-observer-value"),
+                            Arc::new(42_u32),
+                        )?;
+                    }
+                    Ok(seekdeep_cordis::EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )
+            .unwrap();
+        let approval = install(&context, ApprovalConfig::default()).unwrap();
+        assert!(observed.load(Ordering::SeqCst));
+        futures::executor::block_on(approval.dispose()).unwrap();
+        send.send(()).unwrap();
+    });
+    receive
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .expect("prompt registration deadlocked a reentrant service notification");
+}

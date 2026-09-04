@@ -3,9 +3,16 @@
 /// Package-owned durable approval invariants.
 pub mod invariant;
 
-use std::{future::Future, ops::Deref, panic::AssertUnwindSafe, pin::Pin, sync::Arc};
+use std::{
+    future::Future,
+    ops::Deref,
+    panic::AssertUnwindSafe,
+    pin::Pin,
+    sync::{Arc, Weak},
+};
 
 use futures::{FutureExt, future::Either};
+use parking_lot::Mutex;
 use seekdeep_agent::Agent;
 use seekdeep_cordis::{
     Context, CordisError, EventArgs, EventOptions, EventReply, Fiber, Plugin, ServiceKey,
@@ -14,7 +21,7 @@ use seekdeep_cordis::{
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
 use seekdeep_llm::{AbortSignal, CallId, ContentBlock, MessageSource, UserMessage};
 use seekdeep_scope::{scope_target, scoped_event_args};
-use seekdeep_system_prompt::{PromptContext, PromptText, SYSTEM_PROMPT};
+use seekdeep_system_prompt::{PromptContext, PromptText, SYSTEM_PROMPT, SystemPrompt};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -24,8 +31,8 @@ use uuid::Uuid;
 pub const APPROVAL: ServiceKey<ApprovalService> = ServiceKey::new("approval");
 /// Loader plugin identity.
 pub const PLUGIN_NAME: &str = "user-approval";
-/// Approval prompt integration requires the system prompt service.
-pub const PLUGIN_INJECT: &[&str] = &["systemPrompt"];
+/// Approval operates independently of its optional prompt presentation.
+pub const PLUGIN_INJECT: &[&str] = &[];
 
 /// Model-facing statement for the deterministic never policy.
 pub const NEVER_SENTENCE: &str = "Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).";
@@ -417,13 +424,101 @@ impl ApprovalService {
         Ok(())
     }
 
+    fn watch_prompt_context(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
+        let binding = Arc::new(Mutex::new(ApprovalPromptBinding::default()));
+        let watched = context.clone();
+        let watched_binding = binding.clone();
+        let weak = Arc::downgrade(self);
+        context.on_service_change(move || {
+            if let Some(service) = weak.upgrade()
+                && let Err(error) = service.reconcile_prompt_context(&watched, &watched_binding)
+            {
+                watched
+                    .logger(Some(PLUGIN_NAME))
+                    .error([json!(format!("{error:#}"))]);
+            }
+        })?;
+        self.reconcile_prompt_context(context, &binding)?;
+        context.own(EffectHandle::new("approval.prompt-binding", move || {
+            Box::pin(async move {
+                let handle = {
+                    let mut binding = binding.lock();
+                    binding.provider = None;
+                    binding.handle.take()
+                };
+                if let Some(handle) = handle {
+                    handle.dispose().await?;
+                }
+                Ok(())
+            })
+        }))?;
+        Ok(())
+    }
+
+    fn reconcile_prompt_context(
+        self: &Arc<Self>,
+        context: &Context,
+        binding: &Mutex<ApprovalPromptBinding>,
+    ) -> anyhow::Result<()> {
+        {
+            let mut state = binding.lock();
+            if state.reconciling {
+                state.changed = true;
+                return Ok(());
+            }
+            state.reconciling = true;
+        }
+        loop {
+            binding.lock().changed = false;
+            let result = self.reconcile_prompt_once(context, binding);
+            let mut state = binding.lock();
+            if result.is_err() || !state.changed {
+                state.reconciling = false;
+                return result;
+            }
+        }
+    }
+
+    fn reconcile_prompt_once(
+        self: &Arc<Self>,
+        context: &Context,
+        binding: &Mutex<ApprovalPromptBinding>,
+    ) -> anyhow::Result<()> {
+        let prompt = (!context.fiber().is_disposal_requested())
+            .then(|| context.get(SYSTEM_PROMPT))
+            .flatten();
+        let old_handle = {
+            let mut state = binding.lock();
+            let previous = state.provider.as_ref().and_then(Weak::upgrade);
+            let unchanged = match (&previous, &prompt) {
+                (Some(previous), Some(prompt)) => Arc::ptr_eq(previous, prompt),
+                (None, None) => state.handle.is_none(),
+                _ => false,
+            };
+            if unchanged {
+                return Ok(());
+            }
+            state.provider = None;
+            state.handle.take()
+        };
+        // Layer notifications can publish services reentrantly; never hold the binding lock here.
+        if let Some(handle) = old_handle {
+            futures::executor::block_on(handle.dispose())?;
+        }
+        if let Some(prompt) = prompt {
+            let handle = self.contribute_prompt_context(context, &prompt)?;
+            let mut state = binding.lock();
+            state.provider = Some(Arc::downgrade(&prompt));
+            state.handle = Some(handle);
+        }
+        Ok(())
+    }
+
     fn contribute_prompt_context(
         self: &Arc<Self>,
         context: &Context,
-    ) -> anyhow::Result<Option<EffectHandle>> {
-        let Some(prompt) = self.context.get(SYSTEM_PROMPT) else {
-            return Ok(None);
-        };
+        prompt: &SystemPrompt,
+    ) -> anyhow::Result<EffectHandle> {
         let weak = Arc::downgrade(self);
         let effect = prompt.prompt_context(
             context,
@@ -444,8 +539,16 @@ impl ApprovalService {
                 })),
             ),
         )?;
-        Ok(Some(effect))
+        Ok(effect)
     }
+}
+
+#[derive(Default)]
+struct ApprovalPromptBinding {
+    provider: Option<Weak<SystemPrompt>>,
+    handle: Option<EffectHandle>,
+    reconciling: bool,
+    changed: bool,
 }
 
 /// Registers a typed approval answerer without requiring the approval service
@@ -537,7 +640,7 @@ pub fn install(context: &Context, config: ApprovalConfig) -> anyhow::Result<Appr
     let service = ApprovalService::new(context.clone(), config);
     let install_result = (|| {
         service.provide(&child)?;
-        service.contribute_prompt_context(&child)?;
+        service.watch_prompt_context(&child)?;
         Ok::<(), anyhow::Error>(())
     })();
     if let Err(error) = install_result {
