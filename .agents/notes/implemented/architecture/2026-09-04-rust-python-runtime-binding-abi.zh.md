@@ -28,9 +28,11 @@ Hatch 绑定将策略转交给 Rust 发行工具。发行暂存提供显式工�
 
 [绑定测试](../../../../crates/python-sdk-ffi/tests/runtime_binding.rs)从 Python 加载真实共享库，执行嵌套和并发调用，保留回调异常对象身份，并检查包括孤立代理项字符串在内的未知模式。[运行时对比](../../../../crates/python-sdk-ffi/examples/runtime_source_parity.rs)和[客户端对比](../../../../crates/python-sdk-ffi/examples/client_source_parity.rs)对生成的绑定运行固定版本的 Python 测试，仅替换产品身份。客户端对比还检查公开声明，以及源码差分的值／路径／传输矩阵：假值配置选择、符号链接与相对路径、可变通知身份、延后的事件替换、实时配置、导入错误与解析器错误的区分、自定义投影回调、非有限值与任意精度值、双向宽整数、回调清理，以及跨上下文的异常 cause。[原生观察测试](../../../../crates/python-sdk/tests/observation_parity.rs)固定引用生命周期与修改顺序。原生 ABI 测试验证缓冲区所有权、直接操作解码和陈旧句柄拒绝行为。[发行测试](../../../../crates/python-release/tests/release_parity.rs)覆盖按目标暂存库和 wheel 包载荷检查。
 
-[已安装 wheel 包对比](../../../../crates/python-sdk-ffi/examples/installed_source_smoke.rs)拒绝从隔离环境外导入，并通过默认 SDK 启动、自定义文本／代码／工作流轮次、minimal 双工具配置、完整的 advanced 可执行文件快照和直接运行时启动，驱动固定源码的免密钥模型服务器。新配对的 ABI-v3 macOS arm64 SDK／运行时 wheel 包在 Python 3.10 和 3.14 上通过全部五个场景及持久日志检查。advanced 对比还覆盖跨会话通知的精确顺序，包括工作流子 agent 的请求上下文先于父会话的 `tool-workflow/agent-start` 记录。[内置运行时对比](../../../../crates/python-sdk-ffi/examples/bundled_runtime_source_parity.rs)针对原生可执行文件与开发用 Node 启动器运行全部十个固定载体用例，其中包括默认配置未设置或为空，以及缺失插件导致的启动失败。
+[已安装 wheel 包对比](../../../../crates/python-sdk-ffi/examples/installed_source_smoke.rs)拒绝从隔离环境外导入，并通过默认 SDK 启动、自定义文本／代码／工作流轮次、minimal 双工具配置、完整的 advanced 可执行文件快照和直接运行时启动，驱动固定源码的免密钥模型服务器。它逐字节比较全部三个持久日志，并保留 SDK 结果中的每个字段和通知。[内置运行时对比](../../../../crates/python-sdk-ffi/examples/bundled_runtime_source_parity.rs)针对原生可执行文件与开发用 Node 启动器运行全部十个固定载体用例，其中包括默认配置未设置或为空，以及缺失插件导致的启动失败。
 
-这些检查覆盖了清单中所有 Python SDK 与运行时源码表面，但并不证明整个产品已等价、公开发布已就绪，或仍然独立的 Linux 发布矩阵已完成。
+[源码调度探针](../../../../crates/python-sdk-ffi/examples/workflow_order_source_parity.rs)表明，`workflow/agent-start` 可以在子 agent 模型解析之前、请求准备与输出之间，或子 agent 完成之后到达。子 agent 独立启动，而其句柄与启动观察经过一次工作线程往返。因此，快照比较仅允许父会话对应的 `tool-workflow/agent-start` 在 `subagent.started` 之后跨越该子 agent 自身的通知。它不能跨越其他父会话记录或兄弟会话通知；事件内容、数量、会话内顺序以及开始／结束配对仍须精确一致。[负向比较测试](../../../../crates/python-sdk-ffi/tests/smoke_snapshot.rs)拒绝这些无关变化，[真实工作流测试](../../../../crates/workflow-worker-thread/tests/integration_parity.rs)则要求启动发布不依赖模型元数据就绪。
+
+已安装的 macOS arm64 wheel 包在 Python 3.10 和 3.14 上通过这五个场景。Linux x64 与 arm64 的 release 可执行文件和绑定库在各自固定的 manylinux 2.28 镜像内构建，并在 Python 3.10 上通过已安装 wheel 包运行检查；两种载荷均不要求高于 GLIBC_2.28 的版本。这些检查覆盖了清单中所有 Python SDK 与运行时源码表面，但并不证明整个产品已等价、公开发布已就绪，或干净检出中的 CI 已具备可用的独立原生冒烟入口。
 
 ## 考虑过的替代方案
 
@@ -41,6 +43,8 @@ Hatch 绑定将策略转交给 Rust 发行工具。发行暂存提供显式工�
 **先序列化所有回调参数。** 解释器的相等性和表示操作可执行调用方代码，并抛出特定异常对象。复制通知载荷还会丢失订阅者共享的修改，并在字段替换后改变已捕获事件的引用目标。不透明引用可保留这些操作、身份及其顺序。
 
 **将分配器地址作为可复用的所有权身份返回。** 分配器可能复用已释放地址，使陈旧释放操作影响后续响应。不复用的句柄将所有权与存储地址分开。
+
+**在工作流启动记录发布前阻塞子 agent 流。** 源码允许子 agent 先完成，也允许模型元数据随后才解析。生产运行时中的屏障会引入额外依赖，可能使元数据解析死锁，并移除受支持的调度顺序。比较器仅处理已通过实测证明的这项调度自由度。
 
 ## 后果
 

@@ -16,8 +16,8 @@ use seekdeep_cordis::{Context, EventOptions, EventReply};
 use seekdeep_core::{invariant::install_session_invariants, session::SessionId};
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
 use seekdeep_llm::{
-    AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LlmAdapter, ModelId,
-    ProviderId, StreamChunk,
+    AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LlmAdapter,
+    LlmResolvedModelInfo, ModelId, ProviderId, StreamChunk,
 };
 use seekdeep_subagent::SubagentRuntime;
 use seekdeep_subagent_in_process_driver::STRUCTURED_OUTPUT_TOOL;
@@ -37,10 +37,32 @@ enum Reply {
 struct ScriptedAdapter {
     replies: Mutex<VecDeque<Reply>>,
     requests: Mutex<Vec<GenerateOptions>>,
+    model_gate: Option<Arc<tokio::sync::Semaphore>>,
 }
 
 #[async_trait]
 impl LlmAdapter for ScriptedAdapter {
+    async fn resolve_model(
+        &self,
+        provider: &str,
+        model: &str,
+        _signal: Option<&seekdeep_llm::AbortSignal>,
+    ) -> anyhow::Result<LlmResolvedModelInfo> {
+        if let Some(gate) = &self.model_gate {
+            gate.acquire().await?.forget();
+        }
+        Ok(LlmResolvedModelInfo {
+            provider: ProviderId::new(provider),
+            id: ModelId::new(model),
+            name: model.to_owned(),
+            description: None,
+            input_modalities: None,
+            context: None,
+            default_max_tokens: None,
+            reasoning: None,
+        })
+    }
+
     fn stream(&self, options: GenerateOptions) -> AdapterStream {
         self.requests.lock().push(options);
         match self.replies.lock().pop_front().expect("scripted reply") {
@@ -79,6 +101,13 @@ struct Harness {
 
 impl Harness {
     async fn new(replies: impl IntoIterator<Item = Reply>) -> Self {
+        Self::with_model_gate(replies, None).await
+    }
+
+    async fn with_model_gate(
+        replies: impl IntoIterator<Item = Reply>,
+        model_gate: Option<Arc<tokio::sync::Semaphore>>,
+    ) -> Self {
         let context = Context::new();
         let dependencies = mount_agent_loop_test_dependencies(
             &context,
@@ -99,6 +128,7 @@ impl Harness {
         let adapter = Arc::new(ScriptedAdapter {
             replies: Mutex::new(replies.into_iter().collect()),
             requests: Mutex::new(Vec::new()),
+            model_gate,
         });
         dependencies
             .llm
@@ -185,6 +215,54 @@ impl Harness {
             .await
             .expect("dispose context");
     }
+}
+
+#[tokio::test]
+async fn workflow_start_does_not_wait_for_child_model_resolution() {
+    let gate = Arc::new(tokio::sync::Semaphore::new(0));
+    let harness =
+        Harness::with_model_gate([Reply::Text("answer".to_owned())], Some(Arc::clone(&gate))).await;
+    let agents = Arc::clone(&harness.dependencies.agents);
+    let observations = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&observations);
+    let release_gate = Arc::clone(&gate);
+    harness
+        .context
+        .events()
+        .on_sync(
+            &harness.context,
+            "workflow/agent-start",
+            move |_, args| {
+                let info = args.get::<WorkflowAgentInfo>(1).expect("agent info");
+                let child = agents.get(&info.child_id).expect("published child");
+                seen.lock().push(
+                    child
+                        .session()
+                        .events()
+                        .iter()
+                        .any(|event| event.event_type == "request/context"),
+                );
+                release_gate.add_permits(1);
+                Ok(EventReply::Undefined)
+            },
+            EventOptions::default(),
+        )
+        .unwrap();
+    let run = harness
+        .engine
+        .start(harness.request("delayed-model", "return await agent('answer')"))
+        .unwrap();
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), run.result()).await;
+    gate.close();
+    run.dispose().await;
+    assert_eq!(
+        result
+            .expect("workflow must announce the child before metadata resolves")
+            .value,
+        json!("answer")
+    );
+    assert_eq!(*observations.lock(), [false]);
+    harness.dispose().await;
 }
 
 #[tokio::test]

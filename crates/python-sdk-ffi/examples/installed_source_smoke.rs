@@ -7,6 +7,9 @@ use std::{
 
 use serde_json::Value;
 
+#[path = "../tests/support/smoke_snapshot.rs"]
+mod smoke_snapshot;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     let [source, python] = arguments.as_slice() else {
@@ -26,7 +29,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source_script = port_text(&std::fs::read_to_string(
         source.join("scripts/smoke-python-runtime.py"),
     )?);
-    std::fs::write(&script, source_script)?;
+    let compare = "        compare_snapshot_files(files, update_snapshots)";
+    if source_script.matches(compare).count() != 1 {
+        return Err("source snapshot comparison call changed".into());
+    }
+    let capture = temporary.path().join("captured");
+    std::fs::create_dir(&capture)?;
+    std::fs::write(&script, source_script.replace(compare, concat!(
+        "        for filename, content in files.items():\n",
+        "            (Path(os.environ['SEEKDEEP_SMOKE_CAPTURE']) / filename).write_text(content, encoding='utf-8')"
+    )))?;
     stage_fixture(
         &source.join("scripts/snapshots/python-sdk-single-exe/advanced"),
         &script_root.join("snapshots/python-sdk-single-exe/advanced"),
@@ -52,6 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "direct",
     ] {
         let mut command = isolated_python(python, temporary.path());
+        command.env("SEEKDEEP_SMOKE_CAPTURE", &capture);
         command.arg(&script).args(["--scenario", scenario]);
         if scenario != "sdk-default" {
             command.arg("--exe").arg(&executable);
@@ -60,10 +73,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !status.success() {
             return Err(format!("installed source smoke {scenario} failed with {status}").into());
         }
+        if scenario == "sdk-snapshot" {
+            compare_snapshots(
+                &script_root.join("snapshots/python-sdk-single-exe/advanced"),
+                &capture,
+            )?;
+        }
     }
     println!(
         "installed SDK/runtime wheels passed default, custom, minimal, advanced snapshot, and direct source smokes"
     );
+    Ok(())
+}
+
+fn compare_snapshots(expected: &Path, actual: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let names = |root: &Path| -> Result<std::collections::BTreeSet<_>, std::io::Error> {
+        std::fs::read_dir(root)?
+            .map(|entry| entry.map(|entry| entry.file_name()))
+            .collect()
+    };
+    let expected_names = names(expected)?;
+    if expected_names != names(actual)? {
+        return Err("advanced snapshot file set differs".into());
+    }
+    for name in expected_names {
+        let expected_text = std::fs::read_to_string(expected.join(&name))?;
+        let actual_text = std::fs::read_to_string(actual.join(&name))?;
+        if actual_text == expected_text {
+            continue;
+        }
+        if name == "result.json" {
+            let expected =
+                smoke_snapshot::canonical_workflow_starts(serde_json::from_str(&expected_text)?)?;
+            let actual =
+                smoke_snapshot::canonical_workflow_starts(serde_json::from_str(&actual_text)?)?;
+            if serde_json::to_string(&expected)? == serde_json::to_string(&actual)? {
+                println!(
+                    "advanced snapshot: exact data and causal order match across source-supported worker scheduling"
+                );
+                continue;
+            }
+        }
+        return Err(format!("advanced snapshot differs in {}", name.to_string_lossy()).into());
+    }
     Ok(())
 }
 

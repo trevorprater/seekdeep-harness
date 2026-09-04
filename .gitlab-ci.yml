@@ -50,6 +50,7 @@ sdk-wheel:
         esac
         sdk_cargo_home="${CARGO_HOME:-$HOME/.cargo}"
         sdk_rustup_home="${RUSTUP_HOME:-$HOME/.rustup}"
+        mkdir -p "$sdk_cargo_home" "$sdk_rustup_home"
         sdk_rust_bin="$(dirname "$(rustup which --toolchain 1.93.1 cargo)")"
         docker run --rm --user "$(id -u):$(id -g)" \
           -v "$PWD:$PWD" -v "$sdk_cargo_home:$sdk_cargo_home" -v "$sdk_rustup_home:$sdk_rustup_home" \

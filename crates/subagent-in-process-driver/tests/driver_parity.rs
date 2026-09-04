@@ -250,6 +250,13 @@ async fn published_run_begins_its_initial_prompt_before_returning() {
             .iter()
             .any(|event| event.event_type == "agent/inbox/spliced")
     );
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        run.local_agent().unwrap().when_idle().unwrap(),
+    )
+    .await
+    .expect("the child progresses without polling its result")
+    .unwrap();
     assert_eq!(harness.adapter.requests.lock().len(), 1);
     assert_eq!(
         run.result().await.unwrap().stop_reason,

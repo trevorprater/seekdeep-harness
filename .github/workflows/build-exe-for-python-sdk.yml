@@ -156,6 +156,7 @@ jobs:
 
       - name: Select task-local Rust cache directories
         run: |
+          mkdir -p "$RUNNER_TEMP/seekdeep-sdk-cargo" "$RUNNER_TEMP/seekdeep-sdk-rustup"
           echo "CARGO_HOME=$RUNNER_TEMP/seekdeep-sdk-cargo" >> "$GITHUB_ENV"
           echo "RUSTUP_HOME=$RUNNER_TEMP/seekdeep-sdk-rustup" >> "$GITHUB_ENV"
 

@@ -112,6 +112,33 @@ fn runner_local_cache_paths_are_resolved_in_a_step_before_cache_and_toolchain_se
     assert!(script.contains("CARGO_HOME=$RUNNER_TEMP/seekdeep-sdk-cargo"));
     assert!(script.contains("RUSTUP_HOME=$RUNNER_TEMP/seekdeep-sdk-rustup"));
     assert!(script.contains(">> \"$GITHUB_ENV\""));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path().join("runner temporary");
+        std::fs::create_dir(&root).unwrap();
+        let environment = root.join("github-env");
+        let status = std::process::Command::new("bash")
+            .args(["-eu", "-c", script])
+            .env("RUNNER_TEMP", &root)
+            .env("GITHUB_ENV", &environment)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        for name in ["seekdeep-sdk-cargo", "seekdeep-sdk-rustup"] {
+            let metadata = std::fs::metadata(root.join(name)).unwrap();
+            assert!(metadata.is_dir());
+            assert_eq!(metadata.uid(), std::fs::metadata(&root).unwrap().uid());
+        }
+        let recorded = std::fs::read_to_string(environment).unwrap();
+        assert!(recorded.contains(&format!("CARGO_HOME={}/seekdeep-sdk-cargo", root.display())));
+        assert!(recorded.contains(&format!(
+            "RUSTUP_HOME={}/seekdeep-sdk-rustup",
+            root.display()
+        )));
+    }
     for action in ["actions/cache@v4", "dtolnay/rust-toolchain@1.93.1"] {
         let consumer = steps
             .iter()
@@ -152,6 +179,7 @@ fn native_builders_keep_manylinux_compilation_and_validation_on_the_same_pinned_
     assert!(!gitlab_text.contains("scripts/build-python-release.py"));
     assert!(!gitlab_text.contains("deepseek_harness_sdk-"));
     assert!(gitlab_text.contains("rustup which --toolchain 1.93.1 cargo"));
+    assert!(gitlab_text.contains("mkdir -p \"$sdk_cargo_home\" \"$sdk_rustup_home\""));
     assert!(gitlab_text.contains("export PATH=\"$SEEKDEEP_RUST_BIN:$PATH\""));
     let gitlab = workflow(gitlab_text);
     for name in ["MANYLINUX_X64_IMAGE", "MANYLINUX_ARM64_IMAGE"] {

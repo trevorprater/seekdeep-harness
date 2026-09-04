@@ -77881,7 +77881,7 @@
         "pinned-source Vitest: in-process driver and spawn provider 85/85",
         "cargo test -p seekdeep-subagent-in-process-driver --all-features",
         "cargo clippy -p seekdeep-subagent-in-process-driver --all-targets --all-features -- -D warnings",
-        "Rust real-loop regression proves a published run submits its initial prompt before returning; the installed Python SDK advanced snapshot pins the resulting workflow-child notification order"
+        "Rust real-loop regression proves a published run submits its initial prompt before returning and progresses without polling result; live source scheduling probes permit workflow start before request metadata or after child completion"
       ]
     },
     {
@@ -85365,7 +85365,7 @@
     {
       "source": "scripts/build-exe-for-python-sdk.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/python-release/src/executable/mod.rs",
         "crates/python-release/src/executable/target.rs",
@@ -85377,9 +85377,20 @@
         "crates/pty-spawn-helper/examples/source_pty_parity.rs",
         "crates/jsonrpc-demo/src/runtime_catalog.rs",
         "crates/jsonrpc-demo/src/runner.rs",
-        "crates/jsonrpc-demo/tests/runtime_catalog_parity.rs"
+        "crates/jsonrpc-demo/tests/runtime_catalog_parity.rs",
+        "crates/python-sdk-ffi/examples/installed_source_smoke.rs"
       ],
-      "note": "native serial build orchestration, 60 source CLI cases, Rust PTY helper through the pinned node-pty consumer, and macOS arm64 release executable plus Node development carrier are verified; Linux release execution and the complete installed-SDK platform matrix remain pending"
+      "evidence": [
+        "60 target, host, and flag cases match the pinned source CLI parser",
+        "cargo test -p seekdeep-python-release --all-features: 20 native build, artifact, wheel, hook, and workflow tests passed",
+        "cargo clippy -p seekdeep-python-release --all-targets --all-features -- -D warnings",
+        "macOS arm64 release executable and generated Node development carrier pass the relocated source-model smoke; the Rust PTY helper passes through the pinned node-pty consumer",
+        "fresh installed macOS arm64 wheels pass all five source scenarios on Python 3.10 and 3.14",
+        "fresh Linux x64 and arm64 release executables and native binding libraries built in the digest-pinned manylinux 2.28 images; installed wheels pass all five source scenarios on Python 3.10",
+        "readelf reports maximum GLIBC_2.28 for both Linux runtime payloads; cargo xtask macos-deployment-target confirms macOS 13.5 for the executable, helper, and binding library",
+        "workflow regression executes cache-directory setup under the runner user before non-root Docker bind mounts"
+      ],
+      "note": "Rust-native compilation and launch-only compatibility bindings follow the packaged-runtime assembly decision; the standalone smoke command and remaining clean-checkout CI wiring are tracked separately"
     },
     {
       "source": "scripts/build-python-release.py",
@@ -85401,7 +85412,7 @@
         "cargo test -p seekdeep-python-release --all-features",
         "cargo clippy -p seekdeep-python-release --all-targets --all-features -- -D warnings"
       ],
-      "note": "native version/build/hook/verify commands replace the script; production Python bindings and native executable packaging remain separately pending, and empty binding packages fail before wheel construction"
+      "note": "native version/build/hook/verify commands replace the script; platform-native executable construction and standalone smoke orchestration have their own manifest rows, and empty binding packages fail before wheel construction"
     },
     {
       "source": "scripts/change-scope.spec.ts",
@@ -86507,7 +86518,7 @@
         "crates/jsonrpc-demo/examples/packaged_source_smoke.rs",
         "crates/python-sdk-ffi/examples/installed_source_smoke.rs"
       ],
-      "note": "source-model custom-config text/code/workflow turns pass through native and installed Python drivers; installed macOS wheels also pass default SDK and direct-protocol smokes on Python 3.10/3.14; minimal and advanced snapshot scenarios plus the release platform matrix remain pending"
+      "note": "all five source scenarios pass through installed macOS arm64 wheels on Python 3.10/3.14 and Linux x64/arm64 wheels on Python 3.10 in manylinux 2.28; the differential runner still consumes the external pinned Python oracle, while a standalone Rust model/scenario/snapshot CLI and replacement of CI references to this removed script remain pending"
     },
     {
       "source": "scripts/snapshots/python-sdk-single-exe/advanced/result.json",

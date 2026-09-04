@@ -22,7 +22,7 @@ Status: implemented
 
 开发载体保留 Node 入口路径，但只包含启动绑定和宿主平台原生产物。绑定通过 `process.execve` 将 Node 替换为 Rust 进程，保留参数、环境和标准流。原生 launcher 在读取 SDK 协议前清除继承标准流上的 `O_NONBLOCK`；否则，从文件加载的 Node 入口可能将非阻塞描述符交给 Rust 的阻塞 I/O。[Rust PTY 辅助程序](../../../../crates/pty-spawn-helper/src/main.rs)打开继承的终端，应用请求的工作目录，再以请求的程序替换自身。其 macOS 伴随文件保留源码 node-pty 调用方的控制终端契约，而无需交付 C 实现。
 
-GitHub 和 GitLab 的运行时构建作业在按架构选择、按摘要固定的 manylinux 2.28 容器内编译 Linux 可执行文件，并使用相同镜像验证已安装的 wheel 包。容器编译与宿主平台 wheel 工具使用独立的 Cargo 目标目录。macOS 编译默认采用 13.5 部署目标，既有部署目标门禁会依据已发布的平台标签检查两个原生产物。
+GitHub 和 GitLab 的运行时构建作业在按架构选择、按摘要固定的 manylinux 2.28 容器内编译 Linux 可执行文件，并使用相同镜像验证已安装的 wheel 包。runner 在 Docker 挂载前创建自身的缓存目录，因此非 root 构建用户可以写入这些目录，而不会由 Docker 创建 root 所有的挂载源目录。容器编译与宿主平台 wheel 工具使用独立的 Cargo 目标目录。macOS 编译默认采用 13.5 部署目标，既有部署目标门禁会依据已发布的平台标签检查可执行文件、辅助程序和绑定库。
 
 ## 验证
 
@@ -30,7 +30,7 @@ GitHub 和 GitLab 的运行时构建作业在按架构选择、按摘要固定�
 
 [构建器对比](../../../../crates/python-release/examples/executable_source_parity.rs)依据固定版本的源码解析器检查 60 个目标、宿主平台和选项用例。[产物测试](../../../../crates/python-release/tests/executable_parity.rs)覆盖 dry-run 隔离和无效原生文件。[源码 PTY 调用方](../../../../crates/pty-spawn-helper/examples/source_pty_parity.rs)通过固定版本的 node-pty 实现验证编译后的辅助程序。真实的 macOS arm64 release 构建通过移动后的可执行文件和生成的 Node 载体，均完成三轮源码模型冒烟测试及持久日志检查。延迟发送的 SDK 请求固定标准流交接行为。
 
-[Python 运行时绑定 ABI](2026-09-04-rust-python-runtime-binding-abi.md)提供由 Rust 支撑的载体查找、客户端类、共享可变观察对象和按目标生成的原生库。已安装的 macOS wheel 包在 Python 3.10 和 3.14 上通过默认 SDK 启动、自定义文本／代码／工作流轮次和直接运行时检查。这些检查并不证明 Python 分发已完全等价：抽象服务构造器兼容性、完整的 Python 值／路径审计、已安装的 minimal／advanced 场景，以及发布平台矩阵的实际执行仍是独立缺口。静态工作流检查不能替代原生 Linux 构建或已安装 Python 包的导入。
+[Python 运行时绑定 ABI](2026-09-04-rust-python-runtime-binding-abi.md)提供由 Rust 支撑的载体查找、客户端类、共享可变观察对象和按目标生成的原生库。其已安装 wheel 包对比在每个公布的平台上覆盖默认 SDK 启动、自定义文本／代码／工作流轮次、minimal 与 advanced 场景，以及直接运行时检查。这些检查并不证明分发已完全等价：抽象服务构造器兼容性和干净检出中的 CI 组合仍是独立缺口。独立冒烟命令和工作流调用路径需要各自的原生实现；使用外部源码基准的差分运行器并不提供该 CI 入口。
 
 ## 考虑过的替代方案
 

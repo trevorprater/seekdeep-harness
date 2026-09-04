@@ -349,18 +349,14 @@ pub async fn start_in_process_run(
     create.owner_agent = Some(parent);
     let handle = agents.create(create).await?;
     let structured = structured_slot.lock().clone();
-    let run = drive_published_run(
+    Ok(drive_published_run(
         handle,
         request.request.signal,
         request.request.prompt,
         child_id,
         boundary,
         structured,
-    );
-    // JavaScript async functions run through their first await immediately. Give the
-    // newly woken child the equivalent first scheduler turn before publishing the run.
-    tokio::task::yield_now().await;
-    Ok(run)
+    ))
 }
 
 fn drive_published_run(
