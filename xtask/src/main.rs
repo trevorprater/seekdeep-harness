@@ -1979,7 +1979,10 @@ fn copy_ui_attachment_type_declarations(
         let name = entry.file_name().to_string_lossy();
         if !name.ends_with(".d.ts.txt") {
             anyhow::ensure!(
-                name == "README.md",
+                matches!(
+                    name.as_ref(),
+                    "README.md" | "README.zh.md" | "README.i18n.yaml"
+                ),
                 "unexpected attachment type asset: {}",
                 entry.path().display()
             );
@@ -2047,7 +2050,7 @@ fn copy_ui_primitives_type_declarations(
         };
         if !name.ends_with(".d.ts.txt") {
             anyhow::ensure!(
-                name == "README.md",
+                matches!(name, "README.md" | "README.zh.md" | "README.i18n.yaml"),
                 "unexpected type compatibility asset: {}",
                 entry.path().display()
             );
@@ -2113,7 +2116,13 @@ fn copy_ui_primitives_katex_assets(workspace: &Path, out_dir: &Path) -> anyhow::
     }
     let destination_fonts = destination.join("fonts");
     std::fs::create_dir_all(&destination_fonts)?;
-    for name in ["katex.min.css", "LICENSE", "README.md"] {
+    for name in [
+        "katex.min.css",
+        "LICENSE",
+        "README.md",
+        "README.zh.md",
+        "README.i18n.yaml",
+    ] {
         std::fs::copy(source.join(name), destination.join(name))?;
     }
     let source_fonts = source.join("fonts");
@@ -6072,6 +6081,17 @@ mod tests {
             60
         );
         assert!(projected.join("LICENSE").is_file());
+        for name in ["README.md", "README.zh.md", "README.i18n.yaml"] {
+            assert_eq!(
+                std::fs::read(projected.join(name)).unwrap(),
+                std::fs::read(
+                    workspace
+                        .join("packages/client/ui-primitives/assets/katex")
+                        .join(name)
+                )
+                .unwrap()
+            );
+        }
         let projected_types = output.path().join("types");
         copy_ui_primitives_type_declarations(workspace, &projected_types).unwrap();
         assert_eq!(

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-primitives/assets/katex/README.md
+README.md: 12d68b9dacab548a75ee0b3bb4a730eccdda3b76
+README.zh.md: 282146bd7039da4a08ddbbd8e7a782a49ad4cd3c
