@@ -10,7 +10,8 @@ fn fixtures() -> Value {
     serde_json::from_str(include_str!("../data/api-query-fixtures.json")).unwrap()
 }
 
-#[test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn compact_and_every_exact_service_query_match_the_pinned_source() {
     let fixtures = fixtures();
     assert_eq!(
@@ -28,7 +29,8 @@ fn compact_and_every_exact_service_query_match_the_pinned_source() {
     assert!(query_client_service_api(Some("missing")).is_err());
 }
 
-#[test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn compact_and_every_exact_event_query_match_the_pinned_source() {
     let fixtures = fixtures();
     assert_eq!(
@@ -46,7 +48,8 @@ fn compact_and_every_exact_event_query_match_the_pinned_source() {
     assert!(query_client_event_api(Some("missing")).is_err());
 }
 
-#[test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn generated_catalog_contains_types_and_inherited_context_directory() {
     assert!(!client_type_api().is_empty());
     assert_eq!(inherited_context_api().len(), 10);

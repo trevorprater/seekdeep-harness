@@ -83,6 +83,7 @@ members = [
   "crates/hooks-claude-code",
   "crates/headless",
   "crates/cordis",
+  "crates/cordis-api-catalog",
   "crates/cordis-client-runner",
   "crates/cordis-dynamic-types",
   "crates/cordis-timer",

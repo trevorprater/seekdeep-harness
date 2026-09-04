@@ -59363,6 +59363,8 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
+        "crates/cordis-api-catalog/src/lib.rs",
+        "crates/cordis-api-catalog/tests/query_parity.rs",
         "crates/cordis-client-runner/src/bin/port-cordis-client-catalogs.rs",
         "crates/cordis-client-runner/data/api-catalog.json",
         "crates/cordis-client-runner/data/api-query-fixtures.json",
@@ -59374,7 +59376,7 @@
         "cargo test -p seekdeep-cordis-client-runner --test api_catalog_parity --all-features (every generated Service/Event query compared)",
         "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
       ],
-      "note": "all Client Service, Event, Type, and inherited Context entries are generated from the pinned source; Rust owns compact and exact query projection, access expressions, errors, order, and the pinned source's observable empty referencedTypes behavior"
+      "note": "all Client Service, Event, Type, and inherited Context entries are generated from the pinned source; shared native/WASM Rust queries compute projections from catalog records and preserve the generated source helper's backspace-delimited type matching, including its empty ordinary-signature results"
     },
     {
       "source": "packages/extensions/cordis-client-runner/src/client/evaluator.ts",
@@ -60025,6 +60027,8 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
+        "crates/cordis-api-catalog/src/lib.rs",
+        "crates/cordis-api-catalog/tests/query_parity.rs",
         "crates/cordis-client-runner/src/bin/port-cordis-client-catalogs.rs",
         "crates/tool-cordis/data/api-catalog.json",
         "crates/tool-cordis/data/api-query-fixtures.json",
@@ -60033,7 +60037,9 @@
       ],
       "evidence": [
         "pinned-source generator extracted all 55 Services, 56 Events, 510 types, 10 inherited Context entries, and every exact query result",
-        "cargo test -p seekdeep-tool-cordis --all-features (5 passed)",
+        "Host query responses are computed by shared Rust from generated catalog records; expected-response fixtures are test-only",
+        "16 caller-supplied query differentials cover source delimiters, transitive closure, duplicate type names, retained method metadata, key quoting, and exact errors",
+        "cargo test -p seekdeep-tool-cordis -p seekdeep-cordis-api-catalog --all-features",
         "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings"
       ]
     },
@@ -81587,7 +81593,22 @@
     {
       "source": "packages/typert/generator/src/cordis-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/typert-generator/src/catalog/mod.rs",
+        "crates/typert-generator/src/catalog/jsdoc.rs",
+        "crates/typert-generator/src/catalog/markdown.rs",
+        "crates/typert-generator/src/catalog/runtime.rs",
+        "crates/typert-generator/src/catalog/runtime_text.rs",
+        "crates/typert-generator/examples/catalog_parity.rs",
+        "crates/typert-generator/examples/catalog_cases.rs",
+        "crates/typert-generator/tests/catalog_parity.rs"
+      ],
+      "evidence": [
+        "63 live source differentials cover model projection, metadata, type closures, rendering, and ordered diagnostics",
+        "full source-analyzed workspace: 56 services, 56 events, 510 runtime types, all 43 bilingual page regions, inherited page, API text, and native catalog JSON match"
+      ],
+      "note": "model-level catalog projection and output builders are Rust; source-root projectCordisCatalog/collectEvents/collectServices orchestration remains pending with the native analyzer"
     },
     {
       "source": "packages/typert/generator/src/emitter.ts",

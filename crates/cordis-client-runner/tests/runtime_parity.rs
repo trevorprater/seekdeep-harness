@@ -1,5 +1,7 @@
 //! Exact-run Client load, queue, retract, snapshot, crash, and disposal parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     collections::VecDeque,
     sync::{

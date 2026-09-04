@@ -1,5 +1,7 @@
 //! Client inspect registration, publication, query, cancellation, and routing parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

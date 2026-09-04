@@ -1,5 +1,7 @@
 //! Approval state, Host-before-Client ordering, settlement, failure, and joining parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

@@ -42,9 +42,13 @@ fn error_message(error: &JsValue) -> String {
         .unwrap()
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "One JavaScript expression defines the shared browser fixture realm"
+)]
 fn browser_bench() -> JsValue {
     Function::new_no_args(
-        r#"
+        r"
 const factories = new Map();
 const fibers = new Map();
 const services = Object.create(null);
@@ -224,7 +228,7 @@ return {
   dropNextFiber() { dropNextFiber = true; },
   watching() { return crashListener !== undefined; },
 };
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap()
@@ -232,7 +236,7 @@ return {
 
 fn timer_context() -> JsValue {
     Function::new_no_args(
-        r#"
+        r"
 const services = Object.create(null);
 const effects = [];
 const ctx = {
@@ -258,7 +262,7 @@ const ctx = {
   effectCount() { return effects.length; },
 };
 return ctx;
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap()
@@ -266,7 +270,7 @@ return ctx;
 
 fn remote_bench() -> JsValue {
     Function::new_no_args(
-        r#"
+        r"
 const calls = [];
 const reports = [];
 let invokeResult = { ok: true, value: 'pong' };
@@ -341,7 +345,7 @@ return {
   rejectInvoke(value) { invokeThrow = value; },
   setClientCode(value) { clientCode = value; },
 };
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap()
@@ -349,7 +353,7 @@ return {
 
 fn guard_bench() -> JsValue {
     Function::new_no_args(
-        r#"
+        r"
 const registrations = [];
 const effects = [];
 const verbs = [];
@@ -431,7 +435,7 @@ return {
   isContext(value) { return value instanceof TestContext; },
   disposeAll() { for (const row of [...effects].reverse()) row.dispose(); },
 };
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap()
@@ -547,6 +551,10 @@ async fn evaluator_executes_both_forms_and_the_harness_trap_is_constructible() {
 }
 
 #[wasm_bindgen_test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "One browser scenario keeps setup, assertions, and teardown together"
+)]
 async fn evaluator_symbols_failures_console_and_styles_execute_in_the_browser() {
     let react = Object::new();
     Reflect::set(&react, &JsValue::from_str("pageCopy"), &JsValue::TRUE).unwrap();
@@ -565,7 +573,7 @@ async fn evaluator_symbols_failures_console_and_styles_execute_in_the_browser() 
         Function::new_with_args("message", "globalThis.__evaluatorNotes.push(message);");
     let evaluated = evaluate_client_half(
         "dyn-1".to_owned(),
-        r#"
+        r"
 return {
   apply(ctx) {
     console.log('quiet');
@@ -573,7 +581,7 @@ return {
     return React;
   },
 };
-"#
+"
         .to_owned(),
         react.clone().into(),
         Object::new().into(),
@@ -772,7 +780,7 @@ async fn real_wasm_engine_mounts_projects_crashes_and_tears_down() {
     let result = runtime
         .load(request(
             "run-1",
-            r#"
+            r"
 return {
   inject: ['slots', 'absent'],
   apply(ctx) {
@@ -781,7 +789,7 @@ return {
     globalThis.__cordisHostCall = host.call('ping', { a: 1 });
   },
 };
-"#,
+",
         ))
         .await
         .unwrap();
@@ -919,13 +927,7 @@ async fn real_wasm_engine_classifies_every_stage_and_recovers_after_rejection() 
 
     let global = js_sys::global();
     let sink = Reflect::get(&global, &JsValue::from_str("__ModuleLoader__")).unwrap();
-    assert!(
-        Reflect::delete_property(
-            &Object::from(global.clone()),
-            &JsValue::from_str("__ModuleLoader__")
-        )
-        .unwrap()
-    );
+    assert!(Reflect::delete_property(&global, &JsValue::from_str("__ModuleLoader__")).unwrap());
     let rejection = runtime
         .load(request("run-rejected", "return { apply() {} }"))
         .await
@@ -960,7 +962,7 @@ async fn component_identity_is_the_only_slot_crash_attribution_key() {
     runtime
         .load(request(
             "run-identity",
-            r#"
+            r"
 return {
   inject: ['slots'],
   apply(ctx) {
@@ -969,7 +971,7 @@ return {
     ctx.slots.register({ name: 'root' }, null);
   },
 };
-"#,
+",
         ))
         .await
         .unwrap();
@@ -1010,6 +1012,10 @@ return {
 }
 
 #[wasm_bindgen_test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "One browser scenario keeps setup, assertions, and teardown together"
+)]
 async fn rust_wasm_timer_service_preserves_callbacks_promises_iterators_and_wrappers() {
     let ctx = timer_context();
     let service = install_wasm_client_timer(&ctx).unwrap();
@@ -1200,6 +1206,10 @@ async fn rust_wasm_timer_service_preserves_callbacks_promises_iterators_and_wrap
 const CONTEXT_DISPOSED_FOR_TEST: &str = "Context has been disposed";
 
 #[wasm_bindgen_test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "One browser scenario keeps setup, assertions, and teardown together"
+)]
 async fn rust_remote_bindings_fold_carriers_and_preserve_teaching_failures() {
     let bench = remote_bench();
     let namespace: Object = field(&bench, "namespace");
@@ -1367,6 +1377,10 @@ async fn rust_remote_bindings_fold_carriers_and_preserve_teaching_failures() {
 }
 
 #[wasm_bindgen_test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "One browser scenario keeps setup, assertions, and teardown together"
+)]
 async fn final_wasm_client_plugin_composes_face_events_remote_and_teardown() {
     let browser = browser_bench();
     let remote_state = remote_bench();
@@ -1611,6 +1625,10 @@ async fn final_wasm_client_plugin_composes_face_events_remote_and_teardown() {
 }
 
 #[wasm_bindgen_test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "One browser scenario keeps setup, assertions, and teardown together"
+)]
 async fn live_guard_proxy_enforces_context_verbs_service_declarations_and_slots() {
     let bench = guard_bench();
     let (bare, _) = guarded_context(&bench, &[]);

@@ -6615,6 +6615,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-cordis-api-catalog"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "regress 0.11.1",
+ "serde",
+ "serde_json",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "seekdeep-cordis-client-runner"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -6624,6 +6635,7 @@ dependencies = [
  "js-sys",
  "parking_lot",
  "seekdeep-cordis",
+ "seekdeep-cordis-api-catalog",
  "seekdeep-cordis-dynamic-types",
  "seekdeep-cordis-timer",
  "seekdeep-identity",
@@ -9332,6 +9344,7 @@ dependencies = [
  "seekdeep-agent",
  "seekdeep-agent-loop",
  "seekdeep-cordis",
+ "seekdeep-cordis-api-catalog",
  "seekdeep-cordis-host-runner",
  "seekdeep-core",
  "seekdeep-llm",
@@ -9830,6 +9843,9 @@ dependencies = [
  "icu_collator",
  "icu_locale",
  "indexmap 2.14.0",
+ "regex",
+ "regress 0.11.1",
+ "seekdeep-cordis-api-catalog",
  "serde",
  "serde_json",
  "sys-locale",

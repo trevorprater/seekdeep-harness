@@ -13,7 +13,8 @@ use seekdeep_cordis_client_runner::*;
 use seekdeep_cordis_dynamic_types::CordisDynamicPluginId;
 use serde_json::{Value, json};
 
-#[test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn browser_redirects_harness_split_and_parse_teaching_are_exact() {
     assert_eq!(
         CLIENT_BUILTIN_INSPECTION
@@ -45,7 +46,8 @@ fn browser_redirects_harness_split_and_parse_teaching_are_exact() {
     assert!(parse.contains("no JSX, no TypeScript"));
 }
 
-#[test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn plugin_shape_accepts_function_and_apply_object_and_teaches_both_failures() {
     assert_eq!(
         classify_client_plugin(ClientPluginCandidate::Function).unwrap(),
@@ -81,7 +83,8 @@ fn plugin_shape_accepts_function_and_apply_object_and_teaches_both_failures() {
     }
 }
 
-#[tokio::test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
 async fn host_call_routes_method_and_defaults_an_omitted_argument_to_null() {
     let calls = Arc::new(Mutex::new(Vec::<(String, Value)>::new()));
     let observed = calls.clone();
@@ -106,7 +109,8 @@ async fn host_call_routes_method_and_defaults_an_omitted_argument_to_null() {
     );
 }
 
-#[test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn console_mirror_includes_only_classified_values_and_bounds_utf16() {
     assert_eq!(
         mirror_console_error(&[
@@ -146,7 +150,8 @@ impl StyleDom for FakeDom {
     }
 }
 
-#[test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn styles_stamp_ownership_dispose_one_or_all_and_reject_non_strings() {
     let dom = Arc::new(FakeDom::default());
     let styles = DynamicCordisStyles::new(CordisDynamicPluginId::new("dyn-1"), dom.clone());

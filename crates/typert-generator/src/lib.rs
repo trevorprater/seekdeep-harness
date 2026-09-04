@@ -1,5 +1,6 @@
 //! Compiler-independent Typert analysis models and artifact generation.
 
+pub mod catalog;
 pub mod emitter;
 pub mod model;
 mod remote;
@@ -14,6 +15,12 @@ pub enum TypertGeneratorError {
     /// Unsupported compiler-independent model record.
     #[error("{0}")]
     Model(String),
+    /// Cordis documentation or type-classification violation.
+    #[error("{0}")]
+    Catalog(String),
+    /// Invalid caller-owned regular expression.
+    #[error("{0}")]
+    Syntax(String),
     /// Broken graph edge or unrenderable declaration.
     #[error("{0}")]
     Render(String),
@@ -29,7 +36,8 @@ impl TypertGeneratorError {
     /// Source-compatible error class name.
     pub const fn name(&self) -> &'static str {
         match self {
-            Self::Model(_) => "Error",
+            Self::Model(_) | Self::Catalog(_) => "Error",
+            Self::Syntax(_) => "SyntaxError",
             Self::Render(_) => "TypeGraphRenderError",
             Self::Emit(_) => "TypertEmitError",
             Self::Analysis(_) => "TypertAnalysisError",

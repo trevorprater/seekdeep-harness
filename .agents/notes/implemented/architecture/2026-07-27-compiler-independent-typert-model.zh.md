@@ -16,7 +16,7 @@ host 与 client 属于独立 TypeScript project；把两者放进同一个 `ts.P
 
 TypeGraph 保存开发者写下的计算前类型结构，包括泛型参数与应用、显式继承、conditional、mapped、递归引用和 JSDoc。无法无损表示的可达类型使分析失败；某个 emitter 无法处理已经建模的节点时由该 emitter 失败，而不是把类型展平或降级为 `unknown`。
 
-[`crates/typert-generator`](../../../../crates/typert-generator/src/lib.rs) 中的 Rust 后端负责编译器无关的模型、类型图渲染器、反射与 Zod 生成，以及 Host-for-Client Remote 声明和源码映射。它保留类型图标识与开发者编写的成员文本，不依赖编译器或运行时注册表。编译器提取、工作区发现、构建集成和 catalog 投影仍是独立的移植义务；能够接收已捕获的 `FaceModel`，并不证明这些路径已实现。
+[`crates/typert-generator`](../../../../crates/typert-generator/src/lib.rs) 中的 Rust 后端负责编译器无关的模型、类型图渲染器、反射与 Zod 生成、Host-for-Client Remote 声明和源码映射，以及 Cordis catalog 投影。它保留类型图标识与开发者编写的成员文本，不依赖编译器或运行时注册表。编译器提取、工作区发现和构建集成仍是独立的移植义务；能够接收已捕获的 `FaceModel`，并不证明这些路径已实现。
 
 每个 face 独立拥有 PackageModel 和 TypeGraph。`tsconfig.host.json` 与 `tsconfig.client.json` 的直接 project references 决定 package 的 face 归属，`package.json#exports` 决定公开边界。跨 face 关系只来自源码中的显式 import 或 re-export，并作为独立 link 保留；外部 npm 类型记录为 External，不读取或复制其声明。
 
@@ -26,7 +26,9 @@ PackageModel 识别 Cordis service、event、`@typert object` 引用对象和 `@
 
 包产物发布仍通过 package exports 采用显式 opt-in。`WorkspaceTypertGenerator` 仅在被调用时校验所请求 face 的根目录产物协议：host face 必须通过面向用户的 subpath `package/typert` 暴露 `package/lib/typert.host.{js,d.ts}`，client face 必须通过 `package/client/typert` 暴露 `package/lib/typert.client.{js,d.ts}`；它不会修改这些 exports。后续的 [Typert Remote 设计](2026-08-02-typert-remote-method-calls.md) 为根目录 build、typecheck、lint 与文档类型检查增加了全仓 Host 约定 pass。对于已 opt-in 的 Host 包，该 pass 会在消费方解析两者之前生成本地反射产物与严格的 Host-for-Client `/remote` 约定。生成的本地声明将 `TYPERT` 类型保持为 `unknown`，因此业务包不依赖注册表。
 
-构建期的 `CordisCatalogProjector` 一次消费分析后的 `FaceModel` 与 `TypeGraph`，生成 `docs/cordis-catalog/events.md`、`docs/cordis-catalog/services.md`，以及为 `tool-cordis` 提交的静态 `SERVICE_API`、`EVENT_API` 和 `TYPE_API` catalog。`tool-cordis` 读取该静态 catalog，运行时不依赖 `ctx.typert`。[`seekdeep-typert-loader`](../../../../packages/typert/loader/README.md) 与注册表仍是独立的运行时路径：loader 监听 Cordis Loader 配置项生命周期事件，导入显式发布的 `./typert` host 产物，并通过 `ctx.typert` 注册；两者都不是当前 `cordis_inspect` catalog 的数据源。
+构建期的 `CordisCatalogProjector` 消费分析后的 `FaceModel` 与 `TypeGraph`，生成[子系统页面](../../../../docs/subsystems/README.md)中由标记界定的 Cordis API 区域、[框架继承层页面](../../../../docs/cordis-api/inherited.md)，以及供 `tool-cordis` 使用的静态 `SERVICE_API`、`EVENT_API` 和 `TYPE_API` catalog。Rust projector 还生成由[可移植查询模块](../../../../crates/cordis-api-catalog/src/lib.rs)消费的结构化 catalog 数据。Host 与 Client 查询从这些记录计算目录和精确约定；预期查询响应仅用于测试。固定源码中的生成查询模板把 `\b` 解释为退格字符（`U+0008`），而构建期类型闭包使用单词边界。Rust 保留这两种行为。
+
+`tool-cordis` 读取静态 catalog，运行时不依赖 `ctx.typert`。[`seekdeep-typert-loader`](../../../../packages/typert/loader/README.md) 与注册表仍是独立的运行时路径：loader 监听 Cordis Loader 配置项生命周期事件，导入显式发布的 `./typert` host 产物，并通过 `ctx.typert` 注册；两者都不是当前 `cordis_inspect` catalog 的数据源。
 
 ## Verification contract
 
@@ -36,9 +38,9 @@ PackageModel 识别 Cordis service、event、`@typert object` 引用对象和 `@
 
 边界用例固定同 face 与跨 face 的显式包导入、跨 face 命名 re-export、精确 export alias、qualified `import()` link 和全局 `@types` External 归属，并拒绝 package 自有 TypeScript 诊断、相对路径越界、`package.json#exports` 之外的引用，以及尚无模型 target 的跨 face namespace re-export。interface declaration merging 显式保留每个 authored part，无法无损表示的其他 merge 失败。
 
-Zod emitter 对支持的节点和各类 literal 逐类执行成功与失败 parse，对不支持的节点逐类断言明确的 `TypertEmitError`。Emitter fixture 对生成的 Zod JavaScript 与 `.d.ts` 文本做快照，执行 JavaScript，并对声明做类型检查。`seekdeep-typert-registry` 测试固定原子注册、查询、JSON Schema 和 effect 撤销，`seekdeep-typert-loader` 测试还证明延迟挂载、卸载及未完成 dynamic import 的释放行为。真实 `seekdeep-tools` 纵切从模型生成 contribution，经运行时注册表加载后，将其服务、事件与关联类型记录同已提交的静态 `SERVICE_API`、`EVENT_API` 和 `TYPE_API` 对照。全仓 projector 测试重新生成两份 Cordis catalog 文档与 `tool-cordis` API catalog，并要求三份文本同已提交产物逐字节一致。
+Zod emitter 对支持的节点和各类 literal 逐类执行成功与失败 parse，对不支持的节点逐类断言明确的 `TypertEmitError`。Emitter fixture 对生成的 Zod JavaScript 与 `.d.ts` 文本做快照，执行 JavaScript，并对声明做类型检查。`seekdeep-typert-registry` 测试固定原子注册、查询、JSON Schema 和 effect 撤销，`seekdeep-typert-loader` 测试还证明延迟挂载、卸载及未完成 dynamic import 的释放行为。真实 `seekdeep-tools` 纵切从模型生成 contribution，经运行时注册表加载后，将其服务、事件与关联类型记录同已提交的静态 `SERVICE_API`、`EVENT_API` 和 `TYPE_API` 对照。[全仓 catalog 差分测试](../../../../crates/typert-generator/examples/catalog_parity.rs)依据 oracle 的分析模型和已提交产物，比较两种语言文件中的每个生成区域、继承层页面、运行时 API 文本和原生 catalog 数据。[模型级用例](../../../../crates/typert-generator/examples/catalog_cases.rs)独立于提取过程，固定选择规则、元数据、类型闭包和诊断顺序。
 
-Rust 后端差分测试逐一比较固定双 face fixture 中的节点、成员、声明、直接边和声明闭包，随后比较完整的反射、schema、Remote 与声明映射产物。仅用于测试的 [oracle 收集器](../../../../crates/typert-generator/examples/oracle_fixtures/main.rs)检查固定的提交，并从 oracle 复现这些输入，而不修改 oracle。Rust 生成的 schema 文本通过 Zod 执行源码的接受值和拒绝值用例；不支持的用例保留源码的错误类与消息。这些后端检查不能替代分析器、声明消费方或全仓 catalog 测试。
+Rust 后端差分测试逐一比较固定双 face fixture 中的节点、成员、声明、直接边和声明闭包，随后比较完整的反射、schema、Remote 与声明映射产物。仅用于测试的 [oracle 收集器](../../../../crates/typert-generator/examples/oracle_fixtures/main.rs)检查固定的提交，并从 oracle 复现这些输入，而不修改 oracle。Rust 生成的 schema 文本通过 Zod 执行源码的接受值和拒绝值用例；不支持的用例保留源码的错误类与消息。这些后端检查不能替代分析器、声明消费方或工作区构建集成测试。
 
 ## Alternatives considered
 

@@ -5,16 +5,10 @@ use std::sync::OnceLock;
 use serde_json::Value;
 
 const CATALOG_SOURCE: &str = include_str!("../data/api-catalog.json");
-const FIXTURE_SOURCE: &str = include_str!("../data/api-query-fixtures.json");
 
 fn catalog() -> &'static Value {
     static CATALOG: OnceLock<Value> = OnceLock::new();
     CATALOG.get_or_init(|| serde_json::from_str(CATALOG_SOURCE).expect("valid Host API catalog"))
-}
-
-fn fixtures() -> &'static Value {
-    static FIXTURES: OnceLock<Value> = OnceLock::new();
-    FIXTURES.get_or_init(|| serde_json::from_str(FIXTURE_SOURCE).expect("valid Host API fixtures"))
 }
 
 /// Generated Host Service entries in source order.
@@ -65,15 +59,7 @@ pub fn inherited_context_api() -> &'static [Value] {
 ///
 /// Rejects an unknown Service key.
 pub fn query_service_api(key: Option<&str>) -> anyhow::Result<Value> {
-    key.map_or_else(
-        || Ok(fixtures()["serviceCatalog"].clone()),
-        |key| {
-            fixtures()["services"]
-                .get(key)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("no catalogued Service named \"{key}\""))
-        },
-    )
+    seekdeep_cordis_api_catalog::query_service_api(key, service_api(), type_api())
 }
 
 /// Returns the exact source Event catalog or named contract.
@@ -82,15 +68,7 @@ pub fn query_service_api(key: Option<&str>) -> anyhow::Result<Value> {
 ///
 /// Rejects an unknown Event name.
 pub fn query_event_api(name: Option<&str>) -> anyhow::Result<Value> {
-    name.map_or_else(
-        || Ok(fixtures()["eventCatalog"].clone()),
-        |name| {
-            fixtures()["events"]
-                .get(name)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("no catalogued Event named \"{name}\""))
-        },
-    )
+    seekdeep_cordis_api_catalog::query_event_api(name, event_api(), type_api())
 }
 
 /// Host-provider Event projection excluding dynamic Cordis control events.
@@ -99,13 +77,14 @@ pub fn query_event_api(name: Option<&str>) -> anyhow::Result<Value> {
 ///
 /// Rejects an unknown or excluded Event name.
 pub fn query_host_event_api(name: Option<&str>) -> anyhow::Result<Value> {
-    name.map_or_else(
-        || Ok(fixtures()["hostEventCatalog"].clone()),
-        |name| {
-            fixtures()["hostEvents"]
-                .get(name)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("no catalogued Event named \"{name}\""))
-        },
-    )
+    let events = event_api()
+        .iter()
+        .filter(|event| {
+            !event["name"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("cordis/"))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    seekdeep_cordis_api_catalog::query_event_api(name, &events, type_api())
 }

@@ -13,7 +13,8 @@ fn context() -> ClientCordisInspectQueryContext {
     }
 }
 
-#[tokio::test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
 async fn provider_directory_order_schemas_builtins_and_exact_inputs_match_source() {
     let sources = ClientInspectProviderSources {
         services: Arc::new(|exact| Box::pin(async move { Ok(json!({"service": exact})) })),
@@ -94,7 +95,8 @@ async fn provider_directory_order_schemas_builtins_and_exact_inputs_match_source
     );
 }
 
-#[tokio::test]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), tokio::test)]
 async fn generated_sources_route_service_and_event_queries_without_adapter_reimplementation() {
     let sources = generated_client_inspect_sources(
         Arc::new(|_| Box::pin(async { Ok(Vec::new()) })),

@@ -13,6 +13,7 @@ futures.workspace = true
 seekdeep-agent = { path = "../agent" }
 seekdeep-agent-loop = { path = "../agent-loop" }
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-cordis-api-catalog = { path = "../cordis-api-catalog" }
 seekdeep-cordis-host-runner = { path = "../cordis-host-runner" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-system-prompt = { path = "../system-prompt" }

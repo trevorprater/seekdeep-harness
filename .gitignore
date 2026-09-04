@@ -2,6 +2,7 @@
 /apps/web/dist/
 /apps/web/generated/
 /packages/client/*/lib/
+/packages/extensions/cordis-client-runner/lib/
 /packages/session-query/session-log-export/lib/
 /packages/test-support/client-runtime/lib/
 /vendor/*/lib/
