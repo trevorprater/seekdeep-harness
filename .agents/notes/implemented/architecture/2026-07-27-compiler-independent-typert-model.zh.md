@@ -16,6 +16,8 @@ host 与 client 属于独立 TypeScript project；把两者放进同一个 `ts.P
 
 TypeGraph 保存开发者写下的计算前类型结构，包括泛型参数与应用、显式继承、conditional、mapped、递归引用和 JSDoc。无法无损表示的可达类型使分析失败；某个 emitter 无法处理已经建模的节点时由该 emitter 失败，而不是把类型展平或降级为 `unknown`。
 
+[`crates/typert-generator`](../../../../crates/typert-generator/src/lib.rs) 中的 Rust 后端负责编译器无关的模型、类型图渲染器、反射与 Zod 生成，以及 Host-for-Client Remote 声明和源码映射。它保留类型图标识与开发者编写的成员文本，不依赖编译器或运行时注册表。编译器提取、工作区发现、构建集成和 catalog 投影仍是独立的移植义务；能够接收已捕获的 `FaceModel`，并不证明这些路径已实现。
+
 每个 face 独立拥有 PackageModel 和 TypeGraph。`tsconfig.host.json` 与 `tsconfig.client.json` 的直接 project references 决定 package 的 face 归属，`package.json#exports` 决定公开边界。跨 face 关系只来自源码中的显式 import 或 re-export，并作为独立 link 保留；外部 npm 类型记录为 External，不读取或复制其声明。
 
 PackageModel 识别 Cordis service、event、`@typert object` 引用对象和 `@typert schema` 数据根。service 与 object 只暴露 public instance member，排除 constructor、static、private 和 protected；继承边保留在 TypeGraph 中，不复制为扁平成员。缺少 public property、parameter 或 return 类型标注时，`check` 模式报错，`write` 模式写入 checker 推断结果后重建 project 并再次以严格模式分析。
@@ -35,6 +37,8 @@ PackageModel 识别 Cordis service、event、`@typert object` 引用对象和 `@
 边界用例固定同 face 与跨 face 的显式包导入、跨 face 命名 re-export、精确 export alias、qualified `import()` link 和全局 `@types` External 归属，并拒绝 package 自有 TypeScript 诊断、相对路径越界、`package.json#exports` 之外的引用，以及尚无模型 target 的跨 face namespace re-export。interface declaration merging 显式保留每个 authored part，无法无损表示的其他 merge 失败。
 
 Zod emitter 对支持的节点和各类 literal 逐类执行成功与失败 parse，对不支持的节点逐类断言明确的 `TypertEmitError`。Emitter fixture 对生成的 Zod JavaScript 与 `.d.ts` 文本做快照，执行 JavaScript，并对声明做类型检查。`seekdeep-typert-registry` 测试固定原子注册、查询、JSON Schema 和 effect 撤销，`seekdeep-typert-loader` 测试还证明延迟挂载、卸载及未完成 dynamic import 的释放行为。真实 `seekdeep-tools` 纵切从模型生成 contribution，经运行时注册表加载后，将其服务、事件与关联类型记录同已提交的静态 `SERVICE_API`、`EVENT_API` 和 `TYPE_API` 对照。全仓 projector 测试重新生成两份 Cordis catalog 文档与 `tool-cordis` API catalog，并要求三份文本同已提交产物逐字节一致。
+
+Rust 后端差分测试逐一比较固定双 face fixture 中的节点、成员、声明、直接边和声明闭包，随后比较完整的反射、schema、Remote 与声明映射产物。仅用于测试的 [oracle 收集器](../../../../crates/typert-generator/examples/oracle_fixtures/main.rs)检查固定的提交，并从 oracle 复现这些输入，而不修改 oracle。Rust 生成的 schema 文本通过 Zod 执行源码的接受值和拒绝值用例；不支持的用例保留源码的错误类与消息。这些后端检查不能替代分析器、声明消费方或全仓 catalog 测试。
 
 ## Alternatives considered
 

@@ -81592,7 +81592,22 @@
     {
       "source": "packages/typert/generator/src/emitter.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/typert-generator/src/emitter.rs",
+        "crates/typert-generator/src/schema.rs",
+        "crates/typert-generator/src/remote.rs",
+        "crates/typert-generator/src/source_map.rs",
+        "crates/typert-generator/src/text.rs",
+        "crates/typert-generator/tests/emitter_parity.rs",
+        "crates/typert-generator/tests/schema_matrix.rs"
+      ],
+      "evidence": [
+        "pinned-source complete Host, Client, and Remote JavaScript/declaration/source-map artifact differential",
+        "44 source schema cases: exact supported artifacts and unsupported errors, plus generated Zod acceptance/rejection execution",
+        "cargo test -p seekdeep-typert-generator --all-features",
+        "cargo clippy -p seekdeep-typert-generator --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/typert/generator/src/index.ts",
@@ -81616,12 +81631,33 @@
     {
       "source": "packages/typert/generator/src/model.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/typert-generator/src/model.rs",
+        "crates/typert-generator/tests/renderer_parity.rs",
+        "crates/typert-generator/tests/fixtures/source_type_model.json"
+      ],
+      "evidence": [
+        "pinned-source two-face model round trip: all 282 type nodes and 28 declarations, including direct child-edge order",
+        "cargo test -p seekdeep-typert-generator --all-features",
+        "cargo clippy -p seekdeep-typert-generator --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/typert/generator/src/renderer.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/typert-generator/src/renderer.rs",
+        "crates/typert-generator/tests/renderer_parity.rs",
+        "crates/typert-generator/examples/oracle_fixtures/main.rs"
+      ],
+      "evidence": [
+        "pinned-source differential for every captured type, declaration, member, retained source text, and declaration closure",
+        "optional-shape, missing-edge, unknown-record, and duplicate-identity regressions",
+        "cargo test -p seekdeep-typert-generator --all-features",
+        "cargo clippy -p seekdeep-typert-generator --all-targets --all-features -- -D warnings"
+      ]
     },
     {
       "source": "packages/typert/generator/src/tsdown-plugin.ts",
@@ -81931,7 +81967,16 @@
     {
       "source": "packages/typert/generator/tests/renderer.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/typert-generator/tests/renderer_parity.rs",
+        "crates/typert-generator/tests/fixtures/source_type_model.json"
+      ],
+      "evidence": [
+        "source renderer suite passed with optional-shape and defensive graph regressions preserved natively",
+        "all source-authored node kinds and direct edges compared through the complete two-face graph",
+        "cargo test -p seekdeep-typert-generator --all-features"
+      ]
     },
     {
       "source": "packages/typert/generator/tests/schema-emitter.spec.ts",

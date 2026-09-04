@@ -9824,6 +9824,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-typert-generator"
+version = "0.1.0-rc.5"
+dependencies = [
+ "icu_collator",
+ "icu_locale",
+ "indexmap 2.14.0",
+ "serde",
+ "serde_json",
+ "sys-locale",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "seekdeep-typert-loader"
 version = "0.1.0-rc.5"
 dependencies = [

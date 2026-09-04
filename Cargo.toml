@@ -226,6 +226,7 @@ members = [
   "crates/tools",
   "crates/typert-loader",
   "crates/typert-protocol",
+  "crates/typert-generator",
   "crates/typert-registry",
   "crates/web",
   "crates/web-app",
