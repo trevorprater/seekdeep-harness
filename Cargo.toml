@@ -145,6 +145,7 @@ members = [
   "crates/plan-mode",
   "crates/process-exit-hook",
   "crates/pwsh-local",
+  "crates/python-release",
   "crates/pwsh-sandbox",
   "crates/repeat-tool-reminder",
   "crates/repository-tools",
@@ -272,6 +273,7 @@ crc32fast = "1.5.0"
 dirs = "6.0.0"
 encoding_rs = "0.8.35"
 flate2 = "1.1.5"
+zip = { version = "=2.4.2", default-features = false, features = ["flate2", "deflate-flate2"] }
 google-cloud-auth = "1.15.0"
 http = "1.5.0"
 hyper-rustls = { version = "0.24.2", features = ["webpki-tokio"] }

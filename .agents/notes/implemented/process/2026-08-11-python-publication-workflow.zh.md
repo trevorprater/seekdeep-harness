@@ -20,6 +20,10 @@ GitHub 的 `Release (Python)` 工作流为带有 `python-release-dry-run` 标签
 
 仓库版本可以是稳定版，也可以使用受支持的预发布写法。标签保留仓库写法，wheel 包文件名、元数据、依赖版本固定和产物查找则使用规范化的 PEP 440 写法。
 
+[Rust 发布工具](../../../../crates/python-release/src/main.rs)负责版本解析、隔离的包暂存、精确的运行时依赖版本固定、法律文件包含、原生构建钩子策略和 wheel 包验证。工作流的版本步骤使用其 `version --github-output` 命令。生成的 Hatch 绑定把构建钩子的输入和结果转交给编译后的 Rust 工具，不重复实现平台或载荷策略。分发文件名使用 `seekdeep_harness_sdk` 和 `seekdeep_harness_runtime_bin`，导入命名空间仍为 `deepseek_harness` 和 `deepseek_harness_runtime`。
+
+构建器会拒绝缺少生成的 Python 绑定入口的包。[Fixture wheel 包测试](../../../../crates/python-release/tests/release_parity.rs)执行真实的 Hatch 构建和原生载荷检查；[工作流测试](../../../../crates/python-release/tests/workflow_contract.rs)固定发布授权与顺序。这些检查验证的是打包机制，并不证明 Python API 绑定、原生可执行文件构建器或完整的已安装 SDK 冒烟路径已经完成；这些仍是独立的移植缺口。
+
 运行时包的 `platforms.json` 是原生 wheel 包标签和可执行文件名的事实来源。仓库发行构建器与隔离 Hatch 构建钩子会分别校验并加载该文件。GitHub Actions 与 GitLab CI 对运行时可执行文件及其必需的 spawn helper 调用同一个仓库自有的 macOS 部署目标检查，因此 wheel 包中的每个 Mach-O 文件都必须符合声明的平台标签。
 
 两个 Python 构建系统依赖都固定使用 Hatchling 1.30.1。下一个可用的 Hatchling 版本会生成 Core Metadata 2.5，而固定使用的 Twine 6.2.0 校验器会拒绝该版本；精确固定构建器后，本地、GitHub 与 GitLab 的输出会保持一致，直到校验工具链支持该元数据版本。

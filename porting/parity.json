@@ -84968,7 +84968,15 @@
     {
       "source": "python/sdk-runtime/hatch_build.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/python-release/src/hook.rs",
+        "crates/python-release/src/staging.rs"
+      ],
+      "evidence": [
+        "native hook policy and generated staged-package binding exercised by real runtime fixture-wheel build"
+      ],
+      "note": "release staging uses Rust hook policy; direct editable/source-package preparation remains pending with Python compatibility bindings"
     },
     {
       "source": "python/sdk-runtime/package.json",
@@ -85129,7 +85137,16 @@
     {
       "source": "python/sdk/tests/test_release_version.py",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/python-release/tests/release_parity.rs",
+        "crates/python-release/examples/source_parity.rs"
+      ],
+      "evidence": [
+        "source 11-test suite and native version/tag/platform/staging contracts passed",
+        "43 live source metadata comparisons preserve versions, prerelease spellings, exact errors, and platform validation",
+        "cargo test -p seekdeep-python-release --all-features"
+      ]
     },
     {
       "source": "python/sdk/tests/test_runtime_resolution.py",
@@ -85233,7 +85250,24 @@
     {
       "source": "scripts/build-python-release.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/python-release/src/main.rs",
+        "crates/python-release/src/lib.rs",
+        "crates/python-release/src/staging.rs",
+        "crates/python-release/src/hook.rs",
+        "crates/python-release/src/wheel.rs",
+        "crates/python-release/tests/release_parity.rs",
+        "crates/python-release/examples/source_parity.rs"
+      ],
+      "evidence": [
+        "43 release metadata cases match the pinned Python source",
+        "original release-version pytest suite: 11 passed",
+        "Rust CLI builds and validates actual SDK/runtime fixture wheels through an isolated Hatch build and Rust-owned hook",
+        "cargo test -p seekdeep-python-release --all-features",
+        "cargo clippy -p seekdeep-python-release --all-targets --all-features -- -D warnings"
+      ],
+      "note": "native version/build/hook/verify commands replace the script; production Python bindings and native executable packaging remain separately pending, and empty binding packages fail before wheel construction"
     },
     {
       "source": "scripts/change-scope.spec.ts",

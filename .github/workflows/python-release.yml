@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_BUILD_JOBS: '2'
+
 concurrency:
   # Public runs stay globally serialized across tags. Dry runs remain isolated
   # by ref so they do not block an intentional publication.
@@ -51,22 +55,18 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+
       - uses: actions/download-artifact@v8
         with:
-          pattern: deepseek_harness_*
+          pattern: seekdeep_harness_*
           path: dist
           merge-multiple: true
 
       - name: Resolve installed wheel version
         id: compatibility-version
         run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import runpy
-
-          release = runpy.run_path("scripts/build-python-release.py")
-          repository_version = release["repository_version"]()
-          print(f"version={release['pep440_version'](repository_version)}")
-          PY
+          cargo run --quiet --locked -p seekdeep-python-release -- version --github-output >> "$GITHUB_OUTPUT"
 
       - name: Install and run the published entry path
         run: |
@@ -89,18 +89,12 @@ jobs:
         with:
           python-version: '3.10'
 
+      - uses: dtolnay/rust-toolchain@1.93.1
+
       - name: Resolve release version
         id: version
         run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import runpy
-
-          release = runpy.run_path("scripts/build-python-release.py")
-          repository_version = release["repository_version"]()
-          wheel_version = release["pep440_version"](repository_version)
-          print(f"repository-version={repository_version}")
-          print(f"version={wheel_version}")
-          PY
+          cargo run --quiet --locked -p seekdeep-python-release -- version --github-output >> "$GITHUB_OUTPUT"
 
       - name: Authorize publication request
         env:
@@ -134,7 +128,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          pattern: deepseek_harness_*
+          pattern: seekdeep_harness_*
           path: dist
           merge-multiple: true
 
@@ -146,10 +140,10 @@ jobs:
           expected="$(mktemp)"
           actual="$(mktemp)"
           printf '%s\n' \
-            "deepseek_harness_runtime_bin-$VERSION-py3-none-macosx_14_0_arm64.whl" \
-            "deepseek_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_aarch64.whl" \
-            "deepseek_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_x86_64.whl" \
-            "deepseek_harness_sdk-$VERSION-py3-none-any.whl" > "$expected"
+            "seekdeep_harness_runtime_bin-$VERSION-py3-none-macosx_14_0_arm64.whl" \
+            "seekdeep_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_aarch64.whl" \
+            "seekdeep_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_x86_64.whl" \
+            "seekdeep_harness_sdk-$VERSION-py3-none-any.whl" > "$expected"
           find dist -maxdepth 1 -type f -name '*.whl' -exec basename {} \; | sort > "$actual"
           diff -u "$expected" "$actual"
           while IFS= read -r wheel; do
@@ -200,7 +194,7 @@ jobs:
       - name: Select runtime wheels
         run: |
           mkdir -p dist/runtime
-          mv dist/deepseek_harness_runtime_bin-*.whl dist/runtime/
+          mv dist/seekdeep_harness_runtime_bin-*.whl dist/runtime/
 
       - name: Publish runtime wheels
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -235,7 +229,7 @@ jobs:
       - name: Select SDK wheel
         run: |
           mkdir -p dist/sdk
-          mv dist/deepseek_harness_sdk-*.whl dist/sdk/
+          mv dist/seekdeep_harness_sdk-*.whl dist/sdk/
 
       - name: Publish SDK wheel
         uses: pypa/gh-action-pypi-publish@release/v1
