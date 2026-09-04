@@ -29,27 +29,42 @@ uuid.workspace = true
 [dev-dependencies]
 async-trait.workspace = true
 futures.workspace = true
+regex.workspace = true
+seekdeep-acp-demo = { path = "../acp-demo" }
+seekdeep-acp-snapshot = { path = "../acp-snapshot" }
 seekdeep-agent-instructions = { path = "../agent-instructions" }
 seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-spine-demo = { path = "../agent-spine-demo" }
 seekdeep-bash-local = { path = "../bash-local" }
 seekdeep-code-runtime-worker-thread = { path = "../code-runtime-worker-thread" }
 seekdeep-cordis-host-runner = { path = "../cordis-host-runner" }
+seekdeep-credentials-local = { path = "../credentials-local" }
 seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-goal = { path = "../goal" }
 seekdeep-jobs = { path = "../jobs" }
 seekdeep-jobs-local = { path = "../jobs-local" }
+seekdeep-llm-deepseek = { path = "../llm-deepseek" }
+seekdeep-llm-replay = { path = "../llm-replay" }
 seekdeep-loader-smoke = { path = "../loader-smoke" }
 seekdeep-scope = { path = "../scope" }
 seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-checkpoint-policy = { path = "../session-checkpoint-policy" }
 seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
 seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-settings-file = { path = "../settings-file" }
 seekdeep-shell-env = { path = "../shell-env" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
 seekdeep-subprocess-local = { path = "../subprocess-local" }
 seekdeep-tool-bash = { path = "../tool-bash" }
 seekdeep-tool-cordis = { path = "../tool-cordis" }
 seekdeep-tool-fs = { path = "../tool-fs" }
+seekdeep-tool-goal = { path = "../tool-goal" }
 seekdeep-tool-jobs = { path = "../tool-jobs" }
+seekdeep-tool-subagent = { path = "../tool-subagent" }
 seekdeep-tool-todo = { path = "../tool-todo" }
 seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
 tempfile.workspace = true
 
 [lints]

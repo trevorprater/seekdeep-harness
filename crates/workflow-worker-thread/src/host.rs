@@ -238,6 +238,7 @@ impl ChildRegistry {
 
         let key = self.next_key.fetch_add(1, Ordering::AcqRel) + 1;
         let handle = Arc::new(HostChildHandle {
+            runtime: self.runtime.clone(),
             run,
             key,
             registry: Arc::downgrade(self),
@@ -313,6 +314,7 @@ impl Drop for PendingStart {
 }
 
 struct HostChildHandle {
+    runtime: tokio::runtime::Handle,
     run: Arc<dyn SubagentRun>,
     key: u64,
     registry: Weak<ChildRegistry>,
@@ -329,11 +331,7 @@ impl HostChildHandle {
                 let run = Arc::clone(&self.run);
                 let key = self.key;
                 let registry = self.registry.clone();
-                let runtime = registry
-                    .upgrade()
-                    .map_or_else(tokio::runtime::Handle::current, |registry| {
-                        registry.runtime.clone()
-                    });
+                let runtime = self.runtime.clone();
                 let (send, receive) = oneshot::channel();
                 runtime.spawn(async move {
                     let result = AssertUnwindSafe(run.dispose())
@@ -374,14 +372,20 @@ impl ChildHandle for HostChildHandle {
     }
 
     fn result(&self) -> BoxFuture<'static, anyhow::Result<ChildResult>> {
+        let runtime = self.runtime.clone();
         let run = Arc::clone(&self.run);
         Box::pin(async move {
-            let result = run.result().await?;
-            Ok(ChildResult {
-                output: result.output,
-                structured: result.structured,
-                stop_reason: result.stop_reason.as_str().to_owned(),
-            })
+            runtime
+                .spawn(async move {
+                    let result = run.result().await?;
+                    Ok(ChildResult {
+                        output: result.output,
+                        structured: result.structured,
+                        stop_reason: result.stop_reason.as_str().to_owned(),
+                    })
+                })
+                .await
+                .map_err(|error| anyhow::anyhow!("workflow child result task stopped: {error}"))?
         })
     }
 
@@ -398,7 +402,13 @@ impl ChildPort for HostChildPort {
         request: ChildStartRequest,
     ) -> BoxFuture<'static, anyhow::Result<Arc<dyn ChildHandle>>> {
         let registry = self.0.clone();
-        Box::pin(async move { registry.start(request).await })
+        let runtime = registry.runtime.clone();
+        Box::pin(async move {
+            runtime
+                .spawn(async move { registry.start(request).await })
+                .await
+                .map_err(|error| anyhow::anyhow!("workflow child start task stopped: {error}"))?
+        })
     }
 }
 

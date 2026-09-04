@@ -11,7 +11,7 @@ use std::{
 use seekdeep::{DEFAULT_MODEL, process_shutdown::ProcessShutdown};
 use serde_json::Value;
 use tokio::{
-    io::{AsyncRead, AsyncReadExt as _},
+    io::{AsyncRead, AsyncReadExt as _, AsyncWriteExt as _},
     net::{TcpListener, TcpStream},
     process::{Child, Command},
     sync::oneshot,
@@ -262,8 +262,22 @@ async fn held_loopback_endpoint() -> anyhow::Result<(
     let address = listener.local_addr()?;
     let (request_sender, request_receiver) = oneshot::channel();
     let server = tokio::spawn(async move {
-        let (mut stream, _) = listener.accept().await?;
-        let request = read_request(&mut stream).await?;
+        let (mut stream, request) = loop {
+            let (mut stream, _) = listener.accept().await?;
+            let request = read_request(&mut stream).await?;
+            if request.body["max_tokens"] == 64 && request.body.get("tools").is_none() {
+                let body = concat!(
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"Signal probe title\"}}]}\n\n",
+                    "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+                    "data: [DONE]\n\n",
+                );
+                stream.write_all(format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}", body.len()
+                ).as_bytes()).await?;
+                continue;
+            }
+            break (stream, request);
+        };
         request_sender
             .send(request)
             .map_err(|_| anyhow::anyhow!("signal test stopped before receiving the request"))?;
@@ -344,6 +358,10 @@ fn assert_request(request: &CapturedRequest) {
     );
     assert_eq!(request.body["model"], DEFAULT_MODEL);
     assert!(request.body.to_string().contains(TASK));
+    assert!(
+        request.body["tools"].is_array(),
+        "signal must target the main tool-enabled request"
+    );
 }
 
 async fn run_first_signal_case(signal: &str, expected_code: i32) -> anyhow::Result<()> {

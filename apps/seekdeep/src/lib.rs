@@ -1,9 +1,8 @@
 //! Native application assembly for the `seekdeep` executable.
 //!
-//! This module is the first directly executable headless vertical slice. It
-//! deliberately assembles typed Rust services while the source-compatible
-//! profile/include loader is still being ported; it is not a substitute for
-//! the shipped base-plus-headless profile composition.
+//! CLI profiles use the source-compatible profile/include loader and shipped
+//! bundle assets. `HeadlessApplication` supplies an explicit minimal typed
+//! assembly for programmatic callers and tests, not a CLI dispatch route.
 
 pub mod args;
 pub mod layered_env;

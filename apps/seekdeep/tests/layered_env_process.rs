@@ -15,6 +15,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt as _, AsyncWriteExt as _},
     net::{TcpListener, TcpStream},
     process::{Child, Command},
+    sync::oneshot,
     task::JoinHandle,
 };
 
@@ -45,28 +46,43 @@ struct CapturedRequest {
 struct LoopbackServer {
     base_url: String,
     task: Option<JoinHandle<anyhow::Result<Vec<CapturedRequest>>>>,
+    stop: Option<oneshot::Sender<()>>,
 }
 
 impl LoopbackServer {
-    async fn start(expected_requests: usize) -> anyhow::Result<Self> {
+    async fn start() -> anyhow::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let address = listener.local_addr()?;
+        let (stop, mut stopping) = oneshot::channel();
         let task = tokio::spawn(async move {
-            let mut captured = Vec::with_capacity(expected_requests);
-            for _ in 0..expected_requests {
-                let (mut stream, _) = listener.accept().await?;
-                captured.push(read_request(&mut stream).await?);
-                write_answer(&mut stream).await?;
+            let mut captured = Vec::new();
+            loop {
+                let mut stream = tokio::select! {
+                    _ = &mut stopping => break,
+                    accepted = listener.accept() => accepted?.0,
+                };
+                let request = read_request(&mut stream).await?;
+                // Session-title requests share the provider endpoint with the task.
+                if is_title_request(&request) {
+                    write_answer(&mut stream, "Environment process proof").await?;
+                    continue;
+                }
+                captured.push(request);
+                write_answer(&mut stream, ANSWER).await?;
             }
             Ok(captured)
         });
         Ok(Self {
             base_url: format!("http://{address}"),
             task: Some(task),
+            stop: Some(stop),
         })
     }
 
     async fn finish(mut self) -> anyhow::Result<Vec<CapturedRequest>> {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
         let mut task = self
             .task
             .take()
@@ -133,7 +149,17 @@ async fn read_request(stream: &mut TcpStream) -> anyhow::Result<CapturedRequest>
     })
 }
 
-async fn write_answer(stream: &mut TcpStream) -> anyhow::Result<()> {
+fn is_title_request(request: &CapturedRequest) -> bool {
+    request.body["max_tokens"] == 64
+        && request.body.get("tools").is_none()
+        && request.body["messages"][0]["content"]
+            .as_str()
+            .is_some_and(|text| {
+                text.starts_with("Create a concise title for an AI coding-assistant session")
+            })
+}
+
+async fn write_answer(stream: &mut TcpStream, answer: &str) -> anyhow::Result<()> {
     let events = [
         serde_json::json!({
             "choices": [{
@@ -145,7 +171,7 @@ async fn write_answer(stream: &mut TcpStream) -> anyhow::Result<()> {
             }]
         }),
         serde_json::json!({
-            "choices": [{"delta": {"content": ANSWER}}]
+            "choices": [{"delta": {"content": answer}}]
         }),
         serde_json::json!({
             "choices": [{"delta": {}, "finish_reason": "stop"}]
@@ -289,7 +315,7 @@ async fn inherited_base_url_routes_project_over_home_credentials_and_home_fallba
         "AN_UNRELATED_PROJECT_VALUE=present\n",
     )?;
 
-    let server = LoopbackServer::start(2).await?;
+    let server = LoopbackServer::start().await?;
     let environment = [
         ("SEEKDEEP_HOME", home.as_os_str()),
         ("DEEPSEEK_BASE_URL", OsStr::new(&server.base_url)),
@@ -316,6 +342,11 @@ async fn inherited_base_url_routes_project_over_home_credentials_and_home_fallba
     assert_success(&project_output, &format!("{ANSWER}\n"));
     assert_success(&home_output, &format!("{ANSWER}\n"));
     assert_eq!(captured.len(), 2);
+    assert!(
+        captured
+            .iter()
+            .all(|request| request.body["tools"].is_array())
+    );
     // Both launches reaching this otherwise undiscoverable listener proves the
     // bootstrap-only inherited base URL controlled the network destination.
     assert!(

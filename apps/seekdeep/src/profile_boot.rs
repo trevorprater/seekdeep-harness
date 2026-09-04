@@ -518,6 +518,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
             seekdeep_attachment_local::plugin(),
         ),
         ("seekdeep-bash-sandbox", seekdeep_bash_sandbox::plugin()),
+        ("seekdeep-headless", seekdeep_headless::plugin()),
         (
             "seekdeep-client-connection",
             seekdeep_client_connection::host_plugin(),
@@ -871,6 +872,11 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         catalog,
         "seekdeep-tool-subagent-control/list-agents",
         seekdeep_tool_subagent_control::list_plugin(),
+    )?;
+    register_product_plugin(
+        catalog,
+        "seekdeep-headless/startup",
+        seekdeep_headless::startup::plugin(),
     )?;
     register_product_plugin(
         catalog,

@@ -32,6 +32,7 @@ struct StubRun {
     result: SharedResult<SubagentResult>,
     disposal: SharedResult<()>,
     dispose_count: std::sync::atomic::AtomicUsize,
+    result_threads: Arc<Mutex<Vec<std::thread::ThreadId>>>,
 }
 
 impl StubRun {
@@ -45,6 +46,7 @@ impl StubRun {
             result,
             disposal,
             dispose_count: std::sync::atomic::AtomicUsize::new(0),
+            result_threads: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -87,8 +89,14 @@ impl SubagentRun for StubRun {
     }
 
     fn result(&self) -> BoxFuture<'static, anyhow::Result<SubagentResult>> {
+        self.result_threads.lock().push(std::thread::current().id());
         let result = self.result.clone();
-        async move { result.await.map_err(|error| anyhow::anyhow!(error)) }.boxed()
+        let threads = self.result_threads.clone();
+        async move {
+            threads.lock().push(std::thread::current().id());
+            result.await.map_err(|error| anyhow::anyhow!(error))
+        }
+        .boxed()
     }
 
     fn dispose(&self) -> BoxFuture<'static, anyhow::Result<()>> {
@@ -108,6 +116,7 @@ enum StartBehavior {
 struct Provider {
     behaviors: Mutex<VecDeque<StartBehavior>>,
     starts: Mutex<Vec<ResolvedSubagentStartRequest>>,
+    start_threads: Mutex<Vec<std::thread::ThreadId>>,
     changed: Notify,
     capabilities: SubagentCapabilities,
 }
@@ -117,6 +126,7 @@ impl Provider {
         Arc::new(Self {
             behaviors: Mutex::new(behaviors.into_iter().collect()),
             starts: Mutex::new(Vec::new()),
+            start_threads: Mutex::new(Vec::new()),
             changed: Notify::new(),
             capabilities: SubagentCapabilities {
                 output_schema: true,
@@ -160,6 +170,7 @@ impl SubagentProvider for Provider {
         &self,
         request: ResolvedSubagentStartRequest,
     ) -> anyhow::Result<Arc<dyn SubagentRun>> {
+        self.start_threads.lock().push(std::thread::current().id());
         self.starts.lock().push(request);
         self.changed.notify_waiters();
         let behavior = self
@@ -301,6 +312,58 @@ fn completed_result() -> SubagentResult {
         structured: None,
         stop_reason: SubagentStopReason::Completed,
     }
+}
+
+#[cfg(debug_assertions)]
+#[tokio::test]
+async fn child_creation_and_result_polling_use_the_host_runtime() {
+    let executable = std::env::current_exe().expect("test executable");
+    let probe_name = format!("workflow-thread-host-probe{}", std::env::consts::EXE_SUFFIX);
+    if executable.file_name() != Some(std::ffi::OsStr::new(&probe_name)) {
+        // Isolate discovery from Cargo's adjacent process helper so this proves
+        // the supported debug thread fallback, even after the helper is built.
+        let isolated = tempfile::tempdir().expect("isolated worker discovery");
+        let probe = isolated.path().join(probe_name);
+        std::fs::copy(executable, &probe).expect("copy test executable");
+        let output = tokio::time::timeout(
+            Duration::from_secs(10),
+            tokio::process::Command::new(probe)
+                .args([
+                    "--exact",
+                    "child_creation_and_result_polling_use_the_host_runtime",
+                    "--nocapture",
+                ])
+                .env_clear()
+                .current_dir(isolated.path())
+                .kill_on_drop(true)
+                .output(),
+        )
+        .await
+        .expect("thread fallback probe timed out")
+        .expect("run fallback probe");
+        assert!(
+            output.status.success(),
+            "thread fallback probe failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let host_thread = std::thread::current().id();
+    let child = StubRun::immediate("host-affinity", completed_result());
+    let harness = Harness::new([StartBehavior::Run(child.clone())], 200);
+    let run = harness
+        .engine
+        .start(harness.request("await agent('probe'); return 42", None))
+        .expect("start");
+    let result = run.result().await;
+    run.dispose().await;
+    assert_eq!(result.stop_reason, WorkflowStopReason::Completed);
+    assert_eq!(result.value, json!(42));
+    assert_eq!(&*harness.provider.start_threads.lock(), &[host_thread]);
+    let result_threads = child.result_threads.lock();
+    assert!(!result_threads.is_empty());
+    assert!(result_threads.iter().all(|thread| *thread == host_thread));
 }
 
 #[tokio::test]

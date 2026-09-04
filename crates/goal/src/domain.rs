@@ -171,3 +171,21 @@ pub enum GoalErrorCode {
     /// The transition is invalid.
     GoalInvalidTransition,
 }
+
+impl GoalErrorCode {
+    /// Exact machine-routable error code.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::GoalAgentNotLive => "GOAL_AGENT_NOT_LIVE",
+            Self::GoalNotFound => "GOAL_NOT_FOUND",
+            Self::GoalAlreadyExists => "GOAL_ALREADY_EXISTS",
+            Self::GoalStaleRevision => "GOAL_STALE_REVISION",
+            Self::GoalInvalidObjective => "GOAL_INVALID_OBJECTIVE",
+            Self::GoalInvalidMaxRounds => "GOAL_INVALID_MAX_ROUNDS",
+            Self::GoalInvalidBlockReason => "GOAL_INVALID_BLOCK_REASON",
+            Self::GoalInvalidEdit => "GOAL_INVALID_EDIT",
+            Self::GoalInvalidTransition => "GOAL_INVALID_TRANSITION",
+        }
+    }
+}

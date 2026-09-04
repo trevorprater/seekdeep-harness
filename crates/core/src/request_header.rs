@@ -1,7 +1,8 @@
 //! Request-header canonicalization, equality, and replay folding.
 
 use seekdeep_llm::{LlmCallConfig, ToolSchema, call_config_equals};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer, ser::Error as _, ser::SerializeMap as _};
+use serde_json::Value;
 
 use crate::session::SessionEvent;
 
@@ -28,7 +29,7 @@ impl AdapterDefaults {
 }
 
 /// Full request state in force for one model-call epoch.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EpochHeader {
     /// Provider, model, reasoning, and sampling configuration.
@@ -42,6 +43,44 @@ pub struct EpochHeader {
     /// Ordered model-visible tool schemas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<ToolSchema>>,
+}
+
+impl Serialize for EpochHeader {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let Value::Object(mut config) =
+            serde_json::to_value(&self.config).map_err(S::Error::custom)?
+        else {
+            return Err(S::Error::custom(
+                "request-header config must serialize as an object",
+            ));
+        };
+        // Adapter resolution appends maxTokens, then reasoningEffort, after the
+        // caller-owned fields. Persist that order without reordering explicit controls.
+        if let Some(defaults) = &self.adapter_defaults {
+            for (name, defaulted) in [
+                ("maxTokens", defaults.max_tokens),
+                ("reasoningEffort", defaults.reasoning_effort),
+            ] {
+                if defaulted == Some(true)
+                    && let Some(value) = config.shift_remove(name)
+                {
+                    config.insert(name.to_owned(), value);
+                }
+            }
+        }
+        let mut fields = serializer.serialize_map(None)?;
+        fields.serialize_entry("config", &config)?;
+        if let Some(defaults) = &self.adapter_defaults {
+            fields.serialize_entry("adapterDefaults", defaults)?;
+        }
+        if let Some(system) = &self.system {
+            fields.serialize_entry("system", system)?;
+        }
+        if let Some(tools) = &self.tools {
+            fields.serialize_entry("tools", tools)?;
+        }
+        fields.end()
+    }
 }
 
 /// Normalizes empty optional fields to canonical absence.
@@ -126,6 +165,60 @@ mod tests {
             temperature: None,
             max_tokens: None,
             stop: None,
+        }
+    }
+
+    #[test]
+    fn adapter_default_fields_follow_source_materialization_order() {
+        let mut config = config();
+        config.reasoning_effort = Some(ReasoningEffortId::new("high"));
+        config.max_tokens = Some(256_000);
+        config.stop = Some(vec!["stop".to_owned()]);
+        for (defaults, expected) in [
+            (
+                None,
+                vec!["provider", "model", "reasoningEffort", "maxTokens", "stop"],
+            ),
+            (
+                Some(AdapterDefaults {
+                    reasoning_effort: Some(true),
+                    max_tokens: Some(true),
+                }),
+                vec!["provider", "model", "stop", "maxTokens", "reasoningEffort"],
+            ),
+            (
+                Some(AdapterDefaults {
+                    reasoning_effort: Some(true),
+                    max_tokens: None,
+                }),
+                vec!["provider", "model", "maxTokens", "stop", "reasoningEffort"],
+            ),
+            (
+                Some(AdapterDefaults {
+                    reasoning_effort: None,
+                    max_tokens: Some(true),
+                }),
+                vec!["provider", "model", "reasoningEffort", "stop", "maxTokens"],
+            ),
+        ] {
+            let header = EpochHeader {
+                config: config.clone(),
+                adapter_defaults: defaults,
+                system: None,
+                tools: None,
+            };
+            let encoded = serde_json::to_value(&header).unwrap();
+            let keys = encoded["config"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            assert_eq!(keys, expected);
+            assert_eq!(
+                serde_json::from_value::<EpochHeader>(encoded).unwrap(),
+                header
+            );
         }
     }
 

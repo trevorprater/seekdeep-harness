@@ -21,6 +21,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt as _, AsyncWriteExt as _},
     net::{TcpListener, TcpStream},
     process::{Child, Command},
+    sync::oneshot,
     task::JoinHandle,
 };
 
@@ -28,6 +29,14 @@ const PROCESS_TIMEOUT: Duration = Duration::from_secs(20);
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
 const TASK: &str = "prove the executable path";
 const ANSWER: &str = "HEADLESS_PROCESS_ROUND_TRIP";
+const BASH_MARKER: &str = "CLI_TOOL_ROUND_TRIP";
+
+#[derive(Clone, Copy)]
+enum ProviderScenario {
+    Todo,
+    Bash,
+    Failure,
+}
 
 type PipeReader = JoinHandle<std::io::Result<Vec<u8>>>;
 
@@ -36,6 +45,17 @@ struct CapturedRequest {
     path: String,
     headers: BTreeMap<String, String>,
     body: Value,
+}
+
+struct MockServer {
+    task: JoinHandle<anyhow::Result<Vec<CapturedRequest>>>,
+    stop: Option<oneshot::Sender<()>>,
+}
+
+impl Drop for MockServer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
 }
 
 async fn read_request(stream: &mut TcpStream) -> anyhow::Result<CapturedRequest> {
@@ -102,89 +122,104 @@ async fn write_sse(stream: &mut TcpStream, events: &[Value]) -> anyhow::Result<(
     Ok(())
 }
 
+fn text_events(text: &str) -> Vec<Value> {
+    vec![
+        serde_json::json!({"choices":[{"delta":{"content":text}}]}),
+        serde_json::json!({"choices":[{"delta":{},"finish_reason":"stop"}]}),
+        Value::String("[DONE]".to_owned()),
+    ]
+}
+
+fn tool_events(scenario: ProviderScenario) -> Vec<Value> {
+    let (tool, arguments) = match scenario {
+        ProviderScenario::Todo => (
+            "todo_write",
+            serde_json::json!({
+                "todos":[{"content":"prove the process boundary","status":"completed"}]
+            }),
+        ),
+        ProviderScenario::Bash => (
+            "bash",
+            serde_json::json!({
+                "command":"printf CLI_TOOL_ROUND_TRIP",
+                "description":"Prove the CLI tool round trip."
+            }),
+        ),
+        ProviderScenario::Failure => unreachable!("failure has no tool round trip"),
+    };
+    vec![
+        serde_json::json!({"choices":[{"delta":{"tool_calls":[{
+            "index":0,"id":"headless-process-tool","type":"function",
+            "function":{"name":tool,"arguments":arguments.to_string()}
+        }]}}]}),
+        serde_json::json!({"choices":[{"delta":{},"finish_reason":"tool_calls"}]}),
+        Value::String("[DONE]".to_owned()),
+    ]
+}
+
+fn is_title_request(request: &CapturedRequest) -> bool {
+    request.body["max_tokens"] == 64
+        && request.body.get("tools").is_none()
+        && request.body["messages"][0]["content"]
+            .as_str()
+            .is_some_and(|text| {
+                text.starts_with("Create a concise title for an AI coding-assistant session")
+            })
+}
+
+async fn write_failure(stream: &mut TcpStream) -> anyhow::Result<()> {
+    let body = r#"{"error":{"message":"CLI mock provider failed","code":"SERVER"}}"#;
+    let response = format!(
+        "HTTP/1.1 500 Internal Server Error\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(response.as_bytes()).await?;
+    Ok(())
+}
+
 async fn loopback_server(
     request_count: Arc<AtomicUsize>,
-) -> anyhow::Result<(
-    String,
-    tokio::task::JoinHandle<anyhow::Result<Vec<CapturedRequest>>>,
-)> {
+    scenario: ProviderScenario,
+) -> anyhow::Result<(String, MockServer)> {
     let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
     let address = listener.local_addr()?;
+    let (stop, mut stopping) = oneshot::channel();
     let task = tokio::spawn(async move {
         let mut captured = Vec::new();
-
-        let (mut first, _) = listener.accept().await?;
-        captured.push(read_request(&mut first).await?);
-        request_count.fetch_add(1, Ordering::Release);
-        write_sse(
-            &mut first,
-            &[
-                serde_json::json!({
-                    "choices": [{
-                        "delta": {
-                            "role": "assistant",
-                            "content": null,
-                            "reasoning_content": ""
-                        }
-                    }]
-                }),
-                serde_json::json!({
-                    "choices": [{
-                        "delta": {
-                            "tool_calls": [{
-                                "index": 0,
-                                "id": "headless-process-tool",
-                                "type": "function",
-                                "function": {
-                                    "name": "todo_write",
-                                    "arguments": serde_json::json!({
-                                        "todos": [{
-                                            "content": "prove the process boundary",
-                                            "status": "completed"
-                                        }]
-                                    }).to_string()
-                                }
-                            }]
-                        }
-                    }]
-                }),
-                serde_json::json!({
-                    "choices": [{"delta": {}, "finish_reason": "tool_calls"}]
-                }),
-                Value::String("[DONE]".to_owned()),
-            ],
-        )
-        .await?;
-
-        let (mut second, _) = listener.accept().await?;
-        captured.push(read_request(&mut second).await?);
-        request_count.fetch_add(1, Ordering::Release);
-        write_sse(
-            &mut second,
-            &[
-                serde_json::json!({
-                    "choices": [{
-                        "delta": {
-                            "role": "assistant",
-                            "content": null,
-                            "reasoning_content": ""
-                        }
-                    }]
-                }),
-                serde_json::json!({
-                    "choices": [{"delta": {"content": ANSWER}}]
-                }),
-                serde_json::json!({
-                    "choices": [{"delta": {}, "finish_reason": "stop"}]
-                }),
-                Value::String("[DONE]".to_owned()),
-            ],
-        )
-        .await?;
-
+        loop {
+            let mut stream = tokio::select! {
+                _ = &mut stopping => break,
+                accepted = listener.accept() => accepted?.0,
+            };
+            let request = read_request(&mut stream).await?;
+            // The shipped title provider shares the endpoint with conversation turns.
+            if is_title_request(&request) {
+                write_sse(&mut stream, &text_events("Headless process proof")).await?;
+                continue;
+            }
+            let request_index = captured.len();
+            captured.push(request);
+            request_count.fetch_add(1, Ordering::Release);
+            match (scenario, request_index) {
+                (ProviderScenario::Failure, 0) => write_failure(&mut stream).await?,
+                (ProviderScenario::Todo | ProviderScenario::Bash, 0) => {
+                    write_sse(&mut stream, &tool_events(scenario)).await?;
+                }
+                (ProviderScenario::Todo | ProviderScenario::Bash, 1) => {
+                    write_sse(&mut stream, &text_events(ANSWER)).await?;
+                }
+                _ => anyhow::bail!("unexpected conversation request {}", request_index + 1),
+            }
+        }
         Ok(captured)
     });
-    Ok((format!("http://{address}"), task))
+    Ok((
+        format!("http://{address}"),
+        MockServer {
+            task,
+            stop: Some(stop),
+        },
+    ))
 }
 
 fn ordered_subsequence(events: &[String], expected: &[&str]) -> bool {
@@ -306,22 +341,29 @@ async fn finish_pipe_reader(mut reader: PipeReader, name: &str) -> anyhow::Resul
 }
 
 async fn finish_server(
-    mut server: JoinHandle<anyhow::Result<Vec<CapturedRequest>>>,
+    mut server: MockServer,
+    output: &std::process::Output,
 ) -> anyhow::Result<Vec<CapturedRequest>> {
-    if let Ok(joined) = tokio::time::timeout(IO_TIMEOUT, &mut server).await {
+    if let Some(stop) = server.stop.take() {
+        let _ = stop.send(());
+    }
+    if let Ok(joined) = tokio::time::timeout(IO_TIMEOUT, &mut server.task).await {
         joined?
     } else {
-        server.abort();
-        let cleanup = tokio::time::timeout(IO_TIMEOUT, &mut server).await;
-        anyhow::bail!("loopback server did not finish; cleanup: {cleanup:#?}")
+        server.task.abort();
+        let cleanup = tokio::time::timeout(IO_TIMEOUT, &mut server.task).await;
+        anyhow::bail!(
+            "loopback server did not finish; cleanup: {cleanup:#?}; process status: {:?}; stdout: {:?}; stderr: {:?}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
     }
 }
 
-async fn abort_server(
-    mut server: JoinHandle<anyhow::Result<Vec<CapturedRequest>>>,
-) -> anyhow::Result<()> {
-    server.abort();
-    match tokio::time::timeout(IO_TIMEOUT, &mut server).await {
+async fn abort_server(mut server: MockServer) -> anyhow::Result<()> {
+    server.task.abort();
+    match tokio::time::timeout(IO_TIMEOUT, &mut server.task).await {
         Ok(Err(error)) if error.is_cancelled() => Ok(()),
         Ok(Err(error)) => Err(error.into()),
         Ok(Ok(result)) => {
@@ -378,7 +420,11 @@ fn assert_requests(captured: &[CapturedRequest]) {
     assert_eq!(captured[0].body["model"], DEFAULT_MODEL);
     assert_eq!(captured[1].body["model"], DEFAULT_MODEL);
     assert!(captured[0].body.to_string().contains(TASK));
-    assert!(captured[0].body.to_string().contains("todo_write"));
+    assert!(
+        captured[0].body.to_string().contains("todo_write"),
+        "first provider request: {}",
+        captured[0].body
+    );
     assert!(
         captured[1]
             .body
@@ -397,6 +443,9 @@ struct ColdEvidence {
     todo_content: Option<String>,
     has_answer: bool,
     final_reason: Option<String>,
+    final_error: Option<Value>,
+    tool_names: Vec<String>,
+    tool_results: Vec<Value>,
     has_request_header: bool,
 }
 
@@ -448,6 +497,22 @@ async fn collect_cold_jsonl(home: &Path, workspace: &Path) -> anyhow::Result<Col
                 .and_then(|event| event.data.pointer("/reason/kind"))
                 .and_then(Value::as_str)
                 .map(str::to_owned),
+            final_error: events
+                .iter()
+                .rev()
+                .find(|event| event.event_type == "turn/end")
+                .and_then(|event| event.data.pointer("/reason/error"))
+                .cloned(),
+            tool_names: events
+                .iter()
+                .filter(|event| event.event_type == "tool/call")
+                .map(|event| event.data["name"].as_str().unwrap().to_owned())
+                .collect(),
+            tool_results: events
+                .iter()
+                .filter(|event| event.event_type == "tool/result")
+                .map(|event| event.data.clone())
+                .collect(),
             has_request_header: events.iter().any(|event| {
                 event.event_type == "request/header"
                     && event.data.to_string().contains(DEFAULT_PROVIDER)
@@ -497,6 +562,7 @@ fn assert_cold_jsonl(evidence: &ColdEvidence) {
     );
     assert!(evidence.has_answer);
     assert_eq!(evidence.final_reason.as_deref(), Some("completed"));
+    assert!(evidence.final_error.is_none());
     assert!(evidence.has_request_header);
 }
 
@@ -507,7 +573,7 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
     std::fs::create_dir(&workspace)?;
     let home = temporary.path().join("home");
     let request_count = Arc::new(AtomicUsize::new(0));
-    let (base_url, server) = loopback_server(request_count.clone()).await?;
+    let (base_url, server) = loopback_server(request_count.clone(), ProviderScenario::Todo).await?;
 
     let output = run_process(&workspace, &home, &base_url, request_count.as_ref()).await;
     let output = match output {
@@ -521,11 +587,137 @@ async fn binary_runs_tool_prints_answer_and_cold_reopens_jsonl() -> anyhow::Resu
             };
         }
     };
-    let captured = finish_server(server).await?;
+    let captured = finish_server(server, &output).await?;
     let cold = collect_cold_jsonl(&home, &workspace).await?;
 
     assert_process_output(&output);
     assert_requests(&captured);
     assert_cold_jsonl(&cold);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn binary_executes_real_bash_and_records_its_output_before_the_answer() -> anyhow::Result<()>
+{
+    let temporary = tempfile::tempdir()?;
+    let workspace = temporary.path().join("workspace");
+    std::fs::create_dir(&workspace)?;
+    let home = temporary.path().join("home");
+    let requests = Arc::new(AtomicUsize::new(0));
+    let (base_url, server) = loopback_server(requests.clone(), ProviderScenario::Bash).await?;
+    let output = match run_process(&workspace, &home, &base_url, &requests).await {
+        Ok(output) => output,
+        Err(primary) => {
+            return match abort_server(server).await {
+                Ok(()) => Err(primary),
+                Err(cleanup) => Err(anyhow::anyhow!(
+                    "{primary:#}\nloopback cleanup failed: {cleanup:#}"
+                )),
+            };
+        }
+    };
+    let captured = finish_server(server, &output).await?;
+    let cold = collect_cold_jsonl(&home, &workspace).await?;
+    assert_process_output(&output);
+    assert_requests(&captured);
+    assert_eq!(cold.tool_names, ["bash"]);
+    assert_eq!(cold.tool_results.len(), 1);
+    let result = &cold.tool_results[0]["message"]["content"][0];
+    assert_eq!(result["isError"], false, "Bash tool result: {result}");
+    assert!(result["content"].to_string().contains(BASH_MARKER));
+    assert!(
+        captured[1].body["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|message| {
+                message["role"] == "tool" && message["content"].to_string().contains(BASH_MARKER)
+            })
+    );
+    assert_eq!(cold.final_reason.as_deref(), Some("completed"));
+    assert!(cold.final_error.is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn binary_applies_and_preserves_user_profile_patch_without_cli_overlay() -> anyhow::Result<()>
+{
+    let temporary = tempfile::tempdir()?;
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    let profile = home.join("profiles/headless");
+    std::fs::create_dir(&workspace)?;
+    std::fs::create_dir_all(&profile)?;
+    let patch_path = profile.join("cordis.patch.yml");
+    let patch = "- id: agent-default-model\n  config:\n    provider: deepseek-official\n    model: deepseek-v4-pro\n";
+    std::fs::write(&patch_path, patch)?;
+    let requests = Arc::new(AtomicUsize::new(0));
+    let (base_url, server) = loopback_server(requests.clone(), ProviderScenario::Todo).await?;
+    let output = match run_process(&workspace, &home, &base_url, &requests).await {
+        Ok(output) => output,
+        Err(primary) => {
+            return match abort_server(server).await {
+                Ok(()) => Err(primary),
+                Err(cleanup) => Err(anyhow::anyhow!(
+                    "{primary:#}\nloopback cleanup failed: {cleanup:#}"
+                )),
+            };
+        }
+    };
+    let captured = finish_server(server, &output).await?;
+    assert_process_output(&output);
+    assert_eq!(captured.len(), 2);
+    assert!(
+        captured
+            .iter()
+            .all(|request| request.body["model"] == "deepseek-v4-pro")
+    );
+    assert_eq!(std::fs::read_to_string(patch_path)?, patch);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn binary_prints_terminal_provider_failure_and_preserves_the_durable_error()
+-> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir(&workspace)?;
+    std::fs::create_dir(&home)?;
+    std::fs::write(
+        home.join("settings.yaml"),
+        "llm-deepseek:\n  retryPolicy:\n    mode: normal\n    maxRetries: 0\n",
+    )?;
+    let requests = Arc::new(AtomicUsize::new(0));
+    let (base_url, server) = loopback_server(requests.clone(), ProviderScenario::Failure).await?;
+    let output = match run_process(&workspace, &home, &base_url, &requests).await {
+        Ok(output) => output,
+        Err(primary) => {
+            return match abort_server(server).await {
+                Ok(()) => Err(primary),
+                Err(cleanup) => Err(anyhow::anyhow!(
+                    "{primary:#}\nloopback cleanup failed: {cleanup:#}"
+                )),
+            };
+        }
+    };
+    let captured = finish_server(server, &output).await?;
+    let cold = collect_cold_jsonl(&home, &workspace).await?;
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(output.stdout, b"\n");
+    assert_eq!(
+        output.stderr,
+        include_bytes!(
+            "../../../examples/headless-agent/tests/snapshots/headless-profile/stderr.expected.txt"
+        ),
+        "terminal stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(captured.len(), 1);
+    assert_eq!(requests.load(Ordering::Acquire), 1);
+    assert_eq!(cold.final_reason.as_deref(), Some("error"));
+    let error = cold.final_error.expect("persisted terminal error");
+    assert_eq!(error["code"], "SERVER");
+    assert_eq!(error["message"], "CLI mock provider failed");
     Ok(())
 }

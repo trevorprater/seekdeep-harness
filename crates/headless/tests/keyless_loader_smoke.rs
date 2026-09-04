@@ -7,12 +7,13 @@ use std::{path::Path, sync::Arc};
 use async_trait::async_trait;
 use futures::stream;
 use parking_lot::Mutex;
-use seekdeep_agent::AGENTS;
-use seekdeep_agent_loop::{Config as AgentLoopConfig, PLUGIN_INJECT};
-use seekdeep_cordis::{Context, Plugin};
+use seekdeep_agent::{AGENTS, AgentEvent};
+use seekdeep_agent_loop::{AgentRequestEvent, Config as AgentLoopConfig, PLUGIN_INJECT};
+use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, fiber::EffectHandle};
 use seekdeep_llm::{
-    AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LLM, LlmAdapter,
-    StreamChunk, TokenUsage,
+    AbortSignal, AdapterStream, CallId, ContentBlock, FinishReason, GenerateOptions, LLM,
+    LlmAdapter, LlmCallConfig, LlmModelReasoningInfo, LlmReasoningEffortInfo, LlmResolvedModelInfo,
+    ModelId, ProviderId, ReasoningEffortId, StreamChunk, TokenUsage,
 };
 use seekdeep_loader::PluginCatalog;
 use seekdeep_loader_smoke::{FixtureTurnOptions, run_fixture_turn};
@@ -26,6 +27,38 @@ struct KeylessAdapter {
 
 #[async_trait]
 impl LlmAdapter for KeylessAdapter {
+    async fn resolve_model(
+        &self,
+        provider: &str,
+        model: &str,
+        _signal: Option<&AbortSignal>,
+    ) -> anyhow::Result<LlmResolvedModelInfo> {
+        Ok(LlmResolvedModelInfo {
+            provider: ProviderId::new(provider),
+            id: ModelId::new(model),
+            name: model.to_owned(),
+            description: None,
+            input_modalities: None,
+            context: None,
+            default_max_tokens: None,
+            reasoning: Some(LlmModelReasoningInfo {
+                efforts: vec![
+                    LlmReasoningEffortInfo {
+                        id: ReasoningEffortId::new("off"),
+                        name: "Off".to_owned(),
+                        description: None,
+                    },
+                    LlmReasoningEffortInfo {
+                        id: ReasoningEffortId::new("high"),
+                        name: "High".to_owned(),
+                        description: None,
+                    },
+                ],
+                default_effort: Some(ReasoningEffortId::new("high")),
+            }),
+        })
+    }
+
     fn stream(&self, options: GenerateOptions) -> AdapterStream {
         let tool_text = options.messages.last().and_then(|message| {
             message.content().iter().find_map(|block| match block {
@@ -142,9 +175,38 @@ fn catalog(requests: Arc<Mutex<Vec<GenerateOptions>>>) -> anyhow::Result<PluginC
                 let llm = context
                     .get(LLM)
                     .ok_or_else(|| anyhow::anyhow!("cli-mock-llm requires llm"))?;
-                llm.register_adapter(
+                let registration = Arc::new(llm.register_adapter(
                     &["cli-mock".to_owned()],
                     Arc::new(KeylessAdapter { requests }),
+                )?);
+                context.own(EffectHandle::new("cli-mock adapter", move || {
+                    Box::pin(async move { registration.dispose().await })
+                }))?;
+                context.events().on_waterfall(
+                    &context,
+                    "agent/request",
+                    move |_, args, next| {
+                        let step = args
+                            .get::<AgentEvent<AgentRequestEvent>>(0)
+                            .map(|event| event.payload.step);
+                        Box::pin(async move {
+                            let reply = next.run().await?;
+                            let mut config = reply
+                                .downcast::<LlmCallConfig>()
+                                .map(|config| (*config).clone())
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!("agent/request did not return config")
+                                })?;
+                            if step == Some(2) {
+                                config.reasoning_effort = Some(ReasoningEffortId::new("off"));
+                            }
+                            Ok(EventReply::Value(Arc::new(config)))
+                        })
+                    },
+                    EventOptions {
+                        global: true,
+                        ..EventOptions::default()
+                    },
                 )?;
                 Ok(())
             })
@@ -250,6 +312,18 @@ async fn loader_bash_turn_streams_exact_usage_and_flushes_a_zstd_session() -> an
             stream
                 .iter()
                 .all(|record| record["sessionId"] == result.session_id.as_str())
+        );
+        let headers = stream
+            .iter()
+            .filter(|record| record["event"]["type"] == "request/header")
+            .map(|record| record["event"]["data"]["header"]["config"].clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            headers,
+            [
+                json!({"provider":"cli-mock","model":"cli-mock","reasoningEffort":"high"}),
+                json!({"provider":"cli-mock","model":"cli-mock","reasoningEffort":"off"})
+            ]
         );
     }
     assert_eq!(requests.lock().len(), 2);

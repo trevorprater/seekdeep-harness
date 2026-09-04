@@ -576,27 +576,28 @@ fn commit_compaction_body(
     let result = &summarized.result;
     let mut summary_data = json!({
         "compactionId": start_event.data["compactionId"],
-        "summary": result.summary,
-        "shadowedRange": {"start": prepared.selection.start, "end": prepared.selection.end},
-        "shadowedSeqs": prepared.selection.shadowed_seqs,
-        "shadowedTokenCount": prepared.shadowed_token_count,
-        "provider": result.provider,
-        "model": result.model,
     });
     if let Some(source_command_id) = start_event.data.get("sourceCommandId") {
         summary_data["sourceCommandId"] = source_command_id.clone();
     }
-    if let Some(max_tokens) = result.max_tokens {
-        summary_data["maxTokens"] = json!(max_tokens);
-    }
-    if let Some(usage) = &result.usage {
-        summary_data["usage"] = serde_json::to_value(usage)?;
-    }
+    summary_data["summary"] = serde_json::to_value(&result.summary)?;
     if result.llm_stream_call {
         summary_data["rawOutput"] = serde_json::to_value(&result.raw_output)?;
         summary_data["llmStreamCall"] = json!(true);
     } else if !result.raw_output.is_empty() {
         summary_data["rawOutput"] = serde_json::to_value(&result.raw_output)?;
+    }
+    summary_data["shadowedRange"] =
+        json!({"start": prepared.selection.start, "end": prepared.selection.end});
+    summary_data["shadowedSeqs"] = serde_json::to_value(&prepared.selection.shadowed_seqs)?;
+    summary_data["shadowedTokenCount"] = json!(prepared.shadowed_token_count);
+    summary_data["provider"] = serde_json::to_value(&result.provider)?;
+    summary_data["model"] = serde_json::to_value(&result.model)?;
+    if let Some(max_tokens) = result.max_tokens {
+        summary_data["maxTokens"] = json!(max_tokens);
+    }
+    if let Some(usage) = &result.usage {
+        summary_data["usage"] = serde_json::to_value(usage)?;
     }
     let summary_event = append_event(
         append,

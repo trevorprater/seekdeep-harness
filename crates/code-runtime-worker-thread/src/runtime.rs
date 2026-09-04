@@ -9,11 +9,12 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::{StreamExt as _, future::BoxFuture, stream::FuturesUnordered};
 use regex::Regex;
 use seekdeep_code_runtime::{
-    CodeBindingNamespace, CodeRunFailure, CodeRunFailureKind, CodeRunRequest, CodeRunResult,
-    CodeRuntime, CodeRuntimeBackend, PORTABLE_RESERVED_WORDS, RESERVED_BINDING_GLOBALS,
-    RESERVED_ERROR_MEMBERS, is_dunder_member,
+    CodeBindingFunction, CodeBindingNamespace, CodeRunFailure, CodeRunFailureKind, CodeRunRequest,
+    CodeRunResult, CodeRuntime, CodeRuntimeBackend, PORTABLE_RESERVED_WORDS,
+    RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS, is_dunder_member,
 };
 use seekdeep_cordis::{Context, fiber::EffectHandle};
 use serde::{Deserialize, Serialize};
@@ -121,6 +122,9 @@ fn number_message(value: f64) -> String {
 }
 
 /// Pure-Rust implementation of the TypeScript worker-thread runtime.
+///
+/// Bindings are invoked and polled on the calling Tokio runtime, independently
+/// of the program worker's lifetime. Runs with bindings require an active host runtime.
 #[derive(Debug)]
 pub struct WorkerThreadCodeRuntime {
     config: ResolvedConfig,
@@ -133,6 +137,74 @@ struct RuntimeState {
     next_run: AtomicU64,
     live: parking_lot::Mutex<HashMap<u64, seekdeep_llm::AbortSignal>>,
     changed: tokio::sync::Notify,
+}
+
+struct HostBindingCall {
+    function: CodeBindingFunction,
+    argument: Value,
+    reply: tokio::sync::oneshot::Sender<anyhow::Result<Value>>,
+}
+
+fn bridge_host_bindings(
+    mut bindings: Vec<CodeBindingNamespace>,
+) -> anyhow::Result<Vec<CodeBindingNamespace>> {
+    if bindings
+        .iter()
+        .all(|namespace| namespace.functions.is_empty())
+    {
+        return Ok(bindings);
+    }
+    let host = tokio::runtime::Handle::try_current()
+        .map_err(|error| anyhow::anyhow!("code binding host requires a Tokio runtime: {error}"))?;
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<HostBindingCall>();
+    // First suspension is the submission-order boundary; accepted calls retain
+    // their host-side lifetime after the worker drops its binding proxies.
+    host.spawn(async move {
+        let mut pending = FuturesUnordered::<BoxFuture<'static, ()>>::new();
+        let mut receiving = true;
+        while receiving || !pending.is_empty() {
+            tokio::select! {
+                biased;
+                call = receiver.recv(), if receiving => {
+                    if let Some(call) = call {
+                        let mut operation: BoxFuture<'static, ()> = Box::pin(async move {
+                            let result = (call.function)(call.argument).await;
+                            let _ = call.reply.send(result);
+                        });
+                        if futures::poll!(&mut operation).is_pending() {
+                            pending.push(operation);
+                        }
+                    } else {
+                        receiving = false;
+                    }
+                }
+                _ = pending.next(), if !pending.is_empty() => {}
+            }
+        }
+    });
+    for namespace in &mut bindings {
+        for function in namespace.functions.values_mut() {
+            let original = function.clone();
+            let sender = sender.clone();
+            *function = Arc::new(move |argument| {
+                let (reply, response) = tokio::sync::oneshot::channel();
+                let submitted = sender
+                    .send(HostBindingCall {
+                        function: original.clone(),
+                        argument,
+                        reply,
+                    })
+                    .map_err(|_| anyhow::anyhow!("code binding host dispatcher stopped"));
+                Box::pin(async move {
+                    submitted?;
+                    response
+                        .await
+                        .map_err(|_| anyhow::anyhow!("code binding host reply was abandoned"))?
+                })
+            });
+        }
+    }
+    Ok(bindings)
 }
 
 impl WorkerThreadCodeRuntime {
@@ -351,7 +423,7 @@ impl CodeRuntimeBackend for WorkerThreadCodeRuntime {
         }
 
         let program = request.program;
-        let bindings = request.bindings;
+        let bindings = bridge_host_bindings(request.bindings)?;
         let max_output_bytes = self.config.max_output_bytes;
         let runtime_signal = seekdeep_llm::AbortSignal::default();
         let signal = request.signal.map_or_else(
@@ -501,6 +573,150 @@ mod tests {
                 member_name_property: "toolName".to_owned(),
             }),
         }]
+    }
+
+    #[tokio::test]
+    async fn host_binding_tasks_survive_the_program_worker_runtime() {
+        let host_thread = std::thread::current().id();
+        let observed = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let spawned = Arc::new(parking_lot::Mutex::new(None));
+        let release = Arc::new(tokio::sync::Notify::new());
+        let binding: CodeBindingFunction = Arc::new({
+            let observed = observed.clone();
+            let spawned = spawned.clone();
+            let release = release.clone();
+            move |_| {
+                observed.lock().push(std::thread::current().id());
+                let observed = observed.clone();
+                let spawned = spawned.clone();
+                let release = release.clone();
+                Box::pin(async move {
+                    observed.lock().push(std::thread::current().id());
+                    *spawned.lock() = Some(tokio::spawn(async move {
+                        release.notified().await;
+                        "host work settled"
+                    }));
+                    Ok(json!("accepted"))
+                })
+            }
+        });
+        let result = run_program_with_bindings(
+            WorkerThreadCodeRuntimeConfig::default(),
+            "return await tools.start({});",
+            tools(IndexMap::from([("start".to_owned(), binding)])),
+        )
+        .await;
+        assert_eq!(result.value, Some(json!("accepted")));
+        assert!(result.error.is_none());
+        let task = spawned.lock().take().expect("host task was started");
+        release.notify_one();
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), task)
+                .await
+                .expect("host task must remain runnable")
+                .expect("worker exit must not abort a host-owned task"),
+            "host work settled"
+        );
+        assert_eq!(&*observed.lock(), &[host_thread, host_thread]);
+    }
+
+    #[tokio::test]
+    async fn host_bindings_start_in_order_through_their_first_await() {
+        let order = Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let release = Arc::new(tokio::sync::Notify::new());
+        let binding: CodeBindingFunction = Arc::new({
+            let order = order.clone();
+            move |argument| {
+                let ordinal = argument["ordinal"].as_u64().unwrap();
+                order.lock().push(format!("invoke-{ordinal}"));
+                let order = order.clone();
+                let release = release.clone();
+                Box::pin(async move {
+                    order.lock().push(format!("poll-{ordinal}"));
+                    if ordinal == 0 {
+                        release.notified().await;
+                    } else {
+                        release.notify_one();
+                    }
+                    Ok(json!(ordinal))
+                })
+            }
+        });
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            run_program_with_bindings(
+                WorkerThreadCodeRuntimeConfig::default(),
+                "return await Promise.all([tools.call({ordinal: 0}), tools.call({ordinal: 1})]);",
+                tools(IndexMap::from([("call".to_owned(), binding)])),
+            ),
+        )
+        .await
+        .expect("suspended host calls must allow later submissions");
+        assert_eq!(result.value, Some(json!([0, 1])));
+        assert_eq!(
+            &*order.lock(),
+            &["invoke-0", "poll-0", "invoke-1", "poll-1"]
+        );
+    }
+
+    #[tokio::test]
+    async fn worker_abort_does_not_drop_an_accepted_host_binding() {
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let finished = Arc::new(tokio::sync::Notify::new());
+        let binding: CodeBindingFunction = Arc::new({
+            let started = started.clone();
+            let release = release.clone();
+            let finished = finished.clone();
+            move |_| {
+                let started = started.clone();
+                let release = release.clone();
+                let finished = finished.clone();
+                Box::pin(async move {
+                    started.notify_one();
+                    release.notified().await;
+                    finished.notify_one();
+                    Ok(json!("host finished"))
+                })
+            }
+        });
+        let signal = seekdeep_llm::AbortSignal::default();
+        let request = CodeRunRequest {
+            program: "return await tools.wait({});".to_owned(),
+            bindings: tools(IndexMap::from([("wait".to_owned(), binding)])),
+            signal: Some(signal.clone()),
+        };
+        let backend =
+            WorkerThreadCodeRuntime::new(&WorkerThreadCodeRuntimeConfig::default()).unwrap();
+        let running = tokio::spawn(async move { backend.run(request).await });
+        tokio::time::timeout(std::time::Duration::from_secs(2), started.notified())
+            .await
+            .expect("host binding started");
+        signal.abort_with_reason(json!("stop program"));
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), running)
+            .await
+            .expect("worker abort")
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.error.unwrap().kind, CodeRunFailureKind::Abort);
+        release.notify_one();
+        tokio::time::timeout(std::time::Duration::from_secs(2), finished.notified())
+            .await
+            .expect("accepted host binding survived worker abort");
+    }
+
+    #[test]
+    fn pure_programs_do_not_require_a_host_tokio_runtime() {
+        let backend =
+            WorkerThreadCodeRuntime::new(&WorkerThreadCodeRuntimeConfig::default()).unwrap();
+        let result = futures::executor::block_on(backend.run(CodeRunRequest {
+            program: "return 42".to_owned(),
+            bindings: Vec::new(),
+            signal: None,
+        }))
+        .unwrap();
+        assert_eq!(result.value, Some(json!(42)));
+        assert!(result.error.is_none());
     }
 
     #[test]

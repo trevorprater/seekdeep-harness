@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use seekdeep_cordis::Context;
+use seekdeep_goal::runtime::GoalError;
 use seekdeep_goal::{
     CreateGoalRequest, EditGoalRequest, GOAL, GoalActivation, GoalBlockReason, GoalId, GoalPhase,
     GoalRef, GoalView,
@@ -233,6 +234,23 @@ const CREATE_DESCRIPTION: &str = "Create one persisted same-session completion g
 
 const UPDATE_DESCRIPTION: &str = "Update the exact current goal revision. edit, pause, and resume require a direct top-level human request. During an automatic continuation of the current goal, complete and blocked are also allowed. blocked is rejected before the configured minimum round count; the model remains responsible for judging that the same condition persisted across those rounds and must explain it in blocked_reason.";
 
+// The shared tool dispatcher records HarnessError metadata without depending on goal services.
+async fn preserve_goal_error<T>(
+    operation: impl std::future::Future<Output = anyhow::Result<T>>,
+) -> anyhow::Result<T> {
+    operation.await.map_err(|error| {
+        let Some(goal) = error
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<GoalError>())
+        else {
+            return error;
+        };
+        HarnessError::named(goal.name(), &goal.message, goal.code.as_str())
+            .with_cause(goal.clone())
+            .into()
+    })
+}
+
 /// Registers the three goal tools and their shared policy section.
 ///
 /// # Errors
@@ -275,14 +293,14 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
             ),
             Arc::new(move |_args: GetGoalArgs, exec| {
                 let ctx = execute_ctx.clone();
-                Box::pin(async move {
+                Box::pin(preserve_goal_error(async move {
                     let execution = goal_tool_execution(&ctx, &exec)?;
                     let goals = ctx
                         .get(GOAL)
                         .ok_or_else(|| anyhow::anyhow!("tool-goal requires goals"))?;
                     let goal = goals.get(&execution.agent)?;
                     Ok(goal_value(goal.as_ref()))
-                })
+                }))
             }),
         )
         .present_call(Arc::new(|_args: &GetGoalArgs| {
@@ -310,7 +328,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
             ),
             Arc::new(move |args: CreateGoalArgs, exec| {
                 let ctx = create_ctx.clone();
-                Box::pin(async move {
+                Box::pin(preserve_goal_error(async move {
                     let execution = goal_tool_execution(&ctx, &exec)?;
                     require_direct_human(&ctx, &execution)?;
                     let goals = ctx
@@ -324,7 +342,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                         },
                     )?;
                     Ok(goal_value(Some(&goal)))
-                })
+                }))
             }),
         )
         .present_call(Arc::new(|args: &CreateGoalArgs| {
@@ -360,7 +378,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
             ),
             Arc::new(move |args: UpdateGoalArgs, exec| {
                 let ctx = update_ctx.clone();
-                Box::pin(async move {
+                Box::pin(preserve_goal_error(async move {
                     let execution = goal_tool_execution(&ctx, &exec)?;
                     let goal_ref = goal_ref(&args.goal_id, args.revision)?;
                     let replacements = EditGoalRequest {
@@ -470,7 +488,7 @@ pub fn apply(context: &Context, config: &Config) -> anyhow::Result<()> {
                             "GOAL_TOOL_INVALID_UPDATE",
                         ))),
                     }
-                })
+                }))
             }),
         )
         .present_call(Arc::new(|args: &UpdateGoalArgs| {
@@ -528,4 +546,27 @@ pub fn plugin() -> seekdeep_cordis::Plugin {
             .resolve(value)
             .map_err(|error| anyhow::anyhow!("{error}"))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn goal_failure_preserves_shared_metadata_and_original_domain_error() {
+        let error = preserve_goal_error::<()>(async {
+            Err(GoalError::new(
+                "no current goal",
+                seekdeep_goal::GoalErrorCode::GoalNotFound,
+            )
+            .into())
+        })
+        .await
+        .unwrap_err();
+        let metadata = error.downcast_ref::<HarnessError>().unwrap();
+        assert_eq!(metadata.name(), "GoalError");
+        assert_eq!(metadata.code(), "GOAL_NOT_FOUND");
+        assert_eq!(metadata.message(), "no current goal");
+        assert!(error.chain().any(<dyn std::error::Error>::is::<GoalError>));
+    }
 }

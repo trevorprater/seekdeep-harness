@@ -110,24 +110,26 @@ fn web_plan_orders_layers_and_appends_launcher_owned_preset_and_privacy_patches(
 }
 
 #[test]
-fn compiled_catalog_preflights_the_complete_real_web_tree() -> anyhow::Result<()> {
+fn compiled_catalog_preflights_both_complete_shipped_profile_trees() -> anyhow::Result<()> {
     let temporary = tempfile::tempdir()?;
     let home = temporary.path().join("home");
     let cwd = temporary.path().join("workspace");
     std::fs::create_dir_all(&cwd)?;
-    let plan = compose_profile_at(
-        "web",
-        &[],
-        &cwd,
-        &home,
-        &install_anchor(&home),
-        temporary.path(),
-        None,
-    )?;
-    let effective = compose_entries(&[plan.all_patches()])?;
-    let source = render_entry_list_yaml(effective.entries())?;
     let catalog = framework_profile_catalog(&cwd, &home, &LaunchEnvironmentSnapshot::default())?;
-    catalog.preflight_yaml(&source)?;
+    for profile in ["web", "headless"] {
+        let plan = compose_profile_at(
+            profile,
+            &[],
+            &cwd,
+            &home,
+            &install_anchor(&home),
+            temporary.path(),
+            None,
+        )?;
+        let effective = compose_entries(&[plan.all_patches()])?;
+        let source = render_entry_list_yaml(effective.entries())?;
+        catalog.preflight_yaml(&source)?;
+    }
     Ok(())
 }
 

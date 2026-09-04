@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-05-dynamic-workflows.md
-2026-07-05-dynamic-workflows.md: c58dfe10f0ffda057cbe80b00f7229ed5cc4c503
-2026-07-05-dynamic-workflows.zh.md: c82d6dd639106b66c0892e763fe81285c7482d6e
+2026-07-05-dynamic-workflows.md: 4f74badd9b7c6b4320b296204de17ea6f62300aa
+2026-07-05-dynamic-workflows.zh.md: f245960b3262dcc4a5809234e57467f1c97f9628

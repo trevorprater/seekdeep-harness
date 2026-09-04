@@ -3,14 +3,14 @@
 
 use seekdeep_core::session::SessionEvent;
 use seekdeep_tools::ToolRestriction;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer, ser::SerializeMap as _};
 
 /// The current descriptor format version.
 pub const SUBAGENT_DESCRIPTOR_VERSION: u32 = 2;
 
 /// The supported durable subagent identity and optional continuation
 /// composition.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(
     tag = "mode",
     rename_all = "kebab-case",
@@ -50,6 +50,55 @@ pub enum SubagentDescriptorData {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tool_filter: Option<ToolRestriction>,
     },
+}
+
+impl Serialize for SubagentDescriptorData {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let (version, mode, provider, label) = match self {
+            Self::OneShot {
+                version,
+                provider,
+                label,
+            } => (version, "one-shot", provider, label.as_deref()),
+            Self::Continuable {
+                version,
+                provider,
+                label,
+                ..
+            } => (version, "continuable", provider, Some(label.as_str())),
+        };
+        let mut fields = serializer.serialize_map(None)?;
+        fields.serialize_entry("version", version)?;
+        fields.serialize_entry("mode", mode)?;
+        fields.serialize_entry("provider", provider)?;
+        if let Some(label) = label {
+            fields.serialize_entry("label", label)?;
+        }
+        match self {
+            Self::OneShot { .. } => {}
+            Self::Continuable {
+                agent_provider,
+                agent_model,
+                persona,
+                tool_filter,
+                ..
+            } => {
+                if let Some(provider) = agent_provider {
+                    fields.serialize_entry("agentProvider", provider)?;
+                }
+                if let Some(model) = agent_model {
+                    fields.serialize_entry("agentModel", model)?;
+                }
+                if let Some(persona) = persona {
+                    fields.serialize_entry("persona", persona)?;
+                }
+                if let Some(filter) = tool_filter {
+                    fields.serialize_entry("toolFilter", filter)?;
+                }
+            }
+        }
+        fields.end()
+    }
 }
 
 /// Inputs `snapshot_subagent_descriptor` validates and detaches.
@@ -158,6 +207,17 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn durable_descriptors_preserve_source_field_order() {
+        for raw in [
+            r#"{"version":2,"mode":"one-shot","provider":"spawn","label":"audit"}"#,
+            r#"{"version":2,"mode":"continuable","provider":"spawn","label":"audit","agentProvider":"mock","agentModel":"model","persona":"review"}"#,
+        ] {
+            let descriptor: SubagentDescriptorData = serde_json::from_str(raw).unwrap();
+            assert_eq!(serde_json::to_string(&descriptor).unwrap(), raw);
+        }
+    }
 
     fn event(data: serde_json::Value) -> SessionEvent {
         SessionEvent {

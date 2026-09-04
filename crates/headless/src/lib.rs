@@ -9,13 +9,13 @@ use std::{io::Write as _, path::Path, sync::Arc};
 
 use parking_lot::RwLock;
 use seekdeep_agent::{
-    AGENTS, AgentOptions, AgentRegistry, CreateAgentOptions, ModelSelection, ModelSelectionRef,
-    install_model_selection,
+    AGENTS, Agent, AgentCancelCause, AgentOptions, AgentRegistry, CancelOptions,
+    CreateAgentOptions, ModelSelection, ModelSelectionRef, install_model_selection,
 };
 use seekdeep_agent_default_model::AGENT_DEFAULT_MODEL;
 use seekdeep_cmdline::APP_EXIT;
 use seekdeep_cordis::{
-    FiberState, Plugin,
+    Context, FiberState, Plugin,
     fiber::{DisposeFuture, EffectHandle},
 };
 use seekdeep_core::{
@@ -23,7 +23,7 @@ use seekdeep_core::{
     session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
-use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
+use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
 use seekdeep_loader::LOADER;
 use seekdeep_schemastery::Schema;
 use seekdeep_system_prompt::{SYSTEM_PROMPT, SystemPrompt};
@@ -162,7 +162,11 @@ impl HeadlessRunner {
     /// Runs one task and converts both durable and unexpected failures to the
     /// exact process-facing output contract.
     pub async fn run(&self, task: &str) -> HeadlessRunResult {
-        match self.run_checked(task).await {
+        self.run_with_stop(task, &AbortSignal::default()).await
+    }
+
+    async fn run_with_stop(&self, task: &str, stopping: &AbortSignal) -> HeadlessRunResult {
+        match self.run_checked(task, stopping).await {
             Ok((session_id, outcome)) => render_outcome(Some(session_id), &outcome),
             Err(error) => HeadlessRunResult {
                 session_id: None,
@@ -173,7 +177,11 @@ impl HeadlessRunner {
         }
     }
 
-    async fn run_checked(&self, task: &str) -> anyhow::Result<(SessionId, HeadlessOutcome)> {
+    async fn run_checked(
+        &self,
+        task: &str,
+        stopping: &AbortSignal,
+    ) -> anyhow::Result<(SessionId, HeadlessOutcome)> {
         let session_id = SessionId::new(format!("session-{}", Uuid::new_v4()));
         let mut options = CreateAgentOptions::new(session_id.clone());
         options.meta.cwd = Some(self.cwd.clone());
@@ -209,18 +217,32 @@ impl HeadlessRunner {
         }));
 
         let handle = self.agents.create(options).await?;
-        handle.agent.when_idle()?.await?;
+        wait_for_run_idle(&handle.agent, stopping).await?;
         let first_seq = handle.agent.session().seq();
-        handle.agent.followup(UserMessage::new(
-            vec![ContentBlock::Text {
-                text: task.to_owned(),
-            }],
-            MessageSource::user(),
-        ))?;
-        handle.agent.when_idle()?.await?;
+        if !stopping.is_aborted() {
+            handle.agent.followup(UserMessage::new(
+                vec![ContentBlock::Text {
+                    text: task.to_owned(),
+                }],
+                MessageSource::user(),
+            ))?;
+            wait_for_run_idle(&handle.agent, stopping).await?;
+        }
         self.sessions.flush(handle.agent.session()).await?;
         let outcome = summarize(&handle.agent.session().events(), first_seq);
         Ok((session_id, outcome))
+    }
+}
+
+async fn wait_for_run_idle(agent: &Agent, stopping: &AbortSignal) -> anyhow::Result<()> {
+    let idle = agent.when_idle()?;
+    tokio::select! {
+        biased;
+        () = stopping.cancelled() => {
+            agent.cancel(AgentCancelCause::Disposed, CancelOptions::default())?;
+            agent.when_idle()?.await
+        }
+        result = idle => result,
     }
 }
 
@@ -234,23 +256,70 @@ async fn wait_until_active(owner: &Arc<seekdeep_cordis::Fiber>) -> bool {
     }
 }
 
+async fn start_admitted(
+    started: tokio::sync::oneshot::Receiver<()>,
+    stopping: &AbortSignal,
+) -> bool {
+    tokio::select! {
+        biased;
+        () = stopping.cancelled() => false,
+        result = started => result.is_ok(),
+    }
+}
+
 async fn run_plugin_task(
     settlement: Option<Arc<seekdeep_loader::LoaderSettlement>>,
-    owner: Arc<seekdeep_cordis::Fiber>,
-    runner: HeadlessRunner,
+    context: Context,
     task: String,
     output: Arc<dyn HeadlessOutput>,
     exit: Arc<seekdeep_cmdline::AppExit>,
+    stopping: AbortSignal,
 ) {
-    if let Some(settlement) = settlement
-        && settlement.wait().await.is_err()
-    {
+    if let Some(settlement) = settlement {
+        tokio::select! {
+            biased;
+            () = stopping.cancelled() => return,
+            result = settlement.wait() => if result.is_err() { return; },
+        }
+    }
+    let active = tokio::select! {
+        biased;
+        () = stopping.cancelled() => false,
+        active = wait_until_active(context.fiber()) => active,
+    };
+    if !active {
         return;
     }
-    if !wait_until_active(&owner).await {
-        return;
-    }
-    let result = runner.run(&task).await;
+    let runner = (|| -> anyhow::Result<Option<HeadlessRunner>> {
+        let (Some(agents), Some(sessions), Some(default_model)) = (
+            context.get(AGENTS),
+            context.get(SESSIONS),
+            context.get(AGENT_DEFAULT_MODEL),
+        ) else {
+            return Ok(None);
+        };
+        let prompt = context
+            .get(SYSTEM_PROMPT)
+            .ok_or_else(|| anyhow::anyhow!("headless-runner requires systemPrompt"))?;
+        let cwd = std::env::current_dir()?;
+        Ok(Some(HeadlessRunner::new(
+            agents,
+            sessions,
+            prompt,
+            default_model.current_selection(),
+            cwd.to_string_lossy(),
+        )?))
+    })();
+    let result = match runner {
+        Ok(Some(runner)) => runner.run_with_stop(&task, &stopping).await,
+        Ok(None) => return,
+        Err(error) => HeadlessRunResult {
+            session_id: None,
+            stdout: String::new(),
+            stderr: format!("seekdeep: {error}\n"),
+            exit_code: 1,
+        },
+    };
     let operation = (|| -> anyhow::Result<()> {
         output.write_stdout(&result.stdout)?;
         output.write_stderr(&result.stderr)?;
@@ -280,33 +349,29 @@ pub fn plugin_with_output(output: Arc<dyn HeadlessOutput>) -> Plugin {
                     "headless-runner: the launcher must provide ctx.appExit before the tree mounts"
                 )
             })?;
-            let agents = context
-                .get(AGENTS)
-                .ok_or_else(|| anyhow::anyhow!("headless-runner requires agents"))?;
-            let sessions = context
-                .get(SESSIONS)
-                .ok_or_else(|| anyhow::anyhow!("headless-runner requires sessions"))?;
-            let selection = context
-                .get(AGENT_DEFAULT_MODEL)
-                .ok_or_else(|| anyhow::anyhow!("headless-runner requires agentDefaultModel"))?
-                .current_selection();
-            let prompt = context
-                .get(SYSTEM_PROMPT)
-                .ok_or_else(|| anyhow::anyhow!("headless-runner requires systemPrompt"))?;
-            let cwd = std::env::current_dir()?;
-            let runner =
-                HeadlessRunner::new(agents, sessions, prompt, selection, cwd.to_string_lossy())?;
             let settlement = context.get(LOADER);
-            let owner = context.fiber().clone();
+            let task_context = context.clone();
+            let stopping = AbortSignal::default();
+            let task_stopping = stopping.clone();
             let (start, started) = tokio::sync::oneshot::channel();
             let task = tokio::spawn(async move {
-                if started.await.is_ok() {
-                    run_plugin_task(settlement, owner, runner, config.task, output, exit).await;
+                if start_admitted(started, &task_stopping).await {
+                    run_plugin_task(
+                        settlement,
+                        task_context,
+                        config.task,
+                        output,
+                        exit,
+                        task_stopping,
+                    )
+                    .await;
                 }
             });
             let effect = EffectHandle::new("headless-runner task", move || -> DisposeFuture {
                 Box::pin(async move {
-                    task.abort();
+                    // Let the owned Agent settle and flush before the runner writes its
+                    // final result; aborting the task would discard signal-exit output.
+                    stopping.abort();
                     match task.await {
                         Ok(()) => Ok(()),
                         Err(error) if error.is_cancelled() => Ok(()),
@@ -415,11 +480,24 @@ pub fn register_invariant(
 
 #[cfg(test)]
 mod tests {
+    use futures::FutureExt as _;
     use seekdeep_cordis::Context;
     use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn stopping_before_start_releases_the_task_even_with_a_live_sender() {
+        let (start, started) = tokio::sync::oneshot::channel();
+        let stopping = AbortSignal::default();
+        stopping.abort();
+        assert_eq!(
+            start_admitted(started, &stopping).now_or_never(),
+            Some(false)
+        );
+        drop(start);
+    }
 
     fn event(event_type: &str, seq: u64, data: Value) -> SessionEvent {
         SessionEvent {

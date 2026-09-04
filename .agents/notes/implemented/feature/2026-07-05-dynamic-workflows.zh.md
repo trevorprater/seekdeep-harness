@@ -32,6 +32,8 @@ harness 可以通过 `seekdeep-tool-subagent` 将一个任务委派给一个子 
 
 发布组合通过同目录的 `seekdeep-workflow-worker` 可执行文件或已安装 `seekdeep` 二进制的私有 worker 模式提供 worker；两种可终止入口都不可用时，引擎构造会失败。若没有编译后入口，开发构建可以使用同一类型化进程内执行器。聚焦测试会固定三条路径。
 
+开发回退将子 agent 创建、结果轮询及 dispose 路由到已捕获的宿主运行时。临时执行器运行时结束后，子循环与持久化任务仍归宿主所有。
+
 **Meta 是数据**：经 schema 校验的 `meta` 字段以 JSON 形式到达 seam，仅做形状校验。宿主从不执行元数据字面量，否则脚本控制的访问器可以在 worker 隔离之外运行。
 
 **值边界**：`materializeFromRealm` 复制出站值，并拒绝函数、symbol、嵌套 `undefined`、异域原型、循环引用、稀疏数组和非有限数字。数据属性复制使 `"__proto__"` 安全；getter 正常读取，抛出异常的 getter 会明确报错。`args` 通过 `workerData` 传入，暴露前再次克隆。realm 函数被调用而非复制，抛出的值使用对所有输入均有定义的渲染器，因此 `result` 不会 reject。钩子错误是宿主 realm 的 `WorkflowError`，脚本应基于 `name` 或 `code` 分支而非 `instanceof Error`，如引擎 README 所述。并发、total-agent、item、超时和宽限限制均为经校验的配置。
@@ -53,6 +55,8 @@ harness 可以通过 `seekdeep-tool-subagent` 将一个任务委派给一个子 
 ## 测试
 
 worker 侧逻辑通过类型化进程内子端口以及编译后 stdio worker 所使用的同一封闭协议运行。宿主测试独立驱动待启动、迟到就绪、缓慢或失败的 dispose、进程死亡、宽限期终止、外部信号、HMR 卸载与生命周期配对。单元测试覆盖脚本辅助函数、不可伪造的 fatal 错误、nullable 失败、JSON 边界、上限、取消、子 agent 所有权和通过真实循环的结构化输出。清空环境后的冒烟测试会驱动独立 worker 与已安装单一二进制的 worker 模式；真实提供方执行仍是 parity manifest 中的独立边界。
+
+测试会独立于 helper 发现结果强制使用开发回退，并要求在宿主侧创建子 agent 及轮询结果，以及在 worker 退出后冷打开子日志。
 
 ## 延迟（明确的非目标）
 

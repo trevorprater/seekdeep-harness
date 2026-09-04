@@ -32,6 +32,8 @@ The host validates metadata and parses the body before publication. It owns pend
 
 Release composition supplies the worker either as the sibling `seekdeep-workflow-worker` executable or as the private worker mode of the installed `seekdeep` binary; engine construction fails when neither killable entry is available. Development builds may use the same in-process typed evaluator when no compiled entry exists. Focused tests pin all three paths.
 
+The development fallback routes child creation, result polling, and disposal onto the captured host runtime. Child-loop and persistence tasks remain host-owned when the temporary evaluator runtime ends.
+
 **Meta is data**: the schema-validated `meta` field reaches the seam as JSON and is only shape-validated. The host never evaluates a metadata literal, which would let script-controlled accessors run outside the worker's isolation.
 
 **Value boundary**: `materializeFromRealm` copies outbound values and rejects functions, symbols, nested `undefined`, exotic prototypes, cycles, sparse arrays, and non-finite numbers. Data-property copies make `"__proto__"` safe; getters are read normally and a throwing getter fails loudly. `args` crosses through `workerData` and is cloned again before exposure. Realm functions are invoked rather than copied, and thrown values use a total renderer so `result` cannot reject. Hook errors are host-realm `WorkflowError`s, so scripts branch on `name` or `code` rather than `instanceof Error`, as documented in the engine README. Concurrency, total-agent, item, timeout, and grace limits are validated config.
@@ -53,6 +55,8 @@ An output schema makes a schema-valid committed capture mandatory for successful
 ## Testing
 
 Worker-side logic runs through typed in-process child ports and the same closed protocol used by the compiled stdio worker. Host tests independently drive pending starts, late readiness, slow or failed disposal, process death, grace termination, external signals, HMR unload, and lifecycle pairing. Unit tests cover script helpers, unforgeable fatal errors, nullable failures, JSON boundaries, caps, cancellation, child ownership, and structured output through real loops. Scrubbed-environment smokes drive the standalone worker and the installed single-binary worker mode; live-provider execution remains a separate parity-manifest boundary.
+
+Tests force the development fallback independently of helper discovery and require host-side child creation and result polling, plus cold-reopened child logs after worker exit.
 
 ## Deferred (documented non-goals)
 

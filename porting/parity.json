@@ -24112,14 +24112,17 @@
         "apps/seekdeep/src/profile_boot.rs",
         "apps/seekdeep/src/process_shutdown.rs",
         "apps/seekdeep/tests/source_launch_compat.rs",
-        "apps/seekdeep/tests/headless_signal_process.rs"
+        "apps/seekdeep/tests/headless_signal_process.rs",
+        "apps/seekdeep/tests/headless_process.rs",
+        "apps/seekdeep/tests/layered_env_process.rs",
+        "apps/seekdeep/tests/profile_boot_parity.rs"
       ],
       "evidence": [
         "pnpm exec vitest run --config vitest.e2e.config.ts apps/cli/tests/built-bin.e2e.ts (pinned source: 18 passed)",
-        "cargo test -p seekdeep --all-features (Rust: 89 passed across the compiled launcher, real process, profile, and application suites)",
-        "cargo clippy -p seekdeep -p seekdeep-loader -p seekdeep-persona -p seekdeep-tool-skill -p seekdeep-tool-ask-user -p seekdeep-tool-ralph -p seekdeep-tool-workflow --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep --all-features (93 passed, including exact product-profile cold logs, real Bash and todo execution without a CLI overlay, user profile patches, terminal provider errors, layered environment credentials, complete profile registration, and graceful signals)",
+        "cargo clippy -p seekdeep-headless -p seekdeep-core -p seekdeep-goal -p seekdeep-subagent -p seekdeep-tool-goal -p seekdeep-compaction-basic -p seekdeep --all-targets --all-features -- -D warnings"
       ],
-      "note": "the compiled Rust entry owns launcher parsing, profile boot, plugin forwarding, config dumps, headless execution, signal shutdown, and exact exit-code propagation"
+      "note": "the compiled Rust entry routes every profile, including headless without --patch, through the complete profile Loader; it owns parsing, plugin forwarding, config dumps, signal shutdown, and exact exit-code propagation"
     },
     {
       "source": "apps/cli/src/dump-config.ts",
@@ -35597,7 +35600,22 @@
     {
       "source": "examples/headless-agent/tests/headless.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/tests/headless_profile_snapshot.rs",
+        "apps/seekdeep/tests/headless_process.rs",
+        "crates/headless/tests/replay_snapshot_parity.rs",
+        "crates/headless/tests/provider_snapshot_parity.rs",
+        "crates/headless/tests/keyless_loader_smoke.rs",
+        "crates/headless/tests/continuable_settlement_parity.rs",
+        "crates/app-boot/tests/boot_parity.rs"
+      ],
+      "evidence": [
+        "DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.snapshot.config.ts examples/headless-agent/tests/headless.snapshot.ts (pinned source: 14 passed)",
+        "cargo test -p seekdeep-headless -p seekdeep-code-runtime-worker-thread -p seekdeep-workflow-worker-thread --all-features (125 passed, including complete source event streams, cold parent/child logs, and explicitly forced workflow thread fallback)",
+        "cargo test -p seekdeep --all-features --test headless_profile_snapshot (exact product-profile output and cold log passed)",
+        "real provider probes preserve credential failures before HTTP, comment keep-alives, and effective model defaults; the product CLI probes execute Bash and preserve terminal provider-error output"
+      ]
     },
     {
       "source": "examples/headless-agent/tests/keyless-smoke.e2e.ts",
@@ -38827,14 +38845,16 @@
       "status": "verified",
       "targets": [
         "crates/headless/src/lib.rs",
-        "crates/loader/src/lib.rs"
+        "crates/loader/src/lib.rs",
+        "crates/headless/tests/loader_settlement.rs",
+        "apps/seekdeep/tests/headless_signal_process.rs"
       ],
       "evidence": [
-        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo test -p seekdeep-loader -p seekdeep-headless --all-features",
-        "CARGO_TARGET_DIR=/tmp/seekdeep-root-agent-target-20260821 cargo clippy -p seekdeep-loader -p seekdeep-headless --all-targets --all-features -- -D warnings",
-        "pnpm exec vitest run packages/bundle/headless/tests/headless.spec.ts (source commit 37200a934324dd7167ec8a8d3ac1fd01e2239909)"
+        "cargo test -p seekdeep-headless -p seekdeep-code-runtime-worker-thread -p seekdeep-workflow-worker-thread --all-features (125 passed, including 46 headless tests)",
+        "cargo clippy -p seekdeep-headless -p seekdeep-code-runtime-worker-thread -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings",
+        "pnpm exec vitest run packages/bundle/headless/tests/headless.spec.ts packages/bundle/headless/tests/startup.spec.ts (pinned source: 14 passed)"
       ],
-      "note": "Loader-facing runner metadata/config, exact-generation whole-tree settlement, owned task cancellation, fresh Agent drive, durable flush, final-text fold, output, error, and exit mapping are ported"
+      "note": "the runner reads the default model after whole-Loader settlement; disposal cancels and joins the owned Agent through durable flush and final output, while the launcher's first signal exit code remains authoritative"
     },
     {
       "source": "packages/bundle/headless/src/invariant.ts",
@@ -54485,7 +54505,7 @@
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/code-runtime-worker-thread/src/runtime.rs",
         "crates/code-runtime-worker-thread/src/lib.rs"
@@ -54493,7 +54513,8 @@
       "evidence": [
         "Rust public backend validates config, mounts and isolates executions, maps abort/compute/wall controls, caps combined output, and disposes deterministically",
         "cargo clippy -p seekdeep-code-runtime-worker-thread --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "native host-binding ownership is verified, but maxOldGenerationSizeMb is only validated; allocation-limit enforcement required by the source worker resourceLimits is not implemented"
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/invariant.ts",
@@ -84153,11 +84174,14 @@
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/workflow-worker-thread/src/host.rs"
+        "crates/workflow-worker-thread/src/host.rs",
+        "crates/workflow-worker-thread/tests/host_lifecycle_parity.rs",
+        "crates/headless/tests/replay_snapshot_parity.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-workflow-worker-thread --all-features",
-        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-workflow-worker-thread --all-targets --all-features -- -D warnings",
+        "forced thread-fallback regression is red before host-runtime dispatch and green after it; child creation, result polling, and disposal retain the captured host runtime"
       ]
     },
     {

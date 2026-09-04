@@ -8,8 +8,10 @@ use std::sync::{
 use async_trait::async_trait;
 use futures::stream;
 use parking_lot::Mutex;
-use seekdeep_agent::AgentRegistry;
-use seekdeep_agent_default_model::{AgentDefaultModelConfig, install as install_default_model};
+use seekdeep_agent::{AgentRegistry, ModelSelection};
+use seekdeep_agent_default_model::{
+    AGENT_DEFAULT_MODEL, AgentDefaultModelConfig, install as install_default_model,
+};
 use seekdeep_agent_loop::{AgentLoop, AgentLoopServices};
 use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
 use seekdeep_cordis::{Context, Plugin};
@@ -25,12 +27,14 @@ use seekdeep_tools::{ToolRuntimeConfig, install as install_tools};
 #[derive(Debug)]
 struct AnswerAdapter {
     requests: AtomicUsize,
+    models: Mutex<Vec<ModelId>>,
 }
 
 #[async_trait]
 impl LlmAdapter for AnswerAdapter {
-    fn stream(&self, _options: GenerateOptions) -> AdapterStream {
+    fn stream(&self, options: GenerateOptions) -> AdapterStream {
         self.requests.fetch_add(1, Ordering::AcqRel);
+        self.models.lock().push(options.model);
         AdapterStream::new(stream::iter([
             Ok(StreamChunk::TextDelta {
                 index: 0,
@@ -66,6 +70,7 @@ struct RuntimeHarness {
     agents: Arc<AgentRegistry>,
     loop_: AgentLoop,
     adapter: Arc<AnswerAdapter>,
+    _settings_root: tempfile::TempDir,
 }
 
 async fn install_runtime(
@@ -73,12 +78,21 @@ async fn install_runtime(
     exit_code: &Arc<AtomicI32>,
     exit_notify: &Arc<tokio::sync::Notify>,
 ) -> anyhow::Result<RuntimeHarness> {
+    let settings_root = tempfile::tempdir()?;
+    let settings = context.plugin(
+        seekdeep_settings_file::plugin(),
+        serde_json::json!({
+            "path":settings_root.path().join("settings.yaml"),"watch":false,
+        }),
+    )?;
+    settings.await_settled().await?;
     let sessions = seekdeep_core::session_store::SessionStore::install(context)?;
     let agents = Arc::new(AgentRegistry::new(context.clone()));
     agents.provide(context)?;
     let llm = LlmRuntime::install(context)?;
     let adapter = Arc::new(AnswerAdapter {
         requests: AtomicUsize::new(0),
+        models: Mutex::new(Vec::new()),
     });
     llm.register_adapter(&["mock".to_owned()], adapter.clone())?;
     let prompt = install_system_prompt(context, SystemPromptConfig::default())?;
@@ -119,6 +133,7 @@ async fn install_runtime(
         agents,
         loop_,
         adapter,
+        _settings_root: settings_root,
     })
 }
 
@@ -171,12 +186,35 @@ async fn runner_waits_for_every_later_sibling_before_creating_the_agent() -> any
         }
     });
     blocker_started.notified().await;
-    for _ in 0..16 {
-        tokio::task::yield_now().await;
-    }
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            let ready = context.registry().values().iter().any(|runtime| {
+                runtime.name == seekdeep_headless::NAME
+                    && runtime
+                        .fibers
+                        .iter()
+                        .any(|fiber| fiber.fiber().state() == seekdeep_cordis::FiberState::Active)
+            });
+            if ready {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await?;
     assert_eq!(runtime.adapter.requests.load(Ordering::Acquire), 0);
     assert!(output.stdout.lock().is_empty());
     assert_eq!(exit_code.load(Ordering::Acquire), -1);
+
+    context
+        .get(AGENT_DEFAULT_MODEL)
+        .unwrap()
+        .save_selection(&ModelSelection {
+            provider: ProviderId::new("mock"),
+            model: ModelId::new("settled-model"),
+            reasoning_effort: None,
+        })
+        .await?;
 
     blocker_release.notify_one();
     let composition = loading.await??;
@@ -191,6 +229,10 @@ async fn runner_waits_for_every_later_sibling_before_creating_the_agent() -> any
     })
     .await?;
     assert_eq!(runtime.adapter.requests.load(Ordering::Acquire), 1);
+    assert_eq!(
+        &*runtime.adapter.models.lock(),
+        &[ModelId::new("settled-model")]
+    );
     assert_eq!(&*output.stdout.lock(), "LOADER_SETTLED_HEADLESS\n");
     assert!(output.stderr.lock().is_empty());
     assert_eq!(exit_code.load(Ordering::Acquire), 0);
