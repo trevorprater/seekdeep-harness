@@ -147,15 +147,17 @@ jobs:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
-    env:
-      CARGO_HOME: ${{ runner.temp }}/seekdeep-sdk-cargo
-      RUSTUP_HOME: ${{ runner.temp }}/seekdeep-sdk-rustup
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Select task-local Rust cache directories
+        run: |
+          echo "CARGO_HOME=$RUNNER_TEMP/seekdeep-sdk-cargo" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUNNER_TEMP/seekdeep-sdk-rustup" >> "$GITHUB_ENV"
 
       - uses: actions/cache@v4
         with:

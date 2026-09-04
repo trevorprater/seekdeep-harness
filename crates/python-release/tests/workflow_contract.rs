@@ -97,6 +97,31 @@ fn publishing_stays_manual_repository_tag_gated_and_runtime_first() {
 }
 
 #[test]
+fn runner_local_cache_paths_are_resolved_in_a_step_before_cache_and_toolchain_setup() {
+    let github = workflow(include_str!(
+        "../../../.github/workflows/build-exe-for-python-sdk.yml"
+    ));
+    let build = &github["jobs"]["build"];
+    assert!(build["env"].is_null());
+    let steps = build["steps"].as_array().unwrap();
+    let setup = steps
+        .iter()
+        .position(|step| step["name"] == "Select task-local Rust cache directories")
+        .unwrap();
+    let script = steps[setup]["run"].as_str().unwrap();
+    assert!(script.contains("CARGO_HOME=$RUNNER_TEMP/seekdeep-sdk-cargo"));
+    assert!(script.contains("RUSTUP_HOME=$RUNNER_TEMP/seekdeep-sdk-rustup"));
+    assert!(script.contains(">> \"$GITHUB_ENV\""));
+    for action in ["actions/cache@v4", "dtolnay/rust-toolchain@1.93.1"] {
+        let consumer = steps
+            .iter()
+            .position(|step| step["uses"] == action)
+            .unwrap();
+        assert!(setup < consumer, "cache paths must precede {action}");
+    }
+}
+
+#[test]
 fn native_builders_keep_manylinux_compilation_and_validation_on_the_same_pinned_images() {
     let github = workflow(include_str!(
         "../../../.github/workflows/build-exe-for-python-sdk.yml"
