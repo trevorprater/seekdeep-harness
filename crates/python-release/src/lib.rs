@@ -16,6 +16,25 @@ pub mod hook;
 pub mod staging;
 pub mod wheel;
 
+/// Resolves the native binding target paired with a runtime executable.
+///
+/// # Errors
+/// Rejects executable names outside the supported native naming scheme.
+pub fn runtime_binding_target(executable: &str) -> anyhow::Result<executable::Target> {
+    let suffix = executable
+        .strip_prefix("seekdeep-jsonrpc-agent-pkg-")
+        .ok_or_else(|| anyhow::anyhow!("unsupported runtime executable name {executable}"))?;
+    executable::Target::parse(&format!("node24-{suffix}"))
+}
+
+/// Returns the architecture-qualified binding library filename.
+///
+/// # Errors
+/// Rejects an unsupported executable name.
+pub fn runtime_binding_name(executable: &str) -> anyhow::Result<String> {
+    Ok(runtime_binding_target(executable)?.binding_basename())
+}
+
 /// Public Python distribution; the import namespace remains `deepseek_harness`.
 pub const SDK_DISTRIBUTION: &str = "seekdeep-harness-sdk";
 /// Platform-specific runtime distribution.

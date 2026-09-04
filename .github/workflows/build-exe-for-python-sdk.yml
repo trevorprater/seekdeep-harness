@@ -237,6 +237,12 @@ jobs:
           esac
           echo "platform=$platform" >> "$GITHUB_OUTPUT"
           echo "exe=$exe" >> "$GITHUB_OUTPUT"
+          case "$platform" in
+            linux-*) binding="$PWD/dist-exe/seekdeep-python-sdk-ffi-$platform.so" ;;
+            macos-*) binding="$PWD/dist-exe/seekdeep-python-sdk-ffi-$platform.dylib" ;;
+          esac
+          [ -f "$binding" ] || { echo "::error::$binding missing"; exit 1; }
+          echo "binding=$binding" >> "$GITHUB_OUTPUT"
           echo "wheel=$wheel" >> "$GITHUB_OUTPUT"
 
       - name: Full-turn SDK, executable snapshot, and direct-binary smoke
@@ -275,11 +281,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
-          readelf --version-info "${{ steps.runtime.outputs.exe }}" | tee glibc-versions.txt
+          readelf --version-info "${{ steps.runtime.outputs.exe }}" "${{ steps.runtime.outputs.binding }}" | tee glibc-versions.txt
           maximum="$(sed -n 's/.*Name: GLIBC_\([0-9.]*\).*/\1/p' glibc-versions.txt | sort -V | tail -1)"
           [ -n "$maximum" ] || { echo "::error::No GLIBC requirements found"; exit 1; }
           dpkg --compare-versions "$maximum" le 2.28 || {
-            echo "::error::Executable requires GLIBC_$maximum but wheel claims manylinux_2_28"
+            echo "::error::Native runtime payload requires GLIBC_$maximum but wheel claims manylinux_2_28"
             exit 1
           }
 
@@ -287,9 +293,10 @@ jobs:
         if: runner.os == 'macOS'
         env:
           EXE: ${{ steps.runtime.outputs.exe }}
+          BINDING: ${{ steps.runtime.outputs.binding }}
         run: >-
           cargo xtask macos-deployment-target
-          "$EXE" "$EXE-spawn-helper"
+          "$EXE" "$EXE-spawn-helper" "$BINDING"
 
       - name: Run wheel in a manylinux 2.28 container
         if: runner.os == 'Linux'

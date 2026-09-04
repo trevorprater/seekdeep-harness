@@ -19,6 +19,8 @@ Each wheel contains exactly one runtime executable. The macOS wheel also contain
 
 ## Resolution API
 
+These functions are generated bindings to the architecture-matched `seekdeep-python-sdk-ffi-<platform>-<arch>` library shipped beside the runtime executable. The native builder generates the bindings and library; they are also required for an editable checkout. The wheel builder rejects a missing or mixed binding-library payload. The [binding ABI note](https://github.com/deepseek-ai/seekdeep-harness/blob/master/.agents/notes/implemented/architecture/2026-09-04-rust-python-runtime-binding-abi.md) owns memory and callback rules.
+
 - `resolve_bundled_launch_args(mode=None) -> tuple[str, ...]` — the argv tuple that launches the bundled runtime: `(exe_path,)` in exe mode, `(node_path, bin_js_path)` in node mode. Mode selection: explicit argument > `SEEKDEEP_RUNTIME_MODE` env var (`exe` | `node`) > automatic. Automatic resolution finds the production exe ONLY — the dev-only node carrier must be opted into explicitly so a production deployment can never silently ride on a source build.
 - `bundled_runtime_path() -> Path` — the platform exe path (exe carrier only; on macOS it validates that the required sibling `-spawn-helper` is also installed). The node carrier has no single-path equivalent and launches via the argv tuple above.
 - `bundled_default_config_path() -> Path` — the checked-in default config (see below).

@@ -19,6 +19,8 @@ exe 缺失时抛出 `FileNotFoundError`，并写明两种获取途径：在 seek
 
 ## 解析 API
 
+这些函数是生成的绑定，委托给与架构匹配、随运行时可执行文件一同交付的 `seekdeep-python-sdk-ffi-<platform>-<arch>` 库。原生构建器生成绑定和库；可编辑检出同样需要它们。wheel 包构建器拒绝缺失或混合的绑定库载荷。[绑定 ABI 记录](https://github.com/deepseek-ai/seekdeep-harness/blob/master/.agents/notes/implemented/architecture/2026-09-04-rust-python-runtime-binding-abi.md)负责内存和回调规则。
+
 - `resolve_bundled_launch_args(mode=None) -> tuple[str, ...]`——启动内置运行时的 argv 元组：exe 模式下为 `(exe_path,)`，node 模式下为 `(node_path, bin_js_path)`。模式选择：显式参数 > `SEEKDEEP_RUNTIME_MODE` 环境变量（`exe` | `node`）> 自动。自动解析只找生产 exe——仅限开发的 node 载体必须显式选用，从而生产部署绝不会悄悄跑在源码构建上。
 - `bundled_runtime_path() -> Path`——平台 exe 路径（仅 exe 载体，并会在 macOS 上校验必要的 `-spawn-helper` 伴随文件也已安装）。node 载体没有单一路径的等价物，经由上面的 argv 元组启动。
 - `bundled_default_config_path() -> Path`——检入的默认配置（见下文）。

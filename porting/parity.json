@@ -84985,7 +84985,7 @@
       "evidence": [
         "native hook policy and generated staged-package binding exercised by real runtime fixture-wheel build"
       ],
-      "note": "release staging uses Rust hook policy; direct editable/source-package preparation remains pending with Python compatibility bindings"
+      "note": "Rust hook policy and generated bindings pass real wheel and editable-install checks; source module-import manifest snapshot behavior remains pending"
     },
     {
       "source": "python/sdk-runtime/package.json",
@@ -85023,7 +85023,19 @@
     {
       "source": "python/sdk-runtime/src/deepseek_harness_runtime/__init__.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/python-sdk/src/runtime.rs",
+        "crates/python-sdk/src/bindings.rs",
+        "crates/python-sdk-ffi/src/lib.rs",
+        "crates/python-sdk-ffi/src/dispatch.rs",
+        "crates/python-sdk-ffi/examples/runtime_source_parity.rs"
+      ],
+      "evidence": [
+        "pinned runtime-resolution suite: 5 tests pass through generated Rust-backed bindings",
+        "real macOS runtime wheel imports on Python 3.10 and 3.14; editable import and native executable launch pass"
+      ],
+      "note": "runtime binding and production packaging are implemented; final path edge-case and release-platform audit remains pending"
     },
     {
       "source": "python/sdk-runtime/src/deepseek_harness_runtime/deepseek-harness-runtime.json",
@@ -85160,7 +85172,13 @@
     {
       "source": "python/sdk/tests/test_runtime_resolution.py",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/python-sdk/tests/runtime_parity.rs",
+        "crates/python-sdk-ffi/tests/runtime_binding.rs",
+        "crates/python-sdk-ffi/examples/runtime_source_parity.rs"
+      ],
+      "note": "all 5 source cases pass against generated native bindings; retained with the owning runtime API until its remaining audit closes"
     },
     {
       "source": "python/sdk/tests/test_smoke_model.py",

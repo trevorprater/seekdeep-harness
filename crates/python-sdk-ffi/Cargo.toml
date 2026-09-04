@@ -1,0 +1,33 @@
+[package]
+name = "seekdeep-python-sdk-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Narrow C ABI for Rust-owned Python SDK behavior"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+parking_lot.workspace = true
+seekdeep-python-sdk = { path = "../python-sdk" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+# C callers pass borrowed byte pointers and callbacks. Only this crate may
+# dereference them; the complete SDK implementation remains safe Rust.
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"

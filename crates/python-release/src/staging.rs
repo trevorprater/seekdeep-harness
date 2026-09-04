@@ -41,6 +41,7 @@ fn ignored(name: &str) -> bool {
         ".venv" | ".pytest_cache" | "__pycache__" | "dist" | "node_modules"
     ) || name.strip_suffix(".pyc").is_some()
         || name.starts_with("seekdeep-jsonrpc-agent-pkg-")
+        || name.starts_with("seekdeep-python-sdk-ffi-")
 }
 
 fn copy_file(source: &Path, destination: &Path) -> anyhow::Result<()> {
@@ -170,6 +171,22 @@ pub fn stage_runtime(
             &runtime.join(format!("{executable_name}{suffix}")),
         )?;
     }
+    let binding_name = crate::runtime_binding_name(executable_name)?;
+    let binding = executable
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("runtime executable parent is absent"))?
+        .join(&binding_name);
+    crate::executable::validate_native_library(
+        &binding,
+        &crate::runtime_binding_target(executable_name)?,
+    )?;
+    copy_file(&binding, &runtime.join(&binding_name))?;
+    let package = runtime
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("runtime package parent is absent"))?;
+    for (name, text) in seekdeep_python_sdk::bindings::runtime_bindings(&binding_name)? {
+        fs::write(package.join(name), text)?;
+    }
     fs::write(destination.join("hatch_build.py"), NATIVE_HATCH_BINDING)?;
     Ok(())
 }
@@ -180,18 +197,27 @@ fn read_text(path: &Path) -> anyhow::Result<String> {
         .replace('\r', "\n"))
 }
 
-const NATIVE_HATCH_BINDING: &str = r#""""Generated binding to the compiled Rust runtime-wheel policy."""
+pub(crate) const NATIVE_HATCH_BINDING: &str = r#""""Generated binding to the compiled Rust runtime-wheel policy."""
 import json
 import os
 import subprocess
+from pathlib import Path
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 class RuntimeBuildHook(BuildHookInterface):
     def initialize(self, version, build_data):
+        tool = os.environ.get("SEEKDEEP_PYTHON_RELEASE_TOOL")
+        command = [tool] if tool else [
+            "cargo", "run", "--quiet", "--manifest-path",
+            str(Path(__file__).resolve().parents[2] / "Cargo.toml"),
+            "--package", "seekdeep-python-release", "--bin", "seekdeep-python-release", "--",
+        ]
+        environment = os.environ.copy()
+        environment["CARGO_INCREMENTAL"] = "0"
+        environment.setdefault("CARGO_BUILD_JOBS", "2")
         result = subprocess.run(
-            [os.environ["SEEKDEEP_PYTHON_RELEASE_TOOL"], "hook", "--root", self.root,
-             "--version", version, "--target", self.target_name],
-            capture_output=True, text=True,
+            command + ["hook", "--root", self.root, "--version", version, "--target", self.target_name],
+            capture_output=True, text=True, env=environment,
         )
         if result.returncode:
             raise RuntimeError(result.stderr.strip())

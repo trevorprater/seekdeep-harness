@@ -2,6 +2,11 @@
 /dist-exe/
 /python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
 /python/sdk-runtime/src/deepseek_harness_runtime/runtime/seekdeep-jsonrpc-agent-pkg-*
+/python/sdk-runtime/src/deepseek_harness_runtime/runtime/seekdeep-python-sdk-ffi-*
+/python/sdk-runtime/src/deepseek_harness_runtime/__init__.py
+/python/sdk-runtime/src/deepseek_harness_runtime/_bridge.py
+/python/sdk-runtime/src/deepseek_harness_runtime/__pycache__/
+/python/sdk-runtime/hatch_build.py
 /apps/web/dist/
 /apps/web/generated/
 /packages/client/*/lib/

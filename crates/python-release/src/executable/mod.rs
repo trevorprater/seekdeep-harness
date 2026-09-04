@@ -5,6 +5,7 @@ mod target;
 
 pub use pipeline::{
     BuildReport, ENTRY_BIN, RUNTIME_DIRECTORY, build_executables, validate_native_artifact,
+    validate_native_library,
 };
 pub use target::{Arch, BuildOptions, CliError, CliOutcome, Host, Platform, Target, parse_cli};
 

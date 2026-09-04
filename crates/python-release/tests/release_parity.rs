@@ -63,11 +63,48 @@ fn platforms() -> serde_json::Value {
 
 fn executable(path: &Path) {
     fs::write(path, b"native payload").unwrap();
+    if let Some(name) = path.file_name().and_then(|name| name.to_str())
+        && let Ok(target) = seekdeep_python_release::runtime_binding_target(name)
+    {
+        fs::write(
+            path.parent().unwrap().join(target.binding_basename()),
+            library_header(&target),
+        )
+        .unwrap();
+    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
     }
+}
+
+fn library_header(target: &seekdeep_python_release::executable::Target) -> [u8; 32] {
+    use seekdeep_python_release::executable::{Arch, Platform};
+    let mut header = [0_u8; 32];
+    match target.platform() {
+        Platform::Linux => {
+            header[..4].copy_from_slice(b"\x7fELF");
+            header[4] = 2;
+            header[5] = 1;
+            header[16..18].copy_from_slice(&3_u16.to_le_bytes());
+            let machine = match target.arch() {
+                Arch::X64 => 62_u16,
+                Arch::Arm64 => 183,
+            };
+            header[18..20].copy_from_slice(&machine.to_le_bytes());
+        }
+        Platform::Macos => {
+            header[..4].copy_from_slice(&[0xcf, 0xfa, 0xed, 0xfe]);
+            let machine = match target.arch() {
+                Arch::X64 => 0x0100_0007_u32,
+                Arch::Arm64 => 0x0100_000c,
+            };
+            header[4..8].copy_from_slice(&machine.to_le_bytes());
+            header[12..16].copy_from_slice(&6_u32.to_le_bytes());
+        }
+    }
+    header
 }
 
 #[test]
@@ -197,6 +234,18 @@ fn hook_rejects_sdists_mixed_payloads_missing_helpers_and_unexecutable_files() {
     let binary = runtime.join("seekdeep-jsonrpc-agent-pkg-linux-x64");
     executable(&binary);
     assert!(hook::initialize(&staged, "standard", "wheel", None, "Linux", "AMD64").is_ok());
+    let binding = runtime.join(
+        seekdeep_python_release::runtime_binding_name("seekdeep-jsonrpc-agent-pkg-linux-x64")
+            .unwrap(),
+    );
+    fs::remove_file(&binding).unwrap();
+    assert!(
+        hook::initialize(&staged, "standard", "wheel", None, "Linux", "AMD64")
+            .unwrap_err()
+            .to_string()
+            .contains("binding payload")
+    );
+    executable(&binary);
     assert!(
         hook::initialize(
             &staged,
@@ -211,6 +260,7 @@ fn hook_rejects_sdists_mixed_payloads_missing_helpers_and_unexecutable_files() {
     executable(&runtime.join("seekdeep-jsonrpc-agent-pkg-macos-arm64"));
     assert!(hook::initialize(&staged, "standard", "wheel", None, "Linux", "x86_64").is_err());
     fs::remove_file(runtime.join("seekdeep-jsonrpc-agent-pkg-macos-arm64")).unwrap();
+    fs::remove_file(runtime.join("seekdeep-python-sdk-ffi-macos-arm64.dylib")).unwrap();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -258,6 +308,19 @@ fn wheel_file(
             )
             .unwrap();
         archive.write_all(b"runtime").unwrap();
+        if package == Package::Runtime {
+            let target = seekdeep_python_release::runtime_binding_target(name).unwrap();
+            archive
+                .start_file(
+                    format!(
+                        "deepseek_harness_runtime/runtime/{}",
+                        target.binding_basename()
+                    ),
+                    options,
+                )
+                .unwrap();
+            archive.write_all(&library_header(&target)).unwrap();
+        }
     }
     archive.finish().unwrap();
     path

@@ -147,6 +147,8 @@ members = [
   "crates/pty-spawn-helper",
   "crates/pwsh-local",
   "crates/python-release",
+  "crates/python-sdk",
+  "crates/python-sdk-ffi",
   "crates/pwsh-sandbox",
   "crates/repeat-tool-reminder",
   "crates/repository-tools",

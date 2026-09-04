@@ -4589,6 +4589,17 @@ fn is_generated_output(path: &Path) -> bool {
             "runtime",
             "node",
         ])
+        || matches!(
+            parts.as_slice(),
+            ["python", "sdk-runtime", "hatch_build.py"]
+                | [
+                    "python",
+                    "sdk-runtime",
+                    "src",
+                    "deepseek_harness_runtime",
+                    "__init__.py" | "_bridge.py"
+                ]
+        )
 }
 
 #[cfg(test)]
@@ -6283,8 +6294,15 @@ mod tests {
         assert!(is_generated_output(Path::new(
             "python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/node_modules/@seekdeep-ai/seekdeep-sdk-jsonrpc-demo/lib/packaged-bin.js"
         )));
-        for source in [
+        for binding in [
+            "python/sdk-runtime/hatch_build.py",
             "python/sdk-runtime/src/deepseek_harness_runtime/__init__.py",
+            "python/sdk-runtime/src/deepseek_harness_runtime/_bridge.py",
+        ] {
+            assert!(is_generated_output(Path::new(binding)), "{binding}");
+        }
+        for source in [
+            "python/sdk-runtime/src/deepseek_harness_runtime/implementation.py",
             "python/sdk-runtime/src/deepseek_harness_runtime/runtime/node-source/entry.js",
             "python/sdk/src/deepseek_harness/runtime/node/entry.js",
         ] {

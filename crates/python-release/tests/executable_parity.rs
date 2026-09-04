@@ -155,6 +155,7 @@ fn dry_run_does_not_create_outputs_or_launch_cargo() {
     };
     let report = build_executables(temporary.path(), &options, &host()).unwrap();
     assert_eq!(report.products.len(), 3);
+    assert_eq!(report.binding_libraries.len(), 2);
     assert!(!temporary.path().join("dist-exe").exists());
     assert!(!report.node_carrier.exists());
 }

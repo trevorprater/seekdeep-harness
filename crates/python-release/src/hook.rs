@@ -118,6 +118,22 @@ pub fn initialize(
             executable.display()
         );
     }
+    let binding_name = crate::runtime_binding_name(&platform.executable)?;
+    let mut bindings = std::fs::read_dir(&runtime)?
+        .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().into_owned()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    bindings.retain(|name| name.starts_with("seekdeep-python-sdk-ffi-"));
+    bindings.sort();
+    anyhow::ensure!(
+        bindings == [binding_name.clone()],
+        "runtime wheel {tag} binding payload must be {}; found {}",
+        python_repr(&json!([binding_name])),
+        python_repr(&json!(bindings))
+    );
+    crate::executable::validate_native_library(
+        &runtime.join(binding_name),
+        &crate::runtime_binding_target(&platform.executable)?,
+    )?;
     Ok(json!({"pure_python":false,"infer_tag":false,"tag":format!("py3-none-{tag}")}))
 }
 

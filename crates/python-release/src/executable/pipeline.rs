@@ -24,6 +24,8 @@ const HELPER_BIN: &str = "seekdeep-pty-spawn-helper";
 pub struct BuildReport {
     /// Executables and required helper sidecars, in target order.
     pub products: Vec<PathBuf>,
+    /// Architecture-qualified native libraries for the selected Python runtime wheels.
+    pub binding_libraries: Vec<PathBuf>,
     /// The generated dev-only carrier directory.
     pub node_carrier: PathBuf,
 }
@@ -31,6 +33,7 @@ pub struct BuildReport {
 struct Artifacts {
     runtime: PathBuf,
     helper: Option<PathBuf>,
+    binding: PathBuf,
 }
 
 /// Builds the host development carrier and each requested native executable serially.
@@ -61,6 +64,11 @@ pub fn build_executables(
     let node_carrier = runtime_directory.join("node");
     let output = root.join("dist-exe");
     let products = product_paths(&output, &options.targets);
+    let binding_libraries = options
+        .targets
+        .iter()
+        .map(|target| output.join(target.binding_basename()))
+        .collect::<Vec<_>>();
     println!(
         "build-exe-for-python-sdk: targets: {}",
         options
@@ -78,6 +86,7 @@ pub fn build_executables(
         print_dry_run(options, host, &node_carrier, &runtime_directory, &products);
         return Ok(BuildReport {
             products,
+            binding_libraries,
             node_carrier,
         });
     }
@@ -91,6 +100,7 @@ pub fn build_executables(
         &crate::repository_version(&root)?,
     )?;
     ensure_owned_directory(&root, &runtime_directory)?;
+    stage_python_bindings(&root, &runtime_directory, &host_target, &host_artifacts)?;
     stage_node_carrier(&root, &node_carrier, &host_target, &host_artifacts)?;
     ensure_owned_directory(&root, &output)?;
     for target in &options.targets {
@@ -104,6 +114,7 @@ pub fn build_executables(
         if let Some(helper) = &artifacts.helper {
             copy_executable(helper, &helper_path(&product))?;
         }
+        copy_executable(&artifacts.binding, &output.join(target.binding_basename()))?;
     }
     println!("build-exe-for-python-sdk: products:");
     for product in &products {
@@ -115,7 +126,7 @@ pub fn build_executables(
             tenths % 10
         );
     }
-    for product in &products {
+    for product in products.iter().chain(&binding_libraries) {
         let destination = runtime_directory.join(
             product
                 .file_name()
@@ -126,6 +137,7 @@ pub fn build_executables(
     }
     Ok(BuildReport {
         products,
+        binding_libraries,
         node_carrier,
     })
 }
@@ -197,6 +209,15 @@ fn print_dry_run(
     }
     println!("build-exe-for-python-sdk: [dry-run] verify compiled runtime manifest");
     println!(
+        "build-exe-for-python-sdk: [dry-run] generate Python runtime declarations and native hook binding"
+    );
+    for target in &options.targets {
+        println!(
+            "build-exe-for-python-sdk: [dry-run] stage {}",
+            target.binding_basename()
+        );
+    }
+    println!(
         "build-exe-for-python-sdk: [dry-run] replace generated Node carrier {}",
         node.display()
     );
@@ -247,6 +268,9 @@ fn cargo_build_args(target: &Target) -> Vec<String> {
         "seekdeep-sdk-jsonrpc-demo",
         "--bin",
         RUNTIME_BIN,
+        "-p",
+        "seekdeep-python-sdk-ffi",
+        "--lib",
     ];
     if target.platform() == Platform::Macos {
         arguments.extend(["-p", "seekdeep-pty-spawn-helper", "--bin", HELPER_BIN]);
@@ -295,11 +319,13 @@ fn compile(
     let artifacts = Artifacts {
         runtime: directory.join(RUNTIME_BIN),
         helper: (target.platform() == Platform::Macos).then(|| directory.join(HELPER_BIN)),
+        binding: directory.join(target.cargo_binding_basename()),
     };
     validate_native_artifact(&artifacts.runtime, target)?;
     if let Some(helper) = &artifacts.helper {
         validate_native_artifact(helper, target)?;
     }
+    validate_native_library(&artifacts.binding, target)?;
     Ok(artifacts)
 }
 
@@ -308,6 +334,18 @@ fn compile(
 /// # Errors
 /// Rejects absent or non-executable artifacts, truncated headers, and foreign formats or architectures.
 pub fn validate_native_artifact(path: &Path, target: &Target) -> anyhow::Result<()> {
+    validate_native_file(path, target, false)
+}
+
+/// Confirms a C ABI library's native format and architecture without requiring executable mode bits.
+///
+/// # Errors
+/// Requires shared-object or dynamic-library headers with the expected architecture.
+pub fn validate_native_library(path: &Path, target: &Target) -> anyhow::Result<()> {
+    validate_native_file(path, target, true)
+}
+
+fn validate_native_file(path: &Path, target: &Target, library: bool) -> anyhow::Result<()> {
     anyhow::ensure!(
         path.is_file(),
         "build-exe-for-python-sdk: compiled product {} is missing; run without --skip-build",
@@ -317,7 +355,7 @@ pub fn validate_native_artifact(path: &Path, target: &Target) -> anyhow::Result<
     {
         use std::os::unix::fs::PermissionsExt as _;
         anyhow::ensure!(
-            fs::metadata(path)?.permissions().mode() & 0o100 != 0,
+            library || fs::metadata(path)?.permissions().mode() & 0o100 != 0,
             "build-exe-for-python-sdk: product {} is not executable",
             path.display()
         );
@@ -329,7 +367,11 @@ pub fn validate_native_artifact(path: &Path, target: &Target) -> anyhow::Result<
             &header[..4] == b"\x7fELF"
                 && header[4] == 2
                 && header[5] == 1
-                && matches!(u16::from_le_bytes([header[16], header[17]]), 2 | 3)
+                && if library {
+                    u16::from_le_bytes([header[16], header[17]]) == 3
+                } else {
+                    matches!(u16::from_le_bytes([header[16], header[17]]), 2 | 3)
+                }
                 && u16::from_le_bytes([header[18], header[19]])
                     == match target.arch() {
                         Arch::X64 => 62,
@@ -343,7 +385,8 @@ pub fn validate_native_artifact(path: &Path, target: &Target) -> anyhow::Result<
                         Arch::X64 => 0x0100_0007,
                         Arch::Arm64 => 0x0100_000c,
                     }
-                && u32::from_le_bytes([header[12], header[13], header[14], header[15]]) == 2
+                && u32::from_le_bytes([header[12], header[13], header[14], header[15]])
+                    == if library { 6 } else { 2 }
         }
     };
     anyhow::ensure!(
@@ -352,6 +395,54 @@ pub fn validate_native_artifact(path: &Path, target: &Target) -> anyhow::Result<
         path.display(),
         target.platform_arch()
     );
+    Ok(())
+}
+
+fn stage_python_bindings(
+    root: &Path,
+    runtime: &Path,
+    target: &Target,
+    artifacts: &Artifacts,
+) -> anyhow::Result<()> {
+    let package = runtime
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("runtime package parent is absent"))?;
+    ensure_owned_directory(root, package)?;
+    let name = target.binding_basename();
+    copy_executable(&artifacts.binding, &runtime.join(&name))?;
+    for (filename, text) in seekdeep_python_sdk::bindings::runtime_bindings(&name)? {
+        write_generated_binding(&package.join(filename), &text)?;
+    }
+    write_generated_binding(
+        &root.join("python/sdk-runtime/hatch_build.py"),
+        crate::staging::NATIVE_HATCH_BINDING,
+    )?;
+    println!("build-exe-for-python-sdk: generated Rust-backed Python runtime bindings");
+    Ok(())
+}
+
+fn write_generated_binding(path: &Path, text: &str) -> anyhow::Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            anyhow::ensure!(
+                metadata.is_file() && !metadata.file_type().is_symlink(),
+                "generated Python binding is not an owned file: {}",
+                path.display()
+            );
+            let current = fs::read_to_string(path)?;
+            anyhow::ensure!(
+                current.starts_with("# Generated by seekdeep-python-sdk;")
+                    || current.starts_with(
+                        "\"\"\"Generated binding to the compiled Rust runtime-wheel policy."
+                    ),
+                "refusing to overwrite an authored Python binding: {}",
+                path.display()
+            );
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    fs::write(path, text)?;
     Ok(())
 }
 

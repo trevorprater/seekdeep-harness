@@ -40,30 +40,30 @@ pub fn verify_wheel(
         path.display(),
         optional_list(wheel.get("tag"))
     );
-    require_header(path, &metadata, "version", version, "version")?;
-    require_header(
-        path,
-        &metadata,
-        "name",
-        package.distribution(),
-        "distribution name",
-    )?;
-    require_header(
-        path,
-        &metadata,
-        "license-expression",
-        "MIT",
-        "license expression",
-    )?;
-    verify_licenses(path, package, &metadata)?;
+    verify_identity_headers(path, package, version, &metadata)?;
     let runtime_files = names
         .iter()
         .filter(|name| name.contains("/runtime/seekdeep-jsonrpc-agent-pkg-"))
+        .collect::<Vec<_>>();
+    let binding_files = names
+        .iter()
+        .filter(|name| name.contains("/runtime/seekdeep-python-sdk-ffi-"))
         .collect::<Vec<_>>();
     match package {
         Package::Runtime => {
             let platform = platform
                 .ok_or_else(|| anyhow::anyhow!("runtime wheel verification requires a platform"))?;
+            let expected_binding = format!(
+                "deepseek_harness_runtime/runtime/{}",
+                crate::runtime_binding_name(&platform.executable)?
+            );
+            anyhow::ensure!(
+                binding_files == [&expected_binding],
+                "{} native binding payload must be {}; found {}",
+                path.display(),
+                expected_binding,
+                python_repr(&json!(binding_files))
+            );
             let expected = runtime_suffixes(&platform.executable)
                 .iter()
                 .map(|suffix| format!("{}{suffix}", platform.executable))
@@ -97,6 +97,10 @@ pub fn verify_wheel(
         }
         Package::Sdk => {
             anyhow::ensure!(
+                binding_files.is_empty(),
+                "SDK wheel unexpectedly contains native binding libraries"
+            );
+            anyhow::ensure!(
                 runtime_files.is_empty(),
                 "SDK wheel unexpectedly contains runtime executables: {}",
                 python_repr(&json!(runtime_files))
@@ -115,6 +119,22 @@ pub fn verify_wheel(
 }
 
 type Headers = IndexMap<String, Vec<String>>;
+
+fn verify_identity_headers(
+    path: &Path,
+    package: Package,
+    version: &str,
+    metadata: &Headers,
+) -> anyhow::Result<()> {
+    for (field, expected, label) in [
+        ("version", version, "version"),
+        ("name", package.distribution(), "distribution name"),
+        ("license-expression", "MIT", "license expression"),
+    ] {
+        require_header(path, metadata, field, expected, label)?;
+    }
+    verify_licenses(path, package, metadata)
+}
 
 fn verify_licenses(path: &Path, package: Package, metadata: &Headers) -> anyhow::Result<()> {
     let expected = match package {

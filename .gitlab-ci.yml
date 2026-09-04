@@ -72,7 +72,7 @@ sdk-wheel:
     - .wheel-smoke/bin/python scripts/smoke-python-runtime.py --scenario sdk-default
     - |
       if [ "${PLATFORM#linux-}" != "$PLATFORM" ]; then
-        readelf --version-info "$EXE" > glibc-versions.txt
+        readelf --version-info "$EXE" "$PWD/dist-exe/seekdeep-python-sdk-ffi-$PLATFORM.so" > glibc-versions.txt
         maximum="$(sed -n 's/.*Name: GLIBC_\([0-9.]*\).*/\1/p' glibc-versions.txt | sort -V | tail -1)"
         test -n "$maximum"
         dpkg --compare-versions "$maximum" le 2.28
@@ -85,7 +85,7 @@ sdk-wheel:
       fi
     - |
       if [ "$PLATFORM" = macos-arm64 ]; then
-        cargo xtask macos-deployment-target "$EXE" "$EXE-spawn-helper"
+        cargo xtask macos-deployment-target "$EXE" "$EXE-spawn-helper" "$PWD/dist-exe/seekdeep-python-sdk-ffi-$PLATFORM.dylib"
       fi
   artifacts:
     paths: [release/$PLATFORM/*.whl]

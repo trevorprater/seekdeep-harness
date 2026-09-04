@@ -20,7 +20,13 @@ Source = "https://github.com/deepseek-ai/seekdeep-harness"
 # Include the injected executable and default config; exclude the dev-only node
 # closure from wheels and sdists.
 [tool.hatch.build]
-artifacts = ["src/deepseek_harness_runtime/runtime/seekdeep-jsonrpc-agent-*"]
+artifacts = [
+  "src/deepseek_harness_runtime/runtime/seekdeep-jsonrpc-agent-*",
+  "src/deepseek_harness_runtime/runtime/seekdeep-python-sdk-ffi-*",
+  "src/deepseek_harness_runtime/__init__.py",
+  "src/deepseek_harness_runtime/_bridge.py",
+  "hatch_build.py",
+]
 exclude = ["src/deepseek_harness_runtime/runtime/node"]
 
 [tool.hatch.build.targets.wheel]

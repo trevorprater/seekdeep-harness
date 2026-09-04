@@ -133,6 +133,25 @@ impl Target {
     pub fn basename(&self) -> String {
         format!("seekdeep-jsonrpc-agent-pkg-{}", self.platform_arch())
     }
+
+    /// Architecture-qualified C ABI library distributed with the runtime carrier.
+    pub fn binding_basename(&self) -> String {
+        format!(
+            "seekdeep-python-sdk-ffi-{}.{}",
+            self.platform_arch(),
+            match self.platform {
+                Platform::Linux => "so",
+                Platform::Macos => "dylib",
+            },
+        )
+    }
+
+    pub(crate) fn cargo_binding_basename(&self) -> &'static str {
+        match self.platform {
+            Platform::Linux => "libseekdeep_python_sdk_ffi.so",
+            Platform::Macos => "libseekdeep_python_sdk_ffi.dylib",
+        }
+    }
 }
 
 /// Injected source host vocabulary for deterministic target and CLI tests.
