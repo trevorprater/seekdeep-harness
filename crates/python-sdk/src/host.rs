@@ -2,11 +2,16 @@
 
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
 
-use crate::{Error, Result};
+use crate::{Error, Notification, NotificationData, Result};
 
 /// Host effects used by the synchronous SDK, including its monotonic timeout clock.
 #[derive(Clone)]
 pub struct Host {
+    /// Retains the foreign owner until both reader threads finish.
+    pub reader_lifetime:
+        Arc<dyn Fn() -> Result<Arc<dyn std::any::Any + Send + Sync>> + Send + Sync>,
+    /// Creates the shared notification object before routing it to subscribers.
+    pub notification: Arc<dyn Fn(NotificationData) -> Result<Notification> + Send + Sync>,
     /// Current working directory when a path is resolved.
     pub cwd: Arc<dyn Fn() -> Result<PathBuf> + Send + Sync>,
     /// Caller environment captured when the subprocess starts.
@@ -27,6 +32,8 @@ impl Host {
     ) -> Self {
         let epoch = Instant::now();
         Self {
+            reader_lifetime: Arc::new(|| Ok(Arc::new(()))),
+            notification: Arc::new(|value| Ok(Notification::new(value))),
             cwd: Arc::new(|| std::env::current_dir().map_err(|error| Error::io(&error, None))),
             environment: Arc::new(|| std::env::vars().collect()),
             monotonic: Arc::new(move || epoch.elapsed().as_secs_f64()),

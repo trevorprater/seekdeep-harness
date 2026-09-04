@@ -275,7 +275,7 @@ impl<T: Read> StreamReader for T {
 pub(crate) fn read_lines(
     mut reader: impl StreamReader,
     cancelled: &AtomicBool,
-    mut on_line: impl FnMut(String),
+    mut on_line: impl FnMut(String) -> Result<()>,
 ) -> Result<()> {
     let mut bytes = [0_u8; 8192];
     let mut line = Vec::new();
@@ -286,7 +286,7 @@ pub(crate) fn read_lines(
             .map_err(|error| Error::io(&error, None))?;
         if count == 0 {
             if !line.is_empty() && !cancelled.load(Ordering::Acquire) {
-                on_line(decode_line(&line)?);
+                on_line(decode_line(&line)?)?;
             }
             return Ok(());
         }
@@ -297,7 +297,7 @@ pub(crate) fn read_lines(
             }
             after_cr = byte == b'\r';
             if byte == b'\n' || byte == b'\r' {
-                on_line(decode_line(&line)?);
+                on_line(decode_line(&line)?)?;
                 line.clear();
             } else {
                 line.push(byte);

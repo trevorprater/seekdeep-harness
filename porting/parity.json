@@ -85106,27 +85106,79 @@
     {
       "source": "python/sdk/src/deepseek_harness/__init__.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/python-sdk/src/bindings/sdk.rs",
+        "crates/python-sdk-ffi/examples/client_source_parity.rs"
+      ],
+      "evidence": [
+        "generated root exports and ordered __all__ match the pinned Python package in a live declaration comparison"
+      ]
     },
     {
       "source": "python/sdk/src/deepseek_harness/api.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/python-sdk/src/api.rs",
+        "crates/python-sdk/src/observation.rs",
+        "crates/python-sdk/src/bindings/sdk.rs",
+        "crates/python-sdk-ffi/src/client.rs",
+        "crates/python-sdk-ffi/src/objects.rs",
+        "crates/python-sdk-ffi/examples/client_source_parity.rs",
+        "crates/python-sdk-ffi/examples/installed_source_smoke.rs"
+      ],
+      "evidence": [
+        "all pinned client tests pass through the generated Rust-backed facade, including receipt-to-idle ownership and descendant notifications",
+        "shared notifications, captured-event replacement, live config reads, and cross-context exception causes have dedicated regressions",
+        "installed macOS SDK/runtime wheels pass default, custom text/code/workflow, and direct source smokes on Python 3.10 and 3.14"
+      ],
+      "note": "client bindings and installed full turns are implemented; complete Python value/path edge cases and installed minimal/advanced scenarios remain pending"
     },
     {
       "source": "python/sdk/src/deepseek_harness/client.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/python-sdk/src/client.rs",
+        "crates/python-sdk/src/process.rs",
+        "crates/python-sdk/src/observation.rs",
+        "crates/python-sdk/src/bindings/sdk.rs",
+        "crates/python-sdk-ffi/src/client.rs",
+        "crates/python-sdk-ffi/src/objects.rs",
+        "crates/python-sdk-ffi/examples/client_source_parity.rs"
+      ],
+      "evidence": [
+        "all pinned Python client tests pass against the compiled facade; native subprocess tests pin restart, shutdown, timeout, routing, and single-consumption failures",
+        "retained interpreter objects preserve subscriber identity, callback error lifetime, and original exception ownership across harness/client contexts"
+      ],
+      "note": "the complete Python value and transport edge-case audit remains pending"
     },
     {
       "source": "python/sdk/src/deepseek_harness/errors.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/python-sdk/src/error.rs",
+        "crates/python-sdk/src/bindings/sdk.rs",
+        "crates/python-sdk-ffi/examples/client_source_parity.rs"
+      ],
+      "evidence": [
+        "live source comparison matches exception inheritance, constructor signature, args, code/message fields, and exact data-object identity"
+      ]
     },
     {
       "source": "python/sdk/src/deepseek_harness/models.py",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/python-sdk/src/types.rs",
+        "crates/python-sdk/src/bindings/sdk.rs",
+        "crates/python-sdk-ffi/examples/client_source_parity.rs"
+      ],
+      "evidence": [
+        "live source comparison matches model signatures/annotations, dataclass fields/slots/equality/repr, shared payload identity, and Pydantic defaults and extra-field handling"
+      ]
     },
     {
       "source": "python/sdk/tests/manual_sdk_agent_smoke.py",
@@ -85141,7 +85193,15 @@
     {
       "source": "python/sdk/tests/test_client.py",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/python-sdk/tests/client_parity.rs",
+        "crates/python-sdk/tests/observation_parity.rs",
+        "crates/python-sdk-ffi/examples/client_source_parity.rs"
+      ],
+      "evidence": [
+        "the complete pinned client test file runs against generated Rust-backed bindings; 33 pinned client/runtime cases and five additional identity/config/exception regressions pass"
+      ]
     },
     {
       "source": "python/sdk/tests/test_macos_deployment_target.py",
@@ -86411,9 +86471,10 @@
       "kind": "production-code",
       "status": "pending",
       "targets": [
-        "crates/jsonrpc-demo/examples/packaged_source_smoke.rs"
+        "crates/jsonrpc-demo/examples/packaged_source_smoke.rs",
+        "crates/python-sdk-ffi/examples/installed_source_smoke.rs"
       ],
-      "note": "source-model custom-config text/code/workflow turns have a native executable driver; complete Python binding, installed-wheel, minimal, direct-protocol, and advanced snapshot coverage remains pending"
+      "note": "source-model custom-config text/code/workflow turns pass through native and installed Python drivers; installed macOS wheels also pass default SDK and direct-protocol smokes on Python 3.10/3.14; minimal and advanced snapshot scenarios plus the release platform matrix remain pending"
     },
     {
       "source": "scripts/snapshots/python-sdk-single-exe/advanced/result.json",

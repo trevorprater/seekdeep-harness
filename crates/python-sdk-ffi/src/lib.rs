@@ -7,7 +7,9 @@
 //! SDK decisions are delegated to the safe seekdeep-python-sdk crate. No Python
 //! ABI symbols or Python object pointers are linked into the native library.
 
+mod client;
 mod dispatch;
+mod objects;
 
 use std::{
     any::Any,
@@ -26,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 /// Version of the byte-buffer and callback ABI.
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = seekdeep_python_sdk::bindings::ABI_VERSION;
 
 /// Opaque interpreter invocation or callback-owner identity.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -40,6 +42,32 @@ pub type CallbackFunction = unsafe extern "C" fn(u64, *const u8, usize) -> u64;
 pub(crate) struct Callback {
     function: Option<CallbackFunction>,
     context: ContextId,
+}
+
+pub(crate) struct Reply {
+    value: Value,
+    retained: Vec<Box<dyn Any + Send + Sync>>,
+}
+
+impl Reply {
+    fn json(value: Value) -> Self {
+        let mut reply = json!({"kind":"json"});
+        reply["value"] = value;
+        Self {
+            value: reply,
+            retained: Vec::new(),
+        }
+    }
+
+    fn object<T: Any + Send + Sync>(
+        handle: seekdeep_python_sdk::ObjectHandle,
+        retained: T,
+    ) -> Self {
+        Self {
+            value: json!({"kind":"object","value":handle}),
+            retained: vec![Box::new(retained)],
+        }
+    }
 }
 
 struct Buffer {
@@ -78,6 +106,12 @@ fn take(handle: u64) -> Option<Buffer> {
 }
 
 impl Callback {
+    fn with_owner(self, owner: u64) -> Self {
+        Self {
+            context: ContextId(owner),
+            ..self
+        }
+    }
     pub(crate) fn invoke(self, operation: &str, arguments: Value) -> Result<Value> {
         let function = self.function.ok_or_else(|| {
             Error::new(
@@ -105,12 +139,19 @@ impl Callback {
             )
         })?;
         if let Some(error) = response.get("error") {
-            return Err(serde_json::from_value(error.clone()).map_err(|error| {
+            let mut error: Error = serde_json::from_value(error.clone()).map_err(|error| {
                 Error::new(
                     ErrorKind::Value,
                     format!("invalid callback exception: {error}"),
                 )
-            })?);
+            })?;
+            if let Some(id) = error.exception {
+                error.exception_owner = Some(seekdeep_python_sdk::ExceptionOwnerId(self.context.0));
+                let object =
+                    objects::Object::new(self, json!({"owner":self.context.0,"value":id.0}))?;
+                error.retained = Some(seekdeep_python_sdk::Retained::new(object));
+            }
+            return Err(error);
         }
         response.get("ok").cloned().ok_or_else(|| {
             Error::new(
@@ -121,9 +162,9 @@ impl Callback {
     }
 }
 
-fn encode_result(result: Result<Value>) -> u64 {
+fn encode_result(result: Result<Reply>) -> u64 {
     let (value, retained): (Value, Vec<Box<dyn Any + Send + Sync>>) = match result {
-        Ok(value) => (json!({"ok":value}), Vec::new()),
+        Ok(reply) => (json!({"ok":reply.value}), reply.retained),
         Err(error) => (json!({"error":error}), vec![Box::new(error)]),
     };
     match serde_json::to_vec(&value) {
@@ -154,8 +195,10 @@ pub extern "C" fn seekdeep_python_sdk_abi_version() -> u32 {
 ///
 /// # Safety
 /// A nonempty input must point to length readable initialized bytes for this call.
-/// The callback must remain callable for the entire operation, accept calls from
-/// native reader threads, and return only buffers allocated by the copy entry.
+/// The callback must remain callable until every native handle retaining it is
+/// released and its reader threads have stopped. It may be invoked by later
+/// operations or handle destruction on another thread, and must return only
+/// buffers allocated by the copy entry.
 /// The caller frees the returned buffer with this library's free entry.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn seekdeep_python_sdk_call(
@@ -219,6 +262,7 @@ pub extern "C" fn seekdeep_python_sdk_buffer_length(handle: u64) -> usize {
 }
 
 /// Releases a library-owned buffer; zero, unknown, and already-released handles are inert.
+/// Retained foreign objects may call their original callback while being released.
 #[unsafe(no_mangle)]
 pub extern "C" fn seekdeep_python_sdk_free(handle: u64) {
     let buffer = take(handle);
@@ -236,7 +280,7 @@ mod tests {
         let handle = unsafe { seekdeep_python_sdk_call(request.as_ptr(), request.len(), None, 0) };
         let buffer = take(handle).unwrap();
         let response: Value = serde_json::from_slice(buffer.bytes.as_bytes()).unwrap();
-        assert_eq!(response["ok"]["abiVersion"], ABI_VERSION);
+        assert_eq!(response["ok"]["value"]["abiVersion"], ABI_VERSION);
         let later = allocate(b"later".to_vec(), Vec::new());
         seekdeep_python_sdk_free(handle);
         seekdeep_python_sdk_free(handle);

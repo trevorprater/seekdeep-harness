@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-04-rust-python-runtime-binding-abi.md
-2026-09-04-rust-python-runtime-binding-abi.md: e591582c6d3f984d255710cec686444b28cca101
-2026-09-04-rust-python-runtime-binding-abi.zh.md: 424097d07e60c4b85003ff47dcccd8495addd14c
+2026-09-04-rust-python-runtime-binding-abi.md: b0efdb9c19e0f9f98a05739f2049c625fca0cffc
+2026-09-04-rust-python-runtime-binding-abi.zh.md: a939637cb3ea6968289bc427ed887a7299978555

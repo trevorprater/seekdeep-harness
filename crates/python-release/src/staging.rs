@@ -126,6 +126,11 @@ pub fn stage_license_files(
 /// Propagates package/license/version failures and rejects an absent runtime pin.
 pub fn stage_sdk(root: &Path, destination: &Path, version: &str) -> anyhow::Result<()> {
     copy_package(&root.join("python/sdk"), destination)?;
+    let namespace = destination.join("src/deepseek_harness");
+    fs::create_dir_all(&namespace)?;
+    for (name, text) in seekdeep_python_sdk::bindings::sdk_bindings()? {
+        fs::write(namespace.join(name), text)?;
+    }
     stage_license_files(root, destination, false)?;
     let pyproject = destination.join("pyproject.toml");
     rewrite_version(&pyproject, version)?;

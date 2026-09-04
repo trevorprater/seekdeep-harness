@@ -6,11 +6,37 @@ use seekdeep_python_sdk::{Error, ErrorKind, Result, runtime};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::Callback;
+use crate::{Callback, Reply};
 
 #[derive(Deserialize)]
 #[serde(tag = "op")]
 enum Operation {
+    #[serde(rename = "api.normalize")]
+    Normalize {
+        value: seekdeep_python_sdk::ObjectHandle,
+    },
+    #[serde(rename = "api.final_response")]
+    FinalResponse {
+        events: Vec<serde_json::Map<String, Value>>,
+    },
+    #[serde(rename = "api.finish_reason")]
+    FinishReason {
+        events: Vec<serde_json::Map<String, Value>>,
+    },
+    #[serde(rename = "api.inbox_receipt")]
+    InboxReceipt {
+        notification: seekdeep_python_sdk::NotificationData,
+        session: seekdeep_python_sdk::SessionId,
+        message: seekdeep_python_sdk::MessageId,
+    },
+    #[serde(rename = "api.int_or_none")]
+    IntOrNone {
+        value: seekdeep_python_sdk::ObjectHandle,
+    },
+    #[serde(rename = "notification.create")]
+    CreateNotification {
+        value: seekdeep_python_sdk::NotificationData,
+    },
     #[serde(rename = "about")]
     About,
     #[serde(rename = "runtime.platform")]
@@ -31,10 +57,64 @@ enum Operation {
 #[serde(transparent)]
 struct ObjectId(u64);
 
-pub(crate) fn run(bytes: &[u8], callback: Callback) -> Result<Value> {
+// Keep the complete runtime and value-operation ABI table beside its closed request enum.
+#[allow(clippy::too_many_lines)]
+pub(crate) fn run(bytes: &[u8], callback: Callback) -> Result<Reply> {
+    let input: Value = serde_json::from_slice(bytes)
+        .map_err(|error| Error::new(ErrorKind::Value, error.to_string()))?;
+    if input
+        .get("op")
+        .and_then(Value::as_str)
+        .is_some_and(crate::client::handles)
+    {
+        return crate::client::run(input, callback);
+    }
     let operation: Operation = serde_json::from_slice(bytes)
         .map_err(|error| Error::new(ErrorKind::Value, error.to_string()))?;
     match operation {
+        Operation::Normalize { value } => {
+            let callback = callback.with_owner(value.owner);
+            let value = crate::objects::Object::new(callback, json!(value))?;
+            let result = if value.invoke("object.is_string", Value::Null)?.as_bool() == Some(true) {
+                crate::objects::Object::new(
+                    callback,
+                    value.invoke("object.text_block", Value::Null)?,
+                )?
+            } else {
+                value
+            };
+            return Ok(Reply::object(result.handle(), result));
+        }
+        Operation::FinalResponse { events } => {
+            Ok(json!(seekdeep_python_sdk::final_response(&events)))
+        }
+        Operation::FinishReason { events } => {
+            Ok(json!(seekdeep_python_sdk::finish_reason(&events)?))
+        }
+        Operation::InboxReceipt {
+            notification,
+            session,
+            message,
+        } => Ok(json!(seekdeep_python_sdk::is_inbox_receipt(
+            &seekdeep_python_sdk::Notification::new(notification),
+            &session,
+            &message,
+        )?)),
+        Operation::IntOrNone { value } => {
+            let value =
+                crate::objects::Object::new(callback.with_owner(value.owner), json!(value))?;
+            if value.invoke("object.is_integer", Value::Null)?.as_bool() == Some(true) {
+                return Ok(Reply::object(value.handle(), value));
+            }
+            Ok(Value::Null)
+        }
+        Operation::CreateNotification { value } => {
+            let notification = crate::objects::notification(callback, value)?;
+            let handle = notification.object_handle().ok_or_else(|| {
+                Error::new(ErrorKind::Type, "foreign notification has no object handle")
+            })?;
+            return Ok(Reply::object(handle, notification));
+        }
         Operation::About => {
             Ok(json!({"abiVersion":crate::ABI_VERSION,"version":env!("CARGO_PKG_VERSION")}))
         }
@@ -100,6 +180,7 @@ pub(crate) fn run(bytes: &[u8], callback: Callback) -> Result<Value> {
             }
         }
     }
+    .map(Reply::json)
 }
 
 fn callback_string(callback: Callback, operation: &str, arguments: Value) -> Result<String> {

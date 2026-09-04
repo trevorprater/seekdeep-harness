@@ -1,6 +1,18 @@
 //! Generated Python declarations and byte-buffer marshalling, with SDK decisions in Rust.
 
 use std::collections::BTreeMap;
+mod sdk;
+
+/// Generates the platform-independent SDK facade, backed by the runtime package's Rust library.
+///
+/// # Errors
+/// Propagates serialization failures in Rust-owned default configurations.
+pub fn sdk_bindings() -> crate::Result<BTreeMap<String, String>> {
+    sdk::sources()
+}
+
+/// Version of the generated interpreter/byte-buffer result protocol.
+pub const ABI_VERSION: u32 = 2;
 
 /// Generates the runtime package's binding modules for one native library basename.
 ///
@@ -16,11 +28,13 @@ pub fn runtime_bindings(library_name: &str) -> crate::Result<BTreeMap<String, St
             "native binding library must be a basename",
         ));
     }
-    let bridge = BRIDGE.replace(
-        "__NATIVE_LIBRARY__",
-        &serde_json::to_string(library_name)
-            .map_err(|error| crate::Error::new(crate::ErrorKind::Value, error.to_string()))?,
-    );
+    let bridge = BRIDGE
+        .replace(
+            "__NATIVE_LIBRARY__",
+            &serde_json::to_string(library_name)
+                .map_err(|error| crate::Error::new(crate::ErrorKind::Value, error.to_string()))?,
+        )
+        .replace("__ABI_VERSION__", &ABI_VERSION.to_string());
     let runtime = RUNTIME
         .replace("__METADATA__", crate::runtime::PACKAGE_METADATA_FILENAME)
         .replace("__MODE_ENV__", crate::runtime::RUNTIME_MODE_ENV_VAR);
@@ -37,13 +51,14 @@ import ctypes
 import itertools
 import json
 import os
+import weakref
 from pathlib import Path
 
 _library = ctypes.CDLL(str(Path(__file__).parent / "runtime" / __NATIVE_LIBRARY__))
 _callback_type = ctypes.CFUNCTYPE(ctypes.c_uint64, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_size_t)
 _library.seekdeep_python_sdk_abi_version.argtypes = []
 _library.seekdeep_python_sdk_abi_version.restype = ctypes.c_uint32
-if _library.seekdeep_python_sdk_abi_version() != 1:
+if _library.seekdeep_python_sdk_abi_version() != __ABI_VERSION__:
     raise ImportError("SeekDeep SDK native binding ABI does not match its Python declarations")
 _library.seekdeep_python_sdk_call.argtypes = [ctypes.c_void_p, ctypes.c_size_t, _callback_type, ctypes.c_uint64]
 _library.seekdeep_python_sdk_call.restype = ctypes.c_uint64
@@ -58,19 +73,89 @@ _library.seekdeep_python_sdk_free.restype = None
 
 _serial = itertools.count(1)
 _active = {}
+_contexts = weakref.WeakValueDictionary()
+_pins = {}
+
+
+def _owner(identity):
+    return _active.get(identity) or _contexts.get(identity)
 
 
 class _Invocation:
-    def __init__(self, objects, callbacks):
+    def __init__(self, identity, objects, callbacks):
+        self.identity = identity
         self.objects = dict(enumerate(objects, 1))
         self.callbacks = callbacks
+        self.serial = itertools.count(len(self.objects) + 1)
 
     def retain(self, value):
-        key = len(self.objects) + 1
+        key = next(self.serial)
         self.objects[key] = value
         return key
 
+    def handle(self, value):
+        return {"owner": self.identity, "value": self.retain(value)}
+
     def invoke(self, operation, arguments):
+        if operation == "context.retain":
+            owner, count = _pins.get(self.identity, (self, 0))
+            _pins[self.identity] = (owner, count + 1)
+            return None
+        if operation == "context.release":
+            owner, count = _pins.get(self.identity, (self, 0))
+            if count <= 1:
+                _pins.pop(self.identity, None)
+            else:
+                _pins[self.identity] = (owner, count - 1)
+            return None
+        if operation == "object.release":
+            self.objects.pop(arguments["object"], None)
+            return None
+        if operation == "notification.create":
+            value = self.callbacks["notification.create"](arguments["method"], arguments["payload"])
+            return self.handle(value)
+        if operation == "message.notification":
+            original = self.objects[arguments["object"]]
+            value = arguments["arguments"]
+            params = original.get("params")
+            payload = params if value["original_payload"] else value["payload"]
+            return self.handle(self.callbacks["notification.create"](value["method"],payload))
+        if operation == "notification.read":
+            value = self.objects[arguments["object"]]
+            return {"method": value.method, "payload": value.payload}
+        if operation == "notification.replace":
+            value = self.objects[arguments["object"]]
+            fields = arguments["arguments"]
+            value.method, value.payload = fields["method"], fields["payload"]
+            return None
+        if operation == "notification.event":
+            return self.handle(self.objects[arguments["object"]].payload.get("event"))
+        if operation == "object.is_dictionary":
+            return isinstance(self.objects[arguments["object"]], dict)
+        if operation == "object.is_string":
+            return isinstance(self.objects[arguments["object"]], str)
+        if operation == "object.is_integer":
+            return isinstance(self.objects[arguments["object"]], int)
+        if operation == "object.text_block":
+            return self.handle([{"type":"text","text":self.objects[arguments["object"]]}])
+        if operation == "object.read":
+            return self.objects[arguments["object"]]
+        if operation == "object.replace":
+            value = self.objects[arguments["object"]]
+            value.clear()
+            value.update(arguments["arguments"])
+            return None
+        if operation == "object.attribute":
+            return getattr(self.objects[arguments["object"]], arguments["arguments"])
+        if operation == "model.validate":
+            model = self.objects[arguments["object"]]
+            return self.handle(model.model_validate(arguments["arguments"]))
+        if operation in ("filter.call", "observer.call"):
+            function = self.objects[arguments["object"]]
+            handle = arguments["arguments"]
+            value = _owner(handle["owner"]).objects[handle["value"]]
+            result = function(value)
+            return bool(result) if operation == "filter.call" else None
         if operation == "is_none":
             return self.objects[arguments[0]] is None
         if operation == "equals":
@@ -91,7 +176,7 @@ def _exception_message(error):
 
 @_callback_type
 def _callback(context, pointer, length):
-    invocation = _active.get(context)
+    invocation = _owner(context)
     try:
         if invocation is None:
             raise RuntimeError("SeekDeep SDK callback owner is unavailable")
@@ -115,21 +200,47 @@ def _callback(context, pointer, length):
 def _exception(details, invocation):
     kind = details["kind"]
     if kind == "foreign":
-        error = invocation.objects[details["exception"]]
+        owner = _owner(details["exception_owner"]) if "exception_owner" in details else invocation
+        if owner is None:
+            raise RuntimeError("SeekDeep SDK exception owner is unavailable")
+        error = owner.objects[details["exception"]]
     elif kind == "os" and details.get("errno") is not None:
         error = OSError(details["errno"], details["message"], details.get("filename"))
     else:
-        cls = {"file_not_found": FileNotFoundError, "value": ValueError,
-               "type": TypeError, "overflow": OverflowError, "timeout": TimeoutError}.get(kind, RuntimeError)
-        error = cls(details["message"])
+        if kind in ("transport_closed", "protocol", "json_rpc"):
+            from deepseek_harness.errors import TransportClosedError, SdkProtocolError, JsonRpcError
+            if kind == "json_rpc":
+                error = JsonRpcError(details.get("code"), details["message"], details.get("data"))
+            else:
+                error = {"transport_closed":TransportClosedError, "protocol":SdkProtocolError}[kind](details["message"])
+        elif kind == "empty":
+            import queue
+            error = queue.Empty()
+        elif kind == "subprocess_timeout":
+            import subprocess
+            data = details["data"]
+            error = subprocess.TimeoutExpired(data["cmd"], data["timeout"])
+        elif kind == "unicode_decode":
+            data = details["data"]
+            error = UnicodeDecodeError(data["encoding"],bytes(data["bytes"]),data["start"],data["end"],data["reason"])
+        else:
+            cls = {"file_not_found": FileNotFoundError, "value": ValueError,
+                   "type": TypeError, "overflow": OverflowError, "timeout": TimeoutError}.get(kind, RuntimeError)
+            error = cls(details["message"])
     if details.get("cause") is not None:
         error.__cause__ = _exception(details["cause"], invocation)
     return error
 
 
-def invoke(request, objects=(), callbacks=None):
-    context = next(_serial)
-    invocation = _Invocation(objects, {} if callbacks is None else callbacks)
+class Context(_Invocation):
+    def __init__(self, callbacks):
+        super().__init__(next(_serial), (), callbacks)
+        _contexts[self.identity] = self
+
+
+def invoke(request, objects=(), callbacks=None, context=None):
+    invocation = context if context is not None else _Invocation(next(_serial), objects, {} if callbacks is None else callbacks)
+    context = invocation.identity
     _active[context] = invocation
     handle = 0
     try:
@@ -143,11 +254,25 @@ def invoke(request, objects=(), callbacks=None):
         ))
         if "error" in response:
             raise _exception(response["error"], invocation)
-        return response["ok"]
+        return _decode(response["ok"])
     finally:
         if handle:
             _library.seekdeep_python_sdk_free(handle)
         _active.pop(context, None)
+
+
+def _decode(value):
+    kind = value["kind"]
+    if kind == "json":
+        return value["value"]
+    if kind == "object":
+        handle = value["value"]
+        return _owner(handle["owner"]).objects[handle["value"]]
+    if kind == "array":
+        return [_decode(item) for item in value["value"]]
+    if kind == "record":
+        return {key: _decode(item) for key, item in value["value"].items()}
+    raise RuntimeError("unknown SeekDeep native result encoding")
 "#;
 
 const RUNTIME: &str = r#"# Generated by seekdeep-python-sdk; runtime selection is compiled Rust.

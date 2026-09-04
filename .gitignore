@@ -7,6 +7,8 @@
 /python/sdk-runtime/src/deepseek_harness_runtime/_bridge.py
 /python/sdk-runtime/src/deepseek_harness_runtime/__pycache__/
 /python/sdk-runtime/hatch_build.py
+/python/sdk/src/deepseek_harness/*.py
+/python/sdk/src/deepseek_harness/__pycache__/
 /apps/web/dist/
 /apps/web/generated/
 /packages/client/*/lib/

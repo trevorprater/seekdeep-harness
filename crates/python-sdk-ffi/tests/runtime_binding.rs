@@ -9,7 +9,19 @@ from deepseek_harness_runtime import _bridge
 
 root = runtime.bundled_package_dir()
 assert runtime.bundled_default_config_path() == root / "runtime" / "cordis.yml"
-assert _bridge.invoke({"op":"about"})["abiVersion"] == 1
+assert _bridge.invoke({"op":"about"})["abiVersion"] == 2
+class Notification:
+    def __init__(self, method, payload):
+        self.method, self.payload = method, payload
+created = []
+def construct(method, payload):
+    value = Notification(method, payload)
+    created.append(value)
+    return value
+value = _bridge.invoke({"op":"notification.create","value":{"method":"tick","payload":{"value":1}}},
+    callbacks={"notification.create":construct})
+assert value is created[0]
+assert value.payload == {"value":1}
 for mode in ["bogus", "", 7, False, [], {}, float("nan"), "\ud800"]:
     try:
         runtime.resolve_bundled_launch_args(mode)

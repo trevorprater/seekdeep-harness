@@ -15,11 +15,15 @@ pub fn normalize_input(input: Value) -> Value {
 }
 
 /// Matches the root-session inbox splice that accepts this prompt's message.
+///
+/// # Errors
+/// Propagates notification object-access failures.
 pub fn is_inbox_receipt(
     notification: &Notification,
     session_id: &SessionId,
     message_id: &MessageId,
-) -> bool {
+) -> Result<bool> {
+    let notification = notification.read()?;
     if notification.method != "session.event"
         || notification
             .payload
@@ -27,22 +31,24 @@ pub fn is_inbox_receipt(
             .and_then(Value::as_str)
             != Some(session_id.as_str())
     {
-        return false;
+        return Ok(false);
     }
     let Some(event) = notification.payload.get("event").and_then(Value::as_object) else {
-        return false;
+        return Ok(false);
     };
-    event.get("type").and_then(Value::as_str) == Some("agent/inbox/spliced")
-        && event
-            .get("data")
-            .and_then(Value::as_object)
-            .and_then(|data| data.get("inserted"))
-            .and_then(Value::as_array)
-            .is_some_and(|messages| {
-                messages.iter().any(|message| {
-                    message.get("id").and_then(Value::as_str) == Some(message_id.as_str())
-                })
-            })
+    Ok(
+        event.get("type").and_then(Value::as_str) == Some("agent/inbox/spliced")
+            && event
+                .get("data")
+                .and_then(Value::as_object)
+                .and_then(|data| data.get("inserted"))
+                .and_then(Value::as_array)
+                .is_some_and(|messages| {
+                    messages.iter().any(|message| {
+                        message.get("id").and_then(Value::as_str) == Some(message_id.as_str())
+                    })
+                }),
+    )
 }
 
 /// Extracts text from the last assistant/message with an object owner and content list.

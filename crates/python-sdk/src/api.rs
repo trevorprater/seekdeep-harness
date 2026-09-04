@@ -22,10 +22,12 @@ use crate::{
 pub type InitializeValidator = Arc<dyn Fn(Map<String, Value>) -> Result<()> + Send + Sync>;
 /// Validates and extracts the prompt response's messageId.
 pub type PromptValidator = Arc<dyn Fn(Map<String, Value>) -> Result<MessageId> + Send + Sync>;
+type ConfigReader = Arc<dyn Fn() -> Result<HarnessOptions> + Send + Sync>;
 
 /// Reusable synchronous harness with a separately owned low-level client.
 pub struct Harness {
     config: Mutex<HarnessOptions>,
+    config_reader: Mutex<Option<ConfigReader>>,
     client: Arc<Client>,
     cwd: String,
     ids: Arc<dyn IdSource>,
@@ -88,6 +90,7 @@ impl Harness {
         );
         Ok(Arc::new(Self {
             config: Mutex::new(config),
+            config_reader: Mutex::new(None),
             client,
             cwd,
             ids,
@@ -106,6 +109,16 @@ impl Harness {
     /// Updates options read during initialization and result construction.
     pub fn set_config(&self, config: HarnessOptions) {
         *self.config.lock() = config;
+    }
+
+    /// Uses the current foreign configuration when initializing or constructing a result.
+    pub fn set_config_reader(&self, reader: Arc<dyn Fn() -> Result<HarnessOptions> + Send + Sync>) {
+        *self.config_reader.lock() = Some(reader);
+    }
+
+    fn read_config(&self) -> Result<HarnessOptions> {
+        let reader = self.config_reader.lock().clone();
+        reader.map_or_else(|| Ok(self.config()), |reader| reader())
     }
 
     /// The same low-level client for this harness's complete lifetime.
@@ -128,7 +141,7 @@ impl Harness {
             return Ok(());
         }
         self.client.start()?;
-        let config = self.config();
+        let config = self.read_config()?;
         self.client.initialize(
             &self.cwd,
             &config.provider,
@@ -205,7 +218,7 @@ impl Harness {
             loop {
                 let notification = subscription.next()?;
                 if !received {
-                    if !is_inbox_receipt(&notification, session, &message) {
+                    if !is_inbox_receipt(&notification, session, &message)? {
                         continue;
                     }
                     received = true;
@@ -214,32 +227,33 @@ impl Harness {
                 if let Some(observer) = &observer {
                     observer(&notification)?;
                 }
-                let root = notification
-                    .payload
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    == Some(session.as_str());
-                if notification.method == "session.event"
+                let data = notification.read()?;
+                let root =
+                    data.payload.get("sessionId").and_then(Value::as_str) == Some(session.as_str());
+                if data.method == "session.event"
                     && root
-                    && let Some(event) =
-                        notification.payload.get("event").and_then(Value::as_object)
+                    && let Some(event) = notification.event()?
                 {
-                    events.push(event.clone());
+                    events.push(event);
                 }
-                if notification.method == "session.status"
+                if data.method == "session.status"
                     && root
-                    && notification.payload.get("status").and_then(Value::as_str) == Some("idle")
+                    && data.payload.get("status").and_then(Value::as_str) == Some("idle")
                 {
                     break;
                 }
             }
+            let snapshots = events
+                .iter()
+                .map(crate::RunEvent::read)
+                .collect::<Result<Vec<_>>>()?;
             Ok(RunResult {
                 session_id: session.clone(),
-                final_response: final_response(&events),
-                finish_reason: finish_reason(&events)?,
+                final_response: final_response(&snapshots),
+                finish_reason: finish_reason(&snapshots)?,
                 events,
                 notifications,
-                session_root: self.config().session_root,
+                session_root: self.read_config()?.session_root,
             })
         })();
         subscription.close();

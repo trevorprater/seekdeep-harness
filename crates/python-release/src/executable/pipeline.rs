@@ -413,6 +413,11 @@ fn stage_python_bindings(
     for (filename, text) in seekdeep_python_sdk::bindings::runtime_bindings(&name)? {
         write_generated_binding(&package.join(filename), &text)?;
     }
+    let sdk = root.join("python/sdk/src/deepseek_harness");
+    ensure_owned_directory(root, &sdk)?;
+    for (filename, text) in seekdeep_python_sdk::bindings::sdk_bindings()? {
+        write_generated_binding(&sdk.join(filename), &text)?;
+    }
     write_generated_binding(
         &root.join("python/sdk-runtime/hatch_build.py"),
         crate::staging::NATIVE_HATCH_BINDING,

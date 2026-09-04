@@ -17,9 +17,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::{
-    Error, ErrorKind, HarnessConfig, Host, IdSource, IncomingRequest, Notification, RequestId,
-    Result, RuntimeProcess, process::read_lines, queue::Queue, runtime::resolve_path,
-    values::python_str,
+    Error, ErrorKind, HarnessConfig, Host, IdSource, IncomingRequest, Notification,
+    NotificationData, RequestId, Result, RuntimeProcess, process::read_lines, queue::Queue,
+    runtime::resolve_path, values::python_str,
 };
 
 /// Opaque source-compatible notification registration identity.
@@ -38,6 +38,7 @@ impl SubscriptionId {
 pub type NotificationFilter = Arc<dyn Fn(&Notification) -> Result<bool> + Send + Sync>;
 /// Synchronous user observer invoked on the requesting or draining thread.
 pub type NotificationObserver = Arc<dyn Fn(&Notification) -> Result<()> + Send + Sync>;
+type ConfigReader = Arc<dyn Fn() -> Result<HarnessConfig> + Send + Sync>;
 
 /// Optional notification delivery and timeout override for one request.
 #[derive(Default)]
@@ -76,6 +77,7 @@ struct State {
 /// A lazy, restartable owner of one runtime subprocess.
 pub struct Client {
     config: Mutex<HarnessConfig>,
+    config_reader: Mutex<Option<ConfigReader>>,
     host: Host,
     ids: Arc<dyn IdSource>,
     lifecycle: Mutex<()>,
@@ -90,6 +92,7 @@ impl Client {
     pub fn new(config: HarnessConfig, host: Host, ids: Arc<dyn IdSource>) -> Arc<Self> {
         Arc::new(Self {
             config: Mutex::new(config),
+            config_reader: Mutex::new(None),
             host,
             ids,
             lifecycle: Mutex::new(()),
@@ -110,6 +113,16 @@ impl Client {
         *self.config.lock() = config;
     }
 
+    /// Reads a foreign mutable configuration at the same operation boundaries as native options.
+    pub fn set_config_reader(&self, reader: Arc<dyn Fn() -> Result<HarnessConfig> + Send + Sync>) {
+        *self.config_reader.lock() = Some(reader);
+    }
+
+    fn read_config(&self) -> Result<HarnessConfig> {
+        let reader = self.config_reader.lock().clone();
+        reader.map_or_else(|| Ok(self.config()), |reader| reader())
+    }
+
     /// Returns the current process, including a process that has already exited.
     pub fn process(&self) -> Option<Arc<RuntimeProcess>> {
         self.state.lock().process.clone()
@@ -128,7 +141,7 @@ impl Client {
             }
             state.parents.clear();
         }
-        let config = self.config();
+        let config = self.read_config()?;
         let argv = match config
             .launch_args_override
             .as_ref()
@@ -197,20 +210,24 @@ impl Client {
         stdout: std::process::ChildStdout,
         stderr: std::process::ChildStderr,
     ) -> Result<()> {
+        let lifetime = (self.host.reader_lifetime)()?;
+        let stdout_lifetime = Arc::clone(&lifetime);
         let owner = Arc::downgrade(self);
         let runtime = Arc::clone(process);
         let stdout_reader = std::thread::Builder::new()
             .name("seekdeep-runtime-reader".to_owned())
             .spawn(move || {
+                let _lifetime = stdout_lifetime;
                 let result = read_lines(stdout, &runtime.cancelled, |line| {
                     if line.trim_matches(crate::values::is_whitespace).is_empty() {
-                        return;
+                        return Ok(());
                     }
                     if let (Ok(message), Some(owner)) =
                         (serde_json::from_str(&line), owner.upgrade())
                     {
-                        owner.handle_message(&message);
+                        owner.handle_message(&message)?;
                     }
+                    Ok(())
                 });
                 if let Some(owner) = owner.upgrade() {
                     if let Err(error) = result {
@@ -228,6 +245,7 @@ impl Client {
         let stderr_reader = std::thread::Builder::new()
             .name("seekdeep-runtime-stderr".to_owned())
             .spawn(move || {
+                let _lifetime = lifetime;
                 if let Err(error) = read_lines(stderr, &runtime.cancelled, |line| {
                     if let Some(owner) = owner.upgrade() {
                         owner.append_stderr(
@@ -235,6 +253,7 @@ impl Client {
                                 .to_owned(),
                         );
                     }
+                    Ok(())
                 }) {
                     eprintln!("seekdeep-runtime-stderr: {error}");
                 }
@@ -254,7 +273,7 @@ impl Client {
         let Some(process) = self.process() else {
             return Ok(());
         };
-        let timeout = self.config().shutdown_timeout_seconds;
+        let timeout = self.read_config()?.shutdown_timeout_seconds;
         if let Err(error) = self.request_object(
             "shutdown",
             None,
@@ -269,7 +288,7 @@ impl Client {
         if process.poll()?.is_none() {
             process.terminate()?;
         }
-        match process.wait(timeout) {
+        match process.wait(self.read_config()?.shutdown_timeout_seconds) {
             Ok(_) => {}
             Err(error) if error.kind == ErrorKind::SubprocessTimeout => {
                 process.kill()?;
@@ -354,9 +373,9 @@ impl Client {
         let owner = Arc::downgrade(self);
         let session = session_id.clone();
         options.notification_filter = Some(Arc::new(move |notification| {
-            Ok(owner
-                .upgrade()
-                .is_some_and(|owner| owner.belongs_to_session(notification, &session)))
+            owner.upgrade().map_or(Ok(false), |owner| {
+                owner.belongs_to_session(notification, &session)
+            })
         }));
         let mut payload = json!({"sessionId":session_id});
         payload["contentBlocks"] = content_blocks;
@@ -423,7 +442,7 @@ impl Client {
             message["params"] = params;
         }
         self.write_message(&message)?;
-        let timeout = timeout_seconds.or(self.config().request_timeout_seconds);
+        let timeout = timeout_seconds.or(self.read_config()?.request_timeout_seconds);
         let deadline = timeout.map(|timeout| (self.host.monotonic)() + timeout);
         loop {
             if let (Some(observer), Some(subscription)) = (&on_notification, &subscription) {
@@ -593,9 +612,24 @@ impl Client {
     }
 
     /// Routes one decoded message; unknown methods and absent JSON-RPC version fields remain accepted.
-    pub fn handle_message(&self, message: &Value) {
+    ///
+    /// # Errors
+    /// Propagates notification construction and initial object-access failures.
+    pub fn handle_message(&self, message: &Value) -> Result<()> {
+        self.handle_message_with(message, &*self.host.notification)
+    }
+
+    /// Routes an injected message through its caller-owned notification factory.
+    ///
+    /// # Errors
+    /// Propagates notification construction and initial object-access failures.
+    pub fn handle_message_with(
+        &self,
+        message: &Value,
+        factory: &dyn Fn(NotificationData) -> Result<Notification>,
+    ) -> Result<()> {
         let Some(message) = message.as_object() else {
-            return;
+            return Ok(());
         };
         let id = message.get("id").and_then(RequestId::from_value);
         let method = message.get("method").and_then(Value::as_str);
@@ -612,7 +646,7 @@ impl Client {
                 method: method.to_owned(),
                 payload: payload(),
             }));
-            return;
+            return Ok(());
         }
         if let Some(id) = id {
             let waiter = self
@@ -621,7 +655,7 @@ impl Client {
                 .responses
                 .shift_remove(&RpcId::new(id.correlation_key()));
             let Some(waiter) = waiter else {
-                return;
+                return Ok(());
             };
             if let Some(error) = message.get("error").and_then(Value::as_object) {
                 let mut failure = Error::new(
@@ -639,29 +673,24 @@ impl Client {
             } else {
                 waiter.push(Ok(message.get("result").cloned().unwrap_or(Value::Null)));
             }
-            return;
+            return Ok(());
         }
         let Some(method) = method else {
-            return;
+            return Ok(());
         };
-        self.route_notification(Notification {
+        self.route_notification(factory(NotificationData {
             method: method.to_owned(),
             payload: payload(),
-        });
+        })?)
     }
 
-    fn route_notification(&self, notification: Notification) {
+    fn route_notification(&self, notification: Notification) -> Result<()> {
+        let data = notification.read()?;
         let subscribers = {
             let mut state = self.state.lock();
-            if notification.method == "subagent.started" {
-                let parent = notification
-                    .payload
-                    .get("parentSessionId")
-                    .and_then(Value::as_str);
-                let child = notification
-                    .payload
-                    .get("childSessionId")
-                    .and_then(Value::as_str);
+            if data.method == "subagent.started" {
+                let parent = data.payload.get("parentSessionId").and_then(Value::as_str);
+                let child = data.payload.get("childSessionId").and_then(Value::as_str);
                 if let (Some(parent), Some(child)) = (parent, child)
                     && !parent.is_empty()
                     && !child.is_empty()
@@ -682,7 +711,7 @@ impl Client {
         for (id, subscriber) in subscribers {
             let matches = match &subscriber.predicate {
                 Predicate::All => Ok(true),
-                Predicate::Session(session) => Ok(self.belongs_to_session(&notification, session)),
+                Predicate::Session(session) => self.belongs_to_session(&notification, session),
                 Predicate::User(predicate) => predicate(&notification),
             };
             match matches {
@@ -708,9 +737,11 @@ impl Client {
         if !delivered {
             self.notifications.push(Ok(notification));
         }
+        Ok(())
     }
 
-    fn belongs_to_session(&self, notification: &Notification, session: &SessionId) -> bool {
+    fn belongs_to_session(&self, notification: &Notification, session: &SessionId) -> Result<bool> {
+        let notification = notification.read()?;
         let state = self.state.lock();
         if matches!(
             notification.method.as_str(),
@@ -722,19 +753,19 @@ impl Client {
                 .and_then(Value::as_str)
                 .is_some_and(|parent| descendant(&state.parents, parent, session))
             {
-                return true;
+                return Ok(true);
             }
-            return notification
+            return Ok(notification
                 .payload
                 .get("childSessionId")
                 .and_then(Value::as_str)
-                == Some(session.as_str());
+                == Some(session.as_str()));
         }
-        notification
+        Ok(notification
             .payload
             .get("sessionId")
             .and_then(Value::as_str)
-            .is_some_and(|related| descendant(&state.parents, related, session))
+            .is_some_and(|related| descendant(&state.parents, related, session)))
     }
 
     /// Fails pending requests and subscriptions, then enqueues the same failure globally.

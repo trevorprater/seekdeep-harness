@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::{Notification, RunEvent};
 use seekdeep_identity::SessionId;
 use seekdeep_llm::{ModelId, ProviderId};
 use serde::{Deserialize, Serialize};
@@ -31,7 +32,7 @@ impl RequestId {
 
 /// Unsolicited runtime notification with an object payload.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Notification {
+pub struct NotificationData {
     /// Protocol method name, including unknown methods.
     pub method: String,
     /// Non-object wire params are represented as an empty object.
@@ -148,7 +149,7 @@ pub struct RunResult {
     /// String kind of the last turn/end, or None if absent.
     pub finish_reason: Option<String>,
     /// Object events belonging only to the root session.
-    pub events: Vec<Map<String, Value>>,
+    pub events: Vec<RunEvent>,
     /// Root and descendant notifications observed after the matching inbox receipt.
     pub notifications: Vec<Notification>,
     /// Caller-configured session-log root.

@@ -4,10 +4,35 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 
+/// An owned foreign resource retained for the lifetime of a native exception.
+#[derive(Clone)]
+pub struct Retained(Arc<dyn std::any::Any + Send + Sync>);
+
+impl Retained {
+    /// Retains a resource whose destructor releases its foreign reference.
+    pub fn new<T: std::any::Any + Send + Sync>(value: T) -> Self {
+        Self(Arc::new(value))
+    }
+}
+
+impl std::fmt::Debug for Retained {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("Retained")
+            .field("owners", &Arc::strong_count(&self.0))
+            .finish()
+    }
+}
+
 /// Opaque exception retained by the foreign-language callback owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ExceptionId(pub u64);
+
+/// Interpreter context that retains a foreign exception identity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ExceptionOwnerId(pub u64);
 
 /// Exception category exposed by the synchronous SDK.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,12 +92,18 @@ pub struct ErrorDetails {
     /// Retained foreign exception identity.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exception: Option<ExceptionId>,
+    /// Owner of the retained exception, independent of the current ABI caller.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exception_owner: Option<ExceptionOwnerId>,
     /// Whether the foreign exception derives from Python's import-error base class.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub import_error: bool,
     /// Explicit exception cause at a native/foreign boundary.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cause: Option<Box<Error>>,
+    /// Keeps an interpreter exception alive until the final native copy is released.
+    #[serde(skip)]
+    pub retained: Option<Retained>,
 }
 
 impl std::ops::Deref for Error {
@@ -117,8 +148,10 @@ impl Error {
             errno: None,
             filename: None,
             exception: None,
+            exception_owner: None,
             import_error: false,
             cause: None,
+            retained: None,
         }))
     }
 

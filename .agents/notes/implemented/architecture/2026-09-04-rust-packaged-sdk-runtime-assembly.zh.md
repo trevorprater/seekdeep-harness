@@ -30,7 +30,7 @@ GitHub 和 GitLab 的运行时构建作业在按架构选择、按摘要固定�
 
 [构建器对比](../../../../crates/python-release/examples/executable_source_parity.rs)依据固定版本的源码解析器检查 60 个目标、宿主平台和选项用例。[产物测试](../../../../crates/python-release/tests/executable_parity.rs)覆盖 dry-run 隔离和无效原生文件。[源码 PTY 调用方](../../../../crates/pty-spawn-helper/examples/source_pty_parity.rs)通过固定版本的 node-pty 实现验证编译后的辅助程序。真实的 macOS arm64 release 构建通过移动后的可执行文件和生成的 Node 载体，均完成三轮源码模型冒烟测试及持久日志检查。延迟发送的 SDK 请求固定标准流交接行为。
 
-[Python 运行时绑定 ABI](2026-09-04-rust-python-runtime-binding-abi.md)提供由 Rust 支撑的载体查找和按目标生成的原生库。这些检查并不证明 Python 分发已完全等价：抽象服务构造器兼容性、Python 客户端类绑定、完整的已安装 SDK 冒烟测试以及发布平台矩阵的实际执行仍是独立缺口。静态工作流检查不能替代原生 Linux 构建或已安装 Python 包的导入。
+[Python 运行时绑定 ABI](2026-09-04-rust-python-runtime-binding-abi.md)提供由 Rust 支撑的载体查找、客户端类、共享可变观察对象和按目标生成的原生库。已安装的 macOS wheel 包在 Python 3.10 和 3.14 上通过默认 SDK 启动、自定义文本／代码／工作流轮次和直接运行时检查。这些检查并不证明 Python 分发已完全等价：抽象服务构造器兼容性、完整的 Python 值／路径审计、已安装的 minimal／advanced 场景，以及发布平台矩阵的实际执行仍是独立缺口。静态工作流检查不能替代原生 Linux 构建或已安装 Python 包的导入。
 
 ## 考虑过的替代方案
 

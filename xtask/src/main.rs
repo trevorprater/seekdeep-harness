@@ -4594,6 +4594,13 @@ fn is_generated_output(path: &Path) -> bool {
             ["python", "sdk-runtime", "hatch_build.py"]
                 | [
                     "python",
+                    "sdk",
+                    "src",
+                    "deepseek_harness",
+                    "__init__.py" | "api.py" | "client.py" | "models.py" | "errors.py"
+                ]
+                | [
+                    "python",
                     "sdk-runtime",
                     "src",
                     "deepseek_harness_runtime",
@@ -6298,6 +6305,11 @@ mod tests {
             "python/sdk-runtime/hatch_build.py",
             "python/sdk-runtime/src/deepseek_harness_runtime/__init__.py",
             "python/sdk-runtime/src/deepseek_harness_runtime/_bridge.py",
+            "python/sdk/src/deepseek_harness/__init__.py",
+            "python/sdk/src/deepseek_harness/api.py",
+            "python/sdk/src/deepseek_harness/client.py",
+            "python/sdk/src/deepseek_harness/models.py",
+            "python/sdk/src/deepseek_harness/errors.py",
         ] {
             assert!(is_generated_output(Path::new(binding)), "{binding}");
         }

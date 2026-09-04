@@ -129,18 +129,31 @@ fn notification_routing_preserves_global_fallback_and_contains_filter_errors() {
         error.exception = Some(ExceptionId(42));
         Err(error)
     })));
-    let healthy = client.subscribe_notifications(Some(Arc::new(|n| Ok(n.method == "tick"))));
-    client.handle_message(&json!({"method":"tick","params":{"source":"first"}}));
+    let healthy =
+        client.subscribe_notifications(Some(Arc::new(|n| Ok(n.read().unwrap().method == "tick"))));
+    client
+        .handle_message(&json!({"method":"tick","params":{"source":"first"}}))
+        .unwrap();
     assert_eq!(broken.next().unwrap_err().exception, Some(ExceptionId(42)));
-    assert_eq!(healthy.next().unwrap().payload["source"], "first");
-    assert_eq!(client.notification_count(), 0);
-    client.handle_message(&json!({"method":"unmatched","params":false}));
     assert_eq!(
-        client.next_notification().unwrap().payload,
+        healthy.next().unwrap().read().unwrap().payload["source"],
+        "first"
+    );
+    assert_eq!(client.notification_count(), 0);
+    client
+        .handle_message(&json!({"method":"unmatched","params":false}))
+        .unwrap();
+    assert_eq!(
+        client.next_notification().unwrap().read().unwrap().payload,
         serde_json::Map::new()
     );
-    client.handle_message(&json!({"method":"tick","params":{"source":"second"}}));
-    assert_eq!(healthy.next().unwrap().payload["source"], "second");
+    client
+        .handle_message(&json!({"method":"tick","params":{"source":"second"}}))
+        .unwrap();
+    assert_eq!(
+        healthy.next().unwrap().read().unwrap().payload["source"],
+        "second"
+    );
     assert_eq!(broken.queued(), 0);
     broken.close();
     healthy.close();
@@ -151,23 +164,42 @@ fn ancestry_survives_subscriptions_and_late_finishes_do_not_reparent_reused_chil
     let client = client(HarnessConfig::default());
     let old = client.subscribe_session(SessionId::new("old"));
     let new = client.subscribe_session(SessionId::new("new"));
-    client.handle_message(&json!({"method":"subagent.started","params":{"parentSessionId":"old","childSessionId":"child"}}));
-    assert_eq!(old.next().unwrap().method, "subagent.started");
-    client.handle_message(&json!({"method":"subagent.started","params":{"parentSessionId":"new","childSessionId":"child"}}));
-    assert_eq!(new.next().unwrap().method, "subagent.started");
-    client.handle_message(&json!({"method":"subagent.finished","params":{"parentSessionId":"old","childSessionId":"child"}}));
-    assert_eq!(old.next().unwrap().method, "subagent.finished");
-    client.handle_message(
-        &json!({"method":"session.event","params":{"sessionId":"child","event":{}}}),
+    client.handle_message(&json!({"method":"subagent.started","params":{"parentSessionId":"old","childSessionId":"child"}})).unwrap();
+    assert_eq!(
+        old.next().unwrap().read().unwrap().method,
+        "subagent.started"
     );
-    assert_eq!(new.next().unwrap().method, "session.event");
+    client.handle_message(&json!({"method":"subagent.started","params":{"parentSessionId":"new","childSessionId":"child"}})).unwrap();
+    assert_eq!(
+        new.next().unwrap().read().unwrap().method,
+        "subagent.started"
+    );
+    client.handle_message(&json!({"method":"subagent.finished","params":{"parentSessionId":"old","childSessionId":"child"}})).unwrap();
+    assert_eq!(
+        old.next().unwrap().read().unwrap().method,
+        "subagent.finished"
+    );
+    client
+        .handle_message(
+            &json!({"method":"session.event","params":{"sessionId":"child","event":{}}}),
+        )
+        .unwrap();
+    assert_eq!(new.next().unwrap().read().unwrap().method, "session.event");
     assert_eq!(old.queued(), 0);
     new.close();
     let next = client.subscribe_session(SessionId::new("new"));
-    client.handle_message(&json!({"method":"subagent.started","params":{"parentSessionId":"child","childSessionId":"grandchild"}}));
-    client.handle_message(&json!({"method":"session.event","params":{"sessionId":"grandchild"}}));
-    assert_eq!(next.next().unwrap().payload["childSessionId"], "grandchild");
-    assert_eq!(next.next().unwrap().payload["sessionId"], "grandchild");
+    client.handle_message(&json!({"method":"subagent.started","params":{"parentSessionId":"child","childSessionId":"grandchild"}})).unwrap();
+    client
+        .handle_message(&json!({"method":"session.event","params":{"sessionId":"grandchild"}}))
+        .unwrap();
+    assert_eq!(
+        next.next().unwrap().read().unwrap().payload["childSessionId"],
+        "grandchild"
+    );
+    assert_eq!(
+        next.next().unwrap().read().unwrap().payload["sessionId"],
+        "grandchild"
+    );
     assert_eq!(client.notification_count(), 0);
     old.close();
     next.close();
@@ -177,11 +209,14 @@ fn ancestry_survives_subscriptions_and_late_finishes_do_not_reparent_reused_chil
 fn closing_a_subscription_retains_its_queued_items_and_error_is_single_consumption() {
     let client = client(HarnessConfig::default());
     let subscription = client.subscribe_notifications(None);
-    client.handle_message(&json!({"method":"queued"}));
+    client.handle_message(&json!({"method":"queued"})).unwrap();
     subscription.close();
     subscription.close();
     assert!(subscription.is_closed());
-    assert_eq!(subscription.next().unwrap().method, "queued");
+    assert_eq!(
+        subscription.next().unwrap().read().unwrap().method,
+        "queued"
+    );
     assert_eq!(subscription.try_next().unwrap_err().kind, ErrorKind::Empty);
     let subscription = client.subscribe_notifications(None);
     client.fail_waiters(Error::new(ErrorKind::TransportClosed, "stopped"));
@@ -228,7 +263,9 @@ fn observer_delivery_is_synchronous_and_does_not_dispose_caller_owned_subscripti
     let received = Arc::new(Mutex::new(Vec::new()));
     let values = Arc::clone(&received);
     let observer: NotificationObserver = Arc::new(move |notification| {
-        values.lock().push(notification.method.clone());
+        values
+            .lock()
+            .push(notification.read().unwrap().method.clone());
         Ok(())
     });
     let result = client
@@ -246,7 +283,10 @@ fn observer_delivery_is_synchronous_and_does_not_dispose_caller_owned_subscripti
     assert_eq!(*received.lock(), ["tick"]);
     assert!(!subscription.is_closed());
     client.notify("emit", None).unwrap();
-    assert_eq!(subscription.next().unwrap().payload["source"], "emit");
+    assert_eq!(
+        subscription.next().unwrap().read().unwrap().payload["source"],
+        "emit"
+    );
     subscription.close();
     client.close().unwrap();
 }
@@ -270,8 +310,8 @@ fn rpc_errors_and_incoming_boolean_ids_keep_python_integer_semantics() {
     assert!(request.payload.is_empty());
     client.respond(&request.id, json!({"answer":1})).unwrap();
     let seen = client.next_notification().unwrap();
-    assert_eq!(seen.payload["id"], true);
-    assert_eq!(seen.payload["result"], json!({"answer":1}));
+    assert_eq!(seen.read().unwrap().payload["id"], true);
+    assert_eq!(seen.read().unwrap().payload["result"], json!({"answer":1}));
     client.close().unwrap();
 }
 
@@ -347,7 +387,7 @@ fn harness_owns_only_matching_receipt_to_idle_and_keeps_root_events_separate() {
     let received = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&received);
     let observer: NotificationObserver = Arc::new(move |n| {
-        seen.lock().push(n.method.clone());
+        seen.lock().push(n.read().unwrap().method.clone());
         Ok(())
     });
     let result = harness
@@ -363,7 +403,7 @@ fn harness_owns_only_matching_receipt_to_idle_and_keeps_root_events_separate() {
         result
             .notifications
             .iter()
-            .map(|notification| notification.method.as_str())
+            .map(|notification| notification.read().unwrap().method)
             .collect::<Vec<_>>(),
         [
             "session.event",
@@ -379,7 +419,7 @@ fn harness_owns_only_matching_receipt_to_idle_and_keeps_root_events_separate() {
     );
     assert_eq!(result.events.len(), 3);
     assert_eq!(
-        result.notifications[0].payload["event"]["type"],
+        result.notifications[0].read().unwrap().payload["event"]["type"],
         "agent/inbox/spliced"
     );
     assert_eq!(
@@ -387,7 +427,7 @@ fn harness_owns_only_matching_receipt_to_idle_and_keeps_root_events_separate() {
         result
             .notifications
             .iter()
-            .map(|n| n.method.clone())
+            .map(|n| n.read().unwrap().method.clone())
             .collect::<Vec<_>>()
     );
     assert_eq!(harness.client().notification_count(), 0);
