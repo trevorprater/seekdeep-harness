@@ -26,9 +26,9 @@ Hatch 绑定将策略转交给 Rust 发行工具。发行暂存提供显式工�
 
 [绑定测试](../../../../crates/python-sdk-ffi/tests/runtime_binding.rs)从 Python 加载真实共享库，执行嵌套和并发调用，保留回调异常对象身份，并检查包括孤立代理项字符串在内的未知模式。[运行时对比](../../../../crates/python-sdk-ffi/examples/runtime_source_parity.rs)和[客户端对比](../../../../crates/python-sdk-ffi/examples/client_source_parity.rs)对生成的绑定运行固定版本的 Python 测试，仅替换产品身份。客户端对比还检查公开声明、共享载荷身份、延后的事件修改与替换、实时配置变化、回调引用清理，以及跨上下文的异常 cause。[原生观察测试](../../../../crates/python-sdk/tests/observation_parity.rs)固定引用生命周期与修改顺序。原生 ABI 测试验证缓冲区所有权和陈旧句柄拒绝行为。[发行测试](../../../../crates/python-release/tests/release_parity.rs)覆盖按目标暂存库和 wheel 包载荷检查。
 
-[已安装 wheel 包对比](../../../../crates/python-sdk-ffi/examples/installed_source_smoke.rs)拒绝从隔离环境外导入，并通过默认 SDK 启动、自定义文本／代码／工作流轮次和直接运行时启动，驱动固定源码的免密钥模型服务器。macOS arm64 wheel 包在 Python 3.10 和 3.14 上通过这些场景及持久日志检查。
+[已安装 wheel 包对比](../../../../crates/python-sdk-ffi/examples/installed_source_smoke.rs)拒绝从隔离环境外导入，并通过默认 SDK 启动、自定义文本／代码／工作流轮次、minimal 双工具配置、完整的 advanced 可执行文件快照和直接运行时启动，驱动固定源码的免密钥模型服务器。macOS arm64 wheel 包在 Python 3.10 和 3.14 上通过默认、自定义与直接启动场景及持久日志检查；当前载体还在 Python 3.14 上通过 minimal 与 advanced 快照场景。advanced 对比还覆盖跨会话通知的精确顺序，包括工作流子 agent 的请求上下文先于父会话的 `tool-workflow/agent-start` 记录。
 
-此决策并不证明 Python SDK 已完全等价。完整的 Python 值与路径边界审计、已安装的 minimal／advanced 快照场景，以及 Linux 发布矩阵仍需独立证据。
+此决策并不证明 Python SDK 已完全等价。完整的 Python 值与路径边界审计、Hatch 导入时清单快照行为，以及 Linux 发布矩阵仍需独立证据。
 
 ## 考虑过的替代方案
 

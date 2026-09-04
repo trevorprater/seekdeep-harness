@@ -233,6 +233,35 @@ fn assert_inherited_policy_request(adapter: &ScriptedAdapter) {
 }
 
 #[tokio::test]
+async fn published_run_begins_its_initial_prompt_before_returning() {
+    let harness = Harness::new([Reply::Text("child answer".to_owned())]).await;
+    let run = start_in_process_run(
+        harness.request(AbortSignal::default()),
+        InProcessRunOptions::default(),
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        run.local_agent()
+            .unwrap()
+            .session()
+            .events()
+            .iter()
+            .any(|event| event.event_type == "agent/inbox/spliced")
+    );
+    assert_eq!(harness.adapter.requests.lock().len(), 1);
+    assert_eq!(
+        run.result().await.unwrap().stop_reason,
+        SubagentStopReason::Completed
+    );
+
+    run.dispose().await.unwrap();
+    harness.parent.dispose().await.unwrap();
+    harness.context.root_fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
 async fn published_fresh_child_inherits_route_cwd_depth_and_disposes_quiescently() {
     let harness = Harness::new([Reply::Text("child answer".to_owned())]).await;
     harness

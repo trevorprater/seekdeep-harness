@@ -20,15 +20,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let temporary = tempfile::tempdir()?;
     let executable = installed_runtime(python, temporary.path())?;
-    let script = temporary.path().join("smoke.py");
-    let source_script = std::fs::read_to_string(source.join("scripts/smoke-python-runtime.py"))?
-        .replace("@deepseek-ai/", "@seekdeep-ai/")
-        .replace("dsh-", "seekdeep-")
-        .replace("DSH_", "SEEKDEEP_")
-        .replace("DeepSeek Harness", "SeekDeep Harness")
-        .replace("deepseek-harness", "seekdeep-harness");
+    let script_root = temporary.path().join("scripts");
+    std::fs::create_dir(&script_root)?;
+    let script = script_root.join("smoke-python-runtime.py");
+    let source_script = port_text(&std::fs::read_to_string(
+        source.join("scripts/smoke-python-runtime.py"),
+    )?);
     std::fs::write(&script, source_script)?;
-    for scenario in ["sdk-default", "sdk-custom", "direct"] {
+    stage_fixture(
+        &source.join("scripts/snapshots/python-sdk-single-exe/advanced"),
+        &script_root.join("snapshots/python-sdk-single-exe/advanced"),
+    )?;
+    let minimal = source.join("examples/jsonrpc-agent/minimal.cordis.yml");
+    let staged_minimal = temporary
+        .path()
+        .join("examples/jsonrpc-agent/minimal.cordis.yml");
+    std::fs::create_dir_all(
+        staged_minimal
+            .parent()
+            .ok_or("minimal config parent absent")?,
+    )?;
+    std::fs::write(
+        &staged_minimal,
+        port_text(&std::fs::read_to_string(minimal)?),
+    )?;
+    for scenario in [
+        "sdk-default",
+        "sdk-custom",
+        "sdk-minimal",
+        "sdk-snapshot",
+        "direct",
+    ] {
         let mut command = isolated_python(python, temporary.path());
         command.arg(&script).args(["--scenario", scenario]);
         if scenario != "sdk-default" {
@@ -40,9 +62,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     println!(
-        "installed SDK/runtime wheels passed default, custom three-turn, and direct source smokes"
+        "installed SDK/runtime wheels passed default, custom, minimal, advanced snapshot, and direct source smokes"
     );
     Ok(())
+}
+
+fn stage_fixture(source: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(destination)?;
+    for entry in std::fs::read_dir(source)? {
+        let entry = entry?;
+        if entry.file_type()?.is_symlink() {
+            return Err("source smoke fixture contains a symlink".into());
+        }
+        let target = destination.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            stage_fixture(&entry.path(), &target)?;
+        } else {
+            std::fs::write(target, port_text(&std::fs::read_to_string(entry.path())?))?;
+        }
+    }
+    Ok(())
+}
+
+fn port_text(source: &str) -> String {
+    source
+        .replace("@deepseek-ai/", "@seekdeep-ai/")
+        .replace("dsh-", "seekdeep-")
+        .replace("DSH_", "SEEKDEEP_")
+        .replace("DeepSeek Harness", "SeekDeep Harness")
+        .replace("deepseek-harness", "seekdeep-harness")
 }
 
 fn verify_pin(source: &Path) -> Result<(), Box<dyn std::error::Error>> {

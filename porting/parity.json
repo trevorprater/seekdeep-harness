@@ -77880,7 +77880,8 @@
       "evidence": [
         "pinned-source Vitest: in-process driver and spawn provider 85/85",
         "cargo test -p seekdeep-subagent-in-process-driver --all-features",
-        "cargo clippy -p seekdeep-subagent-in-process-driver --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-subagent-in-process-driver --all-targets --all-features -- -D warnings",
+        "Rust real-loop regression proves a published run submits its initial prompt before returning; the installed Python SDK advanced snapshot pins the resulting workflow-child notification order"
       ]
     },
     {
@@ -77978,7 +77979,8 @@
       ],
       "evidence": [
         "pinned-source Vitest: in-process driver and spawn provider 85/85",
-        "cargo test -p seekdeep-subagent-in-process-driver --all-features"
+        "cargo test -p seekdeep-subagent-in-process-driver --all-features",
+        "published_run_begins_its_initial_prompt_before_returning plus the installed advanced SDK snapshot preserve JavaScript Promise eagerness"
       ]
     },
     {
@@ -85131,9 +85133,9 @@
       "evidence": [
         "all pinned client tests pass through the generated Rust-backed facade, including receipt-to-idle ownership and descendant notifications",
         "shared notifications, captured-event replacement, live config reads, and cross-context exception causes have dedicated regressions",
-        "installed macOS SDK/runtime wheels pass default, custom text/code/workflow, and direct source smokes on Python 3.10 and 3.14"
+        "installed macOS SDK/runtime wheels pass default, custom text/code/workflow, and direct source smokes on Python 3.10 and 3.14; the current carrier also passes the minimal configuration and complete advanced source snapshot on Python 3.14"
       ],
-      "note": "client bindings and installed full turns are implemented; complete Python value/path edge cases and installed minimal/advanced scenarios remain pending"
+      "note": "client bindings and installed full turns are implemented; complete Python value/path edge cases remain pending"
     },
     {
       "source": "python/sdk/src/deepseek_harness/client.py",
@@ -85183,12 +85185,26 @@
     {
       "source": "python/sdk/tests/manual_sdk_agent_smoke.py",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/python-sdk-ffi/examples/installed_source_smoke.rs"
+      ],
+      "evidence": [
+        "the real installed SDK/runtime wheels drive the pinned keyless model server through the compiled runtime, validate the configured HTTP route, and reopen durable compressed session logs"
+      ]
     },
     {
       "source": "python/sdk/tests/test_bundled_runtime.py",
       "kind": "test",
-      "status": "pending"
+      "status": "pending",
+      "targets": [
+        "crates/python-sdk-ffi/examples/installed_source_smoke.rs",
+        "crates/python-release/tests/release_parity.rs"
+      ],
+      "evidence": [
+        "real installed macOS wheels pass zero-config, explicit custom configuration, and the minimal two-tool runtime through the compiled executable carrier"
+      ],
+      "note": "missing-plugin startup failure, empty ambient config, and the development-carrier equivalents remain to be pinned"
     },
     {
       "source": "python/sdk/tests/test_client.py",
@@ -85232,18 +85248,27 @@
     {
       "source": "python/sdk/tests/test_runtime_resolution.py",
       "kind": "test",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/python-sdk/tests/runtime_parity.rs",
         "crates/python-sdk-ffi/tests/runtime_binding.rs",
         "crates/python-sdk-ffi/examples/runtime_source_parity.rs"
       ],
-      "note": "all 5 source cases pass against generated native bindings; retained with the owning runtime API until its remaining audit closes"
+      "evidence": [
+        "all 5 pinned source cases pass unchanged except product identity against generated Rust-backed bindings",
+        "native and live ctypes regressions add platform aliases, missing metadata/config/executable/helper, explicit-mode precedence, node lookup order, hostile values, callback exception identity, and concurrent calls"
+      ]
     },
     {
       "source": "python/sdk/tests/test_smoke_model.py",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/python-sdk-ffi/examples/installed_source_smoke.rs"
+      ],
+      "evidence": [
+        "both pinned helper cases pass, and the installed advanced executable snapshot drives direct and workflow children through the same prompt-before-runtime-context response selection"
+      ]
     },
     {
       "source": "python/sdk/uv.lock",

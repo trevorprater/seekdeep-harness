@@ -349,14 +349,18 @@ pub async fn start_in_process_run(
     create.owner_agent = Some(parent);
     let handle = agents.create(create).await?;
     let structured = structured_slot.lock().clone();
-    Ok(drive_published_run(
+    let run = drive_published_run(
         handle,
         request.request.signal,
         request.request.prompt,
         child_id,
         boundary,
         structured,
-    ))
+    );
+    // JavaScript async functions run through their first await immediately. Give the
+    // newly woken child the equivalent first scheduler turn before publishing the run.
+    tokio::task::yield_now().await;
+    Ok(run)
 }
 
 fn drive_published_run(
@@ -369,21 +373,21 @@ fn drive_published_run(
 ) -> Arc<dyn SubagentRun> {
     let child = handle.agent.clone();
     let cancelled = Arc::new(AtomicBool::new(false));
+    let prompt_started = if signal.is_aborted() {
+        cancelled.store(true, Ordering::Release);
+        let _ = child.cancel(AgentCancelCause::Parent, CancelOptions::default());
+        false
+    } else {
+        child
+            .followup(UserMessage::new(prompt, MessageSource::user()))
+            .is_ok()
+    };
     let result_child = child.clone();
     let result_cancelled = Arc::clone(&cancelled);
     let result = async move {
         if signal.is_aborted() {
             cancel_child(&result_child, &result_cancelled).await;
-        } else {
-            let message = UserMessage::new(prompt, MessageSource::user());
-            if result_child.followup(message).is_err() {
-                return read_result(
-                    &result_child,
-                    boundary,
-                    result_cancelled.load(Ordering::Acquire),
-                    structured.as_ref(),
-                );
-            }
+        } else if prompt_started {
             let wait = result_child.when_idle();
             tokio::select! {
                 () = signal.cancelled() => cancel_child(&result_child, &result_cancelled).await,
@@ -403,6 +407,12 @@ fn drive_published_run(
     }
     .boxed()
     .shared();
+    // A JavaScript Promise keeps executing without a consumer awaiting it. Keep the
+    // Rust result future live as well so signal handoff and settlement remain eager.
+    let eager_result = result.clone();
+    tokio::spawn(async move {
+        let _ = eager_result.await;
+    });
     Arc::new(InProcessRun {
         id: child_id,
         agent: child,
