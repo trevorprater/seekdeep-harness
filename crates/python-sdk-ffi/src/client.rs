@@ -14,7 +14,7 @@ use seekdeep_python_sdk::{
     Notification, NotificationFilter, NotificationObserver, NotificationSubscription, ObjectHandle,
     ProviderId, RequestId, RequestOptions, Result, RuntimeProcess, SeededIds, SessionId,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de::Error as _};
 use serde_json::{Map, Value, json};
 
 use crate::{
@@ -105,8 +105,8 @@ fn process(handle: Handle) -> Result<Arc<RuntimeProcess>> {
 enum Operation {
     #[serde(rename = "harness.new")]
     NewHarness {
-        config: Option<Value>,
-        keywords: Map<String, Value>,
+        config: Option<ObjectHandle>,
+        keywords: ObjectHandle,
         owner: u64,
         seed: [u8; 16],
     },
@@ -241,6 +241,7 @@ enum Operation {
     #[serde(rename = "process.wait")]
     Wait {
         handle: Handle,
+        #[serde(default, deserialize_with = "deserialize_optional_f64")]
         timeout: Option<f64>,
     },
     #[serde(rename = "process.terminate")]
@@ -253,10 +254,24 @@ enum Operation {
 
 #[derive(Clone, Copy, Default, Deserialize)]
 struct Options {
+    #[serde(default, deserialize_with = "deserialize_optional_f64")]
     timeout: Option<f64>,
     observer: Option<ObjectHandle>,
     predicate: Option<ObjectHandle>,
     subscription: Option<Handle>,
+}
+
+fn deserialize_optional_f64<'de, D>(deserializer: D) -> std::result::Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<serde_json::Number>::deserialize(deserializer)?
+        .map(|number| {
+            number
+                .as_f64()
+                .ok_or_else(|| D::Error::custom("number is outside the f64 range"))
+        })
+        .transpose()
 }
 
 pub(crate) fn handles(operation: &str) -> bool {
@@ -273,6 +288,18 @@ pub(crate) fn handles(operation: &str) -> bool {
 
 fn object(callback: Callback, handle: ObjectHandle) -> Result<Arc<Object>> {
     Object::new(callback.with_owner(handle.owner), json!(handle))
+}
+
+fn object_truth(value: &Object) -> Result<bool> {
+    value
+        .invoke("object.truth", Value::Null)?
+        .as_bool()
+        .ok_or_else(|| {
+            Error::new(
+                ErrorKind::Type,
+                "interpreter truth test returned no boolean",
+            )
+        })
 }
 
 fn filter(callback: Callback, handle: ObjectHandle) -> Result<NotificationFilter> {
@@ -372,9 +399,21 @@ fn host(owner: &Arc<Mutex<Callback>>) -> Host {
 fn bind_config(client: &ClientEntry) {
     let owner = Arc::clone(&client.owner);
     client.client.set_config_reader(Arc::new(move || {
-        serde_json::from_value(selected(&owner).invoke("config.read", json!([]))?)
-            .map_err(|error| Error::new(ErrorKind::Type, error.to_string()))
+        decode_foreign_json(
+            &selected(&owner).invoke("config.read", json!([]))?,
+            "client configuration",
+        )
     }));
+}
+
+fn decode_foreign_json<T: serde::de::DeserializeOwned>(value: &Value, what: &str) -> Result<T> {
+    let encoded = value.as_str().ok_or_else(|| {
+        Error::new(
+            ErrorKind::Type,
+            format!("foreign {what} must be encoded JSON"),
+        )
+    })?;
+    serde_json::from_str(encoded).map_err(|error| Error::new(ErrorKind::Type, error.to_string()))
 }
 
 fn run_reply(result: seekdeep_python_sdk::RunResult) -> Result<Reply> {
@@ -414,8 +453,8 @@ fn run_reply(result: seekdeep_python_sdk::RunResult) -> Result<Reply> {
 
 // One exhaustive table keeps ABI operations and their ownership transfers auditable together.
 #[allow(clippy::too_many_lines)]
-pub(crate) fn run(input: Value, callback: Callback) -> Result<Reply> {
-    let operation: Operation = serde_json::from_value(input)
+pub(crate) fn run(input: &[u8], callback: Callback) -> Result<Reply> {
+    let operation: Operation = serde_json::from_slice(input)
         .map_err(|error| Error::new(ErrorKind::Value, error.to_string()))?;
     match operation {
         Operation::NewHarness {
@@ -424,28 +463,26 @@ pub(crate) fn run(input: Value, callback: Callback) -> Result<Reply> {
             owner,
             seed,
         } => {
-            if config.is_some() && !keywords.is_empty() {
+            let callback = callback.with_owner(owner);
+            let keywords = object(callback, keywords)?;
+            if config.is_some() && object_truth(&keywords)? {
                 return Err(Error::new(
                     ErrorKind::Type,
                     "pass either DeepSeekHarnessConfig or keyword options, not both",
                 ));
             }
-            let defaults = serde_json::to_value(HarnessOptions::default())
-                .map_err(|error| Error::new(ErrorKind::Value, error.to_string()))?;
-            for key in keywords.keys() {
-                if defaults.get(key).is_none() {
-                    return Err(Error::new(
-                        ErrorKind::Type,
-                        format!(
-                            "DeepSeekHarnessConfig.__init__() got an unexpected keyword argument '{key}'"
-                        ),
-                    ));
-                }
-            }
-            let config: HarnessOptions =
-                serde_json::from_value(config.unwrap_or(Value::Object(keywords)))
-                    .map_err(|error| Error::new(ErrorKind::Type, error.to_string()))?;
-            let callback = callback.with_owner(owner);
+            let config = config.map(|value| object(callback, value)).transpose()?;
+            let selected = match config {
+                Some(config) if object_truth(&config)? => config,
+                Some(_) | None => Object::new(
+                    callback,
+                    keywords.invoke("object.callback", json!("harness.config_from_keywords"))?,
+                )?,
+            };
+            let config: HarnessOptions = decode_foreign_json(
+                &selected.invoke("object.callback_json", json!("harness.config_asdict"))?,
+                "harness configuration",
+            )?;
             let client_owner = Arc::new(Mutex::new(callback));
             let harness = Harness::new(
                 config,
@@ -463,19 +500,28 @@ pub(crate) fn run(input: Value, callback: Callback) -> Result<Reply> {
                         .ok_or_else(|| Error::new(ErrorKind::Type, "messageId must be a string"))
                 }),
             )?;
-            let data = json!({"config":harness.config(),"client_config":harness.client().config()});
+            let client_config = serde_json::to_value(harness.client().config())
+                .map_err(|error| Error::new(ErrorKind::Type, error.to_string()))?;
             harness.set_config_reader(Arc::new(move || {
-                serde_json::from_value(callback.invoke("config.read", json!([]))?)
-                    .map_err(|error| Error::new(ErrorKind::Type, error.to_string()))
+                decode_foreign_json(
+                    &callback.invoke("config.read", json!([]))?,
+                    "harness configuration",
+                )
             }));
             let client = insert(Entry::Client(ClientEntry {
                 client: Arc::clone(harness.client()),
                 owner: client_owner,
             }))?;
             let handle = insert(Entry::Harness(harness))?;
-            Ok(Reply::json(
-                json!({"handle":handle.0,"client":client.0,"config":data["config"],"client_config":data["client_config"]}),
-            ))
+            Ok(Reply {
+                value: json!({"kind":"record","value":{
+                    "handle":{"kind":"json","value":handle.0},
+                    "client":{"kind":"json","value":client.0},
+                    "config":{"kind":"object","value":selected.handle()},
+                    "client_config":{"kind":"json","value":client_config},
+                }}),
+                retained: vec![Box::new(selected)],
+            })
         }
         Operation::StartHarness { handle } => {
             harness(handle)?.start()?;
@@ -731,5 +777,31 @@ pub(crate) fn run(input: Value, callback: Callback) -> Result<Reply> {
             drop(entry);
             Ok(Reply::json(Value::Null))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn operation_decoder_preserves_wide_integer_request_ids() {
+        let wide = "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        let input = format!(r#"{{"op":"client.respond","handle":1,"id":{wide},"result":null}}"#);
+        let Operation::Respond { id, .. } = serde_json::from_slice(input.as_bytes()).unwrap()
+        else {
+            panic!("wrong operation");
+        };
+        assert_eq!(id.to_string(), wide);
+        assert!(RequestId::from_value(&id).is_some());
+    }
+
+    #[test]
+    fn operation_decoder_accepts_floating_client_configuration() {
+        let input = br#"{"op":"client.new","config":{"runtime_bin":null,"bridge_bin":null,"launch_args_override":null,"cwd":null,"env":null,"request_timeout_seconds":null,"shutdown_timeout_seconds":1.0},"owner":1,"seed":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"#;
+        let Operation::New { config, .. } = serde_json::from_slice(input).unwrap() else {
+            panic!("wrong operation");
+        };
+        assert_eq!(config.shutdown_timeout_seconds, Some(1.0));
     }
 }

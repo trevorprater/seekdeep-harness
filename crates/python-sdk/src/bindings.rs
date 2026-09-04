@@ -12,7 +12,7 @@ pub fn sdk_bindings() -> crate::Result<BTreeMap<String, String>> {
 }
 
 /// Version of the generated interpreter/byte-buffer result protocol.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 /// Generates the runtime package's binding modules for one native library basename.
 ///
@@ -132,10 +132,38 @@ class _Invocation:
             return self.handle(self.objects[arguments["object"]].payload.get("event"))
         if operation == "object.is_dictionary":
             return isinstance(self.objects[arguments["object"]], dict)
+        if operation == "object.is_list":
+            return isinstance(self.objects[arguments["object"]], list)
         if operation == "object.is_string":
             return isinstance(self.objects[arguments["object"]], str)
         if operation == "object.is_integer":
             return isinstance(self.objects[arguments["object"]], int)
+        if operation == "object.truth":
+            return bool(self.objects[arguments["object"]])
+        if operation == "object.callback":
+            value = self.callbacks[arguments["arguments"]](self.objects[arguments["object"]])
+            return self.handle(value)
+        if operation == "object.callback_value":
+            return self.callbacks[arguments["arguments"]](self.objects[arguments["object"]])
+        if operation == "object.callback_json":
+            value = self.callbacks[arguments["arguments"]](self.objects[arguments["object"]])
+            return json.dumps(value,separators=(",",":"))
+        if operation == "object.get":
+            return self.handle(self.objects[arguments["object"]].get(arguments["arguments"]))
+        if operation == "object.iter":
+            return [self.handle(value) for value in self.objects[arguments["object"]]]
+        if operation == "object.reversed":
+            return [self.handle(value) for value in reversed(self.objects[arguments["object"]])]
+        if operation == "object.none":
+            return self.handle(None)
+        if operation == "object.equals":
+            return bool(self.objects[arguments["object"]] == arguments["arguments"])
+        if operation == "object.not_equals":
+            return bool(self.objects[arguments["object"]] != arguments["arguments"])
+        if operation == "object.string":
+            return self.handle(str(self.objects[arguments["object"]]))
+        if operation == "objects.concat":
+            return self.handle("".join(self.objects[value["value"]] for value in arguments))
         if operation == "object.text_block":
             return self.handle([{"type":"text","text":self.objects[arguments["object"]]}])
         if operation == "object.read":

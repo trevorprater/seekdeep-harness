@@ -7,8 +7,8 @@ use std::{
 };
 
 use seekdeep_python_release::{
-    Package, RuntimePlatform, hook, load_platforms, pep440_version, repository_version,
-    runtime_suffixes, staging, validate_release_tag, wheel,
+    Package, RuntimePlatform, hook, load_platforms, load_platforms_snapshot, pep440_version,
+    repository_version, runtime_suffixes, staging, validate_release_tag, wheel,
 };
 use serde_json::json;
 use zip::write::SimpleFileOptions;
@@ -159,6 +159,56 @@ fn platform_manifest_is_nonempty_and_has_exact_string_fields() {
         fs::write(&path, serde_json::to_vec(&invalid).unwrap()).unwrap();
         assert!(load_platforms(&path).is_err());
     }
+}
+
+#[test]
+fn generated_hook_uses_its_validated_import_time_platform_snapshot() {
+    let root = fixture();
+    let platform = load_platforms(&root.path().join("python/sdk-runtime/platforms.json")).unwrap()
+        ["linux-x64"]
+        .clone();
+    let executable_path = root.path().join(&platform.executable);
+    executable(&executable_path);
+    let staged = root.path().join("staged-runtime");
+    staging::stage_runtime(
+        root.path(),
+        &staged,
+        "1.2.3",
+        &executable_path,
+        &platform.executable,
+    )
+    .unwrap();
+    let manifest_path = staged.join("platforms.json");
+    let snapshot = fs::read(&manifest_path).unwrap();
+    let platforms = load_platforms_snapshot(&manifest_path, snapshot).unwrap();
+    fs::write(&manifest_path, "{}\n").unwrap();
+
+    assert!(
+        hook::initialize_with_platforms(
+            &staged,
+            &platforms,
+            "standard",
+            "wheel",
+            Some(&platform.tag),
+            "Linux",
+            "x86_64",
+        )
+        .is_ok()
+    );
+    assert!(
+        hook::initialize(
+            &staged,
+            "standard",
+            "wheel",
+            Some(&platform.tag),
+            "Linux",
+            "x86_64",
+        )
+        .is_err()
+    );
+    let binding = fs::read_to_string(staged.join("hatch_build.py")).unwrap();
+    assert!(binding.contains("hook-snapshot"));
+    assert!(binding.contains("SEEKDEEP_INTERNAL_RUNTIME_PLATFORMS_JSON"));
 }
 
 #[test]

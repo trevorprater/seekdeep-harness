@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use crate::{Notification, RunEvent};
 use seekdeep_identity::SessionId;
 use seekdeep_llm::{ModelId, ProviderId};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use serde_json::{Map, Value};
 
 /// Opaque incoming JSON-RPC identity using Python's string-or-integer test.
@@ -16,8 +16,7 @@ pub struct RequestId(Value);
 impl RequestId {
     /// Brands strings, integers, and Python's integer-subtype booleans.
     pub fn from_value(value: &Value) -> Option<Self> {
-        (value.is_string() || value.is_boolean() || value.is_i64() || value.is_u64())
-            .then(|| Self(value.clone()))
+        (value.is_string() || is_python_integer(value)).then(|| Self(value.clone()))
     }
 
     /// Returns the original wire identity without coercion.
@@ -28,6 +27,16 @@ impl RequestId {
     pub(crate) fn correlation_key(&self) -> String {
         crate::values::python_str(&self.0)
     }
+}
+
+pub(crate) fn is_python_integer(value: &Value) -> bool {
+    value.is_boolean()
+        || value.as_number().is_some_and(|number| {
+            !number
+                .to_string()
+                .bytes()
+                .any(|byte| matches!(byte, b'.' | b'e' | b'E'))
+        })
 }
 
 /// Unsolicited runtime notification with an object payload.
@@ -65,8 +74,10 @@ pub struct HarnessConfig {
     /// Overrides merged onto the caller's current environment.
     pub env: Option<BTreeMap<String, String>>,
     /// Default request timeout in seconds; None waits indefinitely.
+    #[serde(default, deserialize_with = "deserialize_optional_f64")]
     pub request_timeout_seconds: Option<f64>,
     /// Shutdown request override and process wait; None defers the request default and waits for exit.
+    #[serde(default, deserialize_with = "deserialize_optional_f64")]
     pub shutdown_timeout_seconds: Option<f64>,
 }
 
@@ -109,13 +120,28 @@ pub struct HarnessOptions {
     /// Complete runtime argv override.
     pub launch_args_override: Option<Vec<String>>,
     /// Default request timeout in seconds.
+    #[serde(default, deserialize_with = "deserialize_optional_f64")]
     pub request_timeout_seconds: Option<f64>,
     /// Shutdown request and process-termination timeout in seconds.
+    #[serde(default, deserialize_with = "deserialize_optional_f64")]
     pub shutdown_timeout_seconds: Option<f64>,
     /// Optional provider endpoint override.
     pub base_url: Option<String>,
     /// Optional provider API-key override; never included in diagnostics.
     pub api_key: Option<String>,
+}
+
+fn deserialize_optional_f64<'de, D>(deserializer: D) -> std::result::Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<serde_json::Number>::deserialize(deserializer)?
+        .map(|number| {
+            number
+                .as_f64()
+                .ok_or_else(|| D::Error::custom("number is outside the f64 range"))
+        })
+        .transpose()
 }
 
 impl Default for HarnessOptions {

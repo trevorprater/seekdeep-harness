@@ -7,8 +7,8 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use seekdeep_python_release::{
-    Package, expected_wheel, hook, load_platforms, pep440_version, repository_version, staging,
-    validate_release_tag, wheel,
+    Package, expected_wheel, hook, load_platforms, load_platforms_snapshot, pep440_version,
+    repository_version, staging, validate_release_tag, wheel,
 };
 
 #[derive(Parser)]
@@ -48,6 +48,8 @@ enum Command {
         #[arg(long)]
         target: String,
     },
+    /// Validate and serialize the platform manifest at binding import time.
+    HookSnapshot,
     /// Validate a previously built wheel.
     Verify {
         #[arg(long, value_enum)]
@@ -105,17 +107,35 @@ fn run(args: Args) -> anyhow::Result<()> {
             } else {
                 std::env::consts::OS
             };
-            let result = hook::initialize(
-                &root,
-                &version,
-                &target,
-                std::env::var("SEEKDEEP_RUNTIME_PLATFORM_TAG")
-                    .ok()
-                    .as_deref(),
-                system,
-                std::env::consts::ARCH,
-            )?;
+            let requested_tag = std::env::var("SEEKDEEP_RUNTIME_PLATFORM_TAG").ok();
+            let result =
+                if let Ok(snapshot) = std::env::var("SEEKDEEP_INTERNAL_RUNTIME_PLATFORMS_JSON") {
+                    let platforms =
+                        load_platforms_snapshot(&root.join("platforms.json"), snapshot.as_bytes())?;
+                    hook::initialize_with_platforms(
+                        &root,
+                        &platforms,
+                        &version,
+                        &target,
+                        requested_tag.as_deref(),
+                        system,
+                        std::env::consts::ARCH,
+                    )?
+                } else {
+                    hook::initialize(
+                        &root,
+                        &version,
+                        &target,
+                        requested_tag.as_deref(),
+                        system,
+                        std::env::consts::ARCH,
+                    )?
+                };
             println!("{result}");
+        }
+        Command::HookSnapshot => {
+            let platforms = load_platforms(&root.join("platforms.json"))?;
+            println!("{}", serde_json::to_string(&platforms)?);
         }
         Command::Verify {
             package,

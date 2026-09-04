@@ -19,9 +19,17 @@ enum Operation {
     FinalResponse {
         events: Vec<serde_json::Map<String, Value>>,
     },
+    #[serde(rename = "api.final_response_object")]
+    FinalResponseObject {
+        events: seekdeep_python_sdk::ObjectHandle,
+    },
     #[serde(rename = "api.finish_reason")]
     FinishReason {
         events: Vec<serde_json::Map<String, Value>>,
+    },
+    #[serde(rename = "api.finish_reason_object")]
+    FinishReasonObject {
+        events: seekdeep_python_sdk::ObjectHandle,
     },
     #[serde(rename = "api.inbox_receipt")]
     InboxReceipt {
@@ -67,7 +75,7 @@ pub(crate) fn run(bytes: &[u8], callback: Callback) -> Result<Reply> {
         .and_then(Value::as_str)
         .is_some_and(crate::client::handles)
     {
-        return crate::client::run(input, callback);
+        return crate::client::run(bytes, callback);
     }
     let operation: Operation = serde_json::from_slice(bytes)
         .map_err(|error| Error::new(ErrorKind::Value, error.to_string()))?;
@@ -88,8 +96,14 @@ pub(crate) fn run(bytes: &[u8], callback: Callback) -> Result<Reply> {
         Operation::FinalResponse { events } => {
             Ok(json!(seekdeep_python_sdk::final_response(&events)))
         }
+        Operation::FinalResponseObject { events } => {
+            return crate::projection::final_response(callback, events);
+        }
         Operation::FinishReason { events } => {
             Ok(json!(seekdeep_python_sdk::finish_reason(&events)?))
+        }
+        Operation::FinishReasonObject { events } => {
+            return crate::projection::finish_reason(callback, events);
         }
         Operation::InboxReceipt {
             notification,

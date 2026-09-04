@@ -11,7 +11,7 @@ use seekdeep_identity::{MessageId, SessionId};
 use seekdeep_llm::{ModelId, ProviderId};
 use seekdeep_python_sdk::{
     Client, Error, ErrorKind, ExceptionId, Harness, HarnessConfig, HarnessOptions, Host,
-    NotificationObserver, RequestOptions, SeededIds,
+    NotificationObserver, RequestId, RequestOptions, SeededIds,
 };
 use serde_json::{Value, json};
 
@@ -119,6 +119,18 @@ fn initialize(client: &Arc<Client>) {
         )
         .unwrap();
     assert_eq!(result["serverInfo"]["name"], "keyless-python-peer");
+}
+
+#[test]
+fn request_ids_preserve_arbitrary_precision_python_integers() {
+    let wide = "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+    let value: Value = serde_json::from_str(wide).unwrap();
+    let request = RequestId::from_value(&value).expect("wide integer id");
+    assert_eq!(request.value().to_string(), wide);
+    for value in ["1.0", "1e3", "-2E4"] {
+        let value: Value = serde_json::from_str(value).unwrap();
+        assert!(RequestId::from_value(&value).is_none());
+    }
 }
 
 #[test]

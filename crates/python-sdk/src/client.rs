@@ -193,15 +193,7 @@ impl Client {
         if let Some(bridge) = &config.bridge_bin {
             return Ok(vec![bridge.clone()]);
         }
-        (self.host.bundled_launch)().map_err(|error| {
-            if error.import_error {
-                Error::new(ErrorKind::FileNotFound,
-                    "Unable to locate the bundled SeekDeep Harness SDK runtime. Install seekdeep-harness-runtime-bin or set HarnessConfig.runtime_bin."
-                ).caused_by(error)
-            } else {
-                error
-            }
-        })
+        (self.host.bundled_launch)()
     }
 
     fn start_readers(
@@ -666,7 +658,7 @@ impl Client {
                 );
                 failure.code = error
                     .get("code")
-                    .filter(|value| value.is_i64() || value.is_u64() || value.is_boolean())
+                    .filter(|value| crate::types::is_python_integer(value))
                     .cloned();
                 failure.data = error.get("data").cloned();
                 waiter.push(Err(failure));

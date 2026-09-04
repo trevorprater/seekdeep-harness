@@ -117,7 +117,13 @@ def _release(handle):
         pass
 
 def _runtime_launch():
-    from deepseek_harness_runtime import resolve_bundled_launch_args
+    try:
+        from deepseek_harness_runtime import resolve_bundled_launch_args
+    except ImportError as error:
+        raise FileNotFoundError(
+            "Unable to locate the bundled SeekDeep Harness SDK runtime. "
+            "Install seekdeep-harness-runtime-bin or set HarnessConfig.runtime_bin."
+        ) from error
     return resolve_bundled_launch_args()
 
 def _runtime_config():
@@ -161,7 +167,7 @@ class HarnessClient:
             "runtime.launch":_runtime_launch,
             "runtime.config":_runtime_config,
             "notification.create":Notification,
-            "config.read":lambda:asdict(self.config),
+            "config.read":lambda:json.dumps(asdict(self.config),separators=(",",":")),
         })
         self._notifications = _NotificationQueue(self)
 
@@ -312,13 +318,17 @@ class DeepSeekHarness:
     """Reusable synchronous SDK backed by a Rust-owned runtime process."""
     def __init__(self, config: DeepSeekHarnessConfig | None = None, **kwargs: object) -> None:
         self._context = Context({
-            "config.read":lambda:asdict(self.config),
+            "config.read":lambda:json.dumps(asdict(self.config),separators=(",",":")),
+            "harness.config_from_keywords":lambda value:DeepSeekHarnessConfig(**value),
+            "harness.config_asdict":asdict,
             "harness.initialize":lambda value: self._validate_initialize(value),
             "harness.prompt":lambda value:_SessionPromptResponse.model_validate(value).messageId,
         })
-        result = invoke({"op":"harness.new","config":None if config is None else asdict(config),
-            "keywords":kwargs,"owner":self._context.identity,"seed":list(os.urandom(16))},context=self._context)
-        self.config = config if config is not None else DeepSeekHarnessConfig(**kwargs)
+        result = invoke({"op":"harness.new",
+            "config":None if config is None else self._context.handle(config),
+            "keywords":self._context.handle(kwargs),"owner":self._context.identity,
+            "seed":list(os.urandom(16))},context=self._context)
+        self.config = result["config"]
         self._handle = result["handle"]
         self._finalizer = weakref.finalize(self, _release, self._handle)
         self._client = HarnessClient._from_native(result["client"],result["client_config"])
@@ -363,10 +373,12 @@ def normalize_input(input: str | list[JsonObject]) -> list[JsonObject]:
     return invoke({"op":"api.normalize","value":context.handle(input)},context=context)
 
 def final_response(events: list[JsonObject]) -> str:
-    return invoke({"op":"api.final_response","events":events})
+    context = Context({})
+    return invoke({"op":"api.final_response_object","events":context.handle(events)},context=context)
 
 def finish_reason(events: list[JsonObject]) -> str | None:
-    return invoke({"op":"api.finish_reason","events":events})
+    context = Context({})
+    return invoke({"op":"api.finish_reason_object","events":context.handle(events)},context=context)
 
 def _is_inbox_receipt(notification: Notification, session_id: str, message_id: str) -> bool:
     return invoke({"op":"api.inbox_receipt","notification":asdict(notification),"session":session_id,"message":message_id})

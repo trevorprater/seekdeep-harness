@@ -58,15 +58,29 @@ pub type RuntimePlatforms = IndexMap<String, RuntimePlatform>;
 /// # Errors
 /// Rejects unreadable/invalid JSON, an empty/non-object root, and non-string or extra fields.
 pub fn load_platforms(path: &Path) -> anyhow::Result<RuntimePlatforms> {
-    let payload = std::fs::read(path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "could not read runtime platform manifest from {}",
-                path.display()
-            )
-        })?;
+    let payload = std::fs::read(path).map_err(|_| {
+        anyhow::anyhow!(
+            "could not read runtime platform manifest from {}",
+            path.display()
+        )
+    })?;
+    load_platforms_snapshot(path, &payload)
+}
+
+/// Parses one import-time platform-manifest snapshot with source-compatible diagnostics.
+///
+/// # Errors
+/// Rejects invalid JSON, an empty/non-object root, and non-string or extra fields.
+pub fn load_platforms_snapshot(
+    path: &Path,
+    snapshot: impl AsRef<[u8]>,
+) -> anyhow::Result<RuntimePlatforms> {
+    let payload = serde_json::from_slice::<Value>(snapshot.as_ref()).map_err(|_| {
+        anyhow::anyhow!(
+            "could not read runtime platform manifest from {}",
+            path.display()
+        )
+    })?;
     let entries = payload
         .as_object()
         .filter(|entries| !entries.is_empty())

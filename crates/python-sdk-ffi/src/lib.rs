@@ -10,6 +10,7 @@
 mod client;
 mod dispatch;
 mod objects;
+mod projection;
 
 use std::{
     any::Any,

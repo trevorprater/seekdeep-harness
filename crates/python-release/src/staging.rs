@@ -209,22 +209,38 @@ import subprocess
 from pathlib import Path
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
+def _command():
+    tool = os.environ.get("SEEKDEEP_PYTHON_RELEASE_TOOL")
+    return [tool] if tool else [
+        "cargo", "run", "--quiet", "--manifest-path",
+        str(Path(__file__).resolve().parents[2] / "Cargo.toml"),
+        "--package", "seekdeep-python-release", "--bin", "seekdeep-python-release", "--",
+    ]
+
+def _run(arguments, environment):
+    result = subprocess.run(
+        _command() + arguments,
+        capture_output=True, text=True, env=environment,
+    )
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip())
+    return result.stdout.strip()
+
+_ROOT = str(Path(__file__).resolve().parent)
+_ENVIRONMENT = os.environ.copy()
+_ENVIRONMENT["CARGO_INCREMENTAL"] = "0"
+_ENVIRONMENT.setdefault("CARGO_BUILD_JOBS", "2")
+_PLATFORMS_JSON = _run(["hook-snapshot", "--root", _ROOT], _ENVIRONMENT)
+
 class RuntimeBuildHook(BuildHookInterface):
     def initialize(self, version, build_data):
-        tool = os.environ.get("SEEKDEEP_PYTHON_RELEASE_TOOL")
-        command = [tool] if tool else [
-            "cargo", "run", "--quiet", "--manifest-path",
-            str(Path(__file__).resolve().parents[2] / "Cargo.toml"),
-            "--package", "seekdeep-python-release", "--bin", "seekdeep-python-release", "--",
-        ]
         environment = os.environ.copy()
         environment["CARGO_INCREMENTAL"] = "0"
         environment.setdefault("CARGO_BUILD_JOBS", "2")
-        result = subprocess.run(
-            command + ["hook", "--root", self.root, "--version", version, "--target", self.target_name],
-            capture_output=True, text=True, env=environment,
+        environment["SEEKDEEP_INTERNAL_RUNTIME_PLATFORMS_JSON"] = _PLATFORMS_JSON
+        output = _run(
+            ["hook", "--root", self.root, "--version", version, "--target", self.target_name],
+            environment,
         )
-        if result.returncode:
-            raise RuntimeError(result.stderr.strip())
-        build_data.update(json.loads(result.stdout))
+        build_data.update(json.loads(output))
 "#;

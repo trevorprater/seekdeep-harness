@@ -84979,15 +84979,17 @@
     {
       "source": "python/sdk-runtime/hatch_build.py",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/python-release/src/hook.rs",
-        "crates/python-release/src/staging.rs"
+        "crates/python-release/src/staging.rs",
+        "crates/python-release/tests/release_parity.rs"
       ],
       "evidence": [
-        "native hook policy and generated staged-package binding exercised by real runtime fixture-wheel build"
-      ],
-      "note": "Rust hook policy and generated bindings pass real wheel and editable-install checks; source module-import manifest snapshot behavior remains pending"
+        "native hook policy and generated staged-package binding exercise editable, wheel-only, target, exact payload, executable-mode, helper, and native-library checks",
+        "generated_hook_uses_its_validated_import_time_platform_snapshot pins the source module-import boundary through Rust",
+        "a release-shaped macOS arm64 runtime wheel builds successfully through the generated snapshot binding and passes payload verification"
+      ]
     },
     {
       "source": "python/sdk-runtime/package.json",
@@ -85025,19 +85027,21 @@
     {
       "source": "python/sdk-runtime/src/deepseek_harness_runtime/__init__.py",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/python-sdk/src/runtime.rs",
         "crates/python-sdk/src/bindings.rs",
         "crates/python-sdk-ffi/src/lib.rs",
         "crates/python-sdk-ffi/src/dispatch.rs",
-        "crates/python-sdk-ffi/examples/runtime_source_parity.rs"
+        "crates/python-sdk-ffi/examples/runtime_source_parity.rs",
+        "crates/python-sdk-ffi/examples/bundled_runtime_source_parity.rs"
       ],
       "evidence": [
         "pinned runtime-resolution suite: 5 tests pass through generated Rust-backed bindings",
+        "native and ctypes tests cover platform aliases, resolved package paths, missing metadata/config/executable/helper, node lookup order, hostile mode values, exact callback exceptions, and concurrency",
+        "all 10 pinned bundled-runtime cases pass against the native executable and Rust-delegating development carrier",
         "real macOS runtime wheel imports on Python 3.10 and 3.14; editable import and native executable launch pass"
-      ],
-      "note": "runtime binding and production packaging are implemented; final path edge-case and release-platform audit remains pending"
+      ]
     },
     {
       "source": "python/sdk-runtime/src/deepseek_harness_runtime/deepseek-harness-runtime.json",
@@ -85120,31 +85124,33 @@
     {
       "source": "python/sdk/src/deepseek_harness/api.py",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/python-sdk/src/api.rs",
         "crates/python-sdk/src/observation.rs",
         "crates/python-sdk/src/bindings/sdk.rs",
         "crates/python-sdk-ffi/src/client.rs",
         "crates/python-sdk-ffi/src/objects.rs",
+        "crates/python-sdk-ffi/src/projection.rs",
         "crates/python-sdk-ffi/examples/client_source_parity.rs",
         "crates/python-sdk-ffi/examples/installed_source_smoke.rs"
       ],
       "evidence": [
-        "all pinned client tests pass through the generated Rust-backed facade, including receipt-to-idle ownership and descendant notifications",
-        "shared notifications, captured-event replacement, live config reads, and cross-context exception causes have dedicated regressions",
-        "installed macOS SDK/runtime wheels pass default, custom text/code/workflow, and direct source smokes on Python 3.10 and 3.14; the current carrier also passes the minimal configuration and complete advanced source snapshot on Python 3.14"
-      ],
-      "note": "client bindings and installed full turns are implemented; complete Python value/path edge cases remain pending"
+        "all 33 pinned client/runtime cases plus five binding regressions pass through the generated Rust-backed facade",
+        "source-differential public API matrix matches falsey config selection, path resolution, exact projection identity/errors, non-finite values, arbitrary-precision integers, live config, and import-versus-resolver failures",
+        "fresh paired ABI-v3 macOS SDK/runtime wheels pass default, custom text/code/workflow, minimal, complete advanced snapshot, and direct source smokes on Python 3.10 and 3.14"
+      ]
     },
     {
       "source": "python/sdk/src/deepseek_harness/client.py",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
+        "Cargo.toml",
         "crates/python-sdk/src/client.rs",
         "crates/python-sdk/src/process.rs",
         "crates/python-sdk/src/observation.rs",
+        "crates/python-sdk/src/types.rs",
         "crates/python-sdk/src/bindings/sdk.rs",
         "crates/python-sdk-ffi/src/client.rs",
         "crates/python-sdk-ffi/src/objects.rs",
@@ -85152,9 +85158,10 @@
       ],
       "evidence": [
         "all pinned Python client tests pass against the compiled facade; native subprocess tests pin restart, shutdown, timeout, routing, and single-consumption failures",
-        "retained interpreter objects preserve subscriber identity, callback error lifetime, and original exception ownership across harness/client contexts"
-      ],
-      "note": "the complete Python value and transport edge-case audit remains pending"
+        "retained interpreter objects preserve subscriber identity, callback error lifetime, falsey config identity, and original exception ownership across harness/client contexts",
+        "source-differential transport edges preserve bidirectional arbitrary-precision integers, exact runtime import/resolver failures, concurrent writes, malformed lines, stderr diagnostics, and callback ordering",
+        "representative cross-workspace test suites pass with arbitrary-precision JSON enabled, including core, settings, LLM/retry, tools, Bash, search, and Client settings"
+      ]
     },
     {
       "source": "python/sdk/src/deepseek_harness/errors.py",
@@ -85196,15 +85203,16 @@
     {
       "source": "python/sdk/tests/test_bundled_runtime.py",
       "kind": "test",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/python-sdk-ffi/examples/installed_source_smoke.rs",
+        "crates/python-sdk-ffi/examples/bundled_runtime_source_parity.rs",
         "crates/python-release/tests/release_parity.rs"
       ],
       "evidence": [
-        "real installed macOS wheels pass zero-config, explicit custom configuration, and the minimal two-tool runtime through the compiled executable carrier"
-      ],
-      "note": "missing-plugin startup failure, empty ambient config, and the development-carrier equivalents remain to be pinned"
+        "the exact pinned suite passes 10/10 after product renames against both the native executable and the development Node launcher that execs compiled Rust",
+        "real installed macOS wheels pass zero-config, explicit custom configuration, the minimal two-tool runtime, and advanced source snapshot through the compiled executable carrier"
+      ]
     },
     {
       "source": "python/sdk/tests/test_client.py",

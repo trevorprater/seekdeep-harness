@@ -51,6 +51,30 @@ pub fn initialize(
     machine: &str,
 ) -> anyhow::Result<Value> {
     let platforms = load_platforms(&root.join("platforms.json"))?;
+    initialize_with_platforms(
+        root,
+        &platforms,
+        version,
+        target,
+        requested_tag,
+        system,
+        machine,
+    )
+}
+
+/// Computes Hatch's native wheel fields from an import-time platform snapshot.
+///
+/// # Errors
+/// Rejects unsupported targets/tags and incomplete or invalid native payloads.
+pub fn initialize_with_platforms(
+    root: &Path,
+    platforms: &RuntimePlatforms,
+    version: &str,
+    target: &str,
+    requested_tag: Option<&str>,
+    system: &str,
+    machine: &str,
+) -> anyhow::Result<Value> {
     if version == "editable" {
         return Ok(json!({}));
     }
@@ -60,7 +84,7 @@ pub fn initialize(
     );
     let tag = match requested_tag.filter(|tag| !tag.is_empty()) {
         Some(tag) => tag.to_owned(),
-        None => host_platform_tag(&platforms, system, machine)?,
+        None => host_platform_tag(platforms, system, machine)?,
     };
     let matches = platforms
         .values()
