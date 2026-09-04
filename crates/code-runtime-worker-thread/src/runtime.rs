@@ -121,7 +121,7 @@ fn number_message(value: f64) -> String {
     }
 }
 
-/// Pure-Rust implementation of the TypeScript worker-thread runtime.
+/// Rust-owned implementation of the TypeScript worker-thread runtime.
 ///
 /// Bindings are invoked and polled on the calling Tokio runtime, independently
 /// of the program worker's lifetime. Runs with bindings require an active host runtime.
@@ -329,6 +329,13 @@ impl WorkerThreadCodeRuntime {
                     message: format!("worker exited with code {code} before completing"),
                 },
             ),
+            EngineCompletion::HeapLimit => ledger.failure(
+                logs,
+                CodeRunFailure {
+                    kind: CodeRunFailureKind::WorkerExit,
+                    message: "worker error: Worker terminated due to reaching memory limit: JS heap out of memory".to_owned(),
+                },
+            ),
             EngineCompletion::ComputeTimeout => ledger.failure(
                 logs,
                 CodeRunFailure {
@@ -440,6 +447,7 @@ impl CodeRuntimeBackend for WorkerThreadCodeRuntime {
         }
         let limits = EngineLimits {
             max_output_bytes,
+            max_old_generation_size_mb: self.config.max_old_generation_size_mb,
             compute_ms: self.config.compute_ms,
             max_wall_ms: self.config.max_wall_ms,
             signal,

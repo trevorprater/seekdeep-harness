@@ -8,8 +8,6 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-boa_engine.workspace = true
-cpu-time.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 oxc_allocator.workspace = true
@@ -32,6 +30,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+v8.workspace = true
 
 [lints]
 workspace = true

@@ -1,4 +1,4 @@
-//! Pure-Rust isolated TypeScript code runtime.
+//! Rust-owned isolated TypeScript code runtime.
 
 use std::sync::Arc;
 
@@ -6,9 +6,10 @@ use seekdeep_cordis::Plugin;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
 mod engine;
-mod job_executor;
 mod runtime;
 mod snapshot;
+mod watchdog;
+mod worker_globals;
 
 pub use runtime::{WorkerThreadCodeRuntime, WorkerThreadCodeRuntimeConfig, install};
 

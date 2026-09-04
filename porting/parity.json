@@ -54494,12 +54494,12 @@
       "status": "verified",
       "targets": [
         "crates/code-runtime-worker-thread/src/engine.rs",
-        "crates/code-runtime-worker-thread/src/job_executor.rs"
+        "crates/code-runtime-worker-thread/src/watchdog.rs"
       ],
       "evidence": [
         "pinned-source Vitest: worker-thread runtime 104 passed",
         "Rust engine owns isolated evaluation globals, async bindings, timers, cancellation, compute limits, output ledgers, and terminal messages",
-        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"
+        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 40 unit tests and 1 heap-limit integration passed"
       ]
     },
     {
@@ -54508,13 +54508,15 @@
       "status": "pending",
       "targets": [
         "crates/code-runtime-worker-thread/src/runtime.rs",
-        "crates/code-runtime-worker-thread/src/lib.rs"
+        "crates/code-runtime-worker-thread/src/lib.rs",
+        "crates/code-runtime-worker-thread/tests/heap_limits.rs"
       ],
       "evidence": [
         "Rust public backend validates config, mounts and isolates executions, maps abort/compute/wall controls, caps combined output, and disposes deterministically",
+        "Rust V8 isolate applies maxOldGenerationSizeMb; 16/512 MiB bounded-allocation differential pins worker-exit, retained logs, and host survival",
         "cargo clippy -p seekdeep-code-runtime-worker-thread --all-targets --all-features -- -D warnings"
       ],
-      "note": "native host-binding ownership is verified, but maxOldGenerationSizeMb is only validated; allocation-limit enforcement required by the source worker resourceLimits is not implemented"
+      "note": "native host-binding ownership and old-generation heap enforcement are verified; general Node module imports and exact Node type-strip positions and diagnostics remain to be matched"
     },
     {
       "source": "packages/code-runtime/code-runtime-worker-thread/src/invariant.ts",
@@ -54553,7 +54555,7 @@
       ],
       "evidence": [
         "Rust protocol state machines validate call/resolution/rejection/log/completion/exit/limit traffic and reject forged lossy shapes",
-        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"
+        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 40 unit tests and 1 heap-limit integration passed"
       ]
     },
     {
@@ -54566,7 +54568,7 @@
       ],
       "evidence": [
         "Rust flat bounded-depth wire codec preserves every lossless JSON root, deep values, and prototype-colliding keys while rejecting malformed/decorated/lossy input",
-        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"
+        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 40 unit tests and 1 heap-limit integration passed"
       ]
     },
     {
@@ -54575,11 +54577,11 @@
       "status": "verified",
       "targets": [
         "crates/code-runtime-worker-thread/src/engine.rs",
-        "crates/code-runtime-worker-thread/src/job_executor.rs"
+        "crates/code-runtime-worker-thread/src/watchdog.rs"
       ],
       "evidence": [
-        "Rust worker executor owns the isolated job lifecycle and message bridge without a JavaScript worker bootstrap",
-        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"
+        "Rust owns the V8 isolate lifecycle and native callbacks behind the JavaScript compatibility bindings",
+        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 40 unit tests and 1 heap-limit integration passed"
       ]
     },
     {
@@ -54587,7 +54589,8 @@
       "kind": "test",
       "status": "verified",
       "targets": [
-        "crates/code-runtime-worker-thread/src/engine.rs"
+        "crates/code-runtime-worker-thread/src/engine_tests.rs",
+        "crates/code-runtime-worker-thread/src/worker_globals.rs"
       ],
       "evidence": [
         "Rust engine tests pin globals, async TypeScript evaluation, binding calls, timers, stdout, mutated globals, exceptions, pending exits, and limits"
@@ -54603,7 +54606,7 @@
       ],
       "evidence": [
         "Cargo compiles and tests the directly linked native runtime artifact; no TypeScript bundle indirection remains",
-        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"
+        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 40 unit tests and 1 heap-limit integration passed"
       ]
     },
     {
@@ -54629,7 +54632,7 @@
       ],
       "evidence": [
         "Rust runtime tests cover mount/run/isolation/preabort/disposal, forged traffic containment, config defaults, output boundaries, diagnostics, compute/wall/abort controls, and typed failures",
-        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 33 passed"
+        "cargo test -p seekdeep-code-runtime-worker-thread --all-features: 40 unit tests and 1 heap-limit integration passed"
       ]
     },
     {
