@@ -45,7 +45,7 @@ pub(crate) const WORKER_GLOBALS: &str = r"
     }
     return parentPort;
   });
-  const workerThreadsModule = capturedPromise.resolve({ parentPort });
+  const workerThreadsModule = capturedObject.freeze({ parentPort });
   defineData(globalThis, '__seekdeep_worker_threads_module__', workerThreadsModule, false, false);
   const consoleShim = capturedObject.create(null);
   for (const level of ['log', 'info', 'warn', 'error', 'debug']) {

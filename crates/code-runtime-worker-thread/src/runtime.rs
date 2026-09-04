@@ -21,8 +21,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    engine::{EngineCompletion, EngineLimits, EngineOutcome, evaluate_program},
+    engine::{EngineCompletion, EngineLimits, EngineOutcome, evaluate_stripped_program},
     output_ledger::OutputLedger,
+    typescript::strip_typescript,
 };
 
 const MAX_TIMER_DELAY_MS: f64 = 2_147_483_647.0;
@@ -429,7 +430,14 @@ impl CodeRuntimeBackend for WorkerThreadCodeRuntime {
             return Ok(self.failure_before_worker(CodeRunFailureKind::Abort, message));
         }
 
-        let program = request.program;
+        let program = match strip_typescript(&request.program) {
+            Ok(program) => program,
+            Err(error) => {
+                return Ok(
+                    self.failure_before_worker(CodeRunFailureKind::Exception, error.to_string())
+                );
+            }
+        };
         let bindings = bridge_host_bindings(request.bindings)?;
         let max_output_bytes = self.config.max_output_bytes;
         let runtime_signal = seekdeep_llm::AbortSignal::default();
@@ -463,7 +471,7 @@ impl CodeRuntimeBackend for WorkerThreadCodeRuntime {
                     .build()
                     .map_err(anyhow::Error::from)
                     .and_then(|runtime| {
-                        runtime.block_on(evaluate_program(&program, limits, bindings))
+                        runtime.block_on(evaluate_stripped_program(&program, limits, bindings))
                     });
                 let _sent = send.send(outcome);
             });

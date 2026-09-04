@@ -10,15 +10,6 @@ anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 indexmap.workspace = true
-oxc_allocator.workspace = true
-oxc_ast.workspace = true
-oxc_ast_visit.workspace = true
-oxc_codegen.workspace = true
-oxc_diagnostics.workspace = true
-oxc_parser.workspace = true
-oxc_semantic.workspace = true
-oxc_span.workspace = true
-oxc_transformer.workspace = true
 parking_lot.workspace = true
 regex.workspace = true
 ryu-js.workspace = true
@@ -28,6 +19,9 @@ seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 serde.workspace = true
 serde_json.workspace = true
+swc_common.workspace = true
+swc_ecma_parser.workspace = true
+swc_ts_fast_strip.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 v8.workspace = true

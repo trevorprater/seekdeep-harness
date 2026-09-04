@@ -179,6 +179,66 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn imports_use_syntax_and_keep_one_real_module_namespace() {
+        let outcome = evaluate_program(
+            r"const specifier: string = 'node:worker_threads'; const first = await import ( /* keep */ specifier ); const second = await import('worker_threads'); const third = await import( 'node:worker_threads' ); return { same: first === second && second === third, tag: Object.prototype.toString.call(first), nullPrototype: Object.getPrototypeOf(first) === null, extensible: Object.isExtensible(first), post: typeof first.parentPort.postMessage };",
+            limits(1_000),
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(&outcome.completion, EngineCompletion::Success(Some(value)) if value == &json!({
+                "same": true, "tag": "[object Module]", "nullPrototype": true, "extensible": false, "post": "function"
+            })),
+            "{:?}",
+            outcome.completion
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn imports_do_not_rewrite_program_string_literals() {
+        let outcome = evaluate_program(
+            r#"return "import('node:worker_threads')";"#,
+            limits(1_000),
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(&outcome.completion, EngineCompletion::Success(Some(value)) if value == &json!("import('node:worker_threads')")),
+            "{:?}",
+            outcome.completion
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn imports_match_source_attribute_failures_and_cached_javascript_type() {
+        let outcome = evaluate_program(
+            r#"const result = []; let first; for (const type of ["json", "json", "bogus", 'a"b', "javascript"]) { try { await import("worker_threads", {with: {type}}); result.push("ok"); } catch(error) { result.push({name:error.name,code:error.code,message:error.message,same:first===error}); if(!first)first=error; } } return result;"#,
+            limits(2_000),
+            Vec::new(),
+        )
+        .await
+        .unwrap();
+        let incompatible = json!({
+            "name": "TypeError", "code": "ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE",
+            "message": "Module \"node:worker_threads\" is not of type \"json\"", "same": false
+        });
+        let expected = json!([
+            incompatible, incompatible,
+            { "name": "TypeError", "code": "ERR_IMPORT_ATTRIBUTE_UNSUPPORTED", "message": "Import attribute \"type\" with value \"bogus\" is not supported in node:worker_threads", "same": false },
+            { "name": "TypeError", "code": "ERR_IMPORT_ATTRIBUTE_UNSUPPORTED", "message": "Import attribute \"type\" with value \"a\"b\" is not supported in node:worker_threads", "same": false },
+            "ok"
+        ]);
+        assert!(
+            matches!(&outcome.completion, EngineCompletion::Success(Some(value)) if value == &expected),
+            "{:?}",
+            outcome.completion
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn stdout_callback_and_timer_are_asynchronous_and_driven() {
         let outcome = evaluate_program(
             "await new Promise(resolve => process.stdout.write('flushed', resolve)); await new Promise(resolve => setTimeout(resolve, 5)); return 'done'",

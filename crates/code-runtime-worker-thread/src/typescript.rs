@@ -1,96 +1,78 @@
-//! Evaluable-only TypeScript erasure in async-function-body context.
+//! Source-compatible, position-preserving TypeScript erasure in async-body context.
 
-use std::path::Path;
+use std::sync::Arc;
 
-use oxc_allocator::Allocator;
-use oxc_ast::AstKind;
-use oxc_ast_visit::Visit;
-use oxc_codegen::Codegen;
-use oxc_parser::Parser;
-use oxc_semantic::SemanticBuilder;
-use oxc_span::SourceType;
-use oxc_transformer::{TransformOptions, Transformer};
+use swc_common::{
+    GLOBALS, Globals, SourceMap,
+    errors::{DiagnosticBuilder, Emitter, HANDLER, Handler},
+    sync::Lrc,
+};
+use swc_ecma_parser::TsSyntax;
+use swc_ts_fast_strip::{Mode, Options};
 
 const PREFIX: &str = "async function __seekdeep_program__() {\n";
 const SUFFIX: &str = "\n}";
 
-#[derive(Default)]
-struct NonErasableSyntax {
-    kind: Option<&'static str>,
-}
+#[derive(Clone, Default)]
+struct FirstDiagnostic(Arc<parking_lot::Mutex<Option<String>>>);
 
-impl<'a> Visit<'a> for NonErasableSyntax {
-    fn enter_node(&mut self, kind: AstKind<'a>) {
-        if self.kind.is_some() {
-            return;
+impl Emitter for FirstDiagnostic {
+    fn emit(&mut self, diagnostic: &mut DiagnosticBuilder) {
+        let mut first = self.0.lock();
+        if first.is_none()
+            && let Some(message) = diagnostic.message.first()
+        {
+            *first = Some(message.0.clone());
         }
-        self.kind = match kind {
-            AstKind::TSEnumDeclaration(_) => Some("enum"),
-            AstKind::TSModuleDeclaration(_) => Some("namespace/module"),
-            AstKind::TSImportEqualsDeclaration(_) => Some("import-equals"),
-            AstKind::FormalParameter(parameter)
-                if parameter.accessibility.is_some()
-                    || parameter.readonly
-                    || parameter.r#override =>
-            {
-                Some("parameter property")
-            }
-            _ => None,
-        };
+    }
+
+    fn take_diagnostics(&mut self) -> Vec<String> {
+        Vec::new()
     }
 }
 
-/// Strips erasable TypeScript syntax while preserving the program's async
-/// function-body grammar (`return` and top-level `await` remain valid).
+/// Erases TypeScript with Node's strip-only semantics and source positions.
+///
+/// The returned code retains the async-function wrapper, so top-level `return`
+/// and `await` remain valid. Comments, line endings, and surviving tokens retain
+/// their positions; type syntax is replaced with source-width whitespace.
 ///
 /// # Errors
 ///
-/// Returns a program diagnostic for parse, semantic, transform, or
-/// non-erasable TypeScript syntax.
+/// Returns the first Node-compatible diagnostic for invalid or unsupported syntax.
 pub fn strip_typescript(program: &str) -> anyhow::Result<String> {
     let source = format!("{PREFIX}{program}{SUFFIX}");
-    let allocator = Allocator::default();
-    let source_type = SourceType::ts();
-    let parsed = Parser::new(&allocator, &source, source_type).parse();
-    if !parsed.errors.is_empty() {
-        anyhow::bail!("TypeScript parse failed: {}", diagnostics(&parsed.errors));
-    }
-    let mut tree = parsed.program;
-    let mut non_erasable = NonErasableSyntax::default();
-    non_erasable.visit_program(&tree);
-    if let Some(kind) = non_erasable.kind {
-        anyhow::bail!("TypeScript strip rejected non-erasable {kind} syntax");
-    }
-    let semantic = SemanticBuilder::new()
-        .with_excess_capacity(2.0)
-        .build(&tree);
-    if !semantic.errors.is_empty() {
+    let map = Lrc::new(SourceMap::default());
+    let diagnostic = FirstDiagnostic::default();
+    let handler = Handler::with_emitter(true, false, Box::new(diagnostic.clone()));
+    let options = Options {
+        mode: Mode::StripOnly,
+        filename: Some(String::new()),
+        parser: TsSyntax {
+            decorators: true,
+            ..TsSyntax::default()
+        },
+        deprecated_ts_module_as_error: Some(true),
+        ..Options::default()
+    };
+    let result = GLOBALS.set(&Globals::new(), || {
+        HANDLER.set(&handler, || {
+            swc_ts_fast_strip::operate(&map, &handler, source, options)
+        })
+    });
+    if handler.has_errors() {
+        // Amaro exposes the first emitted message, not SWC's summary error.
         anyhow::bail!(
-            "TypeScript semantic analysis failed: {}",
-            diagnostics(&semantic.errors)
+            diagnostic
+                .0
+                .lock()
+                .take()
+                .unwrap_or_else(|| "Syntax error".to_owned())
         );
     }
-    let transformed = Transformer::new(
-        &allocator,
-        Path::new("seekdeep-program.ts"),
-        &TransformOptions::default(),
-    )
-    .build_with_scoping(semantic.semantic.into_scoping(), &mut tree);
-    if !transformed.errors.is_empty() {
-        anyhow::bail!(
-            "TypeScript strip failed: {}",
-            diagnostics(&transformed.errors)
-        );
-    }
-    Ok(Codegen::new().build(&tree).code)
-}
-
-fn diagnostics(errors: &[oxc_diagnostics::OxcDiagnostic]) -> String {
-    errors
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join("; ")
+    result
+        .map(|output| output.code)
+        .map_err(|error| anyhow::anyhow!(error.message))
 }
 
 #[cfg(test)]
@@ -103,7 +85,8 @@ mod tests {
             "interface Point { x: number }; const p: Point = { x: 1 } as Point; return await Promise.resolve(p.x);",
         )
         .unwrap();
-        assert!(output.contains("async function __seekdeep_program__"));
+        assert!(output.starts_with(PREFIX));
+        assert!(output.ends_with(SUFFIX));
         assert!(!output.contains("interface Point"));
         assert!(!output.contains(": Point"));
         assert!(output.contains("return await Promise.resolve(p.x)"));
@@ -111,8 +94,15 @@ mod tests {
 
     #[test]
     fn rejects_nonerasable_and_invalid_syntax() {
-        let enum_error = strip_typescript("enum E { A }; return E.A").unwrap_err();
-        assert!(format!("{enum_error:#}").contains("non-erasable enum"));
-        assert!(strip_typescript("return (").is_err());
+        assert_eq!(
+            strip_typescript("enum E { A }; return E.A")
+                .unwrap_err()
+                .to_string(),
+            "TypeScript enum is not supported in strip-only mode"
+        );
+        assert_eq!(
+            strip_typescript("return (").unwrap_err().to_string(),
+            "Expression expected"
+        );
     }
 }

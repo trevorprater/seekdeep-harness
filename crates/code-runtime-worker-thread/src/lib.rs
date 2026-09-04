@@ -6,6 +6,7 @@ use seekdeep_cordis::Plugin;
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
 mod engine;
+mod modules;
 mod runtime;
 mod snapshot;
 mod watchdog;

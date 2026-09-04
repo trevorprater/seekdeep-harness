@@ -13,9 +13,9 @@ use seekdeep_llm::AbortSignal;
 use serde_json::{Value, json};
 
 use crate::{
+    modules::WorkerModules,
     output_ledger::LogBuffer,
     snapshot::{SnapshotIntrinsics, snapshot_json},
-    typescript::strip_typescript,
     watchdog::{Control, Watchdog},
     worker_globals::{WORKER_GLOBALS, binding_setup},
     worker_json::{decode_worker_json, encode_worker_json},
@@ -155,23 +155,13 @@ fn heap_bytes(mebibytes: f64) -> usize {
 }
 
 /// Drives one isolate; pending host calls are owned outside this worker.
-pub(crate) async fn evaluate_program(
-    program: &str,
+pub(crate) async fn evaluate_stripped_program(
+    stripped: &str,
     limits: EngineLimits,
     bindings: Vec<CodeBindingNamespace>,
 ) -> anyhow::Result<EngineOutcome> {
     let started = Instant::now();
-    let stripped = strip_typescript(program)?;
-    let javascript = stripped
-        .replace(
-            "import(\"node:worker_threads\")",
-            "globalThis.__seekdeep_worker_threads_module__",
-        )
-        .replace(
-            "import('node:worker_threads')",
-            "globalThis.__seekdeep_worker_threads_module__",
-        );
-    let source = format!("'use strict';\n{javascript}\n__seekdeep_program__()");
+    let source = format!("'use strict';\n{stripped}\n__seekdeep_program__()");
     let setup = binding_setup(&bindings)?;
     initialize_v8();
     let params = v8::CreateParams::default()
@@ -186,7 +176,7 @@ pub(crate) async fn evaluate_program(
     scope.add_near_heap_limit_callback(near_heap_limit, std::ptr::null_mut());
     let watchdog = Watchdog::new(control, scope.thread_safe_handle(), &limits, started)?;
     let completion = match install_worker_globals(scope, &setup) {
-        Ok(()) => {
+        Ok(_modules) => {
             watchdog.control.enter();
             let completion = run_program(scope, &source, &watchdog.control).await;
             watchdog.control.leave();
@@ -268,7 +258,7 @@ fn evaluate_script<'s>(
         })
 }
 
-fn install_worker_globals(scope: &mut v8::PinScope, setup: &str) -> Result<(), String> {
+fn install_worker_globals(scope: &mut v8::PinScope, setup: &str) -> Result<WorkerModules, String> {
     let global = scope.get_current_context().global(scope);
     for (id, name) in [
         "__seekdeep_log__",
@@ -293,7 +283,7 @@ fn install_worker_globals(scope: &mut v8::PinScope, setup: &str) -> Result<(), S
     }
     evaluate_script(scope, WORKER_GLOBALS)?;
     evaluate_script(scope, setup)?;
-    Ok(())
+    WorkerModules::install(scope)
 }
 
 #[expect(
@@ -789,6 +779,16 @@ fn quote_inspect_string(value: &str) -> String {
     }
     output.push('\'');
     output
+}
+
+#[cfg(test)]
+async fn evaluate_program(
+    program: &str,
+    limits: EngineLimits,
+    bindings: Vec<CodeBindingNamespace>,
+) -> anyhow::Result<EngineOutcome> {
+    let stripped = crate::typescript::strip_typescript(program)?;
+    evaluate_stripped_program(&stripped, limits, bindings).await
 }
 
 #[cfg(test)]
