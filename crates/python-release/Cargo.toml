@@ -1,5 +1,6 @@
 [package]
 name = "seekdeep-python-release"
+default-run = "seekdeep-python-release"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +13,7 @@ clap.workspace = true
 flate2.workspace = true
 indexmap.workspace = true
 regex.workspace = true
+regress.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

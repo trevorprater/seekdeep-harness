@@ -18,11 +18,19 @@ Status: implemented
 
 插件依赖保留源码含义。skill（技能）工具要求 `agents`、`tools` 和 `skills`。审批本身不以系统提示词服务为前提：策略上下文内容会跟随确切的可选提示词提供方处理延迟出现、替换与撤销，而不替换审批服务。可重入的服务通知会被合并，提示词注册与 dispose（资源释放）在绑定锁之外执行。策略决定、失败时拒绝的应答处理以及持久审计事件仍由[审批服务](../feature/2026-07-06-approval-seam.md)负责。
 
+[原生可执行文件构建器](../../../../crates/python-release/src/executable/mod.rs)保留源码的目标与选项语法，串行编译各个请求的平台，并暂存可执行产物和开发载体。既有的 `node<major>` 目标字段仍被接受并输出；决定实现的是固定版本的 Rust 工具链，而非该字段。`--skip-build` 使用已有的 Cargo release 产物。在暂存宿主平台可执行文件之前，构建器会检查其原生格式、架构、可执行权限、仓库版本和内嵌运行时 manifest。输出的父路径必须位于仓库内且不得经过符号链接；替换操作仅限于生成的 Node 载体目录。
+
+开发载体保留 Node 入口路径，但只包含启动绑定和宿主平台原生产物。绑定通过 `process.execve` 将 Node 替换为 Rust 进程，保留参数、环境和标准流。原生 launcher 在读取 SDK 协议前清除继承标准流上的 `O_NONBLOCK`；否则，从文件加载的 Node 入口可能将非阻塞描述符交给 Rust 的阻塞 I/O。[Rust PTY 辅助程序](../../../../crates/pty-spawn-helper/src/main.rs)打开继承的终端，应用请求的工作目录，再以请求的程序替换自身。其 macOS 伴随文件保留源码 node-pty 调用方的控制终端契约，而无需交付 C 实现。
+
+GitHub 和 GitLab 的运行时构建作业在按架构选择、按摘要固定的 manylinux 2.28 容器内编译 Linux 可执行文件，并使用相同镜像验证已安装的 wheel 包。容器编译与宿主平台 wheel 工具使用独立的 Cargo 目标目录。macOS 编译默认采用 13.5 部署目标，既有部署目标门禁会依据已发布的平台标签检查两个原生产物。
+
 ## 验证
 
 [目录测试](../../../../crates/jsonrpc-demo/tests/runtime_catalog_parity.rs)覆盖环境包拒绝、显式文件加载、清理与重新打开后的 SQLite 持久化，以及在空环境中通过移动后的可执行文件执行工作线程协议。[源码对比](../../../../crates/jsonrpc-demo/examples/catalog_source_parity.rs)通过源码路径别名加载固定版本模块，并检查具体工厂的可用性和必需服务声明。[源码模型冒烟测试](../../../../crates/jsonrpc-demo/examples/packaged_source_smoke.rs)通过移动后的 SDK 进程执行文本、代码执行和零 agent（智能体）工作流轮次，并检查持久日志。[审批测试](../../../../crates/user-approval/tests/approval_policy_parity.rs)固定独立服务可用性、可选提供方的生命周期以及可重入通知处理。
 
-这些检查并不证明 Python 分发已完全等价。抽象服务构造器兼容性、原生可执行文件打包命令、Python 绑定、开发载体、完整的已安装 SDK 冒烟测试以及发布平台矩阵仍是独立缺口。
+[构建器对比](../../../../crates/python-release/examples/executable_source_parity.rs)依据固定版本的源码解析器检查 60 个目标、宿主平台和选项用例。[产物测试](../../../../crates/python-release/tests/executable_parity.rs)覆盖 dry-run 隔离和无效原生文件。[源码 PTY 调用方](../../../../crates/pty-spawn-helper/examples/source_pty_parity.rs)通过固定版本的 node-pty 实现验证编译后的辅助程序。真实的 macOS arm64 release 构建通过移动后的可执行文件和生成的 Node 载体，均完成三轮源码模型冒烟测试及持久日志检查。延迟发送的 SDK 请求固定标准流交接行为。
+
+这些检查并不证明 Python 分发已完全等价。抽象服务构造器兼容性、Python 绑定、完整的已安装 SDK 冒烟测试以及发布平台矩阵的实际执行仍是独立缺口。静态工作流检查不能替代原生 Linux 构建或已安装 Python 包的导入。
 
 ## 考虑过的替代方案
 
@@ -33,6 +41,10 @@ Status: implemented
 **根据可执行文件名或相邻文件发现工作流辅助程序。** 两者都依赖正在运行的产物之外的部署布局。传入 launcher 的确切路径可保留移动能力，并让既有进程所有者终止不配合的工作。
 
 **让提示词展示成为审批的前置条件。** 无头组合仍需要确定性的策略与失败时拒绝的决定。可选展示不能导致该服务不可用。
+
+**让 Node 继续作为开发模式的监控进程。** 这会增加一个进程所有者，并改变信号和退出传播。仅负责启动的进程替换让运行时行为与生命周期留在 Rust 中。
+
+**在 runner 上编译 Linux 可执行文件，仅在 manylinux 中测试。** 这可能在验证开始前就引入更高版本的 libc 要求。编译和已安装 wheel 包检查共用固定的基线镜像。
 
 ## 后果
 

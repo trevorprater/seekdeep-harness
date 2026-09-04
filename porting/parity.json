@@ -85256,11 +85256,19 @@
       "kind": "production-code",
       "status": "pending",
       "targets": [
+        "crates/python-release/src/executable/mod.rs",
+        "crates/python-release/src/executable/target.rs",
+        "crates/python-release/src/executable/pipeline.rs",
+        "crates/python-release/src/bin/build-exe-for-python-sdk.rs",
+        "crates/python-release/examples/executable_source_parity.rs",
+        "crates/python-release/tests/executable_parity.rs",
+        "crates/pty-spawn-helper/src/main.rs",
+        "crates/pty-spawn-helper/examples/source_pty_parity.rs",
         "crates/jsonrpc-demo/src/runtime_catalog.rs",
         "crates/jsonrpc-demo/src/runner.rs",
         "crates/jsonrpc-demo/tests/runtime_catalog_parity.rs"
       ],
-      "note": "native compiled factory selection and relocatable workflow worker are implemented; executable build orchestration, development carrier assembly, and release platform validation remain pending"
+      "note": "native serial build orchestration, 60 source CLI cases, Rust PTY helper through the pinned node-pty consumer, and macOS arm64 release executable plus Node development carrier are verified; Linux release execution and the complete installed-SDK platform matrix remain pending"
     },
     {
       "source": "scripts/build-python-release.py",

@@ -11,6 +11,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub mod executable;
 pub mod hook;
 pub mod staging;
 pub mod wheel;

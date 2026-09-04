@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-04-rust-packaged-sdk-runtime-assembly.md
-2026-09-04-rust-packaged-sdk-runtime-assembly.md: b0767608fc33968927a5e79e5da36d97dfda10e1
-2026-09-04-rust-packaged-sdk-runtime-assembly.zh.md: 453a095e983e9e70b8867a8af4f8ab9ce833d2e7
+2026-09-04-rust-packaged-sdk-runtime-assembly.md: f6f480be3d694223bc833e8222196826bb6699d6
+2026-09-04-rust-packaged-sdk-runtime-assembly.zh.md: 3efdcf34b936905df00ae37dee73258839de6905

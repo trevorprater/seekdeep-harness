@@ -32,6 +32,59 @@ fn options(mode: &str) -> HarnessClientOptions {
 }
 
 #[tokio::test]
+#[cfg(unix)]
+async fn node_execve_handoff_preserves_the_sdk_socket_transport() {
+    let node = std::process::Command::new("node")
+        .args(["-p", "process.execPath"])
+        .output()
+        .unwrap();
+    assert!(node.status.success());
+    let runtime = env!("CARGO_BIN_EXE_seekdeep-sdk-fake-runtime");
+    let script = format!(
+        "process.execve({}, [{}, 'normal'], process.env)",
+        serde_json::to_string(runtime).unwrap(),
+        serde_json::to_string(runtime).unwrap()
+    );
+    let node = String::from_utf8(node.stdout).unwrap().trim().to_owned();
+    let directory = tempfile::tempdir().unwrap();
+    let entry = directory.path().join("entry.mjs");
+    std::fs::write(
+        &entry,
+        format!("import process from 'node:process';\n{script}\n"),
+    )
+    .unwrap();
+    for (mode, arguments) in [
+        ("eval", vec!["-e".to_owned(), script]),
+        ("module", vec![entry.to_string_lossy().into_owned()]),
+    ] {
+        let mut launch = options("normal");
+        launch.command = node.clone();
+        launch.args = arguments;
+        launch.env = Some(BTreeMap::from([("PATH".to_owned(), String::new())]));
+        let client = HarnessClient::new(launch);
+        let result = client
+            .initialize(InitializeParams {
+                cwd: std::env::current_dir()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+                provider: seekdeep_llm::ProviderId::new("mock"),
+                model: seekdeep_llm::ModelId::new("model"),
+                max_tokens: None,
+            })
+            .await;
+        client.close().await.unwrap();
+        assert_eq!(
+            result
+                .unwrap_or_else(|error| panic!("{mode}: {error:#}"))
+                .server_info
+                .name,
+            "seekdeep-harness-sdk-runtime"
+        );
+    }
+}
+
+#[tokio::test]
 async fn low_level_client_initializes_prompts_fans_out_and_closes_idempotently() {
     let client = HarnessClient::new(options("normal"));
     let subscription = client.subscribe(None);

@@ -5,6 +5,90 @@ use std::collections::BTreeMap;
 use seekdeep_sdk_jsonrpc_demo::runner::catalog;
 
 #[test]
+fn internal_build_manifest_is_available_without_booting_a_configuration() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_seekdeep-jsonrpc-agent-packaged"))
+        .env_clear()
+        .env("SEEKDEEP_INTERNAL_RUNTIME_MANIFEST", "1")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["formatVersion"], 1);
+    assert_eq!(value["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        value["runtimeManifest"],
+        serde_json::from_str::<serde_json::Value>(include_str!(
+            "../../../python/sdk-runtime/package.json"
+        ))
+        .unwrap()
+    );
+    assert!(
+        value["plugins"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|name| name == "@seekdeep-ai/seekdeep-workflow-worker-thread")
+    );
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn node_file_handoff_keeps_sdk_stdio_open_until_a_delayed_request() {
+    use seekdeep_sdk_client::{HarnessClient, HarnessClientOptions};
+    let root = tempfile::tempdir().unwrap();
+    let config = root.path().join("cordis.yml");
+    std::fs::write(&config, serde_json::json!([
+        {"name":"@seekdeep-ai/seekdeep-sdk-jsonrpc-server"},
+        {"name":"@seekdeep-ai/seekdeep-agent-spine-demo","config":{"workspaceContext":false,"skills":{"enabled":false},"toolBash":false}}
+    ]).to_string()).unwrap();
+    let binary = env!("CARGO_BIN_EXE_seekdeep-jsonrpc-agent-packaged");
+    let entry = root.path().join("entry.mjs");
+    std::fs::write(
+        &entry,
+        format!(
+            "import process from 'node:process';\nprocess.execve({},[{}],process.env);\n",
+            serde_json::to_string(binary).unwrap(),
+            serde_json::to_string(binary).unwrap()
+        ),
+    )
+    .unwrap();
+    let node = std::process::Command::new("node")
+        .args(["-p", "process.execPath"])
+        .output()
+        .unwrap();
+    assert!(node.status.success());
+    let mut launch = HarnessClientOptions::new(String::from_utf8(node.stdout).unwrap().trim());
+    launch.args = vec![entry.to_string_lossy().into_owned()];
+    launch.env = Some(BTreeMap::from([
+        ("PATH".to_owned(), String::new()),
+        (
+            "SEEKDEEP_CORDIS_CONFIG".to_owned(),
+            config.to_string_lossy().into_owned(),
+        ),
+        (
+            "SEEKDEEP_HOME".to_owned(),
+            root.path().join("home").to_string_lossy().into_owned(),
+        ),
+        (
+            "SEEKDEEP_CWD".to_owned(),
+            root.path().to_string_lossy().into_owned(),
+        ),
+        ("DEEPSEEK_API_KEY".to_owned(), "sk-keyless-probe".to_owned()),
+    ]));
+    launch.request_timeout_ms = Some(5_000.0);
+    let client = HarnessClient::new(launch);
+    client.start().await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    let result = client.request("initialize", serde_json::json!({"cwd":root.path(),"provider":"deepseek-official","model":"smoke-model"}).as_object().unwrap().clone(), None).await;
+    client.close().await.unwrap();
+    assert_eq!(
+        result.unwrap()["serverInfo"]["name"],
+        "seekdeep-harness-sdk-runtime"
+    );
+}
+
+#[test]
 fn packaged_catalog_resolves_the_runtime_manifests_concrete_plugins() {
     let root = tempfile::tempdir().unwrap();
     let catalog = catalog(root.path(), &BTreeMap::new(), Some(root.path())).unwrap();

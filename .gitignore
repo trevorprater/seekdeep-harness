@@ -1,4 +1,7 @@
 /target/
+/dist-exe/
+/python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
+/python/sdk-runtime/src/deepseek_harness_runtime/runtime/seekdeep-jsonrpc-agent-pkg-*
 /apps/web/dist/
 /apps/web/generated/
 /packages/client/*/lib/

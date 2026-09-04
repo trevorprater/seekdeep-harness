@@ -11,7 +11,7 @@ on:
   workflow_call:
     inputs:
       targets:
-        description: Comma-separated pkg targets to build; empty builds all three.
+        description: Comma-separated runtime targets to build; empty builds all three.
         type: string
         required: false
         default: ''
@@ -29,7 +29,7 @@ on:
     inputs:
       targets:
         description: >-
-          Comma-separated pkg targets to build. Any subset of:
+          Comma-separated runtime targets to build. Any subset of:
           node24-linux-x64, node24-linux-arm64, node24-macos-arm64.
           Empty builds all three.
         type: string
@@ -54,6 +54,8 @@ env:
   SEEKDEEP_TELEMETRY_DISABLED: '1'
   CARGO_INCREMENTAL: '0'
   CARGO_BUILD_JOBS: '2'
+  MANYLINUX_X64_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:0536c364004fa2a3c5041120b6fe35d84fc5bfe31f04c6a6304f13eac4a67b63
+  MANYLINUX_ARM64_IMAGE: quay.io/pypa/manylinux_2_28_aarch64@sha256:1676a4f178dc6cf8a1d1e3b7e1d71fca891a466ebde72a33880ccda8af3383d8
 
 jobs:
   # Job-level conditions cannot inspect `matrix`, so validate target names and
@@ -145,6 +147,9 @@ jobs:
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
+    env:
+      CARGO_HOME: ${{ runner.temp }}/seekdeep-sdk-cargo
+      RUSTUP_HOME: ${{ runner.temp }}/seekdeep-sdk-rustup
     strategy:
       fail-fast: false
       matrix:
@@ -152,16 +157,23 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}
+            ${{ env.RUSTUP_HOME }}
+            target
+          key: rust-sdk-${{ runner.os }}-${{ runner.arch }}-1.93.1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            rust-sdk-${{ runner.os }}-${{ runner.arch }}-1.93.1-
+
       - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          components: clippy, rustfmt
 
-      - uses: pnpm/action-setup@v4
-
-      # setup-node's built-in pnpm store cache keys on platform AND arch, so
-      # the Linux architectures sharing runner.os stay on separate caches.
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: pnpm
 
       - uses: actions/setup-python@v6.3.0
         with:
@@ -170,55 +182,40 @@ jobs:
       - name: Install Python build tooling
         run: python -m pip install uv==0.11.23
 
-      # Cache pkg's target Node binary; lockfile changes roll the
-      # exact key while the restore prefix can seed its replacement.
-      - uses: actions/cache@v4
-        with:
-          path: ~/.pkg-cache
-          key: pkg-fetch-${{ matrix.target }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            pkg-fetch-${{ matrix.target }}-
-
-      - name: Install (immutable)
-        run: pnpm install --frozen-lockfile
-
-      - name: Rebuild Linux node-pty against manylinux 2.28
+      - name: Build Rust executable against manylinux 2.28
         if: runner.os == 'Linux'
         env:
           RUNNER_ARCH: ${{ runner.arch }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           case "$RUNNER_ARCH" in
-            X64) image=quay.io/pypa/manylinux_2_28_x86_64 ;;
-            ARM64) image=quay.io/pypa/manylinux_2_28_aarch64 ;;
+            X64) image="$MANYLINUX_X64_IMAGE" ;;
+            ARM64) image="$MANYLINUX_ARM64_IMAGE" ;;
             *) echo "::error::Unsupported Linux runner architecture $RUNNER_ARCH"; exit 1 ;;
           esac
-          addon_dir="$(realpath packages/subprocess/subprocess-local/node_modules/node-pty)"
-          addon="$addon_dir/build/Release/pty.node"
-          [ -f "$addon_dir/build/Makefile" ] || {
-            echo "::error::node-pty install did not generate $addon_dir/build/Makefile"
-            exit 1
-          }
+          sdk_rust_bin="$(dirname "$(rustup which --toolchain 1.93.1 cargo)")"
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             -v "$PWD:$PWD" \
-            -v "$HOME/.cache/node-gyp:$HOME/.cache/node-gyp:ro" \
-            -v "$HOME/setup-pnpm:$HOME/setup-pnpm:ro" \
-            -w "$addon_dir" \
+            -v "$CARGO_HOME:$CARGO_HOME" \
+            -v "$RUSTUP_HOME:$RUSTUP_HOME" \
+            -e CARGO_HOME -e RUSTUP_HOME -e CARGO_INCREMENTAL -e CARGO_BUILD_JOBS \
+            -e SEEKDEEP_RUST_BIN="$sdk_rust_bin" \
+            -e CARGO_TARGET_DIR="$PWD/target/manylinux" \
+            -e TARGET -e CI=true \
+            -w "$PWD" \
             "$image" \
-            bash -euxo pipefail -c \
-              'rm -rf build/Release && make -C build -j2 BUILDTYPE=Release'
-          [ -f "$addon" ] || { echo "::error::$addon missing after manylinux rebuild"; exit 1; }
-          readelf --version-info "$addon" | tee node-pty-glibc-versions.txt
-          maximum="$(sed -n 's/.*Name: GLIBC_\([0-9.]*\).*/\1/p' node-pty-glibc-versions.txt | sort -V | tail -1)"
-          [ -n "$maximum" ] || { echo "::error::No GLIBC requirements found in $addon"; exit 1; }
-          dpkg --compare-versions "$maximum" le 2.28 || {
-            echo "::error::node-pty addon requires GLIBC_$maximum but wheel claims manylinux_2_28"
-            exit 1
-          }
+            bash -euxo pipefail -c '
+              export PATH="$SEEKDEEP_RUST_BIN:$PATH"
+              cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$TARGET"
+            '
 
-      - name: Build single-exe
-        run: pnpm exec tsx scripts/build-exe-for-python-sdk.ts --targets=${{ matrix.target }}
+      - name: Build Rust macOS executable and helper
+        if: runner.os == 'macOS'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$TARGET"
 
       - name: Resolve platform outputs
         id: runtime
@@ -289,7 +286,7 @@ jobs:
         env:
           EXE: ${{ steps.runtime.outputs.exe }}
         run: >-
-          python3 scripts/check-macos-deployment-target.py
+          cargo xtask macos-deployment-target
           "$EXE" "$EXE-spawn-helper"
 
       - name: Run wheel in a manylinux 2.28 container
@@ -300,8 +297,8 @@ jobs:
         run: |
           set -euo pipefail
           case "$RUNNER_ARCH" in
-            X64) image=quay.io/pypa/manylinux_2_28_x86_64 ;;
-            ARM64) image=quay.io/pypa/manylinux_2_28_aarch64 ;;
+            X64) image="$MANYLINUX_X64_IMAGE" ;;
+            ARM64) image="$MANYLINUX_ARM64_IMAGE" ;;
             *) echo "::error::Unsupported Linux runner architecture $RUNNER_ARCH"; exit 1 ;;
           esac
           docker run --rm -e VERSION -e SEEKDEEP_TELEMETRY_DISABLED -v "$PWD:/work" -w /work "$image" bash -euxo pipefail -c '

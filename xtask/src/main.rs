@@ -4581,6 +4581,14 @@ fn is_generated_output(path: &Path) -> bool {
             && parts[0] == "apps"
             && parts[1] == "web"
             && matches!(parts[2], "dist" | "generated"))
+        || parts.starts_with(&[
+            "python",
+            "sdk-runtime",
+            "src",
+            "deepseek_harness_runtime",
+            "runtime",
+            "node",
+        ])
 }
 
 #[cfg(test)]
@@ -6272,6 +6280,16 @@ mod tests {
         assert!(is_generated_output(Path::new(
             "apps/web/generated/vite.config.mjs"
         )));
+        assert!(is_generated_output(Path::new(
+            "python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/node_modules/@seekdeep-ai/seekdeep-sdk-jsonrpc-demo/lib/packaged-bin.js"
+        )));
+        for source in [
+            "python/sdk-runtime/src/deepseek_harness_runtime/__init__.py",
+            "python/sdk-runtime/src/deepseek_harness_runtime/runtime/node-source/entry.js",
+            "python/sdk/src/deepseek_harness/runtime/node/entry.js",
+        ] {
+            assert!(!is_generated_output(Path::new(source)), "{source}");
+        }
         assert!(!is_generated_output(Path::new(
             "packages/client/runtime/src/client.js"
         )));

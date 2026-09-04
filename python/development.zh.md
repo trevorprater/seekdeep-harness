@@ -4,16 +4,18 @@
 
 根据所需的贡献者成果选择工作流：构建运行时产物、验证 SDK、从源码运行或构建分发包。包行为分别见 [SDK 参考](sdk/README.md) 和[运行时载体参考](sdk-runtime/README.md)。
 
+Python 工作流既需要原生运行时产物，也需要由 Rust 支撑的 Python 包入口。仅通过原生冒烟测试并不能验证 Python 安装；[原生组合记录](../.agents/notes/implemented/architecture/2026-09-04-rust-packaged-sdk-runtime-assembly.md)定义这一验证边界。
+
 ## 构建运行时产物
 
 各平台可执行文件是构建产物，不检入 git。请在仓库根目录运行构建：
 
 ```sh
-pnpm install
-pnpm exec tsx scripts/build-exe-for-python-sdk.ts
+export CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2
+cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk --
 ```
 
-所需 `lib/` 产物已存在时使用 `--skip-build`；如需选择平台，请使用 `--targets=node24-linux-x64,node24-linux-arm64,node24-macos-arm64`。产物写入 `dist-exe/`，脚本会将所选载体同步到 `python/sdk-runtime/`。macOS 构建还会同步 `node-pty` 所需的配套 spawn 辅助程序。
+所需 Cargo release 产物已存在时使用 `--skip-build`；如需选择目标，请使用 `--targets=node24-macos-arm64`。既有的 `node<major>` 字段仍被接受；实现由固定版本的 Rust 工具链决定。产物写入 `dist-exe/`，构建器会将所选可执行文件和宿主平台开发载体同步到 `python/sdk-runtime/`。macOS 构建还会同步配套的 Rust PTY spawn 辅助程序。Linux 目标要求同架构的 Linux 宿主平台；发布工作流在固定版本的 manylinux 2.28 容器内构建它们。`--dry-run` 输出计划执行的命令与写入操作，但不执行。
 
 ## 验证 SDK
 
@@ -36,25 +38,26 @@ with DeepSeekHarness() as harness:
     print(harness.run("say hi").final_response)
 ```
 
-## 针对 Node 源码运行
+## 运行开发载体
 
-仓库贡献者可以选择以下任一开发载体：
+仓库贡献者可以选择以下任一原生开发入口：
 
-- 设置 `SEEKDEEP_RUNTIME_MODE=node`，在系统 Node `>=22.19` 上使用已构建的 Node 载体。构建脚本会刷新该载体，但分发物绝不会包含或自动选择它。
-- 将仓库根目录设为 `cwd`，并设置 `launch_args_override=("./node_modules/.bin/tsx", "packages/examples/jsonrpc-demo/src/bin.ts")`，以运行未构建的 TypeScript 源码。默认配置不合适时，请提供 `cordis=...`。
+- 设置 `SEEKDEEP_RUNTIME_MODE=node`，在系统 Node `>=22.19` 上使用已构建的启动绑定。它将 Node 替换为原生运行时；分发物绝不会包含或自动选择该载体。
+- 设置 `launch_args_override=(absolute_executable_path,)`，以运行本地构建的 Rust 可执行文件。默认配置不合适时，请提供 `cordis=...`。
 
-完整的源码模式调用见 `python/sdk/tests/manual_sdk_agent_smoke.py`。
+[源码模型冒烟测试](../crates/jsonrpc-demo/examples/packaged_source_smoke.rs)通过 Rust SDK 客户端验证两种载体，不依赖 Python 包安装。
 
 ## 构建分发包
 
-根目录 `package.json` 的版本是两个 Python 分发包的权威版本。暂存脚本会将该版本注入两个 wheel 包，并将 SDK 固定到同版本的 `seekdeep-harness-runtime-bin`。
+根目录 `package.json` 的版本是两个 Python 分发包的权威版本。Rust 暂存命令会将该版本注入两个 wheel 包，并将 SDK 固定到同版本的 `seekdeep-harness-runtime-bin`。必需的 Python 绑定入口缺失时，它会拒绝构建仅含元数据的 wheel 包。
 
 纯 SDK wheel 包只需构建一次；每个原生平台分别构建一个运行时 wheel 包：
 
 ```sh
-version="$(node -p "require('./package.json').version")"
-python scripts/build-python-release.py --package sdk --output-dir dist-python
-python scripts/build-python-release.py --package runtime --platform macos-arm64 --runtime-exe dist-exe/seekdeep-jsonrpc-agent-pkg-macos-arm64 --output-dir dist-python
+export CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2
+version="$(cargo run --quiet --locked -p seekdeep-python-release -- version --github-output | sed -n 's/^version=//p')"
+cargo run --locked -p seekdeep-python-release -- build --package sdk --output-dir dist-python
+cargo run --locked -p seekdeep-python-release -- build --package runtime --platform macos-arm64 --runtime-exe dist-exe/seekdeep-jsonrpc-agent-pkg-macos-arm64 --output-dir dist-python
 pip install --find-links dist-python seekdeep-harness-sdk=="$version"
 ```
 

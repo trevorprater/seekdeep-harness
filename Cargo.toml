@@ -144,6 +144,7 @@ members = [
   "crates/persona",
   "crates/plan-mode",
   "crates/process-exit-hook",
+  "crates/pty-spawn-helper",
   "crates/pwsh-local",
   "crates/python-release",
   "crates/pwsh-sandbox",

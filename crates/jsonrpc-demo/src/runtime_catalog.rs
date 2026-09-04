@@ -8,6 +8,27 @@ use serde_json::Value;
 
 type PluginFactory = fn() -> Plugin;
 
+pub(crate) fn describe() -> anyhow::Result<Value> {
+    let manifest: Value =
+        serde_json::from_str(include_str!("../../../python/sdk-runtime/package.json"))?;
+    let dependencies = manifest
+        .get("dependencies")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow::anyhow!("runtime closure manifest has no dependency object"))?;
+    let plugins = FACTORIES
+        .iter()
+        .map(|(name, _)| format!("@seekdeep-ai/{name}"))
+        .filter(|name| dependencies.contains_key(name))
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "formatVersion": 1,
+        "binary": "seekdeep-sdk-jsonrpc-demo",
+        "version": env!("CARGO_PKG_VERSION"),
+        "runtimeManifest": manifest,
+        "plugins": plugins,
+    }))
+}
+
 pub(crate) const FACTORIES: &[(&str, PluginFactory)] = &[
     ("cordis-plugin-timer", seekdeep_cordis_timer::plugin),
     ("seekdeep-acp", seekdeep_acp::plugin),

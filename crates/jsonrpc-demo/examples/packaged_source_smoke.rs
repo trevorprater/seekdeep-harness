@@ -43,22 +43,20 @@ impl Drop for OracleProcess {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let node = arguments
+        .get(2)
+        .is_some_and(|argument| argument == "--node");
     anyhow::ensure!(
-        arguments.len() == 2,
-        "usage: packaged_source_smoke <pinned-source> <compiled-packaged-runtime>"
+        arguments.len() == 2 || arguments.len() == 3 && node,
+        "usage: packaged_source_smoke <pinned-source> <compiled-runtime-or-node-carrier> [--node]"
     );
     let source = Path::new(&arguments[0]);
     verify_pin(source)?;
     let temporary = tempfile::tempdir()?;
     let root = temporary.path().canonicalize()?;
-    let binary = root.join(if cfg!(windows) {
-        "runtime.exe"
-    } else {
-        "runtime"
-    });
-    std::fs::copy(&arguments[1], &binary)?;
+    let (binary, runtime_arguments) = prepare_runtime(&root, Path::new(&arguments[1]), node)?;
     let (_oracle, fixture) = start_oracle(source, &root)?;
-    let harness = create_harness(&root, &binary, &fixture)?;
+    let harness = create_harness(&root, &binary, runtime_arguments, &fixture)?;
     let turns = fixture["turns"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("oracle turns absent"))?;
@@ -67,10 +65,57 @@ async fn main() -> anyhow::Result<()> {
     result?;
     cleanup?;
     verify_log(&root, turns)?;
+    let carrier = if node {
+        "development Node binding"
+    } else {
+        "native executable without Node"
+    };
     println!(
-        "relocated packaged runtime completed all {} source-model turns and durable log checks without Node or sibling helpers",
+        "relocated {carrier} completed all {} source-model turns and durable log checks",
         turns.len()
     );
+    Ok(())
+}
+
+fn prepare_runtime(
+    root: &Path,
+    source: &Path,
+    node: bool,
+) -> anyhow::Result<(PathBuf, Vec<String>)> {
+    if node {
+        let carrier = root.join("node");
+        copy_tree(source, &carrier)?;
+        let output = Command::new("node")
+            .args(["-p", "process.execPath"])
+            .output()?;
+        anyhow::ensure!(output.status.success(), "Node executable lookup failed");
+        let node = PathBuf::from(String::from_utf8(output.stdout)?.trim());
+        let entry =
+            carrier.join("node_modules/@seekdeep-ai/seekdeep-sdk-jsonrpc-demo/lib/packaged-bin.js");
+        return Ok((node, vec![entry.to_string_lossy().into_owned()]));
+    }
+    let binary = root.join(if cfg!(windows) {
+        "runtime.exe"
+    } else {
+        "runtime"
+    });
+    std::fs::copy(source, &binary)?;
+    Ok((binary, Vec::new()))
+}
+
+fn copy_tree(source: &Path, destination: &Path) -> anyhow::Result<()> {
+    std::fs::create_dir(destination)?;
+    for entry in std::fs::read_dir(source)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        anyhow::ensure!(!kind.is_symlink(), "development carrier contains a symlink");
+        let target = destination.join(entry.file_name());
+        if kind.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), target)?;
+        }
+    }
     Ok(())
 }
 
@@ -118,6 +163,7 @@ fn start_oracle(source: &Path, root: &Path) -> anyhow::Result<(OracleProcess, Va
 fn create_harness(
     root: &Path,
     binary: &Path,
+    runtime_arguments: Vec<String>,
     fixture: &Value,
 ) -> anyhow::Result<Arc<DeepSeekHarness>> {
     let config = fixture["config"]
@@ -160,6 +206,7 @@ fn create_harness(
         ),
     ]);
     let mut launch = HarnessClientOptions::new(binary.to_string_lossy());
+    launch.args = runtime_arguments;
     launch.cwd = Some(root.to_string_lossy().into_owned());
     launch.env = Some(environment);
     launch.request_timeout_ms = Some(30_000.0);

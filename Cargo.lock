@@ -7842,6 +7842,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-pty-spawn-helper"
+version = "0.1.0-rc.5"
+dependencies = [
+ "nix 0.30.1",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "seekdeep-pwsh-local"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -7891,6 +7900,7 @@ dependencies = [
  "flate2",
  "indexmap 2.14.0",
  "regex",
+ "regress 0.11.1",
  "serde",
  "serde_json",
  "serde_yml",
@@ -8127,6 +8137,7 @@ version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
  "clap",
+ "nix 0.30.1",
  "parking_lot",
  "seekdeep-acp",
  "seekdeep-agent",

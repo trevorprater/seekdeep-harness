@@ -59,8 +59,8 @@ fn main() -> anyhow::Result<()> {
     );
     let catalog = seekdeep_loader::PluginCatalog::new();
     runtime_catalog::register(&catalog, false, None)?;
-    let manifest: Value =
-        serde_json::from_str(include_str!("../../../python/sdk-runtime/package.json"))?;
+    let description = runtime_catalog::describe()?;
+    let manifest = &description["runtimeManifest"];
     let mut cases = Vec::new();
     for &(name, factory) in runtime_catalog::FACTORIES {
         let package = format!("@seekdeep-ai/{name}");

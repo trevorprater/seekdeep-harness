@@ -118,6 +118,22 @@ pub async fn boot_selected(
 
 /// Runs the process launcher and returns its selected exit status.
 pub fn process_main(packaged: bool) -> ExitCode {
+    if let Err(error) = prepare_standard_streams() {
+        eprintln!("{NAME}: standard stream setup failed: {error}");
+        return ExitCode::FAILURE;
+    }
+    if std::env::var_os("SEEKDEEP_INTERNAL_RUNTIME_MANIFEST").as_deref() == Some(OsStr::new("1")) {
+        return match crate::runtime_catalog::describe() {
+            Ok(manifest) => {
+                println!("{manifest}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("{error:#}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     install_panic_reporter();
     let internal_worker =
         std::env::var_os("SEEKDEEP_INTERNAL_WORKFLOW_WORKER").as_deref() == Some(OsStr::new("1"));
@@ -147,6 +163,34 @@ pub fn process_main(packaged: bool) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+#[cfg(unix)]
+fn prepare_standard_streams() -> anyhow::Result<()> {
+    use nix::{
+        errno::Errno,
+        fcntl::{FcntlArg, OFlag, fcntl},
+    };
+    use std::os::fd::AsFd as _;
+
+    // A Node execve handoff preserves nonblocking stdio; Rust's standard streams use blocking I/O.
+    let (stdin, stdout, stderr) = (std::io::stdin(), std::io::stdout(), std::io::stderr());
+    for descriptor in [stdin.as_fd(), stdout.as_fd(), stderr.as_fd()] {
+        let flags = match fcntl(descriptor, FcntlArg::F_GETFL) {
+            Ok(flags) => OFlag::from_bits_retain(flags),
+            Err(Errno::EBADF) => continue,
+            Err(error) => return Err(error.into()),
+        };
+        if flags.contains(OFlag::O_NONBLOCK) {
+            fcntl(descriptor, FcntlArg::F_SETFL(flags & !OFlag::O_NONBLOCK))?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn prepare_standard_streams() -> anyhow::Result<()> {
+    Ok(())
 }
 
 async fn process_main_async(packaged: bool) -> anyhow::Result<i32> {

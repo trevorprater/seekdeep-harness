@@ -4,16 +4,18 @@ English | [中文](development.zh.md)
 
 Follow the workflow for the contributor outcome you need: build runtime artifacts, validate the SDK, run against source, or build distributions. Package behavior belongs in the [SDK reference](sdk/README.md) and [runtime carrier reference](sdk-runtime/README.md).
 
+Python workflows require the Rust-backed Python package entry points as well as native runtime artifacts. A native smoke test alone does not verify a Python installation; the [native assembly note](../.agents/notes/implemented/architecture/2026-09-04-rust-packaged-sdk-runtime-assembly.md) defines that verification boundary.
+
 ## Build runtime artifacts
 
 Platform executables are build artifacts and are not checked into git. Run the build from the repository root:
 
 ```sh
-pnpm install
-pnpm exec tsx scripts/build-exe-for-python-sdk.ts
+export CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2
+cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk --
 ```
 
-Use `--skip-build` when the required `lib/` artifacts already exist, or `--targets=node24-linux-x64,node24-linux-arm64,node24-macos-arm64` to select platforms. Products land in `dist-exe/` and the script syncs the selected carriers into `python/sdk-runtime/`. macOS builds also sync the matching spawn helper required by `node-pty`.
+Use `--skip-build` when the required Cargo release artifacts already exist, or `--targets=node24-macos-arm64` to select a target. The legacy `node<major>` field remains accepted; the pinned Rust toolchain controls the implementation. Products land in `dist-exe/`, and the builder syncs the selected executables and the host development carrier into `python/sdk-runtime/`. macOS builds also sync the matching Rust PTY spawn helper. Linux targets require a same-architecture Linux host; the release workflows build them inside pinned manylinux 2.28 containers. `--dry-run` prints planned commands and writes without executing them.
 
 ## Validate the SDK
 
@@ -36,25 +38,26 @@ with DeepSeekHarness() as harness:
     print(harness.run("say hi").final_response)
 ```
 
-## Run against Node source
+## Run a development carrier
 
-Repository contributors can select either development carrier:
+Repository contributors can select either native development entry:
 
-- Set `SEEKDEEP_RUNTIME_MODE=node` to use the built Node carrier on system Node `>=22.19`. The build script refreshes this carrier, but distributions never include or auto-select it.
-- Set `launch_args_override=("./node_modules/.bin/tsx", "packages/examples/jsonrpc-demo/src/bin.ts")` with the repository root as `cwd` to run unbuilt TypeScript source. Supply `cordis=...` when the default configuration is not suitable.
+- Set `SEEKDEEP_RUNTIME_MODE=node` to use the built launch binding on system Node `>=22.19`. It replaces Node with the native runtime; distributions never include or auto-select this carrier.
+- Set `launch_args_override=(absolute_executable_path,)` to run a locally built Rust executable. Supply `cordis=...` when the default configuration is not suitable.
 
-See `python/sdk/tests/manual_sdk_agent_smoke.py` for a complete source-mode invocation.
+The [source-model smoke](../crates/jsonrpc-demo/examples/packaged_source_smoke.rs) exercises both carriers through the Rust SDK client independently of Python package installation.
 
 ## Build distributions
 
-The root `package.json` version is authoritative for both Python distributions. The staging script injects that version into both wheels and pins the SDK to the same `seekdeep-harness-runtime-bin` version.
+The root `package.json` version is authoritative for both Python distributions. The Rust staging command injects that version into both wheels and pins the SDK to the same `seekdeep-harness-runtime-bin` version. It refuses to build a metadata-only wheel when a required Python binding entry is missing.
 
 Build the pure SDK wheel once and one runtime wheel on each native platform:
 
 ```sh
-version="$(node -p "require('./package.json').version")"
-python scripts/build-python-release.py --package sdk --output-dir dist-python
-python scripts/build-python-release.py --package runtime --platform macos-arm64 --runtime-exe dist-exe/seekdeep-jsonrpc-agent-pkg-macos-arm64 --output-dir dist-python
+export CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=2
+version="$(cargo run --quiet --locked -p seekdeep-python-release -- version --github-output | sed -n 's/^version=//p')"
+cargo run --locked -p seekdeep-python-release -- build --package sdk --output-dir dist-python
+cargo run --locked -p seekdeep-python-release -- build --package runtime --platform macos-arm64 --runtime-exe dist-exe/seekdeep-jsonrpc-agent-pkg-macos-arm64 --output-dir dist-python
 pip install --find-links dist-python seekdeep-harness-sdk=="$version"
 ```
 

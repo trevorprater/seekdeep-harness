@@ -95,3 +95,42 @@ fn publishing_stays_manual_repository_tag_gated_and_runtime_first() {
         assert_eq!(publish["with"]["attestations"], false);
     }
 }
+
+#[test]
+fn native_builders_keep_manylinux_compilation_and_validation_on_the_same_pinned_images() {
+    let github = workflow(include_str!(
+        "../../../.github/workflows/build-exe-for-python-sdk.yml"
+    ));
+    let steps = github["jobs"]["build"]["steps"].as_array().unwrap();
+    let build = steps
+        .iter()
+        .find(|step| step["name"] == "Build Rust executable against manylinux 2.28")
+        .unwrap();
+    assert_eq!(build["if"], "runner.os == 'Linux'");
+    let script = build["run"].as_str().unwrap();
+    for expected in [
+        "docker run --rm",
+        "target/manylinux",
+        "-e CARGO_INCREMENTAL",
+        "--bin build-exe-for-python-sdk",
+        "--user",
+        "rustup which --toolchain 1.93.1 cargo",
+        "export PATH=\"$SEEKDEEP_RUST_BIN:$PATH\"",
+    ] {
+        assert!(script.contains(expected), "{expected}");
+    }
+    for name in ["MANYLINUX_X64_IMAGE", "MANYLINUX_ARM64_IMAGE"] {
+        assert!(github["env"][name].as_str().unwrap().contains("@sha256:"));
+    }
+    let gitlab_text = include_str!("../../../.gitlab-ci.yml");
+    assert!(!gitlab_text.contains("scripts/build-exe-for-python-sdk.ts"));
+    assert!(!gitlab_text.contains("scripts/build-python-release.py"));
+    assert!(!gitlab_text.contains("deepseek_harness_sdk-"));
+    assert!(gitlab_text.contains("rustup which --toolchain 1.93.1 cargo"));
+    assert!(gitlab_text.contains("export PATH=\"$SEEKDEEP_RUST_BIN:$PATH\""));
+    let gitlab = workflow(gitlab_text);
+    for name in ["MANYLINUX_X64_IMAGE", "MANYLINUX_ARM64_IMAGE"] {
+        assert_eq!(gitlab["variables"][name], github["env"][name]);
+    }
+    assert_eq!(gitlab["publish-python"]["resource_group"], "python-release");
+}
