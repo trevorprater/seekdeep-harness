@@ -147,6 +147,37 @@ fn has_call(frame: &JsValue, name: &str, argument: Option<&str>) -> bool {
     })
 }
 
+#[wasm_bindgen_test]
+fn timestamp_accounts_round_trip_as_records_and_settle_after_synchronization() {
+    let bench = configure();
+    let frame = makeBrowserFrame(&bench);
+    let sessions = js_sys::JSON::parse(
+        r#"{"ids":["one"],"byId":{"one":{"id":"one","displayTitle":"one","running":false,"blank":false,"updatedAt":7}},"phase":"ready"}"#,
+    )
+    .unwrap();
+    let workspaces = js_sys::JSON::parse(
+        r#"[{"workspaceId":"alpha","path":"/projects/alpha","title":"alpha","sessionIds":["one"],"createdAt":"2026-01-01T00:00:00.000Z","updatedAt":"2026-01-01T00:00:00.000Z"}]"#,
+    )
+    .unwrap();
+    bSetData(&frame, &sessions, &workspaces);
+    let _ = render(&bench, &frame);
+    let _ = render(&bench, &frame);
+    let timestamps = property(&bStore(&frame), "sessionUpdatedAtByAccount");
+    assert_eq!(property(&property(&timestamps, "alpha"), "one"), 7);
+    assert_eq!(
+        bCalls(&frame)
+            .iter()
+            .filter(|value| {
+                let call = Array::from(value);
+                call.get(0).as_string().as_deref() == Some("syncSessionOrderAccount")
+                    && call.get(1).as_string().as_deref() == Some("alpha")
+            })
+            .count(),
+        1,
+        "unchanged timestamps must not schedule another Store update",
+    );
+}
+
 #[wasm_bindgen_test(async)]
 async fn grouped_and_flat_views_share_store_actions_rows_and_opening() {
     let bench = configure();

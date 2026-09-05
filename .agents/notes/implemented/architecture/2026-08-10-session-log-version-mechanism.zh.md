@@ -22,6 +22,8 @@ Session log 在发布后必须能升级格式，而最先发布的运行时决�
 
 v0（0812 发布）交付的内容：分方向的拒绝并带原始日志路径；基于生成的已知词汇清单（`KNOWN_SESSION_EVENT_TYPES`，由 `gen-persistence-catalog` 从所有 `SessionEventMap` 声明合并生成，`verify-persistence-catalog` 保证新鲜）的未知事件守卫；`ignorable` 信封字段被种子校验、两个后端（SQLite 专用列，`SCHEMA_VERSION` 升到 15）和 BFF 线上 schema 接受。`cargo xtask persistence-catalog` 通过 Rust Oxc 解析器拥有源码扫描、校验、Markdown 渲染和 Rust 已知词汇生成；package script 会委托给它。检查模式在内存中渲染两个产物并进行精确字节比较。升级器链本身推迟到第一个真实的 v0→v1 变更出现、有真实对象可测时再建；写入侧目前不写 `ignorable`（还没有生产者需要它），`Session.append` 的这一表面随第一个使用者一起落地。在注册表面出现之前，仓库外插件的事件在第一方读取器下无法恢复会话，预发布立场接受这一点，而且拒绝是显式的而非静默的。未知类型守卫只在读取侧生效：`appendCore` 继续拒绝已淘汰的 legacy 形状，但不对新类型做词汇检查，因为写入时拒绝会让活跃会话的持久化中途停摆，代价大于下次加载时的显式拒绝。JSONL 后端还会在校验当前 header 形状、解码任何事件行之前，直接从原始 header 行拒绝外来版本，因此结构完全不同的未来格式仍会报告升级方向而不是"损坏"；SQLite 则先由自己的 `SCHEMA_VERSION` pragma 把关整个文件的结构。
 
+Rust JSONL 元数据解析器在仓库的 `serde_json/arbitrary_precision` 配置下存在已知的有符号零缺口：解析字面量 `-0` 时，符号会在 `createdAt` 与 `delegationDepth` 守卫拒绝它之前丢失。`header_metadata_round_trips_while_log_open_refuses_foreign_version_first` 与 `scanner_rejects_invalid_headers_and_preserves_header_only_logs` 测试会因该输入失败。源实现明确拒绝有符号零；普通历史记录能够成功加载，并不能证明这一拒绝行为。
+
 ## 曾考虑的替代方案
 
 - **大小两级版本号**：能否转换这一位信息属于每一步的升级器，把它预先固化进编号形状会做出错误承诺。

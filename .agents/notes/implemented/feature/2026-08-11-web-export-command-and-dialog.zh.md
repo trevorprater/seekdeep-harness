@@ -16,7 +16,7 @@ Header 贡献占用最右侧的 `conversation.session.header.utilities` 列表�
 
 ZIP 端点与持久化 `readRaw` 能力仍由 `seekdeep-host-apiproxy` 和持久化包拥有。端点会在读取工件前 flush 活动的根 Session，因此本地确认不会早于持久命令生命周期行。本包不序列化 Session 事件、不写 Host 文件、不交付 Host 路径，也不实现 SQLite 回退。
 
-Rust 端口在 `seekdeep-session-log-export` 内按目标拆分所有权：原生构建包含命令与 invariant 注册，目标可移植控制器及其 `web-sys` HEAD／anchor 适配器则面向 `wasm32-unknown-unknown` 编译，不会把 Host 命令、Agent、Tokio 网络或持久化依赖带入浏览器。控制器拥有同样的单航班状态机、精确 URL 与文件名约定、失败隔离、关闭行为和释放静止性。Header／Dialog Slot 投影仍是独立的浏览器组合层，因此在 Client locale、command、conversation 与 primitive 渲染器具备 Rust/WASM 实现前，其 parity 条目保持未完成。
+Rust 端口在 `seekdeep-session-log-export` 内按目标拆分所有权：原生构建包含命令与 invariant 注册，目标可移植控制器及其 `web-sys` HEAD／anchor 适配器则面向 `wasm32-unknown-unknown` 编译，不会把 Host 命令、Agent、Tokio 网络或持久化依赖带入浏览器。控制器拥有同样的单航班状态机、精确 URL 与文件名约定、失败隔离、关闭行为和释放静止性。组合后的 Rust/WASM 应用会在导出条目尚不存在时渲染 Header 操作；条目缺失表示空闲，而非对象格式错误。已有条目的快照标识仍是浏览器验证缺口：可观察接口每次读取都会序列化出新对象，而 React 消费者要求未变化的选取结果保留对象标识。空状态启动的证据不能覆盖下载状态转换。
 
 ## Alternatives considered
 

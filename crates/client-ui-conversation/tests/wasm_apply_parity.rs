@@ -31,6 +31,18 @@ export function makeConversationApplyBench() {
   const workspaceCalls = []
   const actionCalls = []
   const settingsCalls = []
+  const scopedProvisions = []
+
+  function traceService(ctx, value) {
+    if (value?.[Symbol.for('cordis.service.tracker')] !== true) return value
+    let proxy
+    proxy = new Proxy(value, { get(target, key, receiver) {
+      if (key === 'ctx') return ctx
+      const member = Reflect.get(target, key, receiver)
+      return typeof member === 'function' ? (...args) => Reflect.apply(member, proxy, args) : member
+    } })
+    return proxy
+  }
 
   function own(dispose) {
     effects.push(typeof dispose === 'function' ? dispose : () => {})
@@ -81,14 +93,15 @@ export function makeConversationApplyBench() {
     loadOlder() { sessionCalls.push(['loadOlder']); return Promise.resolve() },
     command() { return Promise.resolve({ ok: true, value: { matched: true } }) },
   }
-  const scopedServices = new Map()
   const actx = {
     effect(setup) { return own(setup()) },
     provide(name, value) {
-      scopedServices.set(name, value)
-      return own(() => { if (scopedServices.get(name) === value) scopedServices.delete(name) })
+      scopedProvisions.push(name)
+      if (services.has(name)) throw new Error(`service ${name} is already provided in this scope`)
+      services.set(name, value)
+      return own(() => { if (services.get(name) === value) services.delete(name) })
     },
-    get(name) { return scopedServices.has(name) ? scopedServices.get(name) : services.get(name) },
+    get(name) { return traceService(this, services.get(name)) },
     on() { return () => {} },
   }
   const binding = { sessionId: 's1', session, ctx: actx }
@@ -119,7 +132,7 @@ export function makeConversationApplyBench() {
       services.set(name, value)
       return own(() => { if (services.get(name) === value) services.delete(name) })
     },
-    get(name) { return services.get(name) },
+    get(name) { return traceService(this, services.get(name)) },
     plugin(entry) { pluginCalls.push(entry); return own(() => pluginCalls.splice(pluginCalls.indexOf(entry), 1)) },
     slots,
     layout: { openDetails() { layoutCalls.push('open') }, closeDetails() { layoutCalls.push('close') } },
@@ -154,7 +167,7 @@ export function makeConversationApplyBench() {
   return {
     ctx, actx, components, effects, entries, specs, services, localeCalls, pluginCalls,
     providerCalls, layoutCalls, sessionCalls, workspaceCalls, settingsStore, settingsCalls,
-    binding, actions, actionCalls,
+    binding, actions, actionCalls, scopedProvisions,
     defineStore(declaration) { return { declaration, id: Symbol('chat-store') } },
     uuid() { return '00000000-0000-4000-8000-000000000001' },
   }
@@ -366,6 +379,10 @@ async fn inject_faces_drive_provider_session_layout_workspace_and_details_action
         .unwrap();
     assert!(property(&property(&provider_output, "hooks"), "input").is_object());
     assert!(property(&property(&provider_output, "props"), "inputActions").is_object());
+    assert_eq!(
+        conversationApplyArray(&bench, "scopedProvisions").length(),
+        0
+    );
     let scoped_service = conversationApplyCall(
         &property(&bench, "actx"),
         "get",

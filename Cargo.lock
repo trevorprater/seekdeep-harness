@@ -12371,6 +12371,8 @@ dependencies = [
  "seekdeep-pwsh-local",
  "seekdeep-schedule",
  "seekdeep-scope",
+ "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
  "seekdeep-session-query",
  "seekdeep-session-query-sqlite",
  "seekdeep-shell-env",

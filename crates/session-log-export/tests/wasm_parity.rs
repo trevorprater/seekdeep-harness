@@ -195,6 +195,17 @@ async fn controller_face_publishes_one_flight_success_failure_and_dismissal() {
 #[wasm_bindgen_test]
 fn dialog_and_header_preserve_copy_busy_and_shared_actions() {
     let bench = configure();
+    let empty = js_sys::JSON::parse(r#"{"bySession":{}}"#).unwrap();
+    let frame = makeSurfaceProps(&bench, &empty);
+    let header = xRender(
+        &bench,
+        &session_log_download_header_action_component().unwrap(),
+        &property(&frame, "props"),
+    );
+    assert_eq!(
+        xProp(&xFindKind(&header, "button"), "disabled"),
+        JsValue::FALSE
+    );
     let downloading = js_sys::JSON::parse(
         r#"{"bySession":{"session":{"open":true,"status":"downloading","error":null}}}"#,
     )

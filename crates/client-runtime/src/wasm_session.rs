@@ -10,7 +10,6 @@ use futures::{FutureExt, future::LocalBoxFuture};
 use indexmap::IndexMap;
 use js_sys::{Array, Function, Map as JsMap, Object, Promise, Reflect};
 use seekdeep_identity::{MessageId, RpcId, SessionId};
-use serde::Serialize;
 use serde_json::{Map as JsonMap, Value, json};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::{JsFuture, future_to_promise, spawn_local};
@@ -1660,9 +1659,10 @@ pub(crate) fn js_to_json(value: &JsValue) -> Result<Value, JsValue> {
 }
 
 pub(crate) fn json_to_js(value: &Value) -> Result<JsValue, JsValue> {
-    value
-        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
-        .map_err(|error| js_sys::Error::new(&error.to_string()).into())
+    // JSON parsing preserves browser numbers instead of serde's arbitrary-precision wrapper objects.
+    let text =
+        serde_json::to_string(value).map_err(|error| js_sys::Error::new(&error.to_string()))?;
+    js_sys::JSON::parse(&text)
 }
 
 pub(crate) fn render_js(value: &JsValue) -> String {

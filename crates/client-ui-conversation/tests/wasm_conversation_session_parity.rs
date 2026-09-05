@@ -222,7 +222,6 @@ fn header_derives_subagent_ancestry_opens_parent_and_falls_back_to_chat_tab() {
                     object(&[
                         ("id", JsValue::from_str("root")),
                         ("displayTitle", JsValue::from_str("Root")),
-                        ("origin", JsValue::from_str("user")),
                     ])
                     .into(),
                 ),

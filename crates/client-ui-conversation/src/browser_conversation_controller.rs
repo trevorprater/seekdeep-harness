@@ -90,6 +90,29 @@ pub struct BrowserConversationController {
     ctx: JsValue,
 }
 
+impl BrowserConversationController {
+    pub(crate) fn into_service_face(self) -> Result<JsValue, JsValue> {
+        let ctx = self.ctx.clone();
+        let controller: JsValue = self.into();
+        Function::new_with_args(
+            "controller, ctx",
+            r"return new Proxy(controller, {
+              get(target, key) {
+                if (key === Symbol.for('cordis.service.tracker')) return true;
+                if (key === 'ctx') return ctx;
+                const value = Reflect.get(target, key, target);
+                if (typeof value !== 'function' || key === 'constructor') return value;
+                return function (...args) {
+                  const bound = target.forContext(this?.ctx ?? ctx);
+                  return Reflect.apply(Reflect.get(bound, key, bound), bound, args);
+                };
+              },
+            });",
+        )
+        .call2(&JsValue::UNDEFINED, &controller, &ctx)
+    }
+}
+
 #[wasm_bindgen(js_class = ConversationController)]
 #[allow(clippy::needless_pass_by_value)] // JavaScript methods own their ABI arguments.
 impl BrowserConversationController {

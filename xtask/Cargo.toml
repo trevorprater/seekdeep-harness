@@ -35,6 +35,8 @@ seekdeep-plan-mode = { path = "../crates/plan-mode" }
 seekdeep-pwsh-local = { path = "../crates/pwsh-local" }
 seekdeep-schedule = { path = "../crates/schedule" }
 seekdeep-scope = { path = "../crates/scope" }
+seekdeep-session-persistence = { path = "../crates/session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../crates/session-persistence-jsonl" }
 seekdeep-session-query = { path = "../crates/session-query" }
 seekdeep-session-query-sqlite = { path = "../crates/session-query-sqlite" }
 seekdeep-shell-env = { path = "../crates/shell-env" }
@@ -70,10 +72,8 @@ seekdeep-user-questions = { path = "../crates/user-questions" }
 seekdeep-web = { path = "../crates/web" }
 seekdeep-workflow = { path = "../crates/workflow" }
 tokio.workspace = true
-walkdir.workspace = true
-
-[dev-dependencies]
 tempfile.workspace = true
+walkdir.workspace = true
 
 [lints]
 workspace = true

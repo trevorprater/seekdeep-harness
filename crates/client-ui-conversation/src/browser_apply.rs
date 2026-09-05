@@ -114,17 +114,17 @@ pub fn apply_client_ui_conversation(ctx: JsValue) -> Result<(), JsValue> {
     let submission_policy = submission_policy(&settings)?;
     let input: JsValue = BrowserInputHub::new(ctx.clone(), translate.clone()).into();
     let blocks: JsValue = BrowserComposerBlockRegistry::new().into();
-    let controller: JsValue = BrowserConversationController::new(
+    let controller = BrowserConversationController::new(
         ctx.clone(),
         object(&[("input", input.clone()), ("blocks", blocks.clone())])?.into(),
     )?
-    .into();
+    .into_service_face()?;
     call_method(
         &ctx,
         "provide",
         &[JsValue::from_str("conversation"), controller.clone()],
     )?;
-    own_input_provider(&ctx, &sessions, &input, &controller)?;
+    own_input_provider(&ctx, &sessions, &input)?;
 
     let views = view_tabs_face(&slots)?;
     let scroll_positions = Rc::new(RefCell::new(BTreeMap::<String, JsValue>::new()));
@@ -225,33 +225,10 @@ fn own_locale(ctx: &JsValue, locale: &JsValue) -> Result<(), JsValue> {
     Ok(())
 }
 
-fn own_input_provider(
-    ctx: &JsValue,
-    sessions: &JsValue,
-    input: &JsValue,
-    controller: &JsValue,
-) -> Result<(), JsValue> {
+fn own_input_provider(ctx: &JsValue, sessions: &JsValue, input: &JsValue) -> Result<(), JsValue> {
     let resolve_input = input.clone();
-    let resolve_controller = controller.clone();
     let resolve = Closure::wrap(
         Box::new(move |binding: JsValue| -> Result<JsValue, JsValue> {
-            let actx = required(&binding, "ctx", "Session binding")?;
-            let scoped = call_method(
-                &resolve_controller,
-                "forContext",
-                std::slice::from_ref(&actx),
-            )?;
-            let current = call_method(&actx, "get", &[JsValue::from_str("conversation")])?;
-            if current.is_null()
-                || current.is_undefined()
-                || Object::is(&current, &resolve_controller)
-            {
-                call_method(
-                    &actx,
-                    "provide",
-                    &[JsValue::from_str("conversation"), scoped],
-                )?;
-            }
             let shell = call_method(&resolve_input, "shellFor", &[binding])?;
             object(&[
                 (

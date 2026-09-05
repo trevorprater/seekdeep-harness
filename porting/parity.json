@@ -72554,7 +72554,7 @@
     {
       "source": "packages/session/session-persistence-jsonl/src/format.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/session-persistence-jsonl/src/format.rs",
         "crates/session-persistence-jsonl/src/backend.rs"
@@ -72563,7 +72563,8 @@
         "pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts",
         "cargo test -p seekdeep-session-persistence-jsonl --all-features",
         "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "Reopened: literal -0 loses its sign under serde_json/arbitrary_precision before metadata validation; the two signed-zero format tests fail. The owning record is .agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.md."
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/index.ts",

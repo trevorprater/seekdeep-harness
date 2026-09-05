@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 mod client_test_runtime_built_smoke_driver;
 mod remote_built_smoke_driver;
 mod remote_contracts;
+mod web_assembled;
+mod web_assembled_driver;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -24,6 +26,13 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Build the actual Web frontend with the isolated, pinned browser dependencies.
+    WebBuild,
+    /// Verify the built Web application against persisted source history and a real Rust Host.
+    WebAssembled {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
     /// Verify browser Loader ownership of the real Remote dependency graph.
     RemoteLoader {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
@@ -233,6 +242,8 @@ fn main() -> anyhow::Result<()> {
             xtask::session_fixture_layout::run(&root, rewrite)
         }
         Command::Parity { source, scope } => parity(&source, scope),
+        Command::WebBuild => web_assembled::build(),
+        Command::WebAssembled { source } => web_assembled::run(&source),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {
@@ -2928,6 +2939,7 @@ fn session_log_export_module_factory(global: &str) -> String {
 fn ui_conversation_module_factory(global: &str) -> String {
     r"require => {
   const g = __GLOBAL__;
+  g.installStoreProduce(require('immer').produce);
   const React = require('react');
   const primitives = require('@seekdeep-ai/seekdeep-client-ui-primitives');
   const attachment = require('@seekdeep-ai/seekdeep-client-ui-attachment');
@@ -5422,6 +5434,7 @@ mod tests {
         )
         .unwrap();
         for expected in [
+            "g.installStoreProduce(require('immer').produce)",
             "configureClientUiConversationReasoning(React, primitives)",
             "configureClientUiConversationMessageItem(React, primitives, attachment",
             "configureClientUiConversationApply(",

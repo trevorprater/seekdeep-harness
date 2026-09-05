@@ -150,6 +150,7 @@ pub(crate) fn search_items(value: &JsValue) -> Result<Vec<SessionSearchResultIte
 }
 
 pub(crate) fn to_js<T: Serialize>(value: &T, owner: &str) -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(value)
+    value
+        .serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
         .map_err(|error| js_sys::Error::new(&format!("failed to encode {owner}: {error}")).into())
 }

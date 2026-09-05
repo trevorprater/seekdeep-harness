@@ -306,12 +306,24 @@ impl ApiProxyService {
                 },
                 presets,
             )?;
-            Ok::<_, anyhow::Error>(Self::new(
+            let workspace = child
+                .get(seekdeep_workspace::WORKSPACE_REGISTRY)
+                .map(|registry| {
+                    let domains = child
+                        .get(seekdeep_storage_domain::STORAGE_DOMAIN)
+                        .ok_or_else(|| anyhow::anyhow!("storageDomain service is required"))?;
+                    Ok::<Arc<dyn WorkspaceRuntime>, anyhow::Error>(
+                        crate::WorkspaceRegistryRuntime::new(registry, domains),
+                    )
+                })
+                .transpose()?;
+            Ok::<_, anyhow::Error>(Arc::new(Self {
                 defaults,
-                picker,
+                directory_picker: picker,
                 attached_session_count,
-                sessions,
-            ))
+                workspace,
+                domains: sessions,
+            }))
         })();
         let service = match build {
             Ok(service) => service,

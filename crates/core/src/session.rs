@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::request_header::{EpochHeader, canonical_header, fold_request_header};
+use crate::request_header::{EpochHeader, fold_request_header};
 
 /// Current on-disk session format version.
 pub const SESSION_FORMAT_VERSION: u32 = 0;
@@ -711,43 +711,55 @@ fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), Ses
             "seed event at index {index} uses unsupported legacy request/header reason \"fallback\""
         )));
     }
-    let header_value = event.data.get("header").ok_or_else(|| {
-        invalid(format!(
-            "seed request/header at index {index} lacks provider/model"
-        ))
-    })?;
-    let header: EpochHeader = serde_json::from_value(header_value.clone()).map_err(|_| {
-        invalid(format!(
-            "seed request/header at index {index} lacks provider/model"
-        ))
-    })?;
-    if header.config.provider.is_empty() || header.config.model.is_empty() {
+    let header = event
+        .data
+        .get("header")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            invalid(format!(
+                "seed request/header at index {index} lacks provider/model"
+            ))
+        })?;
+    let config = header
+        .get("config")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            invalid(format!(
+                "seed request/header at index {index} lacks provider/model"
+            ))
+        })?;
+    if ["provider", "model"].iter().any(|name| {
+        config
+            .get(*name)
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+    }) {
         return Err(invalid(format!(
             "seed request/header at index {index} lacks provider/model"
         )));
     }
-    if header
-        .config
-        .reasoning_effort
-        .as_ref()
-        .is_some_and(|value| value.as_str().is_empty())
+    if config
+        .get("reasoningEffort")
+        .is_some_and(|value| value.as_str().is_none_or(str::is_empty))
     {
         return Err(invalid(format!(
             "seed request/header at index {index} has an invalid reasoningEffort"
         )));
     }
-    if let Some(defaults) = &header.adapter_defaults {
-        let invalid_marker = defaults.reasoning_effort.is_some_and(|value| !value)
-            || defaults.max_tokens.is_some_and(|value| !value)
-            || defaults.reasoning_effort == Some(true) && header.config.reasoning_effort.is_none()
-            || defaults.max_tokens == Some(true) && header.config.max_tokens.is_none();
+    if let Some(defaults) = header.get("adapterDefaults") {
+        let invalid_marker = defaults.as_object().is_none_or(|defaults| {
+            defaults.iter().any(|(name, marker)| {
+                !matches!(name.as_str(), "reasoningEffort" | "maxTokens")
+                    || marker != &Value::Bool(true)
+                    || !config.contains_key(name)
+            })
+        });
         if invalid_marker {
             return Err(invalid(format!(
                 "seed request/header at index {index} has invalid adapterDefaults"
             )));
         }
     }
-    let _ = canonical_header(header);
     Ok(())
 }
 

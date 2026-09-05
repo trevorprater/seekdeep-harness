@@ -64,6 +64,9 @@ fn required(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue>
 }
 
 fn optional(value: &JsValue, key: &str) -> Result<Option<JsValue>, JsValue> {
+    if value.is_null() || value.is_undefined() {
+        return Ok(None);
+    }
     let property = Reflect::get(value, &JsValue::from_str(key))?;
     Ok((!property.is_null() && !property.is_undefined()).then_some(property))
 }

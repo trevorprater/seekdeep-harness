@@ -502,7 +502,11 @@ fn derive_ancestry(list: &JsValue, id: &str) -> Result<JsValue, JsValue> {
             ])?
             .into(),
         );
-        if required_string(&summary, "origin", "session summary")? != "subagent" {
+        if Reflect::get(&summary, &JsValue::from_str("origin"))?
+            .as_string()
+            .as_deref()
+            != Some("subagent")
+        {
             break;
         }
         let parent = Reflect::get(&summary, &JsValue::from_str("parentId"))?;

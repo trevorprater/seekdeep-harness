@@ -513,6 +513,7 @@ This ADR remains proposed until these decisions are resolved:
 - Rust/WASM Cordis executes the built browser registry, Remote gateway, and Client contributions; complete cross-target semantic conformance remains open.
 - Browser context metadata uses a descriptor-preserving property object as the public Proxy target. Extension, plugin contexts, and isolated contexts retain inherited metadata; getters and setters receive the actual calling Context, readonly symbols remain readonly, and membership tests do not invoke getters. Source comparison and real browser Remote calls verify changing Agent identity through a live getter.
 - Browser `ctx.get(name, strict)` preserves strict and relaxed provider visibility through startup, isolation, and withdrawal. Explicit service lookup remains distinct from reflected property access; source comparison and Chromium exercise both paths.
+- The assembled Web path runs the real Host boot graph, workspace registry, Client runtime, and conversation renderers over persisted source history. `cargo xtask web-assembled` verifies content-search selection, rendered turns, Markdown, and reload; it enables the source test's opt-in `first-search` index through a normal home patch and makes no model call. This does not establish the remaining Web interaction or stress scenarios.
 - The source's complete callable Logger interface remains a browser binding gap. Tests that install a recording logger sink do not close that obligation.
 - Source-compatible dynamic Host execution runs in a Rust-owned interpreter worker. The guarded Host path covers lifecycle commands, Services, Tools, Events, callback and Promise timers, async-iterator intervals, throttle/debounce wrappers, exact-generation effect removal, cooperative callback pumping, and stack-safe lossless JSON cloning; the Client compatibility evaluator remains incomplete.
 - Native and browser WebAssembly plugin hosts are not implemented.
@@ -520,3 +521,16 @@ This ADR remains proposed until these decisions are resolved:
 - Native integration process replacement exists only in package-specific pieces.
 
 Until the source behavior matrix, open decisions, implementation, and verification are complete, SeekDeep supports only the native and browser lifecycle behavior already proven by the corresponding tests. It does not yet have full runtime code reload parity.
+
+### Building the assembled browser check
+
+Install the pinned JavaScript build dependencies independently of the unfinished root workspace install:
+
+```sh
+CI=true pnpm --dir support/browser-dependencies install --ignore-workspace --ignore-scripts --frozen-lockfile
+CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo build --locked -p seekdeep -p xtask
+CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo xtask web-build
+CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo xtask web-assembled
+```
+
+`web-build` builds the shell's static Rust/WASM libraries and runs the generated Vite configuration through normal package exports. Dynamic Client plugins must have their current `lib/client.js` bundles built before `web-assembled`; the Host serves those package-owned artifacts. Use one `CARGO_TARGET_DIR` throughout and serialize the commands. The source checkout supplies the recorded Session and installed Playwright; production code and build dependencies come from this repository.
