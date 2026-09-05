@@ -63,6 +63,7 @@ seekdeep-tool-subagent-report = { path = "../crates/tool-subagent-report" }
 seekdeep-tool-terminal = { path = "../crates/tool-terminal" }
 seekdeep-tool-todo = { path = "../crates/tool-todo" }
 seekdeep-tool-web = { path = "../crates/tool-web" }
+seekdeep-typert-generator = { path = "../crates/typert-generator" }
 seekdeep-tool-workflow = { path = "../crates/tool-workflow" }
 seekdeep-tools = { path = "../crates/tools" }
 seekdeep-user-questions = { path = "../crates/user-questions" }

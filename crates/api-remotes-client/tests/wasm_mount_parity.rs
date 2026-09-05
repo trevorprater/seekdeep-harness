@@ -4,7 +4,8 @@
 
 use js_sys::{Array, Function, Promise, Reflect};
 use seekdeep_api_remotes_client::{
-    api_remotes_inject, apply_api_remotes, configure_api_remotes, generated_api_remotes,
+    api_remotes_inject, apply_api_remotes, configure_api_remotes, configure_api_remotes_zod,
+    generated_api_remotes,
 };
 use seekdeep_client_foundation_wasm::{
     client_api_gateway_plugin, client_connection_plugin, client_typert_registry_plugin,
@@ -68,7 +69,6 @@ export function remoteContextWrapper() {
 
 export function remoteGatewayFactories() {
   const tracker = Symbol.for('cordis.service.tracker')
-  const namespaces = ['commands', 'goals', 'dynamicCordisRunner', 'pluginInventory', 'messageFeedback']
   const remoteFactory = (ctx, core) => {
     const service = {
       ctx,
@@ -77,20 +77,20 @@ export function remoteGatewayFactories() {
       $dispatch(event, args) { return core.dispatch(event, args) },
     }
     Object.defineProperty(service, tracker, { value: true })
-    for (const namespace of namespaces) {
-      Object.defineProperty(service, namespace, { get() { return this.ctx.get('remote.' + namespace) } })
-    }
     ctx.provide('remote', service)
     return service
   }
-  const namespaceFactory = (ctx, namespace, invoke) => {
+  const namespaceFactory = (ctx, namespace, invoke, install) => {
     const service = {
       ctx,
       namespace,
+      installDirect(method, fresh) { return install(this, method, fresh) },
+      installScoped(method, fresh) { return install(this, method, fresh) },
       install(method) {
         Object.defineProperty(this, method, {
           configurable: true,
-          value: function (...args) { return invoke(this.ctx, method, args) },
+          enumerable: true,
+          get: function () { const bound = invoke(this.ctx, method); return (...args) => bound(args) },
         })
       },
       remove(method) { delete this[method] },
@@ -154,6 +154,10 @@ export function remoteScopedGoal(root, objective) {
 }
 export function remoteCalls(control) { return control.calls }
 export function remoteRestore(control) { control.restore() }
+export async function loadRemoteZod(path) {
+  const { pathToFileURL } = await import('node:url')
+  return (await import(pathToFileURL(path).href)).z
+}
 "#)]
 extern "C" {
     fn apiRemotesBench(fail_at: &str) -> JsValue;
@@ -170,6 +174,7 @@ extern "C" {
     fn remoteScopedGoal(root: &JsValue, objective: &str) -> Promise;
     fn remoteCalls(control: &JsValue) -> Array;
     fn remoteRestore(control: &JsValue);
+    fn loadRemoteZod(path: &str) -> Promise;
 }
 
 fn contributions() -> Array {
@@ -190,8 +195,17 @@ fn property(value: &JsValue, key: &str) -> JsValue {
     Reflect::get(value, &JsValue::from_str(key)).unwrap()
 }
 
-#[wasm_bindgen_test]
-fn generated_contributions_are_complete_and_goal_codecs_reject_invalid_requests() {
+async fn configure_zod() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../support/browser-dependencies/node_modules/zod/index.js"
+    );
+    configure_api_remotes_zod(JsFuture::from(loadRemoteZod(path)).await.unwrap()).unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+async fn generated_contributions_are_complete_and_goal_codecs_reject_invalid_requests() {
+    configure_zod().await;
     let contributions = generated_api_remotes().unwrap();
     assert_eq!(contributions.length(), 5);
     assert_eq!(
@@ -231,6 +245,7 @@ fn generated_contributions_are_complete_and_goal_codecs_reject_invalid_requests(
 
 #[wasm_bindgen_test(async)]
 async fn generated_goal_remote_supports_explicit_and_agent_context_calls() {
+    configure_zod().await;
     configure_context_wrapper(remoteContextWrapper()).unwrap();
     let factories = remoteGatewayFactories();
     configure_client_api_gateway(factories.get(0), factories.get(1)).unwrap();

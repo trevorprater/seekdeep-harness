@@ -112,13 +112,13 @@ struct EventSubscription {
 
 struct BrowserRemoteState {
     owner_context: JsValue,
-    rpc: JsValue,
     typert: JsValue,
     namespace_factory: Function,
     methods: RefCell<HashMap<String, MethodRecord>>,
     namespaces: RefCell<HashMap<String, NamespaceHandle>>,
     subscriptions: RefCell<Vec<EventSubscription>>,
     next_subscription: Cell<u64>,
+    mutations: RefCell<Promise>,
 }
 
 /// Rust-owned browser projection of the generated Client Remote service.
@@ -129,6 +129,31 @@ pub struct WasmClientRemoteCore {
 
 #[wasm_bindgen]
 impl WasmClientRemoteCore {
+    /// Clears event subscriptions when the gateway's own fiber unloads.
+    ///
+    /// # Errors
+    /// Propagates owner effect registration failure.
+    #[wasm_bindgen(js_name = ownLifecycle)]
+    pub fn own_lifecycle(&self) -> Result<(), JsValue> {
+        let weak = Rc::downgrade(&self.state);
+        let cleanup = Closure::wrap(Box::new(move || {
+            if let Some(state) = weak.upgrade() {
+                state.subscriptions.borrow_mut().clear();
+            }
+        }) as Box<dyn Fn()>)
+        .into_js_value();
+        let setup = Closure::wrap(Box::new(move || cleanup.clone()) as Box<dyn Fn() -> JsValue>);
+        call_method(
+            &self.state.owner_context,
+            "effect",
+            &[
+                setup.into_js_value(),
+                JsValue::from_str("api-gateway.client.subscriptions"),
+            ],
+        )?;
+        Ok(())
+    }
+
     /// Creates one Client Remote core over the mounted Connection and Typert services.
     ///
     /// # Errors
@@ -149,13 +174,13 @@ impl WasmClientRemoteCore {
         Ok(Self {
             state: Rc::new(BrowserRemoteState {
                 owner_context,
-                rpc,
                 typert,
                 namespace_factory,
                 methods: RefCell::new(HashMap::new()),
                 namespaces: RefCell::new(HashMap::new()),
                 subscriptions: RefCell::new(Vec::new()),
                 next_subscription: Cell::new(0),
+                mutations: RefCell::new(Promise::resolve(&JsValue::UNDEFINED)),
             }),
         })
     }
@@ -163,59 +188,48 @@ impl WasmClientRemoteCore {
     /// Mounts one generated Remote contribution and returns its asynchronous disposer.
     #[allow(clippy::needless_pass_by_value)]
     pub fn mount(&self, caller: JsValue, contribution: JsValue) -> Promise {
+        let initialization = Rc::new(RefCell::new(None::<Promise>));
+        let capture = initialization.clone();
         let state = self.state.clone();
+        let registration_context = caller.clone();
+        let setup = Closure::once(move || -> Promise {
+            let operation_state = state.clone();
+            let initialized = enqueue(&state, move || {
+                future_to_promise(mount_contribution(
+                    operation_state,
+                    registration_context,
+                    contribution,
+                ))
+            });
+            *capture.borrow_mut() = Some(initialized.clone());
+            initialized
+        });
+        let owned = match call_method(
+            &caller,
+            "effect",
+            &[
+                setup.into_js_value(),
+                JsValue::from_str("api-gateway.client.$mount()"),
+            ],
+        ) {
+            Ok(owned) => owned,
+            Err(error) => return Promise::reject(&error),
+        };
+        let Some(initialization) = initialization.borrow_mut().take() else {
+            return Promise::reject(&js_sys::Error::new(
+                "Remote mount effect did not initialize",
+            ));
+        };
         future_to_promise(async move {
-            let descriptors = parse_contribution(&contribution)?;
-            validate_contribution(&state, &descriptors)?;
-            let remotes = required(&state.typert, "remotes", "Client Typert registry")?;
-            let registry_disposer = required_function(&remotes, "register", "Typert remotes")?
-                .call1(&remotes, &contribution)?
-                .dyn_into::<Function>()?;
-            let mut installed = Vec::new();
-            for descriptor in descriptors {
-                let token = MountToken::new()?;
-                if let Err(error) = install_descriptor(&state, &descriptor, token, &mut installed) {
-                    cleanup_mount(&state, installed, Some(registry_disposer)).await;
-                    return Err(error);
+            JsFuture::from(initialization).await?;
+            let owned = owned.dyn_into::<Function>()?;
+            Ok(Closure::wrap(Box::new(move || -> Promise {
+                match owned.call0(&JsValue::UNDEFINED) {
+                    Ok(value) => Promise::resolve(&value),
+                    Err(error) => Promise::reject(&error),
                 }
-            }
-            let closed = Rc::new(Cell::new(false));
-            let dispose_state = state;
-            let cleanup = Closure::wrap(Box::new(move || -> Promise {
-                if closed.replace(true) {
-                    return Promise::resolve(&JsValue::UNDEFINED);
-                }
-                let state = dispose_state.clone();
-                let variants = installed.clone();
-                let registry = registry_disposer.clone();
-                future_to_promise(async move {
-                    cleanup_mount(&state, variants, Some(registry)).await;
-                    Ok(JsValue::UNDEFINED)
-                })
-            }) as Box<dyn FnMut() -> Promise>);
-            let cleanup = cleanup.into_js_value();
-            let owned_cleanup = cleanup.clone();
-            let setup = Closure::wrap(
-                Box::new(move || owned_cleanup.clone()) as Box<dyn FnMut() -> JsValue>
-            );
-            match call_method(
-                &caller,
-                "effect",
-                &[
-                    setup.into_js_value(),
-                    JsValue::from_str("api-gateway.client.$mount()"),
-                ],
-            ) {
-                Ok(owned) => Ok(owned),
-                Err(error) => {
-                    if let Ok(cleanup) = cleanup.dyn_into::<Function>()
-                        && let Ok(result) = cleanup.call0(&JsValue::UNDEFINED)
-                    {
-                        let _ = JsFuture::from(Promise::resolve(&result)).await;
-                    }
-                    Err(error)
-                }
-            }
+            }) as Box<dyn Fn() -> Promise>)
+            .into_js_value())
         })
     }
 
@@ -228,7 +242,25 @@ impl WasmClientRemoteCore {
         method: String,
         values: Array,
     ) -> Promise {
-        invoke_remote(self.state.clone(), caller, namespace, method, values)
+        let record = self
+            .state
+            .methods
+            .borrow()
+            .get(&format!("{namespace}/{method}"))
+            .cloned();
+        match record {
+            Some(record) => invoke_remote(
+                self.state.clone(),
+                caller,
+                namespace,
+                method,
+                record,
+                values,
+            ),
+            None => Promise::reject(&js_sys::Error::new(&format!(
+                "client api: Remote method {namespace}/{method} is no longer mounted"
+            ))),
+        }
     }
 
     /// Subscribes one caller-owned listener to a forwarded Remote event.
@@ -395,7 +427,7 @@ fn parse_descriptor(value: &JsValue) -> Result<RemoteDescriptor, JsValue> {
         direct,
         scoped,
         parameters,
-        cancellation: optional_bool(value, "cancellation")?.unwrap_or(false),
+        cancellation: !Reflect::get(value, &JsValue::from_str("cancellation"))?.is_undefined(),
         result,
     })
 }
@@ -439,6 +471,65 @@ fn parse_scope(
     }))
 }
 
+fn enqueue(
+    state: &Rc<BrowserRemoteState>,
+    operation: impl FnOnce() -> Promise + 'static,
+) -> Promise {
+    let previous = state.mutations.borrow().clone();
+    let callback = Closure::once(move |_: JsValue| operation()).into_js_value();
+    let result = match call_method(&previous, "then", &[callback.clone(), callback]) {
+        Ok(value) => Promise::from(value),
+        Err(error) => Promise::reject(&error),
+    };
+    let ignore =
+        Closure::wrap(Box::new(|_: JsValue| JsValue::UNDEFINED) as Box<dyn Fn(JsValue) -> JsValue>)
+            .into_js_value();
+    let tail = match call_method(&result, "then", &[ignore.clone(), ignore]) {
+        Ok(value) => Promise::from(value),
+        Err(error) => Promise::reject(&error),
+    };
+    *state.mutations.borrow_mut() = tail;
+    result
+}
+
+async fn mount_contribution(
+    state: Rc<BrowserRemoteState>,
+    caller: JsValue,
+    contribution: JsValue,
+) -> Result<JsValue, JsValue> {
+    let descriptors = parse_contribution(&contribution)?;
+    validate_contribution(&state, &descriptors)?;
+    let typert = call_method(&caller, "get", &[JsValue::from_str("typert")])?;
+    let remotes = required(&typert, "remotes", "Client Typert registry")?;
+    let registry_disposer = required_function(&remotes, "register", "Typert remotes")?
+        .call1(&remotes, &contribution)?
+        .dyn_into::<Function>()?;
+    let mut installed = Vec::new();
+    for descriptor in descriptors {
+        let token = MountToken::new()?;
+        if let Err(error) = install_descriptor(&state, &descriptor, token, &mut installed) {
+            cleanup_mount(&state, installed, Some(registry_disposer)).await?;
+            return Err(error);
+        }
+    }
+    let closed = Cell::new(false);
+    Ok(Closure::wrap(Box::new(move || -> Promise {
+        if closed.replace(true) {
+            return Promise::resolve(&JsValue::UNDEFINED);
+        }
+        let operation_state = state.clone();
+        let installed = installed.clone();
+        let registry = registry_disposer.clone();
+        enqueue(&state, move || {
+            future_to_promise(async move {
+                cleanup_mount(&operation_state, installed, Some(registry)).await?;
+                Ok(JsValue::UNDEFINED)
+            })
+        })
+    }) as Box<dyn FnMut() -> Promise>)
+    .into_js_value())
+}
+
 fn validate_contribution(
     state: &Rc<BrowserRemoteState>,
     descriptors: &[RemoteDescriptor],
@@ -462,6 +553,32 @@ fn validate_contribution(
             .into());
         }
         let endpoint = descriptor.endpoint();
+        if let Some(namespace) = state.namespaces.borrow().get(&descriptor.namespace) {
+            if !methods.contains_key(&endpoint)
+                && Reflect::has(&namespace.service, &JsValue::from_str(&descriptor.method))?
+            {
+                return Err(js_sys::Error::new(&format!(
+                    "client api: method {endpoint:?} conflicts with its namespace service"
+                ))
+                .into());
+            }
+        } else {
+            let current = call_method(
+                &state.owner_context,
+                "get",
+                &[JsValue::from_str(&format!(
+                    "remote.{}",
+                    descriptor.namespace
+                ))],
+            )?;
+            if !current.is_undefined() {
+                return Err(js_sys::Error::new(&format!(
+                    "client api: namespace {:?} conflicts with an existing Remote namespace",
+                    descriptor.namespace
+                ))
+                .into());
+            }
+        }
         let current = methods.get(&endpoint);
         if descriptor.direct {
             if !direct.insert(endpoint.clone()) {
@@ -533,13 +650,34 @@ fn install_descriptor(
             });
         }
     }
-    if was_empty {
-        let namespace = state.namespaces.borrow();
-        let service = &namespace
+    {
+        let service = state
+            .namespaces
+            .borrow()
             .get(&descriptor.namespace)
             .expect("namespace installed before method")
-            .service;
-        call_method(service, "install", &[JsValue::from_str(&descriptor.method)])?;
+            .service
+            .clone();
+        if descriptor.direct {
+            call_method(
+                &service,
+                "installDirect",
+                &[
+                    JsValue::from_str(&descriptor.method),
+                    JsValue::from_bool(was_empty),
+                ],
+            )?;
+        }
+        if descriptor.scoped.is_some() {
+            call_method(
+                &service,
+                "installScoped",
+                &[
+                    JsValue::from_str(&descriptor.method),
+                    JsValue::from_bool(was_empty && !descriptor.direct),
+                ],
+            )?;
+        }
     }
     Ok(())
 }
@@ -550,21 +688,52 @@ fn ensure_namespace(state: &Rc<BrowserRemoteState>, name: &str) -> Result<(), Js
     }
     let weak = Rc::downgrade(state);
     let namespace = name.to_owned();
-    let invoke = Closure::wrap(Box::new(
-        move |caller: JsValue, method: String, values: Array| -> Promise {
+    let invoke = Closure::wrap(Box::new(move |caller: JsValue, method: String| -> JsValue {
+        let record = weak.upgrade().and_then(|state| {
+            state
+                .methods
+                .borrow()
+                .get(&format!("{namespace}/{method}"))
+                .cloned()
+        });
+        let (weak, namespace) = (weak.clone(), namespace.clone());
+        Closure::wrap(Box::new(move |values: Array| -> Result<JsValue, JsValue> {
+            let record = record.clone().ok_or_else(|| {
+                js_sys::Error::new("client api: Remote method is no longer mounted")
+            })?;
             let Some(state) = weak.upgrade() else {
-                return Promise::reject(&js_sys::Error::new(&format!(
+                return Ok(Promise::resolve(&internal_failure(&format!(
                     "client api: Remote method {namespace}/{method} is no longer mounted"
-                )));
+                ))?)
+                .into());
             };
-            invoke_remote(state, caller, namespace.clone(), method, values)
+            Ok(invoke_remote(
+                state,
+                caller.clone(),
+                namespace.clone(),
+                method.clone(),
+                record,
+                values,
+            )
+            .into())
+        }) as Box<dyn Fn(Array) -> Result<JsValue, JsValue>>)
+        .into_js_value()
+    }) as Box<dyn Fn(JsValue, String) -> JsValue>);
+    let install = Closure::wrap(Box::new(
+        |service: JsValue, method: String, fresh: bool| -> Result<(), JsValue> {
+            if fresh {
+                call_method(&service, "install", &[JsValue::from_str(&method)])?;
+            }
+            Ok(())
         },
-    ) as Box<dyn FnMut(JsValue, String, Array) -> Promise>);
-    let handle = state.namespace_factory.call3(
+    )
+        as Box<dyn Fn(JsValue, String, bool) -> Result<(), JsValue>>);
+    let handle = state.namespace_factory.call4(
         &JsValue::UNDEFINED,
         &state.owner_context,
         &JsValue::from_str(name),
         &invoke.into_js_value(),
+        &install.into_js_value(),
     )?;
     let service = required(&handle, "service", "Remote namespace factory result")?;
     let dispose = required_function(&handle, "dispose", "Remote namespace factory result")?;
@@ -572,6 +741,14 @@ fn ensure_namespace(state: &Rc<BrowserRemoteState>, name: &str) -> Result<(), Js
         .namespaces
         .borrow_mut()
         .insert(name.to_owned(), NamespaceHandle { service, dispose });
+    let remote = call_method(&state.owner_context, "get", &[JsValue::from_str("remote")])?;
+    let getter =
+        Function::new_with_args("key", "return function () { return this.ctx.get(key); };").call1(
+            &JsValue::UNDEFINED,
+            &JsValue::from_str(&format!("remote.{name}")),
+        )?;
+    let property = object(&[("configurable", JsValue::TRUE), ("get", getter)])?;
+    Object::define_property(&Object::from(remote), &JsValue::from_str(name), &property);
     Ok(())
 }
 
@@ -579,8 +756,7 @@ async fn cleanup_mount(
     state: &Rc<BrowserRemoteState>,
     installed: Vec<InstalledVariant>,
     registry_disposer: Option<Function>,
-) {
-    let mut namespace_disposers = Vec::new();
+) -> Result<(), JsValue> {
     for variant in installed.into_iter().rev() {
         variant.token.withdraw();
         let mut remove_method = None;
@@ -616,27 +792,34 @@ async fn cleanup_mount(
             continue;
         };
         if let Some(handle) = state.namespaces.borrow().get(&namespace) {
-            let _ = call_method(&handle.service, "remove", &[JsValue::from_str(&method)]);
+            call_method(&handle.service, "remove", &[JsValue::from_str(&method)])?;
         }
         let namespace_empty = !state
             .methods
             .borrow()
             .keys()
             .any(|endpoint| endpoint.starts_with(&format!("{namespace}/")));
-        if namespace_empty && let Some(handle) = state.namespaces.borrow_mut().remove(&namespace) {
-            namespace_disposers.push(handle.dispose);
+        let retired = if namespace_empty {
+            state.namespaces.borrow_mut().remove(&namespace)
+        } else {
+            None
+        };
+        if let Some(handle) = retired {
+            if let Ok(remote) =
+                call_method(&state.owner_context, "get", &[JsValue::from_str("remote")])
+            {
+                let _ =
+                    Reflect::delete_property(&Object::from(remote), &JsValue::from_str(&namespace));
+            }
+            let result = handle.dispose.call0(&JsValue::UNDEFINED)?;
+            JsFuture::from(Promise::resolve(&result)).await?;
         }
     }
-    for disposer in namespace_disposers {
-        if let Ok(result) = disposer.call0(&JsValue::UNDEFINED) {
-            let _ = JsFuture::from(Promise::resolve(&result)).await;
-        }
+    if let Some(disposer) = registry_disposer {
+        let result = disposer.call0(&JsValue::UNDEFINED)?;
+        JsFuture::from(Promise::resolve(&result)).await?;
     }
-    if let Some(disposer) = registry_disposer
-        && let Ok(result) = disposer.call0(&JsValue::UNDEFINED)
-    {
-        let _ = JsFuture::from(Promise::resolve(&result)).await;
-    }
+    Ok(())
 }
 
 fn invoke_remote(
@@ -644,22 +827,14 @@ fn invoke_remote(
     caller: JsValue,
     namespace: String,
     method: String,
+    record: MethodRecord,
     values: Array,
 ) -> Promise {
     future_to_promise(async move {
         let endpoint = format!("{namespace}/{method}");
-        let record = state
-            .methods
-            .borrow()
-            .get(&endpoint)
-            .cloned()
-            .ok_or_else(|| {
-                js_sys::Error::new(&format!(
-                    "client api: Remote method {endpoint} is no longer mounted"
-                ))
-            })?;
         if let Some(scoped) = &record.scoped
-            && let Some(identity) = bound_context_identity(&state, &scoped.projection, &caller)?
+            && let Some(identity) =
+                bound_context_identity(&state, &scoped.projection, &caller, false, &endpoint)?
         {
             return invoke_descriptor(
                 &state,
@@ -695,11 +870,20 @@ fn bound_context_identity(
     state: &BrowserRemoteState,
     projection: &ScopedProjection,
     caller: &JsValue,
+    required_binder: bool,
+    endpoint: &str,
 ) -> Result<Option<JsValue>, JsValue> {
     let contexts = required(&state.typert, "contexts", "Client Typert registry")?;
     let binder = required_function(&contexts, "getClient", "Typert contexts")?
         .call1(&contexts, &JsValue::from_str(&projection.context))?;
     if binder.is_undefined() || binder.is_null() {
+        if required_binder {
+            return Err(js_sys::Error::new(&format!(
+                "client api: {endpoint} has no Client Context binder for {:?}",
+                projection.context
+            ))
+            .into());
+        }
         return Ok(None);
     }
     let identity =
@@ -743,12 +927,13 @@ async fn invoke_descriptor(
     if let Some(projection) = projection {
         let identity = match bound_identity {
             Some(identity) => identity,
-            None => bound_context_identity(state, projection, caller)?.ok_or_else(|| {
-                js_sys::Error::new(&format!(
-                    "client api: {endpoint} requires a {:?} Context",
-                    projection.context
-                ))
-            })?,
+            None => bound_context_identity(state, projection, caller, true, &endpoint)?
+                .ok_or_else(|| {
+                    js_sys::Error::new(&format!(
+                        "client api: {endpoint} requires a {:?} Context",
+                        projection.context
+                    ))
+                })?,
         };
         let identity = parse_codec(&projection.codec, &identity, &endpoint, &projection.wire)?;
         if !identity.is_undefined() {
@@ -790,9 +975,21 @@ async fn invoke_descriptor(
         None
     };
     let signal = fused_signal(&method.token.abort.signal(), caller_signal.as_ref())?;
+    let connection = call_method(
+        &state.owner_context,
+        "get",
+        &[JsValue::from_str("connection")],
+    )?;
+    if connection.is_undefined() {
+        return Err(js_sys::Error::new(&format!(
+            "client api: {endpoint} has no active Connection"
+        ))
+        .into());
+    }
+    let rpc = required(&connection, "rpc", "Connection")?;
     let payload = object(&[("args", args.into())])?;
     let response = match call_method(
-        &state.rpc,
+        &rpc,
         "call",
         &[
             JsValue::from_str("/api"),
@@ -849,10 +1046,18 @@ fn parse_codec(
     required_function(&schema, "parse", "Remote codec schema")?
         .call1(&schema, value)
         .map_err(|error| {
-            let wrapped = js_sys::Error::new(&format!(
-                "client api: {endpoint} rejected {field:?}: {}",
-                js_error_text(&error)
-            ));
+            let wrapped = js_sys::Error::new(&format!("client api: {endpoint} rejected {field:?}"));
+            if let Ok(property) = object(&[
+                ("value", error),
+                ("writable", JsValue::TRUE),
+                ("configurable", JsValue::TRUE),
+            ]) {
+                Object::define_property(
+                    &Object::from(JsValue::from(wrapped.clone())),
+                    &JsValue::from_str("cause"),
+                    &property,
+                );
+            }
             wrapped.into()
         })
 }
@@ -906,10 +1111,12 @@ fn contain_listener_promise(event: &str, result: JsValue) {
 }
 
 fn report_listener_failure(event: &str, error: &JsValue) {
-    web_sys::console::error_1(&JsValue::from_str(&format!(
-        "client api: Remote event {event:?} listener threw: {}",
-        js_error_text(error)
-    )));
+    web_sys::console::error_2(
+        &JsValue::from_str(&format!(
+            "client api: Remote event {event:?} listener threw:"
+        )),
+        error,
+    );
 }
 
 fn remote_service_reserved(name: &str) -> bool {
@@ -983,18 +1190,6 @@ fn optional_string(value: &JsValue, key: &str) -> Result<Option<String>, JsValue
             .as_string()
             .map(Some)
             .ok_or_else(|| js_sys::TypeError::new(&format!("{key} must be a string")).into())
-    }
-}
-
-fn optional_bool(value: &JsValue, key: &str) -> Result<Option<bool>, JsValue> {
-    let property = Reflect::get(value, &JsValue::from_str(key))?;
-    if property.is_undefined() || property.is_null() {
-        Ok(None)
-    } else {
-        property
-            .as_bool()
-            .map(Some)
-            .ok_or_else(|| js_sys::TypeError::new(&format!("{key} must be a boolean")).into())
     }
 }
 

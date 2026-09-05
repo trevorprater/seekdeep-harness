@@ -1,0 +1,10 @@
+{
+  "name": "seekdeep-browser-build-dependencies",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@11.7.0",
+  "dependencies": {
+    "esbuild": "0.28.1",
+    "zod": "4.4.3"
+  }
+}

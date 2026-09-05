@@ -510,11 +510,11 @@ This ADR remains proposed until these decisions are resolved:
 - Native Cordis contexts, services, events, fibers, and reversible effects exist.
 - Native lifecycle remounting is partially implemented.
 - The semantic conformance suite is incomplete.
-- Cordis is not target-portable yet.
-- Browser Cordis/WASM execution is not implemented.
+- Rust/WASM Cordis executes the built browser registry, Remote gateway, and Client contributions; complete cross-target semantic conformance remains open.
+- Browser binding gaps include preserving property descriptors rather than copying values in `ctx.extend()`, and exposing the source's complete callable Logger interface. Tests that install a recording logger sink do not close the latter obligation.
 - Source-compatible dynamic Host execution runs in a Rust-owned interpreter worker. The guarded Host path covers lifecycle commands, Services, Tools, Events, callback and Promise timers, async-iterator intervals, throttle/debounce wrappers, exact-generation effect removal, cooperative callback pumping, and stack-safe lossless JSON cloning; the Client compatibility evaluator remains incomplete.
 - Native and browser WebAssembly plugin hosts are not implemented.
 - Shadow registries, graph transactions, generation leases, and general state migration are not implemented.
 - Native integration process replacement exists only in package-specific pieces.
 
-Until the source behavior matrix, open decisions, implementation, and verification are complete, SeekDeep supports only the native lifecycle behavior already proven by package tests. It does not yet have full runtime code reload parity.
+Until the source behavior matrix, open decisions, implementation, and verification are complete, SeekDeep supports only the native and browser lifecycle behavior already proven by the corresponding tests. It does not yet have full runtime code reload parity.

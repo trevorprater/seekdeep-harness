@@ -1,0 +1,123 @@
+//! Real-browser protocol verification; no registry, gateway, or transport substitutes.
+
+pub(super) const DRIVER: &str = r#"import { createRequire } from 'node:module';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+const [source, host, output] = process.argv.slice(2);
+const require = createRequire(join(source, 'apps/web/package.json'));
+const { chromium } = require('playwright');
+const root = process.cwd();
+const home = await mkdtemp(join(tmpdir(), 'seekdeep-remote-browser-'));
+let server, browser;
+try {
+  server = spawn(host, ['web', '--host', '127.0.0.1', '--port', '0'], {
+    cwd: root, env: { ...process.env, SEEKDEEP_HOME: home, SEEKDEEP_TELEMETRY_DISABLED: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  server.stderr.on('data', data => { stderr += data; });
+  const origin = await new Promise((resolve, reject) => {
+    let stdout = '';
+    const deadline = setTimeout(() => reject(new Error('Rust Host readiness timed out: ' + stderr)), 30000);
+    server.stdout.on('data', data => { stdout += data; const match = /seekdeep web: (http:\/\/\S+)/.exec(stdout); if (match) { clearTimeout(deadline); resolve(match[1]); } });
+    server.once('exit', code => { clearTimeout(deadline); reject(new Error(`Host exited ${code}: ${stderr}`)); });
+  });
+  browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  page.setDefaultTimeout(30000);
+  page.on('pageerror', error => console.error('browser error:', error.message));
+  const requests = [];
+  const responseReads = [];
+  const hostErrors = [];
+  page.on('request', request => { if (request.method() === 'POST' && request.url().startsWith(origin + '/api/')) requests.push(request.url().slice(origin.length)); });
+  page.on('response', response => {
+    if (response.url().startsWith(origin + '/api/')) responseReads.push(response.json().then(body => { if (body.result && !body.result.ok) hostErrors.push(body.result.error); }).catch(() => {}));
+  });
+  await page.goto(origin + '/api/__remote_path_probe__');
+  await page.setContent('<!doctype html><html><head></head><body></body></html>');
+  const assets = {};
+  for (const path of ['vendor/cordis/lib/client.js', 'vendor/cordis/lib/index.js', 'packages/typert/registry/lib/client.js', 'packages/client/connection/lib/client.js', 'packages/api/gateway/lib/client.js', 'packages/api/remotes/lib/client.js']) assets[path] = await readFile(join(root, path), 'utf8');
+  const bytes = (await readFile(join(root, 'vendor/cordis/lib/client_bg.wasm'))).toString('base64');
+  await page.evaluate(async ({ assets, bytes }) => {
+    const blob = text => URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+    const binding = blob(assets['vendor/cordis/lib/client.js']);
+    const module = blob(assets['vendor/cordis/lib/index.js'].replace("'./client.js'", JSON.stringify(binding)).replace("new URL('./client_bg.wasm', import.meta.url)", `Uint8Array.from(atob(${JSON.stringify(bytes)}), c => c.charCodeAt(0))`));
+    const cordis = await import(module);
+    const handoffs = new Map();
+    window.__ModuleLoader__ = { load(row) { handoffs.set(row.id, row); } };
+    for (const path of Object.keys(assets).filter(path => path.startsWith('packages/'))) {
+      const script = document.createElement('script'); script.textContent = assets[path]; document.head.append(script);
+    }
+    const client = new cordis.Context();
+    for (const id of ['@seekdeep-ai/seekdeep-typert-registry', '@seekdeep-ai/seekdeep-client-connection', '@seekdeep-ai/seekdeep-api-gateway', '@seekdeep-ai/seekdeep-api-remotes']) {
+      const row = handoffs.get(id); if (!row) throw new Error('missing built module ' + id);
+      const plugin = row.factory(); await client.plugin(plugin);
+    }
+    window.remotePathClient = client;
+    URL.revokeObjectURL(binding); URL.revokeObjectURL(module);
+  }, { assets, bytes });
+  const result = await page.evaluate(async ({ root }) => {
+    const client = window.remotePathClient;
+    const assert = (value, message) => { if (!value) throw new Error(message); };
+    let sequence = 0;
+    const callHost = async (method, payload) => {
+      const rpcId = `setup-${++sequence}`;
+      const response = await fetch('/api/' + method, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId, method, payload }) });
+      const result = await response.json(); assert(result.rpcId === rpcId && result.result.ok, 'Host setup failed: ' + JSON.stringify(result)); return result.result.value;
+    };
+    const first = await callHost('session.create', { cwd: root });
+    const second = await callHost('session.create', { cwd: root });
+    client.typert.contexts.registerClient('agent', { identity: ctx => ctx.agentId });
+    const descriptors = client.typert.remotes.list();
+    assert(descriptors.length === 24, 'incomplete Remote descriptor inventory');
+    assert(descriptors.every(d => d.result.typeSymbol && d.sourceLocation && d.parameters.every(p => p.codec.typeSymbol)), 'incomplete generated descriptor metadata');
+    let invalidRejected = false;
+    try { await client.remote.goals.create(first.sessionId, { objective: 1 }); } catch { invalidRejected = true; }
+    assert(invalidRejected, 'invalid input accepted');
+    const created = await client.remote.goals.create(first.sessionId, { objective: 'integrated root goal' });
+    assert(created.ok, 'Goal creation failed: ' + JSON.stringify(created));
+    const edited = await client.remote.goals.edit(first.sessionId, created.value.ref, { objective: 'edited integrated goal' });
+    assert(edited.ok && edited.value.revision === 2, 'Goal edit failed: ' + JSON.stringify(edited));
+    const scoped = client.extend({ agentId: second.sessionId });
+    const scopedGoal = await scoped.remote.goals.create({ objective: 'integrated scoped goal', maxGoalRounds: 3 });
+    assert(scopedGoal.ok, 'scoped Goal creation failed: ' + JSON.stringify(scopedGoal));
+    const commands = await client.remote.commands.list(first.sessionId);
+    assert(commands.ok && Array.isArray(commands.value), 'command listing failed: ' + JSON.stringify(commands));
+    const unknownCommand = await client.remote.commands.execute(first.sessionId, '/__remote_path_unknown_command__');
+    assert(unknownCommand.ok && unknownCommand.value === undefined, 'undefined command result was not preserved: ' + JSON.stringify(unknownCommand));
+    const cancellation = new AbortController(); cancellation.abort(new Error('remote path cancelled'));
+    const cancelled = await client.remote.commands.execute(first.sessionId, '/__remote_path_unknown_command__', cancellation.signal);
+    assert(!cancelled.ok && cancelled.error.code === 'internal', 'cancelled call escaped the error branch');
+    const failed = await client.remote.goals.edit(first.sessionId, { id: 'missing-goal', revision: 1 }, { objective: 'must fail' });
+    assert(!failed.ok, 'missing Goal unexpectedly succeeded');
+    const inventory = await client.remote.dynamicCordisRunner.inventory();
+    assert(inventory.ok, 'dynamic inventory failed: ' + JSON.stringify(inventory));
+    const plugins = await client.remote.pluginInventory.list();
+    assert(plugins.ok, 'plugin inventory failed: ' + JSON.stringify(plugins));
+    const feedback = await client.remote.messageFeedback.list({ sessionId: first.sessionId });
+    assert(feedback.ok, 'feedback listing failed: ' + JSON.stringify(feedback));
+    const firstHistory = await callHost('session.history', { sessionId: first.sessionId });
+    const secondHistory = await callHost('session.history', { sessionId: second.sessionId });
+    const count = history => history.events.filter(entry => entry.event.type === 'goal/change').length;
+    assert(count(firstHistory) === 2 && count(secondHistory) === 1, 'durable Goal events differ');
+    const registry = client.typert;
+    await client.fiber.dispose();
+    assert(registry.remotes.list().length === 0, 'Remote descriptors survived teardown');
+    return { descriptors: descriptors.length, invalidRejected, undefinedPreserved: true, cancellation: cancelled.error, hostFailure: failed.error, rootGoalEvents: count(firstHistory), scopedGoalEvents: count(secondHistory), commands: commands.value.length, namespaceCalls: 5, remainingDescriptors: registry.remotes.list().length };
+  }, { root });
+  const goalCreates = requests.filter(path => path === '/api/goals/create').length;
+  if (goalCreates !== 2) throw new Error('invalid request reached Host or valid request was lost: ' + JSON.stringify(requests));
+  await Promise.all(responseReads);
+  if (!hostErrors.some(error => JSON.stringify(error) === JSON.stringify(result.hostFailure))) throw new Error('gateway did not preserve the Host error verbatim');
+  if (requests.filter(path => path === '/api/commands/execute').length !== 1) throw new Error('pre-aborted command reached the Host');
+  await page.evaluate(result => { document.body.textContent = JSON.stringify(result, null, 2); }, result);
+  await page.screenshot({ path: join(output, 'remote-path.png'), fullPage: true });
+  console.log(JSON.stringify({ ...result, browser: await browser.version(), requests }));
+} finally {
+  if (browser) await browser.close();
+  if (server && server.exitCode === null) { server.kill('SIGINT'); await once(server, 'exit'); }
+  await rm(home, { recursive: true, force: true });
+}
+"#;

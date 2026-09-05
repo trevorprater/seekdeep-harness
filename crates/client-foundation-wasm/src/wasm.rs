@@ -430,80 +430,7 @@ pub fn configure_client_api_gateway(
 #[allow(clippy::too_many_lines)]
 pub fn client_typert_registry_plugin() -> Result<JsValue, JsValue> {
     plugin("typert-registry", &[], |context| {
-        let remote_rows = Rc::new(RefCell::new(Vec::<(u64, String, JsValue)>::new()));
-        let next_remote = Rc::new(Cell::new(0_u64));
-        let register_rows = remote_rows.clone();
-        let register_next = next_remote;
-        let register_remote = Closure::wrap(Box::new(
-            move |contribution: JsValue| -> Result<Function, JsValue> {
-                let descriptors = Reflect::get(&contribution, &JsValue::from_str("descriptors"))?;
-                if !Array::is_array(&descriptors) {
-                    return Err(js_sys::TypeError::new(
-                        "Typert Remote contribution descriptors must be an array",
-                    )
-                    .into());
-                }
-                let id = register_next.get().checked_add(1).ok_or_else(|| {
-                    js_sys::Error::new("Typert Remote registration ids exhausted")
-                })?;
-                register_next.set(id);
-                let mut pending = Vec::new();
-                for descriptor in Array::from(&descriptors).iter() {
-                    let namespace = required_string(&descriptor, "namespace", "Remote descriptor")?;
-                    let method = required_string(&descriptor, "method", "Remote descriptor")?;
-                    let endpoint = format!("{namespace}/{method}");
-                    if pending
-                        .iter()
-                        .any(|(candidate, _): &(String, JsValue)| candidate == &endpoint)
-                        || register_rows
-                            .borrow()
-                            .iter()
-                            .any(|(_, candidate, _)| candidate == &endpoint)
-                    {
-                        return Err(js_sys::Error::new(&format!(
-                            "Typert Remote endpoint {endpoint:?} is already registered"
-                        ))
-                        .into());
-                    }
-                    pending.push((endpoint, descriptor));
-                }
-                register_rows.borrow_mut().extend(
-                    pending
-                        .iter()
-                        .map(|(endpoint, descriptor)| (id, endpoint.clone(), descriptor.clone())),
-                );
-                let disposal_rows = register_rows.clone();
-                let dispose = Closure::wrap(Box::new(move || {
-                    disposal_rows
-                        .borrow_mut()
-                        .retain(|(owner, _, _)| *owner != id);
-                }) as Box<dyn FnMut()>);
-                Ok(dispose.into_js_value().unchecked_into())
-            },
-        )
-            as Box<dyn FnMut(JsValue) -> Result<Function, JsValue>>);
-        let get_rows = remote_rows.clone();
-        let get_remote = Closure::wrap(Box::new(move |endpoint: String| {
-            get_rows
-                .borrow()
-                .iter()
-                .find(|(_, candidate, _)| candidate == &endpoint)
-                .map_or(JsValue::UNDEFINED, |(_, _, descriptor)| descriptor.clone())
-        }) as Box<dyn FnMut(String) -> JsValue>);
-        let list_rows = remote_rows;
-        let list_remote = Closure::wrap(Box::new(move || -> Array {
-            list_rows
-                .borrow()
-                .iter()
-                .map(|(_, _, descriptor)| descriptor.clone())
-                .collect()
-        }) as Box<dyn FnMut() -> Array>);
-        let remotes = object(&[
-            ("register", register_remote.into_js_value()),
-            ("get", get_remote.into_js_value()),
-            ("list", list_remote.into_js_value()),
-        ])?;
-        let typert = object(&[("local", Object::new().into()), ("remotes", remotes.into())])?;
+        let typert = Object::new();
         crate::wasm_typert::install(&typert, &context)?;
         call_method(
             &context,
@@ -539,6 +466,7 @@ pub fn client_api_gateway_plugin() -> Result<JsValue, JsValue> {
         )?
         .into();
         remote_factory.call2(&JsValue::UNDEFINED, &context, &core)?;
+        call_method(&core, "ownLifecycle", &[])?;
         Ok(())
     })
 }
@@ -842,12 +770,6 @@ fn call_method(value: &JsValue, name: &str, arguments: &[JsValue]) -> Result<JsV
     let method = Reflect::get(value, &JsValue::from_str(name))?.dyn_into::<Function>()?;
     let arguments: Array = arguments.iter().cloned().collect();
     method.apply(value, &arguments)
-}
-
-fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, JsValue> {
-    Reflect::get(value, &JsValue::from_str(key))?
-        .as_string()
-        .ok_or_else(|| js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into())
 }
 
 fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {

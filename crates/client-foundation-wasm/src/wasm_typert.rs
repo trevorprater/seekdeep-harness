@@ -1,6 +1,7 @@
 //! Browser schema/package reflection with fiber-owned local invocations.
 
 mod providers;
+mod remotes;
 mod validation;
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
@@ -9,6 +10,27 @@ use js_sys::{Array, Function, Object, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 type Rows = Vec<(String, JsValue)>;
+
+/// Composes the source schema identity.
+#[wasm_bindgen(js_name = typertKey)]
+pub fn typert_key(package: &str, name: &str) -> String {
+    format!("{package}#{name}")
+}
+
+/// Composes the source package-face identity.
+#[wasm_bindgen(js_name = typertPackageKey)]
+pub fn typert_package_key(package: &str, face: &str) -> String {
+    format!("{package}#{face}")
+}
+
+/// Composes a Remote endpoint from its descriptor.
+///
+/// # Errors
+/// Propagates malformed descriptor access.
+#[wasm_bindgen(js_name = typertEndpoint)]
+pub fn typert_endpoint(descriptor: &JsValue) -> Result<String, JsValue> {
+    endpoint(descriptor)
+}
 
 #[derive(Default)]
 struct State {
@@ -25,6 +47,7 @@ struct State {
 pub struct WasmTypertSchemaRegistry {
     state: Rc<RefCell<State>>,
     context: JsValue,
+    kind: &'static str,
 }
 
 #[wasm_bindgen]
@@ -239,12 +262,14 @@ impl WasmTypertSchemaRegistry {
                 || lookup(&self.state.borrow().descriptors, &endpoint).is_some()
             {
                 return Err(error(&format!(
-                    "typert: local endpoint \"{endpoint}\" is already registered"
+                    "typert: {} endpoint \"{endpoint}\" is already registered",
+                    self.kind
                 )));
             }
             if !ids.insert(id.clone()) || self.state.borrow().ids.contains(&id) {
                 return Err(error(&format!(
-                    "typert: local invocation id \"{id}\" is already registered"
+                    "typert: {} invocation id \"{id}\" is already registered",
+                    self.kind
                 )));
             }
         }
@@ -261,6 +286,12 @@ impl WasmTypertSchemaRegistry {
     ) -> Result<JsValue, JsValue> {
         let state = self.state.clone();
         let report_context = self.context.clone();
+        let kind = self.kind;
+        let label = if kind == "remote" {
+            format!("typert.remotes.register({})", json(&key.clone().into())?)
+        } else {
+            "typert.register()".to_owned()
+        };
         let setup = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
             let descriptors: Vec<_> = descriptors
                 .iter()
@@ -279,6 +310,7 @@ impl WasmTypertSchemaRegistry {
             emit(
                 &state,
                 &report_context,
+                kind,
                 descriptors.iter().map(|(key, _, _)| key.as_str()),
             )?;
             let (state, context, key, package, schemas) = (
@@ -310,15 +342,11 @@ impl WasmTypertSchemaRegistry {
                         }
                     }
                 }
-                emit(&state, &context, removed.iter().map(String::as_str))
+                emit(&state, &context, kind, removed.iter().map(String::as_str))
             }) as Box<dyn FnMut() -> Result<(), JsValue>>);
             Ok(dispose.into_js_value())
         }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
-        call(
-            context,
-            "effect",
-            &[setup.into_js_value(), "typert.register()".into()],
-        )
+        call(context, "effect", &[setup.into_js_value(), label.into()])
     }
 }
 
@@ -326,6 +354,7 @@ pub(crate) fn install(service: &Object, context: &JsValue) -> Result<(), JsValue
     let core = WasmTypertSchemaRegistry {
         state: Rc::new(RefCell::new(State::default())),
         context: context.clone(),
+        kind: "local",
     };
     let factory = Function::new_with_args(
         "service,core,ctx",
@@ -348,16 +377,18 @@ Object.defineProperty(service, 'local', { configurable: true, get() {
     );
     factory.call3(&JsValue::UNDEFINED, service, &core.into(), context)?;
     providers::install(service, context)?;
+    remotes::install(service, context)?;
     Ok(())
 }
 
 fn emit<'a>(
     state: &Rc<RefCell<State>>,
     context: &JsValue,
+    kind: &str,
     keys: impl Iterator<Item = &'a str>,
 ) -> Result<(), JsValue> {
     for key in keys {
-        let change = record(&[("kind", "local".into()), ("key", key.into())])?;
+        let change = record(&[("kind", kind.into()), ("key", key.into())])?;
         let listeners = state.borrow().listeners.clone();
         for listener in listeners {
             if let Err(error_value) = listener.call1(&JsValue::UNDEFINED, &change) {
@@ -368,7 +399,7 @@ fn emit<'a>(
                     call(
                         &logger,
                         "warn",
-                        &[format!("typert: local observer for \"{key}\" failed").into()],
+                        &[format!("typert: {kind} observer for \"{key}\" failed").into()],
                     )?;
                     call(&logger, "warn", &[error_value])?;
                 }

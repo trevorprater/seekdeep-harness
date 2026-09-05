@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 mod client_test_runtime_built_smoke_driver;
 mod remote_built_smoke_driver;
+mod remote_contracts;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -23,6 +24,43 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Verify the complete generated-Remote browser-to-Host milestone.
+    RemoteMilestone {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Compare complete built Remote metadata and codec behavior with the pinned emitter.
+    RemoteCodecOracle {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Run the pinned Client gateway corpus with the real browser WASM registry.
+    RemoteGatewayOracle {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Validate the supplemental lifecycle cases on the source implementation.
+        #[arg(long)]
+        source_regressions: bool,
+    },
+    /// Verify the generated Remote path in Chromium against the real built Rust Host.
+    RemoteBrowserPath {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Run the pinned registry corpus against the built browser WASM implementation.
+    RemoteRegistryOracle {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Generate browser Remote construction plans through the Rust Typert emitter.
+    RemoteContracts {
+        /// Refresh the contract model from this read-only pinned oracle.
+        #[arg(long)]
+        capture_source: Option<PathBuf>,
+        /// Verify the existing generated plan without writing it.
+        #[arg(long)]
+        check: bool,
+    },
     /// Generate or verify the plugin configuration catalog from the pinned source tree.
     ConfigCatalog {
         /// Pinned source checkout containing the TypeScript package declarations.
@@ -128,6 +166,18 @@ enum Scope {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
+        Command::RemoteMilestone { source } => remote_contracts::milestone(&source),
+        Command::RemoteCodecOracle { source } => remote_contracts::codec_oracle(&source),
+        Command::RemoteGatewayOracle {
+            source,
+            source_regressions,
+        } => remote_contracts::gateway_oracle(&source, source_regressions),
+        Command::RemoteBrowserPath { source } => remote_contracts::browser_path(&source),
+        Command::RemoteRegistryOracle { source } => remote_contracts::registry_oracle(&source),
+        Command::RemoteContracts {
+            capture_source,
+            check,
+        } => remote_contracts::run(capture_source.as_deref(), check),
         Command::ConfigCatalog { source, check } => {
             xtask::config_catalog::run(Path::new("."), &source, check)
         }
@@ -659,6 +709,16 @@ fn wasm_package_once(
     if module_id == "@seekdeep-ai/seekdeep-client-ui-attachment" {
         return wasm_ui_attachment_package(&metadata, artifact, out_dir, &wasm);
     }
+    wasm_classic_package(&metadata, artifact, module_id, out_dir, &wasm)
+}
+
+fn wasm_classic_package(
+    metadata: &CargoMetadata,
+    artifact: &str,
+    module_id: &str,
+    out_dir: &Path,
+    wasm: &Path,
+) -> anyhow::Result<()> {
     let staging = metadata
         .target_directory
         .join("xtask/wasm-package")
@@ -679,12 +739,17 @@ fn wasm_package_once(
             "--out-dir",
         ])
         .arg(&staging)
-        .arg(&wasm)
+        .arg(wasm)
         .status()?;
-    anyhow::ensure!(status.success(), "wasm-bindgen failed for {package}");
+    anyhow::ensure!(status.success(), "wasm-bindgen failed for {module_id}");
     let bindings = std::fs::read_to_string(staging.join("client.js"))?;
     let bytes = std::fs::read(staging.join("client_bg.wasm"))?;
     let bundle = classic_module_bundle(&bindings, &bytes, &global, module_id)?;
+    let bundle = if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
+        remote_contracts::bundle_zod(&metadata.workspace_root, &bundle)?
+    } else {
+        bundle
+    };
     let out_dir = if out_dir.is_absolute() {
         out_dir.to_owned()
     } else {
@@ -2519,6 +2584,9 @@ fn wasm_package_global(artifact: &str, module_id: &str) -> String {
 }
 
 fn compatibility_prelude(global: &str, module_id: &str) -> String {
+    if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
+        return format!("  {global}.configureApiRemotesZod(__seekdeepRemoteZod);\n");
+    }
     if module_id == "@seekdeep-ai/seekdeep-client-locale" {
         return format!(
             "  Object.assign({global}, {{ apply: {global}.applyClientLocale, inject: ['slots', 'connection', 'remote', 'settingsScope'] }});\n"
@@ -2544,7 +2612,6 @@ fn module_factory(global: &str, module_id: &str) -> String {
         return format!(
             r"() => {{
   const tracker = Symbol.for('cordis.service.tracker');
-  const namespaces = ['commands', 'goals', 'dynamicCordisRunner', 'pluginInventory', 'messageFeedback'];
   const remoteFactory = (ctx, core) => {{
     const service = {{
       ctx,
@@ -2553,22 +2620,20 @@ fn module_factory(global: &str, module_id: &str) -> String {
       $dispatch(event, args) {{ return core.dispatch(event, args); }},
     }};
     Object.defineProperty(service, tracker, {{ value: true }});
-    for (const namespace of namespaces) {{
-      Object.defineProperty(service, namespace, {{
-        get() {{ return this.ctx.get('remote.' + namespace); }},
-      }});
-    }}
     ctx.provide('remote', service);
     return service;
   }};
-  const namespaceFactory = (ctx, namespace, invoke) => {{
+  const namespaceFactory = (ctx, namespace, invoke, install) => {{
     const service = {{
       ctx,
       namespace,
+      installDirect(method, fresh) {{ return install(this, method, fresh); }},
+      installScoped(method, fresh) {{ return install(this, method, fresh); }},
       install(method) {{
         Object.defineProperty(this, method, {{
           configurable: true,
-          value: function (...args) {{ return invoke(this.ctx, method, args); }},
+          enumerable: true,
+          get: function () {{ const bound = invoke(this.ctx, method); return (...args) => bound(args); }},
         }});
       }},
       remove(method) {{ delete this[method]; }},
@@ -4578,6 +4643,7 @@ fn is_generated_output(path: &Path) -> bool {
         .filter(|component| *component != ".")
         .collect::<Vec<_>>();
     (parts.len() >= 4 && parts[0] == "packages" && parts[3] == "lib")
+        || parts.starts_with(&["support", "browser-dependencies", "node_modules"])
         || parts.starts_with(&["python", "sdk", ".venv"])
         || parts.starts_with(&["python", "sdk-runtime", ".venv"])
         || parts.starts_with(&[".wheel-smoke"])
@@ -6311,6 +6377,9 @@ mod tests {
             "apps/web/generated/vite.config.mjs"
         )));
         assert!(is_generated_output(Path::new(
+            "support/browser-dependencies/node_modules/.pnpm/zod@4.4.3/node_modules/zod/index.js"
+        )));
+        assert!(is_generated_output(Path::new(
             "python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/node_modules/@seekdeep-ai/seekdeep-sdk-jsonrpc-demo/lib/packaged-bin.js"
         )));
         for binding in [
@@ -6326,6 +6395,9 @@ mod tests {
             assert!(is_generated_output(Path::new(binding)), "{binding}");
         }
         for source in [
+            "support/browser-dependencies/src/index.js",
+            "support/browser-dependencies/node_modules-source/index.js",
+            "support/other/node_modules/index.js",
             "python/sdk/.venv-source/implementation.py",
             "crates/unported/.venv/implementation.py",
             "python/sdk-runtime/src/deepseek_harness_runtime/implementation.py",

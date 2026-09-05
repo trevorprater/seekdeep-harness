@@ -51,7 +51,6 @@ export function foundationContextWrapper() {
 
 export function foundationGatewayFactories() {
   const tracker = Symbol.for('cordis.service.tracker')
-  const namespaces = ['commands', 'goals', 'dynamicCordisRunner', 'pluginInventory', 'messageFeedback']
   const remoteFactory = (ctx, core) => {
     const service = {
       ctx,
@@ -60,20 +59,20 @@ export function foundationGatewayFactories() {
       $dispatch(event, args) { return core.dispatch(event, args) },
     }
     Object.defineProperty(service, tracker, { value: true })
-    for (const namespace of namespaces) {
-      Object.defineProperty(service, namespace, { get() { return this.ctx.get('remote.' + namespace) } })
-    }
     ctx.provide('remote', service)
     return service
   }
-  const namespaceFactory = (ctx, namespace, invoke) => {
+  const namespaceFactory = (ctx, namespace, invoke, install) => {
     const service = {
       ctx,
       namespace,
+      installDirect(method, fresh) { return install(this, method, fresh) },
+      installScoped(method, fresh) { return install(this, method, fresh) },
       install(method) {
         Object.defineProperty(this, method, {
           configurable: true,
-          value: function (...args) { return invoke(this.ctx, method, args) },
+          enumerable: true,
+          get: function () { const bound = invoke(this.ctx, method); return (...args) => bound(args) },
         })
       },
       remove(method) { delete this[method] },
@@ -88,16 +87,18 @@ export function foundationGatewayFactories() {
 const identitySchema = { parse(value) { return value } }
 const stringSchema = { parse(value) { if (typeof value !== 'string') throw new TypeError('expected string'); return value } }
 export function foundationRemoteContribution() {
-  const codec = schema => ({ mode: 'strict', schema })
+  const codec = schema => ({ mode: 'strict', typeSymbol: '@fixture/foundation#Value', schema })
   return {
     package: '@seekdeep-ai/foundation-test-remotes',
     descriptors: [
       {
         namespace: 'dynamicCordisRunner', method: 'inventory', invocation: { kind: 'direct' },
+        id: '@fixture/foundation#dynamicCordisRunner/inventory', service: 'dynamicCordisRunner',
         parameters: [], result: codec(identitySchema),
       },
       {
         namespace: 'commands', method: 'list', invocation: { kind: 'direct' },
+        id: '@fixture/foundation#commands/list', service: 'commands',
         scope: { context: 'agent', wire: 'agentId' },
         parameters: [{ name: 'agent', wire: 'agentId', source: 'lookup', lookup: 'agent', codec: codec(stringSchema) }],
         result: codec(identitySchema),

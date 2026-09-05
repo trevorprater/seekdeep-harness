@@ -1,6 +1,8 @@
 //! Browser assembly of generated Host Remote contributions.
 
 #[cfg(target_arch = "wasm32")]
+mod construction;
+#[cfg(target_arch = "wasm32")]
 mod wasm;
 
 #[cfg(target_arch = "wasm32")]

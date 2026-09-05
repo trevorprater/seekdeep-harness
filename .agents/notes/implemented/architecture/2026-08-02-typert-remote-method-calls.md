@@ -335,6 +335,10 @@ The root `Context` merges only the direct `TypertClientRemote` surface. `AgentCo
 
 Generated Remote JS contains only descriptors, symbol keys, and codecs; it does not bundle Host Service implementations. The Client Remote Service creates real functions from that data, so the runtime does not depend on a JavaScript Proxy. A Proxy remains an implementation option but is not a source of types or reflection.
 
+The Rust/WASM assembly consumes the pinned, compiler-independent [Host model](../../../../crates/api-remotes-client/contracts/host-model.json). `cargo xtask remote-contracts` runs the Rust emitter and produces declarative schema-construction plans; the [compiled browser constructor](../../../../crates/api-remotes-client/src/construction.rs) executes those plans against the pinned Zod dependency. Schema objects, metadata, recursive references, and parsing behavior therefore come from the generated contract, not a second handwritten validator. `--capture-source <oracle> --check` verifies the source pin, model, complete emitted Remote JavaScript, and plan freshness without modifying the oracle. Capturing the model does not establish the separate Rust compiler-extraction path.
+
+The [browser gateway](../../../../crates/client-foundation-wasm/src/wasm_remote.rs) serializes mount and withdrawal mutations and captures the current method record when a namespace getter is read. The calling fiber owns pending setup before mutation starts. A rejected mutation does not poison the queue; gateway disposal clears its event subscriptions. Callers must await contribution withdrawal before remounting the same package: an immediate remount retains the source's observable “already mounted” rejection.
+
 ## Cross-environment isomorphism constraints
 
 Remote API is a consumer capability, not a synonym for Browser API. The shipped runtime implements Browser Client contribution mounting, Connection RPC calls, and Agent Scope association.
@@ -492,6 +496,7 @@ The package topology is `api/remotes → api/gateway → client/connection → h
 
 ## Verification
 
+- `cargo xtask remote-milestone` rebuilds the real Rust Host and production browser bundles, compares all selected descriptors and codec graphs with the pinned emitter, runs the source registry and gateway corpora against WASM, and drives all five selected namespaces from Chromium through the real Connection transport. The browser check asserts root/scoped Goal persistence, rejection before transport, cancellation, undefined results, Host error preservation, and descriptor withdrawal. This gate does not establish package-export resolution, generated declaration consumers, or complete Web UI parity.
 - Goal Service directly decorates mutation methods whose business signatures already match the Remote contract and keeps `remoteExportCreate(...)` only to adapt `GoalView` into `CreateGoalResult`, without a second route, codec, or Client method list.
 - A clean `build:lib` emits Host and consumer Remote artifacts before Client compilation, including the business package's JS, DTS, and declaration map under `/remote`.
 - After `clean`, standalone `typecheck`, `lint`, and `doc-typecheck` regenerate the Remote contracts; the pre-push hook uses the same prepared typecheck, and CI source consumers wait for one shared contract pass.

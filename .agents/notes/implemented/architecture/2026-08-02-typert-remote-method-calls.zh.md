@@ -335,6 +335,10 @@ agentCtx.remote.goals.create(request)
 
 生成的 Remote JS 只包含 descriptor、symbol key 和 codec，不打包 Host Service 实现。Client Remote Service 据此创建真实函数，因此运行时不依赖 JavaScript Proxy；Proxy 可以作为实现选择，但不会成为类型或反射来源。
 
+Rust/WASM 组装消费固定版本、编译器无关的 [Host 模型](../../../../crates/api-remotes-client/contracts/host-model.json)。`cargo xtask remote-contracts` 运行 Rust emitter 并生成声明式 schema 构建计划；[编译后的浏览器构造器](../../../../crates/api-remotes-client/src/construction.rs) 使用固定版本的 Zod 依赖执行这些计划。因此 schema 对象、元数据、递归引用和解析行为均来自生成约定，而不是另一套手写校验器。`--capture-source <oracle> --check` 校验源码固定版本、模型、完整的生成 Remote JavaScript 以及计划的新鲜度，不修改 oracle。捕获模型不等于证明独立的 Rust 编译器提取路径已实现。
+
+[浏览器 gateway](../../../../crates/client-foundation-wasm/src/wasm_remote.rs) 串行执行挂载与撤销变更，并在读取 namespace getter 时捕获当前方法记录。变更开始之前，调用方 fiber 就已拥有待完成的 setup。被拒绝的变更不会使队列失效；gateway 释放会清空其事件订阅。调用方必须等待 contribution 撤销完成后再重新挂载同一个包：立即重新挂载会保留源码可观察的“already mounted”拒绝行为。
+
 ## 跨环境同构约束
 
 Remote API 是消费端能力，不等同于 Browser API。已交付的运行时实现 Browser Client contribution 挂载、Connection RPC 调用和 Agent Scope 关联。
@@ -492,6 +496,7 @@ Connection 提供共享 channel interceptor 与当前 HTTP carrier 映射。WebS
 
 ## 验证
 
+- `cargo xtask remote-milestone` 重新构建真实 Rust Host 和生产浏览器 bundle，将所有选定 descriptor 与 codec 图同固定版本的 emitter 比较，针对 WASM 运行源码注册表和 gateway 测试集，并从 Chromium 经真实 Connection 传输调用全部五个选定 namespace。浏览器检查断言 root/scoped Goal 持久化、传输前拒绝、取消、undefined 结果、Host 错误保留以及 descriptor 撤销。该门禁不证明包导出解析、生成声明的消费方或完整 Web UI 等价性。
 - Goal Service 直接装饰业务签名已经符合 Remote 约定的变更类方法，仅保留 `remoteExportCreate(...)` 把 `GoalView` 适配为 `CreateGoalResult`，无需第二条路由、第二份 codec 或 Client 方法清单。
 - 一次干净的 `build:lib` 会在 Client 编译前生成 Host 与消费方 Remote 产物，包括业务包 `/remote` 下的 JS、DTS 和 declaration map。
 - `clean` 后，单独运行 `typecheck`、`lint` 或 `doc-typecheck` 都会重新生成 Remote 约定；pre-push 钩子使用同一个已包含约定准备步骤的 typecheck，CI 中的源码消费方则等待一次共享的约定 pass。

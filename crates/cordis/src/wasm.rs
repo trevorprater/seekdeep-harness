@@ -123,6 +123,14 @@ impl WasmContext {
             .map_err(js_error)
     }
 
+    /// Assigns an existing reflected property through the source `ctx.set` entry.
+    ///
+    /// # Errors
+    /// Returns the same ownership and accessor errors as property assignment.
+    pub fn set(&self, name: String, value: JsValue) -> Result<bool, JsValue> {
+        self.set_property(name, value)
+    }
+
     /// Loads one JavaScript plugin descriptor through Rust lifecycle ownership.
     ///
     /// # Errors
@@ -317,6 +325,11 @@ impl WasmContext {
     /// Returns malformed metadata or wrapper failures.
     #[allow(clippy::needless_pass_by_value)]
     pub fn extend(&self, extension: JsValue) -> Result<JsValue, JsValue> {
+        let extension = if extension.is_undefined() {
+            Object::new().into()
+        } else {
+            extension
+        };
         if !extension.is_object() || extension.is_null() {
             return Err(js_sys::Error::new("ctx.extend metadata must be an object").into());
         }

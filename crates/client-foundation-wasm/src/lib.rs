@@ -11,3 +11,5 @@ mod wasm_typert;
 pub use wasm::*;
 #[cfg(target_arch = "wasm32")]
 pub use wasm_remote::*;
+#[cfg(target_arch = "wasm32")]
+pub use wasm_typert::{typert_endpoint, typert_key, typert_package_key};

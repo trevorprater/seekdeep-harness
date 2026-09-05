@@ -12401,6 +12401,7 @@ dependencies = [
  "seekdeep-tool-web",
  "seekdeep-tool-workflow",
  "seekdeep-tools",
+ "seekdeep-typert-generator",
  "seekdeep-user-questions",
  "seekdeep-web",
  "seekdeep-workflow",
