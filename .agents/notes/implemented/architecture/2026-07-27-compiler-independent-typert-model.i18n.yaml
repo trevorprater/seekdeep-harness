@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-27-compiler-independent-typert-model.md
-2026-07-27-compiler-independent-typert-model.md: 4d02b8abaf5e9afe5fcfb3b5005e435be7147df9
-2026-07-27-compiler-independent-typert-model.zh.md: 10c97b1b61ea1856704117c24c02b2df52a02fab
+2026-07-27-compiler-independent-typert-model.md: aed843f5e6ba90f84989ebc43243ed552bb49014
+2026-07-27-compiler-independent-typert-model.zh.md: b98f2142388aaebf7b6ba94a8b8d7f27a4e76eb6

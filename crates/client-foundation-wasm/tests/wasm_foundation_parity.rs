@@ -157,6 +157,124 @@ export function foundationRestore(control) { control.restore() }
 export function foundationStop(handle) { handle.stop() }
 export function foundationResult(response) { return response.result }
 export function foundationFlush() { return new Promise(resolve => setTimeout(resolve, 10)) }
+
+export async function foundationSchemaContract(root) {
+  const check = (value, message) => { if (!value) throw new Error(message) }
+  const fail = action => { try { action() } catch (error) { return error.message } throw new Error('expected rejection') }
+  const registry = root.get('typert')
+  const changes = []
+  const observer = root.plugin({ name: 'reflection-observer', apply(ctx) {
+    ctx.get('typert').local.subscribe(change => changes.push(change))
+  } })
+  await observer.await()
+  let projections = 0
+  const schema = { parse: value => value, toJSONSchema(params) { projections++; return { type: 'string', title: params.title } } }
+  const model = { services: [], events: [], objects: [] }
+  const invocation = { id: 'reflection.go', service: 'commands', namespace: 'commands', method: 'go', parameters: [], result: { mode: 'src-json' }, invocation: { kind: 'direct' } }
+  const contribution = { package: '@seekdeep-ai/reflection', face: 'client', schemas: [{ name: 'Item', schema, extra: model }], model, invocations: [invocation] }
+  const owner = root.plugin({ name: 'reflection-owner', apply(ctx) { ctx.get('typert').register(contribution) } })
+  await owner.await()
+  const key = '@seekdeep-ai/reflection#Item'
+  const record = registry.resolve(key)
+  check(record.schema === schema && record.extra === model, 'schema identity or spread fields lost')
+  check(registry.get(key) === record, 'get copied the schema record')
+  check(registry.getPackage(contribution.package) === undefined, 'default package face is not Host')
+  check(registry.getPackage(contribution.package, 'client').model === model, 'package model identity lost')
+  check(registry.list({ face: 'host' }).length === 0 && registry.list()[0] === record, 'schema filtering/order differs')
+  check(registry.listPackages({ package: contribution.package }).length === 1, 'package filtering differs')
+  const first = registry.toJSONSchema(key, { title: 'one' })
+  const second = registry.toJSONSchema(key, { title: 'two' })
+  check(first !== second && projections === 2 && second.title === 'two', 'schema projection was cached')
+  check(registry.local.get('commands/go') === invocation && registry.local.list()[0] === invocation, 'local descriptor identity lost')
+  check(registry.local.hasSeen('commands/go'), 'local history missing')
+  check(fail(() => registry.register(contribution)) === 'typert: package face "@seekdeep-ai/reflection#client" is already registered', 'duplicate package diagnostic differs')
+  const duplicate = { ...contribution, package: '@seekdeep-ai/other', schemas: [{ name: 'New', schema }], invocations: [{ ...invocation, method: 'different' }] }
+  check(fail(() => registry.register(duplicate)) === 'typert: local invocation id "reflection.go" is already registered', 'duplicate invocation id accepted')
+  check(registry.get('@seekdeep-ai/other#New') === undefined && registry.listPackages().length === 1, 'rejected batch published partial state')
+  check(fail(() => registry.resolve('malformed')) === 'typert: invalid schema key "malformed" — expected "<package>#<name>"', 'invalid key diagnostic differs')
+  check(fail(() => registry.resolve('@seekdeep-ai/reflection#Missing')).includes('registered but contributes no schema named "Missing"'), 'missing schema diagnostic differs')
+  check(fail(() => registry.resolve('@seekdeep-ai/absent#Item')).includes('has no registered contribution'), 'missing package diagnostic differs')
+  await owner.dispose()
+  check(registry.get(key) === undefined && registry.listPackages().length === 0, 'fiber disposal retained schema/package state')
+  check(registry.local.get('commands/go') === undefined && registry.local.hasSeen('commands/go'), 'descriptor withdrawal/history differs')
+  check(changes.length === 2 && changes.every(change => change.kind === 'local' && change.key === 'commands/go'), 'local change notifications differ')
+  await observer.dispose()
+  const dispose = registry.register(contribution)
+  dispose()
+  check(changes.length === 2, 'disposed observer still received changes')
+  return true
+}
+
+async function registryObservation(root, schema) {
+  const registry = root.get('typert')
+  const changes = []
+  const observer = root.plugin({ apply(ctx) { ctx.get('typert').local.subscribe(change => changes.push({ ...change, live: registry.local.list().length })) } })
+  await observer.await()
+  const model = { services: [], events: [], objects: [] }
+  const invocation = { id: 'test.read', service: 'test', namespace: 'test', method: 'read', parameters: [], result: { mode: 'src-json' }, invocation: { kind: 'direct' } }
+  const contribution = { package: '@seekdeep-ai/differential', face: 'client', schemas: [{ name: 'Value', schema, extra: model }], model, invocations: [invocation] }
+  const owner = root.plugin({ apply(ctx) { ctx.get('typert').register(contribution) } })
+  await owner.await()
+  const key = '@seekdeep-ai/differential#Value'
+  const outcome = action => { try { return { value: action() } } catch (error) { return { error: error.message } } }
+  const errors = [
+    outcome(() => registry.register(contribution)),
+    outcome(() => registry.register({ ...contribution, package: '@seekdeep-ai/other' })),
+    outcome(() => registry.register({ ...contribution, package: '@seekdeep-ai/other', invocations: [{ ...invocation, method: 'other' }] })),
+    outcome(() => registry.register({ ...contribution, package: 'bad#key' })),
+    outcome(() => registry.register({ ...contribution, face: 'other' })),
+    outcome(() => registry.resolve('bad')),
+    outcome(() => registry.resolve('@seekdeep-ai/differential#Missing')),
+    outcome(() => registry.resolve('@seekdeep-ai/missing#Value')),
+  ]
+  let filterReads = 0
+  const filtered = registry.list({ get package() { filterReads++; return contribution.package } })
+  const before = {
+    filterReads, filtered: filtered.length,
+    schemaIdentity: registry.get(key).schema === schema,
+    extraIdentity: registry.get(key).extra === model,
+    modelIdentity: registry.getPackage(contribution.package, 'client').model === model,
+    coercedFaceIdentity: registry.getPackage(contribution.package, { toString() { return 'client' } }).model === model,
+    defaultHostAbsent: registry.getPackage(contribution.package) === undefined,
+    keys: registry.list().map(record => record.key),
+    host: registry.list({ face: 'host' }).length,
+    packages: registry.listPackages({ package: contribution.package }).map(record => record.key),
+    invocationIdentity: registry.local.get('test/read') === invocation,
+    schema: registry.toJSONSchema(key), errors,
+  }
+  await owner.dispose()
+  const after = { schemas: registry.list().length, packages: registry.listPackages().length,
+    descriptors: registry.local.list().length, history: registry.local.hasSeen('test/read'), emptyNullFilter: registry.list(null).length }
+  await observer.dispose()
+  const dispose = registry.register(contribution)
+  dispose()
+  return { before, after, changes }
+}
+
+export async function foundationSchemaSourceParity(root, pin) {
+  const source = process.env.SEEKDEEP_PARITY_SOURCE
+  if (!source) throw new Error('SEEKDEEP_PARITY_SOURCE is required')
+  const { execFileSync } = await import('node:child_process')
+  if (execFileSync('git', ['-C', source, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== pin) throw new Error('oracle differs from SOURCE_SNAPSHOT')
+  const { register } = await import(`${source}/node_modules/tsx/dist/esm/api/index.mjs`)
+  const unregister = register()
+  try {
+    const [{ TypertRegistry }, { Context }, { z }] = await Promise.all([
+      import(`${source}/packages/typert/registry/src/service.ts`),
+      import(`${source}/vendor/cordis/lib/index.js`),
+      import(`${source}/packages/typert/registry/node_modules/zod/index.js`),
+    ])
+    const oracle = new Context()
+    const registry = oracle.plugin(TypertRegistry)
+    await registry.await()
+    const schema = z.string().describe('live schema')
+    const expected = await registryObservation(oracle, schema)
+    const actual = await registryObservation(root, schema)
+    await registry.dispose()
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`registry mismatch: ${JSON.stringify({ expected, actual })}`)
+    return true
+  } finally { unregister() }
+}
 "#)]
 extern "C" {
     fn foundationContextWrapper() -> JsValue;
@@ -176,6 +294,51 @@ extern "C" {
     fn foundationStop(handle: &JsValue);
     fn foundationResult(response: &JsValue) -> JsValue;
     fn foundationFlush() -> Promise;
+    fn foundationSchemaContract(root: &JsValue) -> Promise;
+    fn foundationSchemaSourceParity(root: &JsValue, pin: &str) -> Promise;
+}
+
+#[wasm_bindgen_test(async)]
+#[ignore = "requires the pinned source checkout and its test dependencies"]
+async fn reflection_matches_source_with_live_zod_and_cordis() {
+    let pin = include_str!("../../../SOURCE_SNAPSHOT")
+        .lines()
+        .find_map(|line| line.strip_prefix("commit="))
+        .unwrap();
+    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    let root = create_context().unwrap();
+    JsFuture::from(foundationPlugin(
+        &root,
+        &client_typert_registry_plugin().unwrap(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        JsFuture::from(foundationSchemaSourceParity(&root, pin))
+            .await
+            .unwrap()
+            .as_bool(),
+        Some(true)
+    );
+}
+
+#[wasm_bindgen_test(async)]
+async fn reflection_registration_is_atomic_and_owned_by_the_calling_fiber() {
+    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    let root = create_context().unwrap();
+    JsFuture::from(foundationPlugin(
+        &root,
+        &client_typert_registry_plugin().unwrap(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        JsFuture::from(foundationSchemaContract(&root))
+            .await
+            .unwrap()
+            .as_bool(),
+        Some(true)
+    );
 }
 
 #[wasm_bindgen_test(async)]

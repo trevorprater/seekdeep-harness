@@ -568,6 +568,7 @@ pub fn client_typert_registry_plugin() -> Result<JsValue, JsValue> {
             ("remotes", remotes.into()),
             ("lookups", Object::new().into()),
         ])?;
+        crate::wasm_typert::install(&typert, &context)?;
         call_method(
             &context,
             "provide",

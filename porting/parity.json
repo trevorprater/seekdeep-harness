@@ -82314,14 +82314,19 @@
     {
       "source": "packages/typert/registry/src/client/index.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
+      "note": "Native registry tests do not prove browser parity. Browser schema/package reflection, local descriptors, endpoint history, and calling-fiber disposal have live WASM/source evidence; complete lookup and Context providers, Remote subscriptions, and package-export assembly remain unverified.",
       "targets": [
         "crates/typert-registry/src/lib.rs",
-        "crates/typert-registry/tests/registry_parity.rs"
+        "crates/typert-registry/tests/registry_parity.rs",
+        "crates/client-foundation-wasm/src/wasm_typert.rs",
+        "crates/client-foundation-wasm/src/wasm_typert/validation.rs",
+        "crates/client-foundation-wasm/tests/wasm_foundation_parity.rs"
       ],
       "evidence": [
         "installs_same_registry_on_client_face",
-        "cargo test -p seekdeep-typert-registry --all-targets --all-features"
+        "cargo test -p seekdeep-typert-registry --all-targets --all-features",
+        "live WASM reflection differential with pinned Cordis/Zod and the real built Host Remote smoke pass; neither covers the remaining browser providers and subscriptions"
       ]
     },
     {

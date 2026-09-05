@@ -24,6 +24,8 @@ PackageModel 识别 Cordis service、event、`@typert object` 引用对象和 `@
 
 [`seekdeep-typert-registry`](../../../../packages/typert/registry/README.md) 提供 `ctx.typert`，且只负责运行时注册：一个 contribution 原子携带 package-face reflection 与可选 Zod schema，并随 Cordis effect 撤销。注册表不分析 TypeScript，也不合并两个 face。JSON Schema 是对已注册 Zod schema 的按需投影。
 
+[浏览器反射实现](../../../../crates/client-foundation-wasm/src/wasm_typert.rs) 保留活动 schema/model 的对象身份、包与本地调用的原子注册、有序查询、端点历史以及调用方 fiber 的释放行为。其[实时 WASM 差分测试](../../../../crates/client-foundation-wasm/tests/wasm_foundation_parity.rs) 使用真实 Zod 和 Cordis，将这些操作与固定版本的服务进行比较。原生注册表测试不能证明浏览器等价性：完整的查找提供方、Host/Client Context 提供方、Remote 订阅及包导出组装仍是独立的验证义务。
+
 包产物发布仍通过 package exports 采用显式 opt-in。`WorkspaceTypertGenerator` 仅在被调用时校验所请求 face 的根目录产物协议：host face 必须通过面向用户的 subpath `package/typert` 暴露 `package/lib/typert.host.{js,d.ts}`，client face 必须通过 `package/client/typert` 暴露 `package/lib/typert.client.{js,d.ts}`；它不会修改这些 exports。后续的 [Typert Remote 设计](2026-08-02-typert-remote-method-calls.md) 为根目录 build、typecheck、lint 与文档类型检查增加了全仓 Host 约定 pass。对于已 opt-in 的 Host 包，该 pass 会在消费方解析两者之前生成本地反射产物与严格的 Host-for-Client `/remote` 约定。生成的本地声明将 `TYPERT` 类型保持为 `unknown`，因此业务包不依赖注册表。
 
 构建期的 `CordisCatalogProjector` 消费分析后的 `FaceModel` 与 `TypeGraph`，生成[子系统页面](../../../../docs/subsystems/README.md)中由标记界定的 Cordis API 区域、[框架继承层页面](../../../../docs/cordis-api/inherited.md)，以及供 `tool-cordis` 使用的静态 `SERVICE_API`、`EVENT_API` 和 `TYPE_API` catalog。Rust projector 还生成由[可移植查询模块](../../../../crates/cordis-api-catalog/src/lib.rs)消费的结构化 catalog 数据。Host 与 Client 查询从这些记录计算目录和精确约定；预期查询响应仅用于测试。固定源码中的生成查询模板把 `\b` 解释为退格字符（`U+0008`），而构建期类型闭包使用单词边界。Rust 保留这两种行为。
