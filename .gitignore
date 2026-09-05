@@ -9,6 +9,9 @@
 /python/sdk-runtime/hatch_build.py
 /python/sdk/src/deepseek_harness/*.py
 /python/sdk/src/deepseek_harness/__pycache__/
+/python/sdk/.venv/
+/python/sdk-runtime/.venv/
+/.wheel-smoke/
 /apps/web/dist/
 /apps/web/generated/
 /packages/client/*/lib/

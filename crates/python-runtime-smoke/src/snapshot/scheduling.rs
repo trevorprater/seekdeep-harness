@@ -6,7 +6,10 @@ use serde_json::Value;
 ///
 /// The source child executes independently while `ChildStarted` and `AgentStart` make
 /// a worker round trip. No parent event or another child's notification may move.
-pub(crate) fn canonical_workflow_starts(mut result: Value) -> Result<Value, String> {
+///
+/// # Errors
+/// Rejects absent child publication, malformed start markers, and unrelated crossings.
+pub fn canonical_workflow_starts(mut result: Value) -> Result<Value, String> {
     let notifications = result["notifications"]
         .as_array_mut()
         .ok_or("snapshot result has no notifications array")?;

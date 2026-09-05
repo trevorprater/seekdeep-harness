@@ -1,10 +1,7 @@
 //! Snapshot scheduling equivalence retains every event and causal constraint.
 
-#[path = "support/smoke_snapshot.rs"]
-mod smoke_snapshot;
-
+use seekdeep_python_runtime_smoke::snapshot::canonical_workflow_starts;
 use serde_json::{Value, json};
-use smoke_snapshot::canonical_workflow_starts;
 
 fn fixture() -> Value {
     json!({"events":[{"type":"tool-workflow/agent-start","seq":59}],"notifications":[

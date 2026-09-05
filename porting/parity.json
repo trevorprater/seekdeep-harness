@@ -86513,12 +86513,37 @@
     {
       "source": "scripts/smoke-python-runtime.py",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
-        "crates/jsonrpc-demo/examples/packaged_source_smoke.rs",
-        "crates/python-sdk-ffi/examples/installed_source_smoke.rs"
+        "crates/python-runtime-smoke/src/main.rs",
+        "crates/python-runtime-smoke/src/runner.rs",
+        "crates/python-runtime-smoke/src/model.rs",
+        "crates/python-runtime-smoke/src/server.rs",
+        "crates/python-runtime-smoke/src/peer.rs",
+        "crates/python-runtime-smoke/src/json.rs",
+        "crates/python-runtime-smoke/src/snapshot/mod.rs",
+        "crates/python-runtime-smoke/src/snapshot/scheduling.rs",
+        "crates/python-runtime-smoke/examples/python_runtime_smoke_source_parity.rs",
+        "crates/python-runtime-smoke/examples/python_runtime_sdk_interrupt.rs",
+        "crates/python-runtime-smoke/tests/cli_contract.rs",
+        "crates/python-runtime-smoke/tests/json_contract.rs",
+        "crates/python-runtime-smoke/tests/peer_contract.rs",
+        ".github/workflows/build-exe-for-python-sdk.yml",
+        ".github/workflows/python-release.yml",
+        ".gitlab-ci.yml"
       ],
-      "note": "all five source scenarios pass through installed macOS arm64 wheels on Python 3.10/3.14 and Linux x64/arm64 wheels on Python 3.10 in manylinux 2.28; the differential runner still consumes the external pinned Python oracle, while a standalone Rust model/scenario/snapshot CLI and replacement of CI references to this removed script remain pending"
+      "evidence": [
+        "69 model cases and failure boundaries, 8 normalization cases, and all four advanced snapshot files match the pinned Python source",
+        "cargo test -p seekdeep-python-runtime-smoke --all-features: 10 tests passed on macOS arm64 and both Linux architectures",
+        "cargo clippy -p seekdeep-python-runtime-smoke --all-targets --all-features -- -D warnings",
+        "native CLI passes all five installed-wheel scenarios on macOS arm64 with Python 3.10 and 3.14, and on Linux x64/arm64 with Python 3.10 in digest-pinned manylinux 2.28 images without an oracle checkout",
+        "both Linux native runners also pass all five scenarios after relocation to /work with a read-only checkout mount",
+        "the direct scenario passes with a nonexistent --python path, proving it uses native protocol handling without the SDK adapter",
+        "the exact uv-managed editable-SDK workflow command passes all five scenarios",
+        "installed-SDK cancellation during blocked initialization sends shutdown and reaps the runtime before exit for owner-only and foreground-group interrupts on macOS Python 3.10/3.14 and Linux x64/arm64 Python 3.10",
+        "workflow tests require native smoke entry paths, baseline-image compilation, installed-runtime lookup, and unchanged publication authorization"
+      ],
+      "note": "Rust owns model selection, scenario policy, process lifetime, JSON formatting, and snapshot validation; the Python adapter only exercises the installed public SDK API. The independent keyless SDK test job remains a separate CI assembly gap."
     },
     {
       "source": "scripts/snapshots/python-sdk-single-exe/advanced/result.json",
@@ -86528,7 +86553,8 @@
         "scripts/snapshots/python-sdk-single-exe/advanced/result.json"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "mechanical rename port (dsh to seekdeep)",
+        "native installed-SDK scenario retains every result field and notification on macOS arm64 and Linux x64/arm64, allowing only source-proven child/workflow start scheduling freedom"
       ]
     },
     {
@@ -86539,7 +86565,8 @@
         "scripts/snapshots/python-sdk-single-exe/advanced/session.1.jsonl"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "mechanical rename port (dsh to seekdeep)",
+        "native installed-SDK advanced scenario compares this complete normalized direct-child log byte for byte on macOS arm64 and Linux x64/arm64"
       ]
     },
     {
@@ -86550,7 +86577,8 @@
         "scripts/snapshots/python-sdk-single-exe/advanced/session.2.jsonl"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "mechanical rename port (dsh to seekdeep)",
+        "native installed-SDK advanced scenario compares this complete normalized workflow-child log byte for byte on macOS arm64 and Linux x64/arm64"
       ]
     },
     {
@@ -86561,7 +86589,8 @@
         "scripts/snapshots/python-sdk-single-exe/advanced/session.jsonl"
       ],
       "evidence": [
-        "mechanical rename port (dsh to seekdeep)"
+        "mechanical rename port (dsh to seekdeep)",
+        "native installed-SDK advanced scenario compares this complete normalized parent log byte for byte on macOS arm64 and Linux x64/arm64"
       ]
     },
     {

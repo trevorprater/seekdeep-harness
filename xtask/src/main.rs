@@ -4540,19 +4540,21 @@ fn classify(path: &str) -> SurfaceKind {
 fn verify_rust_only() -> anyhow::Result<()> {
     let forbidden = ["ts", "tsx", "js", "mjs", "cjs", "py", "c", "cpp"];
     let mut violations = Vec::new();
-    for entry in walkdir::WalkDir::new(".") {
+    for entry in walkdir::WalkDir::new(".")
+        .into_iter()
+        .filter_entry(|entry| {
+            !entry
+                .path()
+                .components()
+                .any(|part| matches!(part.as_os_str().to_str(), Some(".git" | "target")))
+                && !is_generated_output(entry.path())
+        })
+    {
         let entry = entry?;
         if !entry.file_type().is_file() {
             continue;
         }
         let path = entry.path();
-        if path
-            .components()
-            .any(|part| matches!(part.as_os_str().to_str(), Some(".git" | "target")))
-            || is_generated_output(path)
-        {
-            continue;
-        }
         if path
             .extension()
             .and_then(|value| value.to_str())
@@ -4576,6 +4578,9 @@ fn is_generated_output(path: &Path) -> bool {
         .filter(|component| *component != ".")
         .collect::<Vec<_>>();
     (parts.len() >= 4 && parts[0] == "packages" && parts[3] == "lib")
+        || parts.starts_with(&["python", "sdk", ".venv"])
+        || parts.starts_with(&["python", "sdk-runtime", ".venv"])
+        || parts.starts_with(&[".wheel-smoke"])
         || (parts.len() >= 3 && parts[0] == "vendor" && parts[2] == "lib")
         || (parts.len() >= 3
             && parts[0] == "apps"
@@ -6286,6 +6291,13 @@ mod tests {
 
     #[test]
     fn rust_only_gate_skips_only_named_derivative_roots() {
+        for environment in [
+            "python/sdk/.venv/lib/python3.10/site-packages/typing_extensions.py",
+            "python/sdk-runtime/.venv/lib/python3.14/site-packages/hatchling/build.py",
+            ".wheel-smoke/lib/python3.10/site-packages/deepseek_harness/__init__.py",
+        ] {
+            assert!(is_generated_output(Path::new(environment)), "{environment}");
+        }
         assert!(is_generated_output(Path::new(
             "packages/client/runtime/lib/client.js"
         )));
@@ -6314,6 +6326,8 @@ mod tests {
             assert!(is_generated_output(Path::new(binding)), "{binding}");
         }
         for source in [
+            "python/sdk/.venv-source/implementation.py",
+            "crates/unported/.venv/implementation.py",
             "python/sdk-runtime/src/deepseek_harness_runtime/implementation.py",
             "python/sdk-runtime/src/deepseek_harness_runtime/runtime/node-source/entry.js",
             "python/sdk/src/deepseek_harness/runtime/node/entry.js",

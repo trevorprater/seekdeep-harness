@@ -32,7 +32,7 @@ Hatch 绑定将策略转交给 Rust 发行工具。发行暂存提供显式工�
 
 [源码调度探针](../../../../crates/python-sdk-ffi/examples/workflow_order_source_parity.rs)表明，`workflow/agent-start` 可以在子 agent 模型解析之前、请求准备与输出之间，或子 agent 完成之后到达。子 agent 独立启动，而其句柄与启动观察经过一次工作线程往返。因此，快照比较仅允许父会话对应的 `tool-workflow/agent-start` 在 `subagent.started` 之后跨越该子 agent 自身的通知。它不能跨越其他父会话记录或兄弟会话通知；事件内容、数量、会话内顺序以及开始／结束配对仍须精确一致。[负向比较测试](../../../../crates/python-sdk-ffi/tests/smoke_snapshot.rs)拒绝这些无关变化，[真实工作流测试](../../../../crates/workflow-worker-thread/tests/integration_parity.rs)则要求启动发布不依赖模型元数据就绪。
 
-已安装的 macOS arm64 wheel 包在 Python 3.10 和 3.14 上通过这五个场景。Linux x64 与 arm64 的 release 可执行文件和绑定库在各自固定的 manylinux 2.28 镜像内构建，并在 Python 3.10 上通过已安装 wheel 包运行检查；两种载荷均不要求高于 GLIBC_2.28 的版本。这些检查覆盖了清单中所有 Python SDK 与运行时源码表面，但并不证明整个产品已等价、公开发布已就绪，或干净检出中的 CI 已具备可用的独立原生冒烟入口。
+已安装的 macOS arm64 wheel 包在 Python 3.10 和 3.14 上通过这五个场景。Linux x64 与 arm64 的 release 可执行文件和绑定库在各自固定的 manylinux 2.28 镜像内构建，并在 Python 3.10 上通过已安装 wheel 包运行检查；两种载荷均不要求高于 GLIBC_2.28 的版本。[原生冒烟运行器](../../../../crates/python-runtime-smoke/src/runner.rs)无需外部检出即可执行相同的已安装 SDK 场景，并共用受源码约束的调度比较逻辑。其处理中断的路径使用显式客户端关闭通道；直接 Python 调用方的信号处理仍需独立的源码差分证据。这些检查并不证明整个产品已等价、公开发布已就绪，或其余仓库级 CI 门禁已完成。
 
 ## 考虑过的替代方案
 

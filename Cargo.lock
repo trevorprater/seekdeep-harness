@@ -7910,6 +7910,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-python-runtime-smoke"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "clap",
+ "http-body-util",
+ "hyper 1.11.0",
+ "hyper-util",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "walkdir",
+]
+
+[[package]]
 name = "seekdeep-python-sdk"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -7930,6 +7946,7 @@ name = "seekdeep-python-sdk-ffi"
 version = "0.1.0-rc.5"
 dependencies = [
  "parking_lot",
+ "seekdeep-python-runtime-smoke",
  "seekdeep-python-sdk",
  "serde",
  "serde_json",

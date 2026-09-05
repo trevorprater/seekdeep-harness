@@ -187,3 +187,50 @@ fn native_builders_keep_manylinux_compilation_and_validation_on_the_same_pinned_
     }
     assert_eq!(gitlab["publish-python"]["resource_group"], "python-release");
 }
+
+#[test]
+fn smoke_workflows_use_the_native_runner_and_installed_wheel_payloads() {
+    let build_text = include_str!("../../../.github/workflows/build-exe-for-python-sdk.yml");
+    let release_text = include_str!("../../../.github/workflows/python-release.yml");
+    let gitlab_text = include_str!("../../../.gitlab-ci.yml");
+    for text in [build_text, release_text, gitlab_text] {
+        assert!(!text.contains("scripts/smoke-python-runtime.py"));
+        assert!(text.contains("seekdeep-python-runtime-smoke"));
+        assert!(text.contains("python_runtime_sdk_interrupt"));
+        assert!(!text.contains("/Users/trevor/ws/deepseek-harness"));
+        assert!(!text.contains("source_parity"));
+    }
+    let build = workflow(build_text);
+    let steps = build["jobs"]["build"]["steps"].as_array().unwrap();
+    let native = steps
+        .iter()
+        .find(|step| step["name"] == "Build Rust executable against manylinux 2.28")
+        .unwrap()["run"]
+        .as_str()
+        .unwrap();
+    assert!(native.contains("cargo build --locked -p seekdeep-python-runtime-smoke"));
+    assert!(native.contains("--bin smoke-python-runtime --example python_runtime_sdk_interrupt"));
+    let installed = steps
+        .iter()
+        .find(|step| {
+            step["name"] == "Install only the SDK into a clean venv and validate all scenarios"
+        })
+        .unwrap()["run"]
+        .as_str()
+        .unwrap();
+    assert!(installed.contains("bundled_runtime_path()"));
+    assert!(installed.contains("--scenario all --exe \"$sdk_installed_runtime\""));
+    let baseline = steps
+        .iter()
+        .find(|step| step["name"] == "Run wheel in a manylinux 2.28 container")
+        .unwrap()["run"]
+        .as_str()
+        .unwrap();
+    assert!(baseline.contains("/work/target/manylinux/debug/smoke-python-runtime --root /work"));
+    assert!(baseline.contains("--python /tmp/seekdeep-sdk/bin/python --scenario all"));
+    assert!(
+        baseline.contains("/work/target/manylinux/debug/examples/python_runtime_sdk_interrupt")
+    );
+    assert!(gitlab_text.contains("/work/target/manylinux/debug/smoke-python-runtime --root /work"));
+    assert!(gitlab_text.contains("--python /tmp/seekdeep-sdk/bin/python --scenario all"));
+}

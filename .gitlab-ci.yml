@@ -60,17 +60,23 @@ sdk-wheel:
           -e PKG_TARGET -e CI=true -w "$PWD" "$image" bash -euxo pipefail -c '
             export PATH="$SEEKDEEP_RUST_BIN:$PATH"
             cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$PKG_TARGET"
+            cargo build --locked -p seekdeep-python-runtime-smoke --bin smoke-python-runtime --example python_runtime_sdk_interrupt
           '
       else
         cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$PKG_TARGET"
       fi
     - EXE="$PWD/dist-exe/seekdeep-jsonrpc-agent-pkg-$PLATFORM"
     - test -x "$EXE"
-    - uv run --python 3.10 --group test --project python/sdk python scripts/smoke-python-runtime.py --scenario all --exe "$EXE"
+    - uv run --python 3.10 --group test --project python/sdk cargo run --locked -p seekdeep-python-runtime-smoke -- --root "$PWD" --scenario all --exe "$EXE"
     - cargo run --quiet --locked -p seekdeep-python-release -- build --package runtime --tag "$CI_COMMIT_TAG" --platform "$PLATFORM" --runtime-exe "$EXE" --output-dir "release/$PLATFORM"
     - python -m venv .wheel-smoke
     - .wheel-smoke/bin/python -m pip install --find-links "release/$PLATFORM" --find-links release/sdk seekdeep-harness-sdk=="$SEEKDEEP_WHEEL_VERSION"
-    - .wheel-smoke/bin/python scripts/smoke-python-runtime.py --scenario sdk-default
+    - |
+      sdk_installed_runtime="$(.wheel-smoke/bin/python -I -c "from deepseek_harness_runtime import bundled_runtime_path; print(bundled_runtime_path())")"
+      cargo run --locked -p seekdeep-python-runtime-smoke -- --root "$PWD" \
+        --python "$PWD/.wheel-smoke/bin/python" --scenario all --exe "$sdk_installed_runtime"
+      cargo run --locked -p seekdeep-python-runtime-smoke --example python_runtime_sdk_interrupt -- \
+        "$PWD/.wheel-smoke/bin/python"
     - |
       if [ "${PLATFORM#linux-}" != "$PLATFORM" ]; then
         readelf --version-info "$EXE" "$PWD/dist-exe/seekdeep-python-sdk-ffi-$PLATFORM.so" > glibc-versions.txt
@@ -82,7 +88,14 @@ sdk-wheel:
           linux-arm64) image="$MANYLINUX_ARM64_IMAGE" ;;
           *) echo "Unsupported Linux platform $PLATFORM"; exit 1 ;;
         esac
-        docker run --rm -v "$PWD:/work" -w /work "$image" bash -euxo pipefail -c "/opt/python/cp310-cp310/bin/python -m venv /tmp/seekdeep-sdk && /tmp/seekdeep-sdk/bin/python -m pip install --find-links /work/release/$PLATFORM --find-links /work/release/sdk seekdeep-harness-sdk==$SEEKDEEP_WHEEL_VERSION && /tmp/seekdeep-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-default"
+        docker run --rm -e PLATFORM -e SEEKDEEP_WHEEL_VERSION -v "$PWD:/work" -w /work "$image" bash -euxo pipefail -c '
+          /opt/python/cp310-cp310/bin/python -m venv /tmp/seekdeep-sdk
+          /tmp/seekdeep-sdk/bin/python -m pip install --find-links /work/release/"$PLATFORM" --find-links /work/release/sdk seekdeep-harness-sdk=="$SEEKDEEP_WHEEL_VERSION"
+          sdk_installed_runtime="$(/tmp/seekdeep-sdk/bin/python -I -c "from deepseek_harness_runtime import bundled_runtime_path; print(bundled_runtime_path())")"
+          /work/target/manylinux/debug/smoke-python-runtime --root /work \
+            --python /tmp/seekdeep-sdk/bin/python --scenario all --exe "$sdk_installed_runtime"
+          /work/target/manylinux/debug/examples/python_runtime_sdk_interrupt /tmp/seekdeep-sdk/bin/python
+        '
       fi
     - |
       if [ "$PLATFORM" = macos-arm64 ]; then

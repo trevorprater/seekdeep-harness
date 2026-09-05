@@ -16,6 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+seekdeep-python-runtime-smoke = { path = "../python-runtime-smoke" }
 tempfile.workspace = true
 
 # C callers pass borrowed byte pointers and callbacks. Only this crate may

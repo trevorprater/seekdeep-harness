@@ -212,6 +212,7 @@ jobs:
             bash -euxo pipefail -c '
               export PATH="$SEEKDEEP_RUST_BIN:$PATH"
               cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$TARGET"
+              cargo build --locked -p seekdeep-python-runtime-smoke --bin smoke-python-runtime --example python_runtime_sdk_interrupt
             '
 
       - name: Build Rust macOS executable and helper
@@ -249,7 +250,8 @@ jobs:
       - name: Full-turn SDK, executable snapshot, and direct-binary smoke
         run: >-
           uv run --python 3.10 --group test --project python/sdk
-          python scripts/smoke-python-runtime.py
+          cargo run --locked -p seekdeep-python-runtime-smoke --
+          --root "$PWD"
           --scenario all
           --exe "${{ steps.runtime.outputs.exe }}"
 
@@ -266,7 +268,7 @@ jobs:
           name: seekdeep_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
           path: dist-python
 
-      - name: Install only the SDK into a clean venv and run zero-config
+      - name: Install only the SDK into a clean venv and validate all scenarios
         env:
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
@@ -275,8 +277,12 @@ jobs:
           "$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python" -m pip install \
             --find-links dist-python \
             seekdeep-harness-sdk=="$VERSION"
-          "$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python" scripts/smoke-python-runtime.py \
-            --scenario sdk-default
+          sdk_installed_runtime="$("$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python" -I -c "from deepseek_harness_runtime import bundled_runtime_path; print(bundled_runtime_path())")"
+          cargo run --locked -p seekdeep-python-runtime-smoke -- --root "$PWD" \
+            --python "$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python" \
+            --scenario all --exe "$sdk_installed_runtime"
+          cargo run --locked -p seekdeep-python-runtime-smoke --example python_runtime_sdk_interrupt -- \
+            "$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python"
 
       - name: Check Linux GLIBC requirements
         if: runner.os == 'Linux'
@@ -314,7 +320,10 @@ jobs:
           docker run --rm -e VERSION -e SEEKDEEP_TELEMETRY_DISABLED -v "$PWD:/work" -w /work "$image" bash -euxo pipefail -c '
             /opt/python/cp310-cp310/bin/python -m venv /tmp/seekdeep-sdk
             /tmp/seekdeep-sdk/bin/python -m pip install --find-links /work/dist-python seekdeep-harness-sdk=="$VERSION"
-            /tmp/seekdeep-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-default
+            sdk_installed_runtime="$(/tmp/seekdeep-sdk/bin/python -I -c "from deepseek_harness_runtime import bundled_runtime_path; print(bundled_runtime_path())")"
+            /work/target/manylinux/debug/smoke-python-runtime --root /work \
+              --python /tmp/seekdeep-sdk/bin/python --scenario all --exe "$sdk_installed_runtime"
+            /work/target/manylinux/debug/examples/python_runtime_sdk_interrupt /tmp/seekdeep-sdk/bin/python
           '
 
       - uses: actions/upload-artifact@v7

@@ -24,13 +24,19 @@ Status: implemented
 
 GitHub 和 GitLab 的运行时构建作业在按架构选择、按摘要固定的 manylinux 2.28 容器内编译 Linux 可执行文件，并使用相同镜像验证已安装的 wheel 包。runner 在 Docker 挂载前创建自身的缓存目录，因此非 root 构建用户可以写入这些目录，而不会由 Docker 创建 root 所有的挂载源目录。容器编译与宿主平台 wheel 工具使用独立的 Cargo 目标目录。macOS 编译默认采用 13.5 部署目标，既有部署目标门禁会依据已发布的平台标签检查可执行文件、辅助程序和绑定库。
 
+[原生冒烟运行器](../../../../crates/python-runtime-smoke/src/runner.rs)负责回环模型、场景选择、进程清理、日志验证和快照比较。其 Python 适配器分发公开 SDK 调用，并编组值与异常。SDK 操作在适配器工作线程上运行，因此即使原生调用阻塞，控制读取线程仍然可用。Rust 请求 `client.close()`，等待 SDK 操作与运行时结束后，再回收适配器进程。`--python` 选择解释器，同时保留其虚拟环境符号链接，不将其解析为链接目标；`--root` 选择检出中的 minimal 组合与预期快照。
+
+既有的场景选项、缩写、最后一个值生效规则和显式快照更新继续受支持。每个 SDK 请求保留自身的超时；直接协议读取保留源码的 60 秒期限，进程关闭保留十秒宽限期。Ctrl-C 取消待处理的传输操作，并沿既有所有权执行清理，其中也包括将中断发送到适配器所在前台进程组的情况。Linux 作业在基线镜像内编译运行器，并用它验证已安装 wheel 包的载荷，无需外部源码基准检出。
+
+[Rust 源码审计](../../../../xtask/src/main.rs)仅将 SDK 项目中具名的 `.venv` 目录和 CI 的 `.wheel-smoke` 目录作为生成的 Python 环境排除。相邻源码目录与名称相似的路径仍须遵守仅使用 Rust 的要求。
+
 ## 验证
 
 [目录测试](../../../../crates/jsonrpc-demo/tests/runtime_catalog_parity.rs)覆盖环境包拒绝、显式文件加载、清理与重新打开后的 SQLite 持久化，以及在空环境中通过移动后的可执行文件执行工作线程协议。[源码对比](../../../../crates/jsonrpc-demo/examples/catalog_source_parity.rs)通过源码路径别名加载固定版本模块，并检查具体工厂的可用性和必需服务声明。[源码模型冒烟测试](../../../../crates/jsonrpc-demo/examples/packaged_source_smoke.rs)通过移动后的 SDK 进程执行文本、代码执行和零 agent（智能体）工作流轮次，并检查持久日志。[审批测试](../../../../crates/user-approval/tests/approval_policy_parity.rs)固定独立服务可用性、可选提供方的生命周期以及可重入通知处理。
 
 [构建器对比](../../../../crates/python-release/examples/executable_source_parity.rs)依据固定版本的源码解析器检查 60 个目标、宿主平台和选项用例。[产物测试](../../../../crates/python-release/tests/executable_parity.rs)覆盖 dry-run 隔离和无效原生文件。[源码 PTY 调用方](../../../../crates/pty-spawn-helper/examples/source_pty_parity.rs)通过固定版本的 node-pty 实现验证编译后的辅助程序。真实的 macOS arm64 release 构建通过移动后的可执行文件和生成的 Node 载体，均完成三轮源码模型冒烟测试及持久日志检查。延迟发送的 SDK 请求固定标准流交接行为。
 
-[Python 运行时绑定 ABI](2026-09-04-rust-python-runtime-binding-abi.md)提供由 Rust 支撑的载体查找、客户端类、共享可变观察对象和按目标生成的原生库。其已安装 wheel 包对比在每个公布的平台上覆盖默认 SDK 启动、自定义文本／代码／工作流轮次、minimal 与 advanced 场景，以及直接运行时检查。这些检查并不证明分发已完全等价：抽象服务构造器兼容性和干净检出中的 CI 组合仍是独立缺口。独立冒烟命令和工作流调用路径需要各自的原生实现；使用外部源码基准的差分运行器并不提供该 CI 入口。
+[Python 运行时绑定 ABI](2026-09-04-rust-python-runtime-binding-abi.md)提供由 Rust 支撑的载体查找、客户端类、共享可变观察对象和按目标生成的原生库。其已安装 wheel 包对比在每个公布的平台上覆盖默认 SDK 启动、自定义文本／代码／工作流轮次、minimal 与 advanced 场景，以及直接运行时检查。冒烟运行器的[源码对比](../../../../crates/python-runtime-smoke/examples/python_runtime_smoke_source_parity.rs)固定模型决策与失败、易变值规范化，以及全部四个 advanced 快照文件。[传输检查](../../../../crates/python-runtime-smoke/tests/peer_contract.rs)固定无效帧、stderr 保留和强制清理行为。[已安装 SDK 中断探针](../../../../crates/python-runtime-smoke/examples/python_runtime_sdk_interrupt.rs)验证初始化阻塞时的关闭与运行时进程回收，分别覆盖仅向所有者发送中断和向前台进程组发送中断。抽象服务构造器兼容性与独立的免密钥 SDK 测试作业组合仍是各自的覆盖缺口；这些检查并不证明分发已完全等价或仓库级 CI 已就绪。
 
 ## 考虑过的替代方案
 
@@ -45,6 +51,10 @@ GitHub 和 GitLab 的运行时构建作业在按架构选择、按摘要固定�
 **让 Node 继续作为开发模式的监控进程。** 这会增加一个进程所有者，并改变信号和退出传播。仅负责启动的进程替换让运行时行为与生命周期留在 Rust 中。
 
 **在 runner 上编译 Linux 可执行文件，仅在 manylinux 中测试。** 这可能在验证开始前就引入更高版本的 libc 要求。编译和已安装 wheel 包检查共用固定的基线镜像。
+
+**将外部 Python 源码冒烟测试作为 CI 入口。** 这要求额外检出，并将模型与验证策略留在 Rust 之外。原生运行器提供完整的 CI 路径；源码探针继续作为独立的差分证据。
+
+**不请求 SDK 关闭就停止 Python 适配器。** 阻塞的原生 SDK 调用可能比适配器控制线程存活更久，使运行时失去所有者。关闭控制通道可在 SDK 操作待处理时调用公开客户端，并让清理继续由 Rust 运行器负责。
 
 ## 后果
 

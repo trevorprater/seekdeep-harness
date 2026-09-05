@@ -7,8 +7,7 @@ use std::{
 
 use serde_json::Value;
 
-#[path = "../tests/support/smoke_snapshot.rs"]
-mod smoke_snapshot;
+use seekdeep_python_runtime_smoke::snapshot as smoke_snapshot;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
