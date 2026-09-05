@@ -85485,7 +85485,17 @@
     {
       "source": "scripts/check-workspace-constraints.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/workspace_constraints.rs",
+        "crates/repository-tools/src/workspace_constraints/package.rs",
+        "crates/repository-tools/src/bin/check-workspace-constraints.rs",
+        "crates/repository-tools/tests/workspace_constraints_parity.rs"
+      ],
+      "evidence": [
+        "whole-command pinned-source fixtures compare ordered diagnostics and exit status for publication, dependency, export, version, artifact-directory, and hierarchy rules",
+        "pnpm run constraints invokes Rust and exposes remaining workspace packaging/layout violations; implementing the checker does not assert the workspace satisfies it"
+      ]
     },
     {
       "source": "scripts/ci-workflow.spec.ts",

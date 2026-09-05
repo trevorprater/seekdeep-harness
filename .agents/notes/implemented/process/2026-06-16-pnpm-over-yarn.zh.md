@@ -17,7 +17,7 @@ Status: implemented
 - **Workspaces** 从 `package.json` 的 `workspaces` 数组 + `.yarnrc.yml` 迁移到 `pnpm-workspace.yaml`（`vendor/*`、`packages/*`——同样的 glob；`examples/*` 保持非 workspace，与先前设置及 tsdown 的显式 glob 一致）。
 - **严格符号链接链接器**（pnpm 默认）取代 Yarn 的提升式 `node-modules` 链接器。我们刻意**不**添加 `node-linker=hoisted` / `shamefully-hoist` 逃生口：pnpm 的非扁平 `node_modules` 会使幻影依赖（引用未声明的传递依赖）明确报错，这对于一个以机械门禁为核心质量保障的仓库（见[机械质量门禁](2026-06-11-quality-gates.md)）是一项*优势*。门禁套件（类型检查、lint、test、build、knip）是证明不存在此类幻影导入的安全网。
 - **构建脚本白名单。** pnpm 10+ 不运行依赖的生命周期脚本，除非将其加入白名单。`pnpm-workspace.yaml` 携带一份显式的 `allowBuilds` 映射（`esbuild`、`lefthook`、`@google/genai`、`protobufjs`）——与本仓库对模型/工具输出已有的供应链加固姿态一致，现在也应用于安装时的代码执行。`peerDependencyRules.allowedVersions.typescript: '>=5 <7'` 消除仓库内 TypeScript 的良性 peer 范围警告。
-- **约束变为包管理器无关。** `yarn.config.cjs`（导入 `@yarnpkg/types`，使用 `Yarn.workspaces()` / `workspace.set()`）被 `scripts/check-workspace-constraints.ts` 取代——一个纯 tsx 脚本，通过 `pnpm run constraints` 运行。它在相同的 `vendor` + `packages` 范围上强制执行完全相同的不变式：每个包 `private: true`；`@seekdeep-ai/seekdeep-*` 包将 `cordis` 同时声明为对等依赖（peer dependency）和 dev 依赖且范围一致、使用根 `package.json` 的版本、设置 `type: module`；vendor 包仅检查是否为私有。
+- **约束与包管理器无关。** `pnpm run constraints` 调用 [Rust workspace 检查器](../../../../crates/repository-tools/src/workspace_constraints.rs)。它检查包层级、发布系列版本、发布元数据与内容、范围匹配的 Cordis 对等依赖（peer dependency）和 dev 依赖、兼容导出、`workspace:` 依赖范围，以及 Host/Client 项目引用隔离。[差分 fixture（测试前置数据）](../../../../crates/repository-tools/tests/workspace_constraints_parity.rs) 将完整且有序的诊断与固定版本的源命令进行比较；检查器不会静默忽略缺失的发现根目录，也不会改写 manifest（元数据清单）。
 - 所有 CI、lefthook 钩子、`package.json` 脚本和文档中的 `yarn …` 动词变为 `pnpm …` / `pnpm run …`。`yarn.lock` → `pnpm-lock.yaml`（lockfile v9）。`.gitignore` 将 `.yarn/` 换为 `.pnpm-store/`。vendor README（如 `vendor/cordis/README.md`）按 Vendoring Policy 保持其上游 `yarn` 示例不变。
 
 ## 曾考虑的替代方案
@@ -28,7 +28,7 @@ Status: implemented
 
 ## 后果
 
-约束检查失去了 Yarn 的自动**修复**能力（`workspace.set()` 能原地改写 manifest）；tsx 脚本仅做检查，不通过时以非零退出码和消息退出。这是可接受的：CI 从未运行过 `--fix`，且需要手动编辑的情况很少。贡献者现在为 pnpm 而非 Yarn 运行 `corepack enable`；`pnpm exec lefthook install` 取代 `yarn lefthook install`（`postinstall` 钩子仍会运行 `lefthook install`）。
+约束检查不提供 Yarn 的自动**修复**能力（`workspace.set()` 能原地改写 manifest）；Rust 命令仅做检查，不通过时以非零退出码和诊断退出。这是可接受的：CI 从未运行过 `--fix`，且需要手动编辑的情况很少。贡献者现在为 pnpm 而非 Yarn 运行 `corepack enable`；`pnpm exec lefthook install` 取代 `yarn lefthook install`（`postinstall` 钩子仍会运行 `lefthook install`）。
 
 性能（迁移时在开发 NFS 文件系统上测量；运行次数为个位数的样本，方差大——仅供方向性参考，非基准测试套件）：
 
