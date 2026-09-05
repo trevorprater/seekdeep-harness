@@ -13,7 +13,7 @@ use bytes::Bytes;
 use http_body_util::{BodyExt as _, Full};
 use hyper::{Method, Response, StatusCode, header};
 use indexmap::{IndexMap, IndexSet};
-use parking_lot::RwLock;
+use parking_lot::{ReentrantMutex, RwLock};
 use percent_encoding::percent_decode_str;
 use seekdeep_cordis::{
     Context, EventOptions, Plugin, PluginFiber, ServiceKey, fiber::EffectHandle,
@@ -254,6 +254,7 @@ struct HostState {
     table: IndexMap<ClientModuleId, WebPluginRecord>,
     metadata: HashMap<ClientModuleId, Option<ClientPackageMetadata>>,
     dirty: IndexSet<ClientModuleId>,
+    membership: IndexMap<ClientModuleId, bool>,
     graph: Arc<WebBootGraph>,
     rebuild_listeners: IndexMap<u64, RebuildListener>,
     graph_listeners: IndexMap<u64, GraphListener>,
@@ -265,6 +266,7 @@ pub struct ClientModuleHost {
     resolver: Arc<dyn ClientPackageResolver>,
     logger: HostLogger,
     state: RwLock<HostState>,
+    publication: ReentrantMutex<()>,
 }
 
 impl std::fmt::Debug for ClientModuleHost {
@@ -293,10 +295,12 @@ impl ClientModuleHost {
         let host = Arc::new(Self {
             resolver,
             logger,
+            publication: ReentrantMutex::new(()),
             state: RwLock::new(HostState {
                 table: IndexMap::new(),
                 metadata: HashMap::new(),
                 dirty: entries.iter().map(|entry| entry.name.clone()).collect(),
+                membership: entry_membership(entries),
                 graph: Arc::new(WebBootGraph {
                     rev: short_hash(b"[]"),
                     entries: Vec::new(),
@@ -317,12 +321,23 @@ impl ClientModuleHost {
     /// Stable graph reference until the next table or revision change.
     #[must_use]
     pub fn graph(&self) -> Arc<WebBootGraph> {
+        let _publication = self.publication.lock();
         self.state.read().graph.clone()
+    }
+
+    /// Publishes any observed Loader membership delta before serving a boot graph.
+    /// Metadata and bundle revisions retain their existing cache lifetimes.
+    #[must_use]
+    pub fn graph_for_entries(&self, entries: &[ClientHostEntry]) -> Arc<WebBootGraph> {
+        let _publication = self.publication.lock();
+        self.reconcile_snapshot(entries);
+        self.graph()
     }
 
     /// Absolute bundle path for one known graph row.
     #[must_use]
     pub fn client_path(&self, id: &ClientModuleId) -> Option<PathBuf> {
+        let _publication = self.publication.lock();
         self.state
             .read()
             .table
@@ -332,7 +347,24 @@ impl ClientModuleHost {
 
     /// Marks one Loader package dirty and reconciles all marked names.
     pub fn reconcile(&self, entry: ClientModuleId, entries: &[ClientHostEntry]) {
+        let _publication = self.publication.lock();
         self.state.write().dirty.insert(entry);
+        self.reconcile_snapshot(entries);
+    }
+
+    fn reconcile_snapshot(&self, entries: &[ClientHostEntry]) {
+        let current = entry_membership(entries);
+        {
+            let mut state = self.state.write();
+            let changed = current
+                .keys()
+                .chain(state.membership.keys())
+                .filter(|name| current.get(*name) != state.membership.get(*name))
+                .cloned()
+                .collect::<IndexSet<_>>();
+            state.dirty.extend(changed);
+            state.membership = current;
+        }
         for failure in self.flush(entries) {
             (self.logger)(failure.message);
         }
@@ -344,6 +376,7 @@ impl ClientModuleHost {
     ///
     /// Returns bundle read failures.
     pub fn rebuilt(&self, id: &ClientModuleId) -> anyhow::Result<Option<String>> {
+        let _publication = self.publication.lock();
         let (rev, listeners, graph_listeners) = {
             let mut state = self.state.write();
             let Some(record) = state.table.get_mut(id) else {
@@ -448,6 +481,7 @@ impl ClientModuleHost {
     }
 
     fn flush(&self, entries: &[ClientHostEntry]) -> Vec<CompositionFailure> {
+        let _publication = self.publication.lock();
         let dirty = std::mem::take(&mut self.state.write().dirty);
         let mut changed = false;
         let mut failures = Vec::new();
@@ -622,7 +656,7 @@ pub fn install_client_module_host_with_resolver(
         Arc::new(|message| tracing::warn!(%message, "client module composition warning")),
     )?;
     context.provide(CLIENT_MODULES, host.clone())?;
-    register_web_faces(context, &web_server, &host)?;
+    register_web_faces(context, &web_server, &host, loader.clone())?;
     let event_host = host.clone();
     let event_loader = loader.clone();
     context.events().on(
@@ -686,6 +720,7 @@ fn register_web_faces(
     context: &Context,
     web_server: &WebServer,
     host: &Arc<ClientModuleHost>,
+    loader: Arc<seekdeep_loader::LoaderSettlement>,
 ) -> anyhow::Result<()> {
     let route_host = host.clone();
     let route: WebHandler = Arc::new(move |request| {
@@ -699,7 +734,14 @@ fn register_web_faces(
     })?;
     let graph_host = host.clone();
     let tap = web_server.tap_index(Arc::new(move |html| {
-        inject_boot_manifest(&html, &graph_host.graph())
+        let graph = match loader.entries() {
+            Ok(entries) => graph_host.graph_for_entries(&host_entries(&entries)),
+            Err(error) => {
+                (graph_host.logger)(error.to_string());
+                graph_host.graph()
+            }
+        };
+        inject_boot_manifest(&html, &graph)
     }));
     route.own(context, "client-modules: bundle route")?;
     tap.own(context, "client-modules: boot manifest injection")?;
@@ -734,6 +776,15 @@ fn host_entries(snapshots: &[LoaderEntrySnapshot]) -> Vec<ClientHostEntry> {
             disabled: entry.disabled,
         })
         .collect()
+}
+
+fn entry_membership(entries: &[ClientHostEntry]) -> IndexMap<ClientModuleId, bool> {
+    let mut membership = IndexMap::new();
+    for entry in entries {
+        let eligible = membership.entry(entry.name.clone()).or_insert(false);
+        *eligible |= entry.mounted && !entry.disabled;
+    }
+    membership
 }
 
 fn parse_client_declaration(

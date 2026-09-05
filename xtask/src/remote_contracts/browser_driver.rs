@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-const [source, host, output, typedConsumer] = process.argv.slice(2);
+const [source, host, output, typedConsumer, loaderMode] = process.argv.slice(2);
 const require = createRequire(join(source, 'apps/web/package.json'));
 const { chromium } = require('playwright');
 const root = process.cwd();
@@ -27,6 +27,11 @@ try {
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   page.setDefaultTimeout(30000);
+  const evaluate = async (callback, args) => {
+    let deadline;
+    try { return await Promise.race([page.evaluate(callback, args), new Promise((resolve, reject) => { deadline = setTimeout(() => reject(new Error('browser Remote scenario timed out')), 30000); })]); }
+    finally { clearTimeout(deadline); }
+  };
   page.on('pageerror', error => console.error('browser error:', error.message));
   const requests = [];
   const responseReads = [];
@@ -40,6 +45,21 @@ try {
   const assets = {};
   for (const path of ['vendor/cordis/lib/client.js', 'vendor/cordis/lib/index.js', 'packages/typert/registry/lib/client.js', 'packages/client/connection/lib/client.js', 'packages/api/gateway/lib/client.js', 'packages/api/remotes/lib/client.js']) assets[path] = await readFile(join(root, path), 'utf8');
   const bytes = (await readFile(join(root, 'vendor/cordis/lib/client_bg.wasm'))).toString('base64');
+  let loaderAssets;
+  if (loaderMode) {
+    const html = await (await fetch(origin)).text();
+    const match = /window\.__SEEKDEEP_BOOT__ = ([\s\S]*?)<\/script>/.exec(html);
+    if (!match) throw new Error('Rust Host did not publish its boot manifest');
+    const readRuntime = async (directory, stem, entry = 'index.js') => ({
+      wrapper: await readFile(join(root, directory, entry), 'utf8'),
+      bindings: await readFile(join(root, directory, stem + '.js'), 'utf8'),
+      bytes: (await readFile(join(root, directory, stem + '_bg.wasm'))).toString('base64'), stem,
+    });
+    loaderAssets = { boot: JSON.parse(match[1]), loader: await readRuntime('vendor/loader/lib', 'client'), modules: await readRuntime('packages/client/modules/lib', 'wasm', 'client.js') };
+    for (const id of ['@seekdeep-ai/seekdeep-api-remotes', '@seekdeep-ai/seekdeep-api-gateway', '@seekdeep-ai/seekdeep-typert-registry', '@seekdeep-ai/seekdeep-client-connection']) {
+      if (!loaderAssets.boot.entries.some(entry => entry.id === id)) throw new Error('initial Host boot graph omitted ' + id);
+    }
+  }
   const publicContracts = [];
   let typedSource;
   let zodSource;
@@ -49,20 +69,46 @@ try {
     const model = JSON.parse(await readFile(join(root, 'crates/api-remotes-client/contracts/host-model.json'), 'utf8'));
     for (const pkg of model.face.packages) publicContracts.push({ name: pkg.name.replace('@deepseek-ai/dsh-', '@seekdeep-ai/seekdeep-'), code: await readFile(join(root, pkg.root, 'lib/typert.remote-client.js'), 'utf8') });
   }
-  await page.evaluate(async ({ assets, bytes, publicContracts, typedSource, zodSource }) => {
+  await evaluate(async ({ assets, bytes, publicContracts, typedSource, zodSource, loaderAssets }) => {
     const blob = text => URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
     const binding = blob(assets['vendor/cordis/lib/client.js']);
     const module = blob(assets['vendor/cordis/lib/index.js'].replace("'./client.js'", JSON.stringify(binding)).replace("new URL('./client_bg.wasm', import.meta.url)", `Uint8Array.from(atob(${JSON.stringify(bytes)}), c => c.charCodeAt(0))`));
     const cordis = await import(module);
     const handoffs = new Map();
-    window.__ModuleLoader__ = { load(row) { handoffs.set(row.id, row); } };
-    for (const path of Object.keys(assets).filter(path => path.startsWith('packages/'))) {
-      const script = document.createElement('script'); script.textContent = assets[path]; document.head.append(script);
-    }
     const client = new cordis.Context();
-    for (const id of ['@seekdeep-ai/seekdeep-typert-registry', '@seekdeep-ai/seekdeep-client-connection', '@seekdeep-ai/seekdeep-api-gateway', '@seekdeep-ai/seekdeep-api-remotes']) {
-      const row = handoffs.get(id); if (!row) throw new Error('missing built module ' + id);
-      const plugin = row.factory(); await client.plugin(plugin);
+    if (loaderAssets) {
+      const loadRuntime = async value => {
+        const bindings = blob(value.bindings);
+        const url = blob(value.wrapper.replace(`'./${value.stem}.js'`, JSON.stringify(bindings)).replace(`new URL('./${value.stem}_bg.wasm', import.meta.url)`, `Uint8Array.from(atob(${JSON.stringify(value.bytes)}), c => c.charCodeAt(0))`));
+        const module = await import(url); URL.revokeObjectURL(url); URL.revokeObjectURL(bindings); return module;
+      };
+      const loaderModule = await loadRuntime(loaderAssets.loader);
+      const modulesModule = await loadRuntime(loaderAssets.modules);
+      const boot = modulesModule.parseBootManifest(loaderAssets.boot);
+      const modules = new modulesModule.ClientModuleSystem({ modules: boot.modules, staticModules: { '@seekdeep-ai/cordis': cordis } });
+      await client.plugin(loaderModule.default);
+      const loader = client.get('loader'); loader.internal = modules;
+      const disabled = await loader.create({ id: 'disabled', name: '@seekdeep-ai/seekdeep-api-remotes', disabled: true });
+      if (loader.resolve(disabled).fiber !== undefined) throw new Error('disabled Loader entry acquired a fiber');
+      if (modules.loadCache.has('@seekdeep-ai/seekdeep-api-remotes')) throw new Error('disabled Loader entry imported its module');
+      await loader.remove(disabled);
+      const entries = [
+        { id: 'remotes', name: '@seekdeep-ai/seekdeep-api-remotes' },
+        { id: 'gateway', name: '@seekdeep-ai/seekdeep-api-gateway' },
+        { id: 'registry', name: '@seekdeep-ai/seekdeep-typert-registry' },
+        { id: 'connection', name: '@seekdeep-ai/seekdeep-client-connection' },
+      ];
+      await Promise.all(entries.map(entry => loader.create(entry))); await loader.await();
+      window.remotePathLoader = { loader, modules, connection: entries[3] };
+    } else {
+      window.__ModuleLoader__ = { load(row) { handoffs.set(row.id, row); } };
+      for (const path of Object.keys(assets).filter(path => path.startsWith('packages/'))) {
+        const script = document.createElement('script'); script.textContent = assets[path]; document.head.append(script);
+      }
+      for (const id of ['@seekdeep-ai/seekdeep-typert-registry', '@seekdeep-ai/seekdeep-client-connection', '@seekdeep-ai/seekdeep-api-gateway', '@seekdeep-ai/seekdeep-api-remotes']) {
+        const row = handoffs.get(id); if (!row) throw new Error('missing built module ' + id);
+        const plugin = row.factory(); await client.plugin(plugin);
+      }
     }
     window.remotePathClient = client;
     if (typedSource) {
@@ -84,8 +130,8 @@ try {
       URL.revokeObjectURL(zodUrl);
     }
     URL.revokeObjectURL(binding); URL.revokeObjectURL(module);
-  }, { assets, bytes, publicContracts, typedSource, zodSource });
-  const result = await page.evaluate(async ({ root }) => {
+  }, { assets, bytes, publicContracts, typedSource, zodSource, loaderAssets });
+  const result = await evaluate(async ({ root }) => {
     const client = window.remotePathClient;
     const assert = (value, message) => { if (!value) throw new Error(message); };
     let sequence = 0;
@@ -147,13 +193,31 @@ try {
       typed = { ...result, packages: runtime.contributions.length, goalEvents: count(history), remainingDescriptors: registry.remotes.list().length };
     }
     const registry = client.typert;
+    let lifecycle;
+    if (window.remotePathLoader) {
+      const { loader, modules, connection } = window.remotePathLoader;
+      const retained = client.remote.goals.edit;
+      await loader.remove(connection.id); await loader.await();
+      assert(registry.remotes.list().length === 0, 'provider loss retained Remote descriptors');
+      assert(loader.resolve('gateway').fiber.state === 0 && loader.resolve('remotes').fiber.state === 0, 'dependents did not become pending');
+      const stale = await retained(first.sessionId, { id: edited.value.id, revision: 2 }, { objective: 'stale handle must not run' });
+      assert(!stale.ok, 'retained handle survived provider loss');
+      await loader.create(connection); await loader.await();
+      assert(registry.remotes.list().length === 24, 'provider remount did not restore descriptors');
+      const resumed = await client.remote.goals.edit(first.sessionId, { id: edited.value.id, revision: 2 }, { objective: 'remounted goal' });
+      assert(resumed.ok && resumed.value.revision === 3, 'remounted call failed');
+      const history = await callHost('session.history', { sessionId: first.sessionId });
+      assert(count(history) === 3, 'remounted call did not persist');
+      lifecycle = { entries: loader.entries().length, modules: modules.loadCache.size, goalEvents: count(history), staleRejected: !stale.ok };
+    }
     await client.fiber.dispose();
     assert(registry.remotes.list().length === 0, 'Remote descriptors survived teardown');
-    return { descriptors: descriptors.length, invalidRejected, undefinedPreserved: true, cancellation: cancelled.error, hostFailure: failed.error, rootGoalEvents: count(firstHistory), scopedGoalEvents: count(secondHistory), commands: commands.value.length, namespaceCalls: 5, remainingDescriptors: registry.remotes.list().length, ...(typed ? { typed } : {}) };
+    return { descriptors: descriptors.length, invalidRejected, undefinedPreserved: true, cancellation: cancelled.error, hostFailure: failed.error, rootGoalEvents: count(firstHistory), scopedGoalEvents: count(secondHistory), commands: commands.value.length, namespaceCalls: 5, remainingDescriptors: registry.remotes.list().length, ...(typed ? { typed } : {}), ...(lifecycle ? { lifecycle } : {}) };
   }, { root });
   const goalCreates = requests.filter(path => path === '/api/goals/create').length;
   if (goalCreates !== (typedConsumer ? 3 : 2)) throw new Error('invalid request reached Host or valid request was lost: ' + JSON.stringify(requests));
   if (typedConsumer && !result.typed) throw new Error('checked consumer was not exercised');
+  if (loaderMode && requests.filter(path => path === '/api/goals/edit').length !== 3) throw new Error('stale Loader handle reached the Host or remounted call was lost');
   await Promise.all(responseReads);
   if (!hostErrors.some(error => JSON.stringify(error) === JSON.stringify(result.hostFailure))) throw new Error('gateway did not preserve the Host error verbatim');
   if (requests.filter(path => path === '/api/commands/execute').length !== 1) throw new Error('pre-aborted command reached the Host');

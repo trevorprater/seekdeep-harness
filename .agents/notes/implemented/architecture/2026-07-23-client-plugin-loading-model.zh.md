@@ -72,6 +72,8 @@ vendored Loader 经其 `internal` 约定消费模块系统——唯一调用点�
 
 为什么名册是 yml 行而不是扫描？因为哪些插件组合进一次部署是组合决策，不是包属性——一个在仓库中声明了 seekdeep.client 的包，不代表这次部署要挂载它，扫描发现无从替人做这个决定；node 半只扫描配置树实际挂载了的东西。
 
+[Rust Host 组合器](../../../../crates/client-modules/src/host.rs) 在注入 index 图之前核对所观测的 Loader 成员状态：原生生命周期通知任务可能落后于已经活跃的 fiber。只有成员状态发生变化的名称才进入既有的单包核对流程；元数据判定保留原有缓存生命周期，未变化的图保留对象身份。可重入的发布锁串行化核对、图/路径读取与重建，同时允许订阅者同步重入。这样既保留源码事件循环先 flush、再处理 I/O 的顺序，也无需在每次 index 请求时重读所有包清单。
+
 **第一阶段——模块面。**壳在图之上建起模块系统，然后并行预取每个 `immediately` 行。预取即加载外部脚本，只登记工厂。单行预取失败在这里被吞下：第二阶段 import 时会重试加载并拥有那次大声失败，因此一个坏行藏不住其他行。`immediately` 是预取标记——不是屏障，不是身份。包声明它，注册表把它带进图行。基础设施插件（connection、runtime、ui-theme、i18n，外加 hmr）声明它；UI 插件则径直按需到达。
 
 **第二阶段——插件面。**
@@ -81,6 +83,8 @@ vendored Loader 经其 `internal` 约定消费模块系统——唯一调用点�
 3. 创建顺序不携带任何语义；fiber 经服务等待激活。
 4. `settled` = 每个 entry 已创建 + `loader.await()` 完全停稳 + 一次全 ACTIVE 扫描。扫描列出每个 import 失败、FAILED 或 PENDING 的 fiber 及其缺失的服务。它存在的理由：cordis 的 inject 等待没有超时——这次扫描就是大声失败的兜底线。
 5. loading 页的启动状态是经 `internal/status` 对真实 fiber 状态的投影。settled 翻转即一次性切换到真实 UI。
+
+[Rust/WASM Loader](../../../../crates/client-loader/src/wasm.rs) 在导入模块或创建 fiber 之前检查非 group entry 的禁用状态；源码中始终启用的 group 标记仍保持独立。`cargo xtask remote-loader` 通过 ClientModuleSystem 和外部脚本 URL 消费真实 Host 图，经 Loader 挂载 Remote 依赖图，撤回提供方，拒绝保留的失效调用，并在重新挂载后恢复持久化调用。这组证据不证明完整的 group、update/refresh 或 HMR 失败行为等价性。
 
 ### 热重载：一个驱动插件，自行监视的 bundle
 

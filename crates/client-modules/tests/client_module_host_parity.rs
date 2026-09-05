@@ -94,6 +94,44 @@ fn sibling_seekdeep_roles_compose_one_client_graph_row() {
 }
 
 #[test]
+fn reconciliation_publishes_the_complete_observed_loader_delta() {
+    let fixture = Fixture::new();
+    let names = ["@fixture/first-ready", "@fixture/second-ready"];
+    for name in names {
+        let path = fixture.write_package(name, &serde_json::json!({"client": {"platform": "web"}}));
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, "module.exports = {}\n").unwrap();
+    }
+    let pending = names.map(|name| ClientHostEntry {
+        mounted: false,
+        ..entry(name)
+    });
+    let (_, sink) = logger();
+    let host = ClientModuleHost::new(fixture.resolver(), &pending, sink).unwrap();
+    let settled = names.map(entry);
+    // Sibling notification tasks may still be queued when native I/O sees both live fibers.
+    host.reconcile(ClientModuleId::new(names[0]), &settled);
+    assert_eq!(
+        host.graph()
+            .entries
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect::<Vec<_>>(),
+        names
+    );
+    let graph = host.graph();
+    host.reconcile(ClientModuleId::new(names[1]), &settled);
+    assert!(Arc::ptr_eq(&graph, &host.graph()));
+    let remaining = host.graph_for_entries(&settled[1..]);
+    assert_eq!(remaining.entries.len(), 1);
+    assert_eq!(remaining.entries[0].id.as_str(), names[1]);
+    assert!(Arc::ptr_eq(
+        &remaining,
+        &host.graph_for_entries(&settled[1..])
+    ));
+}
+
+#[test]
 fn installed_profile_resolution_precedes_explicit_compiled_fallbacks() {
     let installed = Fixture::new();
     let compiled = Fixture::new();
@@ -220,6 +258,12 @@ fn rebuild_reconcile_subscriptions_and_manifest_injection_are_stable_and_contain
     let host = ClientModuleHost::new(fixture.resolver(), &[entry(name)], logger).unwrap();
     let first = host.graph();
     assert!(Arc::ptr_eq(&first, &host.graph()));
+    let graph_reader = Arc::downgrade(&host);
+    let _reader = host.on_graph_changed(Arc::new(move || {
+        let host = graph_reader.upgrade().unwrap();
+        let _ = host.graph();
+        let _ = host.client_path(&ClientModuleId::new(name));
+    }));
     assert_eq!(
         first.entries[0].inject.as_deref(),
         Some(&["a".to_owned()][..])

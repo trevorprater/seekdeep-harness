@@ -46,6 +46,7 @@ export function loaderModules() {
 }
 export function loaderSetInternal(loader, internal) { loader.internal = internal }
 export function loaderCreate(loader, id, name) { return loader.create({ id, name }) }
+export function loaderCreateDisabled(loader) { return loader.create({ id: 'disabled', name: 'unavailable', disabled: true }) }
 export function loaderWait(loader) { return loader.await() }
 export function loaderRemove(loader, id) { return loader.remove(id) }
 export function loaderEntries(loader) { return loader.entries() }
@@ -60,12 +61,33 @@ extern "C" {
     fn loaderModules() -> JsValue;
     fn loaderSetInternal(loader: &JsValue, internal: &JsValue);
     fn loaderCreate(loader: &JsValue, id: &str, name: &str) -> Promise;
+    fn loaderCreateDisabled(loader: &JsValue) -> Promise;
     fn loaderWait(loader: &JsValue) -> Promise;
     fn loaderRemove(loader: &JsValue, id: &str) -> Promise;
     fn loaderEntries(loader: &JsValue) -> Array;
     fn loaderEntryState(loader: &JsValue, id: &str) -> u8;
     fn loaderGet(root: &JsValue, name: &str) -> JsValue;
     fn loaderField(value: &JsValue, name: &str) -> JsValue;
+}
+
+#[wasm_bindgen_test(async)]
+async fn disabled_entry_requires_no_importer_or_fiber() {
+    configure_context_wrapper(loaderContextWrapper()).unwrap();
+    let root = create_context().unwrap();
+    JsFuture::from(loaderInstall(&root, &client_loader_plugin().unwrap()))
+        .await
+        .unwrap();
+    let loader = loaderService(&root);
+    let id = JsFuture::from(loaderCreateDisabled(&loader)).await.unwrap();
+    assert_eq!(id.as_string().as_deref(), Some("disabled"));
+    let entries = loaderEntries(&loader);
+    assert_eq!(entries.length(), 1);
+    assert!(loaderField(&entries.get(0), "fiber").is_undefined());
+    JsFuture::from(loaderWait(&loader)).await.unwrap();
+    JsFuture::from(loaderRemove(&loader, "disabled"))
+        .await
+        .unwrap();
+    assert_eq!(loaderEntries(&loader).length(), 0);
 }
 
 #[wasm_bindgen_test(async)]

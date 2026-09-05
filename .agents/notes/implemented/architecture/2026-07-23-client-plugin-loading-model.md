@@ -72,6 +72,8 @@ What happens between `seekdeep web` starting and the UI appearing? Three stages:
 
 Why is the roster yml rows and not a scan? Because which plugins compose into a deployment is a composition decision, not a package property — a package declaring `seekdeep.client` in the repo does not mean this deployment mounts it, so discovery-by-scan cannot make that call; the node half scans only what the tree actually mounted.
 
+The [Rust Host composer](../../../../crates/client-modules/src/host.rs) reconciles observed Loader membership before injecting an index graph: native lifecycle notification tasks can lag fibers that are already live. Only changed membership names enter the existing per-package reconciler; metadata verdicts retain their cache lifetime, and unchanged graphs retain object identity. A reentrant publication lock serializes reconciliation, graph/path reads, and rebuilds while allowing synchronous subscriber reentry. This preserves the source event loop's flush-before-I/O ordering without rereading every package manifest on an index request.
+
 **Phase one — the module face.** The shell builds the module system over the graph, then prefetches every `immediately` row in parallel. Prefetch loads the external script and registers its factory only. A single row's prefetch failure is swallowed here: phase two's import retries the load and owns the loud failure, so one bad row cannot mask the others. `immediately` is a prefetch mark — not a barrier, not an identity. The package declares it, the registry carries it into the row. The infrastructure plugins (connection, runtime, ui-theme, i18n, plus hmr) declare it; UI plugins simply arrive on demand.
 
 **Phase two — the plugin face.**
@@ -81,6 +83,8 @@ Why is the roster yml rows and not a scan? Because which plugins compose into a 
 3. Creation order carries no semantics; fibers activate through service waiting.
 4. `settled` = every entry created + `loader.await()` quiescent + an all-ACTIVE sweep. The sweep lists each import-failed, FAILED, or PENDING fiber with its missing services. It exists because cordis inject waits have no timeout — the sweep is the fail-loud floor.
 5. The loading page's boot status is a projection of real fiber states via `internal/status`. The settled flip switches to the real UI in one pass.
+
+The [Rust/WASM Loader](../../../../crates/client-loader/src/wasm.rs) checks a disabled non-group entry before importing its module or creating a fiber; the source's always-enabled group marker remains distinct. `cargo xtask remote-loader` consumes the real Host graph through ClientModuleSystem and external script URLs, mounts the Remote dependency graph through Loader, withdraws a provider, rejects retained stale calls, and restores durable calls after remount. This evidence does not establish complete group, update/refresh, or HMR failure conformance.
 
 ### Hot reload: one driver plugin, self-watched bundles
 

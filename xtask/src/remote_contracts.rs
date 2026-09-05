@@ -133,7 +133,7 @@ pub(super) fn consumer(browser: bool, source: &Path) -> anyhow::Result<()> {
         let path = super::cargo_metadata()?
             .target_directory
             .join("xtask/remote-consumer/typed-consumer.mjs");
-        browser_path_with_consumer(source, Some(&path))?;
+        browser_path_with_consumer(source, Some(&path), false)?;
     }
     Ok(())
 }
@@ -400,10 +400,40 @@ fn source_gateway_regressions(source: &Path, source_package: &Path) -> anyhow::R
 }
 
 pub(super) fn browser_path(source: &Path) -> anyhow::Result<()> {
-    browser_path_with_consumer(source, None)
+    browser_path_with_consumer(source, None, false)
 }
 
-fn browser_path_with_consumer(source: &Path, consumer: Option<&Path>) -> anyhow::Result<()> {
+pub(super) fn loader_path(source: &Path) -> anyhow::Result<()> {
+    let metadata = super::cargo_metadata()?;
+    for (package, artifact, module, output) in [
+        (
+            "seekdeep-client-loader",
+            "seekdeep_client_loader",
+            "@seekdeep-ai/cordis-plugin-loader",
+            "vendor/loader/lib",
+        ),
+        (
+            "seekdeep-client-modules",
+            "seekdeep_client_modules",
+            "@seekdeep-ai/seekdeep-client-modules",
+            "packages/client/modules/lib",
+        ),
+    ] {
+        super::wasm_package_once(
+            package,
+            artifact,
+            module,
+            &metadata.workspace_root.join(output),
+        )?;
+    }
+    browser_path_with_consumer(source, None, true)
+}
+
+fn browser_path_with_consumer(
+    source: &Path,
+    consumer: Option<&Path>,
+    loader: bool,
+) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;
     let directory = metadata.target_directory.join("xtask/remote-browser-path");
@@ -438,6 +468,11 @@ fn browser_path_with_consumer(source: &Path, consumer: Option<&Path>) -> anyhow:
             "--format=esm",
         )?;
         std::fs::write(directory.join("zod.mjs"), zod)?;
+    } else if loader {
+        command.arg("");
+    }
+    if loader {
+        command.arg("loader");
     }
     let status = command.status()?;
     anyhow::ensure!(status.success(), "integrated browser Remote path failed");

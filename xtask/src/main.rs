@@ -24,6 +24,11 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Verify browser Loader ownership of the real Remote dependency graph.
+    RemoteLoader {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
     /// Build the selected public Remote values, declarations, and Client facade.
     RemoteArtifacts {
         #[arg(long, default_value = ".")]
@@ -189,6 +194,7 @@ enum Scope {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
+        Command::RemoteLoader { source } => remote_contracts::loader_path(&source),
         Command::RemoteArtifacts { out_dir } => remote_contracts::artifacts(&out_dir),
         Command::RemoteConsumer { browser, source } => remote_contracts::consumer(browser, &source),
         Command::RemoteDeclarations {

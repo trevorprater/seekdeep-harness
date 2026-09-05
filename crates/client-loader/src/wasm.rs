@@ -181,6 +181,11 @@ async fn start_entry(
     options: &JsValue,
     name: &str,
 ) -> Result<(), JsValue> {
+    let group = Reflect::get(options, &JsValue::from_str("group"))?;
+    let disabled = Reflect::get(options, &JsValue::from_str("disabled"))?;
+    if !group.is_truthy() && disabled.is_truthy() {
+        return Ok(());
+    }
     if internal.is_undefined() || internal.is_null() {
         return Err(js_sys::Error::new("loader: internal module system is unavailable").into());
     }
