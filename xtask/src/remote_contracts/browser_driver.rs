@@ -208,7 +208,50 @@ try {
       assert(resumed.ok && resumed.value.revision === 3, 'remounted call failed');
       const history = await callHost('session.history', { sessionId: first.sessionId });
       assert(count(history) === 3, 'remounted call did not persist');
-      lifecycle = { entries: loader.entries().length, modules: modules.loadCache.size, goalEvents: count(history), staleRejected: !stale.ok };
+      await loader.remove('remotes'); await loader.await();
+      assert(registry.remotes.list().length === 0, 'assembly unload retained descriptors');
+      const assembly = await modules.import('@seekdeep-ai/seekdeep-api-remotes', '', {});
+      const cleanupTrace = [];
+      const cleanupFailure = new Error('injected Remote cleanup failure');
+      let failOnce = true, cleanup;
+      modules.registerStatic('fixture:cleanup-retry', { inject: ['remote'], apply(ctx) {
+        const remote = ctx.get('remote');
+        const intercepted = new Proxy(remote, { get(target, key, receiver) {
+          if (key !== '$mount') return Reflect.get(target, key, receiver);
+          return async contribution => {
+            const owned = await target.$mount(contribution);
+            return async () => {
+              cleanupTrace.push(contribution.package);
+              if (failOnce && contribution.package.endsWith('-message-feedback')) { failOnce = false; throw cleanupFailure; }
+              await owned();
+            };
+          };
+        } });
+        const context = new Proxy(ctx, { get(target, key, receiver) {
+          if (key === 'get') return name => name === 'remote' ? intercepted : target.get(name);
+          return Reflect.get(target, key, receiver);
+        } });
+        const mounted = assembly.apply(context);
+        mounted.then(value => { cleanup = value; });
+        return mounted;
+      } });
+      await loader.create({ id: 'retry', name: 'fixture:cleanup-retry' }); await loader.await();
+      assert(registry.remotes.list().length === 24, 'retry assembly did not mount the real registry');
+      const failedCleanup = cleanup();
+      assert(cleanupTrace.length === 1 && cleanupTrace[0].endsWith('-message-feedback'), 'cleanup did not start synchronously');
+      let failure;
+      try { await failedCleanup; } catch (error) { failure = error; }
+      assert(failure === cleanupFailure && registry.remotes.list().length === 24, 'cleanup failure lost identity or advanced past the failed disposer');
+      const retriedCleanup = cleanup();
+      assert(cleanupTrace[1].endsWith('-commands'), 'cleanup retry did not reverse the retained array');
+      await retriedCleanup;
+      assert(registry.remotes.list().length === 0, 'cleanup retry retained descriptors');
+      await cleanup();
+      assert(cleanupTrace.length === 11, 'repeated cleanup skipped the retained handles');
+      await loader.remove('retry'); await loader.await();
+      await loader.create({ id: 'remotes', name: '@seekdeep-ai/seekdeep-api-remotes' }); await loader.await();
+      assert(registry.remotes.list().length === 24, 'remount after cleanup failure did not recover');
+      lifecycle = { entries: loader.entries().length, modules: modules.loadCache.size, goalEvents: count(history), staleRejected: !stale.ok, cleanupFailurePreserved: failure === cleanupFailure, cleanupCalls: cleanupTrace.length };
     }
     await client.fiber.dispose();
     assert(registry.remotes.list().length === 0, 'Remote descriptors survived teardown');

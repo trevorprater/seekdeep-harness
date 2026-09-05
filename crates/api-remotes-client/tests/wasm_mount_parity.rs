@@ -31,6 +31,63 @@ export function apiRemotesBench(failAt) {
 }
 export function apiRemotesLog(bench) { return bench.log }
 
+export async function compareSourceLifecycle(target, oracle) {
+  const { createRequire } = await import('node:module');
+  const { readFileSync } = await import('node:fs');
+  const { execFileSync } = await import('node:child_process');
+  const require = createRequire(oracle + '/package.json');
+  const ts = require('typescript');
+  if (execFileSync('git', ['rev-parse', 'HEAD'], { cwd: oracle, encoding: 'utf8' }).trim() !== '37200a934324dd7167ec8a8d3ac1fd01e2239909') throw new Error('oracle pin differs');
+  const path = oracle + '/packages/api/remotes/src/client/index.ts';
+  const file = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+  const apply = file.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'apply');
+  const code = ts.transpileModule(apply.getText(file), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const names = ['commands', 'goals', 'dynamic', 'inventory', 'feedback'];
+  const source = Function('exports', 'commandsRemote', 'goalsRemote', 'dynamicRemote', 'pluginInventoryRemote', 'messageFeedbackRemote', code + ';return exports.apply;')({}, ...names);
+  async function scenario(apply, mode) {
+    const trace = [];
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    let reachedBoth, feedbackCalls = 0;
+    const bothBlocked = new Promise(resolve => { reachedBoth = resolve; });
+    let failed = false;
+    let cleanup, reentered = false;
+    const remote = { async $mount(name) {
+      trace.push('mount:' + name);
+      if (mode.startsWith('mount-') && name === 'dynamic') throw new Error('mount failed');
+      return async () => {
+        trace.push('dispose:' + name);
+        if (mode === 'mount-rollback-failure' && name === 'goals') throw new Error('rollback failed');
+        if (mode === 'failure' && name === 'feedback' && !failed) { failed = true; throw new Error('cleanup failed'); }
+        if (mode === 'overlap' && name === 'feedback') { if (++feedbackCalls === 2) reachedBoth(); await gate; }
+        if (mode === 'reentry' && name === 'feedback' && !reentered) { reentered = true; await cleanup(); }
+      };
+    } };
+    const pending = apply({ remote, get() { return remote; } });
+    const mountImmediate = trace.slice();
+    let dispose;
+    try { dispose = await pending; } catch (error) { return { mountImmediate, error: error.message, trace }; }
+    cleanup = dispose;
+    const first = dispose();
+    const disposeImmediate = trace.slice();
+    const outcome = promise => promise.then(() => 'ok', error => error.message);
+    const firstOutcome = outcome(first);
+    let secondOutcome;
+    if (mode === 'overlap') {
+      secondOutcome = outcome(dispose());
+      await bothBlocked;
+      release();
+    } else {
+      await firstOutcome;
+      secondOutcome = outcome(dispose());
+    }
+    return { mountImmediate, disposeImmediate, outcomes: await Promise.all([firstOutcome, secondOutcome]), trace };
+  }
+  const result = [];
+  for (const mode of ['repeat', 'failure', 'overlap', 'reentry', 'mount-failure', 'mount-rollback-failure']) result.push({ mode, source: await scenario(source, mode), target: await scenario(target, mode) });
+  return result;
+}
+
 export function remoteContextWrapper() {
   const tracker = Symbol.for('cordis.service.tracker')
   const trace = (ctx, value) => {
@@ -160,6 +217,7 @@ export async function loadRemoteZod(path) {
 }
 "#)]
 extern "C" {
+    fn compareSourceLifecycle(target: &Function, oracle: &str) -> Promise;
     fn apiRemotesBench(fail_at: &str) -> JsValue;
     fn apiRemotesLog(bench: &JsValue) -> Array;
     fn remoteContextWrapper() -> JsValue;
@@ -175,6 +233,26 @@ extern "C" {
     fn remoteCalls(control: &JsValue) -> Array;
     fn remoteRestore(control: &JsValue);
     fn loadRemoteZod(path: &str) -> Promise;
+}
+
+#[wasm_bindgen_test(async)]
+#[ignore = "requires the pinned source checkout and its TypeScript compiler"]
+async fn lifecycle_timing_retries_and_overlap_match_source() {
+    configure_api_remotes(contributions().into()).unwrap();
+    let target = wasm_bindgen::closure::Closure::wrap(
+        Box::new(apply_api_remotes) as Box<dyn Fn(JsValue) -> Promise>
+    );
+    let results = JsFuture::from(compareSourceLifecycle(
+        target.as_ref().unchecked_ref(),
+        "/Users/trevor/ws/deepseek-harness",
+    ))
+    .await
+    .unwrap();
+    for result in Array::from(&results) {
+        let source = js_sys::JSON::stringify(&property(&result, "source")).unwrap();
+        let target = js_sys::JSON::stringify(&property(&result, "target")).unwrap();
+        assert_eq!(source, target, "mode {:?}", property(&result, "mode"));
+    }
 }
 
 fn contributions() -> Array {
@@ -373,7 +451,16 @@ async fn mounts_in_declaration_order_and_disposes_in_reverse() {
     );
     let result = disposer.call0(&JsValue::UNDEFINED).unwrap();
     JsFuture::from(Promise::resolve(&result)).await.unwrap();
-    assert_eq!(log(&bench).len(), 10);
+    assert_eq!(
+        &log(&bench)[10..],
+        [
+            "dispose:commands",
+            "dispose:goals",
+            "dispose:dynamic",
+            "dispose:inventory",
+            "dispose:feedback"
+        ]
+    );
 }
 
 #[wasm_bindgen_test(async)]

@@ -37839,18 +37839,23 @@
     {
       "source": "packages/api/remotes/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending",
-      "note": "The built Rust/WASM contributions are rejected by the pinned registry: strict codecs omit typeSymbol, and one descriptor uses a boolean cancellation flag instead of the source parameter descriptor. Routing/mount-order smokes do not prove complete generated-descriptor fidelity.",
+      "status": "verified",
+      "note": "Generated metadata, codec behavior, public declaration consumers, and lifecycle timing have source and browser evidence; full workspace installation and release packaging remain separate obligations.",
       "targets": [
         "crates/api-remotes-client/src/lib.rs",
         "crates/api-remotes-client/src/wasm.rs",
+        "crates/api-remotes-client/src/wasm/lifecycle.rs",
+        "crates/api-remotes-client/src/construction.rs",
+        "crates/api-remotes-client/contracts/host-model.json",
+        "crates/api-remotes-client/contracts/client-declarations.json",
         "crates/api-remotes-client/tests/wasm_mount_parity.rs",
-        "xtask/src/main.rs"
+        "xtask/src/remote_contracts.rs",
+        "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "pinned source built-library e2e passed 1/1",
-        "live Rust/WASM cases mount commands, goals, dynamic Cordis, plugin inventory, and message feedback in exact declaration order; failures roll back committed predecessors and normal disposal unwinds in reverse",
-        "generated declarations retain the ClientRemote, connection, plugin-inventory, dynamic-Cordis, and JsonValue type surfaces"
+        "cargo xtask remote-milestone: 24 source-faithful descriptors, 77 codec boundaries, 2606 assembled/public comparisons, strict public consumers, and Chromium calls to the real Rust Host",
+        "live wasm_mount_parity source-function differential covers synchronous start, repeated cleanup, failed cleanup retry, overlapping and reentrant cleanup, mount failure, and rollback failure",
+        "cargo xtask remote-loader: actual Host boot graph and HTTP bundles, provider loss/remount, stale-call rejection, real-registry cleanup failure identity and retry withdrawal"
       ]
     },
     {
@@ -82315,20 +82320,23 @@
     {
       "source": "packages/typert/registry/src/client/index.ts",
       "kind": "production-code",
-      "status": "pending",
-      "note": "Native registry tests do not prove browser parity. Browser reflection, local descriptors, lookup/Context providers, endpoint history, and calling-fiber disposal have live WASM/source evidence; complete Remote validation/subscriptions, generated codec/cancellation fidelity, and package-export assembly remain unverified.",
+      "status": "verified",
+      "note": "Browser registry behavior is verified independently of the native registry through the pinned corpus, live WASM differentials, real generated codecs, and actual Loader/Host integration.",
       "targets": [
         "crates/typert-registry/src/lib.rs",
         "crates/typert-registry/tests/registry_parity.rs",
         "crates/client-foundation-wasm/src/wasm_typert.rs",
         "crates/client-foundation-wasm/src/wasm_typert/validation.rs",
         "crates/client-foundation-wasm/src/wasm_typert/providers.rs",
-        "crates/client-foundation-wasm/tests/wasm_foundation_parity.rs"
+        "crates/client-foundation-wasm/src/wasm_typert/remotes.rs",
+        "crates/client-foundation-wasm/tests/wasm_foundation_parity.rs",
+        "xtask/src/remote_contracts/registry_driver.rs",
+        "xtask/src/remote_contracts/browser_driver.rs"
       ],
       "evidence": [
-        "installs_same_registry_on_client_face",
-        "cargo test -p seekdeep-typert-registry --all-targets --all-features",
-        "live WASM reflection differential with pinned Cordis/Zod and the real built Host Remote smoke pass; neither covers the remaining browser providers and subscriptions"
+        "cargo xtask remote-registry-oracle: all 21 pinned registry tests execute against built Rust/WASM with real Cordis and Zod",
+        "live wasm_foundation_parity compares schema/model identity, local descriptors, lookup/Context provider ownership, endpoint history, and subscriptions with the pinned registry",
+        "cargo xtask remote-consumer --browser and remote-loader: package-export types, 24 generated Remote descriptors, actual browser transport, provider withdrawal/remount, and complete descriptor teardown"
       ]
     },
     {

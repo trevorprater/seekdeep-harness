@@ -1,10 +1,11 @@
 //! JavaScript-bound Remote mount lifecycle.
 
-use std::{cell::RefCell, rc::Rc};
+mod lifecycle;
+
+use std::cell::RefCell;
 
 use js_sys::{Array, Function, Promise, Reflect};
-use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
-use wasm_bindgen_futures::{JsFuture, future_to_promise};
+use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
 
 use crate::INJECT;
 
@@ -84,39 +85,16 @@ pub fn configure_api_remotes(contributions: JsValue) -> Result<(), JsValue> {
 #[wasm_bindgen(js_name = applyApiRemotes)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn apply_api_remotes(ctx: JsValue) -> Promise {
-    future_to_promise(async move {
-        let remote = required_service(&ctx, "remote")?;
-        let contributions = CONTRIBUTIONS
-            .with(|slot| slot.borrow().clone())
-            .ok_or_else(|| {
-                js_error("api-remotes module factory did not configure generated contributions")
-            })?;
-        let mut disposers = Vec::new();
-        for contribution in contributions {
-            match await_method(&remote, "$mount", &[contribution]).await {
-                Ok(disposer) => disposers.push(disposer.dyn_into::<Function>()?),
-                Err(error) => {
-                    dispose_reverse(&mut disposers).await?;
-                    return Err(error);
-                }
-            }
-        }
-        let disposers = Rc::new(RefCell::new(disposers));
-        let disposer = Closure::wrap(Box::new(move || -> Promise {
-            let disposers = Rc::clone(&disposers);
-            future_to_promise(async move {
-                let ordered = {
-                    let mut disposers = disposers.borrow_mut();
-                    let mut ordered = std::mem::take(&mut *disposers);
-                    ordered.reverse();
-                    ordered
-                };
-                dispose_ordered(&ordered).await?;
-                Ok(JsValue::UNDEFINED)
-            })
-        }) as Box<dyn FnMut() -> Promise>);
-        Ok(disposer.into_js_value())
-    })
+    let remote = match required_service(&ctx, "remote") {
+        Ok(remote) => remote,
+        Err(error) => return Promise::reject(&error),
+    };
+    let Some(contributions) = CONTRIBUTIONS.with(|slot| slot.borrow().clone()) else {
+        return Promise::reject(&js_error(
+            "api-remotes module factory did not configure generated contributions",
+        ));
+    };
+    lifecycle::mount(&remote, &contributions)
 }
 
 /// Exact static inject list.
@@ -127,28 +105,6 @@ pub fn api_remotes_inject() -> Array {
         values.push(&JsValue::from_str(dependency));
     }
     values
-}
-
-async fn dispose_reverse(disposers: &mut [Function]) -> Result<(), JsValue> {
-    disposers.reverse();
-    dispose_ordered(disposers).await
-}
-
-async fn dispose_ordered(disposers: &[Function]) -> Result<(), JsValue> {
-    for disposer in disposers {
-        let result = disposer.call0(&JsValue::UNDEFINED)?;
-        JsFuture::from(Promise::resolve(&result)).await?;
-    }
-    Ok(())
-}
-
-async fn await_method(
-    value: &JsValue,
-    name: &str,
-    arguments: &[JsValue],
-) -> Result<JsValue, JsValue> {
-    let result = call_method(value, name, arguments)?;
-    JsFuture::from(Promise::resolve(&result)).await
 }
 
 fn required_service(ctx: &JsValue, name: &str) -> Result<JsValue, JsValue> {

@@ -476,7 +476,7 @@ Connection supplies the shared-channel interceptor and current HTTP carrier mapp
 
 The package topology is `api/remotes → api/gateway → client/connection → host/webserver`. Connection and WebServer retain their existing paths in this change; moving them later to `api/connection` and `api/webserver` changes package placement rather than these service boundaries. The legacy API Proxy likewise remains under `host/apiproxy` as the fallback for methods not yet migrated to Remote.
 
-The API Remotes cleanup handle needs repeated-call and failure conformance: Rust consumes the disposer vector, while the oracle reverses and invokes the retained vector on each call. One successful teardown does not establish equivalent retry behavior.
+The [Rust API Remotes lifecycle](../../../../crates/api-remotes-client/src/wasm/lifecycle.rs) starts mounting and cleanup synchronously, then advances through native Promise reactions. Cleanup retains its disposer array and reverses it on every invocation; overlapping or reentrant calls iterate the live array rather than a frozen copy. A failed cleanup stops at that disposer, and a later call follows the source's reversed retry order. Mount rollback preserves the original failure unless rollback itself fails. The live WASM differential compares these timings, traces, and failures with the pinned source function; the Loader browser test injects one cleanup failure around real Gateway-owned disposers and verifies error identity, complete retry withdrawal, and remount recovery.
 
 ## Alternatives considered
 

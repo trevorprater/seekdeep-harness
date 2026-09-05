@@ -476,7 +476,7 @@ Connection 提供共享 channel interceptor 与当前 HTTP carrier 映射。WebS
 
 包拓扑为 `api/remotes → api/gateway → client/connection → host/webserver`。Connection 与 WebServer 在本次变更中保留既有路径；后续将它们移到 `api/connection` 和 `api/webserver` 只会改变包位置，不会改变这些服务边界。旧 API Proxy 同样保留在 `host/apiproxy` 下，作为尚未迁移到 Remote 的方法的回退路径。
 
-API Remotes 的清理句柄还需要验证重复调用与失败时的等价性：Rust 会消耗 disposer 向量，而 oracle 每次调用都会反转并执行保留的向量。一次成功清理不能证明重试行为等价。
+[Rust API Remotes 生命周期实现](../../../../crates/api-remotes-client/src/wasm/lifecycle.rs) 同步启动挂载与清理，随后通过原生 Promise reaction 推进。清理保留 disposer 数组，并在每次调用时反转；重叠或重入调用遍历的是活动数组，而非固定副本。清理失败时停在对应 disposer，后续调用遵循源码反转后的重试顺序。挂载回滚保留原始失败，除非回滚自身失败。实时 WASM 差分测试将这些时序、执行轨迹和失败与固定版本的源码函数比较；Loader 浏览器测试在真实 Gateway 所有的 disposer 外注入一次清理失败，并验证错误身份、重试后的完整撤销及重新挂载恢复。
 
 ## Alternatives considered
 
