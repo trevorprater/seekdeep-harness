@@ -2,7 +2,6 @@
 
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
     rc::Rc,
 };
 
@@ -431,64 +430,6 @@ pub fn configure_client_api_gateway(
 #[allow(clippy::too_many_lines)]
 pub fn client_typert_registry_plugin() -> Result<JsValue, JsValue> {
     plugin("typert-registry", &[], |context| {
-        let binders = Rc::new(RefCell::new(HashMap::<String, (u64, JsValue)>::new()));
-        let next_binder = Rc::new(Cell::new(0_u64));
-        let register_binders = binders.clone();
-        let register_next = next_binder;
-        let register = Closure::wrap(Box::new(
-            move |name: String, descriptor: JsValue| -> Result<Function, JsValue> {
-                if name.is_empty() {
-                    return Err(js_sys::Error::new(
-                        "typert context name must be a non-empty string",
-                    )
-                    .into());
-                }
-                let identity = Reflect::get(&descriptor, &JsValue::from_str("identity"))?;
-                if !identity.is_function() {
-                    return Err(js_sys::TypeError::new(&format!(
-                        "Client Context binder {name:?} requires an identity function"
-                    ))
-                    .into());
-                }
-                if register_binders.borrow().contains_key(&name) {
-                    return Err(js_sys::Error::new(&format!(
-                        "Client Context binder {name:?} is already registered"
-                    ))
-                    .into());
-                }
-                let id = register_next
-                    .get()
-                    .checked_add(1)
-                    .ok_or_else(|| js_sys::Error::new("Client Context binder ids exhausted"))?;
-                register_next.set(id);
-                register_binders
-                    .borrow_mut()
-                    .insert(name.clone(), (id, descriptor));
-                let disposal_binders = register_binders.clone();
-                let dispose = Closure::wrap(Box::new(move || {
-                    if disposal_binders
-                        .borrow()
-                        .get(&name)
-                        .is_some_and(|(current, _)| *current == id)
-                    {
-                        disposal_binders.borrow_mut().remove(&name);
-                    }
-                }) as Box<dyn FnMut()>);
-                Ok(dispose.into_js_value().unchecked_into())
-            },
-        )
-            as Box<dyn FnMut(String, JsValue) -> Result<Function, JsValue>>);
-        let get_binders = binders;
-        let get = Closure::wrap(Box::new(move |name: String| {
-            get_binders
-                .borrow()
-                .get(&name)
-                .map_or(JsValue::UNDEFINED, |(_, descriptor)| descriptor.clone())
-        }) as Box<dyn FnMut(String) -> JsValue>);
-        let contexts = object(&[
-            ("registerClient", register.into_js_value()),
-            ("getClient", get.into_js_value()),
-        ])?;
         let remote_rows = Rc::new(RefCell::new(Vec::<(u64, String, JsValue)>::new()));
         let next_remote = Rc::new(Cell::new(0_u64));
         let register_rows = remote_rows.clone();
@@ -562,12 +503,7 @@ pub fn client_typert_registry_plugin() -> Result<JsValue, JsValue> {
             ("get", get_remote.into_js_value()),
             ("list", list_remote.into_js_value()),
         ])?;
-        let typert = object(&[
-            ("contexts", contexts.into()),
-            ("local", Object::new().into()),
-            ("remotes", remotes.into()),
-            ("lookups", Object::new().into()),
-        ])?;
+        let typert = object(&[("local", Object::new().into()), ("remotes", remotes.into())])?;
         crate::wasm_typert::install(&typert, &context)?;
         call_method(
             &context,

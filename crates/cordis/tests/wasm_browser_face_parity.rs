@@ -45,7 +45,36 @@ export function cordisGet(root, name) { return root.get(name) }
 export function cordisFiberState(fiber) { return fiber.state }
 export function cordisFiberWait(fiber) { return fiber.await() }
 export function cordisFiberDispose(fiber) { return fiber.dispose() }
-export function cordisDispose(dispose) { return dispose() }
+export function cordisDispose(dispose) { return Promise.resolve(dispose()) }
+export function cordisSynchronousDisposal(root) {
+  const trace = []
+  const dispose = root.effect(() => () => { trace.push('disposed') }, 'synchronous disposal')
+  const result = dispose()
+  dispose()
+  if (result !== undefined || trace.length !== 1) throw new Error('synchronous disposal was deferred or repeated')
+  const remove = root.provide('immediate-disposal', {})
+  remove()
+  if (root.get('immediate-disposal') !== undefined) throw new Error('service withdrawal was deferred')
+  let reentrant
+  let calls = 0
+  reentrant = root.effect(() => () => { calls++; reentrant() }, 'reentrant disposal')
+  reentrant()
+  if (calls !== 1) throw new Error('reentrant disposal repeated cleanup')
+  return true
+}
+export async function cordisAsynchronousDisposal(root) {
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let calls = 0
+  let completed = false
+  const dispose = root.effect(() => () => { calls++; return gate.then(() => { completed = true }) }, 'asynchronous disposal')
+  const first = dispose()
+  const second = dispose()
+  if (calls !== 1 || completed) throw new Error('asynchronous disposer did not start exactly once')
+  release()
+  await Promise.all([first, second])
+  if (!completed || calls !== 1) throw new Error('asynchronous disposer was not joined')
+}
 export function cordisValue(value) { return { value } }
 export function cordisField(value, key) { return value?.[key] }
 export function cordisLog() { return [] }
@@ -64,6 +93,8 @@ extern "C" {
     fn cordisFiberWait(fiber: &JsValue) -> Promise;
     fn cordisFiberDispose(fiber: &JsValue) -> Promise;
     fn cordisDispose(dispose: &Function) -> Promise;
+    fn cordisSynchronousDisposal(root: &JsValue) -> bool;
+    fn cordisAsynchronousDisposal(root: &JsValue) -> Promise;
     fn cordisValue(value: u32) -> JsValue;
     fn cordisField(value: &JsValue, key: &str) -> JsValue;
     fn cordisLog() -> JsValue;
@@ -77,6 +108,10 @@ extern "C" {
 async fn browser_context_keeps_plugin_services_events_and_cleanup_in_rust() {
     configure_context_wrapper(cordisContextWrapper()).unwrap();
     let root = create_context().unwrap();
+    assert!(cordisSynchronousDisposal(&root));
+    JsFuture::from(cordisAsynchronousDisposal(&root))
+        .await
+        .unwrap();
     let log = cordisLog();
     let fiber = cordisPlugin(&root, &cordisConsumer(&log));
     assert_eq!(cordisFiberState(&fiber), 0);

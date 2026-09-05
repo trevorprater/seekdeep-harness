@@ -251,6 +251,77 @@ async function registryObservation(root, schema) {
   return { before, after, changes }
 }
 
+async function providerObservation(root) {
+  const registry = root.get('typert')
+  const events = []
+  const observer = root.plugin({ apply(ctx) {
+    ctx.get('typert').lookups.subscribe(change => events.push({ ...change }))
+    ctx.get('typert').contexts.subscribe(change => events.push({ ...change }))
+  } })
+  await observer.await()
+  const calls = []
+  const resolved = { id: 'resolved' }
+  let hostContext
+  const resolver = root.plugin({ apply(ctx) {
+    hostContext = ctx
+    ctx.get('typert').lookups.configure('agent', id => { calls.push(id); return resolved })
+    ctx.get('typert').contexts.configureHost('agent', id => { calls.push(id); return ctx })
+  } })
+  await resolver.await()
+  const absentBeforeProvider = registry.lookups.get('agent') === undefined && registry.contexts.getHost('agent') === undefined
+  const provider = { parameter: 'agent', wire: 'agentId', hostTypeSymbol: 'Agent', wireTypeSymbol: 'string', resolve: id => id }
+  const host = { wire: 'agentId', wireTypeSymbol: 'string', resolve: id => id }
+  const binder = { identity: ctx => ctx, marker: resolved }
+  let staleLookups
+  const owner = root.plugin({ apply(ctx) {
+    staleLookups = ctx.get('typert').lookups
+    ctx.get('typert').lookups.register('agent', provider)
+    ctx.get('typert').contexts.registerHost('agent', host)
+    ctx.get('typert').contexts.registerClient('agent', binder)
+  } })
+  await owner.await()
+  const projected = registry.lookups.get('agent')
+  const promise = projected.resolve('lookup')
+  const synchronousCall = calls.length === 1
+  const resultIdentity = await promise === resolved
+  const hostResult = await registry.contexts.getHost('agent').resolve('host')
+  const outcome = action => { try { action(); return 'accepted' } catch (error) { return error.message } }
+  const errors = [
+    outcome(() => registry.lookups.register('agent', provider)),
+    outcome(() => registry.lookups.configure('agent', () => undefined)),
+    outcome(() => registry.contexts.registerHost('agent', host)),
+    outcome(() => registry.contexts.registerClient('agent', binder)),
+    outcome(() => registry.contexts.configureHost('agent', () => undefined)),
+    outcome(() => registry.lookups.register('other', { ...provider, wire: '..' })),
+    outcome(() => registry.contexts.registerHost('other', { ...host, wireTypeSymbol: '' })),
+    outcome(() => registry.contexts.registerClient('bad#key', binder)),
+  ]
+  const before = { absentBeforeProvider, synchronousCall, resultIdentity, hostResolved: hostResult === hostContext,
+    projected: projected !== provider, fields: Object.keys(projected),
+    binderIdentity: registry.contexts.getClient('agent') === binder,
+    keys: registry.lookups.keys(), definitions: registry.lookups.definitions(), errors }
+  await resolver.dispose()
+  const restored = registry.lookups.get('agent') === provider && registry.contexts.getHost('agent') === host
+  const capturedResolver = await projected.resolve('captured') === resolved
+  const removeInvalid = registry.lookups.configure('agent', null)
+  const invalidResolver = await registry.lookups.get('agent').resolve('invalid').then(() => 'accepted', error => `${error.name}: ${error.message}`)
+  removeInvalid()
+  let recursive
+  const removeRecursive = registry.lookups.configure('agent', id => id === 'outer' ? recursive.resolve('inner') : id)
+  recursive = registry.lookups.get('agent')
+  const reentrant = await recursive.resolve('outer')
+  removeRecursive()
+  await owner.dispose()
+  const inactive = outcome(() => staleLookups.register('late', provider))
+  const after = { restored, capturedResolver, invalidResolver, reentrant, inactive, keys: registry.lookups.keys(), definitions: registry.lookups.definitions(),
+    absent: registry.lookups.get('agent') === undefined && registry.contexts.getHost('agent') === undefined && registry.contexts.getClient('agent') === undefined,
+    wireDrift: outcome(() => registry.lookups.register('agent', { ...provider, wire: 'other' })) }
+  await observer.dispose()
+  registry.lookups.register('agent', provider)()
+  registry.contexts.registerClient('agent', {})()
+  return { before, after, events, calls }
+}
+
 export async function foundationSchemaSourceParity(root, pin) {
   const source = process.env.SEEKDEEP_PARITY_SOURCE
   if (!source) throw new Error('SEEKDEEP_PARITY_SOURCE is required')
@@ -268,12 +339,24 @@ export async function foundationSchemaSourceParity(root, pin) {
     const registry = oracle.plugin(TypertRegistry)
     await registry.await()
     const schema = z.string().describe('live schema')
-    const expected = await registryObservation(oracle, schema)
-    const actual = await registryObservation(root, schema)
+    const expected = { reflection: await registryObservation(oracle, schema), providers: await providerObservation(oracle) }
+    const actual = { reflection: await registryObservation(root, schema), providers: await providerObservation(root) }
     await registry.dispose()
     if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`registry mismatch: ${JSON.stringify({ expected, actual })}`)
     return true
   } finally { unregister() }
+}
+export async function foundationProviderContract(root) {
+  const result = await providerObservation(root)
+  if (!result.before.absentBeforeProvider || !result.before.synchronousCall || !result.before.resultIdentity
+    || !result.before.binderIdentity || !result.after.restored || !result.after.capturedResolver || !result.after.absent
+    || result.after.keys.length !== 0 || result.after.definitions.length !== 1 || result.events.length !== 14
+    || result.after.reentrant !== 'inner' || result.after.invalidResolver !== 'TypeError: resolver is not a function'
+    || result.after.inactive !== 'cannot create effect on inactive context'
+    || result.before.errors.includes('accepted') || !result.after.wireDrift.includes('changed its wire declaration')) {
+    throw new Error(`provider contract failed: ${JSON.stringify(result)}`)
+  }
+  return true
 }
 "#)]
 extern "C" {
@@ -296,6 +379,26 @@ extern "C" {
     fn foundationFlush() -> Promise;
     fn foundationSchemaContract(root: &JsValue) -> Promise;
     fn foundationSchemaSourceParity(root: &JsValue, pin: &str) -> Promise;
+    fn foundationProviderContract(root: &JsValue) -> Promise;
+}
+
+#[wasm_bindgen_test(async)]
+async fn providers_preserve_resolver_ownership_and_wire_history() {
+    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    let root = create_context().unwrap();
+    JsFuture::from(foundationPlugin(
+        &root,
+        &client_typert_registry_plugin().unwrap(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        JsFuture::from(foundationProviderContract(&root))
+            .await
+            .unwrap()
+            .as_bool(),
+        Some(true)
+    );
 }
 
 #[wasm_bindgen_test(async)]

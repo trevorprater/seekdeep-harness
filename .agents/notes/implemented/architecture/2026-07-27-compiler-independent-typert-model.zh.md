@@ -24,7 +24,7 @@ PackageModel 识别 Cordis service、event、`@typert object` 引用对象和 `@
 
 [`seekdeep-typert-registry`](../../../../packages/typert/registry/README.md) 提供 `ctx.typert`，且只负责运行时注册：一个 contribution 原子携带 package-face reflection 与可选 Zod schema，并随 Cordis effect 撤销。注册表不分析 TypeScript，也不合并两个 face。JSON Schema 是对已注册 Zod schema 的按需投影。
 
-[浏览器反射实现](../../../../crates/client-foundation-wasm/src/wasm_typert.rs) 保留活动 schema/model 的对象身份、包与本地调用的原子注册、有序查询、端点历史以及调用方 fiber 的释放行为。其[实时 WASM 差分测试](../../../../crates/client-foundation-wasm/tests/wasm_foundation_parity.rs) 使用真实 Zod 和 Cordis，将这些操作与固定版本的服务进行比较。原生注册表测试不能证明浏览器等价性：完整的查找提供方、Host/Client Context 提供方、Remote 订阅及包导出组装仍是独立的验证义务。
+[浏览器反射实现](../../../../crates/client-foundation-wasm/src/wasm_typert.rs) 保留活动 schema/model 的对象身份、包与本地调用的原子注册、有序查询、端点历史以及调用方 fiber 的释放行为。其[查找和 Context 提供方](../../../../crates/client-foundation-wasm/src/wasm_typert/providers.rs) 在撤销后保留协议声明，支持独立拥有的解析器覆盖，并同步发布变更通知。[Cordis WASM 绑定](../../../../crates/cordis/src/wasm.rs) 在返回前启动释放：同步 effect 立即撤销，异步清理仍由单一所有者负责且可等待其完成。[实时 WASM 差分测试](../../../../crates/client-foundation-wasm/tests/wasm_foundation_parity.rs) 使用真实 Zod 和 Cordis，将注册表操作与固定版本的服务进行比较，包括解析器重入和提供方恢复。原生测试与路由冒烟测试不能证明完整的浏览器等价性：Remote 校验/订阅、生成的 codec 和取消元数据，以及包导出组装仍是独立的验证义务。
 
 包产物发布仍通过 package exports 采用显式 opt-in。`WorkspaceTypertGenerator` 仅在被调用时校验所请求 face 的根目录产物协议：host face 必须通过面向用户的 subpath `package/typert` 暴露 `package/lib/typert.host.{js,d.ts}`，client face 必须通过 `package/client/typert` 暴露 `package/lib/typert.client.{js,d.ts}`；它不会修改这些 exports。后续的 [Typert Remote 设计](2026-08-02-typert-remote-method-calls.md) 为根目录 build、typecheck、lint 与文档类型检查增加了全仓 Host 约定 pass。对于已 opt-in 的 Host 包，该 pass 会在消费方解析两者之前生成本地反射产物与严格的 Host-for-Client `/remote` 约定。生成的本地声明将 `TYPERT` 类型保持为 `unknown`，因此业务包不依赖注册表。
 

@@ -293,6 +293,12 @@ impl WasmContext {
     /// Returns setup or inactive-Fiber failures.
     #[allow(clippy::needless_pass_by_value)]
     pub fn effect(&self, setup: JsValue, label: Option<String>) -> Result<Function, JsValue> {
+        if matches!(
+            self.inner.fiber().state(),
+            FiberState::Unloading | FiberState::Disposed
+        ) {
+            return Err(js_sys::Error::new(&crate::CordisError::InactiveEffect.to_string()).into());
+        }
         let setup = setup
             .dyn_into::<Function>()
             .map_err(|_| js_sys::Error::new("ctx.effect setup must be a function"))?;
@@ -767,9 +773,13 @@ fn event_reply_to_js(reply: EventReply) -> JsValue {
 fn js_disposal_effect(label: String, result: JsValue) -> EffectHandle {
     EffectHandle::new(label, move || {
         Box::pin(async move {
-            let result = JsFuture::from(Promise::resolve(&result))
-                .await
-                .map_err(|error| js_anyhow(&error))?;
+            let result = if result.is_function() || result.is_undefined() || result.is_null() {
+                result
+            } else {
+                JsFuture::from(Promise::resolve(&result))
+                    .await
+                    .map_err(|error| js_anyhow(&error))?
+            };
             if result.is_undefined() || result.is_null() {
                 return Ok(());
             }
@@ -779,22 +789,29 @@ fn js_disposal_effect(label: String, result: JsValue) -> EffectHandle {
             let returned = disposer
                 .call0(&JsValue::UNDEFINED)
                 .map_err(|error| js_anyhow(&error))?;
-            JsFuture::from(Promise::resolve(&returned))
-                .await
-                .map_err(|error| js_anyhow(&error))?;
+            if returned.is_object() || returned.is_function() {
+                JsFuture::from(Promise::resolve(&returned))
+                    .await
+                    .map_err(|error| js_anyhow(&error))?;
+            }
             Ok(())
         })
     })
 }
 
 fn effect_disposer(effect: EffectHandle) -> Function {
-    let closure = Closure::wrap(Box::new(move || -> Promise {
+    let closure = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
         let effect = effect.clone();
-        future_to_promise(async move {
+        let mut disposal = Box::pin(async move {
             effect.dispose().await.map_err(js_error)?;
             Ok(JsValue::UNDEFINED)
-        })
-    }) as Box<dyn FnMut() -> Promise>);
+        });
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        match std::future::Future::poll(disposal.as_mut(), &mut context) {
+            std::task::Poll::Ready(result) => result,
+            std::task::Poll::Pending => Ok(future_to_promise(disposal).into()),
+        }
+    }) as Box<dyn Fn() -> Result<JsValue, JsValue>>);
     closure.into_js_value().unchecked_into()
 }
 

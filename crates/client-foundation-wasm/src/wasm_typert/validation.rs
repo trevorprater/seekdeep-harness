@@ -121,7 +121,7 @@ fn codec(value: &JsValue, subject: &str) -> Result<(), JsValue> {
     Ok(())
 }
 
-fn wire(subject: &str, value: &str) -> Result<(), JsValue> {
+pub(super) fn wire(subject: &str, value: &str) -> Result<(), JsValue> {
     if value.is_empty()
         || matches!(value, "." | "..")
         || !value
@@ -144,7 +144,7 @@ pub(super) fn segment(subject: &str, value: &str) -> Result<(), JsValue> {
     Ok(())
 }
 
-fn nonempty(subject: &str, value: &str) -> Result<(), JsValue> {
+pub(super) fn nonempty(subject: &str, value: &str) -> Result<(), JsValue> {
     if value.is_empty() {
         return Err(error(&format!(
             "typert: invalid {subject} — must be nonempty"

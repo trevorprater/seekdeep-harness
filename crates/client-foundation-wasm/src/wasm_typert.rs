@@ -1,5 +1,6 @@
 //! Browser schema/package reflection with fiber-owned local invocations.
 
+mod providers;
 mod validation;
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
@@ -346,6 +347,7 @@ Object.defineProperty(service, 'local', { configurable: true, get() {
 ",
     );
     factory.call3(&JsValue::UNDEFINED, service, &core.into(), context)?;
+    providers::install(service, context)?;
     Ok(())
 }
 
