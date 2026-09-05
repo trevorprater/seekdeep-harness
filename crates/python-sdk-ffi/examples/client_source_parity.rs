@@ -62,7 +62,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(temporary.path().join("test_binding_identity.py"), EXTRA)?;
     let python = std::env::var_os("SEEKDEEP_PYTHON_TEST_PYTHON")
         .map_or_else(|| source.join("python/sdk/.venv/bin/python"), PathBuf::from);
-    let expected = declaration_probe(&python, &source.join("python/sdk/src"))?;
+    let source_packages = [
+        source.join("python/sdk/src"),
+        source.join("python/sdk-runtime/src"),
+    ];
+    let expected = python_probe(&python, &source_packages, DECLARATIONS)?;
     let actual = declaration_probe(&python, temporary.path())?;
     if actual != expected {
         return Err(
@@ -70,8 +74,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     println!("public exports, model declarations, and exception contracts match the pinned source");
-    let expected = python_probe(&python, &source.join("python/sdk/src"), EDGE_PROBE)?;
-    let actual = python_probe(&python, temporary.path(), EDGE_PROBE)?;
+    let expected = python_probe(&python, &source_packages, EDGE_PROBE)?;
+    let actual = python_probe(&python, &[temporary.path().to_path_buf()], EDGE_PROBE)?;
     if actual != expected {
         return Err(format!("Python API edge mismatch: source={expected}, target={actual}").into());
     }
@@ -102,19 +106,20 @@ fn declaration_probe(
     python: &Path,
     package: &Path,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    python_probe(python, package, DECLARATIONS)
+    python_probe(python, &[package.to_path_buf()], DECLARATIONS)
 }
 
 fn python_probe(
     python: &Path,
-    package: &Path,
+    packages: &[PathBuf],
     probe: &str,
 ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let output = Command::new(python)
         .args(["-c", probe])
-        .env("PYTHONPATH", package)
+        .env("PYTHONPATH", std::env::join_paths(packages)?)
+        .env("PYTHONNOUSERSITE", "1")
         .env("PYTHONDONTWRITEBYTECODE", "1")
-        .current_dir(package)
+        .current_dir(packages.first().ok_or("probe package path absent")?)
         .output()?;
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).into_owned().into());

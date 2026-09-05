@@ -7,6 +7,41 @@ fn workflow(source: &str) -> Value {
 }
 
 #[test]
+fn keyless_sdk_ci_runs_native_contracts_and_the_pinned_source_specifications() {
+    let ci = workflow(include_str!("../../../.github/workflows/ci.yml"));
+    let job = &ci["jobs"]["python-sdk"];
+    assert_eq!(job["if"], "github.event_name == 'pull_request'");
+    assert_eq!(job["env"]["CARGO_INCREMENTAL"], "0");
+    let steps = job["steps"].as_array().unwrap();
+    let oracle = steps
+        .iter()
+        .find(|step| step["with"]["repository"] == "deepseek-ai/deepseek-harness")
+        .unwrap();
+    assert_eq!(oracle["with"]["ref"], "${{ steps.oracle.outputs.commit }}");
+    assert_eq!(oracle["with"]["persist-credentials"], false);
+    let commands = steps
+        .iter()
+        .filter_map(|step| step["run"].as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    for required in [
+        "sed -n 's/^commit=//p' SOURCE_SNAPSHOT",
+        "[[ \"$source_commit\" =~ ^[0-9a-f]{40}$ ]]",
+        "cargo test --locked -p seekdeep-python-sdk -p seekdeep-python-sdk-ffi -p seekdeep-python-release -p seekdeep-python-runtime-smoke --all-features",
+        "cargo test --locked -p xtask --lib macos_deployment",
+        "cargo build --locked -p seekdeep-python-sdk-ffi --lib",
+        "--example client_source_parity -- .parity-oracle target/debug/libseekdeep_python_sdk_ffi.so",
+        "--example source_parity -- .parity-oracle",
+        "--example python_runtime_smoke_source_parity -- .parity-oracle",
+    ] {
+        assert!(commands.contains(required), "missing SDK check: {required}");
+    }
+    assert!(!commands.contains("--project python/sdk pytest"));
+    assert!(!commands.contains("continue-on-error"));
+    assert!(steps.iter().all(|step| step["continue-on-error"].is_null()));
+}
+
+#[test]
 fn version_and_wheel_steps_use_rust_and_matching_distribution_filenames() {
     let build_text = include_str!("../../../.github/workflows/build-exe-for-python-sdk.yml");
     let release_text = include_str!("../../../.github/workflows/python-release.yml");
