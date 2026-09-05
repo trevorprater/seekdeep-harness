@@ -814,7 +814,13 @@ impl Context {
     /// Resolves a provider even while its owning plugin is loading.
     #[must_use]
     pub fn get_relaxed<T: Service>(&self, key: ServiceKey<T>) -> Option<Arc<T>> {
-        self.root.services.get(&self.slot(key.name()), false)
+        self.get_named_relaxed(key.name())
+    }
+
+    /// Resolves a runtime-named provider even while its owning plugin is loading.
+    #[must_use]
+    pub fn get_named_relaxed<T: Service>(&self, name: &str) -> Option<Arc<T>> {
+        self.root.services.get(&self.slot(name), false)
     }
 
     /// Replaces a service value from the exact fiber that provided it.

@@ -95,6 +95,28 @@ try {
     const nestedMetadata = metadataContext.extend({ contextMarker: 'nested' });
     if (nestedMetadata.contextValue !== 'nested' || getterReceiver !== nestedMetadata) throw new Error('inherited getter used the parent receiver');
     if (metadataContext[token] !== tokenValue || Reflect.set(metadataContext, token, {})) throw new Error('readonly symbol metadata changed');
+    const lookupScope = client.isolate('lookup-lifecycle', 'browser-loading');
+    let releaseLookup, announceLookup;
+    const lookupGate = new Promise(resolve => { releaseLookup = resolve; });
+    const lookupReady = new Promise(resolve => { announceLookup = resolve; });
+    const lookupFiber = lookupScope.plugin({ name: 'lookup-lifecycle', async apply(ctx) {
+      ctx.provide('lookup-lifecycle', { value: 'loading', field: 42 });
+      announceLookup();
+      await lookupGate;
+    } });
+    try {
+      await lookupReady;
+      if (lookupScope.get('lookup-lifecycle') !== undefined || lookupScope.get('lookup-lifecycle', false)?.value !== 'loading') throw new Error('strict and relaxed loading visibility diverged');
+      if (client.get('lookup-lifecycle', false) !== undefined) throw new Error('relaxed lookup escaped isolation');
+      releaseLookup();
+      await lookupFiber.await();
+      lookupScope.mixin('lookup-lifecycle', ['field']);
+      if (lookupScope.get('lookup-lifecycle')?.value !== 'loading' || lookupScope.field !== 42 || lookupScope.get('field') !== undefined) throw new Error('explicit lookup and reflected property access diverged');
+    } finally {
+      releaseLookup();
+      await lookupFiber.dispose();
+    }
+    if (lookupScope.get('lookup-lifecycle', false) !== undefined) throw new Error('relaxed lookup retained a withdrawn provider');
     if (loaderAssets) {
       const loadRuntime = async value => {
         const bindings = blob(value.bindings);

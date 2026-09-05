@@ -93,6 +93,17 @@ impl WasmContext {
 
 #[wasm_bindgen]
 impl WasmContext {
+    /// Reads a service without resolving mixed-in or reflected properties.
+    #[wasm_bindgen(js_name = serviceGet)]
+    pub fn service_get(&self, name: &str, strict: &JsValue) -> JsValue {
+        let value = if strict.is_undefined() || strict.is_truthy() {
+            self.inner.get_named::<JsValue>(name)
+        } else {
+            self.inner.get_named_relaxed::<JsValue>(name)
+        };
+        value.as_deref().cloned().unwrap_or(JsValue::UNDEFINED)
+    }
+
     /// Reads a reflected service or accessor by runtime name.
     ///
     /// # Errors

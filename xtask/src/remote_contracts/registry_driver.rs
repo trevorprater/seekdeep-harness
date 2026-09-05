@@ -33,6 +33,47 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves strict and relaxed lookup through provider lifecycle and isolation', async () => {
+  const root = new Context()
+  root.provide('loading-service', { value: 'root' })
+  const scoped = root.isolate('loading-service', 'loading-scope')
+  let release, started
+  const gate = new Promise(resolve => { release = resolve })
+  const ready = new Promise(resolve => { started = resolve })
+  const fiber = scoped.plugin({
+    name: 'loading-provider',
+    async apply(ctx) {
+      ctx.provide('loading-service', { value: 'scoped' })
+      started()
+      await gate
+    },
+  })
+  try {
+    await ready
+    expect(scoped.get('loading-service')).toBeUndefined()
+    expect(scoped.get('loading-service', true)).toBeUndefined()
+    expect(scoped.get('loading-service', false)?.value).toBe('scoped')
+    expect(root.get('loading-service', false)?.value).toBe('root')
+    expect(scoped.get('missing-service', false)).toBeUndefined()
+    release()
+    await fiber.await()
+    expect(scoped.get('loading-service')?.value).toBe('scoped')
+    expect(scoped.get('loading-service', false)?.value).toBe('scoped')
+  } finally {
+    release()
+    await fiber.dispose()
+  }
+  expect(scoped.get('loading-service', false)).toBeUndefined()
+  expect(root.get('loading-service')?.value).toBe('root')
+})
+it('keeps explicit service lookup separate from reflected properties', () => {
+  const root = new Context()
+  root.provide('property-service', { field: 42 })
+  root.mixin('property-service', ['field'])
+  expect(root.field).toBe(42)
+  expect(root.get('field')).toBeUndefined()
+  expect(root.get('field', false)).toBeUndefined()
+})
 it('preserves metadata descriptors receivers and isolated inheritance', () => {
   const root = new Context()
   root.provide('metadata-service', { value: 'root' })

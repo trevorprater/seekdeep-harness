@@ -1189,7 +1189,7 @@ function wrapContext(core) {
       if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args);
       if (key === 'serial') return (name, ...args) => target.serialArgs(name, args);
       if (key === 'bail') return (name, ...args) => target.bailArgs(name, args);
-      if (key === 'get') return name => traceService(context, target.get(name));
+      if (key === 'get') return (name, strict) => traceService(context, target.serviceGet(name, strict));
       if (key === 'constructor') return wasm.WasmContext;
       if (Reflect.has(target, key)) {
         const value = Reflect.get(target, key, receiver);
@@ -1716,7 +1716,7 @@ function wrapContext(core) {
       if (key === 'parallel') return (name, ...args) => core.parallelArgs(name, args);
       if (key === 'serial') return (name, ...args) => core.serialArgs(name, args);
       if (key === 'bail') return (name, ...args) => core.bailArgs(name, args);
-      if (key === 'get') return name => traceService(receiver, core.get(name));
+      if (key === 'get') return (name, strict) => traceService(receiver, core.serviceGet(name, strict));
       if (key === 'constructor') return Context;
       if (Reflect.has(Context.prototype, key)) return Reflect.get(Context.prototype, key, receiver);
       if (Reflect.has(core, key)) {
@@ -6067,7 +6067,7 @@ mod tests {
             "await init({ module_or_path:",
             "wasm.configureContextWrapper(wrapContext)",
             "traceService(receiver, core.get(key))",
-            "if (key === 'get') return name => traceService(receiver, core.get(name))",
+            "if (key === 'get') return (name, strict) => traceService(receiver, core.serviceGet(name, strict))",
             "new Proxy(data,",
             "core.metaHas(key, Context.prototype)",
             "core.metaGet(key, receiver)",
