@@ -1,0 +1,36 @@
+[package]
+name = "seekdeep-cordis-host-runner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Model-defined Cordis Host package registry and lifecycle"
+
+[dependencies]
+anyhow.workspace = true
+boa_engine.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-cordis-dynamic-types = { path = "../cordis-dynamic-types" }
+seekdeep-agent = { path = "../agent" }
+seekdeep-api-gateway = { path = "../api-gateway" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-typert-protocol = { path = "../typert-protocol" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+seekdeep-cordis-timer = { path = "../cordis-timer" }
+seekdeep-core = { path = "../core" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-typert-registry = { path = "../typert-registry" }
+
+[lints]
+workspace = true

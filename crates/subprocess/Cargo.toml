@@ -1,0 +1,21 @@
+[package]
+name = "seekdeep-subprocess"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+serde.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+parking_lot.workspace = true
+
+[lints]
+workspace = true

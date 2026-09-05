@@ -1,0 +1,29 @@
+[package]
+name = "seekdeep-storage-domain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Schema-validated event-emitting KV domains for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-storage = { path = "../storage" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

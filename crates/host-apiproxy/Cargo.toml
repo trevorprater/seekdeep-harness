@@ -1,0 +1,69 @@
+[package]
+name = "seekdeep-host-apiproxy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+chrono-tz.workspace = true
+crc32fast.workspace = true
+flate2.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+seekdeep-attachment = { path = "../attachment" }
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-default-model = { path = "../agent-default-model" }
+seekdeep-agent-presets = { path = "../agent-presets" }
+seekdeep-api-remotes = { path = "../api-remotes" }
+seekdeep-client-connection = { path = "../client-connection" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-credentials = { path = "../credentials" }
+seekdeep-goal = { path = "../goal" }
+seekdeep-host-directory-picker = { path = "../host-directory-picker" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-jobs = { path = "../jobs" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-settings = { path = "../settings" }
+seekdeep-skill = { path = "../skill" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-session-projection-cache = { path = "../session-projection-cache" }
+seekdeep-session-query = { path = "../session-query" }
+seekdeep-session-title = { path = "../session-title" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-storage-domain = { path = "../storage-domain" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-user-approval = { path = "../user-approval" }
+seekdeep-user-questions = { path = "../user-questions" }
+seekdeep-util = { path = "../util" }
+seekdeep-workspace = { path = "../workspace" }
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-host-webserver = { path = "../host-webserver" }
+seekdeep-jobs-local = { path = "../jobs-local" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-storage = { path = "../storage" }
+seekdeep-storage-json = { path = "../storage-json" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

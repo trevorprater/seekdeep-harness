@@ -11,12 +11,167 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
-clap.workspace = true
+indexmap.workspace = true
+path-clean.workspace = true
+seekdeep-agent = { path = "../../crates/agent" }
+seekdeep-agent-default-model = { path = "../../crates/agent-default-model" }
+seekdeep-agent-instructions = { path = "../../crates/agent-instructions" }
+seekdeep-agent-loop = { path = "../../crates/agent-loop" }
+seekdeep-agent-presets = { path = "../../crates/agent-presets" }
+seekdeep-agent-tool-presentation = { path = "../../crates/agent-tool-presentation" }
+seekdeep-app-boot = { path = "../../crates/app-boot" }
+seekdeep-api-gateway = { path = "../../crates/api-gateway" }
+seekdeep-api-remotes = { path = "../../crates/api-remotes" }
+seekdeep-attachment-local = { path = "../../crates/attachment-local" }
+seekdeep-bash-sandbox = { path = "../../crates/bash-sandbox" }
+seekdeep-client-connection = { path = "../../crates/client-connection" }
+seekdeep-client-hmr = { path = "../../crates/client-hmr" }
+seekdeep-client-locale = { path = "../../crates/client-locale" }
+seekdeep-client-modules = { path = "../../crates/client-modules" }
+seekdeep-client-runtime = { path = "../../crates/client-runtime" }
+seekdeep-client-ui-cordis = { path = "../../crates/client-ui-cordis" }
+seekdeep-client-ui-directory-picker-browse = { path = "../../crates/client-ui-directory-picker-browse" }
+seekdeep-client-ui-directory-picker-native = { path = "../../crates/client-ui-directory-picker-native" }
+seekdeep-client-ui-agent-preset = { path = "../../crates/client-ui-agent-preset" }
+seekdeep-client-ui-conversation = { path = "../../crates/client-ui-conversation" }
+seekdeep-client-ui-commands = { path = "../../crates/client-ui-commands" }
+seekdeep-client-ui-deliverables = { path = "../../crates/client-ui-deliverables" }
+seekdeep-client-ui-goal = { path = "../../crates/client-ui-goal" }
+seekdeep-client-ui-input-trigger = { path = "../../crates/client-ui-input-trigger" }
+seekdeep-client-ui-jobs = { path = "../../crates/client-ui-jobs" }
+seekdeep-client-ui-layout = { path = "../../crates/client-ui-layout" }
+seekdeep-client-ui-message-feedback = { path = "../../crates/client-ui-message-feedback" }
+seekdeep-client-ui-model-selection = { path = "../../crates/client-ui-model-selection" }
+seekdeep-client-ui-permission-presets = { path = "../../crates/client-ui-permission-presets" }
+seekdeep-client-ui-plan = { path = "../../crates/client-ui-plan" }
+seekdeep-client-ui-user-questions = { path = "../../crates/client-ui-user-questions" }
+seekdeep-client-ui-settings = { path = "../../crates/client-ui-settings" }
+seekdeep-client-ui-settings-general = { path = "../../crates/client-ui-settings-general" }
+seekdeep-client-ui-settings-models = { path = "../../crates/client-ui-settings-models" }
+seekdeep-client-ui-settings-plugin-inventory = { path = "../../crates/client-ui-settings-plugin-inventory" }
+seekdeep-client-ui-settings-plugins = { path = "../../crates/client-ui-settings-plugins" }
+seekdeep-client-ui-sidebar = { path = "../../crates/client-ui-sidebar" }
+seekdeep-client-ui-skill = { path = "../../crates/client-ui-skill" }
+seekdeep-client-ui-subagent = { path = "../../crates/client-ui-subagent" }
+seekdeep-client-ui-theme = { path = "../../crates/client-ui-theme" }
+seekdeep-client-ui-tool = { path = "../../crates/client-ui-tool" }
+seekdeep-client-ui-trajectory = { path = "../../crates/client-ui-trajectory" }
+seekdeep-client-ui-workflow-run = { path = "../../crates/client-ui-workflow-run" }
+seekdeep-client-ui-workspace = { path = "../../crates/client-ui-workspace" }
+seekdeep-code-runtime-worker-thread = { path = "../../crates/code-runtime-worker-thread" }
+seekdeep-cmdline = { path = "../../crates/cmdline" }
+seekdeep-command-compact = { path = "../../crates/command-compact" }
+seekdeep-command-feedback = { path = "../../crates/command-feedback" }
+seekdeep-command-goal = { path = "../../crates/command-goal" }
+seekdeep-commands = { path = "../../crates/commands" }
+seekdeep-compaction-basic = { path = "../../crates/compaction-basic" }
+seekdeep-compaction-tool-result-pruner = { path = "../../crates/compaction-tool-result-pruner" }
+seekdeep-cordis = { path = "../../crates/cordis" }
+seekdeep-cordis-client-runner = { path = "../../crates/cordis-client-runner" }
+seekdeep-cordis-host-runner = { path = "../../crates/cordis-host-runner" }
+seekdeep-cordis-timer = { path = "../../crates/cordis-timer" }
+seekdeep-core = { path = "../../crates/core" }
+seekdeep-credentials-local = { path = "../../crates/credentials-local" }
+seekdeep-fs-observation-policy = { path = "../../crates/fs-observation-policy" }
+seekdeep-fs-local = { path = "../../crates/fs-local" }
+seekdeep-fs-sandbox = { path = "../../crates/fs-sandbox" }
+seekdeep-goal = { path = "../../crates/goal" }
+seekdeep-goal-round-driver = { path = "../../crates/goal-round-driver" }
+seekdeep-headless = { path = "../../crates/headless" }
+seekdeep-hmr = { path = "../../crates/hmr" }
+seekdeep-host-directory-picker-auto = { path = "../../crates/host-directory-picker-auto" }
+seekdeep-host-directory-picker-browse = { path = "../../crates/host-directory-picker-browse" }
+seekdeep-host-directory-picker-native = { path = "../../crates/host-directory-picker-native" }
+seekdeep-host-apiproxy = { path = "../../crates/host-apiproxy" }
+seekdeep-host-plugin-inventory = { path = "../../crates/host-plugin-inventory" }
+seekdeep-host-webserver = { path = "../../crates/host-webserver" }
+seekdeep-jobs-local = { path = "../../crates/jobs-local" }
+seekdeep-llm = { path = "../../crates/llm" }
+seekdeep-llm-deepseek = { path = "../../crates/llm-deepseek" }
+seekdeep-llm-pi-ai = { path = "../../crates/llm-pi-ai" }
+seekdeep-llm-retry = { path = "../../crates/llm-retry" }
 seekdeep-loader = { path = "../../crates/loader" }
+seekdeep-message-feedback = { path = "../../crates/message-feedback" }
+seekdeep-mcp-client = { path = "../../crates/mcp-client" }
+seekdeep-permission-presets = { path = "../../crates/permission-presets" }
+seekdeep-persona = { path = "../../crates/persona" }
+seekdeep-plan-mode = { path = "../../crates/plan-mode" }
+seekdeep-pwsh-sandbox = { path = "../../crates/pwsh-sandbox" }
+seekdeep-repeat-tool-reminder = { path = "../../crates/repeat-tool-reminder" }
+seekdeep-sandbox-local = { path = "../../crates/sandbox-local" }
+seekdeep-sandbox-policy = { path = "../../crates/sandbox-policy" }
+seekdeep-session-checkpoint-policy = { path = "../../crates/session-checkpoint-policy" }
+seekdeep-session-log-export = { path = "../../crates/session-log-export" }
+seekdeep-session-persistence = { path = "../../crates/session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../../crates/session-persistence-jsonl" }
+seekdeep-session-projection = { path = "../../crates/session-projection" }
+seekdeep-session-projection-cache = { path = "../../crates/session-projection-cache" }
+seekdeep-session-query-sqlite = { path = "../../crates/session-query-sqlite" }
+seekdeep-session-telemetry-otel = { path = "../../crates/session-telemetry-otel" }
+seekdeep-session-stats = { path = "../../crates/session-stats" }
+seekdeep-session-title = { path = "../../crates/session-title" }
+seekdeep-session-title-first-prompt-llm = { path = "../../crates/session-title-first-prompt-llm" }
+seekdeep-settings-file = { path = "../../crates/settings-file" }
+seekdeep-shell-env = { path = "../../crates/shell-env" }
+seekdeep-skill = { path = "../../crates/skill" }
+seekdeep-skill-badge = { path = "../../crates/skill-badge" }
+seekdeep-skill-filesystem = { path = "../../crates/skill-filesystem" }
+seekdeep-spill-local = { path = "../../crates/spill-local" }
+seekdeep-spill-policy = { path = "../../crates/spill-policy" }
+seekdeep-storage = { path = "../../crates/storage" }
+seekdeep-storage-domain = { path = "../../crates/storage-domain" }
+seekdeep-storage-json = { path = "../../crates/storage-json" }
+seekdeep-subagent = { path = "../../crates/subagent" }
+seekdeep-subagent-fork-in-process = { path = "../../crates/subagent-fork-in-process" }
+seekdeep-subagent-spawn-in-process = { path = "../../crates/subagent-spawn-in-process" }
+seekdeep-subprocess-local = { path = "../../crates/subprocess-local" }
+seekdeep-system-prompt = { path = "../../crates/system-prompt" }
+seekdeep-terminal = { path = "../../crates/terminal" }
+seekdeep-terminal-bash = { path = "../../crates/terminal-bash" }
+seekdeep-token-meter = { path = "../../crates/token-meter" }
+seekdeep-tool-ask-user = { path = "../../crates/tool-ask-user" }
+seekdeep-tool-bash = { path = "../../crates/tool-bash" }
+seekdeep-tool-bash-persistent = { path = "../../crates/tool-bash-persistent" }
+seekdeep-tool-cordis = { path = "../../crates/tool-cordis" }
+seekdeep-tool-fs = { path = "../../crates/tool-fs" }
+seekdeep-tool-fs-search = { path = "../../crates/tool-fs-search" }
+seekdeep-tool-goal = { path = "../../crates/tool-goal" }
+seekdeep-tool-jobs = { path = "../../crates/tool-jobs" }
+seekdeep-tool-pwsh = { path = "../../crates/tool-pwsh" }
+seekdeep-tool-ralph = { path = "../../crates/tool-ralph" }
+seekdeep-tool-skill = { path = "../../crates/tool-skill" }
+seekdeep-tool-str-replace-editor = { path = "../../crates/tool-str-replace-editor" }
+seekdeep-tool-subagent = { path = "../../crates/tool-subagent" }
+seekdeep-tool-subagent-control = { path = "../../crates/tool-subagent-control" }
+seekdeep-tool-subagent-report = { path = "../../crates/tool-subagent-report" }
+seekdeep-tool-todo = { path = "../../crates/tool-todo" }
+seekdeep-tool-timeout-policy = { path = "../../crates/tool-timeout-policy" }
+seekdeep-tool-web = { path = "../../crates/tool-web" }
+seekdeep-tool-workflow = { path = "../../crates/tool-workflow" }
+seekdeep-tools = { path = "../../crates/tools" }
+seekdeep-typert-loader = { path = "../../crates/typert-loader" }
+seekdeep-typert-registry = { path = "../../crates/typert-registry" }
+seekdeep-user-approval = { path = "../../crates/user-approval" }
+seekdeep-user-questions = { path = "../../crates/user-questions" }
+seekdeep-util = { path = "../../crates/util" }
+seekdeep-web = { path = "../../crates/web" }
+seekdeep-web-app = { path = "../../crates/web-app" }
+seekdeep-web-search-deepseek = { path = "../../crates/web-search-deepseek" }
+seekdeep-workflow-worker-thread = { path = "../../crates/workflow-worker-thread" }
+seekdeep-workspace = { path = "../../crates/workspace" }
+serde_json.workspace = true
+terminal_size.workspace = true
 tokio.workspace = true
-tracing.workspace = true
-tracing-subscriber.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+nix.workspace = true
+parking_lot.workspace = true
+portable-pty.workspace = true
+seekdeep-acp-snapshot = { path = "../../crates/acp-snapshot" }
+seekdeep-workflow = { path = "../../crates/workflow" }
+tempfile.workspace = true
 
 [lints]
 workspace = true
-

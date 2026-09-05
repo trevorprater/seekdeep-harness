@@ -1,0 +1,334 @@
+name: Build single-exe
+
+# Native builds for the release targets; see
+# .agents/notes/implemented/architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md.
+# A full target run retains one SDK wheel and three runtime wheels; subset
+# dispatch retains the SDK wheel and selected runtime wheels. Bare executables
+# and source closures are test inputs. Run manually, label a PR `build-exe`
+# (remove and reapply to rerun), or call it from the Python release workflow.
+# Checkout uses the triggering ref, so dispatch needs no separate ref input.
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: Comma-separated runtime targets to build; empty builds all three.
+        type: string
+        required: false
+        default: ''
+      release:
+        description: Run as the native builder for the Python release workflow.
+        type: boolean
+        required: false
+        default: false
+      ci:
+        description: Run as the required Linux x64 Python runtime pull-request check.
+        type: boolean
+        required: false
+        default: false
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: >-
+          Comma-separated runtime targets to build. Any subset of:
+          node24-linux-x64, node24-linux-arm64, node24-macos-arm64.
+          Empty builds all three.
+        type: string
+        required: false
+        default: ''
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  # Keep the called workflow distinct from its caller's concurrency group;
+  # github.workflow identifies the caller inside a reusable workflow and keeps
+  # an ordinary CI run from cancelling a full release validation on the same ref.
+  group: build-single-exe-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # CI runs must never report to the production telemetry endpoint baked
+  # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
+  SEEKDEEP_TELEMETRY_DISABLED: '1'
+  CARGO_INCREMENTAL: '0'
+  CARGO_BUILD_JOBS: '2'
+  MANYLINUX_X64_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:0536c364004fa2a3c5041120b6fe35d84fc5bfe31f04c6a6304f13eac4a67b63
+  MANYLINUX_ARM64_IMAGE: quay.io/pypa/manylinux_2_28_aarch64@sha256:1676a4f178dc6cf8a1d1e3b7e1d71fca891a466ebde72a33880ccda8af3383d8
+
+jobs:
+  # Job-level conditions cannot inspect `matrix`, so validate target names and
+  # construct the matrix before the dependent jobs.
+  plan:
+    name: plan targets
+    if: inputs.ci || inputs.release || github.event_name == 'workflow_dispatch' || github.event.label.name == 'build-exe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      version: ${{ steps.version.outputs.version }}
+      repository-version: ${{ steps.version.outputs.repository-version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+
+      - name: Resolve repository version
+        id: version
+        run: |
+          set -euo pipefail
+          cargo run --quiet --locked -p seekdeep-python-release -- version --github-output >> "$GITHUB_OUTPUT"
+
+      - name: Compute matrix from targets input
+        id: plan
+        env:
+          # Label runs and blank dispatch inputs build all targets.
+          TARGETS: ${{ inputs.targets || 'node24-linux-x64,node24-linux-arm64,node24-macos-arm64' }}
+        run: |
+          set -euo pipefail
+          matrix='[]'
+          IFS=',' read -r -a targets <<< "$TARGETS"
+          for raw in "${targets[@]}"; do
+            t="$(echo "$raw" | xargs)" # trim surrounding whitespace
+            [ -z "$t" ] && continue
+            # Native-only: hosted arm64 Linux uses ubuntu-24.04-arm, while
+            # macos-latest is Apple Silicon.
+            case "$t" in
+              node24-linux-x64)   runner=ubuntu-latest ;;
+              node24-linux-arm64) runner=ubuntu-24.04-arm ;;
+              node24-macos-arm64) runner=macos-latest ;;
+              *)
+                echo "::error::Unknown target '$t'. Supported: node24-linux-x64, node24-linux-arm64, node24-macos-arm64."
+                exit 1
+                ;;
+            esac
+            matrix="$(jq -c --arg target "$t" --arg runner "$runner" '. + [{target: $target, runner: $runner}]' <<< "$matrix")"
+          done
+          if [ "$matrix" = '[]' ]; then
+            echo "::error::The targets input selected nothing to build."
+            exit 1
+          fi
+          echo "Matrix: $matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  sdk-wheel:
+    needs: plan
+    name: seekdeep_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+
+      - uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.10'
+
+      - name: Install Python build tooling
+        run: python -m pip install uv==0.11.23
+
+      - name: Build release-shaped SDK wheel
+        run: >-
+          cargo run --quiet --locked -p seekdeep-python-release -- build
+          --package sdk
+          --output-dir dist-python
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: seekdeep_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
+          path: dist-python/seekdeep_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
+          if-no-files-found: error
+          retention-days: 7
+
+  build:
+    needs: [plan, sdk-wheel]
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select task-local Rust cache directories
+        run: |
+          mkdir -p "$RUNNER_TEMP/seekdeep-sdk-cargo" "$RUNNER_TEMP/seekdeep-sdk-rustup"
+          echo "CARGO_HOME=$RUNNER_TEMP/seekdeep-sdk-cargo" >> "$GITHUB_ENV"
+          echo "RUSTUP_HOME=$RUNNER_TEMP/seekdeep-sdk-rustup" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_HOME }}
+            ${{ env.RUSTUP_HOME }}
+            target
+          key: rust-sdk-${{ runner.os }}-${{ runner.arch }}-1.93.1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            rust-sdk-${{ runner.os }}-${{ runner.arch }}-1.93.1-
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          components: clippy, rustfmt
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.10'
+
+      - name: Install Python build tooling
+        run: python -m pip install uv==0.11.23
+
+      - name: Build Rust executable against manylinux 2.28
+        if: runner.os == 'Linux'
+        env:
+          RUNNER_ARCH: ${{ runner.arch }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          case "$RUNNER_ARCH" in
+            X64) image="$MANYLINUX_X64_IMAGE" ;;
+            ARM64) image="$MANYLINUX_ARM64_IMAGE" ;;
+            *) echo "::error::Unsupported Linux runner architecture $RUNNER_ARCH"; exit 1 ;;
+          esac
+          sdk_rust_bin="$(dirname "$(rustup which --toolchain 1.93.1 cargo)")"
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "$PWD:$PWD" \
+            -v "$CARGO_HOME:$CARGO_HOME" \
+            -v "$RUSTUP_HOME:$RUSTUP_HOME" \
+            -e CARGO_HOME -e RUSTUP_HOME -e CARGO_INCREMENTAL -e CARGO_BUILD_JOBS \
+            -e SEEKDEEP_RUST_BIN="$sdk_rust_bin" \
+            -e CARGO_TARGET_DIR="$PWD/target/manylinux" \
+            -e TARGET -e CI=true \
+            -w "$PWD" \
+            "$image" \
+            bash -euxo pipefail -c '
+              export PATH="$SEEKDEEP_RUST_BIN:$PATH"
+              cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$TARGET"
+              cargo build --locked -p seekdeep-python-runtime-smoke --bin smoke-python-runtime --example python_runtime_sdk_interrupt
+            '
+
+      - name: Build Rust macOS executable and helper
+        if: runner.os == 'macOS'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk -- --targets="$TARGET"
+
+      - name: Resolve platform outputs
+        id: runtime
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          platform="${TARGET#node24-}"
+          exe="$PWD/dist-exe/seekdeep-jsonrpc-agent-pkg-$platform"
+          [ -x "$exe" ] || { echo "::error::$exe missing or not executable"; exit 1; }
+          case "$platform" in
+            linux-x64) wheel=seekdeep_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_x86_64.whl ;;
+            linux-arm64) wheel=seekdeep_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_aarch64.whl ;;
+            macos-arm64) wheel=seekdeep_harness_runtime_bin-$VERSION-py3-none-macosx_14_0_arm64.whl ;;
+            *) echo "::error::Unsupported runtime platform $platform"; exit 1 ;;
+          esac
+          echo "platform=$platform" >> "$GITHUB_OUTPUT"
+          echo "exe=$exe" >> "$GITHUB_OUTPUT"
+          case "$platform" in
+            linux-*) binding="$PWD/dist-exe/seekdeep-python-sdk-ffi-$platform.so" ;;
+            macos-*) binding="$PWD/dist-exe/seekdeep-python-sdk-ffi-$platform.dylib" ;;
+          esac
+          [ -f "$binding" ] || { echo "::error::$binding missing"; exit 1; }
+          echo "binding=$binding" >> "$GITHUB_OUTPUT"
+          echo "wheel=$wheel" >> "$GITHUB_OUTPUT"
+
+      - name: Full-turn SDK, executable snapshot, and direct-binary smoke
+        run: >-
+          uv run --python 3.10 --group test --project python/sdk
+          cargo run --locked -p seekdeep-python-runtime-smoke --
+          --root "$PWD"
+          --scenario all
+          --exe "${{ steps.runtime.outputs.exe }}"
+
+      - name: Build release-shaped runtime wheel
+        run: >-
+          cargo run --quiet --locked -p seekdeep-python-release -- build
+          --package runtime
+          --platform "${{ steps.runtime.outputs.platform }}"
+          --runtime-exe "${{ steps.runtime.outputs.exe }}"
+          --output-dir dist-python
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: seekdeep_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
+          path: dist-python
+
+      - name: Install only the SDK into a clean venv and validate all scenarios
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/seekdeep-sdk-smoke"
+          "$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python" -m pip install \
+            --find-links dist-python \
+            seekdeep-harness-sdk=="$VERSION"
+          sdk_installed_runtime="$("$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python" -I -c "from deepseek_harness_runtime import bundled_runtime_path; print(bundled_runtime_path())")"
+          cargo run --locked -p seekdeep-python-runtime-smoke -- --root "$PWD" \
+            --python "$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python" \
+            --scenario all --exe "$sdk_installed_runtime"
+          cargo run --locked -p seekdeep-python-runtime-smoke --example python_runtime_sdk_interrupt -- \
+            "$RUNNER_TEMP/seekdeep-sdk-smoke/bin/python"
+
+      - name: Check Linux GLIBC requirements
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          readelf --version-info "${{ steps.runtime.outputs.exe }}" "${{ steps.runtime.outputs.binding }}" | tee glibc-versions.txt
+          maximum="$(sed -n 's/.*Name: GLIBC_\([0-9.]*\).*/\1/p' glibc-versions.txt | sort -V | tail -1)"
+          [ -n "$maximum" ] || { echo "::error::No GLIBC requirements found"; exit 1; }
+          dpkg --compare-versions "$maximum" le 2.28 || {
+            echo "::error::Native runtime payload requires GLIBC_$maximum but wheel claims manylinux_2_28"
+            exit 1
+          }
+
+      - name: Check macOS deployment target
+        if: runner.os == 'macOS'
+        env:
+          EXE: ${{ steps.runtime.outputs.exe }}
+          BINDING: ${{ steps.runtime.outputs.binding }}
+        run: >-
+          cargo xtask macos-deployment-target
+          "$EXE" "$EXE-spawn-helper" "$BINDING"
+
+      - name: Run wheel in a manylinux 2.28 container
+        if: runner.os == 'Linux'
+        env:
+          RUNNER_ARCH: ${{ runner.arch }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          case "$RUNNER_ARCH" in
+            X64) image="$MANYLINUX_X64_IMAGE" ;;
+            ARM64) image="$MANYLINUX_ARM64_IMAGE" ;;
+            *) echo "::error::Unsupported Linux runner architecture $RUNNER_ARCH"; exit 1 ;;
+          esac
+          docker run --rm -e VERSION -e SEEKDEEP_TELEMETRY_DISABLED -v "$PWD:/work" -w /work "$image" bash -euxo pipefail -c '
+            /opt/python/cp310-cp310/bin/python -m venv /tmp/seekdeep-sdk
+            /tmp/seekdeep-sdk/bin/python -m pip install --find-links /work/dist-python seekdeep-harness-sdk=="$VERSION"
+            sdk_installed_runtime="$(/tmp/seekdeep-sdk/bin/python -I -c "from deepseek_harness_runtime import bundled_runtime_path; print(bundled_runtime_path())")"
+            /work/target/manylinux/debug/smoke-python-runtime --root /work \
+              --python /tmp/seekdeep-sdk/bin/python --scenario all --exe "$sdk_installed_runtime"
+            /work/target/manylinux/debug/examples/python_runtime_sdk_interrupt /tmp/seekdeep-sdk/bin/python
+          '
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.runtime.outputs.wheel }}
+          path: dist-python/${{ steps.runtime.outputs.wheel }}
+          if-no-files-found: error
+          retention-days: 7

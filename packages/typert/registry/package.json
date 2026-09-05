@@ -1,0 +1,28 @@
+{
+  "name": "@seekdeep-ai/seekdeep-typert-registry",
+  "description": "Rust/WASM Typert reflection registry",
+  "version": "0.1.0-rc.5",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/typert/registry"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    "./client": { "types": "./lib/types/client/index.d.ts", "default": "./lib/client.js" },
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": { "platform": "web", "inject": [], "immediately": true }
+  },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-foundation-wasm --artifact seekdeep_client_foundation_wasm --module-id @seekdeep-ai/seekdeep-typert-registry --out-dir packages/typert/registry/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-foundation-wasm --artifact seekdeep_client_foundation_wasm --module-id @seekdeep-ai/seekdeep-typert-registry --out-dir packages/typert/registry/lib --watch"
+  },
+  "files": ["lib/client.js", "lib/types/**/*.d.ts"],
+  "license": "MIT"
+}

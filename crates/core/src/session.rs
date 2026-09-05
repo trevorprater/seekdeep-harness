@@ -7,42 +7,18 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use parking_lot::Mutex;
-use seekdeep_llm::{ContentBlock, Message, MessageRole};
+use parking_lot::{Mutex, ReentrantMutex};
+pub use seekdeep_llm::SessionId;
+use seekdeep_llm::{ContentBlock, Message, MessageRole, ModelId, ProviderId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::request_header::{EpochHeader, canonical_header, fold_request_header};
+use crate::request_header::{EpochHeader, fold_request_header};
 
 /// Current on-disk session format version.
 pub const SESSION_FORMAT_VERSION: u32 = 0;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-
-/// Opaque session identity.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct SessionId(String);
-
-impl SessionId {
-    /// Brands a raw session identifier.
-    #[must_use]
-    pub fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-
-    /// Exposes the protocol string.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for SessionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
 
 /// Coarse durable origin classification.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,6 +26,23 @@ impl std::fmt::Display for SessionId {
 pub enum SessionOrigin {
     /// Session was created as a child agent.
     Subagent,
+}
+
+/// Why an active agent driver was cancelled.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum AgentCancelCause {
+    /// Direct user cancellation.
+    User,
+    /// Owning parent stopped the child.
+    Parent,
+    /// A lifecycle hook cancelled with a diagnostic reason.
+    Hook {
+        /// Hook-authored reason.
+        reason: String,
+    },
+    /// Agent lifecycle teardown.
+    Disposed,
 }
 
 /// Immutable storage metadata kept outside the conversation log.
@@ -246,9 +239,9 @@ pub struct AppendOptions {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RequestContext {
     /// Registered provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Provider-owned model id.
-    pub model: String,
+    pub model: ModelId,
     /// Advertised combined input/output token capacity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_window: Option<u64>,
@@ -264,7 +257,7 @@ pub enum SessionError {
     #[error("{0}")]
     InvalidEvent(String),
     /// Another append is inside its acceptance/publication section.
-    #[error("session append cannot reenter while another append is being published")]
+    #[error("session append cannot reenter while another append is being accepted")]
     ReentrantAppend,
 }
 
@@ -377,6 +370,7 @@ pub struct Session {
     header: SessionHeader,
     first_live_seq: u64,
     inner: Mutex<SessionInner>,
+    append_gate: ReentrantMutex<()>,
     publisher: Mutex<Option<Weak<dyn SessionPublisher>>>,
 }
 
@@ -446,6 +440,7 @@ impl Session {
             header,
             first_live_seq,
             inner: Mutex::new(inner),
+            append_gate: ReentrantMutex::new(()),
             publisher: Mutex::new(None),
         }))
     }
@@ -504,6 +499,12 @@ impl Session {
         options: AppendOptions,
     ) -> Result<SessionEvent, SessionError> {
         validate_lossless_json(&data)?;
+        // A synchronous nested append on this thread remains an invariant
+        // violation, while independent executor threads queue in commit order.
+        // JavaScript serialized these callers on one event loop; the Rust
+        // runtime must not turn harmless task interleaving into a false
+        // reentrancy failure while publication temporarily releases `inner`.
+        let _append_gate = self.append_gate.lock();
         let mut inner = self.inner.lock();
         if inner.appending {
             return Err(SessionError::ReentrantAppend);
@@ -548,11 +549,11 @@ impl Session {
         let mut inner = self.inner.lock();
         inner.log.push(event.clone());
         inner.surface = next_surface;
+        inner.appending = false;
         drop(inner);
         if let Some(publication) = publication {
             publication.publish();
         }
-        self.inner.lock().appending = false;
         Ok(event)
     }
 
@@ -710,43 +711,55 @@ fn validate_request_header(event: &SessionEvent, index: usize) -> Result<(), Ses
             "seed event at index {index} uses unsupported legacy request/header reason \"fallback\""
         )));
     }
-    let header_value = event.data.get("header").ok_or_else(|| {
-        invalid(format!(
-            "seed request/header at index {index} lacks provider/model"
-        ))
-    })?;
-    let header: EpochHeader = serde_json::from_value(header_value.clone()).map_err(|_| {
-        invalid(format!(
-            "seed request/header at index {index} lacks provider/model"
-        ))
-    })?;
-    if header.config.provider.is_empty() || header.config.model.is_empty() {
+    let header = event
+        .data
+        .get("header")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            invalid(format!(
+                "seed request/header at index {index} lacks provider/model"
+            ))
+        })?;
+    let config = header
+        .get("config")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            invalid(format!(
+                "seed request/header at index {index} lacks provider/model"
+            ))
+        })?;
+    if ["provider", "model"].iter().any(|name| {
+        config
+            .get(*name)
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+    }) {
         return Err(invalid(format!(
             "seed request/header at index {index} lacks provider/model"
         )));
     }
-    if header
-        .config
-        .reasoning_effort
-        .as_ref()
-        .is_some_and(|value| value.as_str().is_empty())
+    if config
+        .get("reasoningEffort")
+        .is_some_and(|value| value.as_str().is_none_or(str::is_empty))
     {
         return Err(invalid(format!(
             "seed request/header at index {index} has an invalid reasoningEffort"
         )));
     }
-    if let Some(defaults) = &header.adapter_defaults {
-        let invalid_marker = defaults.reasoning_effort.is_some_and(|value| !value)
-            || defaults.max_tokens.is_some_and(|value| !value)
-            || defaults.reasoning_effort == Some(true) && header.config.reasoning_effort.is_none()
-            || defaults.max_tokens == Some(true) && header.config.max_tokens.is_none();
+    if let Some(defaults) = header.get("adapterDefaults") {
+        let invalid_marker = defaults.as_object().is_none_or(|defaults| {
+            defaults.iter().any(|(name, marker)| {
+                !matches!(name.as_str(), "reasoningEffort" | "maxTokens")
+                    || marker != &Value::Bool(true)
+                    || !config.contains_key(name)
+            })
+        });
         if invalid_marker {
             return Err(invalid(format!(
                 "seed request/header at index {index} has invalid adapterDefaults"
             )));
         }
     }
-    let _ = canonical_header(header);
     Ok(())
 }
 
@@ -873,7 +886,7 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     };
     let message: Message = serde_json::from_value(message_value.clone())
         .map_err(|_| invalid(format!("{subject} lacks an identified message")))?;
-    if message.id.as_str().is_empty() {
+    if message.id().as_str().is_empty() {
         return Err(invalid(format!("{subject} lacks an identified message")));
     }
     let expected_role = if event.event_type == "assistant/message" {
@@ -881,7 +894,7 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     } else {
         MessageRole::User
     };
-    if message.role != expected_role {
+    if message.role() != expected_role {
         let role = if expected_role == MessageRole::Assistant {
             "assistant"
         } else {
@@ -891,17 +904,17 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
             "{subject} message must have role \"{role}\""
         )));
     }
-    if message.source.kind.is_empty() {
+    if message.source().kind.is_empty() {
         return Err(invalid(format!("{subject} message has invalid source")));
     }
     if event.event_type == "assistant/message" {
         let provider = message
-            .source
+            .source()
             .fields
             .get("provider")
             .and_then(Value::as_str);
-        let model = message.source.fields.get("model").and_then(Value::as_str);
-        if message.source.kind != "model"
+        let model = message.source().fields.get("model").and_then(Value::as_str);
+        if message.source().kind != "model"
             || provider.is_none_or(str::is_empty)
             || model.is_none_or(str::is_empty)
         {
@@ -910,12 +923,12 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     }
     if event.event_type == "tool/result" {
         let source_call_id = message
-            .source
+            .source()
             .fields
             .get("callId")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty());
-        if message.source.kind != "tool" || source_call_id.is_none() {
+        if message.source().kind != "tool" || source_call_id.is_none() {
             return Err(invalid(format!("{subject} message must have tool source")));
         }
         let [
@@ -924,7 +937,7 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
                 content: _,
                 is_error: _,
             },
-        ] = message.content.as_slice()
+        ] = message.content()
         else {
             return Err(invalid(format!(
                 "{subject} message must contain one tool-result block"
@@ -947,7 +960,7 @@ pub fn derive_event_message(event: &SessionEvent) -> Option<Message> {
         "assistant/message" => {
             let message = event.data.get("message")?;
             let message: Message = serde_json::from_value(message.clone()).ok()?;
-            if message.content.is_empty() {
+            if message.content().is_empty() {
                 None
             } else {
                 Some(message)
@@ -972,6 +985,7 @@ fn now_millis() -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use seekdeep_llm::MessageSource;
     use serde_json::json;
 
     use super::*;
@@ -1063,5 +1077,342 @@ mod tests {
         );
         assert!(result.is_err());
         assert_eq!(session.events(), before);
+    }
+
+    fn turn_start_event(seq: u64) -> SessionEvent {
+        SessionEvent {
+            event_type: "turn/start".to_owned(),
+            seq,
+            time: 1,
+            data: json!({"turn": 1}),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        }
+    }
+
+    fn context_event(
+        seq: u64,
+        provider: &str,
+        model: &str,
+        context_window: Option<u64>,
+    ) -> SessionEvent {
+        let mut data = serde_json::Map::new();
+        data.insert("provider".to_owned(), json!(provider));
+        data.insert("model".to_owned(), json!(model));
+        if let Some(window) = context_window {
+            data.insert("contextWindow".to_owned(), json!(window));
+        }
+        SessionEvent {
+            event_type: "request/context".to_owned(),
+            seq,
+            time: 1,
+            data: Value::Object(data),
+            source_event_seqs: None,
+            surface_op: None,
+            ignorable: None,
+        }
+    }
+
+    fn capacity_session(id: &str, records: &[(&str, &str, Option<u64>)]) -> Arc<Session> {
+        let mut seed = vec![turn_start_event(0)];
+        for (index, (provider, model, window)) in records.iter().enumerate() {
+            seed.push(context_event(
+                u64::try_from(index + 1).expect("seq"),
+                provider,
+                model,
+                *window,
+            ));
+        }
+        Session::create(&SessionId::new(id), Some(seed), None).expect("seeded capacity session")
+    }
+
+    #[test]
+    fn request_context_is_none_before_any_record_exists() {
+        let session = Session::create(&SessionId::new("no-capacity"), None, None).expect("new");
+        assert_eq!(session.request_context(), None);
+    }
+
+    #[test]
+    fn request_context_folds_a_seeded_log_taking_the_last_record() {
+        let session = capacity_session(
+            "seeded-capacity",
+            &[
+                ("mock", "m", Some(128_000)),
+                ("mock", "later", Some(256_000)),
+            ],
+        );
+        assert_eq!(
+            session.request_context(),
+            Some(RequestContext {
+                provider: ProviderId::new("mock"),
+                model: ModelId::new("later"),
+                context_window: Some(256_000),
+            })
+        );
+    }
+
+    #[test]
+    fn request_context_advances_incrementally_and_skips_unrelated_events() {
+        let session = capacity_session("incremental-capacity", &[("mock", "m", Some(128_000))]);
+        assert_eq!(
+            session.request_context(),
+            Some(RequestContext {
+                provider: ProviderId::new("mock"),
+                model: ModelId::new("m"),
+                context_window: Some(128_000),
+            })
+        );
+        session
+            .append("todo/write", json!({"todos": []}), AppendOptions::default())
+            .expect("unrelated append");
+        assert_eq!(
+            session.request_context().as_ref().map(|c| c.model.clone()),
+            Some(ModelId::new("m"))
+        );
+        session
+            .append(
+                "request/context",
+                json!({"provider": "mock", "model": "next", "contextWindow": 64_000}),
+                AppendOptions::default(),
+            )
+            .expect("capacity append");
+        assert_eq!(
+            session.request_context(),
+            Some(RequestContext {
+                provider: ProviderId::new("mock"),
+                model: ModelId::new("next"),
+                context_window: Some(64_000),
+            })
+        );
+        session
+            .append(
+                "request/context",
+                json!({"provider": "mock", "model": "unknown"}),
+                AppendOptions::default(),
+            )
+            .expect("capacity append without window");
+        assert_eq!(
+            session.request_context(),
+            Some(RequestContext {
+                provider: ProviderId::new("mock"),
+                model: ModelId::new("unknown"),
+                context_window: None,
+            })
+        );
+    }
+
+    #[test]
+    fn request_context_folds_a_batch_appended_between_reads() {
+        let session = capacity_session("batched-capacity", &[("mock", "m", Some(128_000))]);
+        assert_eq!(
+            session.request_context().as_ref().map(|c| c.context_window),
+            Some(Some(128_000))
+        );
+        session
+            .append(
+                "request/context",
+                json!({"provider": "mock", "model": "m", "contextWindow": 200_000}),
+                AppendOptions::default(),
+            )
+            .expect("capacity append");
+        session
+            .append("todo/write", json!({"todos": []}), AppendOptions::default())
+            .expect("unrelated append");
+        session
+            .append(
+                "request/context",
+                json!({"provider": "mock", "model": "m", "contextWindow": 300_000}),
+                AppendOptions::default(),
+            )
+            .expect("capacity append");
+        assert_eq!(
+            session.request_context().as_ref().map(|c| c.context_window),
+            Some(Some(300_000))
+        );
+    }
+
+    #[test]
+    fn request_context_returns_a_detached_record() {
+        let session = capacity_session("frozen-capacity", &[("mock", "m", Some(128_000))]);
+        let held = session.request_context().expect("folded capacity record");
+        // Mutating the returned owned clone cannot desync the session's state.
+        let mut mutated = held.clone();
+        mutated.context_window = Some(1);
+        assert_eq!(
+            session.request_context().as_ref().map(|c| c.context_window),
+            Some(Some(128_000))
+        );
+    }
+
+    fn user_text(session: &Session, text: &str) -> SessionEvent {
+        let message = Message::user(
+            vec![ContentBlock::Text {
+                text: text.to_owned(),
+            }],
+            MessageSource::user(),
+        );
+        session
+            .append(
+                "user/message",
+                serde_json::to_value(message).expect("serialize user message"),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("user message")
+    }
+
+    fn assistant_text(session: &Session, text: &str, step: i64) -> SessionEvent {
+        let message = Message::assistant(
+            vec![ContentBlock::Text {
+                text: text.to_owned(),
+            }],
+            "mock",
+            "mock",
+        );
+        session
+            .append(
+                "assistant/message",
+                json!({"turn": 1, "step": step, "message": message}),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("assistant message")
+    }
+
+    fn scratch(session: &Arc<Session>) -> Vec<Message> {
+        Session::create(
+            &SessionId::new(format!(
+                "{}-scratch-{}",
+                session.id().as_str(),
+                session.seq()
+            )),
+            Some(session.events()),
+            None,
+        )
+        .expect("scratch session")
+        .derive_messages()
+    }
+
+    #[test]
+    fn derive_messages_stays_value_equal_to_scratch_replay_as_the_log_grows() {
+        let session = Session::create(&SessionId::new("cache-grow"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        user_text(&session, "one");
+        assert_eq!(session.derive_messages(), scratch(&session));
+
+        user_text(&session, "two");
+        assistant_text(&session, "reply", 1);
+        assert_eq!(session.derive_messages(), scratch(&session));
+
+        session
+            .append(
+                "assistant/message",
+                json!({"turn": 1, "step": 2, "message": Message::assistant(vec![], "mock", "mock")}),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("empty assistant");
+        assert_eq!(session.derive_messages(), scratch(&session));
+    }
+
+    #[test]
+    fn derive_messages_rebuilds_on_a_surface_replace() {
+        let session =
+            Session::create(&SessionId::new("cache-replace"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        user_text(&session, "one");
+        user_text(&session, "two");
+        let before_replace = session.derive_messages();
+        assert_eq!(before_replace.len(), 2);
+
+        let nodes = session.surface_nodes();
+        let summary = Message::user(
+            vec![ContentBlock::Text {
+                text: "summary".to_owned(),
+            }],
+            MessageSource::plugin("compact"),
+        );
+        session
+            .append(
+                "user/message",
+                serde_json::to_value(summary).expect("serialize summary"),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::replace(nodes[0], nodes[1])),
+                    source_event_seqs: Some(nodes.clone()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("replace");
+
+        assert_eq!(session.derive_messages().len(), 1);
+        assert_eq!(session.derive_messages(), scratch(&session));
+        assert_eq!(before_replace.len(), 2);
+    }
+
+    #[test]
+    fn derive_messages_returns_a_fresh_array_per_call() {
+        let session =
+            Session::create(&SessionId::new("cache-snapshot"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        user_text(&session, "one");
+        let first = session.derive_messages();
+        user_text(&session, "two");
+        let second = session.derive_messages();
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 2);
+    }
+
+    #[test]
+    fn derive_event_message_matches_the_full_derivation_projection() {
+        let session = Session::create(&SessionId::new("per-event"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        let event = user_text(&session, "hi");
+        let projected = derive_event_message(&event).expect("projected");
+        let full = session.derive_messages();
+        assert_eq!(projected, full[full.len() - 1].clone());
+    }
+
+    #[test]
+    fn derive_event_message_projects_none_for_boundaries_and_empty_assistant() {
+        let session =
+            Session::create(&SessionId::new("per-event-null"), None, None).expect("session");
+        session
+            .append("turn/start", json!({"turn": 1}), AppendOptions::default())
+            .expect("turn start");
+        let boundary = session
+            .append(
+                "step/start",
+                json!({"turn": 1, "step": 1}),
+                AppendOptions::default(),
+            )
+            .expect("step start");
+        assert!(derive_event_message(&boundary).is_none());
+
+        let empty = session
+            .append(
+                "assistant/message",
+                json!({"turn": 1, "step": 1, "message": Message::assistant(vec![], "mock", "mock")}),
+                AppendOptions {
+                    surface_op: Some(SurfaceOp::append()),
+                    ..AppendOptions::default()
+                },
+            )
+            .expect("empty assistant");
+        assert!(derive_event_message(&empty).is_none());
     }
 }

@@ -1,9 +1,12 @@
 [package]
 name = "seekdeep-llm"
+description = "Provider-neutral LLM service interface for SeekDeep Harness"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+readme = "README.md"
 
 [dependencies]
 anyhow.workspace = true
@@ -15,11 +18,19 @@ parking_lot.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+seekdeep-attachment = { path = "../attachment" }
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-identity = { path = "../identity" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-util = { path = "../util" }
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
 
 [lints]
 workspace = true

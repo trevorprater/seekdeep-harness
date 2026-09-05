@@ -1,0 +1,35 @@
+[package]
+name = "seekdeep-sdk-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust subprocess client for the SeekDeep Harness SDK runtime"
+
+[[bin]]
+name = "seekdeep-sdk-fake-runtime"
+path = "tests/fixtures/fake_runtime.rs"
+test = false
+bench = false
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+path-clean.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-sdk-protocol = { path = "../sdk-protocol" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,64 @@
+{
+  "name": "@seekdeep-ai/seekdeep-tool-ralph",
+  "description": "Model-facing fresh-agent Ralph loop over the workflow and subagent seams",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/workflow/tool-ralph"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent": "workspace:^",
+    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-workflow": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-loop": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-loop-testkit": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent-in-process-driver": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent-spawn-in-process": "workspace:^",
+    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-workflow": "workspace:^",
+    "@seekdeep-ai/seekdeep-workflow-worker-thread": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  }
+}

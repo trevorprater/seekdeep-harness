@@ -1,0 +1,66 @@
+{
+  "name": "@seekdeep-ai/seekdeep-session-log-export",
+  "description": "Web Session-log export command and shared download dialog",
+  "version": "0.1.0-rc.5",
+  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/session-query/session-log-export"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
+    "./invariant": { "types": "./lib/types/invariant.d.ts", "default": "./lib/invariant.js" },
+    "./client": { "types": "./lib/types/client/index.d.ts", "default": "./lib/client.js" },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": ["lib/index.js", "lib/invariant.js", "lib/client.js", "lib/types/**/*.d.ts"],
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-session-log-export --artifact seekdeep_session_log_export --module-id @seekdeep-ai/seekdeep-session-log-export --out-dir packages/session-query/session-log-export/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-session-log-export --artifact seekdeep_session_log_export --module-id @seekdeep-ai/seekdeep-session-log-export --out-dir packages/session-query/session-log-export/lib --watch"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-conversation": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/cordis-plugin-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-conversation": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
+  },
+  "seekdeep": {
+    "client": {
+      "inject": [
+        "@seekdeep-ai/seekdeep-client-locale",
+        "@seekdeep-ai/seekdeep-client-runtime",
+        "@seekdeep-ai/seekdeep-client-ui-commands",
+        "@seekdeep-ai/seekdeep-client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  }
+}

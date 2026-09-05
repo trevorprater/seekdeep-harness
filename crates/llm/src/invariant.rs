@@ -1,46 +1,136 @@
 //! Incremental validation for the LLM stream grammar.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use async_stream::stream;
 use futures::StreamExt;
+use seekdeep_cordis::{EventOptions, EventReply};
+use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 
-use crate::{FinishReason, LlmStream, StreamChunk};
+use crate::{FinishReason, LLM, LlmStream, LlmStreamMiddleware, StreamChunk};
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+const PACKAGE_NAME: &str = "@deepseek-ai/seekdeep-llm";
+
+/// Stable invariant companion name.
+pub const INVARIANT_NAME: &str = "llm-invariant";
+
+/// Registers the package-owned stream and topology invariant companion.
+///
+/// The installer waits for the LLM service, then owns both checks in its child
+/// fiber so disabling or disposing the companion removes them together.
+///
+/// # Errors
+///
+/// Returns ordinary invariant-registry reservation or lifecycle failures.
+pub fn register_invariant(
+    registry: &Arc<InvariantRegistry>,
+) -> anyhow::Result<InvariantRegistration> {
+    registry.register(
+        PACKAGE_NAME,
+        InvariantInstaller::new(["llm"], |context, failure| async move {
+            let runtime = context
+                .get(LLM)
+                .ok_or_else(|| anyhow::anyhow!("llm invariant activated without llm service"))?;
+
+            let stream_failure = failure.clone();
+            let middleware: LlmStreamMiddleware = Arc::new(move |options, next| {
+                validate_stream_with(next(options), stream_failure.clone())
+            });
+            runtime.register_stream_middleware(&context, middleware, true)?;
+
+            let listener_context = context.clone();
+            context.events().on_sync(
+                &context,
+                "llm/adapters-updated",
+                move |_, _| {
+                    let Some(runtime) = listener_context.get(LLM) else {
+                        return Ok(EventReply::Undefined);
+                    };
+                    for provider in runtime.list_providers() {
+                        if runtime.provider_retry_policy(&provider.id).is_err() {
+                            return Err(failure
+                                .fail(format!(
+                                    "llm/adapters-updated fired while provider \"{}\" has no readable registration",
+                                    provider.id
+                                ))
+                                .into());
+                        }
+                    }
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions {
+                    global: true,
+                    ..EventOptions::default()
+                },
+            )?;
+            Ok(())
+        }),
+    )
+}
 
 /// Wraps one provider stream and rejects malformed chunk sequences as consumed.
 #[must_use]
-pub fn validate_stream(mut source: LlmStream) -> LlmStream {
-    Box::pin(stream! {
-        let mut open = HashMap::<u64, String>::new();
-        let mut usage_seen = false;
-        let mut finished = false;
-        while let Some(item) = source.next().await {
-            let chunk = match item {
-                Ok(chunk) => chunk,
-                Err(error) => {
-                    yield Err(error);
+pub fn validate_stream(source: LlmStream) -> LlmStream {
+    validate_stream_inner(source, None)
+}
+
+fn validate_stream_with(
+    source: LlmStream,
+    failure: seekdeep_invariants::InvariantFailure,
+) -> LlmStream {
+    validate_stream_inner(source, Some(failure))
+}
+
+fn validate_stream_inner(
+    source: LlmStream,
+    failure: Option<seekdeep_invariants::InvariantFailure>,
+) -> LlmStream {
+    source.wrap(move |mut source| {
+        Box::pin(stream! {
+            let mut open = HashMap::<u64, String>::new();
+            let mut usage_seen = false;
+            let mut finished = false;
+            while let Some(item) = source.next().await {
+                let chunk = match item {
+                    Ok(chunk) => chunk,
+                    Err(error) => {
+                        yield Err(error);
+                        return;
+                    }
+                };
+                if finished {
+                    let message = format!(
+                        "LLM stream emitted {} after terminal finish", chunk_type(&chunk)
+                    );
+                    yield Err(invariant_error(failure.as_ref(), message));
                     return;
                 }
-            };
-            if finished {
-                yield Err(anyhow::anyhow!(
-                    "LLM stream emitted {} after terminal finish",
-                    chunk_type(&chunk)
+                if let Err(error) = validate_chunk(&chunk, &mut open, &mut usage_seen, &mut finished) {
+                    yield Err(invariant_error(failure.as_ref(), error.to_string()));
+                    return;
+                }
+                yield Ok(chunk);
+            }
+            if !finished {
+                yield Err(invariant_error(
+                    failure.as_ref(),
+                    "LLM stream ended without a terminal finish chunk",
                 ));
-                return;
             }
-            if let Err(error) = validate_chunk(&chunk, &mut open, &mut usage_seen, &mut finished) {
-                yield Err(error);
-                return;
-            }
-            yield Ok(chunk);
-        }
-        if !finished {
-            yield Err(anyhow::anyhow!("LLM stream ended without a terminal finish chunk"));
-        }
+        })
     })
+}
+
+fn invariant_error(
+    failure: Option<&seekdeep_invariants::InvariantFailure>,
+    message: impl Into<String>,
+) -> anyhow::Error {
+    let message = message.into();
+    match failure {
+        Some(failure) => failure.fail(message).into(),
+        None => anyhow::anyhow!(message),
+    }
 }
 
 fn validate_chunk(
@@ -129,13 +219,15 @@ fn chunk_type(chunk: &StreamChunk) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use futures::{StreamExt, stream};
 
     use super::*;
     use crate::ContentBlock;
 
     fn source(chunks: Vec<StreamChunk>) -> LlmStream {
-        Box::pin(stream::iter(chunks.into_iter().map(Ok)))
+        LlmStream::new(stream::iter(chunks.into_iter().map(Ok)))
     }
 
     #[tokio::test]
@@ -190,5 +282,206 @@ mod tests {
                 .as_ref()
                 .is_err_and(|error| error.to_string().contains("requires an open text block"))
         );
+    }
+
+    async fn first_error(chunks: Vec<StreamChunk>) -> String {
+        let mut validated = validate_stream(source(chunks));
+        while let Some(item) = validated.next().await {
+            if let Err(error) = item {
+                return error.to_string();
+            }
+        }
+        panic!("expected invariant failure")
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn rejects_the_complete_source_malformed_grammar_matrix() {
+        let finish = StreamChunk::Finish {
+            reason: FinishReason::Stop,
+            replay_state: None,
+        };
+        let cases = vec![
+            (
+                vec![
+                    StreamChunk::BlockStart {
+                        index: MAX_SAFE_INTEGER + 1,
+                        block_type: "text".to_owned(),
+                    },
+                    finish.clone(),
+                ],
+                "non-negative safe integer",
+            ),
+            (
+                vec![
+                    StreamChunk::BlockStart {
+                        index: 0,
+                        block_type: "text".to_owned(),
+                    },
+                    StreamChunk::BlockStart {
+                        index: 0,
+                        block_type: "text".to_owned(),
+                    },
+                ],
+                "repeated block-start",
+            ),
+            (
+                vec![StreamChunk::TextDelta {
+                    index: 0,
+                    text: "x".to_owned(),
+                }],
+                "requires an open text block",
+            ),
+            (
+                vec![
+                    StreamChunk::BlockStart {
+                        index: 0,
+                        block_type: "reasoning".to_owned(),
+                    },
+                    StreamChunk::TextDelta {
+                        index: 0,
+                        text: "x".to_owned(),
+                    },
+                ],
+                "got reasoning",
+            ),
+            (
+                vec![StreamChunk::BlockEnd {
+                    index: 0,
+                    block: ContentBlock::Text {
+                        text: String::new(),
+                    },
+                }],
+                "has no open block",
+            ),
+            (
+                vec![
+                    StreamChunk::BlockStart {
+                        index: 0,
+                        block_type: "text".to_owned(),
+                    },
+                    StreamChunk::BlockEnd {
+                        index: 0,
+                        block: ContentBlock::Reasoning {
+                            text: String::new(),
+                        },
+                    },
+                ],
+                "closes reasoning, expected text",
+            ),
+            (
+                vec![
+                    StreamChunk::Usage {
+                        usage: crate::TokenUsage {
+                            input_tokens: 0,
+                            output_tokens: 0,
+                            cache_read_tokens: None,
+                            cache_write_tokens: None,
+                            reasoning_tokens: None,
+                        },
+                    },
+                    StreamChunk::Usage {
+                        usage: crate::TokenUsage {
+                            input_tokens: 0,
+                            output_tokens: 0,
+                            cache_read_tokens: None,
+                            cache_write_tokens: None,
+                            reasoning_tokens: None,
+                        },
+                    },
+                ],
+                "usage more than once",
+            ),
+            (
+                vec![
+                    StreamChunk::BlockStart {
+                        index: 0,
+                        block_type: "text".to_owned(),
+                    },
+                    finish.clone(),
+                ],
+                "finished with 1 open block",
+            ),
+            (
+                vec![
+                    finish,
+                    StreamChunk::Usage {
+                        usage: crate::TokenUsage {
+                            input_tokens: 0,
+                            output_tokens: 0,
+                            cache_read_tokens: None,
+                            cache_write_tokens: None,
+                            reasoning_tokens: None,
+                        },
+                    },
+                ],
+                "usage after terminal finish",
+            ),
+            (Vec::new(), "ended without a terminal finish"),
+        ];
+        for (chunks, expected) in cases {
+            assert!(first_error(chunks).await.contains(expected), "{expected}");
+        }
+    }
+
+    #[tokio::test]
+    async fn provider_failure_is_forwarded_without_a_synthetic_missing_finish() {
+        let mut validated = validate_stream(LlmStream::new(stream::iter([Err(anyhow::anyhow!(
+            "provider failed"
+        ))])));
+        assert_eq!(
+            validated
+                .next()
+                .await
+                .expect("error item")
+                .expect_err("provider error")
+                .to_string(),
+            "provider failed"
+        );
+        assert!(validated.next().await.is_none());
+    }
+
+    #[derive(Debug)]
+    struct EmptyAdapter;
+
+    #[async_trait::async_trait]
+    impl crate::LlmAdapter for EmptyAdapter {
+        fn stream(&self, _options: crate::GenerateOptions) -> crate::AdapterStream {
+            crate::AdapterStream::new(stream::empty())
+        }
+    }
+
+    #[tokio::test]
+    async fn registry_companion_activation_and_disposal_own_the_stream_check() {
+        let context = seekdeep_cordis::Context::new();
+        let invariants =
+            InvariantRegistry::install(&context, &seekdeep_invariants::InvariantConfig::default())
+                .expect("registry");
+        let companion = register_invariant(&invariants).expect("companion");
+        let runtime = crate::LlmRuntime::install(&context).expect("runtime");
+        companion.await_ready().await.expect("activate");
+        runtime
+            .register_adapter(&["empty".to_owned()], Arc::new(EmptyAdapter))
+            .expect("adapter");
+        let options = crate::GenerateOptions::new(
+            crate::ProviderId::new("empty"),
+            crate::ModelId::new("m"),
+            Vec::new(),
+        );
+
+        let error = runtime
+            .stream(options.clone())
+            .next()
+            .await
+            .expect("invariant item")
+            .expect_err("missing finish");
+        assert!(
+            error
+                .downcast_ref::<seekdeep_invariants::InvariantError>()
+                .is_some_and(|error| error.code == "INVARIANT")
+        );
+
+        companion.dispose().await.expect("dispose companion");
+        assert!(runtime.stream(options).next().await.is_none());
     }
 }

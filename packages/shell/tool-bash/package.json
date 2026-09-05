@@ -1,0 +1,73 @@
+{
+  "name": "@seekdeep-ai/seekdeep-tool-bash",
+  "description": "Model-facing bash tool with optional generic background-job and sandbox-escalation support",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/shell/tool-bash"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-shell": "workspace:^",
+    "@seekdeep-ai/seekdeep-shell-env": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
+    "@seekdeep-ai/seekdeep-jobs": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-loop": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-loop-testkit": "workspace:^",
+    "@seekdeep-ai/seekdeep-shell": "workspace:^",
+    "@seekdeep-ai/seekdeep-shell-env": "workspace:^",
+    "@seekdeep-ai/seekdeep-bash-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-persistence-jsonl": "workspace:^",
+    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
+    "@seekdeep-ai/seekdeep-jobs": "workspace:^",
+    "@seekdeep-ai/seekdeep-jobs-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-jobs": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  }
+}

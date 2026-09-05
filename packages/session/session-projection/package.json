@@ -1,0 +1,15 @@
+{
+  "name": "@seekdeep-ai/seekdeep-session-projection",
+  "version": "0.1.0-rc.5",
+  "description": "Session-projection seam: the merge-extensible projection type table, the provider contract, and the ctx.sessionProjections registry serving whole current values of log-derived per-session state",
+  "type": "module",
+  "exports": {
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    }
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT"
+}

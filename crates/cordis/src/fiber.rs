@@ -1,6 +1,13 @@
 //! Plugin lifecycle ownership and reversible effects.
 
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{
+        Arc, Weak,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use parking_lot::Mutex;
 use thiserror::Error;
@@ -8,7 +15,11 @@ use tokio::sync::Notify;
 use uuid::Uuid;
 
 /// Boxed asynchronous disposer result.
+#[cfg(not(target_arch = "wasm32"))]
 pub type DisposeFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>>;
+/// Browser disposers stay on the page's single-threaded local executor.
+#[cfg(target_arch = "wasm32")]
+pub type DisposeFuture = Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'static>>;
 
 type Disposer = Box<dyn FnOnce() -> DisposeFuture + Send + 'static>;
 
@@ -21,6 +32,26 @@ pub enum CordisError {
     /// Another provider already owns the service slot.
     #[error("service {0:?} is already provided in this scope")]
     DuplicateService(String),
+    /// A service value was assigned before any provider registered it.
+    #[error("cannot set property {0:?} without provide")]
+    MissingService(String),
+    /// A service value was assigned from a fiber other than its provider.
+    #[error("cannot set property {0:?} in multiple fibers")]
+    ServiceOwner(String),
+    /// A service or accessor already declared the same reflected property.
+    #[error("property {name:?} is already declared as {kind}")]
+    PropertyDeclared {
+        /// Reflected property name.
+        name: String,
+        /// Existing declaration kind.
+        kind: &'static str,
+    },
+    /// A synchronous `internal/plugin` creation observer rejected publication.
+    #[error("plugin publication failed: {0}")]
+    PluginPublication(String),
+    /// A synchronous service-publication guard rejected the new provider.
+    #[error("service publication failed: {0}")]
+    ServicePublication(String),
 }
 
 /// Lifecycle state for one mounted plugin.
@@ -53,7 +84,9 @@ enum EffectState {
 }
 
 struct EffectInner {
-    state: tokio::sync::Mutex<EffectState>,
+    // State transitions never await. Synchronous service-change cleanup must not
+    // yield to the enclosing executor just to claim or complete its disposer.
+    state: Mutex<EffectState>,
     notify: Notify,
     label: String,
 }
@@ -81,7 +114,7 @@ impl EffectHandle {
     ) -> Self {
         Self {
             inner: Arc::new(EffectInner {
-                state: tokio::sync::Mutex::new(EffectState::Pending(Some(Box::new(disposer)))),
+                state: Mutex::new(EffectState::Pending(Some(Box::new(disposer)))),
                 notify: Notify::new(),
                 label: label.into(),
             }),
@@ -103,6 +136,7 @@ impl EffectHandle {
     }
 
     /// Runs cleanup once and joins a cleanup already started by another owner.
+    /// An uncontended synchronous disposer completes without an executor handoff.
     ///
     /// # Errors
     ///
@@ -111,7 +145,7 @@ impl EffectHandle {
         loop {
             let notified = self.inner.notify.notified();
             let disposer = {
-                let mut state = self.inner.state.lock().await;
+                let mut state = self.inner.state.lock();
                 match &mut *state {
                     EffectState::Pending(disposer) => {
                         let Some(disposer) = disposer.take() else {
@@ -137,7 +171,7 @@ impl EffectHandle {
                     EffectOutcome::Ok => Ok(()),
                     EffectOutcome::Error(message) => Err(anyhow::anyhow!(message.clone())),
                 };
-                *self.inner.state.lock().await = EffectState::Done(outcome);
+                *self.inner.state.lock() = EffectState::Done(outcome);
                 self.inner.notify.notify_waiters();
                 return result;
             }
@@ -151,6 +185,31 @@ impl EffectHandle {
 struct FiberInner {
     state: FiberState,
     effects: Vec<EffectHandle>,
+    transition: Option<Arc<FiberTransition>>,
+    disposed_outcome: Option<EffectOutcome>,
+}
+
+#[derive(Debug, Default)]
+struct FiberTransition {
+    outcome: Mutex<Option<EffectOutcome>>,
+    notify: Notify,
+}
+
+impl FiberTransition {
+    fn complete(&self, outcome: EffectOutcome) {
+        *self.outcome.lock() = Some(outcome);
+        self.notify.notify_waiters();
+    }
+
+    async fn wait(&self) -> EffectOutcome {
+        loop {
+            let notified = self.notify.notified();
+            if let Some(outcome) = self.outcome.lock().clone() {
+                return outcome;
+            }
+            notified.await;
+        }
+    }
 }
 
 /// Runtime instance of one plugin application.
@@ -159,7 +218,10 @@ pub struct Fiber {
     id: Uuid,
     name: String,
     root: bool,
+    parent: Option<Weak<Fiber>>,
     inner: Mutex<FiberInner>,
+    disposal_requested: AtomicBool,
+    disposal_notify: Notify,
 }
 
 impl Fiber {
@@ -170,10 +232,15 @@ impl Fiber {
             id: Uuid::nil(),
             name: "root".to_owned(),
             root: true,
+            parent: None,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Active,
                 effects: Vec::new(),
+                transition: None,
+                disposed_outcome: None,
             }),
+            disposal_requested: AtomicBool::new(false),
+            disposal_notify: Notify::new(),
         })
     }
 
@@ -184,10 +251,34 @@ impl Fiber {
             id: Uuid::now_v7(),
             name: name.into(),
             root: false,
+            parent: None,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Pending,
                 effects: Vec::new(),
+                transition: None,
+                disposed_outcome: None,
             }),
+            disposal_requested: AtomicBool::new(false),
+            disposal_notify: Notify::new(),
+        })
+    }
+
+    /// Creates a pending child linked to its owning parent fiber.
+    #[must_use]
+    pub fn child_of(name: impl Into<String>, parent: &Arc<Fiber>) -> Arc<Self> {
+        Arc::new(Self {
+            id: Uuid::now_v7(),
+            name: name.into(),
+            root: false,
+            parent: Some(Arc::downgrade(parent)),
+            inner: Mutex::new(FiberInner {
+                state: FiberState::Pending,
+                effects: Vec::new(),
+                transition: None,
+                disposed_outcome: None,
+            }),
+            disposal_requested: AtomicBool::new(false),
+            disposal_notify: Notify::new(),
         })
     }
 
@@ -198,10 +289,15 @@ impl Fiber {
             id: Uuid::now_v7(),
             name: name.into(),
             root: false,
+            parent: None,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Active,
                 effects: Vec::new(),
+                transition: None,
+                disposed_outcome: None,
             }),
+            disposal_requested: AtomicBool::new(false),
+            disposal_notify: Notify::new(),
         })
     }
 
@@ -217,10 +313,46 @@ impl Fiber {
         &self.name
     }
 
+    /// Whether this fiber is `root` or belongs to its linked descendant tree.
+    #[must_use]
+    pub fn is_within(self: &Arc<Self>, root: &Arc<Self>) -> bool {
+        let mut current = Some(self.clone());
+        while let Some(fiber) = current {
+            if Arc::ptr_eq(&fiber, root) {
+                return true;
+            }
+            current = fiber.parent.as_ref().and_then(Weak::upgrade);
+        }
+        false
+    }
+
     /// Current lifecycle state.
     #[must_use]
     pub fn state(&self) -> FiberState {
         self.inner.lock().state
+    }
+
+    /// Whether the structural plugin owner has requested permanent disposal.
+    #[must_use]
+    pub fn is_disposal_requested(&self) -> bool {
+        self.disposal_requested.load(Ordering::Acquire)
+    }
+
+    /// Waits until the structural plugin owner requests permanent disposal.
+    pub async fn when_disposing(&self) {
+        loop {
+            let notified = self.disposal_notify.notified();
+            if self.is_disposal_requested() {
+                return;
+            }
+            notified.await;
+        }
+    }
+
+    pub(crate) fn request_disposal(&self) {
+        if !self.disposal_requested.swap(true, Ordering::AcqRel) {
+            self.disposal_notify.notify_waiters();
+        }
     }
 
     pub(crate) fn set_state(&self, state: FiberState) {
@@ -271,13 +403,38 @@ impl Fiber {
     }
 
     async fn clear_effects(&self, final_state: FiberState) -> anyhow::Result<()> {
-        let effects = {
+        enum Clear {
+            Run {
+                effects: Vec<EffectHandle>,
+                transition: Arc<FiberTransition>,
+            },
+            Join(Arc<FiberTransition>),
+            Done(EffectOutcome),
+        }
+
+        let clear = {
             let mut inner = self.inner.lock();
             if inner.state == FiberState::Disposed {
-                return Ok(());
+                Clear::Done(inner.disposed_outcome.clone().unwrap_or(EffectOutcome::Ok))
+            } else if let Some(transition) = &inner.transition {
+                Clear::Join(transition.clone())
+            } else {
+                let transition = Arc::new(FiberTransition::default());
+                inner.state = FiberState::Unloading;
+                inner.transition = Some(transition.clone());
+                Clear::Run {
+                    effects: std::mem::take(&mut inner.effects),
+                    transition,
+                }
             }
-            inner.state = FiberState::Unloading;
-            std::mem::take(&mut inner.effects)
+        };
+        let (effects, transition) = match clear {
+            Clear::Run {
+                effects,
+                transition,
+            } => (effects, transition),
+            Clear::Join(transition) => return effect_outcome(transition.wait().await),
+            Clear::Done(outcome) => return effect_outcome(outcome),
         };
         let mut errors = Vec::new();
         for effect in effects.into_iter().rev() {
@@ -285,11 +442,117 @@ impl Fiber {
                 errors.push(format!("{}: {error:#}", effect.label()));
             }
         }
-        self.inner.lock().state = final_state;
-        if errors.is_empty() {
-            Ok(())
+        let outcome = if errors.is_empty() {
+            EffectOutcome::Ok
         } else {
-            Err(anyhow::anyhow!(errors.join("\n")))
+            EffectOutcome::Error(errors.join("\n"))
+        };
+        {
+            let mut inner = self.inner.lock();
+            inner.state = final_state;
+            inner.transition = None;
+            inner.disposed_outcome = (final_state == FiberState::Disposed).then(|| outcome.clone());
+        }
+        transition.complete(outcome.clone());
+        effect_outcome(outcome)
+    }
+}
+
+fn effect_outcome(outcome: EffectOutcome) -> anyhow::Result<()> {
+    match outcome {
+        EffectOutcome::Ok => Ok(()),
+        EffectOutcome::Error(message) => Err(anyhow::anyhow!(message)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::atomic::{AtomicUsize, Ordering},
+        time::Duration,
+    };
+
+    use futures::FutureExt as _;
+    use tokio::sync::oneshot;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn synchronous_disposal_is_ready_after_cooperative_budget_exhaustion() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let recorded = calls.clone();
+        let effect = EffectHandle::synchronous("synchronous registration", move || {
+            recorded.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        });
+        while tokio::task::coop::has_budget_remaining() {
+            tokio::task::consume_budget().await;
+        }
+        // Service-change callbacks synchronously withdraw registrations. Their cleanup
+        // cannot require the enclosing Tokio task to yield before returning.
+        let result = effect.dispose().now_or_never();
+        assert!(
+            matches!(result, Some(Ok(()))),
+            "synchronous disposal yielded: {result:?}"
+        );
+        assert!(matches!(effect.dispose().now_or_never(), Some(Ok(()))));
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn concurrent_disposal_joins_quiescence_and_replays_the_same_failure() {
+        let fiber = Fiber::active_child("concurrent");
+        let (started, started_rx) = oneshot::channel();
+        let (release, release_rx) = oneshot::channel();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let effect_calls = calls.clone();
+        fiber
+            .own(EffectHandle::new("delayed", move || {
+                effect_calls.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move {
+                    let _ = started.send(());
+                    let _ = release_rx.await;
+                    anyhow::bail!("cleanup exploded")
+                })
+            }))
+            .unwrap();
+        let first_fiber = fiber.clone();
+        let first = tokio::spawn(async move { first_fiber.dispose().await });
+        started_rx.await.unwrap();
+        let second_fiber = fiber.clone();
+        let mut second = tokio::spawn(async move { second_fiber.dispose().await });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), &mut second)
+                .await
+                .is_err(),
+            "a racing disposer returned before quiescence"
+        );
+        release.send(()).unwrap();
+        let first_error = first.await.unwrap().unwrap_err().to_string();
+        let second_error = second.await.unwrap().unwrap_err().to_string();
+        assert_eq!(first_error, "delayed: cleanup exploded");
+        assert_eq!(second_error, first_error);
+        assert_eq!(fiber.dispose().await.unwrap_err().to_string(), first_error);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(fiber.state(), FiberState::Disposed);
+    }
+
+    #[tokio::test]
+    async fn root_restart_can_own_a_fresh_generation_after_each_joined_transition() {
+        let root = Fiber::root();
+        let calls = Arc::new(AtomicUsize::new(0));
+        for expected in 1..=2 {
+            let effect_calls = calls.clone();
+            root.own(EffectHandle::synchronous("generation", move || {
+                effect_calls.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }))
+            .unwrap();
+            let (left, right) = tokio::join!(root.restart(), root.restart());
+            left.unwrap();
+            right.unwrap();
+            assert_eq!(calls.load(Ordering::SeqCst), expected);
+            assert_eq!(root.state(), FiberState::Active);
         }
     }
 }

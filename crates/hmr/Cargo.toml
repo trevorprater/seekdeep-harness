@@ -1,0 +1,27 @@
+[package]
+name = "seekdeep-hmr"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Lifecycle-owned Host hot module replacement for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+notify = "8.2.0"
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-loader = { path = "../loader" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

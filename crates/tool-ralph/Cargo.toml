@@ -1,0 +1,36 @@
+[package]
+name = "seekdeep-tool-ralph"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-workflow = { path = "../workflow" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+async-stream.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-core = { path = "../core" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-subagent-in-process-driver = { path = "../subagent-in-process-driver" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
+seekdeep-workflow-worker-thread = { path = "../workflow-worker-thread" }
+
+[lints]
+workspace = true

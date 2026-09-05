@@ -1,0 +1,58 @@
+[package]
+name = "seekdeep-agent-spine-demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Default executor-less and UI-less SeekDeep agent spine"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-instructions = { path = "../agent-instructions" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-cordis-timer = { path = "../cordis-timer" }
+seekdeep-core = { path = "../core" }
+seekdeep-goal = { path = "../goal" }
+seekdeep-goal-round-driver = { path = "../goal-round-driver" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-jobs = { path = "../jobs" }
+seekdeep-jobs-local = { path = "../jobs-local" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-llm-retry = { path = "../llm-retry" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-session-title = { path = "../session-title" }
+seekdeep-shell-env = { path = "../shell-env" }
+seekdeep-skill = { path = "../skill" }
+seekdeep-skill-filesystem = { path = "../skill-filesystem" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tool-bash = { path = "../tool-bash" }
+seekdeep-tool-goal = { path = "../tool-goal" }
+seekdeep-tool-jobs = { path = "../tool-jobs" }
+seekdeep-tool-skill = { path = "../tool-skill" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
+
+[dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-fs-sandbox = { path = "../fs-sandbox" }
+seekdeep-landlock-run = { path = "../landlock-run" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-bash-sandbox = { path = "../bash-sandbox" }
+seekdeep-tool-fs = { path = "../tool-fs" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

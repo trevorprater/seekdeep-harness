@@ -1,0 +1,27 @@
+[package]
+name = "seekdeep-python-release"
+default-run = "seekdeep-python-release"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+# Selects the Rust compression backend for zip's deflate reader.
+flate2.workspace = true
+indexmap.workspace = true
+regex.workspace = true
+regress.workspace = true
+seekdeep-python-sdk = { path = "../python-sdk" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+serde_yml.workspace = true
+
+[lints]
+workspace = true

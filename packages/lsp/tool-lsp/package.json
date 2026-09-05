@@ -1,0 +1,61 @@
+{
+  "name": "@seekdeep-ai/seekdeep-tool-lsp",
+  "description": "Model-facing lsp tool over the SeekDeep Harness LSP capability seam (ctx.lsp) — one read-only tool with goToDefinition/findReferences/goToImplementation/hover operations, one-based UTF-16 cursor coordinates, bounded location rendering, and hover normalization",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/lsp/tool-lsp"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-lsp": "workspace:^",
+    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
+    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "dependencies": {
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-fs-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-lsp": "workspace:^",
+    "@seekdeep-ai/seekdeep-lsp-stdio": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
+    "@seekdeep-ai/seekdeep-timeout": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-call-timeout-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  }
+}

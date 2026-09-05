@@ -1,0 +1,59 @@
+[package]
+name = "seekdeep-acp-snapshot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Deterministic ACP transcript and Session-log snapshot tooling"
+
+[features]
+default = []
+fixture-bins = []
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-acp = { path = "../acp" }
+seekdeep-core = { path = "../core" }
+seekdeep-loader-smoke = { path = "../loader-smoke" }
+seekdeep-sdk-protocol = { path = "../sdk-protocol" }
+seekdeep-util = { path = "../util" }
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+walkdir.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true
+
+[[bin]]
+name = "acp-snapshot-launcher-fixture"
+path = "src/bin/launcher_fixture.rs"
+test = false
+bench = false
+required-features = ["fixture-bins"]
+
+[[test]]
+name = "launcher_parity"
+path = "tests/launcher_parity.rs"
+required-features = ["fixture-bins"]
+
+[[test]]
+name = "harness_parity"
+path = "tests/harness_parity.rs"
+required-features = ["fixture-bins"]
+
+[[test]]
+name = "suite_parity"
+path = "tests/suite_parity.rs"
+required-features = ["fixture-bins"]
+
+[lints]
+workspace = true

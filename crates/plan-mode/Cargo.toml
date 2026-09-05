@@ -1,0 +1,36 @@
+[package]
+name = "seekdeep-plan-mode"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-commands = { path = "../commands" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-user-questions = { path = "../user-questions" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-code-runtime = { path = "../code-runtime" }
+seekdeep-scope = { path = "../scope" }
+tokio.workspace = true
+
+[lints]
+workspace = true

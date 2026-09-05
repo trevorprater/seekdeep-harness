@@ -1,0 +1,45 @@
+[package]
+name = "seekdeep-sandbox-windows-acl-native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Narrow Win32 FFI adapter for SeekDeep Harness ACL confinement"
+readme = "README.md"
+
+[dependencies]
+seekdeep-sandbox-windows-acl = { path = "../sandbox-windows-acl" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[[bin]]
+name = "windows-acl-run"
+path = "src/bin/windows-acl-run.rs"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Console",
+  "Win32_System_Diagnostics_Debug",
+  "Win32_System_Environment",
+  "Win32_System_IO",
+  "Win32_System_JobObjects",
+  "Win32_System_Memory",
+  "Win32_System_Pipes",
+  "Win32_System_Threading",
+  "Win32_System_WindowsProgramming",
+] }
+
+[dev-dependencies]
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-pwsh-local = { path = "../pwsh-local" }
+seekdeep-pwsh-sandbox = { path = "../pwsh-sandbox" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }

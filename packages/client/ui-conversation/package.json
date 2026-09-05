@@ -1,0 +1,115 @@
+{
+  "name": "@seekdeep-ai/seekdeep-client-ui-conversation",
+  "description": "Conversation domain: skeleton, ordered chat flow, composer with the Host-backed busy-Enter preference, and details host",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/client/ui-conversation"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": {
+      "inject": [
+        "@seekdeep-ai/seekdeep-client-connection",
+        "@seekdeep-ai/seekdeep-client-locale",
+        "@seekdeep-ai/seekdeep-client-runtime",
+        "@seekdeep-ai/seekdeep-client-ui-settings",
+        "@seekdeep-ai/seekdeep-api-remotes",
+        "@seekdeep-ai/seekdeep-client-ui-layout"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-conversation --artifact seekdeep_client_ui_conversation --module-id @seekdeep-ai/seekdeep-client-ui-conversation --out-dir packages/client/ui-conversation/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-conversation --artifact seekdeep_client_ui_conversation --module-id @seekdeep-ai/seekdeep-client-ui-conversation --out-dir packages/client/ui-conversation/lib --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "clsx": "^2.0.0",
+    "@seekdeep-ai/schemastery": "workspace:^"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-attachment": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-attachment": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-input-trigger": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-compaction": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm-retry": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-stats": "workspace:^",
+    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-remotes": "workspace:^",
+    "@seekdeep-ai/seekdeep-attachment": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-connection": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-test-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-layout": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-attachment": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-input-trigger": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-compaction": "workspace:^",
+    "@seekdeep-ai/seekdeep-goal": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm-retry": "workspace:^",
+    "@seekdeep-ai/seekdeep-permission-presets": "workspace:^",
+    "@seekdeep-ai/seekdeep-plan-mode": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-stats": "workspace:^",
+    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-todo": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ]
+}

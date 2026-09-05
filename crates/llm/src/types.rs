@@ -1,15 +1,12 @@
 //! Provider-neutral content, stream, and request vocabulary.
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
-
+use seekdeep_attachment::ImageAttachmentRef;
+pub use seekdeep_util::abort::AbortSignal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use serde_json::{Map, Value};
 
 use crate::{
-    brand::{CallId, ReasoningEffortId},
+    brand::{CallId, ModelId, ProviderId, ReasoningEffortId, SessionId},
     error::LlmFailure,
     message::Message,
 };
@@ -29,8 +26,8 @@ pub enum ContentBlock {
     },
     /// Durable raster attachment reference.
     Image {
-        /// Attachment-service owned reference fields.
-        attachment: Value,
+        /// Attachment-service owned durable reference.
+        attachment: ImageAttachmentRef,
     },
     /// Model-requested tool invocation.
     ToolCall {
@@ -89,7 +86,10 @@ impl Serialize for ContentBlock {
                 object.insert("text".to_owned(), Value::String(text.clone()));
             }
             Self::Image { attachment } => {
-                object.insert("attachment".to_owned(), attachment.clone());
+                object.insert(
+                    "attachment".to_owned(),
+                    serde_json::to_value(attachment).map_err(serde::ser::Error::custom)?,
+                );
             }
             Self::ToolCall {
                 id,
@@ -117,7 +117,12 @@ impl Serialize for ContentBlock {
                     object.insert("isError".to_owned(), Value::Bool(*is_error));
                 }
             }
-            Self::Unknown { fields, .. } => object.extend(fields.clone()),
+            Self::Unknown { fields, .. } => object.extend(
+                fields
+                    .iter()
+                    .filter(|(field, _)| field.as_str() != "type")
+                    .map(|(field, value)| (field.clone(), value.clone())),
+            ),
         }
         Value::Object(object).serialize(serializer)
     }
@@ -132,42 +137,44 @@ impl<'de> Deserialize<'de> for ContentBlock {
             return Err(D::Error::custom("content block must be an object"));
         };
         let block_type = take_string::<D::Error>(&mut object, "type")?;
-        match block_type.as_str() {
-            "text" => Ok(Self::Text {
-                text: take_string::<D::Error>(&mut object, "text")?,
-            }),
-            "reasoning" => Ok(Self::Reasoning {
-                text: take_string::<D::Error>(&mut object, "text")?,
-            }),
-            "image" => Ok(Self::Image {
-                attachment: object
-                    .remove("attachment")
-                    .ok_or_else(|| D::Error::missing_field("attachment"))?,
-            }),
-            "tool-call" => Ok(Self::ToolCall {
-                id: CallId::new(take_string::<D::Error>(&mut object, "id")?),
-                name: take_string::<D::Error>(&mut object, "name")?,
-                arguments: take_string::<D::Error>(&mut object, "arguments")?,
-            }),
-            "tool-result" => Ok(Self::ToolResult {
-                tool_call_id: CallId::new(take_string::<D::Error>(&mut object, "toolCallId")?),
-                content: serde_json::from_value(
-                    object
-                        .remove("content")
-                        .ok_or_else(|| D::Error::missing_field("content"))?,
-                )
-                .map_err(D::Error::custom)?,
-                is_error: object
-                    .remove("isError")
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .map_err(D::Error::custom)?,
-            }),
-            _ => Ok(Self::Unknown {
+        Ok(
+            decode_known_content_block(&block_type, &object).unwrap_or(Self::Unknown {
                 block_type,
                 fields: object,
             }),
-        }
+        )
+    }
+}
+
+fn decode_known_content_block(
+    block_type: &str,
+    object: &Map<String, Value>,
+) -> Option<ContentBlock> {
+    match block_type {
+        "text" => Some(ContentBlock::Text {
+            text: object.get("text")?.as_str()?.to_owned(),
+        }),
+        "reasoning" => Some(ContentBlock::Reasoning {
+            text: object.get("text")?.as_str()?.to_owned(),
+        }),
+        "image" => Some(ContentBlock::Image {
+            attachment: serde_json::from_value(object.get("attachment")?.clone()).ok()?,
+        }),
+        "tool-call" => Some(ContentBlock::ToolCall {
+            id: CallId::new(object.get("id")?.as_str()?),
+            name: object.get("name")?.as_str()?.to_owned(),
+            arguments: object.get("arguments")?.as_str()?.to_owned(),
+        }),
+        "tool-result" => Some(ContentBlock::ToolResult {
+            tool_call_id: CallId::new(object.get("toolCallId")?.as_str()?),
+            content: serde_json::from_value(object.get("content")?.clone()).ok()?,
+            is_error: object
+                .get("isError")
+                .map(|value| serde_json::from_value(value.clone()))
+                .transpose()
+                .ok()?,
+        }),
+        _ => None,
     }
 }
 
@@ -182,8 +189,7 @@ fn take_string<E: serde::de::Error>(
 }
 
 /// Why a provider response stopped.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FinishReason {
     /// Natural provider stop.
     Stop,
@@ -201,6 +207,90 @@ pub enum FinishReason {
         /// Provider-neutral failure facts.
         failure: LlmFailure,
     },
+    /// Plugin- or future-core reason retained without interpretation.
+    Unknown {
+        /// Merge-extensible reason tag.
+        kind: String,
+        /// Every remaining wire field.
+        fields: Map<String, Value>,
+    },
+}
+
+impl FinishReason {
+    /// Returns the merge-extensible wire tag.
+    #[must_use]
+    pub fn kind(&self) -> &str {
+        match self {
+            Self::Stop => "stop",
+            Self::ToolCalls => "tool-calls",
+            Self::MaxTokens => "max-tokens",
+            Self::Aborted { .. } => "aborted",
+            Self::Error { .. } => "error",
+            Self::Unknown { kind, .. } => kind,
+        }
+    }
+}
+
+impl Serialize for FinishReason {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut object = Map::new();
+        object.insert("kind".to_owned(), Value::String(self.kind().to_owned()));
+        match self {
+            Self::Aborted { failure } | Self::Error { failure } => {
+                object.insert(
+                    "failure".to_owned(),
+                    serde_json::to_value(failure).map_err(serde::ser::Error::custom)?,
+                );
+            }
+            Self::Unknown { fields, .. } => {
+                object.extend(
+                    fields
+                        .iter()
+                        .filter(|(name, _)| name.as_str() != "kind")
+                        .map(|(name, value)| (name.clone(), value.clone())),
+                );
+            }
+            Self::Stop | Self::ToolCalls | Self::MaxTokens => {}
+        }
+        Value::Object(object).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for FinishReason {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let Value::Object(mut object) = Value::deserialize(deserializer)? else {
+            return Err(D::Error::custom("finish reason must be an object"));
+        };
+        let kind = take_string::<D::Error>(&mut object, "kind")?;
+        match kind.as_str() {
+            "stop" => Ok(Self::Stop),
+            "tool-calls" => Ok(Self::ToolCalls),
+            "max-tokens" => Ok(Self::MaxTokens),
+            "aborted" | "error" => {
+                let failure = serde_json::from_value(
+                    object
+                        .remove("failure")
+                        .ok_or_else(|| D::Error::missing_field("failure"))?,
+                )
+                .map_err(D::Error::custom)?;
+                if kind == "aborted" {
+                    Ok(Self::Aborted { failure })
+                } else {
+                    Ok(Self::Error { failure })
+                }
+            }
+            _ => Ok(Self::Unknown {
+                kind,
+                fields: object,
+            }),
+        }
+    }
 }
 
 /// Disjoint token accounting for one call.
@@ -304,7 +394,7 @@ pub struct ToolSchema {
 #[serde(deny_unknown_fields)]
 pub struct LlmProviderInfo {
     /// Provider route key.
-    pub id: String,
+    pub id: ProviderId,
     /// Human-readable provider name.
     pub name: String,
 }
@@ -331,7 +421,7 @@ pub enum LlmProviderAuthentication {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LlmConfigurableProvider {
     /// Provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Human-readable name.
     pub display_name: String,
     /// User-settings namespace.
@@ -350,7 +440,7 @@ pub struct LlmConfigurableProvider {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LlmDiscoveredModel {
     /// Provider model id.
-    pub id: String,
+    pub id: ModelId,
     /// Optional display name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -366,7 +456,7 @@ pub struct LlmDiscoveredModel {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LlmModelDiscoveryRequest {
     /// Existing provider route being edited.
-    pub provider: Option<String>,
+    pub provider: Option<ProviderId>,
     /// Draft endpoint URL.
     pub base_url: Option<String>,
     /// Draft wire protocol.
@@ -382,9 +472,9 @@ pub struct LlmModelDiscoveryRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LlmModelInfo {
     /// Owning provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Exact model id.
-    pub id: String,
+    pub id: ModelId,
     /// Display name.
     pub name: String,
     /// Optional distinction from similar models.
@@ -432,9 +522,9 @@ pub struct LlmModelReasoningInfo {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LlmResolvedModelInfo {
     /// Owning provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Exact model id.
-    pub id: String,
+    pub id: ModelId,
     /// Display name.
     pub name: String,
     /// Optional description.
@@ -454,53 +544,6 @@ pub struct LlmResolvedModelInfo {
     pub reasoning: Option<LlmModelReasoningInfo>,
 }
 
-/// Cloneable caller-cancellation signal.
-#[derive(Debug, Default)]
-struct AbortState {
-    aborted: AtomicBool,
-    sources: Vec<AbortSignal>,
-}
-
-/// Cloneable caller-cancellation signal.
-#[derive(Clone, Debug, Default)]
-pub struct AbortSignal(Arc<AbortState>);
-
-impl AbortSignal {
-    /// Requests cancellation.
-    pub fn abort(&self) {
-        self.0.aborted.store(true, Ordering::Release);
-    }
-
-    /// Whether cancellation has been requested.
-    #[must_use]
-    pub fn is_aborted(&self) -> bool {
-        self.0.aborted.load(Ordering::Acquire) || self.0.sources.iter().any(Self::is_aborted)
-    }
-
-    /// Creates one live signal that observes cancellation from either source.
-    ///
-    /// Equal inputs preserve their exact identity; distinct inputs are kept as
-    /// flat sources so wrapper replacement cannot detach caller cancellation.
-    #[must_use]
-    pub fn fuse(first: &Self, second: &Self) -> Self {
-        if first == second {
-            return first.clone();
-        }
-        Self(Arc::new(AbortState {
-            aborted: AtomicBool::new(false),
-            sources: vec![first.clone(), second.clone()],
-        }))
-    }
-}
-
-impl PartialEq for AbortSignal {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-impl Eq for AbortSignal {}
-
 /// Provider-neutral auxiliary-call classification.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -516,9 +559,9 @@ pub enum LlmRequestPurpose {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LlmCallConfig {
     /// Registered provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Provider-owned model id.
-    pub model: String,
+    pub model: ModelId,
     /// Adapter-owned reasoning level.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffortId>,
@@ -546,13 +589,13 @@ pub struct LlmCallConfigAdapterDefaults {
 }
 
 /// Fully assembled provider-neutral request.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateOptions {
     /// Registered provider route.
-    pub provider: String,
+    pub provider: ProviderId,
     /// Provider-owned model id.
-    pub model: String,
+    pub model: ModelId,
     /// Adapter-owned reasoning level.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffortId>,
@@ -578,10 +621,104 @@ pub struct GenerateOptions {
     pub signal: Option<AbortSignal>,
     /// Session id for routing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
+    pub session_id: Option<SessionId>,
     /// Auxiliary request purpose.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub purpose: Option<LlmRequestPurpose>,
+    /// Process-local identity showing that the agent loop assembled this exact
+    /// request lineage. This field is deliberately absent from every wire
+    /// representation and cannot be supplied by callers.
+    #[serde(skip)]
+    agent_loop_request: Option<uuid::Uuid>,
+}
+
+impl GenerateOptions {
+    /// Creates an unmarked request with every optional field omitted.
+    #[must_use]
+    pub fn new(provider: ProviderId, model: ModelId, messages: Vec<Message>) -> Self {
+        Self {
+            provider,
+            model,
+            reasoning_effort: None,
+            messages,
+            system: None,
+            tools: None,
+            temperature: None,
+            max_tokens: None,
+            stop: None,
+            signal: None,
+            session_id: None,
+            purpose: None,
+            agent_loop_request: None,
+        }
+    }
+
+    /// Marks this request as assembled from an agent session's durable log.
+    ///
+    /// The random process-local identity survives the internal by-value moves
+    /// and clones required by the Rust middleware chain, but never survives a
+    /// serialization boundary.
+    #[must_use]
+    pub fn mark_agent_loop_request(mut self) -> Self {
+        self.agent_loop_request = Some(uuid::Uuid::new_v4());
+        self
+    }
+
+    /// Returns whether the request carries an agent-loop process-local mark.
+    #[must_use]
+    pub const fn is_agent_loop_request(&self) -> bool {
+        self.agent_loop_request.is_some()
+    }
+
+    /// Clones an internally routed request without losing its exact-object mark.
+    ///
+    /// Ordinary [`Clone`] deliberately clears the process-local marker, just
+    /// as spreading or cloning the source JavaScript request creates a distinct
+    /// object absent from its `WeakSet`. Runtime routing uses this narrower
+    /// operation only where Rust ownership requires a value copy while the
+    /// source passes the same object onward.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn clone_preserving_agent_loop_request(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.agent_loop_request = self.agent_loop_request;
+        cloned
+    }
+
+    pub(crate) fn clear_agent_loop_request(&mut self) {
+        self.agent_loop_request = None;
+    }
+}
+
+impl Clone for GenerateOptions {
+    fn clone(&self) -> Self {
+        Self {
+            provider: self.provider.clone(),
+            model: self.model.clone(),
+            reasoning_effort: self.reasoning_effort.clone(),
+            messages: self.messages.clone(),
+            system: self.system.clone(),
+            tools: self.tools.clone(),
+            temperature: self.temperature,
+            max_tokens: self.max_tokens,
+            stop: self.stop.clone(),
+            signal: self.signal.clone(),
+            session_id: self.session_id.clone(),
+            purpose: self.purpose,
+            agent_loop_request: None,
+        }
+    }
+}
+
+/// Marks one request lineage as assembled by the agent loop.
+pub fn mark_agent_loop_request(request: GenerateOptions) -> GenerateOptions {
+    request.mark_agent_loop_request()
+}
+
+/// Tests whether a request carries the process-local agent-loop identity.
+#[must_use]
+pub const fn is_agent_loop_request(request: &GenerateOptions) -> bool {
+    request.is_agent_loop_request()
 }
 
 /// Whether a chunk carries non-empty model output.
@@ -600,5 +737,70 @@ pub fn is_token_delta(chunk: &StreamChunk) -> bool {
         | StreamChunk::BlockEnd { .. }
         | StreamChunk::Usage { .. }
         | StreamChunk::Finish { .. } => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unknown_finish_reasons_round_trip_losslessly() {
+        let wire = serde_json::json!({
+            "kind": "provider-policy",
+            "category": "safety",
+            "retryable": false
+        });
+        let reason: FinishReason = serde_json::from_value(wire.clone()).unwrap();
+        let FinishReason::Unknown { kind, fields } = &reason else {
+            panic!("unknown reason must remain explicit");
+        };
+        assert_eq!(kind, "provider-policy");
+        assert_eq!(fields["category"], "safety");
+        assert_eq!(serde_json::to_value(reason).unwrap(), wire);
+        assert_eq!(
+            serde_json::to_value(FinishReason::Unknown {
+                kind: "provider-policy".to_owned(),
+                fields: serde_json::json!({"kind":"forged","category":"safety"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            })
+            .unwrap(),
+            serde_json::json!({"kind":"provider-policy","category":"safety"})
+        );
+    }
+
+    #[test]
+    fn failure_finish_reason_uses_source_json_field_order() {
+        let reason = FinishReason::Error {
+            failure: LlmFailure {
+                message: "empty".to_owned(),
+                code: "EMPTY_RESPONSE".to_owned(),
+                status: None,
+                provider_retry_after_ms: None,
+                request_id: None,
+            },
+        };
+        assert_eq!(
+            serde_json::to_string(&reason).unwrap(),
+            r#"{"kind":"error","failure":{"message":"empty","code":"EMPTY_RESPONSE"}}"#
+        );
+    }
+
+    #[test]
+    fn agent_loop_mark_belongs_only_to_the_exact_request_value() {
+        let request =
+            GenerateOptions::new(ProviderId::new("mock"), ModelId::new("model"), Vec::new());
+        let copy = request.clone();
+        let marked = request.mark_agent_loop_request();
+        assert!(marked.is_agent_loop_request());
+        assert!(!copy.is_agent_loop_request());
+        assert!(!marked.clone().is_agent_loop_request());
+        assert!(
+            marked
+                .clone_preserving_agent_loop_request()
+                .is_agent_loop_request()
+        );
     }
 }

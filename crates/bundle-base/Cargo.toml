@@ -1,0 +1,16 @@
+[package]
+name = "seekdeep-bundle-base"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Asset-only shared base profile bundle for SeekDeep Harness"
+
+[dev-dependencies]
+indexmap.workspace = true
+seekdeep-loader = { path = "../loader" }
+serde_json.workspace = true
+
+[lints]
+workspace = true

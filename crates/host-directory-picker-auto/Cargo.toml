@@ -1,0 +1,27 @@
+[package]
+name = "seekdeep-host-directory-picker-auto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Boot-time adaptive native-or-browse directory picker composition"
+
+[dependencies]
+anyhow.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-host-webserver = { path = "../host-webserver" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+
+[dev-dependencies]
+seekdeep-host-directory-picker = { path = "../host-directory-picker" }
+seekdeep-host-directory-picker-browse = { path = "../host-directory-picker-browse" }
+seekdeep-host-directory-picker-native = { path = "../host-directory-picker-native" }
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

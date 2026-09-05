@@ -1,0 +1,24 @@
+[package]
+name = "seekdeep-host-plugin-inventory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Trusted Loader plugin inventory types for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-api-gateway = { path = "../api-gateway" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-typert-protocol = { path = "../typert-protocol" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[lints]
+workspace = true

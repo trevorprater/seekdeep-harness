@@ -1,0 +1,801 @@
+/* Cordis definition card: DisclosureRow chrome (leading/chevron/title come from
+   that primitive) plus this card's own trailing run switch and source body.
+   No running sweep: `cordis_define` only registers a definition in host memory,
+   so the call settles in the same turn it starts and the state dot carries the
+   whole signal. */
+
+.seekdeep-cordis-define-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The shared cordis accent (matches ui-tool's [data-tool^='cordis_'] rows). */
+.seekdeep-cordis-define-card .seekdeep-cordis-define-title,
+.seekdeep-cordis-define-card .seekdeep-cordis-define-chevron {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.seekdeep-cordis-define-title {
+  flex: none;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 24px;
+}
+
+.seekdeep-cordis-define-row {
+  gap: 0;
+}
+
+.seekdeep-cordis-define-separator {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  border-radius: 1px;
+  margin: 0 8px;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.seekdeep-cordis-define-name {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The purpose absorbs the remaining width and clips first: the name and the
+   switch are the two parts that must survive a narrow row. */
+.seekdeep-cordis-define-purpose {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.seekdeep-cordis-define-errorSummary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.seekdeep-cordis-define-requestError {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  margin-left: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 24px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.seekdeep-cordis-define-readout {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-left: 8px;
+}
+
+/* Said once in the expanded body: this card records, the panel operates. */
+.seekdeep-cordis-define-panelHint {
+  margin: 4px 0 2px 4px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.seekdeep-cordis-define-statusLabel {
+  font-size: 12px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-caption);
+}
+
+/* The model's question, shown beside the approve/decline pair. */
+.seekdeep-cordis-define-approvalPrompt {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  margin-left: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* A qualified success (nothing acknowledged the dispatch, or the browser half
+   parked on missing services): informational, so it must not read as the error
+   line beside it. */
+.seekdeep-cordis-define-notice {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  margin-left: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 24px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.seekdeep-cordis-define-switch {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* Terminal definitions (unloaded, or lost to a host restart) stay in the flow
+   as a greyed card: the define call is still in the session log, so removing
+   the row would leave a replay hole. */
+.seekdeep-cordis-define-card[data-terminal] .seekdeep-cordis-define-title,
+.seekdeep-cordis-define-card[data-terminal] .seekdeep-cordis-define-name,
+.seekdeep-cordis-define-card[data-terminal] .seekdeep-cordis-define-purpose,
+.seekdeep-cordis-define-card[data-terminal] .seekdeep-cordis-define-statusLabel {
+  color: var(--dsw-alias-label-caption);
+}
+
+.seekdeep-cordis-define-card[data-terminal] .seekdeep-cordis-define-separator {
+  background: var(--dsw-alias-label-caption);
+}
+
+.seekdeep-cordis-define-bodyWrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.seekdeep-cordis-define-sourceCard {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 4px 4px;
+}
+
+.seekdeep-cordis-define-sourceTabs {
+  display: flex;
+  height: 32px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.seekdeep-cordis-define-sourceTab {
+  position: relative;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font: var(--dsw-font-xs-13);
+}
+
+.seekdeep-cordis-define-sourceTab:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.seekdeep-cordis-define-sourceTab:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.seekdeep-cordis-define-sourceTabActive {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.seekdeep-cordis-define-sourceTabActive::after {
+  position: absolute;
+  right: 10px;
+  bottom: 0;
+  left: 10px;
+  height: 2px;
+  border-radius: 1px 1px 0 0;
+  background: var(--dsw-alias-state-business-primary);
+  content: '';
+}
+
+.seekdeep-cordis-define-sourceTab:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.seekdeep-cordis-define-sourcePanel {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.seekdeep-cordis-define-sourceCode {
+  margin: 0;
+}
+
+.seekdeep-cordis-define-codeSection {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  margin: 4px 0 4px 4px;
+  overflow: auto;
+}
+
+.seekdeep-cordis-define-sectionLabel {
+  flex: none;
+  padding: 2px 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.seekdeep-cordis-define-output {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  background: var(--dsw-alias-markdown-code-block);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--dsw-font-markdown-code-block-small);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.seekdeep-cordis-define-output[data-error] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.seekdeep-cordis-define-inspectButton {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 2px 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.seekdeep-cordis-define-card:hover .seekdeep-cordis-define-inspectButton,
+.seekdeep-cordis-define-inspectButton:focus-visible {
+  opacity: 1;
+}
+
+.seekdeep-cordis-define-inspectButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+  color: var(--dsw-alias-label-primary);
+}
+
+.seekdeep-cordis-define-visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seekdeep-cordis-define-inspectButton {
+    transition: none;
+  }
+}
+
+.seekdeep-cordis-run-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.seekdeep-cordis-run-row {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.seekdeep-cordis-run-icon {
+  display: inline-flex;
+  flex: none;
+  margin-right: 8px;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.seekdeep-cordis-run-title {
+  flex: none;
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 24px;
+}
+
+.seekdeep-cordis-run-separator {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  margin: 0 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.seekdeep-cordis-run-summary,
+.seekdeep-cordis-run-error {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-cordis-run-error {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.seekdeep-cordis-run-status {
+  flex: none;
+  margin-left: 8px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 12px;
+  line-height: 24px;
+}
+
+.seekdeep-cordis-run-card[data-cordis-status='awaiting-approval'] .seekdeep-cordis-run-status,
+.seekdeep-cordis-run-card[data-cordis-status='client-pending'] .seekdeep-cordis-run-status {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.seekdeep-cordis-run-card[data-cordis-status='running'] .seekdeep-cordis-run-status {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.seekdeep-cordis-run-card[data-cordis-status='failed'] .seekdeep-cordis-run-status {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.seekdeep-cordis-run-inspect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.seekdeep-cordis-run-card:hover .seekdeep-cordis-run-inspect,
+.seekdeep-cordis-run-inspect:focus-visible {
+  opacity: 1;
+}
+
+.seekdeep-cordis-run-inspect:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.seekdeep-cordis-run-message {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--dsw-alias-button-ghost-active-fill);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.seekdeep-cordis-run-business {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.seekdeep-cordis-run-output {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-markdown-code-block);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-markdown-code-block-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.seekdeep-cordis-run-business .seekdeep-cordis-run-output {
+  border: none;
+  border-radius: 0;
+}
+
+/* Sidebar-foot Cordis action and the fixed list it opens above the footer. */
+
+.seekdeep-cordis-panel-layer {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 49px;
+  margin: 8px 0 0;
+}
+
+.seekdeep-cordis-panel-footerButtons {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.seekdeep-cordis-panel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 49px;
+  padding: 0 8px 0 6px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.seekdeep-cordis-panel-badge:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+
+.seekdeep-cordis-panel-badge[data-active] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.seekdeep-cordis-panel-badgeLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-cordis-panel-badgeCount {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.seekdeep-cordis-panel-layer.seekdeep-cordis-panel-rail {
+  width: 36px;
+  height: 36px;
+  margin: 0;
+}
+
+.seekdeep-cordis-panel-rail .seekdeep-cordis-panel-badge {
+  justify-content: center;
+  gap: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.seekdeep-cordis-panel-rail .seekdeep-cordis-panel-footerButtons {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.seekdeep-cordis-panel-panel {
+  position: fixed;
+  left: 12px;
+  bottom: 128px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  max-width: calc(100vw - 24px);
+  max-height: 60vh;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  box-shadow: var(--dsw-shadow-lv2);
+  /* Only `.seekdeep-cordis-panel-body` scrolls; the header remains fixed above it. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.seekdeep-cordis-panel-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-base);
+}
+
+.seekdeep-cordis-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 12px 12px;
+}
+
+.seekdeep-cordis-panel-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.seekdeep-cordis-panel-note,
+.seekdeep-cordis-panel-readError {
+  margin: 4px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.seekdeep-cordis-panel-readError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Session headings replace per-row ownership markers. */
+.seekdeep-cordis-panel-group {
+  margin: 8px 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--dsw-alias-label-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.seekdeep-cordis-panel-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seekdeep-cordis-panel-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.seekdeep-cordis-panel-row[data-cordis-awaiting] {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.seekdeep-cordis-panel-rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seekdeep-cordis-panel-rowId {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsh-font-mono, monospace);
+  font-size: 11px;
+  line-height: 20px;
+}
+
+.seekdeep-cordis-panel-rowName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-cordis-panel-rowStatus {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--dsw-alias-button-ghost-active-fill);
+  font-size: 11px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.seekdeep-cordis-panel-row[data-cordis-status='idle'] .seekdeep-cordis-panel-rowStatus {
+  background: var(--dsw-alias-button-ghost-active-fill);
+  color: var(--dsw-alias-label-caption);
+}
+
+.seekdeep-cordis-panel-row[data-cordis-status='awaiting-approval'] .seekdeep-cordis-panel-rowStatus,
+.seekdeep-cordis-panel-row[data-cordis-status='client-pending'] .seekdeep-cordis-panel-rowStatus {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.seekdeep-cordis-panel-row[data-cordis-status='failed'] .seekdeep-cordis-panel-rowStatus {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.seekdeep-cordis-panel-row[data-cordis-status='running'] .seekdeep-cordis-panel-rowStatus {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.seekdeep-cordis-panel-rowDetail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.seekdeep-cordis-panel-versionPicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.seekdeep-cordis-panel-versionPicker select {
+  min-width: 0;
+  flex: 1;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+}
+
+.seekdeep-cordis-panel-rowPurpose {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekdeep-cordis-panel-rowError {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.seekdeep-cordis-panel-rowActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seekdeep-cordis-panel-transition {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.seekdeep-cordis-panel-transitionActions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.seekdeep-cordis-panel-transitionActions button {
+  padding: 2px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.seekdeep-cordis-panel-transitionActions button:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.seekdeep-cordis-panel-transitionActions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.seekdeep-cordis-panel-activeVersion {
+  color: var(--dsw-alias-label-caption);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* Matches GoalBar's action controls: compact circular icons whose visible copy
+   lives in a tooltip and accessible name. */
+.seekdeep-cordis-panel-actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.seekdeep-cordis-panel-actionButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.seekdeep-cordis-panel-actionButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.seekdeep-cordis-panel-doubleCheck {
+  position: relative;
+  display: inline-block;
+  width: 17px;
+  height: 14px;
+}
+
+.seekdeep-cordis-panel-doubleCheck svg {
+  position: absolute;
+  top: 1px;
+}
+
+.seekdeep-cordis-panel-doubleCheck svg:first-child {
+  left: 0;
+  opacity: 0.7;
+}
+
+.seekdeep-cordis-panel-doubleCheck svg:last-child {
+  left: 5px;
+}

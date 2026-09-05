@@ -6,15 +6,20 @@ use std::{
 };
 
 use parking_lot::RwLock;
-use seekdeep_cordis::{Context, Fiber};
+use seekdeep_cordis::{Context, EventArgs, EventSubjectToken, Fiber};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+/// Package-owned scoped-dispatch invariants.
+pub mod invariant;
+/// Generated scope-filtered event catalog.
+pub mod scoped_events;
 /// Insertion-ordered named and anonymous registry entries.
 pub mod store;
 
 const SCOPE_META: &str = "seekdeep.scope";
+const SCOPE_CARRIER_META: &str = "seekdeep.scope.carrier";
 
 /// Opaque process-local scope identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -60,6 +65,13 @@ impl ScopeParentBinding {
     /// Returns when the link would make the key its own ancestor.
     pub fn rebind(&self, parent: ScopeKey) -> anyhow::Result<()> {
         link_parent(self.key, parent)
+    }
+
+    /// Removes the parent link owned by this binding.
+    ///
+    /// Returns whether the link was still present. Repeated calls are safe.
+    pub fn unbind(&self) -> bool {
+        parents().write().remove(&self.key).is_some()
     }
 }
 
@@ -180,17 +192,49 @@ pub fn scope_of(context: &Context) -> Option<ScopeKey> {
 /// dispatch key or one of its ancestors.
 #[must_use]
 pub fn scope_target(context: &Context, key: Option<ScopeKey>) -> Context {
-    context.with_event_filter(move |listener| {
+    let target = context.with_event_filter(move |listener| {
         let Some(tag) = scope_of(listener) else {
             return true;
         };
         scope_chain_of(key).contains(&tag)
-    })
+    });
+    target.with_meta(
+        SCOPE_CARRIER_META,
+        key.map_or(Value::Null, |key| Value::String(key.0.to_string())),
+    )
+}
+
+/// Returns whether [`scope_target`] created this routing context.
+#[must_use]
+pub fn is_scope_carrier(context: &Context) -> bool {
+    context.meta(SCOPE_CARRIER_META).is_some()
+}
+
+/// Reads a carrier's routing key, or `None` for an unkeyed/non-carrier context.
+#[must_use]
+pub fn carrier_key_of(context: &Context) -> Option<ScopeKey> {
+    if !is_scope_carrier(context) {
+        return None;
+    }
+    context
+        .meta(SCOPE_CARRIER_META)
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .and_then(|value| Uuid::parse_str(&value).ok())
+        .map(ScopeKey)
+}
+
+/// Attaches the payload subject used to verify one scoped dispatch carrier.
+#[must_use]
+pub fn scoped_event_args(subject: ScopeKey, args: EventArgs) -> EventArgs {
+    args.with_scope_subject(EventSubjectToken::new(subject.as_uuid()))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     use seekdeep_cordis::{EventArgs, EventOptions, EventReply};
+    use tokio::sync::oneshot;
 
     use super::*;
 
@@ -206,6 +250,17 @@ mod tests {
         let child = ScopeKey::new();
         bind_scope_parent(child, agent).expect("child");
         assert!(binding.rebind(child).is_err());
+    }
+
+    #[test]
+    fn binding_unbind_is_idempotent_and_removes_only_its_link() {
+        let parent = ScopeKey::new();
+        let child = ScopeKey::new();
+        let binding = bind_scope_parent(child, parent).unwrap();
+        assert_eq!(scope_parent_of(child), Some(parent));
+        assert!(binding.unbind());
+        assert_eq!(scope_parent_of(child), None);
+        assert!(!binding.unbind());
     }
 
     #[tokio::test]
@@ -251,5 +306,137 @@ mod tests {
         agent.dispose().await.expect("dispose agent");
         preset.dispose().await.expect("dispose preset");
         other.dispose().await.expect("dispose other");
+    }
+
+    #[test]
+    fn routing_carriers_are_distinct_from_scoped_registration_contexts() {
+        let root = Context::new();
+        let key = ScopeKey::new();
+        let scope = create_scope(&root, key, None).unwrap();
+        let carrier = scope_target(&root, Some(key));
+        let unkeyed = scope_target(&root, None);
+        assert!(!is_scope_carrier(&root));
+        assert!(!is_scope_carrier(&scope.context));
+        assert!(is_scope_carrier(&carrier));
+        assert!(is_scope_carrier(&unkeyed));
+        assert_eq!(carrier_key_of(&carrier), Some(key));
+        assert_eq!(carrier_key_of(&unkeyed), None);
+        assert_eq!(scope_of(&carrier), None);
+        assert_eq!(scope_of(&scope.context), Some(key));
+    }
+
+    #[tokio::test]
+    async fn tags_inherit_nearest_and_scope_effects_are_immediately_usable() {
+        let root = Context::new();
+        let outer_key = ScopeKey::new();
+        let inner_key = ScopeKey::new();
+        let outer = create_scope(&root, outer_key, None).unwrap();
+        let inner = create_scope(&outer.context, inner_key, None).unwrap();
+        assert_eq!(scope_of(&root), None);
+        assert_eq!(scope_of(&outer.context), Some(outer_key));
+        assert_eq!(scope_of(&outer.context.clone()), Some(outer_key));
+        assert_eq!(scope_of(&inner.context), Some(inner_key));
+
+        let disposed = Arc::new(AtomicBool::new(false));
+        let effect_disposed = disposed.clone();
+        inner
+            .context
+            .own(seekdeep_cordis::fiber::EffectHandle::synchronous(
+                "synchronous scope effect",
+                move || {
+                    effect_disposed.store(true, Ordering::Release);
+                    Ok(())
+                },
+            ))
+            .unwrap();
+        inner.dispose().await.unwrap();
+        assert!(disposed.load(Ordering::Acquire));
+        outer.dispose().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn public_and_raw_scope_disposal_share_one_quiescence_boundary() {
+        let root = Context::new();
+        let scope = Arc::new(create_scope(&root, ScopeKey::new(), None).unwrap());
+        let (started, started_rx) = oneshot::channel();
+        let (release, release_rx) = oneshot::channel();
+        scope
+            .context
+            .own(seekdeep_cordis::fiber::EffectHandle::new(
+                "delayed scope effect",
+                move || {
+                    Box::pin(async move {
+                        let _ = started.send(());
+                        let _ = release_rx.await;
+                        Ok(())
+                    })
+                },
+            ))
+            .unwrap();
+        let raw_fiber = scope.fiber();
+        let raw = tokio::spawn(async move { raw_fiber.dispose().await });
+        started_rx.await.unwrap();
+        let public_scope = scope.clone();
+        let mut public = tokio::spawn(async move { public_scope.dispose().await });
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(20), &mut public)
+                .await
+                .is_err()
+        );
+        release.send(()).unwrap();
+        raw.await.unwrap().unwrap();
+        public.await.unwrap().unwrap();
+        scope.dispose().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn target_preserves_base_filter_and_global_listener_semantics() {
+        let root = Context::new();
+        let key = ScopeKey::new();
+        let scope = create_scope(&root, key, None).unwrap();
+        let ordinary = Arc::new(AtomicBool::new(false));
+        let ordinary_seen = ordinary.clone();
+        scope
+            .context
+            .events()
+            .on_sync(
+                &scope.context,
+                "scope/filter",
+                move |_, _| {
+                    ordinary_seen.store(true, Ordering::Release);
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )
+            .unwrap();
+        let global = Arc::new(AtomicBool::new(false));
+        let global_seen = global.clone();
+        scope
+            .context
+            .events()
+            .on_sync(
+                &scope.context,
+                "scope/filter",
+                move |_, _| {
+                    global_seen.store(true, Ordering::Release);
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions {
+                    global: true,
+                    ..EventOptions::default()
+                },
+            )
+            .unwrap();
+        let vetoing_base = root.with_event_filter(|_| false);
+        root.events()
+            .emit(
+                &scope_target(&vetoing_base, Some(key)),
+                "scope/filter",
+                &EventArgs::new(),
+            )
+            .unwrap();
+        assert!(!ordinary.load(Ordering::Acquire));
+        assert!(global.load(Ordering::Acquire));
+        scope.dispose().await.unwrap();
     }
 }

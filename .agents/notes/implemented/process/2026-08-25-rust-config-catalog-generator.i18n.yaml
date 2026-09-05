@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-25-rust-config-catalog-generator.md
+2026-08-25-rust-config-catalog-generator.md: fd1cca0778e2817c0c961b72a13d2093c4b06e3e
+2026-08-25-rust-config-catalog-generator.zh.md: def9f6f69443fda9b7f1e85203515791573c8185

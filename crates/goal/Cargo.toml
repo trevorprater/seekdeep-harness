@@ -1,0 +1,42 @@
+[package]
+name = "seekdeep-goal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-api-gateway = { path = "../api-gateway" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-typert-protocol = { path = "../typert-protocol" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-headless = { path = "../headless" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tool-todo = { path = "../tool-todo" }
+seekdeep-tools = { path = "../tools" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

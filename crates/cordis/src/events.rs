@@ -22,15 +22,40 @@ use crate::{
 /// Type-erased event argument.
 pub type EventValue = Arc<dyn Any + Send + Sync>;
 
+/// Opaque identity derived from a scoped event's payload subject.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct EventSubjectToken(Uuid);
+
+impl EventSubjectToken {
+    /// Wraps one process-local subject identity.
+    #[must_use]
+    pub const fn new(value: Uuid) -> Self {
+        Self(value)
+    }
+
+    /// Returns the underlying opaque identity.
+    #[must_use]
+    pub const fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+#[derive(Default)]
+struct EventArgsInner {
+    values: Vec<EventValue>,
+    scope_subject: Option<EventSubjectToken>,
+}
+
 /// Ordered event argument tuple.
 #[derive(Clone, Default)]
-pub struct EventArgs(Arc<Vec<EventValue>>);
+pub struct EventArgs(Arc<EventArgsInner>);
 
 impl std::fmt::Debug for EventArgs {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_tuple("EventArgs")
-            .field(&self.0.len())
+            .field(&self.0.values.len())
+            .field(&self.0.scope_subject)
             .finish()
     }
 }
@@ -45,7 +70,10 @@ impl EventArgs {
     /// Creates an argument list from erased values.
     #[must_use]
     pub fn from_values(values: Vec<EventValue>) -> Self {
-        Self(Arc::new(values))
+        Self(Arc::new(EventArgsInner {
+            values,
+            scope_subject: None,
+        }))
     }
 
     /// Creates a single-value argument list.
@@ -54,22 +82,43 @@ impl EventArgs {
         Self::from_values(vec![Arc::new(value)])
     }
 
+    /// Creates a single-value list without adding another [`Arc`] layer.
+    #[must_use]
+    pub fn one_shared<T: Any + Send + Sync>(value: Arc<T>) -> Self {
+        Self::from_values(vec![value])
+    }
+
     /// Returns a cloned typed argument.
     #[must_use]
     pub fn get<T: Any + Send + Sync>(&self, index: usize) -> Option<Arc<T>> {
-        Arc::downcast::<T>(self.0.get(index)?.clone()).ok()
+        Arc::downcast::<T>(self.0.values.get(index)?.clone()).ok()
+    }
+
+    /// Attaches the payload-derived subject used by scoped dispatch invariants.
+    #[must_use]
+    pub fn with_scope_subject(self, subject: EventSubjectToken) -> Self {
+        Self(Arc::new(EventArgsInner {
+            values: self.0.values.clone(),
+            scope_subject: Some(subject),
+        }))
+    }
+
+    /// Returns the payload-derived subject for a scope-filtered event.
+    #[must_use]
+    pub fn scope_subject(&self) -> Option<EventSubjectToken> {
+        self.0.scope_subject
     }
 
     /// Number of arguments.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.0.len()
+        self.0.values.len()
     }
 
     /// Whether no arguments are present.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.0.values.is_empty()
     }
 }
 
@@ -116,19 +165,72 @@ impl EventReply {
 }
 
 /// Boxed listener computation.
+#[cfg(not(target_arch = "wasm32"))]
 pub type ListenerFuture =
     Pin<Box<dyn Future<Output = anyhow::Result<EventReply>> + Send + 'static>>;
+/// Browser listeners stay on the page's single-threaded local executor.
+#[cfg(target_arch = "wasm32")]
+pub type ListenerFuture = Pin<Box<dyn Future<Output = anyhow::Result<EventReply>> + 'static>>;
+
+/// Immediate value or promise-like result returned by synchronous bail dispatch.
+pub enum BailReply {
+    /// A listener returned an immediate value, or none bailed.
+    Settled(EventReply),
+    /// A listener returned pending asynchronous work; the promise object is
+    /// itself a JavaScript bail value.
+    Pending(ListenerFuture),
+}
+
+impl std::fmt::Debug for BailReply {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Settled(reply) => formatter.debug_tuple("Settled").field(reply).finish(),
+            Self::Pending(_) => formatter.write_str("Pending(..)"),
+        }
+    }
+}
+
+impl BailReply {
+    /// Every pending promise is a bail value; settled null/false/undefined are not.
+    #[must_use]
+    pub fn is_bailed(&self) -> bool {
+        match self {
+            Self::Settled(reply) => reply.is_bailed(),
+            Self::Pending(_) => true,
+        }
+    }
+
+    /// Awaits a pending listener or returns the immediate reply.
+    ///
+    /// # Errors
+    ///
+    /// Returns the listener failure.
+    pub async fn resolve(self) -> anyhow::Result<EventReply> {
+        match self {
+            Self::Settled(reply) => Ok(reply),
+            Self::Pending(future) => future.await,
+        }
+    }
+}
 
 type Listener = Arc<dyn Fn(Context, EventArgs) -> ListenerFuture + Send + Sync>;
 type WaterfallListener = Arc<dyn Fn(Context, EventArgs, Next) -> ListenerFuture + Send + Sync>;
 
 /// One-shot continuation passed to waterfall middleware.
-pub struct Next(Box<dyn FnOnce() -> ListenerFuture + Send>);
+pub struct Next(Box<dyn FnOnce(Option<EventArgs>) -> ListenerFuture + Send>);
 
 impl Next {
     /// Invokes the remaining middleware or the innermost behavior.
     pub fn run(self) -> ListenerFuture {
-        (self.0)()
+        (self.0)(None)
+    }
+
+    /// Invokes the remaining middleware with replacement event arguments.
+    ///
+    /// This is the Rust counterpart of mutating a JavaScript waterfall's
+    /// shared argument object before calling `next()`.
+    pub fn run_with(self, args: EventArgs) -> ListenerFuture {
+        (self.0)(Some(args))
     }
 }
 
@@ -212,6 +314,30 @@ impl PreparedEmission {
             }
         }
     }
+
+    /// Invokes every captured observer, containing immediate failures through
+    /// `on_error` and failures from detached listener work through
+    /// `on_async_error`.
+    ///
+    /// This preserves JavaScript emit semantics for callers that attach a
+    /// rejection handler to promise-like listener returns while still needing
+    /// to distinguish failures thrown before the first asynchronous yield.
+    pub fn emit_contained_with_async_errors(
+        self,
+        mut on_error: impl FnMut(anyhow::Error),
+        on_async_error: &Arc<dyn Fn(anyhow::Error) + Send + Sync>,
+    ) {
+        for hook in self.hooks {
+            if let Err(error) = invoke_emitted_hook_with_async_error(
+                &hook,
+                &self.context,
+                &self.args,
+                on_async_error.clone(),
+            ) {
+                on_error(error);
+            }
+        }
+    }
 }
 
 impl EventBus {
@@ -233,13 +359,49 @@ impl EventBus {
         listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
         options: EventOptions,
     ) -> Result<EffectHandle, CordisError> {
-        let name = name.into();
+        self.register_hook(context, name.into(), Arc::new(listener), options, false)
+    }
+
+    /// Registers an asynchronous listener removed immediately before its first invocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CordisError::InactiveEffect`] if the owning context is inactive.
+    pub fn once(
+        &self,
+        context: &Context,
+        name: impl Into<String>,
+        listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
+        options: EventOptions,
+    ) -> Result<EffectHandle, CordisError> {
+        self.register_hook(context, name.into(), Arc::new(listener), options, true)
+    }
+
+    fn register_hook(
+        &self,
+        context: &Context,
+        name: String,
+        listener: Listener,
+        options: EventOptions,
+        once: bool,
+    ) -> Result<EffectHandle, CordisError> {
         let id = Uuid::now_v7();
+        let listener = if once {
+            let registry = self.hooks.clone();
+            let event_name = name.clone();
+            let listener = listener.clone();
+            Arc::new(move |context, args| {
+                remove_hook(&registry, &event_name, id);
+                listener(context, args)
+            }) as Listener
+        } else {
+            listener
+        };
         let hook = Hook {
             id,
             owner: context.clone(),
             options,
-            listener: Arc::new(listener),
+            listener,
         };
         let mut hooks = self.hooks.write();
         let entries = hooks.entry(name.clone()).or_default();
@@ -280,6 +442,31 @@ impl EventBus {
     ) -> Result<EffectHandle, CordisError> {
         let listener = Arc::new(listener);
         self.on(
+            context,
+            name,
+            move |context, args| {
+                let listener = listener.clone();
+                let result = listener(context, args);
+                Box::pin(async move { result })
+            },
+            options,
+        )
+    }
+
+    /// Registers a synchronous listener removed before its first invocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CordisError::InactiveEffect`] if the owning context is inactive.
+    pub fn once_sync(
+        &self,
+        context: &Context,
+        name: impl Into<String>,
+        listener: impl Fn(Context, EventArgs) -> anyhow::Result<EventReply> + Send + Sync + 'static,
+        options: EventOptions,
+    ) -> Result<EffectHandle, CordisError> {
+        let listener = Arc::new(listener);
+        self.once(
             context,
             name,
             move |context, args| {
@@ -428,6 +615,42 @@ impl EventBus {
         Ok(EventReply::Undefined)
     }
 
+    /// Invokes listeners synchronously until one returns a bail value.
+    ///
+    /// A pending listener future is returned without detaching it because the
+    /// corresponding JavaScript promise is itself the bail value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an immediate listener failure or panic.
+    pub fn bail(
+        &self,
+        dispatch_context: &Context,
+        name: &str,
+        args: &EventArgs,
+    ) -> anyhow::Result<BailReply> {
+        self.notify_internal_dispatch(dispatch_context, DispatchMode::Bail, name, args)?;
+        for hook in self.selected(dispatch_context, name) {
+            let mut future = catch_unwind(AssertUnwindSafe(|| {
+                (hook.listener)(dispatch_context.clone(), args.clone())
+            }))
+            .map_err(|payload| panic_error(&payload))?;
+            let mut task_context = TaskContext::from_waker(noop_waker_ref());
+            match catch_unwind(AssertUnwindSafe(|| future.as_mut().poll(&mut task_context)))
+                .map_err(|payload| panic_error(&payload))?
+            {
+                Poll::Ready(result) => {
+                    let reply = result?;
+                    if reply.is_bailed() {
+                        return Ok(BailReply::Settled(reply));
+                    }
+                }
+                Poll::Pending => return Ok(BailReply::Pending(future)),
+            }
+        }
+        Ok(BailReply::Settled(EventReply::Undefined))
+    }
+
     /// Composes waterfall listeners around `inner`.
     ///
     /// # Errors
@@ -439,6 +662,25 @@ impl EventBus {
         name: &str,
         args: &EventArgs,
         inner: impl FnOnce() -> ListenerFuture + Send + 'static,
+    ) -> anyhow::Result<EventReply> {
+        self.waterfall_with_args(dispatch_context, name, args, move |_| inner())
+            .await
+    }
+
+    /// Composes waterfall listeners around an argument-aware inner operation.
+    ///
+    /// Replacement arguments supplied through [`Next::run_with`] reach both
+    /// downstream listeners and this innermost boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns a middleware or innermost-operation failure.
+    pub async fn waterfall_with_args(
+        &self,
+        dispatch_context: &Context,
+        name: &str,
+        args: &EventArgs,
+        inner: impl FnOnce(EventArgs) -> ListenerFuture + Send + 'static,
     ) -> anyhow::Result<EventReply> {
         self.notify_internal_dispatch(dispatch_context, DispatchMode::Waterfall, name, args)?;
         let hooks = self.selected_waterfall(dispatch_context, name);
@@ -525,21 +767,49 @@ fn invoke_emitted_hook(
     Ok(())
 }
 
+fn invoke_emitted_hook_with_async_error(
+    hook: &Hook,
+    dispatch_context: &Context,
+    args: &EventArgs,
+    on_async_error: Arc<dyn Fn(anyhow::Error) + Send + Sync>,
+) -> anyhow::Result<()> {
+    let mut future = catch_unwind(AssertUnwindSafe(|| {
+        (hook.listener)(dispatch_context.clone(), args.clone())
+    }))
+    .map_err(|payload| panic_error(&payload))?;
+    let mut task_context = TaskContext::from_waker(noop_waker_ref());
+    match catch_unwind(AssertUnwindSafe(|| future.as_mut().poll(&mut task_context)))
+        .map_err(|payload| panic_error(&payload))?
+    {
+        Poll::Ready(result) => result.map(|_| ()),
+        Poll::Pending => {
+            detach_listener_with_error_handler(future, on_async_error);
+            Ok(())
+        }
+    }
+}
+
 fn build_waterfall(
     hooks: &Arc<[WaterfallHook]>,
     index: usize,
     context: Context,
     args: EventArgs,
-    inner: Box<dyn FnOnce() -> ListenerFuture + Send>,
+    inner: Box<dyn FnOnce(EventArgs) -> ListenerFuture + Send>,
 ) -> ListenerFuture {
     let Some(hook) = hooks.get(index).cloned() else {
-        return inner();
+        return inner(args);
     };
     let next_hooks = hooks.clone();
     let next_context = context.clone();
     let next_args = args.clone();
-    let next = Next(Box::new(move || {
-        build_waterfall(&next_hooks, index + 1, next_context, next_args, inner)
+    let next = Next(Box::new(move |replacement| {
+        build_waterfall(
+            &next_hooks,
+            index + 1,
+            next_context,
+            replacement.unwrap_or(next_args),
+            inner,
+        )
     }));
     (hook.listener)(context, args, next)
 }
@@ -550,11 +820,35 @@ fn detach_listener(future: ListenerFuture) {
             tracing::error!(%error, "detached event listener failed");
         }
     };
+    spawn_detached(run);
+}
+
+fn detach_listener_with_error_handler(
+    future: ListenerFuture,
+    on_error: Arc<dyn Fn(anyhow::Error) + Send + Sync>,
+) {
+    let run = async move {
+        match AssertUnwindSafe(future).catch_unwind().await {
+            Ok(Ok(_)) => {}
+            Ok(Err(error)) => on_error(error),
+            Err(payload) => on_error(panic_error(&payload)),
+        }
+    };
+    spawn_detached(run);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_detached(future: impl Future<Output = ()> + Send + 'static) {
     if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-        runtime.spawn(run);
+        runtime.spawn(future);
     } else {
-        std::thread::spawn(move || futures::executor::block_on(run));
+        std::thread::spawn(move || futures::executor::block_on(future));
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn spawn_detached(future: impl Future<Output = ()> + 'static) {
+    wasm_bindgen_futures::spawn_local(future);
 }
 
 fn panic_error(payload: &Box<dyn Any + Send>) -> anyhow::Error {
@@ -634,6 +928,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn contained_emit_routes_detached_rejection_to_the_supplied_handler() {
+        let context = Context::new();
+        let events = context.events();
+        events
+            .on(
+                &context,
+                "example",
+                |_, _| {
+                    Box::pin(async {
+                        tokio::task::yield_now().await;
+                        anyhow::bail!("async observer failed")
+                    })
+                },
+                EventOptions::default(),
+            )
+            .expect("listener");
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let sender = Arc::new(parking_lot::Mutex::new(Some(sender)));
+        let sender_for_handler = sender.clone();
+        let handler: Arc<dyn Fn(anyhow::Error) + Send + Sync> = Arc::new(move |error| {
+            if let Some(sender) = sender_for_handler.lock().take() {
+                let _ = sender.send(error.to_string());
+            }
+        });
+
+        events
+            .prepare_emit(&context, "example", &EventArgs::new())
+            .expect("prepare")
+            .emit_contained_with_async_errors(
+                |error| panic!("unexpected immediate error: {error:#}"),
+                &handler,
+            );
+
+        assert_eq!(
+            receiver.await.expect("handler called"),
+            "async observer failed"
+        );
+    }
+
+    #[tokio::test]
     async fn waterfall_delegates_only_when_next_is_called() {
         let context = Context::new();
         context
@@ -659,6 +993,66 @@ mod tests {
             .await
             .expect("dispatch succeeds");
         assert_eq!(result.downcast::<u32>().as_deref(), Some(&42));
+    }
+
+    #[tokio::test]
+    async fn waterfall_can_replace_arguments_before_delegating() {
+        let context = Context::new();
+        context
+            .events()
+            .on_waterfall(
+                &context,
+                "event",
+                |_, _, next| Box::pin(async move { next.run_with(EventArgs::one(41_u32)).await }),
+                EventOptions::default(),
+            )
+            .expect("first listener");
+        context
+            .events()
+            .on_waterfall(
+                &context,
+                "event",
+                |_, args, _| {
+                    Box::pin(async move {
+                        let value = args.get::<u32>(0).expect("replacement argument");
+                        Ok(EventReply::Value(Arc::new(*value + 1)))
+                    })
+                },
+                EventOptions::default(),
+            )
+            .expect("second listener");
+
+        let result = context
+            .events()
+            .waterfall(&context, "event", &EventArgs::one(0_u32), || {
+                Box::pin(async { anyhow::bail!("short-circuited listener must win") })
+            })
+            .await
+            .expect("dispatch succeeds");
+        assert_eq!(result.downcast::<u32>().as_deref(), Some(&42));
+
+        let inner_context = Context::new();
+        inner_context
+            .events()
+            .on_waterfall(
+                &inner_context,
+                "event",
+                |_, _, next| Box::pin(async move { next.run_with(EventArgs::one(41_u32)).await }),
+                EventOptions::default(),
+            )
+            .expect("replacement listener");
+        let result = inner_context
+            .events()
+            .waterfall_with_args(&inner_context, "event", &EventArgs::one(0_u32), |args| {
+                Box::pin(async move {
+                    Ok(EventReply::Value(
+                        args.get::<u32>(0).expect("inner argument"),
+                    ))
+                })
+            })
+            .await
+            .expect("argument-aware inner succeeds");
+        assert_eq!(result.downcast::<u32>().as_deref(), Some(&41));
     }
 
     #[tokio::test]

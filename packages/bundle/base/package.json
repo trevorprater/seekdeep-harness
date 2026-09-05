@@ -1,0 +1,128 @@
+{
+  "name": "@seekdeep-ai/seekdeep-base",
+  "description": "The shared seekdeep core as a profile bundle: every profile's first patch layer, inserting the base plugin rows over the empty profile root",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/bundle/base"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "seekdeep": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@seekdeep-ai/cordis-plugin-hmr": "workspace:^",
+    "@seekdeep-ai/cordis-plugin-timer": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-default-model": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-loop": "workspace:^",
+    "@seekdeep-ai/seekdeep-attachment-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-shell-env": "workspace:^",
+    "@seekdeep-ai/seekdeep-bash-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-command-compact": "workspace:^",
+    "@seekdeep-ai/seekdeep-command-feedback": "workspace:^",
+    "@seekdeep-ai/seekdeep-command-goal": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-compaction-basic": "workspace:^",
+    "@seekdeep-ai/seekdeep-compaction-tool-result-pruner": "workspace:^",
+    "@seekdeep-ai/seekdeep-credentials-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-fs-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-fs-observation-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-fs-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-goal": "workspace:^",
+    "@seekdeep-ai/seekdeep-goal-round-driver": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-gateway": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm-deepseek": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm-pi-ai": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm-retry": "workspace:^",
+    "@seekdeep-ai/seekdeep-permission-presets": "workspace:^",
+    "@seekdeep-ai/seekdeep-plan-mode": "workspace:^",
+    "@seekdeep-ai/seekdeep-pwsh-sandbox": "workspace:^",
+    "@seekdeep-ai/seekdeep-repeat-tool-reminder": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-sandbox-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-checkpoint-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-persistence-jsonl": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-query-sqlite": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-telemetry-otel": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-title": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-title-first-prompt-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-settings-file": "workspace:^",
+    "@seekdeep-ai/seekdeep-skill": "workspace:^",
+    "@seekdeep-ai/seekdeep-skill-badge": "workspace:^",
+    "@seekdeep-ai/seekdeep-skill-filesystem": "workspace:^",
+    "@seekdeep-ai/seekdeep-spill-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-spill-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent-fork-in-process": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent-spawn-in-process": "workspace:^",
+    "@seekdeep-ai/seekdeep-subprocess-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-system-prompt": "workspace:^",
+    "@seekdeep-ai/seekdeep-jobs-local": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-call-timeout-policy": "workspace:^",
+    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-bash": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-fs": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-fs-search": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-goal": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-pwsh": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-ralph": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-skill": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-str-replace-editor": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-subagent": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-subagent-control": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-subagent-report": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-jobs": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-todo": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-web": "workspace:^",
+    "@seekdeep-ai/seekdeep-tool-workflow": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-typert-loader": "workspace:^",
+    "@seekdeep-ai/seekdeep-typert-registry": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-questions": "workspace:^",
+    "@seekdeep-ai/seekdeep-web": "workspace:^",
+    "@seekdeep-ai/seekdeep-web-search-deepseek": "workspace:^",
+    "@seekdeep-ai/seekdeep-workflow-worker-thread": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-instructions": "workspace:^"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  }
+}

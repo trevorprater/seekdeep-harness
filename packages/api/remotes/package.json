@@ -1,0 +1,96 @@
+{
+  "name": "@seekdeep-ai/seekdeep-api-remotes",
+  "description": "Remote BFF assembly and Host Agent/Session lookup policy",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/api/remotes"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": {
+      "inject": [
+        "@seekdeep-ai/seekdeep-api-gateway"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "bundle": "cargo xtask remote-artifacts",
+    "watch": "cargo xtask wasm-package --package seekdeep-api-remotes-client --artifact seekdeep_api_remotes_client --module-id @seekdeep-ai/seekdeep-api-remotes --out-dir packages/api/remotes/lib --watch"
+  },
+  "license": "MIT",
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "dependencies": {
+    "@seekdeep-ai/seekdeep-typert-protocol": "workspace:^"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-gateway": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-credentials": "workspace:^",
+    "@seekdeep-ai/seekdeep-goal": "workspace:^",
+    "@seekdeep-ai/seekdeep-cordis-host-runner": "workspace:^",
+    "@seekdeep-ai/seekdeep-host-plugin-inventory": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-presets": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-message-feedback": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-typert-registry": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-agent": "workspace:^",
+    "@seekdeep-ai/seekdeep-api-gateway": "workspace:^",
+    "@seekdeep-ai/seekdeep-commands": "workspace:^",
+    "@seekdeep-ai/seekdeep-credentials": "workspace:^",
+    "@seekdeep-ai/seekdeep-goal": "workspace:^",
+    "@seekdeep-ai/seekdeep-cordis-host-runner": "workspace:^",
+    "@seekdeep-ai/seekdeep-host-plugin-inventory": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-agent-presets": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-message-feedback": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-persistence": "workspace:^",
+    "@seekdeep-ai/seekdeep-settings": "workspace:^",
+    "@seekdeep-ai/seekdeep-typert-registry": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  }
+}

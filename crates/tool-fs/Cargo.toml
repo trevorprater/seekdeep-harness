@@ -1,0 +1,38 @@
+[package]
+name = "seekdeep-tool-fs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-attachment = { path = "../attachment" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-fs = { path = "../fs" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-user-approval = { path = "../user-approval" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+seekdeep-core = { path = "../core" }
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-fs-observation-policy = { path = "../fs-observation-policy" }
+seekdeep-fs-sandbox = { path = "../fs-sandbox" }
+seekdeep-scope = { path = "../scope" }
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

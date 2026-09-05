@@ -1,0 +1,44 @@
+[package]
+name = "seekdeep-subagent-codex"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "One-shot official Codex app-server subagent provider for SeekDeep Harness"
+
+[[bin]]
+name = "seekdeep-codex-app-server-fixture"
+path = "tests/fixtures/app_server.rs"
+test = false
+bench = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-sdk-protocol = { path = "../sdk-protocol" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+seekdeep-scope = { path = "../scope" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tool-subagent = { path = "../tool-subagent" }
+seekdeep-tools = { path = "../tools" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

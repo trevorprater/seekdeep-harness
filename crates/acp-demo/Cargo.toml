@@ -1,0 +1,125 @@
+[package]
+name = "seekdeep-acp-demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ACP automation server application"
+
+[[bin]]
+name = "seekdeep-acp-demo"
+path = "src/bin/seekdeep-acp-demo.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "seekdeep-acp-lsp-fixture"
+path = "src/bin/seekdeep-acp-lsp-fixture.rs"
+test = false
+bench = false
+doc = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+num-traits.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-acp = { path = "../acp" }
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-agent-spine-demo = { path = "../agent-spine-demo" }
+seekdeep-agent-instructions = { path = "../agent-instructions" }
+seekdeep-app-boot = { path = "../app-boot" }
+seekdeep-attachment-local = { path = "../attachment-local" }
+seekdeep-bash-local = { path = "../bash-local" }
+seekdeep-bash-sandbox = { path = "../bash-sandbox" }
+seekdeep-code-runtime-worker-thread = { path = "../code-runtime-worker-thread" }
+seekdeep-compaction = { path = "../compaction" }
+seekdeep-compaction-basic = { path = "../compaction-basic" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-cordis-host-runner = { path = "../cordis-host-runner" }
+seekdeep-fs-observation-policy = { path = "../fs-observation-policy" }
+seekdeep-fs-sandbox = { path = "../fs-sandbox" }
+seekdeep-hooks-claude-code = { path = "../hooks-claude-code" }
+seekdeep-hooks-codex = { path = "../hooks-codex" }
+seekdeep-loader = { path = "../loader" }
+seekdeep-llm-deepseek = { path = "../llm-deepseek" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-llm-replay = { path = "../llm-replay" }
+seekdeep-lsp = { path = "../lsp" }
+seekdeep-lsp-stdio = { path = "../lsp-stdio" }
+seekdeep-pwsh-local = { path = "../pwsh-local" }
+seekdeep-repeat-tool-reminder = { path = "../repeat-tool-reminder" }
+seekdeep-sandbox-local = { path = "../sandbox-local" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-session-checkpoint-policy = { path = "../session-checkpoint-policy" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-session-query = { path = "../session-query" }
+seekdeep-session-query-sqlite = { path = "../session-query-sqlite" }
+seekdeep-session-title = { path = "../session-title" }
+seekdeep-session-title-first-prompt-llm = { path = "../session-title-first-prompt-llm" }
+seekdeep-shell-env = { path = "../shell-env" }
+seekdeep-spill-local = { path = "../spill-local" }
+seekdeep-spill-policy = { path = "../spill-policy" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subagent-claude-code = { path = "../subagent-claude-code" }
+seekdeep-subagent-codex = { path = "../subagent-codex" }
+seekdeep-subagent-fork-in-process = { path = "../subagent-fork-in-process" }
+seekdeep-subagent-in-process-driver = { path = "../subagent-in-process-driver" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-terminal = { path = "../terminal" }
+seekdeep-terminal-bash = { path = "../terminal-bash" }
+seekdeep-token-meter = { path = "../token-meter" }
+seekdeep-tool-ask-user = { path = "../tool-ask-user" }
+seekdeep-tool-cordis = { path = "../tool-cordis" }
+seekdeep-tool-fs = { path = "../tool-fs" }
+seekdeep-tool-fs-search = { path = "../tool-fs-search" }
+seekdeep-tool-lsp = { path = "../tool-lsp" }
+seekdeep-tool-pwsh = { path = "../tool-pwsh" }
+seekdeep-tool-ralph = { path = "../tool-ralph" }
+seekdeep-tool-session-query = { path = "../tool-session-query" }
+seekdeep-tool-subagent = { path = "../tool-subagent" }
+seekdeep-tool-subagent-control = { path = "../tool-subagent-control" }
+seekdeep-tool-subagent-report = { path = "../tool-subagent-report" }
+seekdeep-tool-terminal = { path = "../tool-terminal" }
+seekdeep-tool-timeout-policy = { path = "../tool-timeout-policy" }
+seekdeep-tool-todo = { path = "../tool-todo" }
+seekdeep-tool-web = { path = "../tool-web" }
+seekdeep-tool-workflow = { path = "../tool-workflow" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-user-approval = { path = "../user-approval" }
+seekdeep-user-questions = { path = "../user-questions" }
+seekdeep-web = { path = "../web" }
+seekdeep-web-fetch-http = { path = "../web-fetch-http" }
+seekdeep-workflow-worker-thread = { path = "../workflow-worker-thread" }
+seekdeep-jobs-local = { path = "../jobs-local" }
+seekdeep-tool-bash = { path = "../tool-bash" }
+seekdeep-tool-jobs = { path = "../tool-jobs" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+regex.workspace = true
+seekdeep-goal = { path = "../goal" }
+seekdeep-jobs = { path = "../jobs" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-skill = { path = "../skill" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-sdk-protocol = { path = "../sdk-protocol" }
+seekdeep-acp-snapshot = { path = "../acp-snapshot", features = ["fixture-bins"] }
+tempfile.workspace = true
+zstd.workspace = true
+
+[lints]
+workspace = true

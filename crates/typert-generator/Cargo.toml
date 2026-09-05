@@ -1,0 +1,21 @@
+[package]
+name = "seekdeep-typert-generator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+icu_collator.workspace = true
+icu_locale.workspace = true
+indexmap.workspace = true
+regress.workspace = true
+regex.workspace = true
+seekdeep-cordis-api-catalog = { path = "../cordis-api-catalog" }
+serde.workspace = true
+serde_json.workspace = true
+sys-locale.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

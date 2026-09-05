@@ -1,0 +1,40 @@
+[package]
+name = "seekdeep-subagent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-user-approval = { path = "../user-approval" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

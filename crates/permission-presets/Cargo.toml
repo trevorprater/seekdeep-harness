@@ -1,0 +1,38 @@
+[package]
+name = "seekdeep-permission-presets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "User-facing permission presets over sandbox and approval knobs"
+
+[dependencies]
+anyhow.workspace = true
+indexmap.workspace = true
+seekdeep-commands = { path = "../commands" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-sandbox-policy = { path = "../sandbox-policy" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-settings = { path = "../settings" }
+seekdeep-shell = { path = "../shell" }
+seekdeep-user-approval = { path = "../user-approval" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
+tokio.workspace = true
+
+[lints]
+workspace = true

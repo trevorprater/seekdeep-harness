@@ -1,0 +1,30 @@
+[package]
+name = "seekdeep-code-runtime-worker-thread"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+indexmap.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+ryu-js.workspace = true
+seekdeep-code-runtime = { path = "../code-runtime" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+serde.workspace = true
+serde_json.workspace = true
+swc_common.workspace = true
+swc_ecma_parser.workspace = true
+swc_ts_fast_strip.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+v8.workspace = true
+
+[lints]
+workspace = true

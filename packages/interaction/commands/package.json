@@ -1,0 +1,31 @@
+{
+  "name": "@seekdeep-ai/seekdeep-commands",
+  "version": "0.1.0-rc.5",
+  "description": "Plugin-owned human command registry for SeekDeep Harness UIs",
+  "type": "module",
+  "exports": {
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    },
+    "./brand": {
+      "types": "./lib/types/brand.d.ts"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    }
+  },
+  "files": [
+    "lib/types/**/*.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "zod": "4.4.3"
+  }
+}

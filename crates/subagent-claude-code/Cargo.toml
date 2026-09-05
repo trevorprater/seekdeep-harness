@@ -1,0 +1,43 @@
+[package]
+name = "seekdeep-subagent-claude-code"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "One-shot Claude Code subagent provider over the native CLI stream protocol"
+
+[[bin]]
+name = "seekdeep-claude-code-fixture"
+path = "tests/fixtures/fake_claude.rs"
+test = false
+bench = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+seekdeep-loader = { path = "../loader" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-subprocess-local = { path = "../subprocess-local" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tool-subagent = { path = "../tool-subagent" }
+seekdeep-tools = { path = "../tools" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

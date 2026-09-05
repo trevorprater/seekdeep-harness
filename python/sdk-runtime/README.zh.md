@@ -1,0 +1,31 @@
+# SeekDeep Harness 运行时 wheel 包
+
+[English](https://github.com/deepseek-ai/seekdeep-harness/blob/master/python/sdk-runtime/README.md) | 中文
+
+Python SDK 的运行时载体包（分发名 `seekdeep-harness-runtime-bin`，模块名 `deepseek_harness_runtime`）：它定位 `seekdeep-harness-sdk` 客户端要 spawn 的内置运行时二进制，并附带支撑零配置运行的默认配置。
+
+## 运行时载体
+
+两种载体并存于 `src/deepseek_harness_runtime/runtime/` 之下，均由 `cargo run --locked -p seekdeep-python-release --bin build-exe-for-python-sdk --` 构建注入，且均被 git 忽略：
+
+- **exe（生产）**——原生 Rust 可执行程序 `seekdeep-jsonrpc-agent-pkg-<platform>-<arch>`（platform：`linux`/`macos`；arch：`x64`/`arm64`）。macOS 构建还会随附用于 PTY 启动契约的 Rust `-spawn-helper` 伴随文件。目标机器无需安装 Node。这是唯一随 wheel 包分发的载体；本包不发布 sdist。
+- **node（仅限开发）**——`runtime/node/` 下的启动绑定与宿主平台原生产物，在系统 Node >= 22.19 上以 `node runtime/node/node_modules/@seekdeep-ai/seekdeep-sdk-jsonrpc-demo/lib/packaged-bin.js` 执行。绑定将 Node 替换为 Rust 运行时，保留参数、环境和标准流。它仅用于仓库本地的开发与验证；不会被自动选中，也不进入分发物。
+
+两种载体运行相同的编译后运行时。本包根目录的 [package.json](https://github.com/deepseek-ai/seekdeep-harness/blob/master/python/sdk-runtime/package.json) 选择其具体插件目录。新增内置插件时，必须同时提供 Rust 工厂并将其纳入 manifest，然后重新构建。构建器会拒绝内嵌 manifest 或仓库版本过期的宿主平台产物。[原生组合记录](https://github.com/deepseek-ai/seekdeep-harness/blob/master/.agents/notes/implemented/architecture/2026-09-04-rust-packaged-sdk-runtime-assembly.md)记录验证情况及包括 Python 绑定在内的剩余分发缺口。
+
+exe 缺失时抛出 `FileNotFoundError`，并写明两种获取途径：在 seekdeep-harness 检出中使用上述原生命令构建，或安装 `build-exe-for-python-sdk` CI 工作流生成的对应平台运行时 wheel 包。仅限开发的 node 载体缺失时只提示构建命令这一条途径。该工作流只保留 wheel 包，不保留独立 exe 归档。获取策略与查找接口刻意分离，之后可以换成按需下载而不改动任何调用方。
+
+每个 wheel 包只包含一个运行时可执行文件。macOS wheel 包还包含与其匹配的原生 spawn helper；缺少伴随文件意味着该安装不完整，并会在启动时硬失败，即使所选 Cordis 组合不使用 PTY 工具也是如此。Linux wheel 包不包含 spawn helper；其原生运行时直接负责创建 PTY。固定标签为 `py3-none-manylinux_2_28_x86_64`、`py3-none-manylinux_2_28_aarch64` 与 `py3-none-macosx_14_0_arm64`；macOS 构建默认采用 13.5 部署目标，低于 wheel 包保守设定的 macOS 14 最低版本。本包的 `platforms.json` 统一定义仓库发行构建器与隔离构建钩子使用的固定标签和可执行文件名。构建钩子会拒绝 `py3-none-any`、不存在运行时文件、存在多个运行时文件、文件不可执行以及不支持的平台标签。仓库根目录的 `package.json` 为本包和 SDK 提供共同版本，`python-v<repository-version>` 发布标签必须与其匹配。
+
+## 解析 API
+
+这些函数是生成的绑定，委托给与架构匹配、随运行时可执行文件一同交付的 `seekdeep-python-sdk-ffi-<platform>-<arch>` 库。原生构建器生成绑定和库；可编辑检出同样需要它们。wheel 包构建器拒绝缺失或混合的绑定库载荷。[绑定 ABI 记录](https://github.com/deepseek-ai/seekdeep-harness/blob/master/.agents/notes/implemented/architecture/2026-09-04-rust-python-runtime-binding-abi.md)负责内存和回调规则。
+
+- `resolve_bundled_launch_args(mode=None) -> tuple[str, ...]`——启动内置运行时的 argv 元组：exe 模式下为 `(exe_path,)`，node 模式下为 `(node_path, bin_js_path)`。模式选择：显式参数 > `SEEKDEEP_RUNTIME_MODE` 环境变量（`exe` | `node`）> 自动。自动解析只找生产 exe——仅限开发的 node 载体必须显式选用，从而生产部署绝不会悄悄跑在源码构建上。
+- `bundled_runtime_path() -> Path`——平台 exe 路径（仅 exe 载体，并会在 macOS 上校验必要的 `-spawn-helper` 伴随文件也已安装）。node 载体没有单一路径的等价物，经由上面的 argv 元组启动。
+- `bundled_default_config_path() -> Path`——检入的默认配置（见下文）。
+- `bundled_package_dir() -> Path`——已安装包的数据根目录。
+
+## 零配置设计
+
+运行时二进制始终要求显式配置（`$SEEKDEEP_CORDIS_CONFIG`，或作为 argv 位置参数的配置路径），缺了就报错退出——这一强制语义是运行时设计的一部分，本包不会弱化它。bin（`seekdeep-jsonrpc-agent`）只启动配置里列出的插件；对外服务接口（stdio JSON-RPC 服务器）也是其中一个条目（`@seekdeep-ai/seekdeep-sdk-jsonrpc-server`），缺了它，启动出的 agent（智能体）就没有对外通道。本包检入的 `runtime/cordis.yml` 包含 JSON-RPC 服务条目、agent 核心、预载的 DeepSeek 适配器、JSONL 持久化、显式组合的语义检查点策略、本地 bash，以及用于有界加载工作区指令的本地文件系统提供方。持久化后端负责持久存储，独立的策略则选择请求、工具分发和已完成步骤的检查点。DeepSeek 适配器读取 `DEEPSEEK_API_KEY` 与 `DEEPSEEK_BASE_URL`，持久化、bash 和文件系统提供方则使用 `SEEKDEEP_SESSION_ROOT` 和 `SEEKDEEP_CWD`，并为手动运行提供回退值。调用方未使用任何显式配置通道时，`deepseek_harness` 客户端把该文件路径注入 `SEEKDEEP_CORDIS_CONFIG`（注入条件见 [sdk README](https://github.com/deepseek-ai/seekdeep-harness/blob/master/python/sdk/README.md)）。因此，零配置是包装层中一次显式、可见的参数传递，而不是运行时中的隐藏回退。

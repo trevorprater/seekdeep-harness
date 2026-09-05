@@ -1,0 +1,84 @@
+{
+  "name": "@seekdeep-ai/seekdeep-client-ui-subagent",
+  "description": "Subagent conversation catalog, continuation routing UI, and '@' reference source",
+  "version": "0.1.0-rc.5",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/seekdeep-harness.git",
+    "directory": "packages/client/ui-subagent"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "seekdeep": {
+    "client": {
+      "inject": [
+        "@seekdeep-ai/seekdeep-client-locale",
+        "@seekdeep-ai/seekdeep-client-runtime",
+        "@seekdeep-ai/seekdeep-client-ui-conversation",
+        "@seekdeep-ai/seekdeep-client-ui-primitives",
+        "@seekdeep-ai/seekdeep-client-ui-input-trigger"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "bundle": "cargo xtask wasm-package --package seekdeep-client-ui-subagent --artifact seekdeep_client_ui_subagent --module-id @seekdeep-ai/seekdeep-client-ui-subagent --out-dir packages/client/ui-subagent/lib",
+    "watch": "cargo xtask wasm-package --package seekdeep-client-ui-subagent --artifact seekdeep_client_ui_subagent --module-id @seekdeep-ai/seekdeep-client-ui-subagent --out-dir packages/client/ui-subagent/lib --watch"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "react": "^18.2.0"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-conversation": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-input-trigger": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent": "workspace:^",
+    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-client-locale": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-test-runtime": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-conversation": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-primitives": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-input-trigger": "workspace:^",
+    "@seekdeep-ai/seekdeep-client-ui-slots": "workspace:^",
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^",
+    "@seekdeep-ai/seekdeep-subagent": "workspace:^",
+    "@seekdeep-ai/seekdeep-token-meter": "workspace:^",
+    "@types/react": "~18.3.1",
+    "@seekdeep-ai/cordis": "workspace:^"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/invariant.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts"
+  ]
+}

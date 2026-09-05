@@ -1,0 +1,41 @@
+[package]
+name = "seekdeep-agent-instructions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Workspace context loader for AGENTS.md/CLAUDE.md instruction files"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+path-clean.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-core = { path = "../core" }
+seekdeep-fs = { path = "../fs" }
+seekdeep-invariants = { path = "../invariants" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-schemastery = { path = "../schemastery" }
+seekdeep-util = { path = "../util" }
+serde.workspace = true
+serde_json.workspace = true
+sha1.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-fs-local = { path = "../fs-local" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-sandbox = { path = "../sandbox" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-tool-fs = { path = "../tool-fs" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,37 @@
+[package]
+name = "seekdeep-acp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Automation-only Agent Client Protocol bridge and client for SeekDeep Harness"
+
+[dependencies]
+anyhow.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+seekdeep-agent = { path = "../agent" }
+seekdeep-agent-loop = { path = "../agent-loop" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-core = { path = "../core" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-scope = { path = "../scope" }
+seekdeep-sdk-protocol = { path = "../sdk-protocol" }
+seekdeep-subagent = { path = "../subagent" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+seekdeep-user-approval = { path = "../user-approval" }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-attachment = { path = "../attachment" }
+seekdeep-tools = { path = "../tools" }
+tempfile.workspace = true
+
+[lints]
+workspace = true

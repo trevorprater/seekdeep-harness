@@ -1,0 +1,15 @@
+{
+  "name": "@seekdeep-ai/seekdeep-user-questions",
+  "version": "0.1.0-rc.5",
+  "description": "Abstract user-questions seam (ctx.userQuestions) for asking the human during agent runs",
+  "type": "module",
+  "exports": {
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    }
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT"
+}

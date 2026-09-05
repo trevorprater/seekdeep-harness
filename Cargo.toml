@@ -1,14 +1,252 @@
 [workspace]
 members = [
   "apps/seekdeep",
+  "crates/bash-local",
+  "crates/bash-sandbox",
+  "crates/attachment",
+  "crates/attachment-local",
+  "crates/app-boot",
+  "crates/bundle-base",
+  "crates/agent",
+  "crates/agent-presets",
+  "crates/agent-default-model",
+  "crates/agent-instructions",
+  "crates/agent-loop",
+  "crates/agent-loop-testkit",
+  "crates/agent-tool-presentation",
+  "crates/anonymous-user-id",
+  "crates/acp",
+  "crates/acp-snapshot",
+  "crates/api-gateway",
+  "crates/api-remotes",
+  "crates/api-remotes-client",
+  "crates/client-connection",
+  "crates/client-modules",
+  "crates/client-hmr",
+  "crates/client-locale",
+  "crates/client-schema-form",
+  "crates/client-ui-cordis",
+  "crates/client-ui-agent-preset",
+  "crates/client-ui-attachment",
+  "crates/client-ui-conversation",
+  "crates/client-ui-commands",
+  "crates/client-ui-deliverables",
+  "crates/client-ui-directory-picker-browse",
+  "crates/client-ui-directory-picker-native",
+  "crates/client-ui-goal",
+  "crates/client-ui-input-trigger",
+  "crates/client-ui-jobs",
+  "crates/client-ui-layout",
+  "crates/client-ui-message-feedback",
+  "crates/client-ui-model-selection",
+  "crates/client-ui-permission-presets",
+  "crates/client-ui-plan",
+  "crates/client-ui-user-questions",
+  "crates/client-ui-primitives",
+  "crates/client-ui-settings",
+  "crates/client-ui-settings-general",
+  "crates/client-ui-settings-models",
+  "crates/client-ui-settings-plugin-inventory",
+  "crates/client-ui-settings-plugins",
+  "crates/client-ui-sidebar",
+  "crates/client-ui-skill",
+  "crates/client-ui-subagent",
+  "crates/client-ui-theme",
+  "crates/client-ui-tool",
+  "crates/client-ui-trajectory",
+  "crates/client-ui-workflow-run",
+  "crates/client-ui-workspace",
+  "crates/client-ui-slots",
+  "crates/client-loader",
+  "crates/client-foundation-wasm",
+  "crates/client-web",
+  "crates/client-web-react",
+  "crates/client-runtime",
+  "crates/client-settings-contract",
+  "crates/client-test-runtime",
+  "crates/change-scope",
+  "crates/chunk-attribution",
+  "crates/win32-durable-namespace",
+  "crates/win32-directory-dialog",
+  "crates/cmdline",
+  "crates/host-apiproxy",
+  "crates/host-directory-picker",
+  "crates/host-directory-picker-auto",
+  "crates/host-directory-picker-browse",
+  "crates/host-directory-picker-native",
+  "crates/host-frontend-static",
+  "crates/hmr",
+  "crates/host-plugin-inventory",
+  "crates/host-webserver",
+  "crates/hook-protocol",
+  "crates/hooks-codex",
+  "crates/hooks-claude-code",
+  "crates/headless",
   "crates/cordis",
+  "crates/cordis-api-catalog",
+  "crates/cordis-client-runner",
+  "crates/cordis-dynamic-types",
+  "crates/cordis-timer",
+  "crates/cordis-host-runner",
   "crates/cosmokit",
+  "crates/code-runtime",
+  "crates/code-runtime-worker-thread",
+  "crates/command-feedback",
+  "crates/command-compact",
+  "crates/command-goal",
+  "crates/commands-contract",
+  "crates/commands",
+  "crates/compaction",
+  "crates/compaction-basic",
+  "crates/compaction-tool-result-pruner",
+  "crates/credentials",
+  "crates/credentials-local",
+  "crates/e2b",
+  "crates/fs",
+  "crates/fs-e2b",
+  "crates/fs-local",
+  "crates/fs-local-win32-native",
+  "crates/fs-observation-policy",
+  "crates/fs-sandbox",
+  "crates/goal",
+  "crates/goal-round-driver",
   "crates/schemastery",
+  "crates/settings",
+  "crates/settings-file",
+  "crates/shell",
+  "crates/shell-env",
   "crates/loader",
+  "crates/loader-smoke",
+  "crates/lsp",
+  "crates/lsp-stdio",
+  "crates/message-feedback",
+  "crates/mcp-client",
+  "crates/logger-console",
+  "crates/jsonrpc-demo",
+  "crates/agent-spine-demo",
+  "crates/acp-demo",
+  "crates/demo-launcher",
   "crates/llm",
+  "crates/llm-deepseek",
+  "crates/llm-mock-server",
+  "crates/llm-replay",
+  "crates/llm-pi-ai",
+  "crates/llm-retry",
+  "crates/token-meter",
   "crates/core",
+  "crates/invariants",
+  "crates/identity",
+  "crates/issue-policy",
+  "crates/jobs",
+  "crates/jobs-local",
+  "crates/landlock-run",
+  "crates/permission-presets",
+  "crates/persona",
+  "crates/plan-mode",
+  "crates/process-exit-hook",
+  "crates/pty-spawn-helper",
+  "crates/pwsh-local",
+  "crates/python-release",
+  "crates/python-runtime-smoke",
+  "crates/python-sdk",
+  "crates/python-sdk-ffi",
+  "crates/pwsh-sandbox",
+  "crates/repeat-tool-reminder",
+  "crates/repository-tools",
+  "crates/sandbox",
+  "crates/sandbox-local",
+  "crates/sandbox-policy",
+  "crates/sandbox-windows-acl",
+  "crates/sandbox-windows-acl-native",
+  "crates/schedule",
   "crates/scope",
+  "crates/sdk-protocol",
+  "crates/sdk-client",
+  "crates/sdk-server",
+  "crates/skill",
+  "crates/skill-badge",
+  "crates/skill-filesystem",
+  "crates/subagent",
+  "crates/subagent-codex",
+  "crates/subagent-claude-code",
+  "crates/subagent-acp",
+  "crates/subagent-sdk",
+  "crates/subagent-in-process-driver",
+  "crates/subagent-fork-in-process",
+  "crates/subagent-spawn-in-process",
+  "crates/session-persistence",
+  "crates/session-persistence-jsonl",
+  "crates/session-persistence-sqlite",
+  "crates/session-checkpoint-policy",
+  "crates/session-projection",
+  "crates/failure-display",
+  "crates/session-projection-cache",
+  "crates/session-query",
+  "crates/session-query-sqlite",
+  "crates/session-log-export",
+  "crates/tool-session-query",
+  "crates/session-reference",
+  "crates/session-stats",
+  "crates/session-telemetry",
+  "crates/session-telemetry-otel",
+  "crates/session-title",
+  "crates/session-title-all-prompts-llm",
+  "crates/session-title-first-prompt-llm",
+  "crates/session-title-llm",
+  "crates/spill",
+  "crates/spill-local",
+  "crates/spill-policy",
+  "crates/storage",
+  "crates/storage-domain",
+  "crates/storage-json",
+  "crates/storage-sqlite",
+  "crates/subprocess",
+  "crates/subprocess-e2b",
+  "crates/subprocess-local",
+  "crates/system-prompt",
+  "crates/terminal",
+  "crates/terminal-bash",
+  "crates/time-context",
+  "crates/tmux-context",
+  "crates/tool-timeout-policy",
+  "crates/tool-ask-user",
+  "crates/tool-bash",
+  "crates/tool-bash-persistent",
+  "crates/tool-cordis",
+  "crates/tool-fs",
+  "crates/tool-fs-search",
+  "crates/tool-str-replace-editor",
+  "crates/tool-goal",
+  "crates/tool-jobs",
+  "crates/tool-lsp",
+  "crates/tool-pwsh",
+  "crates/tool-ralph",
+  "crates/tool-subagent-report",
+  "crates/tool-terminal",
+  "crates/tool-subagent-control",
+  "crates/tool-subagent",
+  "crates/tool-skill",
+  "crates/tool-workflow",
+  "crates/tool-web",
+  "crates/tool-todo",
   "crates/tools",
+  "crates/typert-loader",
+  "crates/typert-protocol",
+  "crates/typert-generator",
+  "crates/typert-registry",
+  "crates/web",
+  "crates/web-app",
+  "crates/web-fetch-http",
+  "crates/web-search-deepseek",
+  "crates/web-search-exa",
+  "crates/web-search-perplexity",
+  "crates/user-approval",
+  "crates/user-questions-contract",
+  "crates/user-questions",
+  "crates/util",
+  "crates/workspace",
+  "crates/workflow",
+  "crates/workflow-worker-thread",
   "xtask",
 ]
 resolver = "3"
@@ -24,22 +262,97 @@ repository = "https://github.com/deepseek-ai/seekdeep-harness"
 anyhow = "1.0.100"
 async-trait = "0.1.89"
 async-stream = "0.3.6"
+aws-config = "1.8.18"
+aws-sdk-bedrockruntime = "1.135.0"
+aws-smithy-types = "1.5.0"
+aws-smithy-http-client = { version = "1.1.13", features = ["rustls-aws-lc"] }
+aws-smithy-runtime = { version = "1.11.3", features = ["connector-hyper-0-14-x"] }
 base64 = "0.22.1"
+bytes = "1.11.0"
+boa_engine = { version = "0.21.1", default-features = false }
 chrono = { version = "0.4.42", features = ["clock", "serde"] }
+chrono-tz = "0.10.4"
 clap = { version = "4.5.54", features = ["derive", "env"] }
+crc32fast = "1.5.0"
+dirs = "6.0.0"
+encoding_rs = "0.8.35"
+flate2 = "1.1.5"
+zip = { version = "=2.4.2", default-features = false, features = ["flate2", "deflate-flate2"] }
+google-cloud-auth = "1.15.0"
+http = "1.5.0"
+hyper-rustls = { version = "0.24.2", features = ["webpki-tokio"] }
 futures = "0.3.31"
+glob = "0.3.3"
+hex = "0.4.3"
+libc = "0.2.180"
+http-body-util = "0.1.3"
+hyper = { version = "1.8.1", features = ["http1", "server"] }
+hyper-util = { version = "0.1.19", features = ["tokio"] }
+mdream = "=1.0.4"
+image = { version = "0.25.9", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
+iana-time-zone = "0.1.64"
+if-addrs = "0.15.0"
+icu_collator = "=2.0.0"
+icu_locale = "=2.0.0"
+icu_timezone = "1.5.0"
 indexmap = { version = "2.12.1", features = ["serde"] }
+js-sys = "0.3.104"
+num-traits = "0.2.19"
+opentelemetry = { version = "0.32.0", default-features = false, features = ["logs"] }
+opentelemetry-otlp = { version = "0.32.0", default-features = false, features = ["gzip-http", "http-json", "logs", "reqwest-client", "reqwest-rustls"] }
+opentelemetry_sdk = { version = "0.32.1", default-features = false, features = ["experimental_logs_batch_log_processor_with_async_runtime", "logs", "rt-tokio"] }
+oxc_allocator = "=0.122.0"
+oxc_ast = "=0.122.0"
+oxc_ast_visit = "=0.122.0"
+oxc_codegen = { version = "=0.122.0", default-features = false }
+oxc_diagnostics = "=0.122.0"
+oxc_parser = "=0.122.0"
+oxc_semantic = "=0.122.0"
+oxc_span = "=0.122.0"
+oxc_transformer = "=0.122.0"
 parking_lot = "0.12.5"
+nix = { version = "0.30.1", default-features = false, features = ["process", "signal"] }
+path-clean = "1.0.1"
+portable-pty = "0.9.0"
+percent-encoding = "2.3.2"
+proptest = "1.9.0"
 regex = "1.12.2"
+scraper = "0.27.0"
+regress = "0.11.1"
+reqwest = { version = "0.12.24", default-features = false, features = ["rustls-tls", "stream"] }
+rowan = "0.16.1"
+ryu-js = "1.0.3"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+same-file = "1.0.6"
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.148", features = ["preserve_order"] }
+serde_json = { version = "1.0.148", features = ["arbitrary_precision", "preserve_order"] }
 serde_yml = "0.0.12"
+sha1 = "0.10"
+sha2 = "0.10.9"
+socket2 = "0.6.2"
+swc_common = "=14.0.4"
+swc_ecma_parser = { version = "=23.0.0", default-features = false, features = ["typescript"] }
+swc_ts_fast_strip = "=31.0.0"
+sys-locale = "0.3.2"
 thiserror = "2.0.17"
-tokio = { version = "1.49.0", features = ["full"] }
+tempfile = "3.23.0"
+terminal_size = "0.4.4"
+tokio = { version = "1.49.0", features = ["full", "test-util"] }
+tokio-tungstenite = { version = "0.28.0", features = ["rustls-tls-webpki-roots"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
-uuid = { version = "1.19.0", features = ["serde", "v4", "v7"] }
+unicode-ident = "1.0.22"
+unicode-normalization = "0.1.25"
+uuid = { version = "1.19.0", features = ["serde", "v4", "v5", "v7"] }
+wasm-bindgen = "0.2.127"
+wasm-bindgen-futures = "0.4.77"
+serde-wasm-bindgen = "0.6.5"
+web-sys = "0.3.104"
+url = "2.5.7"
+v8 = "=150.0.0"
 walkdir = "2.5.0"
+yaml-edit = "0.2.3"
+zstd = "0.13.3"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -56,3 +369,7 @@ must_use_candidate = "allow"
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+# V8's Rust bindings require optimized code even in development builds.
+[profile.dev.package.v8]
+opt-level = 1

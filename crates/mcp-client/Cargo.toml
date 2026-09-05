@@ -1,0 +1,40 @@
+[package]
+name = "seekdeep-mcp-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MCP client bridge for external tool servers"
+
+[[bin]]
+name = "seekdeep-mcp-server-fixture"
+path = "tests/fixtures/mcp_server.rs"
+test = false
+bench = false
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+parking_lot.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-llm = { path = "../llm" }
+seekdeep-sdk-protocol = { path = "../sdk-protocol" }
+seekdeep-subprocess = { path = "../subprocess" }
+seekdeep-tools = { path = "../tools" }
+seekdeep-util = { path = "../util" }
+tokio.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+seekdeep-loader = { path = "../loader" }
+seekdeep-system-prompt = { path = "../system-prompt" }
+tempfile.workspace = true
+
+[lints]
+workspace = true
