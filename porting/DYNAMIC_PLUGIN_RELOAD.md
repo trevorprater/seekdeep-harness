@@ -511,7 +511,8 @@ This ADR remains proposed until these decisions are resolved:
 - Native lifecycle remounting is partially implemented.
 - The semantic conformance suite is incomplete.
 - Rust/WASM Cordis executes the built browser registry, Remote gateway, and Client contributions; complete cross-target semantic conformance remains open.
-- Browser binding gaps include preserving property descriptors rather than copying values in `ctx.extend()`, and exposing the source's complete callable Logger interface. Tests that install a recording logger sink do not close the latter obligation.
+- Browser context metadata uses a descriptor-preserving property object as the public Proxy target. Extension, plugin contexts, and isolated contexts retain inherited metadata; getters and setters receive the actual calling Context, readonly symbols remain readonly, and membership tests do not invoke getters. Source comparison and real browser Remote calls verify changing Agent identity through a live getter.
+- Browser binding gaps include the source's complete callable Logger interface and the optional relaxed lookup flag in `ctx.get(name, strict)`. Tests that install a recording logger sink or exercise only active service lookups do not close those obligations.
 - Source-compatible dynamic Host execution runs in a Rust-owned interpreter worker. The guarded Host path covers lifecycle commands, Services, Tools, Events, callback and Promise timers, async-iterator intervals, throttle/debounce wrappers, exact-generation effect removal, cooperative callback pumping, and stack-safe lossless JSON cloning; the Client compatibility evaluator remains incomplete.
 - Native and browser WebAssembly plugin hosts are not implemented.
 - Shadow registries, graph transactions, generation leases, and general state migration are not implemented.

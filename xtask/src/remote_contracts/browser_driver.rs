@@ -34,9 +34,10 @@ try {
   };
   page.on('pageerror', error => console.error('browser error:', error.message));
   const requests = [];
+  const commandIdentities = [];
   const responseReads = [];
   const hostErrors = [];
-  page.on('request', request => { if (request.method() === 'POST' && request.url().startsWith(origin + '/api/')) requests.push(request.url().slice(origin.length)); });
+  page.on('request', request => { if (request.method() === 'POST' && request.url().startsWith(origin + '/api/')) { requests.push(request.url().slice(origin.length)); if (request.url().startsWith(origin + '/api/commands/list')) commandIdentities.push(request.postDataJSON().payload.args.agentId); } });
   page.on('response', response => {
     if (response.url().startsWith(origin + '/api/')) responseReads.push(response.json().then(body => { if (body.result && !body.result.ok) hostErrors.push(body.result.error); }).catch(() => {}));
   });
@@ -76,6 +77,24 @@ try {
     const cordis = await import(module);
     const handoffs = new Map();
     const client = new cordis.Context();
+    let metadataReads = 0, getterReceiver, setterReceiver;
+    const getter = function () { metadataReads++; getterReceiver = this; return this.contextMarker; };
+    const setter = function (value) { setterReceiver = this; this.contextMarker = value; };
+    const token = Symbol('metadata'), tokenValue = Object.freeze({ value: 1 });
+    const extension = { contextMarker: 'initial' };
+    Object.defineProperty(extension, 'contextValue', { get: getter, set: setter, enumerable: false, configurable: false });
+    Object.defineProperty(extension, token, { value: tokenValue, writable: false, enumerable: false, configurable: false });
+    const metadataContext = client.extend(extension);
+    if (metadataReads !== 0) throw new Error('Context.extend invoked a metadata getter');
+    const descriptor = Object.getOwnPropertyDescriptor(metadataContext, 'contextValue');
+    if (!descriptor || descriptor.get !== getter || descriptor.set !== setter || descriptor.enumerable || descriptor.configurable) throw new Error('Context.extend changed property descriptors');
+    if (!('contextValue' in metadataContext) || metadataReads !== 0) throw new Error('metadata membership invoked a getter');
+    if (Object.getPrototypeOf(metadataContext) !== client || metadataContext.contextValue !== 'initial' || getterReceiver !== metadataContext) throw new Error('metadata getter lost its context receiver or prototype');
+    metadataContext.contextValue = 'updated';
+    if (setterReceiver !== metadataContext || metadataContext.contextMarker !== 'updated') throw new Error('metadata setter lost its receiver');
+    const nestedMetadata = metadataContext.extend({ contextMarker: 'nested' });
+    if (nestedMetadata.contextValue !== 'nested' || getterReceiver !== nestedMetadata) throw new Error('inherited getter used the parent receiver');
+    if (metadataContext[token] !== tokenValue || Reflect.set(metadataContext, token, {})) throw new Error('readonly symbol metadata changed');
     if (loaderAssets) {
       const loadRuntime = async value => {
         const bindings = blob(value.bindings);
@@ -156,6 +175,11 @@ try {
     const scoped = client.extend({ agentId: second.sessionId });
     const scopedGoal = await scoped.remote.goals.create({ objective: 'integrated scoped goal', maxGoalRounds: 3 });
     assert(scopedGoal.ok, 'scoped Goal creation failed: ' + JSON.stringify(scopedGoal));
+    let currentIdentity = first.sessionId;
+    const liveIdentity = client.extend({ get agentId() { return currentIdentity; } });
+    assert((await liveIdentity.remote.commands.list()).ok, 'first live getter call failed');
+    currentIdentity = second.sessionId;
+    assert((await liveIdentity.remote.commands.list()).ok, 'changed live getter call failed');
     const commands = await client.remote.commands.list(first.sessionId);
     assert(commands.ok && Array.isArray(commands.value), 'command listing failed: ' + JSON.stringify(commands));
     const unknownCommand = await client.remote.commands.execute(first.sessionId, '/__remote_path_unknown_command__');
@@ -258,6 +282,7 @@ try {
     return { descriptors: descriptors.length, invalidRejected, undefinedPreserved: true, cancellation: cancelled.error, hostFailure: failed.error, rootGoalEvents: count(firstHistory), scopedGoalEvents: count(secondHistory), commands: commands.value.length, namespaceCalls: 5, remainingDescriptors: registry.remotes.list().length, ...(typed ? { typed } : {}), ...(lifecycle ? { lifecycle } : {}) };
   }, { root });
   const goalCreates = requests.filter(path => path === '/api/goals/create').length;
+  if (commandIdentities.length < 3 || commandIdentities[0] === commandIdentities[1] || commandIdentities[0] !== commandIdentities[2]) throw new Error('live context getter did not route the current Agent identity');
   if (goalCreates !== (typedConsumer ? 3 : 2)) throw new Error('invalid request reached Host or valid request was lost: ' + JSON.stringify(requests));
   if (typedConsumer && !result.typed) throw new Error('checked consumer was not exercised');
   if (loaderMode && requests.filter(path => path === '/api/goals/edit').length !== 3) throw new Error('stale Loader handle reached the Host or remounted call was lost');

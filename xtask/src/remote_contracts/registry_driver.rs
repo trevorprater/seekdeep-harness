@@ -33,6 +33,38 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves metadata descriptors receivers and isolated inheritance', () => {
+  const root = new Context()
+  root.provide('metadata-service', { value: 'root' })
+  let reads = 0, receiver
+  const getter = function () { reads++; receiver = this; return this.get('metadata-service').value }
+  const symbol = Symbol('readonly'), value = Object.freeze({ source: true })
+  const metadata = { label: 'child', absent: undefined }
+  Object.defineProperty(metadata, 'current', { get: getter, enumerable: false, configurable: false })
+  Object.defineProperty(metadata, symbol, { value, writable: false, enumerable: false, configurable: false })
+  const child = root.extend(metadata)
+  expect(reads).toBe(0)
+  expect('current' in child).toBe(true)
+  expect('absent' in child).toBe(true)
+  expect(reads).toBe(0)
+  expect(Object.getOwnPropertyDescriptor(child, 'current')).toEqual(Object.getOwnPropertyDescriptor(metadata, 'current'))
+  expect(Object.getPrototypeOf(child)).toBe(root)
+  expect(child.hasOwnProperty('label')).toBe(true)
+  expect(root.isPrototypeOf(child)).toBe(true)
+  expect(Object.keys(child)).toEqual(['label', 'absent'])
+  expect(child.current).toBe('root')
+  expect(receiver).toBe(child)
+  const isolated = child.isolate('metadata-service', 'isolated')
+  isolated.provide('metadata-service', { value: 'isolated' })
+  expect(isolated.current).toBe('isolated')
+  expect(receiver).toBe(isolated)
+  expect(child.current).toBe('root')
+  expect(child[symbol]).toBe(value)
+  expect(Reflect.set(child, symbol, {})).toBe(false)
+  Object.preventExtensions(child)
+  expect(Object.getPrototypeOf(child)).toBe(root)
+  expect(child.current).toBe('root')
+})
 it('clears retained event subscriptions when the gateway owner unloads', async () => {
   const { ctx, client } = await benchFiber(vi.fn())
   let observed = 0

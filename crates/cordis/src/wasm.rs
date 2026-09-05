@@ -19,6 +19,16 @@ thread_local! {
 
 type FaceSlot = Arc<Mutex<Option<JsValue>>>;
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = Reflect, js_name = get, catch)]
+    fn get_with_receiver(
+        target: &JsValue,
+        key: &JsValue,
+        receiver: &JsValue,
+    ) -> Result<JsValue, JsValue>;
+}
+
 /// Configures the package wrapper that adds reflected service-property access.
 ///
 /// # Errors
@@ -137,12 +147,18 @@ impl WasmContext {
     ///
     /// Returns malformed descriptor, config, publication, or inactive-parent failures.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn plugin(&self, descriptor: JsValue, config: JsValue) -> Result<JsValue, JsValue> {
+    pub fn plugin(
+        &self,
+        descriptor: JsValue,
+        config: JsValue,
+        parent: Option<JsValue>,
+    ) -> Result<JsValue, JsValue> {
+        let metadata = parent.unwrap_or_else(|| self.metadata.clone());
         let context_face = empty_face_slot();
         let fiber_face = empty_face_slot();
         let plugin = plugin_from_js(
             descriptor,
-            self.metadata.clone(),
+            metadata.clone(),
             self.root_face.clone(),
             context_face.clone(),
             fiber_face.clone(),
@@ -154,7 +170,7 @@ impl WasmContext {
             .map_err(|error| js_sys::Error::new(&error.to_string()))?;
         let child = ensure_context_face(
             mounted.context().clone(),
-            self.metadata.clone(),
+            metadata,
             self.root_face.clone(),
             &context_face,
             fiber_face.clone(),
@@ -171,12 +187,17 @@ impl WasmContext {
     ///
     /// Returns the same failures as [`WasmContext::plugin`].
     #[allow(clippy::needless_pass_by_value)]
-    pub fn inject(&self, dependencies: JsValue, callback: JsValue) -> Result<JsValue, JsValue> {
+    pub fn inject(
+        &self,
+        dependencies: JsValue,
+        callback: JsValue,
+        parent: Option<JsValue>,
+    ) -> Result<JsValue, JsValue> {
         let descriptor = Object::new();
         set(&descriptor, "name", &JsValue::from_str("inject"))?;
         set(&descriptor, "inject", &dependencies)?;
         set(&descriptor, "apply", &callback)?;
-        self.plugin(descriptor.into(), JsValue::UNDEFINED)
+        self.plugin(descriptor.into(), JsValue::UNDEFINED, parent)
     }
 
     /// Registers an owned listener.
@@ -324,7 +345,7 @@ impl WasmContext {
     ///
     /// Returns malformed metadata or wrapper failures.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn extend(&self, extension: JsValue) -> Result<JsValue, JsValue> {
+    pub fn extend(&self, extension: JsValue, parent: Option<JsValue>) -> Result<JsValue, JsValue> {
         let extension = if extension.is_undefined() {
             Object::new().into()
         } else {
@@ -333,9 +354,13 @@ impl WasmContext {
         if !extension.is_object() || extension.is_null() {
             return Err(js_sys::Error::new("ctx.extend metadata must be an object").into());
         }
-        let metadata = Object::create(&Object::from(self.metadata.clone()));
+        let metadata = Object::create(&Object::from(
+            parent.unwrap_or_else(|| self.metadata.clone()),
+        ));
         for key in Reflect::own_keys(&extension)? {
-            Reflect::set(&metadata, &key, &Reflect::get(&extension, &key)?)?;
+            let descriptor =
+                Reflect::get_own_property_descriptor(&Object::from(extension.clone()), &key)?;
+            Reflect::define_property(&metadata, &key, &Object::from(descriptor))?;
         }
         wrap_context(self.child(self.inner.clone(), metadata.into(), self.fiber_face.clone()))
     }
@@ -346,12 +371,20 @@ impl WasmContext {
     ///
     /// Returns wrapper failures.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn isolate(&self, name: String, label: Option<String>) -> Result<JsValue, JsValue> {
+    pub fn isolate(
+        &self,
+        name: String,
+        label: Option<String>,
+        parent: Option<JsValue>,
+    ) -> Result<JsValue, JsValue> {
         let inner = label.map_or_else(
             || self.inner.isolate_named(&name),
             |label| self.inner.isolate_named_as(&name, &label),
         );
-        wrap_context(self.child(inner, self.metadata.clone(), self.fiber_face.clone()))
+        let metadata = Object::create(&Object::from(
+            parent.unwrap_or_else(|| self.metadata.clone()),
+        ));
+        wrap_context(self.child(inner, metadata.into(), self.fiber_face.clone()))
     }
 
     /// Creates a child carrying one service intercept.
@@ -360,14 +393,24 @@ impl WasmContext {
     ///
     /// Returns non-JSON config or wrapper failures.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn intercept(&self, name: String, config: JsValue) -> Result<JsValue, JsValue> {
+    pub fn intercept(
+        &self,
+        name: String,
+        config: JsValue,
+        parent: Option<JsValue>,
+    ) -> Result<JsValue, JsValue> {
         let config = serde_wasm_bindgen::from_value(config)
             .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-        wrap_context(self.child(
-            self.inner.intercept(&name, config),
-            self.metadata.clone(),
-            self.fiber_face.clone(),
-        ))
+        wrap_context(
+            self.child(
+                self.inner.intercept(&name, config),
+                Object::create(&Object::from(
+                    parent.unwrap_or_else(|| self.metadata.clone()),
+                ))
+                .into(),
+                self.fiber_face.clone(),
+            ),
+        )
     }
 
     /// Exposes service members as reflected Context properties.
@@ -427,8 +470,56 @@ impl WasmContext {
     /// Returns JavaScript property-access failures.
     #[wasm_bindgen(js_name = metaGet)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn meta_get(&self, key: JsValue) -> Result<JsValue, JsValue> {
-        Reflect::get(&self.metadata, &key)
+    pub fn meta_get(&self, key: JsValue, receiver: Option<JsValue>) -> Result<JsValue, JsValue> {
+        get_with_receiver(
+            &self.metadata,
+            &key,
+            &receiver.unwrap_or_else(|| self.metadata.clone()),
+        )
+    }
+
+    /// Canonical property storage used as the public Proxy target.
+    #[wasm_bindgen(getter, js_name = contextData)]
+    pub fn context_data(&self) -> JsValue {
+        self.metadata.clone()
+    }
+
+    /// Tests metadata membership without evaluating accessors.
+    ///
+    /// # Errors
+    /// Propagates property-descriptor or prototype access failures.
+    #[wasm_bindgen(js_name = metaHas)]
+    pub fn meta_has(&self, key: &JsValue, boundary: &JsValue) -> Result<bool, JsValue> {
+        let mut current = self.metadata.clone();
+        while !current.is_null() && !Object::is(&current, boundary) {
+            if !Reflect::get_own_property_descriptor(&Object::from(current.clone()), key)?
+                .is_undefined()
+            {
+                return Ok(true);
+            }
+            current = Reflect::get_prototype_of(&current)?.into();
+        }
+        Ok(false)
+    }
+
+    /// Writes metadata with the calling context as the accessor receiver.
+    ///
+    /// # Errors
+    /// Propagates setter failures; returns false for a readonly property.
+    #[wasm_bindgen(js_name = metaSet)]
+    pub fn meta_set(
+        &self,
+        key: &JsValue,
+        value: &JsValue,
+        receiver: &JsValue,
+    ) -> Result<bool, JsValue> {
+        Reflect::set_with_receiver(&self.metadata, key, value, receiver)
+    }
+
+    /// Whether a service or accessor name has been declared, independent of availability.
+    #[wasm_bindgen(js_name = propertyDefined)]
+    pub fn property_defined(&self, name: &str) -> bool {
+        self.inner.has_property(name)
     }
 
     /// Root Context face shared by every child.
@@ -472,7 +563,7 @@ impl WasmContext {
     pub fn registry(&self) -> Result<JsValue, JsValue> {
         let context = self.clone_for_binding();
         let plugin = Closure::wrap(Box::new(move |descriptor: JsValue, config: JsValue| {
-            context.plugin(descriptor, config)
+            context.plugin(descriptor, config, None)
         })
             as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
         object(&[("plugin", plugin.into_js_value())]).map(Into::into)
@@ -688,7 +779,12 @@ fn ensure_context_face(
     if let Some(face) = context_face.lock().clone() {
         return Ok(face);
     }
-    let raw = WasmContext::new(context, metadata, root_face, fiber_face);
+    let raw = WasmContext::new(
+        context,
+        Object::create(&Object::from(metadata)).into(),
+        root_face,
+        fiber_face,
+    );
     let face = wrap_context(raw).map_err(|error| js_anyhow(&error))?;
     *context_face.lock() = Some(face.clone());
     Ok(face)
@@ -701,7 +797,7 @@ fn wrap_detached_context(
 ) -> anyhow::Result<JsValue> {
     wrap_context(WasmContext::new(
         context,
-        metadata,
+        Object::create(&Object::from(metadata)).into(),
         root_face,
         empty_face_slot(),
     ))

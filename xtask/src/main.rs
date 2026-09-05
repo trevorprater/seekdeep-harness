@@ -1702,31 +1702,37 @@ function traceService(ctx, value) {
 
 function wrapContext(core) {
   let context;
-  context = new Proxy(core, {
+  const data = core.contextData;
+  if (Object.getPrototypeOf(data) === Object.prototype) Object.setPrototypeOf(data, Context.prototype);
+  context = new Proxy(data, {
     get(target, key, receiver) {
-      if (key === 'emit') return (name, ...args) => target.emitArgs(name, args);
-      if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args);
-      if (key === 'serial') return (name, ...args) => target.serialArgs(name, args);
-      if (key === 'bail') return (name, ...args) => target.bailArgs(name, args);
-      if (key === 'get') return name => traceService(context, target.get(name));
-      if (Reflect.has(target, key)) {
-        const value = Reflect.get(target, key, receiver);
-        return typeof value === 'function' ? value.bind(target) : value;
+      if (core.metaHas(key, Context.prototype)) return core.metaGet(key, receiver);
+      if (key === 'extend') return metadata => core.extend(metadata, receiver);
+      if (key === 'isolate') return (name, label) => core.isolate(name, label, receiver);
+      if (key === 'intercept') return (name, config) => core.intercept(name, config, receiver);
+      if (key === 'plugin') return (plugin, config) => core.plugin(plugin, config, receiver);
+      if (key === 'inject') return (dependencies, callback) => core.inject(dependencies, callback, receiver);
+      if (key === 'emit') return (name, ...args) => core.emitArgs(name, args);
+      if (key === 'parallel') return (name, ...args) => core.parallelArgs(name, args);
+      if (key === 'serial') return (name, ...args) => core.serialArgs(name, args);
+      if (key === 'bail') return (name, ...args) => core.bailArgs(name, args);
+      if (key === 'get') return name => traceService(receiver, core.get(name));
+      if (key === 'constructor') return Context;
+      if (Reflect.has(Context.prototype, key)) return Reflect.get(Context.prototype, key, receiver);
+      if (Reflect.has(core, key)) {
+        const value = Reflect.get(core, key, core);
+        return typeof value === 'function' ? value.bind(core) : value;
       }
-      const metadata = target.metaGet(key);
-      if (metadata !== undefined) return metadata;
-      return typeof key === 'string' ? traceService(context, target.get(key)) : undefined;
+      return typeof key === 'string' ? traceService(receiver, core.get(key)) : undefined;
     },
     set(target, key, value, receiver) {
-      if (Reflect.has(target, key) || typeof key !== 'string') {
-        return Reflect.set(target, key, value, receiver);
-      }
-      return target.setProperty(key, value);
+      if (core.metaHas(key, Context.prototype) || typeof key !== 'string') return core.metaSet(key, value, receiver);
+      if (Reflect.has(core, key)) return Reflect.set(core, key, value, core);
+      return core.setProperty(key, value);
     },
     has(target, key) {
-      if (Reflect.has(target, key)) return true;
-      if (target.metaGet(key) !== undefined) return true;
-      return typeof key === 'string' && target.get(key) !== undefined;
+      if (core.metaHas(key, Context.prototype) || Reflect.has(core, key)) return true;
+      return typeof key === 'string' && core.propertyDefined(key);
     },
   });
   return context;
@@ -6060,8 +6066,13 @@ mod tests {
         for expected in [
             "await init({ module_or_path:",
             "wasm.configureContextWrapper(wrapContext)",
-            "traceService(context, target.get(key))",
-            "if (key === 'get') return name => traceService(context, target.get(name))",
+            "traceService(receiver, core.get(key))",
+            "if (key === 'get') return name => traceService(receiver, core.get(name))",
+            "new Proxy(data,",
+            "core.metaHas(key, Context.prototype)",
+            "core.metaGet(key, receiver)",
+            "core.metaSet(key, value, receiver)",
+            "core.extend(metadata, receiver)",
             "constructor() { return wasm.createContext(); }",
             "Object.defineProperty(this, SERVICE_TRACKER",
             "ctx.provide(name, this)",

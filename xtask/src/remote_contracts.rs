@@ -310,7 +310,7 @@ fn corpus(source: &Path, gateway: bool, source_regressions: bool) -> anyhow::Res
     if source_regressions {
         command.args([
             "-t",
-            "preserves immediate-remount|owns pending|clears retained",
+            "preserves immediate-remount|owns pending|clears retained|preserves metadata",
         ]);
     }
     let status = command.status()?;
