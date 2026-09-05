@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-const [source, host, output] = process.argv.slice(2);
+const [source, host, output, typedConsumer] = process.argv.slice(2);
 const require = createRequire(join(source, 'apps/web/package.json'));
 const { chromium } = require('playwright');
 const root = process.cwd();
@@ -40,7 +40,16 @@ try {
   const assets = {};
   for (const path of ['vendor/cordis/lib/client.js', 'vendor/cordis/lib/index.js', 'packages/typert/registry/lib/client.js', 'packages/client/connection/lib/client.js', 'packages/api/gateway/lib/client.js', 'packages/api/remotes/lib/client.js']) assets[path] = await readFile(join(root, path), 'utf8');
   const bytes = (await readFile(join(root, 'vendor/cordis/lib/client_bg.wasm'))).toString('base64');
-  await page.evaluate(async ({ assets, bytes }) => {
+  const publicContracts = [];
+  let typedSource;
+  let zodSource;
+  if (typedConsumer) {
+    typedSource = await readFile(typedConsumer, 'utf8');
+    zodSource = await readFile(join(output, 'zod.mjs'), 'utf8');
+    const model = JSON.parse(await readFile(join(root, 'crates/api-remotes-client/contracts/host-model.json'), 'utf8'));
+    for (const pkg of model.face.packages) publicContracts.push({ name: pkg.name.replace('@deepseek-ai/dsh-', '@seekdeep-ai/seekdeep-'), code: await readFile(join(root, pkg.root, 'lib/typert.remote-client.js'), 'utf8') });
+  }
+  await page.evaluate(async ({ assets, bytes, publicContracts, typedSource, zodSource }) => {
     const blob = text => URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
     const binding = blob(assets['vendor/cordis/lib/client.js']);
     const module = blob(assets['vendor/cordis/lib/index.js'].replace("'./client.js'", JSON.stringify(binding)).replace("new URL('./client_bg.wasm', import.meta.url)", `Uint8Array.from(atob(${JSON.stringify(bytes)}), c => c.charCodeAt(0))`));
@@ -56,8 +65,26 @@ try {
       const plugin = row.factory(); await client.plugin(plugin);
     }
     window.remotePathClient = client;
+    if (typedSource) {
+      const zodUrl = blob(zodSource);
+      const importMap = document.createElement('script');
+      importMap.type = 'importmap'; importMap.textContent = JSON.stringify({ imports: { zod: zodUrl } }); document.head.append(importMap);
+      const contributions = [];
+      for (const contract of publicContracts) {
+        const url = blob(contract.code);
+        const value = await import(url);
+        if (Object.keys(value).sort().join(',') !== 'TYPERT_REMOTE,default' || value.default !== value.TYPERT_REMOTE || value.default.package !== contract.name) throw new Error('invalid public Remote module ' + contract.name);
+        contributions.push(value.default);
+        URL.revokeObjectURL(url);
+      }
+      const url = blob(typedSource);
+      const typed = await import(url);
+      window.remotePathTyped = { Context: cordis.Context, handoffs, contributions, run: typed.typedRemote };
+      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(zodUrl);
+    }
     URL.revokeObjectURL(binding); URL.revokeObjectURL(module);
-  }, { assets, bytes });
+  }, { assets, bytes, publicContracts, typedSource, zodSource });
   const result = await page.evaluate(async ({ root }) => {
     const client = window.remotePathClient;
     const assert = (value, message) => { if (!value) throw new Error(message); };
@@ -102,17 +129,35 @@ try {
     const secondHistory = await callHost('session.history', { sessionId: second.sessionId });
     const count = history => history.events.filter(entry => entry.event.type === 'goal/change').length;
     assert(count(firstHistory) === 2 && count(secondHistory) === 1, 'durable Goal events differ');
+    let typed;
+    if (window.remotePathTyped) {
+      const runtime = window.remotePathTyped;
+      const consumer = new runtime.Context();
+      for (const id of ['@seekdeep-ai/seekdeep-typert-registry', '@seekdeep-ai/seekdeep-client-connection', '@seekdeep-ai/seekdeep-api-gateway']) await consumer.plugin(runtime.handoffs.get(id).factory());
+      for (const contribution of runtime.contributions) await consumer.remote.$mount(contribution);
+      const registry = consumer.typert;
+      assert(registry.remotes.list().length === 24, 'public package contributions are incomplete');
+      const session = await callHost('session.create', { cwd: root });
+      const result = await runtime.run(consumer, session.sessionId);
+      assert(result.revision === 2 && result.commands > 0, 'checked public consumer failed');
+      const history = await callHost('session.history', { sessionId: session.sessionId });
+      assert(count(history) === 2, 'checked public consumer did not persist both Goal operations');
+      await consumer.fiber.dispose();
+      assert(registry.remotes.list().length === 0, 'public contributions survived teardown');
+      typed = { ...result, packages: runtime.contributions.length, goalEvents: count(history), remainingDescriptors: registry.remotes.list().length };
+    }
     const registry = client.typert;
     await client.fiber.dispose();
     assert(registry.remotes.list().length === 0, 'Remote descriptors survived teardown');
-    return { descriptors: descriptors.length, invalidRejected, undefinedPreserved: true, cancellation: cancelled.error, hostFailure: failed.error, rootGoalEvents: count(firstHistory), scopedGoalEvents: count(secondHistory), commands: commands.value.length, namespaceCalls: 5, remainingDescriptors: registry.remotes.list().length };
+    return { descriptors: descriptors.length, invalidRejected, undefinedPreserved: true, cancellation: cancelled.error, hostFailure: failed.error, rootGoalEvents: count(firstHistory), scopedGoalEvents: count(secondHistory), commands: commands.value.length, namespaceCalls: 5, remainingDescriptors: registry.remotes.list().length, ...(typed ? { typed } : {}) };
   }, { root });
   const goalCreates = requests.filter(path => path === '/api/goals/create').length;
-  if (goalCreates !== 2) throw new Error('invalid request reached Host or valid request was lost: ' + JSON.stringify(requests));
+  if (goalCreates !== (typedConsumer ? 3 : 2)) throw new Error('invalid request reached Host or valid request was lost: ' + JSON.stringify(requests));
+  if (typedConsumer && !result.typed) throw new Error('checked consumer was not exercised');
   await Promise.all(responseReads);
   if (!hostErrors.some(error => JSON.stringify(error) === JSON.stringify(result.hostFailure))) throw new Error('gateway did not preserve the Host error verbatim');
   if (requests.filter(path => path === '/api/commands/execute').length !== 1) throw new Error('pre-aborted command reached the Host');
-  await page.evaluate(result => { document.body.textContent = JSON.stringify(result, null, 2); }, result);
+  await page.evaluate(result => { const pre = document.createElement('pre'); pre.textContent = JSON.stringify(result, null, 2); document.body.replaceChildren(pre); }, result);
   await page.screenshot({ path: join(output, 'remote-path.png'), fullPage: true });
   console.log(JSON.stringify({ ...result, browser: await browser.version(), requests }));
 } finally {

@@ -1,0 +1,29 @@
+{
+  "name": "@seekdeep-ai/seekdeep-host-apiproxy",
+  "version": "0.1.0-rc.5",
+  "description": "API gateway: the ApiProxy contract (api/), the fetch carrier pair (fetch/), and the host-side gateway plugin providing ctx.apiProxy",
+  "type": "module",
+  "exports": {
+    "./api": {
+      "types": "./lib/types/api/index.d.ts"
+    },
+    "./client": {
+      "types": "./lib/types/fetch/client.d.ts"
+    }
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/seekdeep-attachment": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^",
+    "@seekdeep-ai/seekdeep-jobs": "workspace:^",
+    "@seekdeep-ai/seekdeep-llm": "workspace:^",
+    "@seekdeep-ai/seekdeep-session": "workspace:^",
+    "@seekdeep-ai/seekdeep-session-projection": "workspace:^",
+    "@seekdeep-ai/seekdeep-tools": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
+    "@seekdeep-ai/seekdeep-user-questions": "workspace:^"
+  }
+}

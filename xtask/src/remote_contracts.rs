@@ -2,6 +2,8 @@
 
 mod browser_driver;
 mod codec_driver;
+mod declarations;
+mod modules;
 mod plan;
 mod registry_driver;
 
@@ -33,7 +35,7 @@ const order = JSON.parse(process.argv[2]);
 const workspace = new WorkspaceAnalyzer({ root, packages: order, faces: ['host'], mode: 'check' }).analyze();
 const face = workspace.faces[0];
 const emitter = new FaceModelEmitter(face);
-process.stdout.write(JSON.stringify({ face, artifacts: order.map(name => emitter.emit(name).remote.js) },
+process.stdout.write(JSON.stringify({ face, artifacts: order.map(name => emitter.emit(name).remote) },
   (key, value) => typeof value === 'bigint' ? { $bigint: String(value) } : value));
 ";
 
@@ -80,13 +82,19 @@ pub(super) fn run(source: Option<&Path>, check: bool) -> anyhow::Result<()> {
             .remote
             .ok_or_else(|| anyhow::anyhow!("missing Remote artifact for {package}"))?;
         if let Some(captured) = &captured {
-            let expected = captured["artifacts"][index]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("source artifact missing"))?;
-            anyhow::ensure!(
-                normalize(&artifact.js) == normalize(expected),
-                "Rust Remote emitter differs from source for {package}"
-            );
+            for (key, actual) in [
+                ("js", &artifact.js),
+                ("dts", &artifact.dts),
+                ("dtsMap", &artifact.dts_map),
+            ] {
+                let expected = captured["artifacts"][index][key]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("source artifact {key} missing"))?;
+                anyhow::ensure!(
+                    normalize(actual) == normalize(expected),
+                    "Rust Remote emitter {key} differs from source for {package}"
+                );
+            }
         }
         plans.push(plan::compile(&normalize(&artifact.js))?);
     }
@@ -103,6 +111,33 @@ pub(super) fn run(source: Option<&Path>, check: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub(super) fn declarations(
+    output_root: &Path,
+    check: bool,
+    source: Option<&Path>,
+) -> anyhow::Result<()> {
+    declarations::run(output_root, check, source)
+}
+
+pub(super) fn write_package_declarations(
+    root: &Path,
+    module_id: &str,
+    output: &Path,
+) -> anyhow::Result<()> {
+    declarations::write_package(root, module_id, output)
+}
+
+pub(super) fn consumer(browser: bool, source: &Path) -> anyhow::Result<()> {
+    declarations::consumer()?;
+    if browser {
+        let path = super::cargo_metadata()?
+            .target_directory
+            .join("xtask/remote-consumer/typed-consumer.mjs");
+        browser_path_with_consumer(source, Some(&path))?;
+    }
+    Ok(())
+}
+
 fn normalize(value: &str) -> String {
     value
         .replace("@deepseek-ai/dsh-", "@seekdeep-ai/seekdeep-")
@@ -112,6 +147,10 @@ fn normalize(value: &str) -> String {
 }
 
 pub(super) fn bundle_zod(root: &Path, bundle: &str) -> anyhow::Result<String> {
+    bundle_zod_format(root, bundle, "--format=iife")
+}
+
+fn bundle_zod_format(root: &Path, bundle: &str, format: &str) -> anyhow::Result<String> {
     use std::{io::Write as _, process::Stdio};
     let dependencies = root.join("support/browser-dependencies/node_modules");
     let esbuild = dependencies.join("esbuild/bin/esbuild");
@@ -128,7 +167,7 @@ pub(super) fn bundle_zod(root: &Path, bundle: &str) -> anyhow::Result<String> {
         .arg(esbuild)
         .args([
             "--bundle",
-            "--format=iife",
+            format,
             "--platform=browser",
             "--target=es2022",
             "--legal-comments=inline",
@@ -150,6 +189,31 @@ pub(super) fn bundle_zod(root: &Path, bundle: &str) -> anyhow::Result<String> {
         String::from_utf8_lossy(&output.stderr)
     );
     Ok(String::from_utf8(output.stdout)?)
+}
+
+pub(super) fn artifacts(output_root: &Path) -> anyhow::Result<()> {
+    let metadata = super::cargo_metadata()?;
+    let output_root = metadata.workspace_root.join(output_root);
+    let artifact = "seekdeep_api_remotes_client";
+    let module_id = "@seekdeep-ai/seekdeep-api-remotes";
+    super::wasm_package_once(
+        "seekdeep-api-remotes-client",
+        artifact,
+        module_id,
+        &output_root.join("packages/api/remotes/lib"),
+    )?;
+    let staging = metadata
+        .target_directory
+        .join("xtask/wasm-package")
+        .join(artifact);
+    modules::write(
+        &metadata.workspace_root,
+        &output_root,
+        &std::fs::read_to_string(staging.join("client.js"))?,
+        &std::fs::read(staging.join("client_bg.wasm"))?,
+        &super::wasm_package_global(artifact, module_id),
+    )?;
+    declarations::run(&output_root, false, None)
 }
 
 fn publish(path: &Path, value: &Value, check: bool) -> anyhow::Result<()> {
@@ -336,6 +400,10 @@ fn source_gateway_regressions(source: &Path, source_package: &Path) -> anyhow::R
 }
 
 pub(super) fn browser_path(source: &Path) -> anyhow::Result<()> {
+    browser_path_with_consumer(source, None)
+}
+
+fn browser_path_with_consumer(source: &Path, consumer: Option<&Path>) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;
     let directory = metadata.target_directory.join("xtask/remote-browser-path");
@@ -354,13 +422,24 @@ pub(super) fn browser_path(source: &Path) -> anyhow::Result<()> {
         host.is_file(),
         "build the Rust Host first: cargo build -p seekdeep"
     );
-    let status = Command::new("node")
+    let mut command = Command::new("node");
+    command
         .arg(&driver)
         .arg(source)
         .arg(&host)
         .arg(&directory)
-        .current_dir(&metadata.workspace_root)
-        .status()?;
+        .current_dir(&metadata.workspace_root);
+    if let Some(path) = consumer {
+        anyhow::ensure!(path.is_file(), "checked Remote consumer is absent");
+        command.arg(path);
+        let zod = bundle_zod_format(
+            &metadata.workspace_root,
+            "export { __seekdeepRemoteZod as z };",
+            "--format=esm",
+        )?;
+        std::fs::write(directory.join("zod.mjs"), zod)?;
+    }
+    let status = command.status()?;
     anyhow::ensure!(status.success(), "integrated browser Remote path failed");
     Ok(())
 }
@@ -425,12 +504,6 @@ pub(super) fn milestone(source: &Path) -> anyhow::Result<()> {
             "@seekdeep-ai/seekdeep-api-gateway",
             "packages/api/gateway/lib",
         ),
-        (
-            "seekdeep-api-remotes-client",
-            "seekdeep_api_remotes_client",
-            "@seekdeep-ai/seekdeep-api-remotes",
-            "packages/api/remotes/lib",
-        ),
     ] {
         super::wasm_package_once(
             package,
@@ -439,11 +512,13 @@ pub(super) fn milestone(source: &Path) -> anyhow::Result<()> {
             &metadata.workspace_root.join(directory),
         )?;
     }
+    artifacts(&metadata.workspace_root)?;
+    declarations::run(&metadata.workspace_root, true, Some(source))?;
     codec_oracle(source)?;
     registry_oracle(source)?;
     gateway_oracle(source, true)?;
     gateway_oracle(source, false)?;
-    browser_path(source)?;
+    consumer(true, source)?;
     println!(
         "Remote milestone passed in {:.2}s: generated contracts → browser Typert → Client gateway → Rust Host",
         started.elapsed().as_secs_f64()

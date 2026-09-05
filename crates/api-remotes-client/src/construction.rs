@@ -4,20 +4,36 @@ use js_sys::{Array, Function, Object, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 
 pub(crate) fn generate(zod: &JsValue) -> Result<Array, JsValue> {
-    let plans = js_sys::JSON::parse(include_str!("../contracts/remote-plans.json"))?;
     let result = Array::new();
-    for module in Array::from(&field(&plans, "modules")?).iter() {
-        let env = Object::create(&JsValue::NULL.unchecked_into());
-        define(&env, "z", zod)?;
-        for binding in Array::from(&field(&module, "bindings")?).iter() {
-            let binding = Array::from(&binding);
-            let name = text(&binding.get(0))?;
-            let value = evaluate(&binding.get(1), &env)?;
-            define(&env, &name, &value)?;
-        }
-        result.push(&evaluate(&field(&module, "result")?, &env)?);
+    for module in modules()?.iter() {
+        result.push(&construct(&module, zod)?);
     }
     Ok(result)
+}
+
+pub(crate) fn generate_one(zod: &JsValue, index: u32) -> Result<JsValue, JsValue> {
+    let modules = modules()?;
+    if index >= modules.length() {
+        return Err(js_sys::RangeError::new("generated Remote index is out of range").into());
+    }
+    construct(&modules.get(index), zod)
+}
+
+fn modules() -> Result<Array, JsValue> {
+    let plans = js_sys::JSON::parse(include_str!("../contracts/remote-plans.json"))?;
+    Ok(Array::from(&field(&plans, "modules")?))
+}
+
+fn construct(module: &JsValue, zod: &JsValue) -> Result<JsValue, JsValue> {
+    let env = Object::create(&JsValue::NULL.unchecked_into());
+    define(&env, "z", zod)?;
+    for binding in Array::from(&field(module, "bindings")?).iter() {
+        let binding = Array::from(&binding);
+        let name = text(&binding.get(0))?;
+        let value = evaluate(&binding.get(1), &env)?;
+        define(&env, &name, &value)?;
+    }
+    evaluate(&field(module, "result")?, &env)
 }
 
 fn evaluate(expression: &JsValue, env: &Object) -> Result<JsValue, JsValue> {

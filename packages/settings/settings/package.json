@@ -1,0 +1,19 @@
+{
+  "name": "@seekdeep-ai/seekdeep-settings",
+  "version": "0.1.0-rc.5",
+  "description": "Abstract user-settings seam (ctx.settings) for the SeekDeep Harness",
+  "type": "module",
+  "exports": {
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    }
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/cordis": "workspace:^",
+    "@seekdeep-ai/seekdeep-brand": "workspace:^"
+  }
+}

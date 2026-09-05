@@ -39,10 +39,21 @@ pub fn configure_api_remotes_zod(zod: JsValue) -> Result<(), JsValue> {
 /// Returns missing dependency, construction-plan, or Zod construction failures.
 #[wasm_bindgen(js_name = generatedApiRemotes)]
 pub fn generated_api_remotes() -> Result<Array, JsValue> {
-    let zod = ZOD
-        .with(|value| value.borrow().clone())
-        .ok_or_else(|| js_error("api-remotes: Zod schema dependency is not configured"))?;
-    crate::construction::generate(&zod)
+    crate::construction::generate(&zod()?)
+}
+
+/// Constructs one public package contribution by its source assembly index.
+///
+/// # Errors
+/// Rejects an unknown index, an absent dependency, or schema construction failure.
+#[wasm_bindgen(js_name = generatedApiRemote)]
+pub fn generated_api_remote(index: u32) -> Result<JsValue, JsValue> {
+    crate::construction::generate_one(&zod()?, index)
+}
+
+fn zod() -> Result<JsValue, JsValue> {
+    ZOD.with(|value| value.borrow().clone())
+        .ok_or_else(|| js_error("api-remotes: Zod schema dependency is not configured"))
 }
 
 /// Configures the five generated Remote contributions at module materialization.

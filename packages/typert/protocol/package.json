@@ -1,0 +1,21 @@
+{
+  "name": "@seekdeep-ai/seekdeep-typert-protocol",
+  "version": "0.1.0-rc.5",
+  "description": "Compiler-independent Remote metadata and Typert provider protocols",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    }
+  },
+  "files": [
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@seekdeep-ai/cordis": "workspace:^"
+  }
+}

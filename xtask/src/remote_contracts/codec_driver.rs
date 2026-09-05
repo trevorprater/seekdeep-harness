@@ -1,9 +1,9 @@
 //! Full descriptor and real-Zod codec differential over compiled browser artifacts.
 
 pub(super) const DRIVER: &str = r#"import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, copyFileSync, symlinkSync, rmSync } from 'node:fs';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { resolve, join, dirname } from 'node:path';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const source = resolve(process.argv[2]);
@@ -32,6 +32,24 @@ const ctx = new Context();
 const registry = new TypertRegistry(ctx);
 const actual = [];
 const dispose = await plugin.apply({ get() { return { $mount(value) { actual.push(value); return registry.remotes.register(value); } }; } });
+const publicContributions = [];
+const publicRoot = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), 'packages-'));
+process.on('exit', () => rmSync(publicRoot, { recursive: true, force: true }));
+mkdirSync(join(publicRoot, 'node_modules'), { recursive: true });
+symlinkSync(resolve('support/browser-dependencies/node_modules/zod'), join(publicRoot, 'node_modules/zod'), process.platform === 'win32' ? 'junction' : 'dir');
+writeFileSync(join(publicRoot, 'package.json'), JSON.stringify({ type: 'module', private: true }));
+const publicRequire = createRequire(join(publicRoot, 'package.json'));
+for (const name of order) {
+  const pkg = model.face.packages.find(pkg => pkg.name === '@deepseek-ai/dsh-' + name);
+  const destination = join(publicRoot, 'node_modules', normalize(pkg.name));
+  mkdirSync(join(destination, 'lib'), { recursive: true });
+  copyFileSync(resolve(pkg.root, 'package.json'), join(destination, 'package.json'));
+  copyFileSync(resolve(pkg.root, 'lib/typert.remote-client.js'), join(destination, 'lib/typert.remote-client.js'));
+  const value = await import(pathToFileURL(publicRequire.resolve(normalize(pkg.name) + '/remote')).href);
+  assert.deepEqual(Object.keys(value).sort(), ['TYPERT_REMOTE', 'default']);
+  assert.equal(value.default, value.TYPERT_REMOTE);
+  publicContributions.push(value.default);
+}
 
 function snapshot(value, schemas = new Map()) {
   if (value === undefined) return { $undefined: true };
@@ -92,13 +110,15 @@ function outcome(schema, input) {
 }
 
 assert.deepEqual(snapshot(actual), snapshot(expected), 'complete descriptor/schema definitions differ');
+assert.deepEqual(snapshot(publicContributions), snapshot(expected), 'public package descriptor/schema definitions differ');
 let boundaries = 0, comparisons = 0;
 for (let packageIndex = 0; packageIndex < expected.length; packageIndex++) {
   for (let index = 0; index < expected[packageIndex].descriptors.length; index++) {
-    const left = expected[packageIndex].descriptors[index], right = actual[packageIndex].descriptors[index];
+    const left = expected[packageIndex].descriptors[index], right = actual[packageIndex].descriptors[index], published = publicContributions[packageIndex].descriptors[index];
     const sourceCodecs = [...left.parameters.map(p => p.codec), left.result];
     const targetCodecs = [...right.parameters.map(p => p.codec), right.result];
-    if (left.invocation.kind === 'context') { sourceCodecs.push(left.invocation.codec); targetCodecs.push(right.invocation.codec); }
+    const publicCodecs = [...published.parameters.map(p => p.codec), published.result];
+    if (left.invocation.kind === 'context') { sourceCodecs.push(left.invocation.codec); targetCodecs.push(right.invocation.codec); publicCodecs.push(published.invocation.codec); }
     for (let boundary = 0; boundary < sourceCodecs.length; boundary++) {
       const sourceSchema = sourceCodecs[boundary].schema, targetSchema = targetCodecs[boundary].schema;
       const inputs = [undefined, null, false, true, 0, -1, 1, NaN, Infinity, '', 'fixture', [], {}, { unexpected: true }];
@@ -110,8 +130,10 @@ for (let packageIndex = 0; packageIndex < expected.length; packageIndex++) {
         for (const key of Object.keys(valid)) { const missing = { ...valid }; delete missing[key]; inputs.push(missing); }
       }
       for (const input of inputs) {
-        assert.deepEqual(outcome(targetSchema, input), outcome(sourceSchema, input), `${left.id} boundary ${boundary}`);
-        comparisons++;
+        const expected = outcome(sourceSchema, structuredClone(input));
+        assert.deepEqual(outcome(targetSchema, structuredClone(input)), expected, `${left.id} boundary ${boundary}`);
+        assert.deepEqual(outcome(publicCodecs[boundary].schema, structuredClone(input)), expected, `${left.id} public boundary ${boundary}`);
+        comparisons += 2;
       }
       boundaries++;
     }
@@ -119,5 +141,9 @@ for (let packageIndex = 0; packageIndex < expected.length; packageIndex++) {
 }
 await dispose();
 assert.equal(registry.remotes.list().length, 0);
-console.log(JSON.stringify({ modules: actual.length, descriptors: actual.flatMap(value => value.descriptors).length, boundaries, comparisons, sourceAccepted: true, remaining: 0 }));
+const publicDisposers = publicContributions.map(contribution => registry.remotes.register(contribution));
+assert.equal(registry.remotes.list().length, 24);
+for (const dispose of publicDisposers.reverse()) await dispose();
+assert.equal(registry.remotes.list().length, 0);
+console.log(JSON.stringify({ modules: actual.length, publicModules: publicContributions.length, descriptors: actual.flatMap(value => value.descriptors).length, boundaries, comparisons, sourceAccepted: true, remaining: 0 }));
 "#;

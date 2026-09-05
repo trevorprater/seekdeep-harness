@@ -24,6 +24,29 @@ struct Args {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Build the selected public Remote values, declarations, and Client facade.
+    RemoteArtifacts {
+        #[arg(long, default_value = ".")]
+        out_dir: PathBuf,
+    },
+    /// Typecheck public Remote consumers through the generated package exports.
+    RemoteConsumer {
+        /// Execute the checked consumer in Chromium against the built Rust Host.
+        #[arg(long)]
+        browser: bool,
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Publish generated Remote declarations and maps from the pinned Host model.
+    RemoteDeclarations {
+        #[arg(long, default_value = ".")]
+        out_dir: PathBuf,
+        #[arg(long)]
+        check: bool,
+        /// Capture public compatibility declarations from the read-only pinned oracle.
+        #[arg(long)]
+        capture_source: Option<PathBuf>,
+    },
     /// Verify the complete generated-Remote browser-to-Host milestone.
     RemoteMilestone {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
@@ -166,6 +189,13 @@ enum Scope {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
+        Command::RemoteArtifacts { out_dir } => remote_contracts::artifacts(&out_dir),
+        Command::RemoteConsumer { browser, source } => remote_contracts::consumer(browser, &source),
+        Command::RemoteDeclarations {
+            out_dir,
+            check,
+            capture_source,
+        } => remote_contracts::declarations(&out_dir, check, capture_source.as_deref()),
         Command::RemoteMilestone { source } => remote_contracts::milestone(&source),
         Command::RemoteCodecOracle { source } => remote_contracts::codec_oracle(&source),
         Command::RemoteGatewayOracle {
@@ -765,6 +795,7 @@ fn wasm_classic_package(
     std::fs::write(type_dir.join("index.d.ts"), declarations)?;
     copy_wasm_package_assets(&metadata.workspace_root, module_id, &out_dir)?;
     write_wasm_package_compatibility_entries(module_id, &out_dir)?;
+    remote_contracts::write_package_declarations(&metadata.workspace_root, module_id, &out_dir)?;
     println!(
         "built {module_id} Rust/WASM classic bundle at {}",
         out_dir.join("client.js").display()
@@ -808,6 +839,11 @@ fn wasm_cordis_package(
     }
     std::fs::create_dir_all(&type_dir)?;
     std::fs::write(type_dir.join("index.d.ts"), cordis_esm_declarations())?;
+    remote_contracts::write_package_declarations(
+        &metadata.workspace_root,
+        "@seekdeep-ai/cordis",
+        &out_dir,
+    )?;
     println!(
         "built @seekdeep-ai/cordis Rust/WASM ESM runtime at {}",
         out_dir.join("index.js").display()
@@ -2545,6 +2581,17 @@ fn classic_module_bundle(
     global: &str,
     module_id: &str,
 ) -> anyhow::Result<String> {
+    let bindings = named_wasm_bindings(bindings, global)?;
+    let compatibility = compatibility_prelude(global, module_id);
+    let factory = module_factory(global, module_id);
+    let module_id = serde_json::to_string(module_id)?;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(wasm);
+    Ok(format!(
+        "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n{compatibility}  window.__ModuleLoader__.load({{ id: {module_id}, factory: {factory} }});\n}})();\n"
+    ))
+}
+
+fn named_wasm_bindings(bindings: &str, global: &str) -> anyhow::Result<String> {
     anyhow::ensure!(
         is_javascript_identifier(global),
         "WASM global must be a JavaScript identifier"
@@ -2559,13 +2606,7 @@ fn classic_module_bundle(
         );
         bindings.to_owned()
     };
-    let compatibility = compatibility_prelude(global, module_id);
-    let factory = module_factory(global, module_id);
-    let module_id = serde_json::to_string(module_id)?;
-    let encoded = base64::engine::general_purpose::STANDARD.encode(wasm);
-    Ok(format!(
-        "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n{compatibility}  window.__ModuleLoader__.load({{ id: {module_id}, factory: {factory} }});\n}})();\n"
-    ))
+    Ok(bindings)
 }
 
 fn wasm_package_global(artifact: &str, module_id: &str) -> String {

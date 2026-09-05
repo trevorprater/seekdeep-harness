@@ -14,13 +14,7 @@
 /.wheel-smoke/
 /apps/web/dist/
 /apps/web/generated/
-/packages/client/*/lib/
-/packages/api/gateway/lib/
-/packages/api/remotes/lib/
-/packages/typert/registry/lib/
-/packages/extensions/cordis-client-runner/lib/
-/packages/session-query/session-log-export/lib/
-/packages/test-support/client-runtime/lib/
+/packages/*/*/lib/
 /vendor/*/lib/
 /.seekdeep/
 *.profraw
