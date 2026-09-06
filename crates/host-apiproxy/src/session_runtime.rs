@@ -15,6 +15,7 @@ use seekdeep_agent::{
     AGENTS, Agent, AgentEvent, AgentOptions, AgentRegistry, AgentSetup, AgentStatus,
     AgentStatusChanged, CreateAgentMeta, CreateAgentOptions,
 };
+use seekdeep_agent_loop::AgentErrorEvent;
 use seekdeep_agent_presets::{
     AGENT_PRESETS, PresetMountError, UnknownPresetError, resolve_session_preset,
 };
@@ -57,7 +58,7 @@ use crate::{
     RpcReceipt, RpcRequest, RpcResponse,
     api::{
         downloads::SessionLogQuery,
-        events::{HostFrame, MuxFrame},
+        events::{HostFrame, MuxFrame, SessionAddedOrigin},
         jobs::{JobId as WireJobId, JobStatus as WireJobStatus, JobView},
         sessions::{
             HistoryEntry, SESSION_SEARCH_RESULT_LIMIT, SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
@@ -1293,6 +1294,106 @@ impl SessionApiProxyRuntime {
         (effects, result)
     }
 
+    #[allow(clippy::too_many_lines)] // One transaction owns the complete Host lifecycle listener set.
+    fn register_host_listeners(
+        &self,
+        sender: &tokio::sync::mpsc::UnboundedSender<RpcRequest<HostFrame>>,
+    ) -> (Vec<EffectHandle>, anyhow::Result<()>) {
+        let mut effects = Vec::new();
+        let result = (|| -> anyhow::Result<()> {
+            let created = sender.clone();
+            effects.push(self.context.events().on_sync(
+                &self.context,
+                "session/created",
+                move |_, args| {
+                    let session = args
+                        .get::<Session>(0)
+                        .ok_or_else(|| anyhow::anyhow!("session/created lacks a Session"))?;
+                    let header = session.header();
+                    let events = session.events();
+                    send_host_frame(
+                        &created,
+                        HostFrame::SessionAdded {
+                            session_id: session.id().clone(),
+                            blank: fold_list_metadata(&events).blank,
+                            parent_session_id: header.parent_session.clone(),
+                            origin: header.origin.map(|origin| match origin {
+                                SessionOrigin::Subagent => SessionAddedOrigin::Subagent,
+                            }),
+                            cwd: header.cwd.clone(),
+                            agent_preset: resolve_session_preset(header, &events),
+                        },
+                    );
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )?);
+            let removed = sender.clone();
+            effects.push(self.context.events().on_sync(
+                &self.context,
+                "session/disposed",
+                move |_, args| {
+                    let session = args
+                        .get::<Session>(0)
+                        .ok_or_else(|| anyhow::anyhow!("session/disposed lacks a Session"))?;
+                    send_host_frame(
+                        &removed,
+                        HostFrame::SessionRemoved {
+                            session_id: session.id().clone(),
+                        },
+                    );
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )?);
+            let status = sender.clone();
+            effects.push(self.context.events().on_sync(
+                &self.context,
+                "agent/status",
+                move |_, args| {
+                    let event = args
+                        .get::<AgentEvent<AgentStatusChanged>>(0)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("agent/status lacks an Agent status event")
+                        })?;
+                    send_host_frame(
+                        &status,
+                        HostFrame::SessionStatus {
+                            session_id: event.agent.id().clone(),
+                            running: match event.payload.status {
+                                AgentStatus::Idle => false,
+                                AgentStatus::Running => true,
+                            },
+                        },
+                    );
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )?);
+            let failed = sender.clone();
+            effects.push(self.context.events().on_sync(
+                &self.context,
+                "agent/error",
+                move |_, args| {
+                    let event = args
+                        .get::<AgentEvent<AgentErrorEvent>>(0)
+                        .ok_or_else(|| anyhow::anyhow!("agent/error lacks an Agent error event"))?;
+                    send_host_frame(
+                        &failed,
+                        HostFrame::AgentError {
+                            session_id: event.agent.id().clone(),
+                            message: event.payload.error.clone(),
+                        },
+                    );
+                    Ok(EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )?);
+            Ok(())
+        })();
+        (effects, result)
+    }
+
     fn mux_stream(
         self: &Arc<Self>,
         signal: &AbortSignal,
@@ -1544,28 +1645,14 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
         signal: AbortSignal,
     ) -> ApiDownlinkStream<HostFrame> {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let listener = self.context.events().on_sync(
-            &self.context,
-            "agent/status",
-            move |_, args| {
-                let event = args
-                    .get::<AgentEvent<AgentStatusChanged>>(0)
-                    .ok_or_else(|| anyhow::anyhow!("agent/status lacks an Agent status event"))?;
-                let _ = sender.send(RpcRequest::new(
-                    next_session_frame_id(),
-                    HostFrame::SessionStatus {
-                        session_id: event.agent.id().clone(),
-                        running: event.payload.status == AgentStatus::Running,
-                    },
-                ));
-                Ok(EventReply::Undefined)
-            },
-            EventOptions::default(),
-        );
-        let listener = match listener {
-            Ok(listener) => listener,
-            Err(error) => return futures::stream::once(async move { Err(error.into()) }).boxed(),
-        };
+        let (effects, registered) = self.register_host_listeners(&sender);
+        if let Err(error) = registered {
+            return SessionDownlinkStream {
+                inner: futures::stream::once(async move { Err(error) }).boxed(),
+                guard: SessionDownlinkListenerGuard::new(effects),
+            }
+            .boxed();
+        }
         let domains = self.domains.host(request, signal.clone());
         let live = async_stream::stream! {
             loop {
@@ -1581,7 +1668,7 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
         };
         SessionDownlinkStream {
             inner: futures::stream::select(live.boxed(), domains).boxed(),
-            guard: SessionDownlinkListenerGuard::new(vec![listener]),
+            guard: SessionDownlinkListenerGuard::new(effects),
         }
         .boxed()
     }
@@ -2202,6 +2289,13 @@ fn send_subscribed_if_new(
     if subscribed.lock().insert(session.id().clone()) {
         let _ = sender.send(subscribed_envelope(session));
     }
+}
+
+fn send_host_frame(
+    sender: &tokio::sync::mpsc::UnboundedSender<RpcRequest<HostFrame>>,
+    payload: HostFrame,
+) {
+    let _ = sender.send(RpcRequest::new(next_session_frame_id(), payload));
 }
 
 fn next_session_frame_id() -> crate::RpcId {

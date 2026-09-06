@@ -10,18 +10,21 @@ use std::{
 use seekdeep::profile_boot::{
     boot_profile, compose_profile_at, framework_profile_catalog, shipped_preset_root,
 };
+use seekdeep_agent::AgentEvents;
+use seekdeep_agent_loop::AgentErrorEvent;
 use seekdeep_app_boot::BootPrepare;
 use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
+use seekdeep_commands::{COMMANDS, CommandDefinition, CommandResult};
 use seekdeep_cordis::{Context, EventOptions, EventReply};
 use seekdeep_core::{
-    session::{Session, SessionHeader},
-    session_store::SessionStore,
+    session::{Session, SessionHeader, SessionId},
+    session_store::{CreateSessionOptions, SESSIONS, SessionStore},
 };
 use seekdeep_host_webserver::WEB_SERVER;
 use seekdeep_llm_replay::{
     ReplayConfig, ReplayProviderConfig, install_llm_replay, parse_session_log,
 };
-use seekdeep_session_persistence::SessionPersistence as _;
+use seekdeep_session_persistence::{SESSION_PERSISTENCE, SessionPersistence as _};
 use seekdeep_session_persistence_jsonl::{JsonlConfig, JsonlSessionPersistence};
 use seekdeep_typert_loader::TypertArtifactRegistry;
 use seekdeep_util::launch_environment::{
@@ -205,6 +208,60 @@ fn prepare_profile(
     })
 }
 
+fn install_lifecycle_probe(context: &Context) -> anyhow::Result<()> {
+    let commands = context
+        .get(COMMANDS)
+        .ok_or_else(|| anyhow::anyhow!("Web profile has no commands"))?;
+    let sessions = context
+        .get(SESSIONS)
+        .ok_or_else(|| anyhow::anyhow!("Web profile has no Sessions"))?;
+    let persistence = context
+        .get(SESSION_PERSISTENCE)
+        .ok_or_else(|| anyhow::anyhow!("Web profile has no persistence"))?;
+    let owner = context.clone();
+    commands.register(
+        context,
+        CommandDefinition::new(
+            "lifecycle-probe",
+            "Exercise Host lifecycle broadcasts",
+            Arc::new(move |invocation| {
+                let owner = owner.clone();
+                let sessions = sessions.clone();
+                let persistence = persistence.clone();
+                Box::pin(async move {
+                    let probe = sessions.prepare(
+                        Some(SessionId::new("browser-lifecycle-probe")),
+                        CreateSessionOptions {
+                            cwd: invocation.agent.session().header().cwd.clone(),
+                            ..CreateSessionOptions::default()
+                        },
+                    )?;
+                    persistence.persistence().create(probe.header()).await?;
+                    let detach = sessions.enter(&probe)?;
+                    let announced = sessions.announce(&probe);
+                    if announced.is_ok() {
+                        AgentEvents::new(owner, invocation.agent).emit(
+                            "agent/error",
+                            AgentErrorEvent {
+                                turn: 1,
+                                step: 1,
+                                error: "Host lifecycle probe failed.".to_owned(),
+                            },
+                        );
+                    }
+                    let cleanup = detach.dispose().await;
+                    announced?;
+                    cleanup?;
+                    Ok(CommandResult::success(Some(
+                        "Host lifecycle probe complete.",
+                    )))
+                })
+            }),
+        ),
+    )?;
+    Ok(())
+}
+
 async fn audit_cold_log(
     home: &Path,
     output: &Path,
@@ -267,6 +324,27 @@ async fn audit_cold_log(
                 raw.content.contains(PROMPT),
                 "durable prompt differs from the source fixture"
             );
+            let commands = events
+                .iter()
+                .filter(|event| {
+                    event.event_type == "command/run"
+                        && event.data["name"].as_str() == Some("lifecycle-probe")
+                })
+                .collect::<Vec<_>>();
+            anyhow::ensure!(
+                commands.len() == 1,
+                "lifecycle probe did not execute exactly once"
+            );
+            anyhow::ensure!(
+                events
+                    .iter()
+                    .filter(|event| event.event_type == "command/done"
+                        && event.data["commandId"] == commands[0].data["commandId"]
+                        && event.data["kind"].as_str() == Some("success"))
+                    .count()
+                    == 1,
+                "lifecycle probe lacks one successful durable completion"
+            );
             std::fs::write(output.join("session.jsonl"), raw.content)?;
         }
         anyhow::ensure!(driven == 1, "expected one driven Session, got {driven}");
@@ -323,6 +401,7 @@ async fn active_turn_streams_and_survives_browser_reload() -> anyhow::Result<()>
         }
     };
     let run = async {
+        install_lifecycle_probe(application.context())?;
         let server = application
             .context()
             .get(WEB_SERVER)

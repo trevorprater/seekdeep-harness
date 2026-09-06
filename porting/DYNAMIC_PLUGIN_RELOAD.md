@@ -545,3 +545,5 @@ CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test --locked -p seekdeep --test we
 ```
 
 It boots the normal Rust Web profile in an isolated temporary world, installs the Rust replay adapter with the source fixture's catalog, and drives the source workspace-picker flow and composer in Chromium. Intermediate DOM text, running/idle controls, reload, complete fixture consumption, and cold-log settlement are required. Build the Web shell and current dynamic Client bundles first; this gate does not make a live model call.
+
+The same fixture opens a second independent browser connection and runs a Rust lifecycle-probe command through the ordinary command gateway. Both connections must receive one Session-added frame, its matching removal, and the exact Agent error text. The probe's own run/done pair must appear once in the durable log without a second model turn.

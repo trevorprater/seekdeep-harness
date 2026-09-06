@@ -7,7 +7,7 @@ use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use seekdeep_agent::{
     AgentEvents, AgentRegistry, AgentStatus, AgentStatusChanged, assemble_context_for,
 };
-use seekdeep_agent_loop::{AgentLoop, AgentLoopServices};
+use seekdeep_agent_loop::{AgentErrorEvent, AgentLoop, AgentLoopServices};
 use seekdeep_agent_presets::{
     AgentPresetConfig, AgentPresetRegistry, AgentPresetRegistryConfig, COMPOSITION_FILE,
     PresetRoot, PresetTrust, resolve_session_preset,
@@ -16,7 +16,7 @@ use seekdeep_client_connection::{HttpResponse, RpcResult};
 use seekdeep_cordis::Context;
 use seekdeep_core::{
     session::{AppendOptions, Session, SessionEvent, SessionHeader, SessionId, SurfaceOp},
-    session_store::{SESSIONS, SessionStore},
+    session_store::{CreateSessionOptions, SESSIONS, SessionStore},
 };
 use seekdeep_host_apiproxy::{
     ApiDownlinkStream, ApiProxyRuntime, ClientResponse, ModelSelection, PathOpenerInternals,
@@ -158,7 +158,7 @@ struct Harness {
     sessions: Arc<SessionStore>,
     agents: Arc<AgentRegistry>,
     runtime: Arc<SessionApiProxyRuntime>,
-    _project: tempfile::TempDir,
+    project: tempfile::TempDir,
     _presets: tempfile::TempDir,
 }
 
@@ -250,7 +250,7 @@ impl Harness {
             sessions,
             agents,
             runtime,
-            _project: project,
+            project,
             _presets: presets,
         }
     }
@@ -389,6 +389,86 @@ async fn host_status_stream_owns_running_idle_and_cancellation_listeners() {
             .context
             .events()
             .listener_count(&harness.context, "agent/status"),
+        baseline
+    );
+    harness.context.root_fiber().dispose().await.unwrap();
+}
+
+#[tokio::test]
+async fn host_lifecycle_frames_preserve_metadata_error_text_and_detached_identity() {
+    let harness = Harness::new(true).await;
+    value(create(&harness.runtime, json!({"sessionId":"subject"})).await);
+    let topics = [
+        "session/created",
+        "session/disposed",
+        "agent/status",
+        "agent/error",
+    ];
+    let baseline = topics.map(|topic| {
+        harness
+            .context
+            .events()
+            .listener_count(&harness.context, topic)
+    });
+    let mut stream = harness.runtime.host(
+        RpcRequest::new(RpcId::new("lifecycle"), json!({})),
+        AbortSignal::default(),
+    );
+    let session = harness
+        .sessions
+        .prepare(
+            Some(SessionId::new("probe")),
+            CreateSessionOptions {
+                cwd: Some(harness.project.path().to_string_lossy().into_owned()),
+                agent_preset: Some("minimal".to_owned()),
+                ..CreateSessionOptions::default()
+            },
+        )
+        .unwrap();
+    let detach = harness.sessions.enter(&session).unwrap();
+    harness.sessions.announce(&session).unwrap();
+    let added = stream.next().await.unwrap().unwrap();
+    assert_eq!(
+        added.payload,
+        HostFrame::SessionAdded {
+            session_id: session.id().clone(),
+            blank: true,
+            parent_session_id: None,
+            origin: None,
+            cwd: session.header().cwd.clone(),
+            agent_preset: Some("minimal".to_owned()),
+        }
+    );
+    let subject = harness.agents.get(&SessionId::new("subject")).unwrap();
+    AgentEvents::new(harness.context.clone(), subject.clone()).emit(
+        "agent/error",
+        AgentErrorEvent {
+            turn: 1,
+            step: 1,
+            error: "outer: inner".to_owned(),
+        },
+    );
+    assert_eq!(
+        stream.next().await.unwrap().unwrap().payload,
+        HostFrame::AgentError {
+            session_id: subject.id().clone(),
+            message: "outer: inner".to_owned(),
+        }
+    );
+    detach.dispose().await.unwrap();
+    assert!(harness.sessions.get(session.id()).is_none());
+    assert_eq!(
+        stream.next().await.unwrap().unwrap().payload,
+        HostFrame::SessionRemoved {
+            session_id: session.id().clone()
+        }
+    );
+    drop(stream);
+    assert_eq!(
+        topics.map(|topic| harness
+            .context
+            .events()
+            .listener_count(&harness.context, topic)),
         baseline
     );
     harness.context.root_fiber().dispose().await.unwrap();

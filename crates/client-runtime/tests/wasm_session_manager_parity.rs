@@ -197,6 +197,28 @@ async fn list_refresh_session_wrapper_and_raw_frame_routes_keep_cached_shapes() 
         .unwrap();
     Reflect::delete_property(&projection, &JsValue::from_str("value")).unwrap();
     assert!(manager.handle_mux_envelope(envelope.into()).is_err());
+    let error = Object::new();
+    set(&error, "type", &JsValue::from_str("host/agent-error"));
+    set(&error, "sessionId", &JsValue::from_str("s1"));
+    set(&error, "message", &JsValue::from_str("outer: inner"));
+    let envelope = Object::new();
+    set(&envelope, "payload", &error);
+    manager
+        .handle_host_envelope(envelope.clone().into())
+        .unwrap();
+    let snapshot = get(&first, "getSnapshot").dyn_into::<Function>().unwrap();
+    assert_eq!(
+        get(&snapshot.call0(&first).unwrap(), "lastAgentError")
+            .as_string()
+            .as_deref(),
+        Some("outer: inner")
+    );
+    set(&error, "type", &JsValue::from_str("host/session-removed"));
+    manager.handle_host_envelope(envelope.into()).unwrap();
+    assert_eq!(
+        get(&snapshot.call0(&first).unwrap(), "removed"),
+        JsValue::TRUE
+    );
 }
 
 #[wasm_bindgen_test(async)]

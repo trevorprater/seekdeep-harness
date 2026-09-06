@@ -63530,7 +63530,7 @@
     {
       "source": "packages/host/apiproxy/src/api-proxy.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/host-apiproxy/src/service.rs",
         "crates/host-apiproxy/src/configuration.rs",
@@ -63544,9 +63544,10 @@
         "pnpm exec vitest run packages/host/apiproxy/tests --reporter=dot (20 files, 374 tests passed)",
         "cargo test -p seekdeep-host-apiproxy --all-features",
         "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings",
-        "cargo xtask docs"
+        "cargo xtask docs",
+        "cargo test --locked -p seekdeep --test web_replay_browser --all-features -- --ignored --nocapture"
       ],
-      "note": "Unary, response, mux, export, and domain behavior retain their focused evidence. Real browser replay verifies Host running/idle publication and stream-owned cleanup. Host session-added, session-removed, and agent-error producers remain incomplete and are recorded in the existing GUI Web client architecture record."
+      "note": "Unary, response, mux, export, and domain behavior retain their focused evidence. All 179 native API Proxy tests pass. Two real browser clients verify Session-added/removed and Agent-error publication alongside active-turn running/idle frames, exact metadata/error text, durable command execution, and stream-owned cleanup."
     },
     {
       "source": "packages/host/apiproxy/src/api/agent-presets.schema.ts",
