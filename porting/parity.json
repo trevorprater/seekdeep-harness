@@ -24675,12 +24675,33 @@
     {
       "source": "apps/web/tests/composer-draft-scroll.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_composer_driver.rs",
+        "crates/client-ui-conversation/src/browser_input_bar.rs"
+      ],
+      "evidence": [
+        "pinned source composer-draft-scroll and composer-tab-geometry suites: 17 passed",
+        "cargo xtask web-composer: source measurement functions verify the real Rust/WASM 14-line cap, equal wrap widths, same-task caret/glyph coupling, wheel, typing, clipboard paste, and trailing-newline reveal; exact source geometry golden and zero model calls"
+      ]
     },
     {
       "source": "apps/web/tests/composer-tab-geometry.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_composer_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-conversation/src/browser_conversation_root.rs",
+        "crates/client-ui-conversation/src/browser_conversation_session.rs",
+        "crates/client-ui-trajectory/src/browser_plugin.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs"
+      ],
+      "evidence": [
+        "pinned source composer-draft-scroll and composer-tab-geometry suites: 17 passed",
+        "cargo xtask web-composer: source-generated 24-turn history through real Rust persistence, content search, Session opening, and built Chat/Trajectory; wide/narrow zero-shift geometry, exact source golden, visible scrollbars, and CSS control proving the expected 4px shift; zero model calls",
+        "affected WASM runtime/conversation/trajectory suites: 16 passed; targeted native suites: 252 passed"
+      ]
     },
     {
       "source": "apps/web/tests/conversation-column-overflow.e2e.ts",
@@ -52881,7 +52902,9 @@
       "status": "verified",
       "targets": [
         "crates/client-ui-trajectory/src/snapshot_builder.rs",
-        "crates/client-ui-trajectory/tests/snapshot_builder_parity.rs"
+        "crates/client-ui-trajectory/tests/snapshot_builder_parity.rs",
+        "crates/client-ui-trajectory/src/browser_plugin.rs",
+        "crates/client-ui-trajectory/tests/wasm_plugin_parity.rs"
       ],
       "evidence": [
         "Rust keyed replace/apply preserves cached contribution order and rebuilds only for inserts or anchor changes",
@@ -52889,7 +52912,7 @@
         "pinned source snapshot-builder suite passed 4/4 within the 107/107 trajectory run",
         "cargo test -p seekdeep-client-ui-trajectory --test snapshot_builder_parity --all-features (5 passed)"
       ],
-      "note": "the typed Rust snapshot retains IndexMap fields; JavaScript Map materialization and registry installation belong to the independently pending Client/WASM plugin boundary"
+      "note": "typed Rust snapshots retain IndexMap fields; a target-owned browser codec materializes Maps through the registered builder and Session view accessor, verified by live WASM key round trips and the real-Host composer/Trajectory browser path"
     },
     {
       "source": "packages/client/ui-trajectory/src/client/trajectory-tool-definition.ts",

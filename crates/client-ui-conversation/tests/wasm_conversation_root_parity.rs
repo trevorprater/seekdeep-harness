@@ -36,10 +36,10 @@ export function rootSetup() {
     workspaces: { phase: 'loading', items: [] },
     block: undefined,
     slots: [], chains: [], selections: [], selectionMode: 'resolve', selectionPending: [],
-    resizeObservers: [], styleWrites: [],
+    resizeObservers: [], styleWrites: [], styles: [],
   }
   globalThis.document = {
-    head: { appendChild() {} }, createElement() { return { setAttribute() {} } }, querySelector() { return null },
+    head: { appendChild(style) { bench.styles.push(style.textContent) } }, createElement() { return { setAttribute() {} } }, querySelector() { return null },
   }
   globalThis.ResizeObserver = class {
     constructor(callback) { this.callback = callback; this.observed = []; this.disconnected = 0; bench.resizeObservers.push(this) }
@@ -310,6 +310,16 @@ fn assert_resident_bar_position() {
 #[allow(clippy::too_many_lines)] // One Hook runtime owns the full resident transition sequence.
 async fn compiled_conversation_root_runs_resident_phase_workspace_chain_and_resize_matrix() {
     let component = setup();
+    let styles = Array::from(&property(&root_bench(), "styles"));
+    let root_style = styles
+        .iter()
+        .filter_map(|value| value.as_string())
+        .find(|value| value.contains("data-conversation-composer-overlay"))
+        .unwrap();
+    assert!(root_style.contains(
+        ".seekdeep-conversation-session-scrollBody:has([data-conversation-composer-overlay]) > [data-slot='conversation.session'] > .seekdeep-conversation-session-viewArea"
+    ));
+    assert!(!root_style.contains(":global("));
     let tree = root_render(&component);
     assert_resident_bar_position();
     assert_eq!(

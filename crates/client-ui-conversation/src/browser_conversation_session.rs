@@ -7,9 +7,6 @@ use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen
 
 use crate::browser_reasoning::inject_style;
 
-const SESSION_CSS: &str = include_str!(
-    "../../../packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css"
-);
 const DEFAULT_VIEW_ID: &str = "chat";
 
 thread_local! {
@@ -45,7 +42,7 @@ pub fn configure_client_ui_conversation_session(react: JsValue) -> Result<(), Js
     };
     inject_style(
         "ConversationRoot",
-        SESSION_CSS,
+        &crate::browser_conversation_root::conversation_root_styles(),
         &[
             ("Tab", "seekdeep-conversation-session-Tab"),
             ("agents", "seekdeep-conversation-session-agents"),
@@ -78,7 +75,6 @@ pub fn configure_client_ui_conversation_session(react: JsValue) -> Result<(), Js
             ("md", "seekdeep-conversation-session-md"),
             ("root", "seekdeep-conversation-session-root"),
             ("scrollBody", "seekdeep-conversation-session-scrollBody"),
-            ("session", "seekdeep-conversation-session-session"),
             ("tab", "seekdeep-conversation-session-tab"),
             ("tabActive", "seekdeep-conversation-session-tabActive"),
             ("tabs", "seekdeep-conversation-session-tabs"),

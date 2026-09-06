@@ -15,6 +15,13 @@ const ROOT_CSS: &str = include_str!(
     "../../../packages/client/ui-conversation/src/client/skeleton/ConversationRoot.module.css"
 );
 
+pub(crate) fn conversation_root_styles() -> String {
+    ROOT_CSS.replace(
+        ":global([data-slot='conversation.session'])",
+        "[data-slot='conversation.session']",
+    )
+}
+
 thread_local! {
     static COMPONENT: RefCell<Option<JsValue>> = const { RefCell::new(None) };
 }
@@ -50,7 +57,7 @@ pub fn configure_client_ui_conversation_root(
     configure_client_ui_conversation_empty_hero(react.clone(), ui_primitives)?;
     inject_style(
         "ConversationRoot",
-        ROOT_CSS,
+        &conversation_root_styles(),
         &[
             ("Tab", "seekdeep-conversation-session-Tab"),
             ("agents", "seekdeep-conversation-session-agents"),
@@ -77,7 +84,6 @@ pub fn configure_client_ui_conversation_root(
             ("md", "seekdeep-conversation-session-md"),
             ("root", class("root")),
             ("scrollBody", class("scrollBody")),
-            ("session", "seekdeep-conversation-session-session"),
             ("tab", "seekdeep-conversation-session-tab"),
             ("tabActive", "seekdeep-conversation-session-tabActive"),
             ("tabs", "seekdeep-conversation-session-tabs"),

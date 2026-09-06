@@ -2,7 +2,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use js_sys::{Array, Function, Promise, Reflect};
+use js_sys::{Array, Function, Map, Promise, Reflect};
 use seekdeep_client_runtime::{
     WasmConversationEventRegistry, WasmConversationNodeAssembler, WasmConversationViewRegistry,
 };
@@ -132,6 +132,7 @@ fn apply_registers_native_definitions_view_slot_locale_store_and_disposes() {
     assert_eq!(trajectory_inject().length(), 5);
     assert_eq!(events.entries().length(), 8);
     assert_eq!(views.entries().length(), 1);
+    assert_snapshot_codec(&views.entries().get(0));
     assert_eq!(trajectorySlotEntries(&bench).length(), 1);
     assert_eq!(trajectoryLocaleCalls(&bench).length(), 1);
     let entry = trajectorySlotEntries(&bench).get(0);
@@ -191,6 +192,8 @@ fn apply_registers_native_definitions_view_slot_locale_store_and_disposes() {
     assembler.replace_window(Array::of1(&input), false).unwrap();
     assert!(assembler.flush().unwrap());
     let snapshot = assembler.get("trajectory").unwrap();
+    assert!(property(&snapshot, "callSchemas").is_instance_of::<Map>());
+    assert!(property(&snapshot, "eventLocations").is_instance_of::<Map>());
     let nodes = Array::from(&property(&snapshot, "eventNodes"));
     assert_eq!(nodes.length(), 1);
     assert_eq!(
@@ -202,6 +205,49 @@ fn apply_registers_native_definitions_view_slot_locale_store_and_disposes() {
     assert_eq!(events.entries().length(), 0);
     assert_eq!(views.entries().length(), 0);
     assert_eq!(trajectorySlotEntries(&bench).length(), 0);
+}
+
+fn assert_snapshot_codec(definition: &JsValue) {
+    let builder = property(definition, "create")
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&JsValue::UNDEFINED)
+        .unwrap();
+    let empty = property(&builder, "empty");
+    assert!(property(&empty, "callSchemas").is_instance_of::<Map>());
+    assert!(property(&empty, "eventLocations").is_instance_of::<Map>());
+    assert!(property(&builder, "toBrowserSnapshot").is_undefined());
+    let codec = Reflect::get(
+        &builder,
+        &js_sys::Symbol::for_("@seekdeep-ai/seekdeep-client-runtime/native-view-snapshot-codec"),
+    )
+    .unwrap();
+    let encoded = js_sys::JSON::parse(
+        r#"{"eventLocations":[[7,{"turn":2,"step":1}]],"callSchemas":{"__proto__":{"name":"bash","parameters":{"type":"object"}}},"eventNodes":[],"requests":[],"partial":null,"runningCalls":[]}"#,
+    ).unwrap();
+    let projected = trajectoryCall(&codec, "toBrowserSnapshot", &encoded);
+    let schemas = property(&projected, "callSchemas")
+        .dyn_into::<Map>()
+        .unwrap();
+    assert_eq!(
+        property(&schemas.get(&JsValue::from_str("__proto__")), "name")
+            .as_string()
+            .as_deref(),
+        Some("bash")
+    );
+    let locations = property(&projected, "eventLocations")
+        .dyn_into::<Map>()
+        .unwrap();
+    assert_eq!(
+        property(&locations.get(&JsValue::from_f64(7.0)), "turn").as_f64(),
+        Some(2.0)
+    );
+    let round_trip = trajectoryCall(&codec, "toNativeSnapshot", &projected);
+    assert_eq!(
+        js_sys::JSON::stringify(&round_trip).unwrap(),
+        js_sys::JSON::stringify(&encoded).unwrap()
+    );
+    assert!(Array::is_array(&property(&encoded, "eventLocations")));
 }
 
 #[wasm_bindgen_test(async)]

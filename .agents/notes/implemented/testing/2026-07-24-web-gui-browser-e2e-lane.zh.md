@@ -42,6 +42,8 @@ Rust [工作区运行器](../../../../xtask/src/web_workspaces.rs)与[浏览器�
 
 ### 模式与 fixture
 
+`cargo xtask web-composer` 复用固定源实现的测量函数与预期输出格式化器，检查草稿滚动和跨标签页几何。它在单个启用可见滚动条的 Chromium 进程中验证真实 wheel、键入、剪贴板、尾随换行、响应式宽度与 CSS 控制组行为。源实现生成的历史由 Rust 在 Host 启动后、浏览器初始化前解析、持久化并检查。隔离 Host 启用源 scaffold 的内存索引，并在首次搜索时打开；已交付的搜索默认值不变。两份几何预期输出均精确比较，拆卸要求模型调用次数为零。
+
 `cargo xtask web-startup` 针对真实 Rust Host 检查源实现的冷空白会话与启动自动选择场景。启动后的 fixture 路由通过生产持久化创建未发布、已压缩且只有一个事件的会话；浏览器验证空侧栏的精确预期输出。首次关联 Workspace 保留原有 Hero、picker、scroll body、composer seat 与 textarea 节点。重新加载时暂缓并继续真实历史请求，不替换响应，验证只出现 Hero phase，并仅在这次主动重新加载期间允许连接丢失警告。拆卸要求模型调用次数为零。
 
 `cargo xtask web-model-selection` 将源实现的模型默认值与已声明推理配置覆盖层应用到真实 Rust Host。单个 Chromium 会话验证输入框默认值持久化、已记录会话的优先级、不可用路由的拒绝与恢复，以及已声明推理等级菜单和已保存选择的精确值。仅供 fixture 使用的 PUT 通过真实 Session 追加源实现的已记录路由事实，不合成模型轮次。Host 流守卫要求调用次数为零，生产持久化路径负责拆卸与冷读兼容性。

@@ -20,6 +20,8 @@ Trajectory 针对共享的 [`ConversationNodeAssembler`](2026-08-09-client-conve
 
 既有的 [Trajectory 检查记录表](../feature/2026-07-27-trajectory-inspection-ledger.md)继续作为视图模型。Trajectory Builder 把已物化的 target Node 转换为原有的 `eventNodes`、Requests、Tool schema、运行中调用和 Location map；layout、表格虚拟化、选择、Overview 与检查器行为不会成为通用 Conversation 约定。
 
+原生 Rust Builder 通过[原生 Definition 适配器](../../../../crates/client-runtime/src/wasm_native_definition.rs)提供 target 自有的浏览器快照编解码器。公开的 `empty`、`replace`、`apply` 与 Session view 读取都将 `eventLocations` 和 `callSchemas` 暴露为 Map；原生 assembler 存储使用数值键条目对与 schema 对象。双向转换均不修改输入，共享运行时委托转换而不需要知道 Trajectory 字段名。没有编解码器的通用 JavaScript View Builder 仍经过 JSON 转换；保留任意非 JSON 自定义快照仍是独立的浏览器兼容性缺口。
+
 ### 业务 Definition
 
 | 业务 | Context 标识 | State 组装方式 | Trajectory contribution |
@@ -93,6 +95,8 @@ Context 迁移与下列表现层优化解决的是不同成本。这些优化保
 Runtime 测试固定 target 注册、精确 ID append、先 update 后 start 的 replay、prepend identity、Reader window-gap 修复、Location replay，以及 Chat 与 Trajectory snapshot 隔离。
 
 Trajectory Definition 与 Builder 测试固定 Assistant streaming 与 interruption、嵌套 Tool call 和并行 interruption、Compaction 与 prompt 继承、Steering 分类和 Step 位置、Request 标记顺序、稳定 contribution 替换与 prepend 扩展。Table、layout、Timeline 与搜索测试固定延迟 Markdown 工作、节流索引更新、Tooltip 展示时格式化，以及 append/prepend 期间稳定的搜索结果。
+
+实时 WASM 插件测试通过已注册的 assembler 检查 Map 快照，并往返验证数值 Location 键与类似原型属性的 schema 键。[composer 浏览器驱动](../../../../xtask/src/web_composer_driver.rs)通过真实 Rust Host 打开由源实现生成的冷历史，切换到已构建的 Trajectory renderer，并使用源实现的测量函数与几何预期输出比较其与 Chat 的布局。
 
 ## 后果
 

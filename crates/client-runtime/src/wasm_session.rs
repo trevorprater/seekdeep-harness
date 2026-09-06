@@ -644,7 +644,7 @@ fn views_face(session: &Rc<ClientSession>) -> Result<JsValue, JsValue> {
                     .map(|(previous, value)| (previous.as_ref(), value)),
             )?
         } else {
-            json_to_js(&snapshot)?
+            session.conversation_snapshot_to_browser(&target, &snapshot)?
         };
         cache.borrow_mut().insert(target, (snapshot, value.clone()));
         Ok(value)

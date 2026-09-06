@@ -1,6 +1,6 @@
 //! Browser Client plugin registration backed entirely by compiled Rust/WASM.
 
-use js_sys::{Array, Function, Object, Promise, Reflect};
+use js_sys::{Array, Function, Map, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
@@ -41,8 +41,12 @@ pub fn apply_client_ui_trajectory(ctx: JsValue) -> Result<(), JsValue> {
         &views,
         "register",
         &[
-            seekdeep_client_runtime::native_conversation_view_definition_to_js(
+            seekdeep_client_runtime::native_conversation_view_definition_to_js_with_codec(
                 trajectory_view_definition(),
+                seekdeep_client_runtime::NativeConversationViewSnapshotCodec {
+                    to_browser: project_snapshot,
+                    to_native: encode_snapshot,
+                },
             )?,
         ],
     )?;
@@ -88,6 +92,36 @@ pub fn apply_client_ui_trajectory(ctx: JsValue) -> Result<(), JsValue> {
         ],
     )?;
     Ok(())
+}
+
+fn project_snapshot(encoded: &JsValue) -> Result<JsValue, JsValue> {
+    let value = Object::assign(&Object::new(), encoded.unchecked_ref::<Object>());
+    let locations = required(encoded, "eventLocations", "trajectory snapshot")?;
+    let schemas = required(encoded, "callSchemas", "trajectory snapshot")?.dyn_into::<Object>()?;
+    let location_map = Map::new();
+    for pair in Array::from(&locations) {
+        let pair = Array::from(&pair);
+        location_map.set(&pair.get(0), &pair.get(1));
+    }
+    let schema_map = Map::new();
+    for pair in Object::entries(&schemas) {
+        let pair = Array::from(&pair);
+        schema_map.set(&pair.get(0), &pair.get(1));
+    }
+    set(&value, "eventLocations", location_map.as_ref())?;
+    set(&value, "callSchemas", schema_map.as_ref())?;
+    Ok(value.into())
+}
+
+fn encode_snapshot(snapshot: &JsValue) -> Result<JsValue, JsValue> {
+    let value = Object::assign(&Object::new(), snapshot.unchecked_ref::<Object>());
+    let locations =
+        required(snapshot, "eventLocations", "trajectory snapshot")?.dyn_into::<Map>()?;
+    let schemas = required(snapshot, "callSchemas", "trajectory snapshot")?.dyn_into::<Map>()?;
+    set(&value, "eventLocations", &Array::from(locations.as_ref()))?;
+    let encoded_schemas = Object::from_entries(schemas.as_ref())?;
+    set(&value, "callSchemas", &encoded_schemas)?;
+    Ok(value.into())
 }
 
 /// Returns the exact browser Client dependency list.

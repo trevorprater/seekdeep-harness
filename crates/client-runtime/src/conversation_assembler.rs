@@ -239,6 +239,19 @@ pub trait AssemblerEventDefinitions {
 
 /// Per-target incremental view builder.
 pub trait AssemblerViewBuilder {
+    /// Projects the native snapshot into the target's browser types.
+    ///
+    /// # Errors
+    ///
+    /// Returns conversion failures from the target-owned projection.
+    #[cfg(target_arch = "wasm32")]
+    fn snapshot_to_browser(
+        &self,
+        snapshot: &Value,
+    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue> {
+        crate::wasm_session::json_to_js(snapshot)
+    }
+
     /// Empty target snapshot.
     fn empty(&self) -> Rc<Value>;
     /// Replaces the complete target Node set.
@@ -612,6 +625,18 @@ impl ConversationNodeAssembler {
     #[must_use]
     pub fn snapshot(&self, target: &str) -> Option<Rc<Value>> {
         self.views.get(target).map(|view| view.snapshot.clone())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn snapshot_to_browser(
+        &self,
+        target: &str,
+        snapshot: &Value,
+    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue> {
+        self.views.get(target).map_or_else(
+            || crate::wasm_session::json_to_js(snapshot),
+            |view| view.builder.snapshot_to_browser(snapshot),
+        )
     }
 
     fn sorted_inputs(&self) -> Vec<ConversationEventInput> {

@@ -116,7 +116,7 @@ impl WasmConversationNodeAssembler {
             return Ok(JsValue::UNDEFINED);
         };
         if target != "chat" {
-            return crate::wasm_session::json_to_js(&value);
+            return self.assembler.snapshot_to_browser(target, &value);
         }
         let cache = self.chat_cache.borrow();
         if let Some((current, rendered)) = &*cache

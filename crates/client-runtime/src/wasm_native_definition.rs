@@ -19,6 +19,10 @@ use crate::{
     wasm_session::{js_to_json, json_to_js, parse_event},
 };
 
+// Native codec metadata must not reserve string properties on arbitrary Client View Builders.
+pub(crate) const VIEW_SNAPSHOT_CODEC: &str =
+    "@seekdeep-ai/seekdeep-client-runtime/native-view-snapshot-codec";
+
 /// Wraps one native Rust Event Definition in the browser registry object contract.
 ///
 /// # Errors
@@ -169,21 +173,75 @@ fn location_data_to_js(data: &ConversationLocationData) -> Result<JsValue, JsVal
 pub fn native_conversation_view_definition_to_js(
     definition: AssemblerViewDefinition,
 ) -> Result<JsValue, JsValue> {
+    native_view_definition(definition, None)
+}
+
+/// Target-owned conversion between native JSON storage and the public browser snapshot.
+#[derive(Clone, Copy)]
+pub struct NativeConversationViewSnapshotCodec {
+    /// Restores browser-only types without mutating the encoded input.
+    pub to_browser: fn(&JsValue) -> Result<JsValue, JsValue>,
+    /// Encodes browser-only types without mutating the public snapshot.
+    pub to_native: fn(&JsValue) -> Result<JsValue, JsValue>,
+}
+
+/// Wraps a native View Definition with its target-owned browser snapshot codec.
+///
+/// Builder outputs and public Session reads expose browser types such as Maps; the
+/// native assembler stores the codec's JSON representation without knowing target fields.
+///
+/// # Errors
+///
+/// Returns object-construction failures. Codec errors propagate through the affected operation.
+pub fn native_conversation_view_definition_to_js_with_codec(
+    definition: AssemblerViewDefinition,
+    codec: NativeConversationViewSnapshotCodec,
+) -> Result<JsValue, JsValue> {
+    native_view_definition(definition, Some(codec))
+}
+
+fn native_view_definition(
+    definition: AssemblerViewDefinition,
+    codec: Option<NativeConversationViewSnapshotCodec>,
+) -> Result<JsValue, JsValue> {
     let value = Object::new();
     set(&value, "target", &JsValue::from_str(&definition.target))?;
     let create_native = definition.create;
     let create = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
-        browser_view_builder((create_native)())
+        browser_view_builder((create_native)(), codec)
     }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
     set(&value, "create", &create.into_js_value())?;
     Ok(value.into())
 }
 
-fn browser_view_builder(builder: Box<dyn AssemblerViewBuilder>) -> Result<JsValue, JsValue> {
+fn browser_view_builder(
+    builder: Box<dyn AssemblerViewBuilder>,
+    codec: Option<NativeConversationViewSnapshotCodec>,
+) -> Result<JsValue, JsValue> {
     let builder = Rc::new(RefCell::new(builder));
     let value = Object::new();
+    if let Some(codec) = codec {
+        let metadata = Object::new();
+        for (name, convert) in [
+            ("toBrowserSnapshot", codec.to_browser),
+            ("toNativeSnapshot", codec.to_native),
+        ] {
+            let callback = Closure::wrap(Box::new(move |snapshot: JsValue| convert(&snapshot))
+                as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
+            set(&metadata, name, &callback.into_js_value())?;
+        }
+        Reflect::set(
+            &value,
+            &js_sys::Symbol::for_(VIEW_SNAPSHOT_CODEC),
+            &metadata,
+        )?;
+    }
     let empty = builder.borrow().empty();
-    set(&value, "empty", &json_to_js(&empty)?)?;
+    let encode = move |snapshot: &serde_json::Value| {
+        let encoded = json_to_js(snapshot)?;
+        codec.map_or(Ok(encoded.clone()), |codec| (codec.to_browser)(&encoded))
+    };
+    set(&value, "empty", &encode(&empty)?)?;
 
     let replace_builder = builder.clone();
     let replace = Closure::wrap(Box::new(move |input: JsValue| -> Result<JsValue, JsValue> {
@@ -193,7 +251,7 @@ fn browser_view_builder(builder: Box<dyn AssemblerViewBuilder>) -> Result<JsValu
             .borrow_mut()
             .replace(&nodes, timeline)
             .map_err(assembler_error)
-            .and_then(|snapshot| json_to_js(&snapshot))
+            .and_then(|snapshot| encode(&snapshot))
     })
         as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
     set(&value, "replace", &replace.into_js_value())?;
@@ -206,7 +264,7 @@ fn browser_view_builder(builder: Box<dyn AssemblerViewBuilder>) -> Result<JsValu
             .borrow_mut()
             .apply(&nodes, timeline)
             .map_err(assembler_error)
-            .and_then(|snapshot| json_to_js(&snapshot))
+            .and_then(|snapshot| encode(&snapshot))
     })
         as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>);
     set(&value, "apply", &apply.into_js_value())?;

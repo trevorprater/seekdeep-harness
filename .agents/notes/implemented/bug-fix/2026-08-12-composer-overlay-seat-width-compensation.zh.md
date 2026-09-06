@@ -36,4 +36,6 @@ trajectory 表格让这个代价显形：整行分隔线在面板右边缘前 8p
 
 ## 测试
 
+Rust/WASM ConversationRoot 样式表展开源 CSS Module 的全局 slot 选择器，并保持引号内的 `conversation.session` 标识不变。实时 WASM 断言检查生成的选择器，`cargo xtask web-composer` 则对照固定的源预期输出验证真实宽／窄视口几何与移除补偿的控制组。无效选择器会使当前视图不受高度约束，让外层列滚动，并让 composer 多付出一次滚动条宽度。
+
 `apps/web/tests/composer-tab-geometry.e2e.ts` 仍断言输入卡在标签页间保持位置，并新增断言拆分：Chat 滚动容器保持 `scrollbar-gutter: stable` 与非零槽宽，覆盖分支解析为 `auto` 且槽宽为零。控制级联随机制改变：现在移除座位的 `right` 补偿（而非移除该分支上 Chat 从未有过的槽），测得同样的 4px 位移，证明相等的矩形并非从未到达布局的标签页切换。提交的 golden 记录两种状态。

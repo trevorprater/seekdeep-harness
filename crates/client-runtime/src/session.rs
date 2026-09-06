@@ -469,6 +469,17 @@ impl ClientSession {
         self.conversation.borrow().snapshot(target)
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn conversation_snapshot_to_browser(
+        &self,
+        target: &str,
+        snapshot: &Value,
+    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue> {
+        self.conversation
+            .borrow()
+            .snapshot_to_browser(target, snapshot)
+    }
+
     /// Binds the single Agent-scoped Client context marker.
     ///
     /// # Errors

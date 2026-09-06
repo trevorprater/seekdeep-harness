@@ -36,4 +36,6 @@ The compensation value is not a literal: ui-theme's scrollbar.css defines `--see
 
 ## Testing
 
+The Rust/WASM ConversationRoot stylesheet unwraps the source CSS Module's global slot selector and leaves the quoted `conversation.session` identity unchanged. A live WASM assertion checks the emitted selector, and `cargo xtask web-composer` verifies the actual wide/narrow geometry and broken-compensation control against the pinned source golden. An invalid selector leaves the active view unconstrained, makes the outer column scroll, and charges the composer for a second scrollbar width.
+
 `apps/web/tests/composer-tab-geometry.e2e.ts` still asserts the card holds its position across tabs and now also asserts the split: Chat's scroller keeps `scrollbar-gutter: stable` and a nonzero band, while the overlay branch resolves `auto` with a zero band. The control cascade changed with the mechanism: it now drops the seat's `right` compensation (instead of dropping a gutter Chat never had on that branch) and measures the same 4px shift, proving the equal rectangles are not a tab switch that never reached layout. The committed golden records both states.

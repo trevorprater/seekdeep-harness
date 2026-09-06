@@ -275,7 +275,7 @@ fn adapt_view_definition(definition: &BrowserView) -> Rc<AssemblerViewDefinition
             let builder = call_method(&payload, "create", &[])
                 .unwrap_or_else(|error| wasm_bindgen::throw_val(error));
             let empty = required(&builder, "empty", "Conversation view builder")
-                .and_then(|value| js_to_json(&value))
+                .and_then(|value| native_view_snapshot(&builder, &value))
                 .map_or_else(|error| wasm_bindgen::throw_val(error), Rc::new);
             Box::new(BrowserViewBuilder { builder, empty })
         }),
@@ -288,6 +288,18 @@ struct BrowserViewBuilder {
 }
 
 impl AssemblerViewBuilder for BrowserViewBuilder {
+    fn snapshot_to_browser(&self, snapshot: &serde_json::Value) -> Result<JsValue, JsValue> {
+        let encoded = json_to_js(snapshot)?;
+        let projection = snapshot_codec_method(&self.builder, "toBrowserSnapshot")?;
+        if projection.is_undefined() {
+            Ok(encoded)
+        } else {
+            projection
+                .dyn_into::<Function>()?
+                .call1(&self.builder, &encoded)
+        }
+    }
+
     fn empty(&self) -> Rc<serde_json::Value> {
         self.empty.clone()
     }
@@ -338,7 +350,34 @@ impl BrowserViewBuilder {
         )
         .map_err(adapter_error)?;
         let result = call_method(&self.builder, method, &[input.into()]).map_err(adapter_error)?;
-        js_to_json(&result).map(Rc::new).map_err(adapter_error)
+        native_view_snapshot(&self.builder, &result)
+            .map(Rc::new)
+            .map_err(adapter_error)
+    }
+}
+
+fn native_view_snapshot(
+    builder: &JsValue,
+    snapshot: &JsValue,
+) -> Result<serde_json::Value, JsValue> {
+    let codec = snapshot_codec_method(builder, "toNativeSnapshot")?;
+    let encoded = if codec.is_undefined() {
+        snapshot.clone()
+    } else {
+        codec.dyn_into::<Function>()?.call1(builder, snapshot)?
+    };
+    js_to_json(&encoded)
+}
+
+fn snapshot_codec_method(builder: &JsValue, name: &str) -> Result<JsValue, JsValue> {
+    let codec = Reflect::get(
+        builder,
+        &js_sys::Symbol::for_(crate::wasm_native_definition::VIEW_SNAPSHOT_CODEC),
+    )?;
+    if codec.is_undefined() {
+        Ok(JsValue::UNDEFINED)
+    } else {
+        Reflect::get(&codec, &JsValue::from_str(name))
     }
 }
 

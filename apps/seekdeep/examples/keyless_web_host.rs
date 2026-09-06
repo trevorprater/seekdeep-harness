@@ -108,6 +108,7 @@ fn write_overlay(home: &Path, data: &Path, mode: FixtureMode) -> anyhow::Result<
             {"id":"credentials","config":{"seekdeepHome":home}},
             {"id":"storage-json","config":{"root":data.join("storages")}},
             {"id":"session-persistence-jsonl","config":{"root":data.join("sessions")}},
+            {"id":"session-query-sqlite","config":{"path":":memory:","openAt":"first-search"}},
             {"id":"agent-presets","config":{"default":"standard","roots":[{"path":shipped_preset_root(),"trust":"system"}],"includeUserRoot":false}},
             {"id":"skill-filesystem","config":{"seekdeepHome":home,"agentsHome":home.join("agents"),"bundledSkillDir":home.join("bundled-skills"),"watch":false}},
             {"id":"directory-picker","disabled":true},
@@ -262,6 +263,105 @@ fn session_fixture_route(context: &Context, server: &WebServer) -> anyhow::Resul
     })
 }
 
+fn seed_log_fixture_route(
+    context: &Context,
+    server: &WebServer,
+    path: PathBuf,
+    id: SessionId,
+    workspace: PathBuf,
+) -> anyhow::Result<WebRegistration> {
+    let persistence = context
+        .get(seekdeep_session_persistence::SESSION_PERSISTENCE)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no persistence"))?
+        .persistence();
+    server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/seed-log".to_owned(),
+        handler: Arc::new(move |request| {
+            let persistence = persistence.clone();
+            let path = path.clone();
+            let id = id.clone();
+            let workspace = workspace.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture seed requires POST"
+                );
+                let raw = tokio::fs::read_to_string(path)
+                    .await?
+                    .replace("{{sessionId}}", id.as_str())
+                    .replace("{{cwd}}", &workspace.to_string_lossy());
+                let mut lines = raw.lines();
+                let header = seekdeep_session_persistence_jsonl::parse_header_meta(
+                    lines
+                        .next()
+                        .ok_or_else(|| anyhow::anyhow!("fixture header absent"))?,
+                )?
+                .ok_or_else(|| anyhow::anyhow!("fixture has an invalid JSONL header"))?;
+                anyhow::ensure!(header.id == id, "fixture Session identity mismatch");
+                let mut events = Vec::<seekdeep_core::session::SessionEvent>::new();
+                for line in lines.filter(|line| !line.is_empty()) {
+                    for event in seekdeep_core::chunk_rows::decode_storage_record(
+                        serde_json::from_str(line)?,
+                    )? {
+                        events.push(serde_json::from_value(event)?);
+                    }
+                }
+                anyhow::ensure!(
+                    events
+                        .last()
+                        .is_some_and(|event| event.event_type == "turn/end"),
+                    "fixture has no closed final turn"
+                );
+                persistence.create(&header).await?;
+                persistence.append(&id, &events).await?;
+                let loaded = persistence.inspect(&id, None).await?;
+                anyhow::ensure!(
+                    serde_json::to_value(&loaded.events)? == serde_json::to_value(&events)?,
+                    "fixture persisted events differ"
+                );
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&json!({"events":events.len()}))?,
+                ))
+            })
+        }),
+    })
+}
+
+fn attach_seed_fixture_route(
+    context: &Context,
+    server: &WebServer,
+    workspace: PathBuf,
+    seed: SessionId,
+) -> anyhow::Result<WebRegistration> {
+    let registry = context
+        .get(WORKSPACE_REGISTRY)
+        .ok_or_else(|| anyhow::anyhow!("Web profile has no workspace registry"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/attach-seed".to_owned(),
+        handler: Arc::new(move |request| {
+            let registry = registry.clone();
+            let workspace = workspace.clone();
+            let seed = seed.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture attachment requires POST"
+                );
+                registry
+                    .resolve_by_path(&workspace.to_string_lossy())
+                    .await?
+                    .ok_or_else(|| anyhow::anyhow!("fixture workspace is not registered"))?
+                    .attach_session(seed)
+                    .await?;
+                Ok(response(200_u16.try_into()?, "attached"))
+            })
+        }),
+    })
+}
+
 fn isolated_environment(home: &Path) -> LaunchEnvironmentSnapshot {
     create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
         source: LaunchEnvironmentSource::Process,
@@ -312,8 +412,8 @@ fn install_keyless_routes(
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     anyhow::ensure!(
-        matches!(arguments.len(), 3..=6),
-        "expected harness-home, workspace, seed id, optional isolated data root, mode, and extra overlay"
+        matches!(arguments.len(), 3..=7),
+        "expected harness-home, workspace, seed id, optional isolated data root, mode, extra overlay, and seed log"
     );
     let mode = match arguments
         .get(4)
@@ -364,35 +464,20 @@ async fn main() -> anyhow::Result<()> {
     let calls = Arc::new(AtomicUsize::new(0));
     let context = application.context();
     install_keyless_routes(context, &calls, mode)?;
-    let registry = context
-        .get(WORKSPACE_REGISTRY)
-        .ok_or_else(|| anyhow::anyhow!("Web profile has no workspace registry"))?;
     let server = context
         .get(WEB_SERVER)
         .ok_or_else(|| anyhow::anyhow!("Web profile has no server"))?;
-    let settings_routes = settings_fixture_routes(context, &server)?;
-    let attach = server.register(WebRoute {
-        kind: WebRouteKind::Exact,
-        path: "/fixture/attach-seed".to_owned(),
-        handler: Arc::new(move |request| {
-            let registry = registry.clone();
-            let workspace = workspace.clone();
-            let seed = seed.clone();
-            Box::pin(async move {
-                anyhow::ensure!(
-                    request.method().as_str() == "POST",
-                    "fixture attachment requires POST"
-                );
-                registry
-                    .resolve_by_path(&workspace.to_string_lossy())
-                    .await?
-                    .ok_or_else(|| anyhow::anyhow!("fixture workspace is not registered"))?
-                    .attach_session(seed)
-                    .await?;
-                Ok(response(200_u16.try_into()?, "attached"))
-            })
-        }),
-    })?;
+    let mut settings_routes = settings_fixture_routes(context, &server)?;
+    if let Some(path) = arguments.get(6) {
+        settings_routes.push(seed_log_fixture_route(
+            context,
+            &server,
+            PathBuf::from(path).canonicalize()?,
+            seed.clone(),
+            workspace.clone(),
+        )?);
+    }
+    let attach = attach_seed_fixture_route(context, &server, workspace, seed)?;
     println!("seekdeep web: http://127.0.0.1:{}", server.port());
     tokio::signal::ctrl_c().await?;
     attach.dispose();

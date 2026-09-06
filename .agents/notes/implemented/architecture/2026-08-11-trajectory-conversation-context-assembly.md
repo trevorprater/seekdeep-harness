@@ -20,6 +20,8 @@ Each Definition belongs to one target. Chat and Trajectory may recognize the sam
 
 The existing [Trajectory inspection ledger](../feature/2026-07-27-trajectory-inspection-ledger.md) remains the view model. The Trajectory Builder converts materialized target Nodes into its established `eventNodes`, Requests, Tool schemas, running calls, and Location map; layout, table virtualization, selection, Overview, and inspector behavior do not become generic Conversation contracts.
 
+The native Rust Builder supplies a target-owned browser snapshot codec through the [native Definition adapter](../../../../crates/client-runtime/src/wasm_native_definition.rs). Its public `empty`, `replace`, `apply`, and Session-view reads expose `eventLocations` and `callSchemas` as Maps; native assembler storage uses numeric-key entry pairs and a schema object. Both conversion directions preserve the input, and the shared runtime delegates conversion without knowing Trajectory field names. Generic JavaScript View Builders without a codec still pass through JSON conversion; preserving arbitrary non-JSON custom snapshots remains a separate browser compatibility gap.
+
 ### Business Definitions
 
 | Business | Context identity | State assembly | Trajectory contribution |
@@ -93,6 +95,8 @@ Display memoization and search indexing stay separate. Search must include off-s
 Runtime tests pin target registration, exact-ID append, update-before-start replay, prepend identity, Reader window-gap repair, Location replay, and isolation between Chat and Trajectory snapshots.
 
 Trajectory Definition and Builder tests pin Assistant streaming and interruption, nested Tool calls and parallel interruption, Compaction and prompt inheritance, Steering classification and Step placement, Request marker order, stable contribution replacement, and prepend expansion. Table, layout, Timeline, and search tests pin deferred Markdown work, throttled index updates, tooltip-time formatting, and stable search results across append and prepend.
+
+Live WASM plugin tests check Map-backed snapshots through the registered assembler and round-trip numeric Location keys and prototype-like schema keys. The [composer browser driver](../../../../xtask/src/web_composer_driver.rs) opens a source-generated cold history through the real Rust Host, switches into the built Trajectory renderer, and compares its layout with Chat using the source measurements and geometry golden.
 
 ## Consequences
 
