@@ -252,6 +252,29 @@ async fn list_projection_keeps_workspace_item_identity_and_shares_refresh_promis
 }
 
 #[wasm_bindgen_test(async)]
+async fn public_connect_workspace_name_routes_to_the_compiled_service() {
+    let fake = api();
+    let root = root_context();
+    let sessions = WasmSessionRuntime::new(root.clone(), fake.api.clone(), fake.remote).unwrap();
+    let workspaces = WasmWorkspaceRuntime::new(root, fake.api, &sessions).unwrap();
+    JsFuture::from(workspaces.refresh()).await.unwrap();
+    JsFuture::from(sessions.refresh()).await.unwrap();
+    let public: JsValue = workspaces.into();
+    let connect = get(&public, "connectWorkspace")
+        .dyn_into::<Function>()
+        .unwrap();
+    let returned = connect.call1(&public, &JsValue::from_str("alpha")).unwrap();
+    assert_eq!(
+        JsFuture::from(returned.dyn_into::<Promise>().unwrap())
+            .await
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("s1")
+    );
+}
+
+#[wasm_bindgen_test(async)]
 async fn connect_workspace_shares_promise_and_create_errors_keep_source_class() {
     let fake = api();
     let root = root_context();

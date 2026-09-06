@@ -40,6 +40,10 @@ Browser event dispatch uses the Cordis core's hook/effect ledger while retaining
 
 Specialized per-Fiber `internal/update` routing, callback argument service tracing, and cross-realm Context branding remain browser obligations; ordinary event coverage does not establish them. Cordis's WASM `--all-targets` check remains red because native Tokio unit tests are not target-gated; the WASM library and browser integration targets have separate strict Clippy checks.
 
+Active-turn evidence uses the normal Rust Web profile with the existing Rust session-log replay adapter and the pinned source's provider catalog and workspace-picker interaction. The browser calls the public `connectWorkspace` export, creates a Session, submits a prompt, observes intermediate text and the running-state Stop control, and reloads the settled response. The fixture audits complete replay consumption and the cold JSONL artifact after Host shutdown. Projection frames retain null values while still refusing an absent `value`; Host running/idle frames come from the Agent status event, with stream-owned listeners released on cancellation or drop. This keyless replay is not a live-model run.
+
+The native-picker Workspace API still exports `pick_directory` instead of the declared `pickDirectory`. Host `session-added`, `session-removed`, and `agent-error` publication also remains incomplete; running-state coverage does not establish those separate lifecycle frames.
+
 Type universes stay split at the aggregate level — `tsconfig.host.json` is the host program and `tsconfig.client.json` the client program, both referenced by the solution root `tsconfig.json` — because both sides merge cordis `Context` under the same keys (`sessions`, `loader`) with different services; client packages consume the wire vocabulary through pure type subpaths (`@seekdeep-ai/seekdeep-session/types` and kin) so no host augmentation rides into the client program.
 
 ## The slot system: how the page composes

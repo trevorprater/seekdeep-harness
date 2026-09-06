@@ -16,6 +16,8 @@ Slot-level hot replacement also requires two independent owners. Removing the de
 
 The ledger records a declaration epoch distinct from the slot's ordinary entry version. An epoch changes whenever a child declaration is created or collapsed. Injection remembers the active epoch, disposes its callback effect when that epoch ends, and reruns the callback for a replacement declaration even when the final observed state is continuously declared. Ordinary contribution changes do not restart injection.
 
+Callbacks may synchronously nest `inject()` through the same service face, as the browse directory picker does to require both directory-flow declarations. The WASM binding permits that reentry; the Slot ledger and caller effects retain ownership. A focused regression covers nested setup and removal, and the assembled browser exercises the real picker mount.
+
 Both sides retain their natural ownership. The injection controller and every contribution run on the contributing plugin's caller `Context`, so disposing that plugin removes its wait and active entries. The slot ledger's existing child-collapse cascade removes entries when the declarer disappears; injection then runs their disposers to release service-layer resources and remains ready for a later declaration. The declaring plugin's `Context` is neither retained as a capability source nor exposed to contributors.
 
 Dynamic reload code uses an ordinary Cordis plugin fiber as its replacement unit: activate the new module through `ctx.plugin()`, dispose and await the old fiber before mounting its replacement, and let its `slots.inject` and `slots.register` effects leave with that fiber. Renderer subscriptions observe the ledger removal and unmount the component; no slot-owned fiber tree is required.

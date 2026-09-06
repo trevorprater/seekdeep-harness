@@ -12,8 +12,8 @@ use std::{
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use parking_lot::Mutex;
 use seekdeep_agent::{
-    AGENTS, Agent, AgentOptions, AgentRegistry, AgentSetup, AgentStatus, CreateAgentMeta,
-    CreateAgentOptions,
+    AGENTS, Agent, AgentEvent, AgentOptions, AgentRegistry, AgentSetup, AgentStatus,
+    AgentStatusChanged, CreateAgentMeta, CreateAgentOptions,
 };
 use seekdeep_agent_presets::{
     AGENT_PRESETS, PresetMountError, UnknownPresetError, resolve_session_preset,
@@ -1302,9 +1302,9 @@ impl SessionApiProxyRuntime {
         let subscribed = Arc::new(parking_lot::Mutex::new(HashSet::new()));
         let (effects, register) = self.register_mux_listeners(&sender, &subscribed);
         if let Err(error) = register {
-            return SessionMuxStream {
+            return SessionDownlinkStream {
                 inner: futures::stream::once(async move { Err(error) }).boxed(),
-                _guard: SessionMuxListenerGuard::new(effects),
+                guard: SessionDownlinkListenerGuard::new(effects),
             }
             .boxed();
         }
@@ -1342,9 +1342,9 @@ impl SessionApiProxyRuntime {
                 yield envelope;
             }
         };
-        SessionMuxStream {
+        SessionDownlinkStream {
             inner: inner.boxed(),
-            _guard: SessionMuxListenerGuard::new(effects),
+            guard: SessionDownlinkListenerGuard::new(effects),
         }
         .boxed()
     }
@@ -1543,7 +1543,47 @@ impl ApiProxyRuntime for SessionApiProxyRuntime {
         request: RpcRequest<Value>,
         signal: AbortSignal,
     ) -> ApiDownlinkStream<HostFrame> {
-        self.domains.host(request, signal)
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let listener = self.context.events().on_sync(
+            &self.context,
+            "agent/status",
+            move |_, args| {
+                let event = args
+                    .get::<AgentEvent<AgentStatusChanged>>(0)
+                    .ok_or_else(|| anyhow::anyhow!("agent/status lacks an Agent status event"))?;
+                let _ = sender.send(RpcRequest::new(
+                    next_session_frame_id(),
+                    HostFrame::SessionStatus {
+                        session_id: event.agent.id().clone(),
+                        running: event.payload.status == AgentStatus::Running,
+                    },
+                ));
+                Ok(EventReply::Undefined)
+            },
+            EventOptions::default(),
+        );
+        let listener = match listener {
+            Ok(listener) => listener,
+            Err(error) => return futures::stream::once(async move { Err(error.into()) }).boxed(),
+        };
+        let domains = self.domains.host(request, signal.clone());
+        let live = async_stream::stream! {
+            loop {
+                tokio::select! {
+                    biased;
+                    () = signal.cancelled() => break,
+                    frame = receiver.recv() => match frame {
+                        Some(frame) => yield Ok(frame),
+                        None => break,
+                    },
+                }
+            }
+        };
+        SessionDownlinkStream {
+            inner: futures::stream::select(live.boxed(), domains).boxed(),
+            guard: SessionDownlinkListenerGuard::new(vec![listener]),
+        }
+        .boxed()
     }
 
     fn session_log(
@@ -2171,30 +2211,31 @@ fn next_session_frame_id() -> crate::RpcId {
     ))
 }
 
-struct SessionMuxListenerGuard {
+struct SessionDownlinkListenerGuard {
     effects: Option<Vec<EffectHandle>>,
 }
 
-impl SessionMuxListenerGuard {
+impl SessionDownlinkListenerGuard {
     const fn new(effects: Vec<EffectHandle>) -> Self {
         Self {
             effects: Some(effects),
         }
     }
-}
-
-impl Drop for SessionMuxListenerGuard {
-    fn drop(&mut self) {
+    fn stop(&mut self) {
         let Some(effects) = self.effects.take() else {
             return;
         };
-        let dispose = async move {
+        let mut dispose = Box::pin(async move {
             for effect in effects.into_iter().rev() {
                 if let Err(error) = effect.dispose().await {
-                    tracing::warn!(%error, "Session mux listener disposal failed");
+                    tracing::warn!(%error, "Session downlink listener disposal failed");
                 }
             }
-        };
+        });
+        let mut context = TaskContext::from_waker(std::task::Waker::noop());
+        if std::future::Future::poll(dispose.as_mut(), &mut context).is_ready() {
+            return;
+        }
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             runtime.spawn(dispose);
         } else {
@@ -2203,18 +2244,28 @@ impl Drop for SessionMuxListenerGuard {
     }
 }
 
-struct SessionMuxStream {
-    inner: ApiDownlinkStream<MuxFrame>,
-    _guard: SessionMuxListenerGuard,
+impl Drop for SessionDownlinkListenerGuard {
+    fn drop(&mut self) {
+        self.stop();
+    }
 }
 
-impl futures::Stream for SessionMuxStream {
-    type Item = anyhow::Result<RpcRequest<MuxFrame>>;
+struct SessionDownlinkStream<F> {
+    inner: ApiDownlinkStream<F>,
+    guard: SessionDownlinkListenerGuard,
+}
+
+impl<F> futures::Stream for SessionDownlinkStream<F> {
+    type Item = anyhow::Result<RpcRequest<F>>;
 
     fn poll_next(
         mut self: Pin<&mut Self>,
         context: &mut TaskContext<'_>,
     ) -> Poll<Option<Self::Item>> {
-        self.inner.as_mut().poll_next(context)
+        let next = self.inner.as_mut().poll_next(context);
+        if matches!(next, Poll::Ready(None)) {
+            self.guard.stop();
+        }
+        next
     }
 }

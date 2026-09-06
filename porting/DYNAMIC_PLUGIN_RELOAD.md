@@ -537,3 +537,11 @@ CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo xtask web-assembled --export
 `web-build` builds the shell's static Rust/WASM libraries and runs the generated Vite configuration through normal package exports. Dynamic Client plugins must have their current `lib/client.js` bundles built before `web-assembled`; the Host serves those package-owned artifacts. Use one `CARGO_TARGET_DIR` throughout and serialize the commands. The source checkout supplies the recorded Session and installed Playwright; production code and build dependencies come from this repository.
 
 The `--export` variant exercises both the real Header and composer command through HEAD preflight, native browser ZIP download, and success-dialog dismissal. It compares each archive with independently decoded durable JSONL bytes and requires the original history to remain an unchanged prefix. The command contributes one durable run/done pair without a model turn, and its acknowledgment survives reload.
+
+Active model-stream handling has a separate keyless replay gate:
+
+```sh
+CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo test --locked -p seekdeep --test web_replay_browser --all-features -- --ignored --nocapture
+```
+
+It boots the normal Rust Web profile in an isolated temporary world, installs the Rust replay adapter with the source fixture's catalog, and drives the source workspace-picker flow and composer in Chromium. Intermediate DOM text, running/idle controls, reload, complete fixture consumption, and cold-log settlement are required. Build the Web shell and current dynamic Client bundles first; this gate does not make a live model call.

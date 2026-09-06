@@ -41000,7 +41000,7 @@
     {
       "source": "packages/client/runtime/src/client/workspaces/service.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/client-runtime/src/workspace_service.rs",
         "crates/client-runtime/src/wasm_workspace_service.rs",
@@ -41014,7 +41014,7 @@
         "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
         "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
       ],
-      "note": "The Rust service joins Workspace and Session readiness, derives recent Workspace with Host-order tie breaking, coalesces per-Workspace blank creation, reuses only visible accounted non-archived blanks, runs one retryable and disposable initial-selection policy, targets New Session explicitly/current/recent, installs all Host action echoes, shields remote archives from stale baselines, and clears only an archived current selection; the WASM face preserves shared refresh and in-flight-create Promise identity while immediate reuse returns independent Promises, Workspace-row identity, exact action signatures, source error classes, AbortSignal identity, and raw Host routing"
+      "note": "Native readiness, blank reuse, ordering, lifecycle, and action behavior retain their evidence. The public connectWorkspace binding now passes the real browser active-turn path, but the native-picker method still exports pick_directory rather than pickDirectory; the owning GUI Web client architecture record tracks that remaining binding gap."
     },
     {
       "source": "packages/client/runtime/src/client/workspaces/workspace.ts",
@@ -63530,7 +63530,7 @@
     {
       "source": "packages/host/apiproxy/src/api-proxy.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/host-apiproxy/src/service.rs",
         "crates/host-apiproxy/src/configuration.rs",
@@ -63546,7 +63546,7 @@
         "cargo clippy -p seekdeep-host-apiproxy --all-targets --all-features -- -D warnings",
         "cargo xtask docs"
       ],
-      "note": "The composed Rust API Proxy owns every unary, response, mux, Host, and Session-export path from the pinned source: Host and workspace controls, configuration, interactions, live/cold Session lifecycle, model and attachment admission, presets, exact private capabilities, goals, skills, queue/cancel, background jobs, subagents, projections, and pull-driven ZIP export. Domain decorators preserve one shared Agent-resolution policy and deterministic lifecycle-owned listeners."
+      "note": "Unary, response, mux, export, and domain behavior retain their focused evidence. Real browser replay verifies Host running/idle publication and stream-owned cleanup. Host session-added, session-removed, and agent-error producers remain incomplete and are recorded in the existing GUI Web client architecture record."
     },
     {
       "source": "packages/host/apiproxy/src/api/agent-presets.schema.ts",

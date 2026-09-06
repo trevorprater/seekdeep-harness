@@ -199,6 +199,49 @@ fn declaration_callback_can_reenter_the_shared_register_binding() {
     dispose_root.call0(&JsValue::UNDEFINED).unwrap();
 }
 
+#[wasm_bindgen_test]
+fn nested_declaration_injection_reenters_the_same_service_face() {
+    let registry = WasmClientSlotRegistry::new(None);
+    let face = registry.face_for(caller("nested-injection")).unwrap();
+    let root = call(
+        &face,
+        "register",
+        &[
+            root_options(&[("t.outer", "single", "root"), ("t.inner", "single", "root")]).into(),
+            JsValue::from_str("frame"),
+        ],
+    )
+    .unwrap()
+    .dyn_into::<Function>()
+    .unwrap();
+    let register_face = face.clone();
+    let inner = Closure::wrap(Box::new(move || {
+        call(
+            &register_face,
+            "register",
+            &[options("t.inner").into(), JsValue::from_str("entry")],
+        )
+    }) as Box<dyn Fn() -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    let inject_face = face.clone();
+    let outer = Closure::wrap(Box::new(move || {
+        call(
+            &inject_face,
+            "inject",
+            &[JsValue::from_str("t.inner"), inner.clone()],
+        )
+    }) as Box<dyn Fn() -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    let dispose = call(&face, "inject", &[JsValue::from_str("t.outer"), outer])
+        .unwrap()
+        .dyn_into::<Function>()
+        .unwrap();
+    assert_eq!(registry.entries("t.inner".to_owned()).length(), 1);
+    dispose.call0(&JsValue::UNDEFINED).unwrap();
+    assert_eq!(registry.entries("t.inner".to_owned()).length(), 0);
+    root.call0(&JsValue::UNDEFINED).unwrap();
+}
+
 #[wasm_bindgen_test(async)]
 async fn caller_face_exposes_batched_ledger_subscriptions() {
     let registry = WasmClientSlotRegistry::new(None);

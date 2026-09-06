@@ -4968,6 +4968,7 @@ dependencies = [
  "seekdeep-llm",
  "seekdeep-llm-deepseek",
  "seekdeep-llm-pi-ai",
+ "seekdeep-llm-replay",
  "seekdeep-llm-retry",
  "seekdeep-loader",
  "seekdeep-mcp-client",

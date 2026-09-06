@@ -462,7 +462,7 @@ fn service_face(state: &Rc<BrowserState>, caller: &JsValue) -> Result<JsValue, J
             )
         },
     )
-        as Box<dyn FnMut(String, Function) -> Result<JsValue, JsValue>>);
+        as Box<dyn Fn(String, Function) -> Result<JsValue, JsValue>>);
     set(&face, "inject", &inject.into_js_value())?;
 
     let install_state = state.clone();

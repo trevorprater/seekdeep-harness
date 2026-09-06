@@ -170,6 +170,7 @@ nix.workspace = true
 parking_lot.workspace = true
 portable-pty.workspace = true
 seekdeep-acp-snapshot = { path = "../../crates/acp-snapshot" }
+seekdeep-llm-replay = { path = "../../crates/llm-replay" }
 seekdeep-workflow = { path = "../../crates/workflow" }
 tempfile.workspace = true
 

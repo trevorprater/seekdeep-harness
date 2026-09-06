@@ -342,10 +342,8 @@ impl WasmSessionManager {
         let frame = match frame_type.as_str() {
             "session/projection" => ManagerMuxFrame::Projection {
                 key: required_string(&payload, "key", "session/projection")?,
-                value: Rc::new(js_to_json(&required(
-                    &payload,
-                    "value",
-                    "session/projection",
+                value: Rc::new(js_to_json(&optional(&payload, "value")?.ok_or_else(
+                    || js_sys::Error::new("session/projection requires \"value\""),
                 )?)?),
                 seq: safe_i64(
                     &required(&payload, "seq", "session/projection")?,

@@ -96,6 +96,7 @@ impl WasmWorkspaceRuntime {
     }
 
     /// Resolves or creates the blank Session used to enter one Workspace.
+    #[wasm_bindgen(js_name = connectWorkspace)]
     pub fn connect_workspace(&self, workspace_id: String) -> Promise {
         let workspace_id = WorkspaceId::new(workspace_id);
         if let Some(promise) = self.state.connect_promises.borrow().get(&workspace_id) {

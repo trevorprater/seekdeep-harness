@@ -179,7 +179,9 @@ async fn list_refresh_session_wrapper_and_raw_frame_routes_keep_cached_shapes() 
     let envelope = Object::new();
     set(&envelope, "rpcId", &JsValue::from_str("projection"));
     set(&envelope, "payload", &projection);
-    manager.handle_mux_envelope(envelope.into()).unwrap();
+    manager
+        .handle_mux_envelope(envelope.clone().into())
+        .unwrap();
     let items = get(&manager.get_list_snapshot().unwrap(), "items")
         .dyn_into::<Array>()
         .unwrap();
@@ -187,6 +189,14 @@ async fn list_refresh_session_wrapper_and_raw_frame_routes_keep_cached_shapes() 
         get(&items.get(0), "title").as_string().as_deref(),
         Some("Projected")
     );
+    set(&projection, "key", &JsValue::from_str("goal"));
+    set(&projection, "value", &JsValue::NULL);
+    set(&projection, "seq", &JsValue::from_f64(3.0));
+    manager
+        .handle_mux_envelope(envelope.clone().into())
+        .unwrap();
+    Reflect::delete_property(&projection, &JsValue::from_str("value")).unwrap();
+    assert!(manager.handle_mux_envelope(envelope.into()).is_err());
 }
 
 #[wasm_bindgen_test(async)]

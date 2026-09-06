@@ -4,7 +4,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
-use seekdeep_agent::{AgentEvents, AgentRegistry, AgentStatus, assemble_context_for};
+use seekdeep_agent::{
+    AgentEvents, AgentRegistry, AgentStatus, AgentStatusChanged, assemble_context_for,
+};
 use seekdeep_agent_loop::{AgentLoop, AgentLoopServices};
 use seekdeep_agent_presets::{
     AgentPresetConfig, AgentPresetRegistry, AgentPresetRegistryConfig, COMPOSITION_FILE,
@@ -323,6 +325,73 @@ fn error(result: RpcResult<Value>) -> (String, Value) {
         RpcResult::Failure { error } => (error.code, Value::Object(error.details)),
         other @ RpcResult::Success { .. } => panic!("expected failure, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn host_status_stream_owns_running_idle_and_cancellation_listeners() {
+    let harness = Harness::new(true).await;
+    value(create(&harness.runtime, json!({"sessionId":"status"})).await);
+    let id = SessionId::new("status");
+    let agent = harness.agents.get(&id).unwrap();
+    let events = AgentEvents::new(harness.context.clone(), agent);
+    let baseline = harness
+        .context
+        .events()
+        .listener_count(&harness.context, "agent/status");
+    let signal = AbortSignal::default();
+    let mut stream = harness.runtime.host(
+        RpcRequest::new(RpcId::new("host-status"), json!({})),
+        signal.clone(),
+    );
+    assert_eq!(
+        harness
+            .context
+            .events()
+            .listener_count(&harness.context, "agent/status"),
+        baseline + 1
+    );
+    for status in [AgentStatus::Running, AgentStatus::Idle] {
+        events.emit("agent/status", AgentStatusChanged { status });
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            frame.payload,
+            HostFrame::SessionStatus {
+                session_id: id.clone(),
+                running: status == AgentStatus::Running
+            }
+        );
+    }
+    signal.abort();
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        harness
+            .context
+            .events()
+            .listener_count(&harness.context, "agent/status"),
+        baseline
+    );
+    let unpolled = harness.runtime.host(
+        RpcRequest::new(RpcId::new("unpolled"), json!({})),
+        AbortSignal::default(),
+    );
+    drop(unpolled);
+    assert_eq!(
+        harness
+            .context
+            .events()
+            .listener_count(&harness.context, "agent/status"),
+        baseline
+    );
+    harness.context.root_fiber().dispose().await.unwrap();
 }
 
 #[tokio::test]

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.md
-2026-07-19-gui-web-client-architecture.md: 39c8b4e95b3b1914b45719dc819053556a1fe9f0
-2026-07-19-gui-web-client-architecture.zh.md: f9ebe8cf51ceaba3a281938064699b26b47322fe
+2026-07-19-gui-web-client-architecture.md: 6f8c3ab2b534b172d0ebd262820cba7a7fc250df
+2026-07-19-gui-web-client-architecture.zh.md: e8ba22dc730ba2c6222d6d8aa55a6ead8135a328

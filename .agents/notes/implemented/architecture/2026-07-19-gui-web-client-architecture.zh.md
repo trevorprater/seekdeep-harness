@@ -40,6 +40,10 @@ Client Runtime factory 以相同名称公开 source barrel 的完整 value roste
 
 专门的逐 Fiber `internal/update` 路由、回调参数的 service tracing，以及跨 realm Context 标识仍是浏览器待实现义务；普通事件覆盖不能证明这些行为。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
 
+活动轮次证据使用正常的 Rust Web profile、现有 Rust session-log replay 适配器，以及固定源实现的 provider catalog 和 workspace-picker 交互。浏览器调用公开的 `connectWorkspace` 导出，创建 Session、提交提示词，观察中间文本与运行态 Stop 控件，并重新加载已结算的响应。夹具在 Host 关闭后审计完整 replay 消费及冷读 JSONL 工件。Projection frame 保留 null 值，同时仍拒绝缺失的 `value`；Host 运行／空闲 frame 来自 Agent status 事件，stream 所有的监听器会在取消或 drop 时释放。此无密钥 replay 不是真实模型运行。
+
+Workspace 的原生选择器 API 仍导出 `pick_directory`，而非声明中的 `pickDirectory`。Host 的 `session-added`、`session-removed` 与 `agent-error` 发布也尚未完成；运行态覆盖不能证明这些独立的生命周期 frame。
+
 类型宇宙在聚合层拆分——`tsconfig.host.json` 是 host program、`tsconfig.client.json` 是 client program，二者由 solution 根 `tsconfig.json` 引用，因为两侧都在相同键（`sessions`、`loader`）上对 cordis `Context` 做声明合并且服务不同；client 包经纯类型子路径（`@seekdeep-ai/seekdeep-session/types` 等）消费协议词汇，host 侧的声明合并不会搭车进入 client program。
 
 ## slot 体系：页面怎么拼

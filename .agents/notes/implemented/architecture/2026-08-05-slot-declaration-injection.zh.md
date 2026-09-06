@@ -16,6 +16,8 @@ slot 级热替换还要求两个相互独立的所有者。移除声明方插件
 
 该账本记录独立于 slot 普通条目版本的 declaration epoch（声明代次）。每当子声明创建或折叠时，epoch 都会变化。注入会记住活跃 epoch；该 epoch 结束时，注入会 dispose 其回调 effect；即使最终观测到的状态始终为已声明，也会为替换声明重新执行回调。普通贡献变更不会重启注入。
 
+回调可以通过同一服务接口同步嵌套调用 `inject()`，例如 browse 目录选择器借此要求两个 directory-flow 声明同时存在。WASM 绑定允许这种重入；所有权仍由 Slot 账本与调用方 effect 保持。聚焦回归用例覆盖嵌套 setup 与移除，组合浏览器则覆盖真实选择器的挂载。
+
 声明方与贡献方各自保留其自然所有权。注入控制器和每项贡献都运行在贡献方插件调用时的 `Context` 上，因此 dispose 该插件会同时移除其等待与活跃条目。slot 账本现有的子项折叠级联会在声明方消失时移除条目；随后，注入会运行其 disposer 以释放服务层资源，并继续等待后续声明。系统既不会将声明方插件的 `Context` 保留为 capability 来源，也不会向贡献方公开它。
 
 动态重载代码使用普通 Cordis 插件 fiber 作为替换单元：通过 `ctx.plugin()` 激活新模块；挂载替换模块之前，先 dispose 并等待旧 fiber；该 fiber 的 `slots.inject` 与 `slots.register` effect 会随之退出。renderer 订阅会观察到账本移除并卸载组件；无需建立 slot 自有的 fiber 树。
