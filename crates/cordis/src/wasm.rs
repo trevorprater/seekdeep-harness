@@ -23,12 +23,28 @@ type FaceSlot = Arc<Mutex<Option<JsValue>>>;
 
 #[wasm_bindgen]
 extern "C" {
+    #[wasm_bindgen(js_name = Object)]
+    fn boxed_object(value: &JsValue) -> Object;
+
     #[wasm_bindgen(js_namespace = Reflect, js_name = get, catch)]
     fn get_with_receiver(
         target: &JsValue,
         key: &JsValue,
         receiver: &JsValue,
     ) -> Result<JsValue, JsValue>;
+}
+
+/// Tests the source Context brand, including inherited markers and primitive receivers.
+///
+/// # Errors
+/// Propagates brand-key conversion and property-getter failures unchanged.
+#[wasm_bindgen(js_name = contextIs)]
+pub fn context_is(value: &JsValue, brand_key: &JsValue) -> Result<bool, JsValue> {
+    if value.is_null() || value.is_undefined() {
+        return Ok(false);
+    }
+    get_with_receiver(boxed_object(value).as_ref(), brand_key, value)
+        .map(|marker| marker.is_truthy())
 }
 
 /// Configures the package wrapper that adds reflected service-property access.

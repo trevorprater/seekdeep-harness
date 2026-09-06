@@ -1684,6 +1684,7 @@ export default plugin;
 "
 }
 
+#[allow(clippy::too_many_lines)] // The Context Proxy, branding, and Service bindings form one ESM face.
 fn cordis_esm_wrapper() -> &'static str {
     r"import init, * as wasm from './client.js';
 
@@ -1745,7 +1746,7 @@ function wrapContext(core) {
       return core.setProperty(key, value);
     },
     has(target, key) {
-      if (core.metaHas(key, Context.prototype) || Reflect.has(core, key)) return true;
+      if (core.metaHas(key, Context.prototype) || Reflect.has(core, key) || Reflect.has(Context.prototype, key)) return true;
       return typeof key === 'string' && core.propertyDefined(key);
     },
   });
@@ -1765,7 +1766,11 @@ export class Context {
   static effect = EFFECT;
   static isolate = ISOLATE;
   static intercept = INTERCEPT;
-  static is(value) { return value?.__seekdeepContext instanceof wasm.WasmContext; }
+  static is(value) { return wasm.contextIs(value, Context.is); }
+  static {
+    Context.is[Symbol.toPrimitive] = () => Symbol.for('cordis.is');
+    Context.prototype[Context.is] = true;
+  }
   constructor() { return wasm.createContext(); }
 }
 

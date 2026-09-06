@@ -38,7 +38,9 @@ Client Runtime factory 以相同名称公开 source barrel 的完整 value roste
 
 浏览器事件分发使用 Cordis core 的 hook／effect 账本，同时保留 JavaScript 接收者与返回值语义。可选的显式接收者提供 `Context.filter` 和监听器的 `this`；隐式分发绑定 `null`。`bail` 保留同步值及返回的 Promise 标识，`events.dispatch` 消费接收者与事件名，并返回已捕获的回调列表。`once` 在重入前移除注册，并遵守拦截器提供的 disposer。Waterfall 监听器共享可变参数列表，并可否决 continuation。Serial 与 parallel 分发同步进入监听器，同时将异步失败公开为 rejection。源实现／已构建 WASM 的差分用例与 Chromium 插件释放验证这些行为；组合后的 `/export` 路径覆盖 token 消费和本地执行确认。
 
-专门的逐 Fiber `internal/update` 路由、回调参数的 service tracing，以及跨 realm Context 标识仍是浏览器待实现义务；普通事件覆盖不能证明这些行为。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
+`Context.is` 通过编译后的 Rust 谓词读取源实现的共享 symbol 标识，包括继承的标记、可变的标识键函数、原始值 getter 接收者，以及未改写的 getter 失败。原型属性描述符与源实现一致；Chromium 验证独立 Cordis 副本和外部 realm 对象。该标识用于识别对象，不授予能力。
+
+专门的逐 Fiber `internal/update` 路由和回调参数的 service tracing 仍是浏览器待实现义务；普通事件覆盖不能证明这些行为。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
 
 活动轮次证据使用正常的 Rust Web profile、现有 Rust session-log replay 适配器，以及固定源实现的 provider catalog 和 workspace-picker 交互。浏览器调用公开的 `connectWorkspace` 导出，创建 Session、提交提示词，观察中间文本与运行态 Stop 控件，并重新加载已结算的响应。夹具在 Host 关闭后审计完整 replay 消费及冷读 JSONL 工件。Projection frame 保留 null 值，同时仍拒绝缺失的 `value`；Host 运行／空闲 frame 来自 Agent status 事件，stream 所有的监听器会在取消或 drop 时释放。此无密钥 replay 不是真实模型运行。
 

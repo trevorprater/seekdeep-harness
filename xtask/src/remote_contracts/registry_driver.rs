@@ -33,6 +33,31 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves Context branding and the dynamic brand-key contract', () => {
+  const root = new Context(), Ctor = root.constructor, brand = Symbol.for('cordis.is')
+  expect(Ctor.is(root)).toBe(true)
+  expect(Ctor.is(root.extend({ marker: 1 }))).toBe(true)
+  expect(Ctor.is(Ctor.prototype)).toBe(true)
+  expect(brand in root).toBe(true)
+  expect(root[Ctor.is]).toBe(true)
+  for (const value of [null, undefined, false, 0, '', {}, () => {}]) expect(Ctor.is(value)).toBe(false)
+  expect(Ctor.is({ [brand]: 'branded' })).toBe(true)
+  const descriptor = Object.getOwnPropertyDescriptor(Ctor.prototype, brand)
+  expect(descriptor).toEqual({ value: true, writable: true, enumerable: true, configurable: true })
+  let receiver
+  Object.defineProperty(Number.prototype, brand, { configurable: true, get() { receiver = this; return true } })
+  try { expect(Ctor.is(7)).toBe(true); expect(receiver).toBe(7) } finally { delete Number.prototype[brand] }
+  const original = Ctor.is[Symbol.toPrimitive], alternate = Symbol('alternate'), sentinel = new Error('brand-key failure')
+  try {
+    Ctor.is[Symbol.toPrimitive] = () => alternate
+    expect(Ctor.is(root)).toBe(false)
+    expect(Ctor.is({ [alternate]: true })).toBe(true)
+    Ctor.is[Symbol.toPrimitive] = () => { throw sentinel }
+    expect(Ctor.is(null)).toBe(false)
+    expect(() => Ctor.is({})).toThrow(sentinel)
+  } finally { Ctor.is[Symbol.toPrimitive] = original }
+})
+
 it('preserves browser event lifecycle, interception, and async entry timing', async () => {
   const root = new Context(), trace = []
   root.once('test/once', () => { trace.push('once'); root.emit('test/once') })
