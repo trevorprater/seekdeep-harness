@@ -13,8 +13,12 @@ use crate::{
     PluginFiber, fiber::EffectHandle,
 };
 
+mod browser_config;
 pub(crate) mod browser_events;
 mod tracing;
+mod update_hooks;
+
+pub use browser_config::{configure_validation_error_prototype, validation_error_message};
 
 thread_local! {
     static CONTEXT_WRAPPER: RefCell<Option<Function>> = const { RefCell::new(None) };
@@ -79,9 +83,11 @@ pub fn create_context() -> Result<JsValue, JsValue> {
         fiber_face.clone(),
     );
     let root_fiber = context.inner.fiber().clone();
+    let binding = context.clone_for_binding();
     let face = wrap_context(context)?;
     *root_face.lock() = Some(face.clone());
     *fiber_face.lock() = Some(root_fiber_face(&face, root_fiber)?);
+    browser_events::install(&binding, &face)?;
     Ok(face)
 }
 
@@ -186,17 +192,18 @@ impl WasmContext {
         let metadata = parent.unwrap_or_else(|| self.metadata.clone());
         let context_face = empty_face_slot();
         let fiber_face = empty_face_slot();
+        let browser_config = browser_config::BrowserConfig::new(descriptor.clone());
         let plugin = plugin_from_js(
             descriptor,
             metadata.clone(),
             self.root_face.clone(),
             context_face.clone(),
             fiber_face.clone(),
+            browser_config.clone(),
         )?;
-        let config = config_from_js(config)?;
         let mounted = self
             .inner
-            .plugin(plugin, config)
+            .plugin(plugin, Value::Null)
             .map_err(|error| js_sys::Error::new(&error.to_string()))?;
         let child = ensure_context_face(
             mounted.context().clone(),
@@ -206,9 +213,10 @@ impl WasmContext {
             fiber_face.clone(),
         )
         .map_err(js_error)?;
-        let fiber: JsValue = WasmFiber::new(mounted, child).into();
+        let fiber: JsValue =
+            WasmFiber::new(mounted, child, fiber_face.clone(), browser_config).into();
         *fiber_face.lock() = Some(fiber.clone());
-        Ok(fiber)
+        wrap_fiber(&fiber, &config)
     }
 
     /// Shorthand plugin registration for one dependency declaration.
@@ -654,20 +662,37 @@ pub struct WasmFiber {
     inner: Arc<PluginFiber>,
     context: JsValue,
     entry: FaceSlot,
+    face: FaceSlot,
+    browser_config: browser_config::BrowserConfig,
+    hooks: Object,
 }
 
 impl WasmFiber {
-    fn new(inner: Arc<PluginFiber>, context: JsValue) -> Self {
+    fn new(
+        inner: Arc<PluginFiber>,
+        context: JsValue,
+        face: FaceSlot,
+        browser_config: browser_config::BrowserConfig,
+    ) -> Self {
         Self {
             inner,
             context,
             entry: empty_face_slot(),
+            face,
+            browser_config,
+            hooks: Object::create(&Object::from(JsValue::NULL)),
         }
     }
 }
 
 #[wasm_bindgen]
 impl WasmFiber {
+    /// Persistent source hook lists, separate from activation-owned effects.
+    #[wasm_bindgen(getter, js_name = _hooks)]
+    pub fn hooks(&self) -> Object {
+        self.hooks.clone()
+    }
+
     /// Plugin-scoped Context.
     #[wasm_bindgen(getter, js_name = ctx)]
     pub fn context(&self) -> JsValue {
@@ -720,23 +745,15 @@ impl WasmFiber {
     #[wasm_bindgen(js_name = await)]
     pub fn wait(&self) -> Promise {
         let fiber = self.inner.clone();
+        let face = self.face.clone();
+        let state = self.browser_config.clone();
         future_to_promise(async move {
-            fiber.await_settled().await.map_err(js_error)?;
-            Ok(JsValue::UNDEFINED)
+            fiber
+                .await_settled()
+                .await
+                .map_err(|error| state.lifecycle_error(error))?;
+            Ok(face.lock().clone().unwrap_or(JsValue::UNDEFINED))
         })
-    }
-
-    /// `PromiseLike` bridge used by `await ctx.plugin(...)`.
-    ///
-    /// # Errors
-    ///
-    /// Returns JavaScript invocation failures.
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn then(&self, fulfilled: Function, rejected: Function) -> Result<Promise, JsValue> {
-        let promise = self.wait();
-        required_function(promise.as_ref(), "then")?
-            .call2(&promise, &fulfilled, &rejected)?
-            .dyn_into::<Promise>()
     }
 
     /// Permanently disposes this plugin generation.
@@ -748,16 +765,111 @@ impl WasmFiber {
         })
     }
 
-    /// Transactionally replaces raw plugin configuration.
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn update(&self, config: JsValue) -> Promise {
+    /// Stages raw config and runs the source update waterfall before restarting.
+    ///
+    /// # Errors
+    /// Throws synchronous validation or hook failures and rejects disposed Fibers.
+    /// A hook may veto or return any value; the default continuation returns a restart Promise.
+    pub fn update(
+        &self,
+        config: &JsValue,
+        no_save: &JsValue,
+        owner: Option<JsValue>,
+    ) -> Result<JsValue, JsValue> {
+        if self.inner.uid().is_none() {
+            return Err(js_sys::Error::new(&crate::CordisError::InactiveEffect.to_string()).into());
+        }
+        let face = owner.unwrap_or_else(|| self.face.lock().clone().unwrap_or(JsValue::UNDEFINED));
+        Reflect::set(&face, &"_config".into(), config)?;
+        if self.inner.fiber().state() != FiberState::Active {
+            self.inner.request_browser_restart().map_err(js_error)?;
+            return Ok(JsValue::UNDEFINED);
+        }
+        let config = self.browser_config.resolve(&self.context, &face)?;
+        let accepted = config.clone();
+        let state = self.browser_config.clone();
         let fiber = self.inner.clone();
-        future_to_promise(async move {
-            let config = config_from_js(config)?;
-            fiber.update(config).await.map_err(js_error)?;
-            Ok(JsValue::UNDEFINED)
-        })
+        let activation = face.clone();
+        let next = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
+            Reflect::set(&activation, &"config".into(), &accepted)?;
+            state.activate_as(activation.clone());
+            restart_browser_fiber(fiber.clone(), state.clone()).map(Into::into)
+        }) as Box<dyn Fn() -> Result<JsValue, JsValue>>)
+        .into_js_value();
+        let no_save = if no_save.is_undefined() {
+            JsValue::FALSE
+        } else {
+            no_save.clone()
+        };
+        let args = Array::of4(&face, &"internal/update".into(), &config, &no_save);
+        args.push(&next);
+        required_function(&self.context, "waterfall")?.apply(&self.context, &args)
     }
+
+    /// Restarts with the most recent raw config, without native transactional rollback.
+    pub fn restart(&self, owner: Option<JsValue>) -> Promise {
+        let face = owner.unwrap_or_else(|| self.face.lock().clone().unwrap_or(JsValue::UNDEFINED));
+        self.browser_config.activate_as(face);
+        restart_browser_fiber(self.inner.clone(), self.browser_config.clone())
+            .unwrap_or_else(|error| Promise::reject(&error))
+    }
+}
+
+fn restart_browser_fiber(
+    fiber: Arc<PluginFiber>,
+    state: browser_config::BrowserConfig,
+) -> Result<Promise, JsValue> {
+    fiber.request_browser_restart().map_err(js_error)?;
+    state.clear_failure();
+    Ok(future_to_promise(async move {
+        fiber
+            .await_settled()
+            .await
+            .map_err(|error| state.lifecycle_error(error))?;
+        Ok(JsValue::UNDEFINED)
+    }))
+}
+
+fn wrap_fiber(core: &JsValue, config: &JsValue) -> Result<JsValue, JsValue> {
+    // The source returns Object.create(fiber): writes on the awaitable handle may
+    // shadow raw fields, while dependency callbacks retain the original Fiber.
+    for (name, value) in [("_config", config), ("config", &JsValue::UNDEFINED)] {
+        Reflect::define_property(
+            core.unchecked_ref::<Object>(),
+            &name.into(),
+            &object(&[
+                ("value", value.clone()),
+                ("writable", JsValue::TRUE),
+                ("enumerable", JsValue::TRUE),
+                ("configurable", JsValue::TRUE),
+            ])?,
+        )?;
+    }
+    for (name, parameters, body) in [
+        (
+            "update",
+            "core,invoke",
+            "return function(config,noSave) { return invoke.call(core,config,noSave,this); }",
+        ),
+        (
+            "restart",
+            "core,invoke",
+            "return function() { return invoke.call(core,this); }",
+        ),
+    ] {
+        let invoke = Reflect::get(core, &name.into())?;
+        let method =
+            Function::new_with_args(parameters, body).call2(&JsValue::UNDEFINED, core, &invoke)?;
+        Reflect::set(core, &name.into(), &method)?;
+    }
+    let wrapped = Object::create(core.unchecked_ref());
+    let then = Function::new_with_args(
+        "core",
+        "return function(fulfilled,rejected) { return core.await().then(fulfilled,rejected); }",
+    )
+    .call1(&JsValue::UNDEFINED, core)?;
+    set(&wrapped, "then", &then)?;
+    Ok(wrapped.into())
 }
 
 fn plugin_from_js(
@@ -766,28 +878,41 @@ fn plugin_from_js(
     root_face: FaceSlot,
     context_face: FaceSlot,
     fiber_face: FaceSlot,
+    browser_config: browser_config::BrowserConfig,
 ) -> Result<Plugin, JsValue> {
     let name = string_property(&descriptor, "name")?.unwrap_or_else(|| "anonymous".to_owned());
     let diagnostic_name = name.clone();
     let inject = inject_names(&Reflect::get(&descriptor, &JsValue::from_str("inject"))?)?;
     let callback_descriptor = descriptor;
-    Ok(Plugin::new(name, inject, move |context, config| {
+    Ok(Plugin::new(name, inject, move |context, _config| {
         let descriptor = callback_descriptor.clone();
         let metadata = metadata.clone();
         let root_face = root_face.clone();
         let context_face = context_face.clone();
         let fiber_face = fiber_face.clone();
         let diagnostic_name = diagnostic_name.clone();
+        let browser_config = browser_config.clone();
         Box::pin(async move {
             let owner = context.clone();
-            let face =
-                ensure_context_face(context, metadata, root_face, &context_face, fiber_face)?;
-            let config = serde_wasm_bindgen::to_value(&config)
-                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            let face = ensure_context_face(
+                context,
+                metadata,
+                root_face,
+                &context_face,
+                fiber_face.clone(),
+            )?;
+            let fiber = fiber_face.lock().clone().unwrap_or(JsValue::UNDEFINED);
+            let fiber = browser_config.activation_face(&fiber);
+            let config = browser_config.resolve(&face, &fiber).map_err(|error| {
+                browser_config.retain_failure(&error);
+                js_anyhow(&error)
+            })?;
+            Reflect::set(&fiber, &"config".into(), &config).map_err(|error| js_anyhow(&error))?;
             let returned = if let Some(function) = descriptor.dyn_ref::<Function>() {
                 function
                     .call2(&JsValue::UNDEFINED, &face, &config)
                     .map_err(|error| {
+                        browser_config.retain_failure(&error);
                         anyhow::anyhow!(
                             "browser plugin {diagnostic_name:?} apply failed: {}",
                             js_anyhow(&error)
@@ -795,12 +920,14 @@ fn plugin_from_js(
                     })?
             } else {
                 let apply = required_function(&descriptor, "apply").map_err(|error| {
+                    browser_config.retain_failure(&error);
                     anyhow::anyhow!(
                         "browser plugin {diagnostic_name:?} apply resolution failed: {}",
                         js_anyhow(&error)
                     )
                 })?;
                 apply.call2(&descriptor, &face, &config).map_err(|error| {
+                    browser_config.retain_failure(&error);
                     anyhow::anyhow!(
                         "browser plugin {diagnostic_name:?} apply failed: {}",
                         js_anyhow(&error)
@@ -810,6 +937,7 @@ fn plugin_from_js(
             let returned = JsFuture::from(Promise::resolve(&returned))
                 .await
                 .map_err(|error| {
+                    browser_config.retain_failure(&error);
                     anyhow::anyhow!(
                         "browser plugin {diagnostic_name:?} async apply failed: {}",
                         js_anyhow(&error)
@@ -825,6 +953,7 @@ fn plugin_from_js(
                     "browser plugin {diagnostic_name:?} returned an unsupported effect value"
                 ));
             }
+            browser_config.clear_failure();
             Ok(())
         })
     }))
@@ -880,6 +1009,11 @@ fn wrap_context(context: WasmContext) -> Result<JsValue, JsValue> {
 
 fn root_fiber_face(context: &JsValue, fiber: Arc<crate::Fiber>) -> Result<JsValue, JsValue> {
     let face = Object::new();
+    set(
+        &face,
+        "_hooks",
+        &Object::create(&Object::from(JsValue::NULL)),
+    )?;
     set(&face, "uid", &JsValue::from_f64(0.0))?;
     set(&face, "state", &JsValue::from_f64(2.0))?;
     set(&face, "ctx", context)?;
@@ -983,14 +1117,6 @@ fn effect_disposer(effect: EffectHandle) -> Function {
         }
     }) as Box<dyn Fn() -> Result<JsValue, JsValue>>);
     closure.into_js_value().unchecked_into()
-}
-
-fn config_from_js(value: JsValue) -> Result<Value, JsValue> {
-    if value.is_undefined() {
-        return Ok(Value::Null);
-    }
-    serde_wasm_bindgen::from_value(value)
-        .map_err(|error| js_sys::Error::new(&format!("plugin config is not JSON: {error}")).into())
 }
 
 fn inject_names(value: &JsValue) -> Result<Vec<String>, JsValue> {

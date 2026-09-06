@@ -108,6 +108,35 @@ try {
     if (client.bail(tracedService, 'probe/traced-callback', tracedService) !== traceFiber.ctx) throw new Error('tracked method return lost its caller');
     await traceFiber.dispose();
     if (traceLog.join(',') !== 'disposed') throw new Error('traced callback effect escaped its owner');
+    const updateLog = [], updateFibers = new Map();
+    const updateProbe = label => client.plugin({ name: 'update-probe-' + label, apply(ctx, config) {
+      updateLog.push(label + ':apply:' + config.version);
+      ctx.on('internal/update', function (config, noSave, next) {
+        if (this !== updateFibers.get(label)) throw new Error('update hook lost its Fiber receiver');
+        updateLog.push(label + ':update:' + noSave);
+        return config.veto ? 'vetoed' : next();
+      });
+      ctx.effect(() => () => updateLog.push(label + ':dispose'));
+    } }, { version: 1 });
+    const firstUpdate = updateProbe('first'), secondUpdate = updateProbe('second');
+    updateFibers.set('first', firstUpdate); updateFibers.set('second', secondUpdate);
+    await firstUpdate; await secondUpdate; updateLog.length = 0;
+    if (firstUpdate.update({ version: 2, veto: true }, true) !== 'vetoed') throw new Error('update veto was not synchronous');
+    if (firstUpdate.config.version !== 1 || firstUpdate._config.version !== 2) throw new Error('update veto changed committed config');
+    const updatedConfig = { version: 3 };
+    await firstUpdate.update(updatedConfig);
+    if (firstUpdate.config !== updatedConfig || updateLog.join(',') !== 'first:update:true,first:update:false,first:dispose,first:apply:3') throw new Error('update crossed Fiber ownership or lost config identity');
+    if (Object.getPrototypeOf(firstUpdate) !== firstUpdate.ctx.fiber || await firstUpdate !== firstUpdate.ctx.fiber) throw new Error('awaitable Fiber handle lost its prototype identity');
+    await firstUpdate.dispose(); await secondUpdate.dispose();
+    const updateFailure = new Error('browser restart failure');
+    const recoveringUpdate = await client.plugin({ name: 'update-recovery', apply(ctx, config) { if (config.fail) throw updateFailure; } }, {});
+    const failedUpdate = recoveringUpdate.update({ fail: true });
+    if (recoveringUpdate.state !== 5) throw new Error('restart admission did not enter UNLOADING synchronously');
+    try { await failedUpdate; throw new Error('failed restart resolved'); } catch (error) { if (error !== updateFailure) throw error; }
+    if (recoveringUpdate.state !== 3 || !recoveringUpdate._config.fail) throw new Error('failed restart rolled back its config or lost FAILED state');
+    recoveringUpdate.update({}); await recoveringUpdate.await();
+    if (recoveringUpdate.state !== 2) throw new Error('failed Fiber did not recover');
+    await recoveringUpdate.dispose();
     const eventTrace = [];
     let eventOwner;
     const interceptedDisposer = () => {};

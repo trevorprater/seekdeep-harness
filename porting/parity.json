@@ -87593,23 +87593,29 @@
         "cargo xtask remote-gateway-oracle",
         "cargo xtask web-assembled --export"
       ],
-      "note": "Native event semantics, ordinary browser lifecycle/interception, callback service tracing with listener-owned effect cleanup, and the assembled export path pass. Specialized per-Fiber internal/update routing remains open in the existing GUI Web client architecture record."
+      "note": "Native event semantics, browser lifecycle/interception, callback tracing, per-Fiber update routing and veto, and the assembled export path pass. Symbol-named browser registration remains open in the existing GUI Web client architecture record."
     },
     {
       "source": "vendor/cordis/src/fiber.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/cordis/src/fiber.rs",
         "crates/cordis/src/plugin.rs",
+        "crates/cordis/src/wasm.rs",
+        "crates/cordis/src/wasm/browser_config.rs",
         "crates/cordis/tests/plugin_lifecycle_events.rs",
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
         "pinned-source direct Node/tsx semantic oracle: pending, active, withdrawn, and disposed dependency epochs matched exactly",
         "cargo test -p seekdeep-cordis --all-features (23 passed)",
-        "Rust additive guarantees: joined deterministic disposal errors and transactional update rollback remain covered"
-      ]
+        "Rust additive guarantees: joined deterministic disposal errors and transactional update rollback remain covered",
+        "cargo xtask remote-gateway-oracle --source-regressions",
+        "cargo xtask remote-gateway-oracle",
+        "cargo xtask remote-loader"
+      ],
+      "note": "Browser update validation, config identity, underlying-Fiber admission, original restart errors, recovery, and awaitable-handle prototypes pass source differential and Chromium checks. Complete per-handle lifecycle-state shadows remain open in the GUI Web client architecture record; native-only evidence does not verify this browser behavior."
     },
     {
       "source": "vendor/cordis/src/index.ts",

@@ -42,7 +42,9 @@ Client Runtime factory 以相同名称公开 source barrel 的完整 value roste
 
 服务访问与 `reflect.trace`/`reflect.bind` 共用同一个 Rust/WASM tracer。源实现的 tracker 元数据控制调用方 Context 替换、origin shadow、关联属性、嵌套服务和 `noShadow`；方法调用保留显式 receiver，对直接返回值执行 tracing，但不包装 Promise。绑定后的回调在事件拦截之前对 receiver 与参数执行 tracing，也适用于构造调用。源实现对照与 Chromium 验证：通过回调服务创建的 effect 属于 listener 插件，并随其 dispose 消失。
 
-专门的逐 Fiber `internal/update` 路由仍是浏览器待实现义务；普通事件覆盖不能证明该行为。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
+浏览器 `Fiber.update()` 在验证前暂存原始 JavaScript 配置，再在全局 update waterfall 内运行 Fiber 本地钩子。它保留 `noSave`、同步与 Promise 否决结果、standard-schema 规范化与验证错误，以及精确的配置 identity。源实现的特殊钩子列表在 restart 与 dispose 后仍保留，直到显式移除；其缺失的 `unshift` 操作仍会拒绝 prepend 注册。可等待的挂载句柄继承底层 Fiber，因此待依赖激活读取底层原始配置，而不是句柄上遮蔽的值。底层 Fiber 同步接纳 restart，保留原始启动错误，并在不采用原生事务回滚的情况下恢复。源实现差分用例与 Chromium 双插件 restart 场景固定这些行为。
+
+浏览器 symbol 名称事件注册仍待完成：源实现接受注册，并在分发时抛出 TypeError，而当前绑定在注册时发生 trap。完整的逐句柄生命周期状态遮蔽也仍待完成：重启挂载句柄不会改变源实现底层 Fiber 的状态，而 Rust 基础实现共享该状态转换。这些缺口不削弱原生事务更新约定。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
 
 活动轮次证据使用正常的 Rust Web profile、现有 Rust session-log replay 适配器，以及固定源实现的 provider catalog 和 workspace-picker 交互。浏览器调用公开的 `connectWorkspace` 导出，创建 Session、提交提示词，观察中间文本与运行态 Stop 控件，并重新加载已结算的响应。夹具在 Host 关闭后审计完整 replay 消费及冷读 JSONL 工件。Projection frame 保留 null 值，同时仍拒绝缺失的 `value`；Host 运行／空闲 frame 来自 Agent status 事件，stream 所有的监听器会在取消或 drop 时释放。此无密钥 replay 不是真实模型运行。
 

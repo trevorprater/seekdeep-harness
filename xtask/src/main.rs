@@ -1632,6 +1632,12 @@ const EFFECT = Symbol.for('cordis.effect');
 const ISOLATE = Symbol.for('cordis.isolate');
 const INTERCEPT = Symbol.for('cordis.intercept');
 
+class ValidationError extends TypeError {
+  constructor(issues) { super(wasm.validationErrorMessage(issues)); this.name = 'ValidationError'; }
+}
+Object.defineProperty(ValidationError.prototype, Symbol.for('ValidationError'), { value: true });
+wasm.configureValidationErrorPrototype(ValidationError.prototype);
+
 function wrapContext(core) {
   let context;
   const data = core.contextData;
@@ -1701,7 +1707,7 @@ await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
 
 __SEEKDEEP_CONTEXT_BINDING__
 
-export { Context };
+export { Context, ValidationError };
 export const Fiber = wasm.WasmFiber;
 export const FiberState = Object.freeze({ PENDING: 0, LOADING: 1, ACTIVE: 2, FAILED: 3, DISPOSED: 4, UNLOADING: 5 });
 export const symbols = Object.freeze({ filter: FILTER, effect: EFFECT, isolate: ISOLATE, intercept: INTERCEPT });
@@ -1725,22 +1731,28 @@ export function Inject() { return value => value; }
 }
 
 fn cordis_esm_declarations() -> &'static str {
-    r"export type Awaitable<T> = T | PromiseLike<T>;
+    r"import type { StandardSchemaV1 } from '@standard-schema/spec';
+export type Awaitable<T> = T | PromiseLike<T>;
 export type Disposable = () => Awaitable<void>;
 export type Inject = readonly string[] | Readonly<Record<string, unknown>>;
-export interface PluginObject<T = unknown> { name?: string; inject?: Inject; apply(ctx: Context, config: T): unknown }
+export interface PluginObject<T = unknown> { name?: string; inject?: Inject; Config?: StandardSchemaV1<unknown, T>; apply(ctx: Context, config: T): unknown }
 export type Plugin<T = unknown> = PluginObject<T> | ((ctx: Context, config: T) => unknown);
 export interface EventOptions { prepend?: boolean; global?: boolean }
+export declare class ValidationError extends TypeError {
+  constructor(issues: readonly StandardSchemaV1.Issue[]);
+}
 export declare class Fiber {
   readonly ctx: Context;
   readonly state: number;
   readonly uid: number | null;
   readonly inject: Record<string, unknown>;
   entry?: unknown;
-  await(): Promise<void>;
-  then(fulfilled: Function, rejected: Function): Promise<unknown>;
+  await(): Promise<Fiber>;
   dispose(): Promise<void>;
-  update(config: unknown): Promise<void>;
+  config: unknown;
+  _config: unknown;
+  update(config: unknown, noSave?: boolean): unknown;
+  restart(): Promise<void>;
 }
 export declare class Context {
   static readonly filter: symbol;
@@ -1751,13 +1763,13 @@ export declare class Context {
   readonly root: Context;
   readonly fiber: Fiber;
   readonly reflect: { provide(name: string, value: unknown, check?: unknown): Disposable; trace<T>(value: T): T; bind<T extends Function>(callback: T): T };
-  readonly registry: { plugin(plugin: Plugin, config?: unknown): Fiber };
+  readonly registry: { plugin(plugin: Plugin, config?: unknown): Fiber & PromiseLike<Fiber> };
   readonly events: Context;
   constructor();
   get(name: string): unknown;
   provide(name: string, value: unknown): Disposable;
-  plugin(plugin: Plugin, config?: unknown): Fiber;
-  inject(dependencies: Inject, callback: Plugin): Fiber;
+  plugin(plugin: Plugin, config?: unknown): Fiber & PromiseLike<Fiber>;
+  inject(dependencies: Inject, callback: Plugin): Fiber & PromiseLike<Fiber>;
   on(name: string, listener: Function, options?: boolean | EventOptions): Disposable;
   once(name: string, listener: Function, options?: boolean | EventOptions): Disposable;
   dispatch(mode: string, args: unknown[]): Function[];

@@ -24,6 +24,90 @@ pub(crate) struct BrowserHook {
     pub callback: BrowserCallback,
 }
 
+pub(super) fn install(context: &WasmContext, owner: &JsValue) -> Result<(), JsValue> {
+    let listener = receiver_function(move |receiver, args| {
+        if args.get(0).as_string().as_deref() != Some("internal/update")
+            || Reflect::get(&args.get(2), &"global".into())?.is_truthy()
+        {
+            return Ok(JsValue::UNDEFINED);
+        }
+        register_update(&receiver, &args.get(1), &args.get(2))
+    })?;
+    register_hook(
+        context,
+        "internal/listener".into(),
+        listener,
+        EventOptions::default(),
+        owner.clone(),
+    )?;
+    let update = receiver_function(move |receiver, args| dispatch_update(&receiver, &args))?;
+    register_hook(
+        context,
+        "internal/update".into(),
+        update,
+        EventOptions {
+            global: true,
+            prepend: true,
+        },
+        owner.clone(),
+    )?;
+    Ok(())
+}
+
+fn receiver_function(
+    callback: impl Fn(JsValue, Array) -> Result<JsValue, JsValue> + 'static,
+) -> Result<Function, JsValue> {
+    let callback = Closure::wrap(
+        Box::new(callback) as Box<dyn Fn(JsValue, Array) -> Result<JsValue, JsValue>>
+    )
+    .into_js_value();
+    Function::new_with_args(
+        "callback",
+        "'use strict'; return function (...args) { return callback(this, args); }",
+    )
+    .call1(&JsValue::UNDEFINED, &callback)?
+    .dyn_into()
+}
+
+fn register_update(
+    owner: &JsValue,
+    listener: &JsValue,
+    options: &JsValue,
+) -> Result<JsValue, JsValue> {
+    let fiber = Reflect::get(owner, &"fiber".into())?;
+    let hooks = Reflect::get(&fiber, &"_hooks".into())?;
+    let key = JsValue::from_str("internal/update");
+    let mut list = Reflect::get(&hooks, &key)?;
+    if list.is_null() || list.is_undefined() {
+        list = super::update_hooks::disposable_list()?;
+        Reflect::set(&hooks, &key, &list)?;
+    }
+    let method = if Reflect::get(options, &"prepend".into())?.is_truthy() {
+        "unshift"
+    } else {
+        "push"
+    };
+    Reflect::get(&list, &method.into())?
+        .dyn_into::<Function>()
+        .map_err(|_| js_sys::TypeError::new("hooks[method] is not a function"))?
+        .call1(&list, listener)
+}
+
+fn dispatch_update(receiver: &JsValue, args: &Array) -> Result<JsValue, JsValue> {
+    let hooks = Reflect::get(receiver, &"_hooks".into())?;
+    let list = Reflect::get(&hooks, &"internal/update".into())?;
+    let callbacks = Array::new();
+    if list.is_truthy() {
+        for callback in Array::from(&list).iter() {
+            callbacks.push(&callback.dyn_into::<Function>()?.bind0(receiver));
+        }
+    }
+    let args = args.slice(0, args.length());
+    let inner = args.pop().dyn_into::<Function>()?.bind0(receiver);
+    args.push(&inner);
+    waterfall(&callbacks, &args)
+}
+
 pub(super) fn register(
     context: &WasmContext,
     name: String,
@@ -64,6 +148,16 @@ pub(super) fn register(
         prepend: Reflect::get(&options, &JsValue::from_str("prepend"))?.is_truthy(),
         global: Reflect::get(&options, &JsValue::from_str("global"))?.is_truthy(),
     };
+    register_hook(context, name, listener, registration, owner)
+}
+
+fn register_hook(
+    context: &WasmContext,
+    name: String,
+    listener: Function,
+    registration: EventOptions,
+    owner: JsValue,
+) -> Result<JsValue, JsValue> {
     let browser_listener = listener.clone();
     let browser = BrowserHook {
         owner,

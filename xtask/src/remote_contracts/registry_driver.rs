@@ -33,6 +33,134 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves per-Fiber update routing, veto, config identity, and restart ownership', async () => {
+  const root = new Context(), log = [], fibers = new Map()
+  const mount = label => root.plugin({ name: label, apply(ctx, config) {
+    log.push([label, 'apply', config])
+    ctx.on('internal/update', function (nextConfig, noSave, next) {
+      if (this !== fibers.get(label)) throw new Error('update receiver differs from owning fiber')
+      log.push([label, 'update', nextConfig, noSave])
+      if (nextConfig.veto) return 'vetoed'
+      return next()
+    })
+    ctx.effect(() => () => log.push([label, 'dispose']))
+  } }, { value: 1 })
+  const first = mount('first'), second = mount('second')
+  fibers.set('first', first); fibers.set('second', second)
+  await first; await second
+  log.length = 0
+  const veto = { value: 2, veto: true }
+  expect(first.update(veto, true)).toBe('vetoed')
+  expect(first._config).toBe(veto)
+  expect(first.config).toEqual({ value: 1 })
+  expect(log).toEqual([['first', 'update', veto, true]])
+  log.length = 0
+  const nextConfig = { value: 3 }
+  await first.update(nextConfig)
+  expect(first.config).toBe(nextConfig)
+  expect(log).toEqual([['first', 'update', nextConfig, false], ['first', 'dispose'], ['first', 'apply', nextConfig]])
+  log.length = 0
+  const again = { value: 4 }
+  await first.update(again)
+  expect(log).toEqual([['first', 'update', again, false], ['first', 'update', again, false], ['first', 'dispose'], ['first', 'apply', again]])
+  const hooks = first._hooks['internal/update']
+  expect(hooks.length).toBe(3)
+  expect(hooks.delete([...hooks][0])).toBe(true)
+  expect(hooks.length).toBe(2)
+  const disposeHook = first.ctx.on('internal/update', () => 'manual')
+  expect(disposeHook()).toBe(true)
+  expect(disposeHook()).toBe(false)
+  expect(() => first.ctx.on('internal/update', () => {}, true)).toThrow(TypeError)
+  log.length = 0
+  await first.dispose(); await second.dispose()
+  expect(hooks.length).toBe(2)
+  expect(() => first.update({ value: 4 })).toThrow()
+})
+
+it('preserves per-Fiber update admission, failed restart identity, and recovery', async () => {
+  const root = new Context(), failure = new Error('restart failure'), applied = []
+  const fiber = await root.plugin({ apply(ctx, config) {
+    if (config.fail) throw failure
+    applied.push(config)
+  } }, { version: 1 })
+  const config = { fail: true }
+  const restart = fiber.update(config)
+  expect(fiber.state).toBe(5)
+  await expect(restart).rejects.toBe(failure)
+  expect(fiber._config).toBe(config)
+  expect(fiber.state).toBe(3)
+  await expect(fiber.await()).rejects.toBe(failure)
+  expect(fiber.update({ version: 2 })).toBe(undefined)
+  await fiber.await()
+  expect(fiber.state).toBe(2)
+  expect(applied).toEqual([{ version: 1 }, { version: 2 }])
+  await fiber.dispose()
+})
+
+it('preserves per-Fiber update global ordering and synchronous or Promise veto results', async () => {
+  const root = new Context(), log = [], promise = Promise.resolve('held')
+  const fiber = root.plugin({ apply(ctx) {
+    ctx.on('internal/update', function (config, noSave, next) {
+      if (this !== fiber) throw new Error('local update receiver changed')
+      log.push(['local', noSave])
+      return config.hold ? promise : next()
+    })
+  } }, {})
+  await fiber
+  const before = root.on('internal/update', function (config, noSave, next) {
+    if (this !== fiber) throw new Error('global update receiver changed')
+    log.push(['before', noSave]); return next()
+  }, { global: true, prepend: true })
+  const after = root.on('internal/update', (config, noSave, next) => { log.push(['after', noSave]); return next() }, { global: true })
+  expect(fiber.update({ hold: true }, null)).toBe(promise)
+  expect(log).toEqual([['before', null], ['local', null]])
+  log.length = 0
+  expect(root.waterfall(fiber, 'internal/update', {}, false, () => 'terminal')).toBe('terminal')
+  expect(log).toEqual([['before', false], ['local', false], ['after', false]])
+  await before(); await after(); await fiber.dispose()
+})
+
+it('preserves per-Fiber update validation before hooks and deferred pending config', async () => {
+  const root = new Context(), applied = [], updates = []
+  const schema = { '~standard': { version: 1, vendor: 'fixture', validate(value) {
+    if (value.async) return Promise.resolve({ value })
+    if (value.reject) return { issues: [{ message: 'bad value', path: ['value'] }] }
+    return { value: { ...value, normalized: true } }
+  } } }
+  const fiber = root.plugin({ Config: schema, apply(ctx, config) {
+    applied.push(config)
+    ctx.on('internal/update', (config, noSave, next) => { updates.push(config); return next() })
+  } }, { value: 1 })
+  await fiber
+  expect(applied).toEqual([{ value: 1, normalized: true }])
+  const invalid = { reject: true }
+  expect(() => fiber.update(invalid)).toThrow('invalid config:\n  - bad value (at value)')
+  try { fiber.update(invalid) } catch (error) {
+    expect(error).toBeInstanceOf(TypeError)
+    expect(error.name).toBe('ValidationError')
+    expect(error[Symbol.for('ValidationError')]).toBe(true)
+  }
+  expect(fiber._config).toBe(invalid)
+  expect(fiber.config).toEqual({ value: 1, normalized: true })
+  expect(updates).toEqual([])
+  expect(() => fiber.update({ async: true })).toThrow('Async config validation is not supported')
+  await fiber.update({ value: 2 })
+  expect(updates).toEqual([{ value: 2, normalized: true }])
+  expect(applied).toEqual([{ value: 1, normalized: true }, { value: 2, normalized: true }])
+  await fiber.dispose()
+  const opaque = { method() { return 7 } }, pending = root.plugin({ inject: ['late'], apply(ctx, config) { applied.push(config) } }, { value: 0 })
+  expect(pending.update(opaque)).toBe(undefined)
+  expect(pending._config).toBe(opaque)
+  root.provide('late', {})
+  await pending
+  expect(Object.getPrototypeOf(pending)).toBe(pending.ctx.fiber)
+  expect(await pending).toBe(pending.ctx.fiber)
+  expect(applied.at(-1)).toEqual({ value: 0 })
+  await pending.update(opaque)
+  expect(applied.at(-1)).toBe(opaque)
+  await pending.dispose()
+})
+
 it('preserves callback service tracing, method receivers, and effect ownership', async () => {
   const root = new Context(), origin = root.extend({ label: 'origin' }), tracker = Symbol.for('cordis.tracker'), shadow = Symbol.for('cordis.shadow'), original = Symbol.for('cordis.original')
   class NamedService extends Service { constructor(ctx) { super(ctx, 'traced-named') } }

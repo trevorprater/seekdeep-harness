@@ -211,6 +211,8 @@ impl PluginRegistry {
             updates: tokio::sync::Mutex::new(()),
             scheduled: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            #[cfg(target_arch = "wasm32")]
+            browser_restart: AtomicBool::new(false),
             lifecycle_generation: AtomicU64::new(0),
             disposed: AtomicBool::new(false),
             settled: Notify::new(),
@@ -412,6 +414,8 @@ pub struct PluginFiber {
     updates: tokio::sync::Mutex<()>,
     scheduled: AtomicBool,
     dirty: AtomicBool,
+    #[cfg(target_arch = "wasm32")]
+    browser_restart: AtomicBool,
     lifecycle_generation: AtomicU64,
     disposed: AtomicBool,
     settled: Notify,
@@ -578,6 +582,23 @@ impl PluginFiber {
         *self.config.lock() = config;
         *self.epoch.lock() = None;
         self.schedule();
+    }
+
+    /// Browser source compatibility stages its opaque config before requesting a restart.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn request_browser_restart(self: &Arc<Self>) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.disposed.load(Ordering::Acquire),
+            "plugin {:?} is disposed",
+            self.plugin.name
+        );
+        *self.error.lock() = None;
+        if self.fiber.state() == FiberState::Active {
+            self.browser_restart.store(true, Ordering::Release);
+            self.fiber.set_state(FiberState::Unloading);
+        }
+        self.request_update(self.config());
+        Ok(())
     }
 
     /// Replaces configuration transactionally, restoring the exact previous
@@ -758,6 +779,10 @@ impl PluginFiber {
         if self.disposed.load(Ordering::Acquire) {
             return;
         }
+        #[cfg(target_arch = "wasm32")]
+        let browser_restart = self.browser_restart.swap(false, Ordering::AcqRel);
+        #[cfg(not(target_arch = "wasm32"))]
+        let browser_restart = false;
         let required = self.required_services();
         let next_epoch = required
             .iter()
@@ -782,7 +807,7 @@ impl PluginFiber {
         {
             return;
         }
-        if self.fiber.state() == FiberState::Active {
+        if self.fiber.state() == FiberState::Active || browser_restart {
             if let Err(error) = self.fiber.deactivate().await {
                 tracing::error!(plugin = %self.plugin.name, %error, "plugin reload cleanup failed");
             }
