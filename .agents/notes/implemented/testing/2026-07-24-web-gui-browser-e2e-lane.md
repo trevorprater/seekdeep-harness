@@ -34,11 +34,15 @@ Every scenario fails on any pageerror and on the client's connection-loss/gap-re
 
 ### Expected outputs
 
+The pinned onboarding `models` and `dismissed` goldens contain an older Models intro than the pinned locale implementation; `dismissed` also omits the `openai-codex` provider option. The source's own browser tests reproduce both discrepancies. The [Rust onboarding driver](../../../../xtask/src/web_onboarding_driver.rs) requires the exact stale lines, reads the Chinese intro from the pinned locale, and anchors the missing option to the pinned Models snapshot. Every remaining line compares unchanged apart from product identity. The oracle files remain untouched; these corrections do not establish a green result for the unmodified source browser suites.
+
 Scenarios with a stable owning region commit a normalized `ariaSnapshot()` for each distinct user-visible state; cross-region workspace-management states instead use semantic DOM assertions plus authoritative host-state checks. UUID, cwd, workspace basename, and duration volatility collapse to stable tokens; captures poll until consecutive normalized reads agree. Role and text anchors remain semantic guards around the reviewable goldens and own cross-region states directly. World-state assertions use root-context session events rather than a second committed log golden because the ACP, headless, and TUI suites already pin the persisted-log surface through the same loop and persistence. `refresh` is the sole golden writer; a missing replay golden fails with the regeneration command.
 
 The typecheck plane split is structural: the host scaffold, its support module, and every web spec that boots or inspects the host composition are excluded from the client-registered `apps/web` project and included file-by-file in `tsconfig.host.json`. One program cannot hold both sides of the Cordis `Context` merges.
 
 ### Modes and fixtures
+
+`cargo xtask web-onboarding` runs the official-credential and alternate-provider scenarios with the real DeepSeek adapter mounted without a key, not the route-only adapter. Two isolated Hosts verify versioned acknowledgement, write-only credentials, readiness without reload, an interactive configured reload while real describe responses are held, custom model persistence and selection, and independent setup/add-card lifetimes. Both Hosts retain the all-provider stream guard and require zero calls at teardown. The source-fixture corrections above are explicit; all other snapshot lines remain exact after product renaming.
 
 `cargo xtask web-plugin-settings` runs the pinned plugin-configuration scenarios through the [Rust browser driver](../../../../xtask/src/web_plugin_settings_driver.rs), including the exact three-card golden and staged Save, Discard, invalid-input, and Reset behavior. It also verifies the Agent Loop's live cap through a read-only fixture endpoint, requires successful saves to leave no failure notice, and checks zero model calls at teardown. Persisted numeric values must be ordinary YAML scalars, not merely values the Rust reader can decode.
 

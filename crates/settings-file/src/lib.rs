@@ -5,7 +5,6 @@
 //! as map-leaf edits so untouched formatting and comments survive.
 
 use std::{
-    collections::BTreeMap,
     ffi::OsStr,
     path::{Path, PathBuf},
     str::FromStr,
@@ -547,19 +546,27 @@ impl AsYaml for IndentedYaml {
         &self,
         builder: &mut rowan::GreenNodeBuilder,
         _indent: usize,
-        flow_context: bool,
+        _flow_context: bool,
     ) -> bool {
+        let node = self
+            .value
+            .as_node()
+            .expect("generated YAML has a syntax node");
         if self.value.is_inline() {
-            self.value.build_content(builder, 0, flow_context)
+            let mut line_start = false;
+            copy_yaml_content(
+                builder,
+                node,
+                &" ".repeat(self.indent.saturating_sub(2)),
+                &mut line_start,
+            );
+            line_start
         } else {
-            builder.token(SyntaxKind::INDENT.into(), &" ".repeat(self.indent));
-            match &self.value {
-                YamlNode::Mapping(value) => value.build_content(builder, self.indent, flow_context),
-                YamlNode::Sequence(value) => {
-                    value.build_content(builder, self.indent, flow_context)
-                }
-                value => value.build_content(builder, self.indent, flow_context),
-            }
+            let mut line_start = true;
+            builder.start_node(node.kind().into());
+            copy_yaml_content(builder, node, &" ".repeat(self.indent), &mut line_start);
+            builder.finish_node();
+            line_start
         }
     }
 
@@ -568,14 +575,57 @@ impl AsYaml for IndentedYaml {
     }
 }
 
+fn copy_yaml_content(
+    builder: &mut rowan::GreenNodeBuilder,
+    node: &rowan::SyntaxNode<yaml_edit::Lang>,
+    indent: &str,
+    line_start: &mut bool,
+) {
+    // Line position spans CST node boundaries: a mapping entry's trailing newline
+    // also indents the following entry or sequence item. Resetting it per node
+    // leaves multi-field model rows at their original document columns.
+    for child in node.children_with_tokens() {
+        match child {
+            rowan::NodeOrToken::Node(child) => {
+                if *line_start {
+                    builder.token(SyntaxKind::INDENT.into(), indent);
+                    *line_start = false;
+                }
+                builder.start_node(child.kind().into());
+                copy_yaml_content(builder, &child, indent, line_start);
+                builder.finish_node();
+            }
+            rowan::NodeOrToken::Token(token) => {
+                let mut text = String::new();
+                for (index, part) in token.text().split_inclusive('\n').enumerate() {
+                    if *line_start && part != "\n" {
+                        if index == 0 {
+                            builder.token(SyntaxKind::INDENT.into(), indent);
+                        } else {
+                            text.push_str(indent);
+                        }
+                    }
+                    text.push_str(part);
+                    *line_start = part.ends_with('\n');
+                }
+                builder.token(token.kind().into(), &text);
+            }
+        }
+    }
+}
+
 fn yaml_node(value: &Value) -> anyhow::Result<YamlNode> {
-    let mut wrapper = BTreeMap::new();
-    wrapper.insert("value", value);
-    let text = yaml_string(&wrapper)?;
+    let text = yaml_string(value)?;
     let file = YamlFile::from_str(&text)
         .map_err(|_| anyhow::anyhow!("settings-file: rendered YAML could not be edited"))?;
-    file.document()
-        .and_then(|document| document.get("value"))
+    let document = file
+        .document()
+        .ok_or_else(|| anyhow::anyhow!("settings-file: rendered YAML has no document"))?;
+    document
+        .as_mapping()
+        .map(YamlNode::Mapping)
+        .or_else(|| document.as_sequence().map(YamlNode::Sequence))
+        .or_else(|| document.as_scalar().map(YamlNode::Scalar))
         .ok_or_else(|| anyhow::anyhow!("settings-file: rendered YAML has no value node"))
 }
 

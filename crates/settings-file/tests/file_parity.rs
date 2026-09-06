@@ -395,6 +395,65 @@ async fn yaml_numbers_are_scalars_for_independent_readers_on_create_and_patch() 
 }
 
 #[tokio::test]
+async fn yaml_model_sequences_keep_nested_mapping_indentation_on_insert_and_replace() {
+    let directory = TempDir::new().unwrap();
+    let path = directory.path().join("settings.yaml");
+    tokio::fs::write(
+        &path,
+        "# preserved\nui-onboarding:\n  welcomeNoticeVersion: acknowledged\n",
+    )
+    .await
+    .unwrap();
+    let harness = Harness::boot(&path, false).await;
+    let scope = harness
+        .context
+        .get(SETTINGS)
+        .unwrap()
+        .register(
+            &harness.context,
+            &settings_namespace("llm-deepseek").unwrap(),
+            Schema::object([
+                ("label", Schema::string()),
+                (
+                    "models",
+                    Schema::array(Schema::object([
+                        ("id", Schema::string().required()),
+                        ("name", Schema::string()),
+                        ("maxTokens", Schema::number()),
+                    ])),
+                ),
+            ]),
+            SettingsRegisterOptions::default(),
+        )
+        .unwrap();
+    for (name, label) in [
+        ("Private Preview", "catalog"),
+        ("  Private\n  Preview", "  multi\n  label"),
+    ] {
+        let models = json!([
+            {"id":"deepseek-v4-pro","name":"DeepSeek-V4-Pro"},
+            {"id":"private-preview","name":name,"maxTokens":64000,"nested":[{"label":"inner","weight":2}]}
+        ]);
+        scope
+            .update(json!({"label":label,"models":models}))
+            .await
+            .unwrap();
+        let text = tokio::fs::read_to_string(&path).await.unwrap();
+        let yaml: serde_yml::Value =
+            serde_yml::from_str(&text).unwrap_or_else(|error| panic!("{error}:\n{text}"));
+        let expected: serde_yml::Value = serde_yml::from_str(&models.to_string()).unwrap();
+        assert_eq!(yaml["llm-deepseek"]["models"], expected, "{text}");
+        assert_eq!(yaml["llm-deepseek"]["label"].as_str(), Some(label));
+        assert!(text.starts_with("# preserved\n"));
+        assert_eq!(
+            yaml["ui-onboarding"]["welcomeNoticeVersion"].as_str(),
+            Some("acknowledged")
+        );
+    }
+    harness.fiber.dispose().await.unwrap();
+}
+
+#[tokio::test]
 async fn two_provider_instances_coordinate_with_the_writer_lock() {
     let directory = TempDir::new().unwrap();
     let path = directory.path().join("settings.yaml");

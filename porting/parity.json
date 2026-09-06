@@ -24842,12 +24842,35 @@
     {
       "source": "apps/web/tests/onboarding-deepseek-config.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_onboarding_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/settings-file/tests/file_parity.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-onboarding: all four official-provider scenarios through Chromium and the real credential-less Rust DeepSeek adapter",
+        "versioned welcome acknowledgement, write-only credential persistence, immediate readiness, reload without takeover flash under held real settings responses",
+        "custom model catalog and numeric capacities persist as valid YAML and replace the removed model in the live selector",
+        "welcome/missing source goldens match after product renaming; the stale models intro is reconciled to the pinned locale after reproducing the source test failure"
+      ],
+      "note": "the pinned source suite has one stale-snapshot failure; the narrow correction is recorded in the owning browser-lane note, and the oracle remains untouched"
     },
     {
       "source": "apps/web/tests/onboarding-usable-provider.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_onboarding_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-onboarding: all three alternate-provider scenarios through Chromium and the production Rust Web profile",
+        "dismissing official setup preserves the add-provider draft; configuring minimax-cn ends onboarding without creating a DeepSeek credential",
+        "reload and the Models page remain usable with no key leakage, browser/wire warnings, or model calls",
+        "dismissed golden is exact except product identity and source-proven stale intro/Codex-option corrections, anchored to the pinned locale and Models snapshot"
+      ],
+      "note": "the pinned source suite reproduces the stale golden; no oracle snapshot or production provider metadata is changed to force a pass"
     },
     {
       "source": "apps/web/tests/permission-policy-context.e2e.ts",

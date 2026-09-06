@@ -18,6 +18,7 @@ mod remote_contracts;
 mod web_assembled;
 mod web_assembled_driver;
 mod web_models_settings_driver;
+mod web_onboarding_driver;
 mod web_plugin_settings_driver;
 mod web_settings;
 mod web_settings_driver;
@@ -51,6 +52,11 @@ enum Command {
     },
     /// Verify staged plugin configuration edits through the real Web profile.
     WebPluginSettings {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Verify first-run credentials and provider readiness through the real Web profile.
+    WebOnboarding {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
     },
@@ -277,6 +283,7 @@ fn main() -> anyhow::Result<()> {
         Command::WebSettings { source } => web_settings::run(&source),
         Command::WebModelsSettings { source } => web_settings::run_models(&source),
         Command::WebPluginSettings { source } => web_settings::run_plugins(&source),
+        Command::WebOnboarding { source } => web_settings::run_onboarding(&source),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {

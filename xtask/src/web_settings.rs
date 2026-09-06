@@ -22,6 +22,14 @@ pub(super) fn run_plugins(source: &Path) -> anyhow::Result<()> {
     )
 }
 
+pub(super) fn run_onboarding(source: &Path) -> anyhow::Result<()> {
+    run_case(
+        source,
+        "web-onboarding",
+        super::web_onboarding_driver::DRIVER,
+    )
+}
+
 fn run_case(source: &Path, name: &str, script: &str) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;

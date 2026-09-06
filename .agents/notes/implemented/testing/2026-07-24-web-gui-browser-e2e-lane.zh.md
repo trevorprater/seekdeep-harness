@@ -34,11 +34,15 @@ Rust [工作区运行器](../../../../xtask/src/web_workspaces.rs)与[浏览器�
 
 ### 预期输出
 
+固定的引导 `models` 与 `dismissed` 预期输出所含的 Models 简介，比同一固定版本的 locale 实现更旧；`dismissed` 还缺少 `openai-codex` 提供方选项。源实现自身的浏览器测试也复现了这两项差异。[Rust 引导驱动](../../../../xtask/src/web_onboarding_driver.rs)要求陈旧行精确存在，从固定 locale 读取中文简介，并以固定的 Models 快照为依据补入缺失的选项。除产品名称外，其余每一行保持不变并进行比较。oracle 文件不作修改；这些修正不代表未经修改的源浏览器套件已通过。
+
 具有稳定所属区域的场景会为每个不同的用户可见状态提交一份规范化的 `ariaSnapshot()`；跨区域的工作区管理状态则使用语义 DOM 断言和权威的 host 状态检查。UUID、cwd、工作区目录名与时长等易变内容会归一为稳定 token；采集过程持续轮询，直到连续两次规范化读取结果相同。Role 与文本锚点继续充当可评审预期输出周围的语义防线，并直接覆盖跨区域状态。世界状态断言使用根上下文的会话事件，而不是第二份提交的日志预期输出，因为 ACP、headless 与 TUI 套件已经通过同一循环和持久化钉住持久化日志表面。`refresh` 是预期输出的唯一写入者；回放模式下缺少预期输出时，测试会连同重新生成命令一起失败。
 
 类型检查平面切分是结构性的：host scaffold、其支持模块，以及每个启动或检查 host 组合的 web spec 都会从注册在 client 侧的 `apps/web` 工程中排除，并逐文件纳入 `tsconfig.host.json`。一个程序不能同时持有 Cordis `Context` 合并的两侧。
 
 ### 模式与 fixture
+
+`cargo xtask web-onboarding` 在挂载真实 DeepSeek 适配器但不提供密钥的情况下运行官方凭据与其他提供方场景，不使用仅提供路由的适配器。两个隔离 Host 验证版本化确认、只写凭据、无需重载的就绪更新、暂缓真实 describe 响应期间仍可交互的已配置重载、自定义模型持久化与选择，以及彼此独立的设置卡片／新增卡片生命周期。两个 Host 都保留全提供方流守卫，并要求拆卸时调用次数为零。上述源 fixture 修正是显式的；除产品重命名外，其余快照行均精确比较。
 
 `cargo xtask web-plugin-settings` 通过 [Rust 浏览器驱动](../../../../xtask/src/web_plugin_settings_driver.rs)运行固定的插件配置场景，包括三张卡片的精确预期输出，以及暂存后保存、放弃修改、无效输入和重置的行为。它还通过只读 fixture 端点验证 Agent Loop 的实时上限，要求成功保存后没有失败提示，并在拆卸时检查模型调用次数为零。持久化数值必须是普通 YAML 标量，不能只是 Rust 读取器能够解码的值。
 

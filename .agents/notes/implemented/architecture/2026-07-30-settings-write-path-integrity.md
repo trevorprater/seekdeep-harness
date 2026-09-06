@@ -24,6 +24,8 @@ The provider's write path could destroy state it never observed, and the Service
 
 The Rust writer converts JSON tokens into native YAML values before rendering a new document or changed leaf. Direct Serde serialization of an arbitrary-precision `serde_json::Number` exposes a private map instead of a numeric scalar. Tests therefore inspect raw YAML and use a YAML-value reader for integer, fractional, and nested numbers on both create and patch paths; a `serde_json::Value` round trip alone can decode that private map and hide the incompatible file format.
 
+Generated replacement values start at column zero and shift indentation across the entire syntax tree. Line-start state crosses node boundaries, so sibling fields, multi-field sequence entries, nested arrays, and multiline scalars retain their relative columns. The model-list insertion and replacement regression checks parsed values with an independent YAML reader and preserves the untouched onboarding section and its comment.
+
 ## Alternatives considered
 
 - **`proper-lockfile` instead of a hand-rolled lock** — the dependency-over-hand-rolling policy was weighed: the library is barely maintained, its ownership and retry policy is broader than this one-file protocol needs, and the shipped lock is a small exclusive-create loop with deterministic contention tests. The policy favors dependencies that delete owned code; this one would replace a narrow protocol with an opaque peer.

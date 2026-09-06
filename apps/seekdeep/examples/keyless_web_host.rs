@@ -1,4 +1,4 @@
-//! Real Web profile with the source scaffold's route-only adapter and fixture attachment.
+//! Real Web profile with isolated settings, fixture attachment, and a model-stream guard.
 
 use std::{
     collections::BTreeMap,
@@ -34,6 +34,12 @@ use seekdeep_workspace::WORKSPACE_REGISTRY;
 use serde_json::json;
 
 struct RouteOnly(Arc<AtomicUsize>);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FixtureMode {
+    RouteOnly,
+    MissingCredential,
+}
 
 #[async_trait]
 impl LlmAdapter for RouteOnly {
@@ -87,14 +93,14 @@ impl LlmAdapter for RouteOnly {
     }
 }
 
-fn write_overlay(home: &Path, data: &Path) -> anyhow::Result<PathBuf> {
+fn write_overlay(home: &Path, data: &Path, mode: FixtureMode) -> anyhow::Result<PathBuf> {
     let overlay = data.join("keyless.patch.yml");
     std::fs::write(
         &overlay,
         serde_json::to_string_pretty(&json!([
             {"id":"webserver","config":{"host":"127.0.0.1","port":0}},
             {"id":"web-runtime","config":{"printUrl":false,"surfaceContext":true}},
-            {"id":"llm-deepseek","disabled":true},
+            {"id":"llm-deepseek","disabled":mode == FixtureMode::RouteOnly},
             {"id":"agent-instructions","disabled":true},
             {"id":"session-title-llm","disabled":true},
             {"id":"session-telemetry-otel","disabled":true},
@@ -209,14 +215,20 @@ fn isolated_environment(home: &Path) -> LaunchEnvironmentSnapshot {
     }])
 }
 
-fn install_keyless_routes(context: &Context, calls: &Arc<AtomicUsize>) -> anyhow::Result<()> {
+fn install_keyless_routes(
+    context: &Context,
+    calls: &Arc<AtomicUsize>,
+    mode: FixtureMode,
+) -> anyhow::Result<()> {
     let llm = context
         .get(LLM)
         .ok_or_else(|| anyhow::anyhow!("Web profile has no llm"))?;
-    llm.register_adapter(
-        &["deepseek-official".to_owned()],
-        Arc::new(RouteOnly(calls.clone())),
-    )?;
+    if mode == FixtureMode::RouteOnly {
+        llm.register_adapter(
+            &["deepseek-official".to_owned()],
+            Arc::new(RouteOnly(calls.clone())),
+        )?;
+    }
     let calls = calls.clone();
     llm.register_stream_middleware(
         context,
@@ -235,9 +247,18 @@ fn install_keyless_routes(context: &Context, calls: &Arc<AtomicUsize>) -> anyhow
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     anyhow::ensure!(
-        matches!(arguments.len(), 3 | 4),
-        "expected harness-home, workspace, seed id, and optional isolated data root"
+        matches!(arguments.len(), 3..=5),
+        "expected harness-home, workspace, seed id, optional isolated data root, and optional missing-credential mode"
     );
+    let mode = match arguments
+        .get(4)
+        .map(|value| value.to_string_lossy())
+        .as_deref()
+    {
+        None => FixtureMode::RouteOnly,
+        Some("missing-credential") => FixtureMode::MissingCredential,
+        Some(value) => anyhow::bail!("unknown keyless fixture mode {value:?}"),
+    };
     let home = PathBuf::from(&arguments[0]).canonicalize()?;
     let workspace = PathBuf::from(&arguments[1]).canonicalize()?;
     let seed = SessionId::new(arguments[2].to_string_lossy());
@@ -245,7 +266,7 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&data)?;
     std::env::set_current_dir(&workspace)?;
     let environment = isolated_environment(&home);
-    let overlay = write_overlay(&home, &data)?;
+    let overlay = write_overlay(&home, &data, mode)?;
     let catalog = framework_profile_catalog(&workspace, &home, &environment)?;
     let plan = compose_profile_at(
         "web",
@@ -273,7 +294,7 @@ async fn main() -> anyhow::Result<()> {
     let application = boot_profile(plan, &catalog, Some(prepare)).await?;
     let calls = Arc::new(AtomicUsize::new(0));
     let context = application.context();
-    install_keyless_routes(context, &calls)?;
+    install_keyless_routes(context, &calls, mode)?;
     let registry = context
         .get(WORKSPACE_REGISTRY)
         .ok_or_else(|| anyhow::anyhow!("Web profile has no workspace registry"))?;
