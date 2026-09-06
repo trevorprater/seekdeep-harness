@@ -162,16 +162,24 @@ fn settings_fixture_routes(
             })
         }),
     })?;
+    Ok(vec![cap, count, session_fixture_route(context, server)?])
+}
+
+fn session_fixture_route(context: &Context, server: &WebServer) -> anyhow::Result<WebRegistration> {
     let owner = context.clone();
     let sessions = context
         .get(SESSIONS)
         .ok_or_else(|| anyhow::anyhow!("fixture has no Sessions"))?;
-    let session = server.register(WebRoute {
+    let defaults = context
+        .get(seekdeep_agent_default_model::AGENT_DEFAULT_MODEL)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agent default"))?;
+    server.register(WebRoute {
         kind: WebRouteKind::Prefix,
         path: "/fixture/session".to_owned(),
         handler: Arc::new(move |request| {
             let owner = owner.clone();
             let sessions = sessions.clone();
+            let defaults = defaults.clone();
             Box::pin(async move {
                 let id = request
                     .uri()
@@ -187,14 +195,26 @@ fn settings_fixture_routes(
                         .get(&id)
                         .ok_or_else(|| anyhow::anyhow!("fixture session absent"))?
                 };
+                if request.method().as_str() == "PUT" {
+                    // The source default-model scenario seeds a logged route without a model call.
+                    let selection = defaults.current_selection();
+                    let mut config = json!({"provider":selection.provider,"model":selection.model});
+                    if let Some(effort) = selection.reasoning_effort {
+                        config["reasoningEffort"] = json!(effort);
+                    }
+                    session.append(
+                        "request/header",
+                        json!({"header":{"config":config},"reason":"initial"}),
+                        seekdeep_core::session::AppendOptions::default(),
+                    )?;
+                }
                 Ok(response(
                     200_u16.try_into()?,
                     serde_json::to_vec(&session.events())?,
                 ))
             })
         }),
-    })?;
-    Ok(vec![cap, count, session])
+    })
 }
 
 fn isolated_environment(home: &Path) -> LaunchEnvironmentSnapshot {
@@ -247,15 +267,15 @@ fn install_keyless_routes(
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     anyhow::ensure!(
-        matches!(arguments.len(), 3..=5),
-        "expected harness-home, workspace, seed id, optional isolated data root, and optional missing-credential mode"
+        matches!(arguments.len(), 3..=6),
+        "expected harness-home, workspace, seed id, optional isolated data root, mode, and extra overlay"
     );
     let mode = match arguments
         .get(4)
         .map(|value| value.to_string_lossy())
         .as_deref()
     {
-        None => FixtureMode::RouteOnly,
+        None | Some("route-only") => FixtureMode::RouteOnly,
         Some("missing-credential") => FixtureMode::MissingCredential,
         Some(value) => anyhow::bail!("unknown keyless fixture mode {value:?}"),
     };
@@ -267,10 +287,14 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_current_dir(&workspace)?;
     let environment = isolated_environment(&home);
     let overlay = write_overlay(&home, &data, mode)?;
+    let mut overlays = vec![overlay];
+    if let Some(extra) = arguments.get(5) {
+        overlays.push(PathBuf::from(extra).canonicalize()?);
+    }
     let catalog = framework_profile_catalog(&workspace, &home, &environment)?;
     let plan = compose_profile_at(
         "web",
-        &[overlay],
+        &overlays,
         &workspace,
         &home,
         &home.join("profiles/.seekdeep-installation/package.json"),

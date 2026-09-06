@@ -24687,7 +24687,16 @@
     {
       "source": "apps/web/tests/declared-reasoning.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_model_selection_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-model-selection: declared provider profiles reach the real Chromium composer through the Rust Host",
+        "exact Default/Off/High/Max menu and pinned source aria golden; High selection persists in agent-default-model and updates the accessible trigger label",
+        "source declared-reasoning browser suite: two tests passed; snapshot inventory stays closed and model-call audit remains zero"
+      ]
     },
     {
       "source": "apps/web/tests/declared-reasoning.overlay.yml",
@@ -24703,7 +24712,18 @@
     {
       "source": "apps/web/tests/default-model.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_model_selection_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/session-persistence-jsonl/src/backend.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-model-selection: composer selection persists the shared default, later sessions inherit it, and a logged session retains its own route",
+        "removing the declared routes disables the composer and returns model-unavailable from the real Host; the model seat remains enabled and recovers through a served route",
+        "source default-model browser suite: two tests passed; the source standalone request/header fact persists unchanged through real Session append and JSONL teardown",
+        "plain and compressed JSONL append/export/inspect/cold-load regression passes while the optional core execution invariant remains strict; zero model calls"
+      ]
     },
     {
       "source": "apps/web/tests/default-model.overlay.yml",

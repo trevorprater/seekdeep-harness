@@ -15,7 +15,6 @@ use futures::{FutureExt as _, future::Shared};
 use parking_lot::Mutex;
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::{
-    invariant::validate_persisted_session_events,
     preparation::SessionPreparation,
     repair::interrupted_turn_closers,
     session::{Session, SessionEvent, SessionHeader, SessionId},
@@ -802,7 +801,6 @@ impl JsonlSessionPersistence {
             .collect::<Vec<_>>();
         let normalized = normalize_stored_events(&combined, &current.header.id)?;
         validate_normalized_events(&current.header, &normalized)?;
-        validate_persisted_session_events(&normalized)?;
         let path = log_path(
             &self.root,
             current.header.cwd.as_deref(),
@@ -839,7 +837,6 @@ impl JsonlSessionPersistence {
         let mut balanced = stored.scan.events.clone();
         let closers = interrupted_turn_closers(&balanced);
         balanced.extend(closers.clone());
-        validate_persisted_session_events(&balanced)?;
         let meta = stored.scan.meta;
         let session = self.sessions.prepare(
             Some(id.clone()),
@@ -1116,7 +1113,6 @@ impl JsonlSessionPersistence {
             )
         })?;
         validate_normalized_events(&stored.scan.meta, &normalized)?;
-        validate_persisted_session_events(&normalized)?;
         stored.scan.events = normalized;
         Ok(stored)
     }
@@ -1225,7 +1221,6 @@ impl JsonlSessionPersistence {
             }
         }
         events.extend(closers);
-        validate_persisted_session_events(&events)?;
         if commit_repair {
             self.state.lock().insert(
                 id.clone(),
@@ -1600,9 +1595,8 @@ impl SessionPersistence for JsonlSessionPersistence {
         if let Some(live) = self.sessions.get(id) {
             let events = live.events();
             self.flush_existing(&live).await?;
-            let balance = validate_persisted_session_events(&events)?;
             anyhow::ensure!(
-                balance.open_turn.is_none(),
+                interrupted_turn_closers(&events).is_empty(),
                 "cannot crash-repair live session {id} with an open turn"
             );
             return Ok(SessionInspection {
@@ -1831,6 +1825,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use seekdeep_cordis::{Context, Fiber};
+    use seekdeep_core::invariant::validate_persisted_session_events;
     use seekdeep_core::session::{AppendOptions, Session};
     use seekdeep_core::session_store::CreateSessionOptions;
     use seekdeep_session_persistence::{SessionPersistence, SessionPersistenceAborted};
@@ -1911,6 +1906,50 @@ mod tests {
         let snapshots = backend.list_snapshots(None).await.expect("snapshots");
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].header.id, *session.id());
+    }
+
+    #[tokio::test]
+    async fn source_logged_route_fact_round_trips_without_enabling_the_loop_invariant() {
+        for compression in [JsonlCompression::None, JsonlCompression::Zstd] {
+            let temporary = tempfile::tempdir().expect("tempdir");
+            let (writer, _, _) = backend_with_compression(temporary.path(), compression);
+            let header = SessionHeader::new(SessionId::new("logged-route-fact"));
+            let events: Vec<SessionEvent> = serde_json::from_value(json!([{
+                "type":"request/header", "seq":0, "time":1,
+                "data":{"header":{"config":{"provider":"origin-gateway","model":"origin-large"}},"reason":"initial"}
+            }])).expect("source default-model fixture");
+            assert!(seekdeep_core::invariant::validate_session_events(&events).is_err());
+            writer.create(&header).await.expect("create");
+            writer
+                .append(&header.id, &events)
+                .await
+                .expect("source-compatible append");
+            assert_eq!(
+                writer
+                    .inspect(&header.id, None)
+                    .await
+                    .expect("inspect")
+                    .events,
+                events
+            );
+            let raw = writer
+                .read_raw(&header.id, None)
+                .await
+                .expect("raw")
+                .expect("artifact");
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(
+                    raw.content.lines().nth(1).expect("event")
+                )
+                .expect("event JSON"),
+                serde_json::to_value(&events[0]).expect("source event")
+            );
+            let (reader, _, _) = backend_with_compression(temporary.path(), compression);
+            assert_eq!(
+                reader.load(&header.id).await.expect("cold load").events,
+                events
+            );
+        }
     }
 
     #[tokio::test]

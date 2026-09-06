@@ -17,6 +17,7 @@ mod remote_built_smoke_driver;
 mod remote_contracts;
 mod web_assembled;
 mod web_assembled_driver;
+mod web_model_selection_driver;
 mod web_models_settings_driver;
 mod web_onboarding_driver;
 mod web_plugin_settings_driver;
@@ -57,6 +58,11 @@ enum Command {
     },
     /// Verify first-run credentials and provider readiness through the real Web profile.
     WebOnboarding {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Verify shared model defaults, unavailable routes, and declared reasoning in Chromium.
+    WebModelSelection {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
     },
@@ -284,6 +290,7 @@ fn main() -> anyhow::Result<()> {
         Command::WebModelsSettings { source } => web_settings::run_models(&source),
         Command::WebPluginSettings { source } => web_settings::run_plugins(&source),
         Command::WebOnboarding { source } => web_settings::run_onboarding(&source),
+        Command::WebModelSelection { source } => web_settings::run_model_selection(&source),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {

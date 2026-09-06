@@ -30,6 +30,14 @@ pub(super) fn run_onboarding(source: &Path) -> anyhow::Result<()> {
     )
 }
 
+pub(super) fn run_model_selection(source: &Path) -> anyhow::Result<()> {
+    run_case(
+        source,
+        "web-model-selection",
+        super::web_model_selection_driver::DRIVER,
+    )
+}
+
 fn run_case(source: &Path, name: &str, script: &str) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;

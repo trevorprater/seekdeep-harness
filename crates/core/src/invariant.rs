@@ -55,6 +55,9 @@ pub fn validate_session_events(
 
 /// Validates persisted structure while admitting model-only assistant surface rewrites.
 ///
+/// This is an optional execution-invariant audit, distinct from the storage
+/// format's schema and sequence checks.
+///
 /// Runtime invariant registration remains stricter: a live assistant event
 /// must name its open step. Persistence accepts a replacement already
 /// validated by [`Session`], because model-only
