@@ -14,6 +14,14 @@ pub(super) fn run_models(source: &Path) -> anyhow::Result<()> {
     )
 }
 
+pub(super) fn run_plugins(source: &Path) -> anyhow::Result<()> {
+    run_case(
+        source,
+        "web-plugin-settings",
+        super::web_plugin_settings_driver::DRIVER,
+    )
+}
+
 fn run_case(source: &Path, name: &str, script: &str) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;

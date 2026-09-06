@@ -118,6 +118,22 @@ fn settings_fixture_routes(
     context: &Context,
     server: &WebServer,
 ) -> anyhow::Result<Vec<WebRegistration>> {
+    let agent_loop = context
+        .get(seekdeep_agent_loop::AGENT_LOOP)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agent Loop"))?;
+    let cap = server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/agent-loop-cap".to_owned(),
+        handler: Arc::new(move |_| {
+            let agent_loop = agent_loop.clone();
+            Box::pin(async move {
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&agent_loop.max_parallel_tool_calls())?,
+                ))
+            })
+        }),
+    })?;
     let loader = context
         .get(seekdeep_loader::LOADER)
         .ok_or_else(|| anyhow::anyhow!("fixture has no Loader"))?;
@@ -172,7 +188,7 @@ fn settings_fixture_routes(
             })
         }),
     })?;
-    Ok(vec![count, session])
+    Ok(vec![cap, count, session])
 }
 
 fn isolated_environment(home: &Path) -> LaunchEnvironmentSnapshot {

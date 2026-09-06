@@ -350,6 +350,51 @@ async fn json_writes_are_pretty_and_cross_namespace_operations_do_not_drop_secti
 }
 
 #[tokio::test]
+async fn yaml_numbers_are_scalars_for_independent_readers_on_create_and_patch() {
+    let directory = TempDir::new().unwrap();
+    let path = directory.path().join("settings.yaml");
+    let harness = Harness::boot(&path, false).await;
+    let settings = harness.context.get(SETTINGS).unwrap();
+    let section = settings
+        .register(
+            &harness.context,
+            &settings_namespace("numbers").unwrap(),
+            Schema::object([("count", Schema::number()), ("nested", Schema::any())]),
+            SettingsRegisterOptions::default(),
+        )
+        .unwrap();
+    for count in [12_000, 7_000] {
+        section
+            .update(json!({"count":count,"nested":{"fraction":1.25,"values":[2,-3,null,true]}}))
+            .await
+            .unwrap();
+        let text = tokio::fs::read_to_string(&path).await.unwrap();
+        assert!(!text.contains("$serde_json"), "{text}");
+        // serde_json can consume its own private number map and hide invalid YAML output.
+        let yaml: serde_yml::Value = serde_yml::from_str(&text).unwrap();
+        assert_eq!(yaml["numbers"]["count"].as_i64(), Some(count));
+        assert_eq!(yaml["numbers"]["nested"]["fraction"].as_f64(), Some(1.25));
+        assert_eq!(yaml["numbers"]["nested"]["values"][0].as_i64(), Some(2));
+        assert_eq!(yaml["numbers"]["nested"]["values"][1].as_i64(), Some(-3));
+    }
+    harness.fiber.dispose().await.unwrap();
+    let reopened = Harness::boot(&path, false).await;
+    let section = reopened
+        .context
+        .get(SETTINGS)
+        .unwrap()
+        .register(
+            &reopened.context,
+            &settings_namespace("numbers").unwrap(),
+            Schema::object([("count", Schema::number()), ("nested", Schema::any())]),
+            SettingsRegisterOptions::default(),
+        )
+        .unwrap();
+    assert_eq!(section.get()["count"], 7_000);
+    reopened.fiber.dispose().await.unwrap();
+}
+
+#[tokio::test]
 async fn two_provider_instances_coordinate_with_the_writer_lock() {
     let directory = TempDir::new().unwrap();
     let path = directory.path().join("settings.yaml");

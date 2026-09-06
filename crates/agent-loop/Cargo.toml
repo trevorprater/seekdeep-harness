@@ -17,7 +17,9 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-scope = { path = "../scope" }
+seekdeep-schemastery = { path = "../schemastery" }
 seekdeep-session-persistence = { path = "../session-persistence" }
+seekdeep-settings = { path = "../settings" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-tools = { path = "../tools" }
 serde.workspace = true

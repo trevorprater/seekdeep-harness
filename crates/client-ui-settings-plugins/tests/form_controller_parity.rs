@@ -28,6 +28,7 @@ struct ScopeInner {
     listeners: RefCell<Vec<Rc<dyn Fn()>>>,
     calls: RefCell<Vec<(String, String, Option<Value>)>>,
     accept: Cell<bool>,
+    normalize_numbers: Cell<bool>,
 }
 
 impl ScopeFixture {
@@ -46,6 +47,7 @@ impl ScopeFixture {
                 listeners: RefCell::new(Vec::new()),
                 calls: RefCell::new(Vec::new()),
                 accept: Cell::new(true),
+                normalize_numbers: Cell::new(false),
             }),
         })
     }
@@ -103,6 +105,12 @@ impl ClientSettingsScope<Value> for ScopeFixture {
                 Some(value.clone()),
             ));
             if fixture.inner.accept.get() {
+                let value = if fixture.inner.normalize_numbers.get() && value.is_number() {
+                    serde_json::from_str(ryu_js::Buffer::new().format(value.as_f64().unwrap()))
+                        .unwrap()
+                } else {
+                    value
+                };
                 let current = fixture.snapshot();
                 let mut effective = current
                     .value
@@ -284,6 +292,29 @@ fn form_stages_in_order_and_reads_back_host_authority() {
     );
     assert!(!form.shell().dirty);
     assert!(!form.shell().failed);
+}
+
+#[test]
+fn numeric_readback_uses_javascript_equality_after_json_number_normalization() {
+    let scope = ScopeFixture::new(
+        json!({"timeoutMs":60000}),
+        Some(json!({"timeoutMs":60000})),
+        Some(json!({})),
+    );
+    scope.inner.normalize_numbers.set(true);
+    let form = CardForm::new(
+        scope.clone(),
+        vec![number_field("timeoutMs").into()],
+        Vec::new(),
+    );
+    form.edit("timeoutMs", "12000");
+    futures::executor::block_on(form.save()).unwrap();
+    assert_eq!(
+        scope.snapshot().user.as_ref().unwrap()["timeoutMs"],
+        json!(12000)
+    );
+    assert!(!form.shell().failed);
+    assert!(!form.shell().dirty);
 }
 
 #[test]

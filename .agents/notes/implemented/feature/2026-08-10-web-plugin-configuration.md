@@ -20,6 +20,8 @@ Three host-plane plugins register their own settings namespace, and one browser-
 
 **A section is a subset when the plugin config is bigger than what a user owns.** `agent-loop` exposes only `maxParallelToolCalls`; its `agents` array is consumed once when the service starts, so a stored change there could only look like it had an effect.
 
+The Rust Agent Loop owns an optional settings section with the same schema and positive-integer validator. Each tool group snapshots the live factory's cap; a write during that group affects the next group, not the pool already running. Provider detachment restores the composition cap, and consumer teardown withdraws the namespace. The browser configuration scenario reads the real Host's cap after Save and Reset; a manually polled scheduler regression checks group boundaries without timing-dependent absence assertions.
+
 **The provider projects, rather than captures.** `web-search-deepseek` hands its provider a thunk instead of an options value, so an endpoint or model change reaches the next search without re-registering the provider — which would make the web seam's provider selection observable to the user as a flicker.
 
 **Exposure stays a Host allowlist.** The three namespaces join `WEB_SETTINGS_NAMESPACES`; registration alone still never crosses the transport, and a namespace absent from that list answers `settings-not-exposed` exactly as an unregistered one does.
@@ -27,6 +29,8 @@ Three host-plane plugins register their own settings namespace, and one browser-
 **The configurable tab knows no namespace.** `seekdeep-client-ui-settings-plugins` owns the Plugins section, contributes its `configurable` page through `settings.plugins.tab`, and declares a nested `settings.plugin.item` slot there. It renders the cards registered into that nested slot, so a plugin that ships a browser half owns its card and its controls. Each card binds its namespace through the client settings scope, which gained the two things a form needs: the raw `user` layer, whose key PRESENCE is what marks a field overridden, and `unset`, which clears one field back to the composition layer. A card renders nothing while its namespace is unavailable, so a deployment that does not compose the owning plugin shows no trace of it.
 
 **A card stages its edits and writes them on save.** Controls hold no draft of their own: the card's form owns the staged text, every control renders it, and only **Save** turns it into document mutations. A settings write is durable and revision-fenced, so a control that committed as it settled spent a revision on a value the user had not decided to store and could not preview; the reset stages the composed default the same way. Because the Host's validators own the constraints no schema can express, the form reads the section back after writing and reports a save that did not land instead of predicting the outcome, keeping those drafts for the user to correct. The credential control is staged with the rest even though it writes through the credentials domain, so one save covers everything the card shows.
+
+Numeric read-back uses JavaScript scalar equality, not JSON number spelling: `12000.0` in a Rust draft and `12000` returned through the browser describe the same accepted value. The assembled browser check requires the failure notice to stay absent after a successful save, in addition to verifying the persisted value and disabled Save button.
 
 ## Alternatives considered
 

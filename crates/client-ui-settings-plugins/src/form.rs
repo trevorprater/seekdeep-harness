@@ -409,7 +409,13 @@ impl CardForm {
                 PlannedWrite::Invalid => unreachable!("invalid plans are refused before saving"),
                 PlannedWrite::Set { field, value } => {
                     self.scope.set(field.clone(), value.clone()).await?;
-                    self.user_value(&field).as_ref() == Some(&value)
+                    self.user_value(&field)
+                        .is_some_and(|stored| match (&stored, &value) {
+                            (Value::Number(stored), Value::Number(written)) => {
+                                stored.as_f64() == written.as_f64()
+                            }
+                            _ => stored == value,
+                        })
                 }
                 PlannedWrite::Clear { field } => {
                     self.scope.unset(field.clone()).await?;

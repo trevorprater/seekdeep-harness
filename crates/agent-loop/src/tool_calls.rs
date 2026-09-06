@@ -74,7 +74,7 @@ pub struct ToolCallBatch<'a> {
     pub tool_calls: &'a [ToolCall],
     /// Owning step cancellation signal.
     pub signal: &'a AbortSignal,
-    /// Maximum simultaneously dispatched parallel-safe calls.
+    /// Fallback cap when no live Agent Loop owns the batch. Live groups snapshot its settings.
     pub max_parallel_tool_calls: usize,
 }
 
@@ -169,6 +169,11 @@ where
         } else {
             &planned[next..=next]
         };
+        let group_cap = agent
+            .and_then(|agent| agent.context().get(crate::AGENT_LOOP))
+            .map_or(max_parallel_tool_calls, |factory| {
+                factory.max_parallel_tool_calls()
+            });
         let outcome = run_group(
             runtime,
             session,
@@ -177,7 +182,7 @@ where
             group,
             mode,
             signal,
-            max_parallel_tool_calls,
+            group_cap,
             &mut accept_context,
         )
         .await?;

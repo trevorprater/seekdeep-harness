@@ -40,6 +40,8 @@ Rust [工作区运行器](../../../../xtask/src/web_workspaces.rs)与[浏览器�
 
 ### 模式与 fixture
 
+`cargo xtask web-plugin-settings` 通过 [Rust 浏览器驱动](../../../../xtask/src/web_plugin_settings_driver.rs)运行固定的插件配置场景，包括三张卡片的精确预期输出，以及暂存后保存、放弃修改、无效输入和重置的行为。它还通过只读 fixture 端点验证 Agent Loop 的实时上限，要求成功保存后没有失败提示，并在拆卸时检查模型调用次数为零。持久化数值必须是普通 YAML 标量，不能只是 Rust 读取器能够解码的值。
+
 `cargo xtask web-models-settings` 使用 [Models 浏览器驱动](../../../../xtask/src/web_models_settings_driver.rs)，连接真实的 Rust 设置、凭据与提供方注册。其十个源实现场景比较全部七份提供方卡片预期输出，并通过持久化文档验证只写密钥、由 schema 决定的自定义路由创建、协议／名称编辑及删除。无密钥 Host 通过全局 LLM 中间件拒绝每个提供方的流，并在拆卸时检查调用次数为零，即使页面已用测试凭据激活提供方也不例外。这份无密钥证据与真实模型 GUI 演示分开。
 
 Rust [设置运行器](../../../../xtask/src/web_settings.rs)与[浏览器驱动](../../../../xtask/src/web_settings_driver.rs)复用同一无密钥 Host，覆盖 settings-chrome 的全部八个场景。并行运行的 Host 只共享设置 home，会话与存储根目录分别隔离。真实 SessionStore 提供权限默认值断言，真实 Loader 提供插件清单基数。源实现的预期输出、暂缓插件加载时的深色启动、同步的浏览器主题元数据、跨 origin 的偏好持久化，以及全新浏览器的 locale 选择，都在不调用模型的情况下检查。打开配置文件的交互保留源实现对 OS 启动响应的拦截，不声称实际打开编辑器。每个 Host 都独立关闭，清理失败与原始场景失败一起报告。

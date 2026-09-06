@@ -24873,7 +24873,20 @@
     {
       "source": "apps/web/tests/plugin-config.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_plugin_settings_driver.rs",
+        "xtask/src/web_settings.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/agent-loop/tests/settings_parity.rs",
+        "crates/settings-file/tests/file_parity.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-plugin-settings: all six source scenarios in Chromium against the production Rust Web profile, with the exact three-card aria golden",
+        "staged Save, Discard, invalid numeric input, Reset, ordinary YAML numeric scalars, and no false failure notice after successful writes",
+        "additional browser Save/Reset and invalid-write checks read the real Agent Loop scheduler cap; teardown proves zero model calls and no browser/wire warnings",
+        "native settings and scheduler regressions verify provider layering, withdrawal, exact positive-integer validation, and cap snapshots per tool group"
+      ]
     },
     {
       "source": "apps/web/tests/produced-file-mentions.e2e.ts",
@@ -56658,14 +56671,16 @@
       "status": "verified",
       "targets": [
         "crates/agent-loop/src/factory.rs",
-        "crates/agent-loop/src/lib.rs"
+        "crates/agent-loop/src/lib.rs",
+        "crates/agent-loop/tests/settings_parity.rs"
       ],
       "evidence": [
-        "pinned source Agent Loop aggregate: 329 passed",
+        "pinned source settings.spec.ts: all six tests passed",
         "cargo test -p seekdeep-agent-loop --all-features",
-        "cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-agent-loop --all-targets --all-features -- -D warnings",
+        "four focused native settings/scheduler tests and the real Chromium plugin-configuration path"
       ],
-      "note": "Rust AgentOptions validation and factory defaults preserve bounded parallelism, initiator/session identity and configuration failure timing"
+      "note": "optional provider layering exposes only the live cap, rejects invalid writes, restores composition on provider detach, withdraws on consumer disposal, and snapshots the cap at each tool-group boundary"
     },
     {
       "source": "packages/core/agent-loop/tests/tool-calls.spec.ts",

@@ -18,6 +18,7 @@ use seekdeep_core::{
 };
 use seekdeep_llm::AbortSignal;
 use seekdeep_session_persistence::SessionPersistence;
+use seekdeep_settings::{InstalledSettingsSection, install_settings_section};
 use uuid::Uuid;
 
 use crate::{AgentLoopServices, LoopAgent};
@@ -34,6 +35,7 @@ struct FactoryInner {
     sessions: Arc<SessionStore>,
     agents: AgentRegistry,
     services: AgentLoopServices,
+    settings: InstalledSettingsSection,
     prompt_variables: EffectHandle,
     persistence: Mutex<Option<Arc<dyn SessionPersistence>>>,
     active: AtomicBool,
@@ -142,12 +144,29 @@ impl AgentLoop {
         );
         let prompt_variables =
             install_prompt_variables(&context, &services.system_prompt, &agents)?;
+        let settings = install_settings_section(
+            &context,
+            &crate::settings_namespace_id(),
+            crate::settings_schema(),
+            serde_json::json!({"maxParallelToolCalls": services.max_parallel_tool_calls}),
+            Some(Arc::new(|value| {
+                anyhow::ensure!(
+                    value["maxParallelToolCalls"]
+                        .as_f64()
+                        .is_some_and(|cap| { cap.is_finite() && cap >= 1.0 && cap.fract() == 0.0 }),
+                    "maxParallelToolCalls must be a positive integer"
+                );
+                Ok(())
+            })),
+            Arc::new(|| Ok(())),
+        )?;
         Ok(Self {
             inner: Arc::new(FactoryInner {
                 context,
                 sessions,
                 agents,
                 services,
+                settings,
                 prompt_variables,
                 persistence: Mutex::new(None),
                 active: AtomicBool::new(true),
@@ -157,10 +176,24 @@ impl AgentLoop {
         })
     }
 
-    /// Configured maximum parallel-safe tool calls per step.
+    /// Current cap, with the composition value restored if the settings provider detaches.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the registered schema exposes a non-numeric cap.
     #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn max_parallel_tool_calls(&self) -> usize {
-        self.inner.services.max_parallel_tool_calls
+        // A source-valid integer larger than addressable memory is equivalent to an
+        // unbounded pool; saturating conversion preserves that behavior without overflow.
+        self.inner.settings.source.get()["maxParallelToolCalls"]
+            .as_f64()
+            .expect("Agent Loop settings schema guarantees a positive integer") as usize
+    }
+
+    pub(crate) async fn settle_settings(&self) -> anyhow::Result<()> {
+        self.inner.settings.fiber.await_settled().await?;
+        Ok(())
     }
 
     /// Creates, composes, and publishes one exact agent/session lifecycle.

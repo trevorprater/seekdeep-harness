@@ -22,6 +22,8 @@ The provider's write path could destroy state it never observed, and the Service
 
 **YAML edits are leaf-level diffs.** `renderYaml` diffs the stored section against the next one and applies only `setIn` for changed values and `deleteIn` for removed keys, recursing through maps. Comments, anchors, and formatting survive on every untouched node and on the key node of every changed pair; arrays and other non-map values replace wholesale when unequal (`deepEqualJson` is the shared predicate), taking comments inside them along.
 
+The Rust writer converts JSON tokens into native YAML values before rendering a new document or changed leaf. Direct Serde serialization of an arbitrary-precision `serde_json::Number` exposes a private map instead of a numeric scalar. Tests therefore inspect raw YAML and use a YAML-value reader for integer, fractional, and nested numbers on both create and patch paths; a `serde_json::Value` round trip alone can decode that private map and hide the incompatible file format.
+
 ## Alternatives considered
 
 - **`proper-lockfile` instead of a hand-rolled lock** — the dependency-over-hand-rolling policy was weighed: the library is barely maintained, its ownership and retry policy is broader than this one-file protocol needs, and the shipped lock is a small exclusive-create loop with deterministic contention tests. The policy favors dependencies that delete owned code; this one would replace a narrow protocol with an opaque peer.

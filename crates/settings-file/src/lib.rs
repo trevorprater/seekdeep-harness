@@ -367,7 +367,7 @@ fn render_yaml(
     let Some(text) = text else {
         let mut document = Map::new();
         document.insert(namespace.to_string(), Value::Object(section.clone()));
-        return Ok(serde_yml::to_string(&document)?);
+        return yaml_string(&document);
     };
     let current = parse_document(text, spec)?;
     let file = YamlFile::from_str(text)
@@ -571,12 +571,19 @@ impl AsYaml for IndentedYaml {
 fn yaml_node(value: &Value) -> anyhow::Result<YamlNode> {
     let mut wrapper = BTreeMap::new();
     wrapper.insert("value", value);
-    let text = serde_yml::to_string(&wrapper)?;
+    let text = yaml_string(&wrapper)?;
     let file = YamlFile::from_str(&text)
         .map_err(|_| anyhow::anyhow!("settings-file: rendered YAML could not be edited"))?;
     file.document()
         .and_then(|document| document.get("value"))
         .ok_or_else(|| anyhow::anyhow!("settings-file: rendered YAML has no value node"))
+}
+
+fn yaml_string(value: &impl Serialize) -> anyhow::Result<String> {
+    // JSON tokens preserve scalar numbers when serde_json's arbitrary-precision
+    // feature would otherwise expose its private Serde struct to the YAML writer.
+    let yaml: serde_yml::Value = serde_yml::from_str(&serde_json::to_string(value)?)?;
+    Ok(serde_yml::to_string(&yaml)?)
 }
 
 fn render_json(

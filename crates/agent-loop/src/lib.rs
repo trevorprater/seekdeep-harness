@@ -12,7 +12,9 @@ use seekdeep_agent::{AgentOptions, AgentRegistry};
 use seekdeep_cordis::{Context, Plugin, fiber::EffectHandle};
 use seekdeep_core::{session::SessionId, session_store::SessionStore};
 use seekdeep_llm::{LLM, ModelId, ProviderId};
+use seekdeep_schemastery::Schema;
 use seekdeep_session_persistence::SESSION_PERSISTENCE;
+use seekdeep_settings::SettingsNamespace;
 use seekdeep_system_prompt::SYSTEM_PROMPT;
 use seekdeep_tools::TOOLS;
 use serde::{Deserialize, Serialize};
@@ -25,6 +27,24 @@ pub const PLUGIN_NAME: &str = "agent-loop";
 /// Services required by the concrete factory.
 pub const PLUGIN_INJECT: &[&str] = &["agents", "sessions", "llm", "tools", "systemPrompt"];
 static NEXT_CONFIGURED_AGENT: AtomicU64 = AtomicU64::new(1);
+
+/// Settings namespace for the live scheduler cap, excluding boot-time agents.
+#[must_use]
+pub fn settings_namespace_id() -> SettingsNamespace {
+    SettingsNamespace::new("agent-loop")
+}
+
+/// Source-compatible schema for the user-owned Agent Loop settings.
+#[must_use]
+pub fn settings_schema() -> Schema {
+    Schema::object([(
+        "maxParallelToolCalls",
+        Schema::number()
+            .step(1.0)
+            .min(1.0)
+            .with_default(DEFAULT_MAX_PARALLEL_TOOL_CALLS),
+    )])
+}
 
 /// One declaratively created or resumed agent.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -192,6 +212,7 @@ pub async fn apply(context: &Context, config: Config) -> anyhow::Result<Arc<Agen
                 .unwrap_or(DEFAULT_MAX_PARALLEL_TOOL_CALLS),
         },
     )?);
+    agent_loop.settle_settings().await?;
     if let Some(persistence) = context.get(SESSION_PERSISTENCE) {
         agent_loop.set_persistence(persistence.persistence())?;
     }

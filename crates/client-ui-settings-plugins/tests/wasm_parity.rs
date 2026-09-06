@@ -202,6 +202,7 @@ async fn bash_controller_stages_renders_saves_resets_and_reports_refusal() {
     assert!(pText(&staged).contains("Unsaved"));
     pClick(&pFindText(&staged, "Save"));
     JsFuture::from(pTick()).await.unwrap();
+    assert!(!pText(&pRender(&bench, &component, &props)).contains("Save failed."));
     let calls = pCalls(&scope);
     assert_eq!(
         property(&calls.get(0), "1").as_string().as_deref(),
