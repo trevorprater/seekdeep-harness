@@ -2038,6 +2038,9 @@ fn render_tree(
             &[],
         )?);
     }
+    if !drag_active {
+        root_children.push(JsValue::NULL);
+    }
     if !toast.is_null() {
         let icon = create_element(&modules.react, &modules.warning, None, &[])?;
         root_children.push(create_element(
@@ -2052,6 +2055,9 @@ fn render_tree(
             ])?),
             &[],
         )?);
+    }
+    if toast.is_null() {
+        root_children.push(JsValue::NULL);
     }
     if !notice.is_null() && !notice.is_undefined() {
         let error = required_string(notice, "level", "input notice")? == "error";
@@ -2072,10 +2078,16 @@ fn render_tree(
         )?);
     }
 
+    if notice.is_null() || notice.is_undefined() {
+        root_children.push(JsValue::NULL);
+    }
+
     let mut card_children = Vec::new();
     for (key, class_name) in [("overlay", "overlayAnchor"), ("accessory", "accessory")] {
         let value = optional_value(props, key)?;
-        if !value.is_undefined() {
+        if value.is_undefined() {
+            card_children.push(JsValue::NULL);
+        } else {
             card_children.push(create_element(
                 &modules.react,
                 &JsValue::from_str("div"),
@@ -2123,6 +2135,9 @@ fn render_tree(
             Some(&class_props(class("attachments"))?),
             &[rail],
         )?);
+    }
+    if rail_items.length() == 0 {
+        card_children.push(JsValue::NULL);
     }
     let backdrop_node = create_element(
         &modules.react,
@@ -2411,6 +2426,9 @@ fn render_tree(
             ])?),
             &[],
         )?);
+    }
+    if preview.is_null() {
+        root_children.push(JsValue::NULL);
     }
     root_children.push(optional_value(props, "footer")?);
     create_element(

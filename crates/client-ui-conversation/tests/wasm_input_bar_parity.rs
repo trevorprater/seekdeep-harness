@@ -410,6 +410,24 @@ fn textarea(tree: &JsValue) -> JsValue {
 fn compiled_input_bar_runs_render_keyboard_clipboard_attachment_and_slot_matrix() {
     let component = setup();
     let tree = bar_render(&component);
+    let root_children = property(&tree, "children").dyn_into::<Array>().unwrap();
+    let card = root_children.get(3);
+    assert_eq!(
+        property(&property(&card, "props"), "data-composer-card")
+            .as_string()
+            .as_deref(),
+        Some("")
+    );
+    let card_children = property(&card, "children").dyn_into::<Array>().unwrap();
+    assert_eq!(
+        property(
+            &property(&card_children.get(3), "props"),
+            "data-input-scroll"
+        )
+        .as_string()
+        .as_deref(),
+        Some("")
+    );
     let input = textarea(&tree);
     assert_eq!(
         property(&property(&input, "props"), "placeholder")

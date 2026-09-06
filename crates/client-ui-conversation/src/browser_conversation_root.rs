@@ -585,8 +585,12 @@ fn render_composer_stack(
             &[],
         )?);
         children.push(workspace_row);
+    } else {
+        children.extend([JsValue::NULL, JsValue::NULL, JsValue::NULL]);
     }
-    if !zone.is_undefined() {
+    if zone.is_undefined() {
+        children.push(JsValue::NULL);
+    } else {
         children.push(render_slot.call2(
             &JsValue::UNDEFINED,
             &JsValue::from_str("conversation.input.dock"),

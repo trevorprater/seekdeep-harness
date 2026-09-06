@@ -295,11 +295,23 @@ async fn flush_microtasks() {
     }
 }
 
+fn assert_resident_bar_position() {
+    let chain = root_chains().get(0);
+    let fallback = property(&property(&chain, "options"), "fallback");
+    let children = property(&fallback, "children").dyn_into::<Array>().unwrap();
+    assert_eq!(children.length(), 5);
+    assert_eq!(
+        property(&children.get(4), "kind").as_string().as_deref(),
+        Some("slot:conversation.composer.bar")
+    );
+}
+
 #[wasm_bindgen_test]
 #[allow(clippy::too_many_lines)] // One Hook runtime owns the full resident transition sequence.
 async fn compiled_conversation_root_runs_resident_phase_workspace_chain_and_resize_matrix() {
     let component = setup();
     let tree = root_render(&component);
+    assert_resident_bar_position();
     assert_eq!(
         property(&property(&tree, "props"), "data-phase")
             .as_string()
@@ -342,6 +354,7 @@ async fn compiled_conversation_root_runs_resident_phase_workspace_chain_and_resi
     root_set_sessions(sessions("/work/project", false).as_ref());
     root_set_workspaces(workspaces("loading", &[]).as_ref());
     let tree = root_render(&component);
+    assert_resident_bar_position();
     assert_eq!(
         property(&property(&tree, "props"), "data-phase")
             .as_string()
@@ -357,6 +370,7 @@ async fn compiled_conversation_root_runs_resident_phase_workspace_chain_and_resi
 
     root_set_sessions(sessions("/work/project", true).as_ref());
     let tree = root_render(&component);
+    assert_resident_bar_position();
     assert_eq!(
         property(&property(&tree, "props"), "data-phase")
             .as_string()

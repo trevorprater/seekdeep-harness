@@ -109,6 +109,8 @@ skill/@subagent 引用不走占位符 + occurrence 身份链——纯文本引�
 
 状态机全部行为由纯 JS 单测覆盖（事件序列进、断言状态与效果，零浏览器 DOM）；交互矩阵逐行投影测试。这一要求正是纯核 + 服务壳分层的成因。
 
+Rust/WASM composer 为缺席的 Hero、dock、notice、附件与浮层子节点保留 null 项，使子节点位置与源 JSX 一致。压紧这些数组会改变 React 身份，并可能在 Session 或 accessory 出现时替换 textarea。聚焦的 WASM 测试钉住 composer bar 与 input scroll 的位置；[启动浏览器驱动](../../../../xtask/src/web_startup_driver.rs)检查首次关联 Workspace 前后的真实 DOM 身份，并验证暂缓真实 Host 历史响应期间 Hero 始终可见。
+
 ## 曾考虑的替代方案
 
 | 弃案 | 一行理由 |

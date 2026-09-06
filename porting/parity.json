@@ -24657,7 +24657,15 @@
     {
       "source": "apps/web/tests/cold-blank-session.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "xtask/src/web_startup_driver.rs"
+      ],
+      "evidence": [
+        "pinned source cold-blank-session and startup-auto-selection browser suites: 3 passed",
+        "cargo xtask web-startup: real compressed cold Session created after Host boot, exact empty-sidebar source golden, zero model calls at teardown"
+      ]
     },
     {
       "source": "apps/web/tests/complex-history.perf.ts",
@@ -26501,7 +26509,19 @@
     {
       "source": "apps/web/tests/startup-auto-selection.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-ui-conversation/src/browser_conversation_root.rs",
+        "crates/client-ui-conversation/src/browser_input_bar.rs",
+        "crates/client-ui-conversation/tests/wasm_conversation_root_parity.rs",
+        "crates/client-ui-conversation/tests/wasm_input_bar_parity.rs",
+        "xtask/src/web_startup_driver.rs"
+      ],
+      "evidence": [
+        "pinned source cold-blank-session and startup-auto-selection browser suites: 3 passed",
+        "cargo xtask web-startup: optimized Rust/WASM preserves actual Hero/composer DOM identity across first Workspace attachment and only Hero phase while real Rust Host history request is held; fish color/hover and zero model calls verified",
+        "targeted live WASM ConversationRoot and InputBar tests: 2 passed; active Web replay and model-selection browser regressions passed"
+      ]
     },
     {
       "source": "apps/web/tests/stats-paged-history.e2e.ts",

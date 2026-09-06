@@ -23,6 +23,7 @@ mod web_onboarding_driver;
 mod web_plugin_settings_driver;
 mod web_settings;
 mod web_settings_driver;
+mod web_startup_driver;
 mod web_workspaces;
 mod web_workspaces_driver;
 
@@ -63,6 +64,11 @@ enum Command {
     },
     /// Verify shared model defaults, unavailable routes, and declared reasoning in Chromium.
     WebModelSelection {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Verify cold blank-session filtering and stable startup composition in Chromium.
+    WebStartup {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
     },
@@ -291,6 +297,7 @@ fn main() -> anyhow::Result<()> {
         Command::WebPluginSettings { source } => web_settings::run_plugins(&source),
         Command::WebOnboarding { source } => web_settings::run_onboarding(&source),
         Command::WebModelSelection { source } => web_settings::run_model_selection(&source),
+        Command::WebStartup { source } => web_settings::run_startup(&source),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {

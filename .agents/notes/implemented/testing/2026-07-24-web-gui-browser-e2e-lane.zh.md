@@ -42,6 +42,8 @@ Rust [工作区运行器](../../../../xtask/src/web_workspaces.rs)与[浏览器�
 
 ### 模式与 fixture
 
+`cargo xtask web-startup` 针对真实 Rust Host 检查源实现的冷空白会话与启动自动选择场景。启动后的 fixture 路由通过生产持久化创建未发布、已压缩且只有一个事件的会话；浏览器验证空侧栏的精确预期输出。首次关联 Workspace 保留原有 Hero、picker、scroll body、composer seat 与 textarea 节点。重新加载时暂缓并继续真实历史请求，不替换响应，验证只出现 Hero phase，并仅在这次主动重新加载期间允许连接丢失警告。拆卸要求模型调用次数为零。
+
 `cargo xtask web-model-selection` 将源实现的模型默认值与已声明推理配置覆盖层应用到真实 Rust Host。单个 Chromium 会话验证输入框默认值持久化、已记录会话的优先级、不可用路由的拒绝与恢复，以及已声明推理等级菜单和已保存选择的精确值。仅供 fixture 使用的 PUT 通过真实 Session 追加源实现的已记录路由事实，不合成模型轮次。Host 流守卫要求调用次数为零，生产持久化路径负责拆卸与冷读兼容性。
 
 `cargo xtask web-onboarding` 在挂载真实 DeepSeek 适配器但不提供密钥的情况下运行官方凭据与其他提供方场景，不使用仅提供路由的适配器。两个隔离 Host 验证版本化确认、只写凭据、无需重载的就绪更新、暂缓真实 describe 响应期间仍可交互的已配置重载、自定义模型持久化与选择，以及彼此独立的设置卡片／新增卡片生命周期。两个 Host 都保留全提供方流守卫，并要求拆卸时调用次数为零。上述源 fixture 修正是显式的；除产品重命名外，其余快照行均精确比较。

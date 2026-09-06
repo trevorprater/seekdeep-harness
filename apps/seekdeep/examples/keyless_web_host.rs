@@ -162,7 +162,52 @@ fn settings_fixture_routes(
             })
         }),
     })?;
-    Ok(vec![cap, count, session_fixture_route(context, server)?])
+    Ok(vec![
+        cap,
+        count,
+        session_fixture_route(context, server)?,
+        cold_blank_fixture_route(context, server)?,
+    ])
+}
+
+fn cold_blank_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let persistence = context
+        .get(seekdeep_session_persistence::SESSION_PERSISTENCE)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no persistence"))?
+        .persistence();
+    let sessions = context
+        .get(SESSIONS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Sessions"))?;
+    let cwd = std::env::current_dir()?.join("cold-blank-workspace");
+    server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/cold-blank".to_owned(),
+        handler: Arc::new(move |request| {
+            let persistence = persistence.clone(); let sessions = sessions.clone(); let cwd = cwd.clone();
+            Box::pin(async move {
+                anyhow::ensure!(request.method().as_str() == "POST", "cold blank fixture requires POST");
+                tokio::fs::create_dir_all(&cwd).await?;
+                let mut header = seekdeep_core::session::SessionHeader::new(SessionId::new("cold-blank-session-web-e2e"));
+                header.created_at = header.created_at.saturating_sub(60_000);
+                header.cwd = Some(cwd.to_string_lossy().into_owned()); header.delegation_depth = Some(0);
+                persistence.create(&header).await?;
+                persistence.append(&header.id, &[seekdeep_core::session::SessionEvent {
+                    event_type: "session/end-seed".to_owned(), seq: 0, time: header.created_at.try_into()?,
+                    data: json!({}), source_event_seqs: None, surface_op: None, ignorable: None,
+                }]).await?;
+                let location = persistence.locate(&header).ok_or_else(|| anyhow::anyhow!("blank fixture has no artifact"))?;
+                let size = tokio::fs::metadata(&location.path).await?.len();
+                let listed = persistence.list(None).await?.iter().any(|candidate| candidate.id == header.id);
+                Ok(response(200_u16.try_into()?, serde_json::to_vec(&json!({
+                    "size":size,"listed":listed,"cold":sessions.get(&header.id).is_none(),
+                    "compressed":location.path.extension().is_some_and(|extension| extension == "zstd")
+                }))?))
+            })
+        }),
+    })
 }
 
 fn session_fixture_route(context: &Context, server: &WebServer) -> anyhow::Result<WebRegistration> {

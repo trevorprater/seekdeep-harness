@@ -109,6 +109,8 @@ skill/@subagent references skip the placeholder + occurrence identity chain — 
 
 The state machine's entire behavior is covered by pure-JS unit tests (event sequences in, asserting state and effects, zero browser DOM); the interaction matrix is projection-tested row by row. This requirement is precisely what forced the pure-core + service-shell layering.
 
+The Rust/WASM composer preserves the source JSX child positions with null entries for absent Hero, dock, notice, attachment, and overlay children. Compacting those arrays changes React identity and can replace the textarea when a Session or accessory appears. Focused WASM tests pin the composer-bar and input-scroll positions; the [startup browser driver](../../../../xtask/src/web_startup_driver.rs) checks actual DOM identity across first Workspace attachment and keeps the Hero visible while the real Host history response is held.
+
 ## Alternatives considered
 
 | Rejected | One-line reason |
