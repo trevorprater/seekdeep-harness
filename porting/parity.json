@@ -87583,6 +87583,7 @@
         "crates/cordis/src/events.rs",
         "crates/cordis/tests/source_semantic_oracle.rs",
         "crates/cordis/src/wasm/browser_events.rs",
+        "crates/cordis/src/wasm/symbol_events.rs",
         "crates/cordis/tests/wasm_browser_face_parity.rs"
       ],
       "evidence": [
@@ -87593,7 +87594,7 @@
         "cargo xtask remote-gateway-oracle",
         "cargo xtask web-assembled --export"
       ],
-      "note": "Native event semantics, browser lifecycle/interception, callback tracing, per-Fiber update routing and veto, and the assembled export path pass. Symbol-named browser registration remains open in the existing GUI Web client architecture record."
+      "note": "Native event semantics, browser lifecycle/interception, callback tracing, per-Fiber update routing and veto, symbol registration/dispatch failure/identity/teardown, and the assembled export path pass. The source's exposed browser event-hook table remains open in the existing GUI Web client architecture record."
     },
     {
       "source": "vendor/cordis/src/fiber.ts",

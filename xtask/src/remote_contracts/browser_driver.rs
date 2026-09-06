@@ -137,6 +137,22 @@ try {
     recoveringUpdate.update({}); await recoveringUpdate.await();
     if (recoveringUpdate.state !== 2) throw new Error('failed Fiber did not recover');
     await recoveringUpdate.dispose();
+    const symbolEvent = Symbol('owned-event'), symbolValues = [];
+    const symbolFiber = client.plugin({ name: 'symbol-event-owner', apply(ctx) { ctx.on(symbolEvent, value => symbolValues.push(value)); } });
+    await symbolFiber;
+    try { client.emit(symbolEvent, 'rejected'); throw new Error('symbol dispatch unexpectedly succeeded'); }
+    catch (error) { if (!(error instanceof TypeError) || error.message !== 'name.startsWith is not a function') throw error; }
+    const symbolPrefix = Object.getOwnPropertyDescriptor(Symbol.prototype, 'startsWith');
+    try {
+      Object.defineProperty(Symbol.prototype, 'startsWith', { configurable: true, value() { return false; } });
+      client.emit(symbolEvent, 'delivered');
+      await symbolFiber.dispose();
+      client.emit(symbolEvent, 'withdrawn');
+      if (symbolValues.join(',') !== 'delivered') throw new Error('symbol listener was lost or escaped disposal');
+    } finally {
+      if (symbolPrefix) Object.defineProperty(Symbol.prototype, 'startsWith', symbolPrefix);
+      else delete Symbol.prototype.startsWith;
+    }
     const eventTrace = [];
     let eventOwner;
     const interceptedDisposer = () => {};

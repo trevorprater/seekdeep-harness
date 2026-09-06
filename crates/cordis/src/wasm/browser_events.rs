@@ -6,7 +6,7 @@ use std::{
 };
 
 use futures::task::noop_waker_ref;
-use js_sys::{Array, Function, Promise, Reflect, Symbol};
+use js_sys::{Array, Function, Object, Promise, Reflect, Symbol};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
@@ -110,7 +110,7 @@ fn dispatch_update(receiver: &JsValue, args: &Array) -> Result<JsValue, JsValue>
 
 pub(super) fn register(
     context: &WasmContext,
-    name: String,
+    name: &JsValue,
     listener: JsValue,
     options: JsValue,
     owner: Option<JsValue>,
@@ -136,7 +136,7 @@ pub(super) fn register(
     let interception = Array::of4(
         &owner,
         &JsValue::from_str("internal/listener"),
-        &JsValue::from_str(&name),
+        name,
         &listener,
     );
     interception.push(&options);
@@ -148,7 +148,43 @@ pub(super) fn register(
         prepend: Reflect::get(&options, &JsValue::from_str("prepend"))?.is_truthy(),
         global: Reflect::get(&options, &JsValue::from_str("global"))?.is_truthy(),
     };
-    register_hook(context, name, listener, registration, owner)
+    let key = property_key(name)?;
+    if key.is_symbol() {
+        let label = format!(
+            "ctx.on({})",
+            String::from(key.clone().unchecked_into::<Symbol>().to_string())
+        );
+        let effect = context
+            .inner
+            .events()
+            .symbols
+            .register(
+                &context.inner,
+                &key,
+                label,
+                registration,
+                BrowserHook {
+                    owner,
+                    callback: Arc::new(move |receiver, args| listener.apply(receiver, args)),
+                },
+            )
+            .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+        Ok(effect_disposer(effect).into())
+    } else {
+        register_hook(
+            context,
+            key.as_string().expect("property key is a string or symbol"),
+            listener,
+            registration,
+            owner,
+        )
+    }
+}
+
+fn property_key(value: &JsValue) -> Result<JsValue, JsValue> {
+    let holder = Object::new();
+    Reflect::define_property(&holder, value, &object(&[("value", JsValue::UNDEFINED)])?)?;
+    Ok(Reflect::own_keys(&holder)?.get(0))
 }
 
 fn register_hook(
@@ -190,7 +226,7 @@ fn register_hook(
 
 pub(super) fn once(
     context: &WasmContext,
-    name: String,
+    name: &JsValue,
     listener: &JsValue,
     options: JsValue,
     owner: Option<JsValue>,
@@ -227,21 +263,22 @@ pub(super) fn once(
 }
 
 pub(super) fn dispatch(context: &WasmContext, mode: &str, args: &Array) -> Result<Array, JsValue> {
+    enum Candidate {
+        Core(crate::events::Hook),
+        Symbol(EventOptions, BrowserHook),
+    }
     let first = args.get(0);
     let receiver = if first.is_object() || first.is_function() || first.is_null() {
         args.shift()
     } else {
         JsValue::NULL
     };
-    let name = args
-        .shift()
-        .as_string()
-        .ok_or_else(|| js_sys::TypeError::new("event name must be a string"))?;
-    if !name.starts_with("internal/") {
+    let name = args.shift();
+    if !is_internal(&name)? {
         let diagnostic = Array::of4(
             &JsValue::from_str("internal/dispatch"),
             &JsValue::from_str(mode),
-            &JsValue::from_str(&name),
+            &name,
             args,
         );
         diagnostic.push(&receiver);
@@ -252,33 +289,57 @@ pub(super) fn dispatch(context: &WasmContext, mode: &str, args: &Array) -> Resul
     } else {
         Reflect::get(&receiver, &Symbol::for_("cordis.filter"))?
     };
+    let key = property_key(&name)?;
+    let hooks = if key.is_symbol() {
+        context
+            .inner
+            .events()
+            .symbols
+            .snapshot(&key)
+            .into_iter()
+            .map(|(options, hook)| Candidate::Symbol(options, hook))
+            .collect::<Vec<_>>()
+    } else {
+        context
+            .inner
+            .events()
+            .browser_hooks(&key.as_string().expect("property key is a string or symbol"))
+            .into_iter()
+            .map(Candidate::Core)
+            .collect()
+    };
     let callbacks = Array::new();
-    for hook in context.inner.events().browser_hooks(&name) {
-        let (owner, callback): (JsValue, BrowserCallback) = if let Some(browser) = hook.browser {
-            (browser.owner, browser.callback)
-        } else {
-            let owner = wrap_detached_context(
-                hook.owner,
-                context.metadata.clone(),
-                context.root_face.clone(),
-            )
-            .map_err(js_error)?;
-            let dispatch_context = context.inner.clone();
-            let callback: BrowserCallback = Arc::new(move |_, args| {
-                let mut future =
-                    (hook.listener)(dispatch_context.clone(), event_args_from_js(args));
-                let mut task = TaskContext::from_waker(noop_waker_ref());
-                match future.as_mut().poll(&mut task) {
-                    Poll::Ready(result) => result.map(event_reply_to_js).map_err(js_error),
-                    Poll::Pending => Ok(future_to_promise(async move {
-                        future.await.map(event_reply_to_js).map_err(js_error)
-                    })
-                    .into()),
+    for hook in hooks {
+        let (options, owner, callback): (EventOptions, JsValue, BrowserCallback) = match hook {
+            Candidate::Symbol(options, browser) => (options, browser.owner, browser.callback),
+            Candidate::Core(hook) => {
+                if let Some(browser) = hook.browser {
+                    (hook.options, browser.owner, browser.callback)
+                } else {
+                    let owner = wrap_detached_context(
+                        hook.owner,
+                        context.metadata.clone(),
+                        context.root_face.clone(),
+                    )
+                    .map_err(js_error)?;
+                    let dispatch_context = context.inner.clone();
+                    let callback: BrowserCallback = Arc::new(move |_, args| {
+                        let mut future =
+                            (hook.listener)(dispatch_context.clone(), event_args_from_js(args));
+                        let mut task = TaskContext::from_waker(noop_waker_ref());
+                        match future.as_mut().poll(&mut task) {
+                            Poll::Ready(result) => result.map(event_reply_to_js).map_err(js_error),
+                            Poll::Pending => Ok(future_to_promise(async move {
+                                future.await.map(event_reply_to_js).map_err(js_error)
+                            })
+                            .into()),
+                        }
+                    });
+                    (hook.options, owner, callback)
                 }
-            });
-            (owner, callback)
+            }
         };
-        if !hook.options.global && filter.is_truthy() {
+        if !options.global && filter.is_truthy() {
             let filter = filter
                 .clone()
                 .dyn_into::<Function>()
@@ -294,6 +355,26 @@ pub(super) fn dispatch(context: &WasmContext, mode: &str, args: &Array) -> Resul
         callbacks.push(&variadic(&bound)?);
     }
     Ok(callbacks)
+}
+
+fn is_internal(name: &JsValue) -> Result<bool, JsValue> {
+    if name.is_null() || name.is_undefined() {
+        let kind = if name.is_null() { "null" } else { "undefined" };
+        return Err(js_sys::TypeError::new(&format!(
+            "Cannot read properties of {kind} (reading 'startsWith')"
+        ))
+        .into());
+    }
+    let method = super::get_with_receiver(
+        super::boxed_object(name).as_ref(),
+        &"startsWith".into(),
+        name,
+    )?;
+    method
+        .dyn_into::<Function>()
+        .map_err(|_| js_sys::TypeError::new("name.startsWith is not a function"))?
+        .call1(name, &"internal/".into())
+        .map(|value| value.is_truthy())
 }
 
 fn variadic(callback: &JsValue) -> Result<JsValue, JsValue> {

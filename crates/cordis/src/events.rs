@@ -281,6 +281,8 @@ struct WaterfallHook {
 pub struct EventBus {
     hooks: Arc<RwLock<HashMap<String, Vec<Hook>>>>,
     waterfall_hooks: Arc<RwLock<HashMap<String, Vec<WaterfallHook>>>>,
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) symbols: crate::wasm::symbol_events::SymbolEvents,
 }
 
 /// Immutable listener snapshot prepared at a transactional dispatch boundary.

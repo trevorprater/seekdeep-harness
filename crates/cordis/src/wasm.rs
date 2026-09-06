@@ -15,6 +15,7 @@ use crate::{
 
 mod browser_config;
 pub(crate) mod browser_events;
+pub(crate) mod symbol_events;
 mod tracing;
 mod update_hooks;
 
@@ -246,7 +247,7 @@ impl WasmContext {
     #[allow(clippy::needless_pass_by_value)]
     pub fn on(
         &self,
-        name: String,
+        name: &JsValue,
         listener: JsValue,
         options: JsValue,
         owner: Option<JsValue>,
@@ -260,7 +261,7 @@ impl WasmContext {
     /// Returns interception, malformed option, or inactive-Fiber failures.
     pub fn once(
         &self,
-        name: String,
+        name: &JsValue,
         listener: &JsValue,
         options: JsValue,
         owner: Option<JsValue>,

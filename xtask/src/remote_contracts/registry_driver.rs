@@ -33,6 +33,36 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves symbol event registration, dispatch failure, identity, and disposal', async () => {
+  const root = new Context(), event = Symbol('event'), other = Symbol('event'), values = [], intercepted = []
+  root.on('internal/listener', (name) => { if (typeof name === 'symbol') intercepted.push(name) })
+  const fiber = root.plugin({ apply(ctx) {
+    ctx.on(event, value => values.push(['event', value]))
+    ctx.on(other, value => values.push(['other', value]))
+  } })
+  await fiber
+  expect(intercepted).toEqual([event, other])
+  expect(() => root.emit(event, 1)).toThrow('name.startsWith is not a function')
+  expect(values).toEqual([])
+  const descriptor = Object.getOwnPropertyDescriptor(Symbol.prototype, 'startsWith')
+  try {
+    Object.defineProperty(Symbol.prototype, 'startsWith', { configurable: true, value() { return false } })
+    root.emit(event, 1)
+    root.emit(other, 2)
+    expect(values).toEqual([['event', 1], ['other', 2]])
+    const once = root.once(event, value => values.push(['once', value]))
+    root.emit(event, 3); root.emit(event, 4)
+    expect(values.slice(2)).toEqual([['event', 3], ['once', 3], ['event', 4]])
+    await once()
+    await fiber.dispose()
+    root.emit(event, 5); root.emit(other, 6)
+    expect(values.length).toBe(5)
+  } finally {
+    if (descriptor) Object.defineProperty(Symbol.prototype, 'startsWith', descriptor)
+    else delete Symbol.prototype.startsWith
+  }
+})
+
 it('preserves per-Fiber update routing, veto, config identity, and restart ownership', async () => {
   const root = new Context(), log = [], fibers = new Map()
   const mount = label => root.plugin({ name: label, apply(ctx, config) {

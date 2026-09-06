@@ -1770,8 +1770,8 @@ export declare class Context {
   provide(name: string, value: unknown): Disposable;
   plugin(plugin: Plugin, config?: unknown): Fiber & PromiseLike<Fiber>;
   inject(dependencies: Inject, callback: Plugin): Fiber & PromiseLike<Fiber>;
-  on(name: string, listener: Function, options?: boolean | EventOptions): Disposable;
-  once(name: string, listener: Function, options?: boolean | EventOptions): Disposable;
+  on(name: string | symbol, listener: Function, options?: boolean | EventOptions): Disposable;
+  once(name: string | symbol, listener: Function, options?: boolean | EventOptions): Disposable;
   dispatch(mode: string, args: unknown[]): Function[];
   emit(name: string, ...args: unknown[]): void;
   emit(thisArg: object | null, name: string, ...args: unknown[]): void;
