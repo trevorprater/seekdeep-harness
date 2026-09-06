@@ -26506,7 +26506,17 @@
     {
       "source": "apps/web/tests/workspace-management.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_workspaces.rs",
+        "xtask/src/web_workspaces_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-workspaces: all 12 pinned source scenarios through Chromium and the real Rust Web profile",
+        "exact source directory aria golden, persisted selection, pointer transit, clipboard, unchanged archived log bytes, and closed fixture inventory",
+        "real workspace registry attachment, cold Host restart equality, zero route-only adapter calls, and cold audit of nine durable sessions"
+      ]
     },
     {
       "source": "apps/web/tsconfig.json",

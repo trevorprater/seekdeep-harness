@@ -800,8 +800,9 @@ impl JsonlSessionPersistence {
             .cloned()
             .chain(events.iter().cloned())
             .collect::<Vec<_>>();
-        validate_normalized_events(&current.header, &combined)?;
-        validate_persisted_session_events(&combined)?;
+        let normalized = normalize_stored_events(&combined, &current.header.id)?;
+        validate_normalized_events(&current.header, &normalized)?;
+        validate_persisted_session_events(&normalized)?;
         let path = log_path(
             &self.root,
             current.header.cwd.as_deref(),
@@ -1910,6 +1911,60 @@ mod tests {
         let snapshots = backend.list_snapshots(None).await.expect("snapshots");
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].header.id, *session.id());
+    }
+
+    #[tokio::test]
+    async fn public_append_accepts_supported_legacy_messages_without_rewriting_raw_data() {
+        let temporary = tempfile::tempdir().expect("tempdir");
+        let (backend, _sessions, _context) = backend(temporary.path());
+        let header = SessionHeader::new(SessionId::new("legacy-append"));
+        let events: Vec<SessionEvent> = serde_json::from_value(json!([
+            {"type":"turn/start","seq":0,"time":1,"data":{"turn":1}},
+            {"type":"user/message","seq":1,"time":2,"surfaceOp":"append","data":{"content":[{"type":"text","text":"legacy content"}],"source":{"kind":"user","rpcId":"legacy-rpc"}}},
+            {"type":"turn/end","seq":2,"time":3,"data":{"turn":1,"reason":{"kind":"completed"}}}
+        ])).expect("legacy events");
+        backend.create(&header).await.expect("create");
+        backend
+            .append(&header.id, &events)
+            .await
+            .expect("append legacy");
+        let raw = backend
+            .read_raw(&header.id, None)
+            .await
+            .expect("read raw")
+            .expect("artifact");
+        let stored: serde_json::Value =
+            serde_json::from_str(raw.content.lines().nth(2).expect("message line"))
+                .expect("stored event");
+        assert_eq!(stored["data"], events[1].data);
+        let inspected = backend
+            .inspect(&header.id, None)
+            .await
+            .expect("inspect legacy");
+        assert_eq!(
+            inspected.events[1].data["id"],
+            "legacy-message:legacy-append:1"
+        );
+        let retired: SessionEvent =
+            serde_json::from_value(json!({"type":"mode/set","seq":3,"time":4,"data":{}}))
+                .expect("retired event");
+        assert!(
+            backend
+                .append(&header.id, &[retired])
+                .await
+                .expect_err("retired shape")
+                .to_string()
+                .contains("unsupported legacy mode/set")
+        );
+        assert_eq!(
+            backend
+                .read_raw(&header.id, None)
+                .await
+                .expect("read unchanged")
+                .expect("artifact")
+                .content,
+            raw.content
+        );
     }
 
     #[tokio::test]

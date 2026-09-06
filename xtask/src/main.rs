@@ -17,6 +17,8 @@ mod remote_built_smoke_driver;
 mod remote_contracts;
 mod web_assembled;
 mod web_assembled_driver;
+mod web_workspaces;
+mod web_workspaces_driver;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -28,6 +30,11 @@ struct Args {
 enum Command {
     /// Build the actual Web frontend with the isolated, pinned browser dependencies.
     WebBuild,
+    /// Verify the source workspace-management workflow through the built Web app and Rust Host.
+    WebWorkspaces {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
     /// Verify the built Web application against persisted source history and a real Rust Host.
     WebAssembled {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
@@ -247,6 +254,7 @@ fn main() -> anyhow::Result<()> {
         Command::Parity { source, scope } => parity(&source, scope),
         Command::WebBuild => web_assembled::build(),
         Command::WebAssembled { source, export } => web_assembled::run(&source, export),
+        Command::WebWorkspaces { source } => web_workspaces::run(&source),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {

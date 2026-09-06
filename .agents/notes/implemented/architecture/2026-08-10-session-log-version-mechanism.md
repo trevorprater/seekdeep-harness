@@ -24,6 +24,8 @@ What shipped in v0 (release 0812): direction-aware refusal with the raw-log path
 
 The Rust JSONL parser preserves raw `-0` tokens for `createdAt` and `delegationDepth` before metadata validation: `serde_json/arbitrary_precision` otherwise erases the sign of an integer zero. Borrowed raw values retain JSON's decoded keys and last-key-wins behavior without a separate lexer. Foreign-version refusal still precedes current-header validation. Sixteen source-differential cases cover signed-zero spellings, numeric underflow, duplicate keys, escaped keys, and unrelated text containing `-0`.
 
+Supported pre-identity messages remain valid append input. The Rust JSONL append path runs its strict validators over the existing compatibility decoder's normalized view, but writes the original event data. Read-side compatibility identities therefore do not rewrite historical bytes or require fixture-authored IDs. Retired shapes still fail before writing, and sequence, message, surface, and turn validation remain enforced.
+
 ## Alternatives considered
 
 - **Major/minor versioning** — the "is it convertible" bit lives on each step's upgrader, and pre-committing it into a number shape invites wrong promises.
