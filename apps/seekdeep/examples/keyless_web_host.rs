@@ -15,16 +15,20 @@ use seekdeep::profile_boot::{
 };
 use seekdeep_app_boot::BootPrepare;
 use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
+use seekdeep_cordis::Context;
 use seekdeep_core::session::SessionId;
-use seekdeep_host_webserver::{WEB_SERVER, WebRoute, WebRouteKind, response};
+use seekdeep_core::session_store::{CreateSessionOptions, SESSIONS};
+use seekdeep_host_webserver::{
+    WEB_SERVER, WebRegistration, WebRoute, WebRouteKind, WebServer, response,
+};
 use seekdeep_llm::{
     AbortSignal, AdapterStream, GenerateOptions, LLM, LlmAdapter, LlmModelContext, LlmModelInfo,
     LlmProviderInfo, LlmResolvedModelInfo, ModelId, ProviderId,
 };
 use seekdeep_typert_loader::TypertArtifactRegistry;
 use seekdeep_util::launch_environment::{
-    LaunchEnvironmentLayerInput, LaunchEnvironmentSource, SEEKDEEP_LAUNCH_ENVIRONMENT,
-    create_launch_environment_snapshot,
+    LaunchEnvironmentLayerInput, LaunchEnvironmentSnapshot, LaunchEnvironmentSource,
+    SEEKDEEP_LAUNCH_ENVIRONMENT, create_launch_environment_snapshot,
 };
 use seekdeep_workspace::WORKSPACE_REGISTRY;
 use serde_json::json;
@@ -83,8 +87,8 @@ impl LlmAdapter for RouteOnly {
     }
 }
 
-fn write_overlay(home: &Path) -> anyhow::Result<PathBuf> {
-    let overlay = home.join("keyless.patch.yml");
+fn write_overlay(home: &Path, data: &Path) -> anyhow::Result<PathBuf> {
+    let overlay = data.join("keyless.patch.yml");
     std::fs::write(
         &overlay,
         serde_json::to_string_pretty(&json!([
@@ -96,8 +100,8 @@ fn write_overlay(home: &Path) -> anyhow::Result<PathBuf> {
             {"id":"session-telemetry-otel","disabled":true},
             {"id":"settings","config":{"seekdeepHome":home}},
             {"id":"credentials","config":{"seekdeepHome":home}},
-            {"id":"storage-json","config":{"root":home.join("storages")}},
-            {"id":"session-persistence-jsonl","config":{"root":home.join("sessions")}},
+            {"id":"storage-json","config":{"root":data.join("storages")}},
+            {"id":"session-persistence-jsonl","config":{"root":data.join("sessions")}},
             {"id":"agent-presets","config":{"default":"standard","roots":[{"path":shipped_preset_root(),"trust":"system"}],"includeUserRoot":false}},
             {"id":"skill-filesystem","config":{"seekdeepHome":home,"agentsHome":home.join("agents"),"bundledSkillDir":home.join("bundled-skills"),"watch":false}},
             {"id":"directory-picker","disabled":true},
@@ -110,18 +114,69 @@ fn write_overlay(home: &Path) -> anyhow::Result<PathBuf> {
     Ok(overlay)
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
-    anyhow::ensure!(
-        arguments.len() == 3,
-        "expected harness-home, workspace, and seed id"
-    );
-    let home = PathBuf::from(&arguments[0]).canonicalize()?;
-    let workspace = PathBuf::from(&arguments[1]).canonicalize()?;
-    let seed = SessionId::new(arguments[2].to_string_lossy());
-    std::env::set_current_dir(&workspace)?;
-    let environment = create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
+fn settings_fixture_routes(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<Vec<WebRegistration>> {
+    let loader = context
+        .get(seekdeep_loader::LOADER)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Loader"))?;
+    let count = server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/plugin-count".to_owned(),
+        handler: Arc::new(move |_| {
+            let loader = loader.clone();
+            Box::pin(async move {
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(
+                        &loader
+                            .entries()?
+                            .iter()
+                            .filter(|entry| !entry.group)
+                            .count(),
+                    )?,
+                ))
+            })
+        }),
+    })?;
+    let owner = context.clone();
+    let sessions = context
+        .get(SESSIONS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Sessions"))?;
+    let session = server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/session".to_owned(),
+        handler: Arc::new(move |request| {
+            let owner = owner.clone();
+            let sessions = sessions.clone();
+            Box::pin(async move {
+                let id = request
+                    .uri()
+                    .path()
+                    .strip_prefix("/fixture/session/")
+                    .filter(|id| !id.is_empty())
+                    .ok_or_else(|| anyhow::anyhow!("fixture session id absent"))?;
+                let id = SessionId::new(id);
+                let session = if request.method().as_str() == "POST" {
+                    sessions.create(&owner, Some(id), CreateSessionOptions::default())?
+                } else {
+                    sessions
+                        .get(&id)
+                        .ok_or_else(|| anyhow::anyhow!("fixture session absent"))?
+                };
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&session.events())?,
+                ))
+            })
+        }),
+    })?;
+    Ok(vec![count, session])
+}
+
+fn isolated_environment(home: &Path) -> LaunchEnvironmentSnapshot {
+    create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
         source: LaunchEnvironmentSource::Process,
         path: None,
         values: BTreeMap::from([
@@ -135,8 +190,24 @@ async fn main() -> anyhow::Result<()> {
             ),
             ("SEEKDEEP_TELEMETRY_DISABLED".to_owned(), "1".to_owned()),
         ]),
-    }]);
-    let overlay = write_overlay(&home)?;
+    }])
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    anyhow::ensure!(
+        matches!(arguments.len(), 3 | 4),
+        "expected harness-home, workspace, seed id, and optional isolated data root"
+    );
+    let home = PathBuf::from(&arguments[0]).canonicalize()?;
+    let workspace = PathBuf::from(&arguments[1]).canonicalize()?;
+    let seed = SessionId::new(arguments[2].to_string_lossy());
+    let data = arguments.get(3).map_or_else(|| home.clone(), PathBuf::from);
+    std::fs::create_dir_all(&data)?;
+    std::env::set_current_dir(&workspace)?;
+    let environment = isolated_environment(&home);
+    let overlay = write_overlay(&home, &data)?;
     let catalog = framework_profile_catalog(&workspace, &home, &environment)?;
     let plan = compose_profile_at(
         "web",
@@ -177,6 +248,7 @@ async fn main() -> anyhow::Result<()> {
     let server = context
         .get(WEB_SERVER)
         .ok_or_else(|| anyhow::anyhow!("Web profile has no server"))?;
+    let settings_routes = settings_fixture_routes(context, &server)?;
     let attach = server.register(WebRoute {
         kind: WebRouteKind::Exact,
         path: "/fixture/attach-seed".to_owned(),
@@ -202,9 +274,12 @@ async fn main() -> anyhow::Result<()> {
     println!("seekdeep web: http://127.0.0.1:{}", server.port());
     tokio::signal::ctrl_c().await?;
     attach.dispose();
+    for route in settings_routes {
+        route.dispose();
+    }
     application.dispose().await?;
     std::fs::write(
-        home.join("model-call-audit.json"),
+        data.join("model-call-audit.json"),
         serde_json::to_vec(&json!({"calls":calls.load(Ordering::SeqCst)}))?,
     )?;
     anyhow::ensure!(

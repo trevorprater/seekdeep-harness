@@ -40,6 +40,8 @@ Rust [工作区运行器](../../../../xtask/src/web_workspaces.rs)与[浏览器�
 
 ### 模式与 fixture
 
+Rust [设置运行器](../../../../xtask/src/web_settings.rs)与[浏览器驱动](../../../../xtask/src/web_settings_driver.rs)复用同一无密钥 Host，覆盖 settings-chrome 的全部八个场景。并行运行的 Host 只共享设置 home，会话与存储根目录分别隔离。真实 SessionStore 提供权限默认值断言，真实 Loader 提供插件清单基数。源实现的预期输出、暂缓插件加载时的深色启动、同步的浏览器主题元数据、跨 origin 的偏好持久化，以及全新浏览器的 locale 选择，都在不调用模型的情况下检查。打开配置文件的交互保留源实现对 OS 启动响应的拦截，不声称实际打开编辑器。每个 Host 都独立关闭，清理失败与原始场景失败一起报告。
+
 `SEEKDEEP_SNAPSHOT` 选择 replay（默认，无密钥）、record（带密钥）或 refresh（无密钥）。发起提示的 spec 将所有模式共用的驱动步骤与仅供 replay/refresh 使用的断言分开；record 模式驱动真实输入框，采收内存中的会话 header 与事件，脱敏请求头，并 token 化当次运行的会话、cwd 与 RPC 标识。随后一次无密钥 refresh 重新生成 aria 预期输出。每条提示词都会与 fixture 中录制的 `user/message` 核对；每个场景目录都采用封闭清单，其中每个 JSONL 都是脱敏不动点。Web fixture 全部脱敏请求头且不钉任何 header 类别；见「暂缓」。
 
 ### 覆盖约定

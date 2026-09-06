@@ -24963,7 +24963,18 @@
     {
       "source": "apps/web/tests/settings-chrome.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_settings.rs",
+        "xtask/src/web_settings_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-settings: all eight source settings scenarios in Chromium against the production Rust Web profile",
+        "exact Chinese General and plugin-row aria goldens, real Loader inventory, and permission events from the real SessionStore",
+        "held-bundle dark startup, synchronized theme-color metadata, Host-backed theme/language/Enter preferences across reload and distinct live Host origins",
+        "all five isolated Host lifetimes report zero model calls; the source open-document scenario intercepts only the OS-launch response"
+      ]
     },
     {
       "source": "apps/web/tests/shipped-composition.e2e.ts",
