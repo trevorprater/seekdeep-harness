@@ -42,7 +42,7 @@ Client Runtime factory 以相同名称公开 source barrel 的完整 value roste
 
 活动轮次证据使用正常的 Rust Web profile、现有 Rust session-log replay 适配器，以及固定源实现的 provider catalog 和 workspace-picker 交互。浏览器调用公开的 `connectWorkspace` 导出，创建 Session、提交提示词，观察中间文本与运行态 Stop 控件，并重新加载已结算的响应。夹具在 Host 关闭后审计完整 replay 消费及冷读 JSONL 工件。Projection frame 保留 null 值，同时仍拒绝缺失的 `value`；Host 运行／空闲 frame 来自 Agent status 事件，stream 所有的监听器会在取消或 drop 时释放。此无密钥 replay 不是真实模型运行。
 
-Host 生命周期发布还覆盖 Session 创建／移除和无轮次位置的 Agent 错误。两个独立浏览器连接通过仅用于测试的 Rust 命令观察精确的创建元数据、先添加后移除的顺序，以及未改写的错误文本；命令使用真实 Session store、Agent dispatcher 与 command registry。命令的 run/done 对保持持久化，且不会增加模型轮次。无位置错误进入源实现的 `lastAgentError` 快照字段；该路径不会另造 UI 通知。Workspace 的原生选择器 API 仍导出 `pick_directory`，而非声明中的 `pickDirectory`。
+Host 生命周期发布还覆盖 Session 创建／移除和无轮次位置的 Agent 错误。两个独立浏览器连接通过仅用于测试的 Rust 命令观察精确的创建元数据、先添加后移除的顺序，以及未改写的错误文本；命令使用真实 Session store、Agent dispatcher 与 command registry。命令的 run/done 对保持持久化，且不会增加模型轮次。无位置错误进入源实现的 `lastAgentError` 快照字段；该路径不会另造 UI 通知。公开的 `pickDirectory()` WASM 方法保留选中的路径、以 null 表示的取消，以及 Host 业务错误。Chromium 通过 Client 模块系统加载真实 Runtime 包，并针对仅提供 browse 能力的 Host 验证一次原生选择器请求及其精确拒绝消息；该检查不操作交互式 OS 选择器。
 
 类型宇宙在聚合层拆分——`tsconfig.host.json` 是 host program、`tsconfig.client.json` 是 client program，二者由 solution 根 `tsconfig.json` 引用，因为两侧都在相同键（`sessions`、`loader`）上对 cordis `Context` 做声明合并且服务不同；client 包经纯类型子路径（`@seekdeep-ai/seekdeep-session/types` 等）消费协议词汇，host 侧的声明合并不会搭车进入 client program。
 

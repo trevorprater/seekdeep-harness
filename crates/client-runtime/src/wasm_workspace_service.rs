@@ -169,6 +169,7 @@ impl WasmWorkspaceRuntime {
     }
 
     /// Opens the Host native directory picker.
+    #[wasm_bindgen(js_name = pickDirectory)]
     pub fn pick_directory(&self) -> Promise {
         let runtime = self.state.runtime.clone();
         future_to_promise(async move {

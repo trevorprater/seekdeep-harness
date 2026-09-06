@@ -1,7 +1,7 @@
 //! Real-browser protocol verification; no registry, gateway, or transport substitutes.
 
 pub(super) const DRIVER: &str = r#"import { createRequire } from 'node:module';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
@@ -13,6 +13,7 @@ const root = process.cwd();
 const home = await mkdtemp(join(tmpdir(), 'seekdeep-remote-browser-'));
 let server, browser;
 try {
+  if (loaderMode) await writeFile(join(home, 'cordis.patch.yml'), '- id: directory-picker\n  disabled: true\n- insert:\n    - id: picker-browse\n      name: "@seekdeep-ai/seekdeep-host-directory-picker-browse"\n');
   server = spawn(host, ['web', '--host', '127.0.0.1', '--port', '0'], {
     cwd: root, env: { ...process.env, SEEKDEEP_HOME: home, SEEKDEEP_TELEMETRY_DISABLED: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -56,7 +57,7 @@ try {
       bindings: await readFile(join(root, directory, stem + '.js'), 'utf8'),
       bytes: (await readFile(join(root, directory, stem + '_bg.wasm'))).toString('base64'), stem,
     });
-    loaderAssets = { boot: JSON.parse(match[1]), loader: await readRuntime('vendor/loader/lib', 'client'), modules: await readRuntime('packages/client/modules/lib', 'wasm', 'client.js') };
+    loaderAssets = { boot: JSON.parse(match[1]), loader: await readRuntime('vendor/loader/lib', 'client'), modules: await readRuntime('packages/client/modules/lib', 'wasm', 'client.js'), immer: await readFile(join(root, 'support/browser-dependencies/node_modules/immer/dist/immer.production.mjs'), 'utf8') };
     for (const id of ['@seekdeep-ai/seekdeep-api-remotes', '@seekdeep-ai/seekdeep-api-gateway', '@seekdeep-ai/seekdeep-typert-registry', '@seekdeep-ai/seekdeep-client-connection']) {
       if (!loaderAssets.boot.entries.some(entry => entry.id === id)) throw new Error('initial Host boot graph omitted ' + id);
     }
@@ -166,6 +167,17 @@ try {
         { id: 'connection', name: '@seekdeep-ai/seekdeep-client-connection' },
       ];
       await Promise.all(entries.map(entry => loader.create(entry))); await loader.await();
+      const immerUrl = blob(loaderAssets.immer);
+      const immer = await import(immerUrl);
+      modules.registerStatic('immer', immer);
+      URL.revokeObjectURL(immerUrl);
+      const runtime = await modules.import('@seekdeep-ai/seekdeep-client-runtime', '', undefined);
+      const sessions = new runtime.SessionRuntime(client, client.connection.api, client.remote);
+      const workspaces = new runtime.WorkspaceRuntime(client, client.connection.api, sessions);
+      let pickerFailure;
+      try { await workspaces.pickDirectory(); } catch (error) { pickerFailure = error; }
+      if (!(pickerFailure instanceof Error)) throw new Error('native picker accepted the browse-only Host');
+      window.remotePathNativePicker = { message: pickerFailure.message };
       window.remotePathLoader = { loader, modules, connection: entries[3] };
     } else {
       window.__ModuleLoader__ = { load(row) { handoffs.set(row.id, row); } };
@@ -327,7 +339,7 @@ try {
     }
     await client.fiber.dispose();
     assert(registry.remotes.list().length === 0, 'Remote descriptors survived teardown');
-    return { descriptors: descriptors.length, invalidRejected, undefinedPreserved: true, cancellation: cancelled.error, hostFailure: failed.error, rootGoalEvents: count(firstHistory), scopedGoalEvents: count(secondHistory), commands: commands.value.length, namespaceCalls: 5, remainingDescriptors: registry.remotes.list().length, ...(typed ? { typed } : {}), ...(lifecycle ? { lifecycle } : {}) };
+    return { descriptors: descriptors.length, invalidRejected, undefinedPreserved: true, cancellation: cancelled.error, hostFailure: failed.error, rootGoalEvents: count(firstHistory), scopedGoalEvents: count(secondHistory), commands: commands.value.length, namespaceCalls: 5, remainingDescriptors: registry.remotes.list().length, ...(typed ? { typed } : {}), ...(lifecycle ? { lifecycle } : {}), ...(window.remotePathNativePicker ? { nativePicker: window.remotePathNativePicker } : {}) };
   }, { root });
   const goalCreates = requests.filter(path => path === '/api/goals/create').length;
   if (commandIdentities.length < 3 || commandIdentities[0] === commandIdentities[1] || commandIdentities[0] !== commandIdentities[2]) throw new Error('live context getter did not route the current Agent identity');
@@ -335,6 +347,10 @@ try {
   if (typedConsumer && !result.typed) throw new Error('checked consumer was not exercised');
   if (loaderMode && requests.filter(path => path === '/api/goals/edit').length !== 3) throw new Error('stale Loader handle reached the Host or remounted call was lost');
   await Promise.all(responseReads);
+  if (loaderMode) {
+    const rejection = hostErrors.find(error => error.code === 'directory-picker-unavailable');
+    if (!rejection || result.nativePicker?.message !== 'directory picker failed: ' + rejection.message || requests.filter(path => path === '/api/host.pickDirectory').length !== 1) throw new Error('public picker binding did not preserve the real Host rejection');
+  }
   if (!hostErrors.some(error => JSON.stringify(error) === JSON.stringify(result.hostFailure))) throw new Error('gateway did not preserve the Host error verbatim');
   if (requests.filter(path => path === '/api/commands/execute').length !== 1) throw new Error('pre-aborted command reached the Host');
   await page.evaluate(result => { const pre = document.createElement('pre'); pre.textContent = JSON.stringify(result, null, 2); document.body.replaceChildren(pre); }, result);

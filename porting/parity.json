@@ -40459,7 +40459,8 @@
       "evidence": [
         "pnpm exec vitest run packages/client/runtime/tests/workspaces-service.client.spec.ts --reporter=dot (pinned source: 22 passed)",
         "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 passed)",
-        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_workspace_service_parity-*.wasm (4 passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-runtime --target wasm32-unknown-unknown --test wasm_workspace_service_parity (6 passed)",
+        "cargo xtask remote-loader (public Runtime native-picker call through the real Host)",
         "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
       ],
       "note": "The Rust/WASM Workspaces face exposes the exact list, connect/start, create, picker, browse, filesystem-open, rename/delete/reorder/move/archive operation roster; opaque WorkspaceId and SessionId newtypes cross the core boundary, directory browse forwards the caller's exact AbortSignal, and structured create/browse failures retain their source-visible classes and rpcError fields"
@@ -41000,7 +41001,7 @@
     {
       "source": "packages/client/runtime/src/client/workspaces/service.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/client-runtime/src/workspace_service.rs",
         "crates/client-runtime/src/wasm_workspace_service.rs",
@@ -41010,11 +41011,12 @@
       "evidence": [
         "pnpm exec vitest run packages/client/runtime/tests/workspaces-service.client.spec.ts --reporter=dot (pinned source: 22 passed)",
         "cargo test -p seekdeep-client-runtime --test workspace_service_parity --all-features (12 passed)",
-        "WASM_BINDGEN_TEST_ONLY_NODE=1 wasm-bindgen-test-runner target/wasm32-unknown-unknown/debug/deps/wasm_workspace_service_parity-*.wasm (4 passed)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-runtime --target wasm32-unknown-unknown --test wasm_workspace_service_parity (6 passed)",
+        "cargo xtask remote-loader (public Runtime native-picker call through the real Host)",
         "cargo clippy -p seekdeep-client-runtime --all-targets --all-features -- -D warnings",
         "cargo clippy -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
       ],
-      "note": "Native readiness, blank reuse, ordering, lifecycle, and action behavior retain their evidence. The public connectWorkspace binding now passes the real browser active-turn path, but the native-picker method still exports pick_directory rather than pickDirectory; the owning GUI Web client architecture record tracks that remaining binding gap."
+      "note": "Native readiness, blank reuse, ordering, lifecycle, and action behavior retain their evidence. The public connectWorkspace binding passes the real browser active-turn path. The public pickDirectory binding preserves path/null/error outcomes in six WASM Workspace tests, and remote-loader verifies its exact native-capability rejection through the real Runtime module, Client connection, and Rust Host."
     },
     {
       "source": "packages/client/runtime/src/client/workspaces/workspace.ts",

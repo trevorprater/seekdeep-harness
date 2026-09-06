@@ -275,6 +275,56 @@ async fn public_connect_workspace_name_routes_to_the_compiled_service() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn public_native_picker_preserves_path_cancellation_and_business_failure() {
+    let transport = api();
+    let host = get(&transport.api, "host").dyn_into::<Object>().unwrap();
+    let root = root_context();
+    let sessions =
+        WasmSessionRuntime::new(root.clone(), transport.api.clone(), transport.remote).unwrap();
+    let workspaces: JsValue = WasmWorkspaceRuntime::new(root, transport.api, &sessions)
+        .unwrap()
+        .into();
+    let pick = get(&workspaces, "pickDirectory")
+        .dyn_into::<Function>()
+        .unwrap();
+    for expected in [JsValue::from_str("/chosen"), JsValue::NULL] {
+        let value = Object::new();
+        set(&value, "path", &expected);
+        let returned = response(value.into());
+        let handler = Closure::wrap(
+            Box::new(move |_payload: JsValue| Promise::resolve(&returned))
+                as Box<dyn Fn(JsValue) -> Promise>,
+        );
+        set(&host, "pickDirectory", &handler.into_js_value());
+        let result = pick
+            .call0(&workspaces)
+            .unwrap()
+            .dyn_into::<Promise>()
+            .unwrap();
+        assert_eq!(JsFuture::from(result).await.unwrap(), expected);
+    }
+    let handler = Closure::wrap(Box::new(move |_payload: JsValue| {
+        Promise::resolve(&failure_response(
+            "directory-picker-unavailable",
+            "native capability is unavailable",
+        ))
+    }) as Box<dyn Fn(JsValue) -> Promise>);
+    set(&host, "pickDirectory", &handler.into_js_value());
+    let failure = JsFuture::from(
+        pick.call0(&workspaces)
+            .unwrap()
+            .dyn_into::<Promise>()
+            .unwrap(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        get(&failure, "message").as_string().as_deref(),
+        Some("directory picker failed: native capability is unavailable")
+    );
+}
+
+#[wasm_bindgen_test(async)]
 async fn connect_workspace_shares_promise_and_create_errors_keep_source_class() {
     let fake = api();
     let root = root_context();
