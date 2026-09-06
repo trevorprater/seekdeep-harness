@@ -12,10 +12,8 @@ use wasm_bindgen_test::wasm_bindgen_test;
 export function cordisContextWrapper() {
   return core => new Proxy(core, {
     get(target, key, receiver) {
-      if (key === 'emit') return (name, ...args) => target.emitArgs(name, args)
-      if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args)
-      if (key === 'serial') return (name, ...args) => target.serialArgs(name, args)
-      if (key === 'bail') return (name, ...args) => target.bailArgs(name, args)
+      if (['emit','parallel','serial','bail'].includes(key)) return (...args) => target.eventArgs(key, args)
+      if (key === 'on') return (name, listener, options) => target.on(name, listener, options, receiver)
       if (Reflect.has(target, key)) {
         const value = Reflect.get(target, key, receiver)
         return typeof value === 'function' ? value.bind(target) : value
@@ -82,6 +80,31 @@ export function cordisLogValues(log) { return [...log] }
 export function cordisOn(root, name, listener) { return root.on(name, listener) }
 export function cordisListener(value) { return () => value }
 export function cordisBail(root, name) { return root.bail(name) }
+export async function cordisExplicitEvents(root) {
+  const payload = {}, trace = [], receiver = { marker: 'receiver', [Symbol.for('cordis.filter')](owner) { trace.push(['filter', this === receiver, owner === root]); return owner === root } }
+  root.on('explicit', function (value) { trace.push(['listener', this === receiver, value === payload]); return false })
+  root.on('explicit', function () { return true })
+  if (root.bail(receiver, 'explicit', payload) !== true) throw new Error('bail lost its synchronous return')
+  if (JSON.stringify(trace) !== JSON.stringify([['filter',true,true],['filter',true,true],['listener',true,true]])) throw new Error(JSON.stringify(trace))
+  const promise = Promise.resolve(false)
+  root.on('promise', () => promise)
+  root.on('promise', () => { throw new Error('a promise must bail immediately') })
+  if (root.bail('promise') !== promise) throw new Error('bail replaced the listener promise')
+  const raw = [receiver, 'explicit', payload]
+  const callbacks = root.dispatch('emit', raw)
+  if (raw.length !== 1 || raw[0] !== payload || callbacks.length !== 2 || callbacks[0](...raw) !== false) throw new Error('dispatch did not consume the receiver and name')
+  let unfilteredThis
+  root.on('unfiltered', function () { unfilteredThis = this })
+  root.emit('unfiltered')
+  if (unfilteredThis !== null) throw new Error('implicit listener receiver must be null')
+  const failures = [new Error('first'), new Error('second')]
+  root.on('parallel-errors', () => { throw failures[0] })
+  root.on('parallel-errors', async () => { throw failures[1] })
+  try { await root.parallel('parallel-errors'); throw new Error('parallel accepted failures') } catch (error) {
+    if (!(error instanceof AggregateError) || error.errors[0] !== failures[0] || error.errors[1] !== failures[1]) throw error
+  }
+  return true
+}
 "#)]
 extern "C" {
     fn cordisContextWrapper() -> JsValue;
@@ -102,6 +125,17 @@ extern "C" {
     fn cordisOn(root: &JsValue, name: &str, listener: &Function) -> Function;
     fn cordisListener(value: &JsValue) -> Function;
     fn cordisBail(root: &JsValue, name: &str) -> JsValue;
+    fn cordisExplicitEvents(root: &JsValue) -> Promise;
+}
+
+#[wasm_bindgen_test(async)]
+async fn browser_events_preserve_explicit_receiver_and_synchronous_bail() {
+    configure_context_wrapper(cordisContextWrapper()).unwrap();
+    let root = create_context().unwrap();
+    assert_eq!(
+        JsFuture::from(cordisExplicitEvents(&root)).await.unwrap(),
+        JsValue::TRUE
+    );
 }
 
 #[wasm_bindgen_test(async)]

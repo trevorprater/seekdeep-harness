@@ -18,7 +18,7 @@ ZIP 端点与持久化 `readRaw` 能力仍由 `seekdeep-host-apiproxy` 和持久
 
 Rust 端口在 `seekdeep-session-log-export` 内按目标拆分所有权：原生构建包含命令与 invariant 注册，目标可移植控制器及其 `web-sys` HEAD／anchor 适配器则面向 `wasm32-unknown-unknown` 编译，不会把 Host 命令、Agent、Tokio 网络或持久化依赖带入浏览器。控制器拥有同样的单航班状态机、精确 URL 与文件名约定、失败隔离、关闭行为和释放静止性。组合后的 Rust/WASM 应用会在导出条目尚不存在时渲染 Header 操作；条目缺失表示空闲，而非对象格式错误。浏览器接口缓存不可变的原生快照，并保留未变化的逐 Session 条目，使 React 重复选取时具有稳定的对象标识。
 
-`cargo xtask web-assembled --export` 在搜索、打开并重新加载持久化的源历史记录后，通过真实 Header 操作访问 Rust Host。它观察 HEAD 预检，保存来自预期 GET URL 的浏览器原生下载，将 ZIP 中的 JSONL 字节与独立解码的持久化工件比较，并打开和关闭成功 Modal。原始记录必须保持为未修改的前缀；正常 Session 初始化可以追加事件。Chromium 可能不会为浏览器自行处理的下载发出请求事件，因此下载 URL 与保存的归档通过其 Download API 检查。此无密钥夹具不能证明真实模型交互或斜杠命令路径。
+`cargo xtask web-assembled --export` 在搜索、打开并重新加载持久化的源历史记录后，通过真实 Header 和 composer `/export` 命令访问 Rust Host。每个入口均使用一次可观察的 HEAD 预检，以及来自预期 GET URL 的浏览器原生下载；ZIP 中的 JSONL 字节必须与独立解码的持久化工件一致。成功 Modal 会打开并关闭。命令追加一组 `command/run` 与 `command/done`，不启动模型轮次，在下载中包含这些持久化行，并在重新加载后保留确认文本。原始记录必须保持为未修改的前缀；正常 Session 初始化可以追加事件。Chromium 可能不会为浏览器自行处理的下载发出请求事件，因此下载 URL 与保存的归档通过其 Download API 检查。此无密钥夹具不能证明真实模型交互。
 
 ## Alternatives considered
 

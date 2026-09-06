@@ -13,6 +13,8 @@ use crate::{
     PluginFiber, fiber::EffectHandle,
 };
 
+pub(crate) mod browser_events;
+
 thread_local! {
     static CONTEXT_WRAPPER: RefCell<Option<Function>> = const { RefCell::new(None) };
 }
@@ -222,12 +224,22 @@ impl WasmContext {
         name: String,
         listener: JsValue,
         options: JsValue,
+        owner: Option<JsValue>,
     ) -> Result<Function, JsValue> {
         let listener = listener
             .dyn_into::<Function>()
             .map_err(|_| js_sys::Error::new("ctx.on listener must be a function"))?;
         let registration = event_options(&options)?;
         let once = bool_property(&options, "once")?;
+        let browser_listener = listener.clone();
+        let owner = match owner {
+            Some(owner) => owner,
+            None => wrap_context(self.clone_for_binding())?,
+        };
+        let browser = browser_events::BrowserHook {
+            owner,
+            callback: Arc::new(move |receiver, args| browser_listener.apply(receiver, args)),
+        };
         let root_face = self.root_face.clone();
         let metadata = self.metadata.clone();
         let callback = move |context: Context, args: EventArgs| {
@@ -245,16 +257,11 @@ impl WasmContext {
                 Ok(event_reply_from_js(settled))
             }) as crate::events::ListenerFuture
         };
-        let effect = if once {
-            self.inner
-                .events()
-                .once(&self.inner, name, callback, registration)
-        } else {
-            self.inner
-                .events()
-                .on(&self.inner, name, callback, registration)
-        }
-        .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+        let effect = self
+            .inner
+            .events()
+            .on_browser(&self.inner, name, callback, registration, once, browser)
+            .map_err(|error| js_sys::Error::new(&error.to_string()))?;
         Ok(effect_disposer(effect))
     }
 
@@ -324,6 +331,23 @@ impl WasmContext {
             })
             .into()),
         }
+    }
+
+    /// Dispatches raw browser arguments, including the optional listener receiver.
+    ///
+    /// # Errors
+    /// Returns malformed event names, filter errors, or synchronous listener errors.
+    #[wasm_bindgen(js_name = eventArgs)]
+    pub fn event_args(&self, mode: &str, args: &Array) -> Result<JsValue, JsValue> {
+        browser_events::invoke(self, mode, args)
+    }
+
+    /// Consumes an optional receiver and event name, returning bound callbacks.
+    ///
+    /// # Errors
+    /// Returns malformed event names, filter errors, or dispatch-observer errors.
+    pub fn dispatch(&self, mode: &str, args: &Array) -> Result<Array, JsValue> {
+        browser_events::dispatch(self, mode, args)
     }
 
     /// Registers an arbitrary setup result in the current Fiber ledger.
@@ -968,7 +992,7 @@ fn inject_names(value: &JsValue) -> Result<Vec<String>, JsValue> {
 
 fn event_options(value: &JsValue) -> Result<EventOptions, JsValue> {
     Ok(EventOptions {
-        prepend: bool_property(value, "prepend")?,
+        prepend: value.as_bool().unwrap_or(bool_property(value, "prepend")?),
         global: bool_property(value, "global")?,
     })
 }

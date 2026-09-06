@@ -33,6 +33,42 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves browser event receivers, filtering, raw dispatch, and synchronous bail values', async () => {
+  const root = new Context(), left = root.extend({ lane: 'left' }), right = root.extend({ lane: 'right' })
+  const seen = [], payload = {}
+  const receiver = { lane: 'left', [Context.filter](owner) { return this.lane === owner.lane } }
+  const remove = left.on('test/explicit', function (value) { seen.push([this === receiver, value === payload]); return false })
+  right.on('test/explicit', () => { throw new Error('wrong scope') })
+  root.on('test/explicit', () => 0, { global: true })
+  expect(root.bail(receiver, 'test/explicit', payload)).toBe(0)
+  expect(seen).toEqual([[true, true]])
+  const args = [receiver, 'test/explicit', payload]
+  const callbacks = root.events.dispatch('emit', args)
+  expect(args).toEqual([payload])
+  expect(callbacks).toHaveLength(2)
+  remove()
+  expect(callbacks[0](...args)).toBe(false)
+  expect(root.bail(receiver, 'test/explicit', payload)).toBe(0)
+  expect(seen).toHaveLength(2)
+  const promise = Promise.resolve(false)
+  root.on('test/promise', () => promise)
+  root.on('test/promise', () => { throw new Error('Promise is itself a bail value') })
+  expect(root.bail('test/promise')).toBe(promise)
+  const serial = []
+  root.on('test/serial', async () => { serial.push(1); return false })
+  root.on('test/serial', () => { serial.push(2); return '' })
+  expect(await root.serial('test/serial')).toBe('')
+  expect(serial).toEqual([1, 2])
+  let implicit
+  root.on('test/implicit', function () { implicit = this })
+  root.emit('test/implicit')
+  expect(implicit).toBe(null)
+  const errors = [new Error('sync'), new Error('async')]
+  root.on('test/errors', () => { throw errors[0] })
+  root.on('test/errors', async () => { throw errors[1] })
+  await expect(root.parallel('test/errors')).rejects.toMatchObject({ errors })
+})
+
 it('preserves strict and relaxed lookup through provider lifecycle and isolation', async () => {
   const root = new Context()
   root.provide('loading-service', { value: 'root' })

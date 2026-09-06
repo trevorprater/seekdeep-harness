@@ -87575,16 +87575,22 @@
     {
       "source": "vendor/cordis/src/events.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/cordis/src/events.rs",
-        "crates/cordis/tests/source_semantic_oracle.rs"
+        "crates/cordis/tests/source_semantic_oracle.rs",
+        "crates/cordis/src/wasm/browser_events.rs",
+        "crates/cordis/tests/wasm_browser_face_parity.rs"
       ],
       "evidence": [
         "pinned-source direct Node/tsx semantic oracle: exact emit, parallel, serial, bail, waterfall, once, prepend, filter, and global-listener outcomes",
         "cargo test -p seekdeep-cordis --all-features (23 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
-      ]
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
+        "cargo xtask remote-gateway-oracle --source-regressions",
+        "cargo xtask remote-gateway-oracle",
+        "cargo xtask web-assembled --export"
+      ],
+      "note": "Native event semantics and the assembled browser export path pass. Browser once, waterfall, and internal/listener interception still require complete source-faithful coverage; tracked in the existing GUI Web client architecture record."
     },
     {
       "source": "vendor/cordis/src/fiber.ts",

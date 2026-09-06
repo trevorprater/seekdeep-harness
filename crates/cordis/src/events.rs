@@ -259,11 +259,13 @@ pub struct EventOptions {
 }
 
 #[derive(Clone)]
-struct Hook {
+pub(crate) struct Hook {
     id: Uuid,
-    owner: Context,
-    options: EventOptions,
-    listener: Listener,
+    pub(crate) owner: Context,
+    pub(crate) options: EventOptions,
+    pub(crate) listener: Listener,
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) browser: Option<crate::wasm::browser_events::BrowserHook>,
 }
 
 #[derive(Clone)]
@@ -359,7 +361,15 @@ impl EventBus {
         listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
         options: EventOptions,
     ) -> Result<EffectHandle, CordisError> {
-        self.register_hook(context, name.into(), Arc::new(listener), options, false)
+        self.register_hook(
+            context,
+            name.into(),
+            Arc::new(listener),
+            options,
+            false,
+            #[cfg(target_arch = "wasm32")]
+            None,
+        )
     }
 
     /// Registers an asynchronous listener removed immediately before its first invocation.
@@ -374,7 +384,40 @@ impl EventBus {
         listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
         options: EventOptions,
     ) -> Result<EffectHandle, CordisError> {
-        self.register_hook(context, name.into(), Arc::new(listener), options, true)
+        self.register_hook(
+            context,
+            name.into(),
+            Arc::new(listener),
+            options,
+            true,
+            #[cfg(target_arch = "wasm32")]
+            None,
+        )
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn on_browser(
+        &self,
+        context: &Context,
+        name: String,
+        listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
+        options: EventOptions,
+        once: bool,
+        browser: crate::wasm::browser_events::BrowserHook,
+    ) -> Result<EffectHandle, CordisError> {
+        self.register_hook(
+            context,
+            name,
+            Arc::new(listener),
+            options,
+            once,
+            Some(browser),
+        )
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn browser_hooks(&self, name: &str) -> Vec<Hook> {
+        self.hooks.read().get(name).cloned().unwrap_or_default()
     }
 
     fn register_hook(
@@ -384,8 +427,22 @@ impl EventBus {
         listener: Listener,
         options: EventOptions,
         once: bool,
+        #[cfg(target_arch = "wasm32")] browser: Option<crate::wasm::browser_events::BrowserHook>,
     ) -> Result<EffectHandle, CordisError> {
         let id = Uuid::now_v7();
+        #[cfg(target_arch = "wasm32")]
+        let browser = browser.map(|mut browser| {
+            if once {
+                let registry = self.hooks.clone();
+                let event_name = name.clone();
+                let callback = browser.callback.clone();
+                browser.callback = Arc::new(move |receiver, args| {
+                    remove_hook(&registry, &event_name, id);
+                    callback(receiver, args)
+                });
+            }
+            browser
+        });
         let listener = if once {
             let registry = self.hooks.clone();
             let event_name = name.clone();
@@ -402,6 +459,8 @@ impl EventBus {
             owner: context.clone(),
             options,
             listener,
+            #[cfg(target_arch = "wasm32")]
+            browser,
         };
         let mut hooks = self.hooks.write();
         let entries = hooks.entry(name.clone()).or_default();

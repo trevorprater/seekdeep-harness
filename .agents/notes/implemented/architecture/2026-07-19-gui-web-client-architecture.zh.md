@@ -36,6 +36,8 @@ Status: implemented
 
 Client Runtime factory 以相同名称公开 source barrel 的完整 value roster 与 generated declaration。薄 compatibility binding 提供 alias、reference-stable empty constant 与原生 `Error` subclass，而 helper、service、`PendingWait`、Conversation assembler 和 Location-index 行为全部委托给编译后的 Rust；内部 wasm-bindgen export 不会取代或削弱已记录的 public face。
 
+浏览器事件分发使用 Cordis core 的 hook／effect 账本，同时保留 JavaScript 接收者与返回值语义。可选的显式接收者提供 `Context.filter` 和监听器的 `this`；隐式分发绑定 `null`。`bail` 保留同步值及返回的 Promise 标识，`events.dispatch` 消费接收者与事件名，并返回已捕获的回调列表。源实现与已构建 WASM 的 gateway 用例固定这些行为；组合后的 `/export` 路径通过 composer token 消费和本地执行确认覆盖它们。浏览器 `once`、waterfall 与 `internal/listener` 拦截仍是独立的验证义务。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
+
 类型宇宙在聚合层拆分——`tsconfig.host.json` 是 host program、`tsconfig.client.json` 是 client program，二者由 solution 根 `tsconfig.json` 引用，因为两侧都在相同键（`sessions`、`loader`）上对 cordis `Context` 做声明合并且服务不同；client 包经纯类型子路径（`@seekdeep-ai/seekdeep-session/types` 等）消费协议词汇，host 侧的声明合并不会搭车进入 client program。
 
 ## slot 体系：页面怎么拼
