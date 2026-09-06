@@ -16,7 +16,7 @@ use parking_lot::Mutex;
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, fiber::EffectHandle};
 use seekdeep_core::{
     preparation::SessionPreparation,
-    repair::interrupted_turn_closers,
+    repair::try_interrupted_turn_closers,
     session::{Session, SessionEvent, SessionHeader, SessionId},
     session_store::{CreateSessionOptions, SessionStore},
 };
@@ -29,7 +29,10 @@ use seekdeep_session_persistence::{
     preparations::{
         DiscardReady, PreparedSource, SessionPreparationReservation, SessionPreparations,
     },
-    stored_events::{assert_known_events, normalize_stored_events, validate_normalized_events},
+    stored_events::{
+        assert_known_events, assert_supported_events, classify_cold_repair,
+        classify_cold_validation, normalize_stored_events, validate_normalized_events,
+    },
     write_behind::SessionWriteBehind,
 };
 use serde::{Deserialize, Serialize};
@@ -766,6 +769,7 @@ impl JsonlSessionPersistence {
     }
 
     async fn append_core(&self, id: &SessionId, events: &[SessionEvent]) -> anyhow::Result<()> {
+        assert_supported_events(events, id)?;
         if events.is_empty() {
             return Ok(());
         }
@@ -783,14 +787,12 @@ impl JsonlSessionPersistence {
         let mut current = current
             .ok_or_else(|| anyhow::anyhow!("session {id} has not been created in persistence"))?;
         let expected = u64::try_from(current.events.len())?;
-        anyhow::ensure!(
-            events.first().map(|event| event.seq) == Some(expected),
-            "session {id} append must begin at seq {expected}"
-        );
         for (offset, event) in events.iter().enumerate() {
             anyhow::ensure!(
                 event.seq == expected + u64::try_from(offset)?,
-                "session {id} append contains a sequence gap"
+                "append seq mismatch for \"{id}\": expected {} at index {offset}, got {}",
+                expected + u64::try_from(offset)?,
+                event.seq
             );
         }
         let combined = current
@@ -799,8 +801,6 @@ impl JsonlSessionPersistence {
             .cloned()
             .chain(events.iter().cloned())
             .collect::<Vec<_>>();
-        let normalized = normalize_stored_events(&combined, &current.header.id)?;
-        validate_normalized_events(&current.header, &normalized)?;
         let path = log_path(
             &self.root,
             current.header.cwd.as_deref(),
@@ -833,9 +833,13 @@ impl JsonlSessionPersistence {
             .find_log(id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("session {id} was not found"))?;
-        let stored = self.read_scan(&path, Some(id)).await?;
+        let stored = self
+            .read_scan(&path, Some(id))
+            .await
+            .map_err(|error| classify_cold_validation(id, error))?;
         let mut balanced = stored.scan.events.clone();
-        let closers = interrupted_turn_closers(&balanced);
+        let closers = try_interrupted_turn_closers(&balanced)
+            .map_err(|error| classify_cold_repair(id, &error))?;
         balanced.extend(closers.clone());
         let meta = stored.scan.meta;
         let session = self.sessions.prepare(
@@ -1203,7 +1207,7 @@ impl JsonlSessionPersistence {
             .ok_or_else(|| anyhow::anyhow!("session {id} was not found"))?;
         let stored = self.read_scan(&path, Some(id)).await?;
         let mut events = stored.scan.events.clone();
-        let closers = interrupted_turn_closers(&events);
+        let closers = try_interrupted_turn_closers(&events)?;
         if commit_repair {
             if let Some(truncate_to) = stored.truncate_to {
                 let file = fs::OpenOptions::new().write(true).open(&path).await?;
@@ -1596,7 +1600,7 @@ impl SessionPersistence for JsonlSessionPersistence {
             let events = live.events();
             self.flush_existing(&live).await?;
             anyhow::ensure!(
-                interrupted_turn_closers(&events).is_empty(),
+                try_interrupted_turn_closers(&events)?.is_empty(),
                 "cannot crash-repair live session {id} with an open turn"
             );
             return Ok(SessionInspection {
@@ -1610,7 +1614,7 @@ impl SessionPersistence for JsonlSessionPersistence {
             let events = live.events();
             self.flush_existing(&live).await?;
             anyhow::ensure!(
-                interrupted_turn_closers(&events).is_empty(),
+                try_interrupted_turn_closers(&events)?.is_empty(),
                 "cannot load session {id} while its live turn is open; use the live Session or wait for the turn to close"
             );
             return Ok(SessionInspection {
@@ -2108,7 +2112,7 @@ mod tests {
         let mut bad = session.events();
         bad[0].seq = 1;
         let error = backend.append(session.id(), &bad).await.expect_err("gap");
-        assert!(error.to_string().contains("begin at seq 0"));
+        assert!(error.to_string().contains("expected 0 at index 0"));
         assert!(backend.list(None).await.expect("list").is_empty());
     }
 

@@ -35,6 +35,8 @@ Status: implemented
 
 ## 后果
 
-尚待完成的校验时机审计涉及追加时的规范化：Rust 后端在写入前运行存储事件规范化与封装校验，而固定协调器在追加时检查废弃格式与序号，并在读取时规范化封装。格式错误的当前／旧版输入是否被接受、何时出错，仍需专门的差分检查；已记录路由的浏览器场景不能证明这些行为的对等性。
+两个 Rust 后端都先按源实现规定的优先级检查废弃格式，再检查追加序号连续性。已接受事件原样存储；规范化与消息封装校验在读取时进行。必需的未知事件仍可写入，但解释时会被拒绝；可忽略的未知事件则保留。共享准备过程保留带类型的数据损坏与格式不支持错误，不把这些分类退化为字符串。恢复保留已存储的轮次／步骤值，区分缺失字段与 null，并对不可读取的恢复对象报告错误，而不展开存储操作的调用栈。
+
+[校验时机矩阵](../../../../crates/session-persistence-sqlite/tests/validation_timing.rs)在原始 JSONL、Zstandard JSONL 与 SQLite 上检查 22 类输入：追加是否接受及其诊断、原始事件保留、检查、提交式加载、恢复输出与读取错误分类。常规测试使用[已记录的源结果](../../../../crates/session-persistence/tests/fixtures/validation-timing.expected.json)；`cargo test -p seekdeep-session-persistence-sqlite --test validation_timing -- --ignored --nocapture` 会重新运行固定的源实现，再与 Rust 比较。该差分运行需要源检出及其已安装的 Node 依赖。这些存储检查补充真实 Host 的模型选择与活跃会话浏览器回归测试，不取代它们。
 
 新增两个包，以及 `seekdeep-session` 中的元数据约定（`session.header`，`create(id?, options?)` 签名）。收益：持久恢复/fork、读取/回放路径、崩溃容忍，以及基于现有事件溯源日志的宿主侧会话访问，后端可在同一接口下替换。可复用的 `runPersistenceContract` 测试套件以相同的仅追加、连续 seq、惰性物化、逻辑恢复、整数元数据与可序列化语义约束每个后端。持久化完整的逻辑日志还确定了事件保真度：即使 JSONL 将多个 `assistant/chunk` 打包到一条存储行中，每个事件也会精确保留。SQLite 初始化要么提交完整的自有 schema 与 header 标识，要么不留下任何会使下次打开受阻的部分 schema。

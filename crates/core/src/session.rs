@@ -884,9 +884,11 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
             .get("message")
             .ok_or_else(|| invalid(format!("{subject} lacks an identified message")))?
     };
-    let message: Message = serde_json::from_value(message_value.clone())
-        .map_err(|_| invalid(format!("{subject} lacks an identified message")))?;
-    if message.id().as_str().is_empty() {
+    if message_value
+        .get("id")
+        .and_then(Value::as_str)
+        .is_none_or(str::is_empty)
+    {
         return Err(invalid(format!("{subject} lacks an identified message")));
     }
     let expected_role = if event.event_type == "assistant/message" {
@@ -894,7 +896,12 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
     } else {
         MessageRole::User
     };
-    if message.role() != expected_role {
+    let role = if expected_role == MessageRole::Assistant {
+        "assistant"
+    } else {
+        "user"
+    };
+    if message_value.get("role").and_then(Value::as_str) != Some(role) {
         let role = if expected_role == MessageRole::Assistant {
             "assistant"
         } else {
@@ -904,6 +911,18 @@ fn validate_message_event(event: &SessionEvent, subject: &str) -> Result<(), Ses
             "{subject} message must have role \"{role}\""
         )));
     }
+    if message_value
+        .pointer("/source/kind")
+        .and_then(Value::as_str)
+        .is_none_or(str::is_empty)
+    {
+        return Err(invalid(format!("{subject} message has invalid source")));
+    }
+    if !message_value.get("content").is_some_and(Value::is_array) {
+        return Err(invalid(format!("{subject} message has invalid content")));
+    }
+    let message: Message = serde_json::from_value(message_value.clone())
+        .map_err(|_| invalid(format!("{subject} lacks an identified message")))?;
     if message.source().kind.is_empty() {
         return Err(invalid(format!("{subject} message has invalid source")));
     }

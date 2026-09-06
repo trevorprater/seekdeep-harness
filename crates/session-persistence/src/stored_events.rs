@@ -9,6 +9,33 @@ use seekdeep_core::{
 };
 use serde_json::{Map, Value, json};
 
+/// A stored envelope failed interpretation after its physical bytes were read.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub struct StoredEventValidationError(pub String);
+
+/// Classifies cold preparation validation without relabeling physical I/O failures.
+#[must_use]
+pub fn classify_cold_validation(id: &SessionId, error: anyhow::Error) -> anyhow::Error {
+    if error.is::<StoredEventValidationError>() {
+        crate::SessionPersistenceCorruptionError(format!(
+            "stored session \"{id}\" failed validation: Error: {error}"
+        ))
+        .into()
+    } else {
+        error
+    }
+}
+
+/// Retains the source corruption classification for unreadable recovery fields.
+#[must_use]
+pub fn classify_cold_repair(id: &SessionId, error: &anyhow::Error) -> anyhow::Error {
+    crate::SessionPersistenceCorruptionError(format!(
+        "stored session \"{id}\" failed validation: TypeError: {error}"
+    ))
+    .into()
+}
+
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
 /// Upgrades every supported legacy record into the current in-memory shape.
@@ -21,7 +48,12 @@ pub fn normalize_stored_events(
     events: &[SessionEvent],
     id: &SessionId,
 ) -> anyhow::Result<Vec<SessionEvent>> {
-    assert_no_retired_events(events, id)?;
+    normalize_events(events, id)
+        .map_err(|error| StoredEventValidationError(error.to_string()).into())
+}
+
+fn normalize_events(events: &[SessionEvent], id: &SessionId) -> anyhow::Result<Vec<SessionEvent>> {
+    assert_supported_events(events, id)?;
     let mut message_ids = HashMap::<u64, String>::new();
     let mut normalized = Vec::with_capacity(events.len());
     for event in events {
@@ -69,30 +101,45 @@ pub fn validate_normalized_events(
     meta: &SessionHeader,
     events: &[SessionEvent],
 ) -> anyhow::Result<()> {
-    let _ = Session::create(&meta.id, Some(events.to_vec()), Some(meta.clone()))?;
+    let _ =
+        Session::create(&meta.id, Some(events.to_vec()), Some(meta.clone())).map_err(|error| {
+            let mut message = error.to_string();
+            for (index, event) in events.iter().enumerate() {
+                message = message.replace(
+                    &format!("seed {} at index {index}", event.event_type),
+                    &format!("session event at seq {}", event.seq),
+                );
+            }
+            StoredEventValidationError(message)
+        })?;
     Ok(())
 }
 
-fn assert_no_retired_events(events: &[SessionEvent], id: &SessionId) -> anyhow::Result<()> {
+/// Rejects retired event forms without interpreting or normalizing accepted data.
+///
+/// # Errors
+/// Preserves the source's retired-type priority and null header-data refusal.
+pub fn assert_supported_events(events: &[SessionEvent], id: &SessionId) -> anyhow::Result<()> {
+    for retired in ["request/header-delta", "mode/set"] {
+        if let Some(event) = events.iter().find(|event| event.event_type == retired) {
+            anyhow::bail!(
+                "session \"{id}\" contains unsupported legacy {retired} event at seq {}",
+                event.seq
+            );
+        }
+    }
     for event in events {
-        match event.event_type.as_str() {
-            "request/header-delta" => anyhow::bail!(
-                "session \"{id}\" contains unsupported legacy request/header-delta event at seq {}",
-                event.seq
-            ),
-            "mode/set" => anyhow::bail!(
-                "session \"{id}\" contains unsupported legacy mode/set event at seq {}",
-                event.seq
-            ),
-            "request/header"
-                if event.data.get("reason").and_then(Value::as_str) == Some("fallback") =>
-            {
+        if event.event_type == "request/header" {
+            anyhow::ensure!(
+                !event.data.is_null(),
+                "Cannot read properties of null (reading 'reason')"
+            );
+            if event.data.get("reason").and_then(Value::as_str) == Some("fallback") {
                 anyhow::bail!(
                     "session \"{id}\" contains unsupported legacy request/header reason \"fallback\" at seq {}",
                     event.seq
                 )
             }
-            _ => {}
         }
     }
     Ok(())

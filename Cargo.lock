@@ -8426,6 +8426,7 @@ dependencies = [
  "seekdeep-invariants",
  "seekdeep-llm",
  "seekdeep-session-persistence",
+ "seekdeep-session-persistence-jsonl",
  "serde",
  "serde_json",
  "tempfile",

@@ -25,6 +25,7 @@ tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
 tempfile.workspace = true
 
 [lints]

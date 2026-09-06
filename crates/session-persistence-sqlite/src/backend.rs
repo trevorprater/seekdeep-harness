@@ -14,9 +14,8 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, params};
 use seekdeep_cordis::{Context, EventArgs, EventOptions, EventReply, Plugin, fiber::EffectHandle};
 use seekdeep_core::{
-    invariant::validate_session_events,
     preparation::SessionPreparation,
-    repair::interrupted_turn_closers,
+    repair::try_interrupted_turn_closers,
     session::{
         SESSION_FORMAT_VERSION, Session, SessionEvent, SessionHeader, SessionId, SessionOrigin,
     },
@@ -32,7 +31,10 @@ use seekdeep_session_persistence::{
         DiscardReady, PreparedSource, SessionPreparationReservation, SessionPreparations,
     },
     session_format_version_refusal,
-    stored_events::{assert_known_events, normalize_stored_events, validate_normalized_events},
+    stored_events::{
+        assert_known_events, assert_supported_events, classify_cold_repair,
+        classify_cold_validation, normalize_stored_events, validate_normalized_events,
+    },
     write_behind::SessionWriteBehind,
 };
 use serde::{Deserialize, Serialize};
@@ -721,6 +723,7 @@ impl SqliteSessionPersistence {
     }
 
     async fn append_core(&self, id: &SessionId, events: &[SessionEvent]) -> anyhow::Result<()> {
+        assert_supported_events(events, id)?;
         if events.is_empty() {
             return Ok(());
         }
@@ -738,14 +741,12 @@ impl SqliteSessionPersistence {
         let mut current = current
             .ok_or_else(|| anyhow::anyhow!("session {id} has not been created in persistence"))?;
         let expected = u64::try_from(current.events.len())?;
-        anyhow::ensure!(
-            events.first().map(|event| event.seq) == Some(expected),
-            "session {id} append must begin at seq {expected}"
-        );
         for (offset, event) in events.iter().enumerate() {
             anyhow::ensure!(
                 event.seq == expected + u64::try_from(offset)?,
-                "session {id} append contains a sequence gap"
+                "append seq mismatch for \"{id}\": expected {} at index {offset}, got {}",
+                expected + u64::try_from(offset)?,
+                event.seq
             );
         }
         let combined = current
@@ -754,9 +755,6 @@ impl SqliteSessionPersistence {
             .cloned()
             .chain(events.iter().cloned())
             .collect::<Vec<_>>();
-        normalize_stored_events(events, id)?;
-        validate_normalized_events(&current.header, &combined)?;
-        validate_session_events(&combined)?;
         self.append_batch(&current.header, events, current.materialized)
             .await?;
         current.materialized = true;
@@ -778,12 +776,13 @@ impl SqliteSessionPersistence {
     async fn prepare_core(&self, id: &SessionId) -> anyhow::Result<PreparedSqliteSource> {
         let stored = self
             .read_prefix(id)
-            .await?
+            .await
+            .map_err(|error| classify_cold_validation(id, error))?
             .ok_or_else(|| anyhow::anyhow!("session {id} was not found"))?;
         let mut balanced = stored.events.clone();
-        let closers = interrupted_turn_closers(&balanced);
+        let closers = try_interrupted_turn_closers(&balanced)
+            .map_err(|error| classify_cold_repair(id, &error))?;
         balanced.extend(closers.clone());
-        validate_session_events(&balanced)?;
         let meta = stored.meta;
         let session = self.sessions.prepare(
             Some(id.clone()),
@@ -899,13 +898,12 @@ impl SqliteSessionPersistence {
             .await?
             .ok_or_else(|| anyhow::anyhow!("session {id} was not found"))?;
         let mut events = stored.events;
-        let closers = interrupted_turn_closers(&events);
+        let closers = try_interrupted_turn_closers(&events)?;
         if repair && (stored.torn_from.is_some() || !closers.is_empty()) {
             self.commit_repair(&stored.meta, stored.torn_from, &closers)
                 .await?;
         }
         events.extend(closers);
-        validate_session_events(&events)?;
         if repair {
             self.state.lock().insert(
                 id.clone(),
@@ -943,7 +941,6 @@ impl SqliteSessionPersistence {
         assert_known_events(&events, id)
             .map_err(|error| SessionFormatUnsupportedError::new(error.to_string(), None))?;
         validate_normalized_events(&meta, &events)?;
-        validate_session_events(&events)?;
         Ok(Some(StoredPrefix {
             meta,
             events,
@@ -1199,7 +1196,7 @@ impl SessionPersistence for SqliteSessionPersistence {
             let events = live.events();
             self.flush_existing(&live).await?;
             anyhow::ensure!(
-                interrupted_turn_closers(&events).is_empty(),
+                try_interrupted_turn_closers(&events)?.is_empty(),
                 "cannot load session {id} while its live turn is open; use the live Session or wait for the turn to close"
             );
             anyhow::ensure!(!events.is_empty(), "session {id} was not found");
@@ -1214,7 +1211,7 @@ impl SessionPersistence for SqliteSessionPersistence {
             let events = live.events();
             self.flush_existing(&live).await?;
             anyhow::ensure!(
-                interrupted_turn_closers(&events).is_empty(),
+                try_interrupted_turn_closers(&events)?.is_empty(),
                 "cannot load session {id} while its live turn is open; use the live Session or wait for the turn to close"
             );
             return Ok(SessionInspection {

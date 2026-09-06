@@ -11,6 +11,34 @@ use thiserror::Error;
 use tokio::sync::{Notify, OnceCell};
 use uuid::Uuid;
 
+#[derive(Clone, Debug)]
+enum LoadFailure {
+    Unsupported(crate::SessionFormatUnsupportedError),
+    Corruption(crate::SessionPersistenceCorruptionError),
+    Other(Arc<String>),
+}
+
+impl LoadFailure {
+    fn capture(error: &anyhow::Error) -> Self {
+        if let Some(error) = error.downcast_ref::<crate::SessionFormatUnsupportedError>() {
+            Self::Unsupported(error.clone())
+        } else if let Some(error) = error.downcast_ref::<crate::SessionPersistenceCorruptionError>()
+        {
+            Self::Corruption(error.clone())
+        } else {
+            Self::Other(Arc::new(error.to_string()))
+        }
+    }
+
+    fn into_error(self) -> anyhow::Error {
+        match self {
+            Self::Unsupported(error) => error.into(),
+            Self::Corruption(error) => error.into(),
+            Self::Other(error) => anyhow::Error::msg((*error).clone()),
+        }
+    }
+}
+
 /// A cached source that owns one exact unpublished session.
 pub trait PreparedSource: Send + Sync + 'static {
     /// Exact unpublished session represented by this source.
@@ -34,7 +62,7 @@ struct EntryState<Source, CommitState> {
 
 struct PreparationEntry<Source, CommitState> {
     id: SessionId,
-    result: OnceCell<Result<Arc<Source>, Arc<String>>>,
+    result: OnceCell<Result<Arc<Source>, LoadFailure>>,
     state: Mutex<EntryState<Source, CommitState>>,
     changed: Notify,
 }
@@ -416,7 +444,7 @@ where
             let result = load()
                 .await
                 .map(Arc::new)
-                .map_err(|error| Arc::new(error.to_string()));
+                .map_err(|error| LoadFailure::capture(&error));
             let _ = loading_entry.result.set(result.clone());
             match result {
                 Ok(source) if pool.is_current(&loading_entry) => {
@@ -597,9 +625,7 @@ async fn await_result<Source, CommitState>(
         tokio::pin!(changed);
         changed.as_mut().enable();
         if let Some(result) = entry.result.get() {
-            return result
-                .clone()
-                .map_err(|error| anyhow::Error::msg((*error).clone()));
+            return result.clone().map_err(LoadFailure::into_error);
         }
         wait_notification(changed, signal).await?;
     }

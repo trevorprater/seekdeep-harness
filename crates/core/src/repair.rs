@@ -11,25 +11,52 @@ pub const TOOL_NOT_STARTED: &str = "TOOL_NOT_STARTED";
 /// A started tool has no durable outcome, so retry safety is unknown.
 pub const TOOL_OUTCOME_UNKNOWN: &str = "TOOL_OUTCOME_UNKNOWN";
 
-const NOT_STARTED_TEXT: &str = "The tool call was interrupted before the SeekDeep Harness recorded it as started. Retry it if it is still needed.";
+const NOT_STARTED_TEXT: &str = "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.";
 const OUTCOME_UNKNOWN_TEXT: &str = "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.";
 
 #[derive(Clone, Debug)]
 struct PendingCall {
-    step: i64,
+    step: Option<Value>,
     call_seq: Option<u64>,
 }
 
+#[derive(Clone, Debug)]
+enum OpenMarker {
+    Undefined,
+    Value(Value),
+}
+
+impl OpenMarker {
+    fn value(&self) -> Option<&Value> {
+        match self {
+            Self::Undefined => None,
+            Self::Value(value) => Some(value),
+        }
+    }
+}
+
 /// Returns deterministic events that close an open crash-tail turn.
+///
+/// # Panics
+/// Panics on malformed event objects. Untrusted stored data uses
+/// [`try_interrupted_turn_closers`] to report the error without unwinding.
 #[must_use]
 pub fn interrupted_turn_closers(events: &[SessionEvent]) -> Vec<SessionEvent> {
+    try_interrupted_turn_closers(events).expect("crash repair requires readable event objects")
+}
+
+/// Closes a stored tail while retaining its exact turn and step values.
+///
+/// # Errors
+/// Reports malformed objects at the same property read as the source repair walk.
+pub fn try_interrupted_turn_closers(events: &[SessionEvent]) -> anyhow::Result<Vec<SessionEvent>> {
     let mut open_turn = None;
     let mut open_step = None;
     let mut pending = IndexMap::<String, PendingCall>::new();
     for event in events {
         match event.event_type.as_str() {
             "turn/start" => {
-                open_turn = integer_field(&event.data, "turn");
+                open_turn = open_marker(property(Some(&event.data), "turn")?);
                 open_step = None;
                 pending.clear();
             }
@@ -38,25 +65,24 @@ pub fn interrupted_turn_closers(events: &[SessionEvent]) -> Vec<SessionEvent> {
                 open_step = None;
                 pending.clear();
             }
-            "step/start" => open_step = integer_field(&event.data, "step"),
+            "step/start" => open_step = open_marker(property(Some(&event.data), "step")?),
             "step/end" => {
                 pending.clear();
                 open_step = None;
             }
-            "assistant/message" => register_assistant_calls(event, &mut pending),
+            "assistant/message" => register_assistant_calls(event, &mut pending)?,
             "tool/call" => {
-                if let Some(call_id) = event.data.get("callId").and_then(Value::as_str)
+                if let Some(call_id) =
+                    property(Some(&event.data), "callId")?.and_then(Value::as_str)
                     && let Some(call) = pending.get_mut(call_id)
                 {
                     call.call_seq = Some(event.seq);
                 }
             }
             "tool/result" => {
-                if let Some(call_id) = event
-                    .data
-                    .pointer("/message/source/callId")
-                    .and_then(Value::as_str)
-                {
+                let message = property(Some(&event.data), "message")?;
+                let source = property(message, "source")?;
+                if let Some(call_id) = property(source, "callId")?.and_then(Value::as_str) {
                     pending.shift_remove(call_id);
                 }
             }
@@ -64,40 +90,39 @@ pub fn interrupted_turn_closers(events: &[SessionEvent]) -> Vec<SessionEvent> {
         }
     }
     let (Some(turn), Some(last)) = (open_turn, events.last()) else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    synthesize_closers(turn, open_step, pending, last)
+    Ok(synthesize_closers(turn.value(), open_step, pending, last))
 }
 
-fn register_assistant_calls(event: &SessionEvent, pending: &mut IndexMap<String, PendingCall>) {
-    let Some(step) = integer_field(&event.data, "step") else {
-        return;
-    };
-    let Some(content) = event
-        .data
-        .pointer("/message/content")
-        .and_then(Value::as_array)
-    else {
-        return;
+fn register_assistant_calls(
+    event: &SessionEvent,
+    pending: &mut IndexMap<String, PendingCall>,
+) -> anyhow::Result<()> {
+    let message = property(Some(&event.data), "message")?;
+    let content = property(message, "content")?;
+    let Some(content) = content.and_then(Value::as_array) else {
+        anyhow::bail!("event.data.message.content is not iterable");
     };
     for block in content {
-        if block.get("type").and_then(Value::as_str) == Some("tool-call")
+        if property(Some(block), "type")?.and_then(Value::as_str) == Some("tool-call")
             && let Some(id) = block.get("id").and_then(Value::as_str)
         {
             pending.insert(
                 id.to_owned(),
                 PendingCall {
-                    step,
+                    step: property(Some(&event.data), "step")?.cloned(),
                     call_seq: None,
                 },
             );
         }
     }
+    Ok(())
 }
 
 fn synthesize_closers(
-    turn: i64,
-    open_step: Option<i64>,
+    turn: Option<&Value>,
+    open_step: Option<OpenMarker>,
     pending: IndexMap<String, PendingCall>,
     last: &SessionEvent,
 ) -> Vec<SessionEvent> {
@@ -112,7 +137,7 @@ fn synthesize_closers(
             "step/end",
             seq,
             last.time,
-            json!({"turn": turn, "step": step}),
+            positioned_data(turn, step.value(), json!({})),
         ));
         seq = seq.saturating_add(1);
     }
@@ -120,13 +145,13 @@ fn synthesize_closers(
         "turn/end",
         seq,
         last.time,
-        json!({"turn": turn, "reason": {"kind": "interrupted"}}),
+        positioned_data(turn, None, json!({"reason": {"kind": "interrupted"}})),
     ));
     closers
 }
 
 fn tool_result_closer(
-    turn: i64,
+    turn: Option<&Value>,
     call_id: &str,
     pending: &PendingCall,
     seq: u64,
@@ -155,16 +180,18 @@ fn tool_result_closer(
         event_type: "tool/result".to_owned(),
         seq,
         time,
-        data: json!({
-            "turn": turn,
-            "step": pending.step,
-            "message": message,
-            "error": if started {
-                json!({"name": "ToolOutcomeUnknownError", "code": TOOL_OUTCOME_UNKNOWN})
-            } else {
-                json!({"name": "ToolNotStartedError", "code": TOOL_NOT_STARTED})
-            },
-        }),
+        data: positioned_data(
+            turn,
+            pending.step.as_ref(),
+            json!({
+                "message": message,
+                "error": if started {
+                    json!({"name": "ToolOutcomeUnknownError", "code": TOOL_OUTCOME_UNKNOWN})
+                } else {
+                    json!({"name": "ToolNotStartedError", "code": TOOL_NOT_STARTED})
+                },
+            }),
+        ),
         source_event_seqs: pending.call_seq.map(|call_seq| vec![call_seq]),
         surface_op: Some(SurfaceOp::append()),
         ignorable: None,
@@ -183,8 +210,37 @@ fn plain_closer(event_type: &str, seq: u64, time: i64, data: Value) -> SessionEv
     }
 }
 
-fn integer_field(value: &Value, field: &str) -> Option<i64> {
-    value.get(field)?.as_i64()
+fn property<'a>(value: Option<&'a Value>, field: &str) -> anyhow::Result<Option<&'a Value>> {
+    match value {
+        None => anyhow::bail!("Cannot read properties of undefined (reading '{field}')"),
+        Some(Value::Null) => anyhow::bail!("Cannot read properties of null (reading '{field}')"),
+        Some(value) => Ok(value.get(field)),
+    }
+}
+
+fn open_marker(value: Option<&Value>) -> Option<OpenMarker> {
+    if value == Some(&Value::Null) {
+        None
+    } else {
+        Some(value.map_or(OpenMarker::Undefined, |value| {
+            OpenMarker::Value(value.clone())
+        }))
+    }
+}
+
+fn positioned_data(turn: Option<&Value>, step: Option<&Value>, extra: Value) -> Value {
+    let mut data = serde_json::Map::new();
+    if let Some(turn) = turn {
+        data.insert("turn".to_owned(), turn.clone());
+    }
+    if let Some(step) = step {
+        data.insert("step".to_owned(), step.clone());
+    }
+    let Value::Object(extra) = extra else {
+        unreachable!("closer fields are an object")
+    };
+    data.extend(extra);
+    Value::Object(data)
 }
 
 #[cfg(test)]
@@ -374,7 +430,7 @@ mod tests {
         let text = &result.data["message"]["content"][0]["content"][0]["text"];
         assert_eq!(
             text,
-            "The tool call was interrupted before the SeekDeep Harness recorded it as started. Retry it if it is still needed."
+            "The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed."
         );
     }
 

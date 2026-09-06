@@ -270,7 +270,7 @@ async fn append_rejects_first_sequence_and_mid_batch_gaps_without_materializing(
             .await
             .expect_err("first gap")
             .to_string()
-            .contains("must begin at seq 0")
+            .contains("expected 0 at index 0")
     );
     let mut middle = session.events();
     middle[1].seq = 2;
@@ -280,7 +280,7 @@ async fn append_rejects_first_sequence_and_mid_batch_gaps_without_materializing(
             .await
             .expect_err("middle gap")
             .to_string()
-            .contains("sequence gap")
+            .contains("expected 1 at index 1")
     );
     assert!(backend.list(None).await.expect("still lazy").is_empty());
     context.fiber().dispose().await.expect("dispose");
