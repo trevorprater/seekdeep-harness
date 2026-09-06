@@ -46,6 +46,14 @@ pub(super) fn run_composer(source: &Path) -> anyhow::Result<()> {
     run_case(source, "web-composer", super::web_composer_driver::DRIVER)
 }
 
+pub(super) fn run_scrollbars(source: &Path) -> anyhow::Result<()> {
+    run_case(
+        source,
+        "web-scrollbars",
+        super::web_scrollbars_driver::DRIVER,
+    )
+}
+
 fn run_case(source: &Path, name: &str, script: &str) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;

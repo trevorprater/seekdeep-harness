@@ -24706,7 +24706,15 @@
     {
       "source": "apps/web/tests/conversation-column-overflow.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_scrollbars_driver.rs",
+        "crates/client-ui-conversation/src/browser_conversation_root.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-column-overflow and sidebar-scrollbar browser suites: 12 passed",
+        "cargo xtask web-scrollbars: source five-width measurements retain the narrow glow bleed and vertical scrolling, refuse horizontal wheels, and match the exact source golden; the source-timed overflow-x mutation control reaches the measured positive boundary; zero model calls"
+      ]
     },
     {
       "source": "apps/web/tests/cordis-tool-round.e2e.ts",
@@ -25081,7 +25089,17 @@
     {
       "source": "apps/web/tests/sidebar-scrollbar.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_scrollbars_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-sidebar/src/wasm.rs"
+      ],
+      "evidence": [
+        "pinned source conversation-column-overflow and sidebar-scrollbar browser suites: 12 passed",
+        "cargo xtask web-scrollbars: 24 source-derived cold sessions through real Rust persistence before fresh browser bootstrap; reserved gutter, unobscured timestamps, fixed row insets, pointer reveal/linger, pointer-free quiet scrolling, and both palette goldens pass with only product CSS-variable renaming; zero model calls",
+        "cargo xtask web-composer: all 10 geometry checks pass with the source-faithful legacy fixture seeder"
+      ]
     },
     {
       "source": "apps/web/tests/sidebar-subagent-activity.e2e.ts",

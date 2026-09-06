@@ -22,6 +22,7 @@ mod web_model_selection_driver;
 mod web_models_settings_driver;
 mod web_onboarding_driver;
 mod web_plugin_settings_driver;
+mod web_scrollbars_driver;
 mod web_settings;
 mod web_settings_driver;
 mod web_startup_driver;
@@ -75,6 +76,11 @@ enum Command {
     },
     /// Verify composer scrolling and tab geometry with source browser measurements.
     WebComposer {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Verify responsive column overflow and sidebar scrollbar behavior in Chromium.
+    WebScrollbars {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
     },
@@ -305,6 +311,7 @@ fn main() -> anyhow::Result<()> {
         Command::WebModelSelection { source } => web_settings::run_model_selection(&source),
         Command::WebStartup { source } => web_settings::run_startup(&source),
         Command::WebComposer { source } => web_settings::run_composer(&source),
+        Command::WebScrollbars { source } => web_settings::run_scrollbars(&source),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {
