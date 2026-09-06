@@ -30,6 +30,8 @@ The package is an ESM Rust/WASM test library rather than a `tsdown` bundle. The 
 
 ## Verification
 
+The generated Context binding is shared with the production Cordis package, preserving caller identity and inherited shadow metadata. The built-package smoke checks service methods and bound callbacks against the runtime's exact public Context; a separate simplified Context proxy would hide production tracing defects.
+
 The full pinned source runtime suite passes all 26 tests. Native Rust tests pin subscription ordering, disposal, failure propagation, settings publication and write records, translation conversion, Workspace stabilization, every action default and stub, browse cancellation, archive publication, class folding, UTF-16 fingerprinting, and target Session defaults. Fourteen live WASM tests exercise every reusable helper plus assembled root boot order, renderer updates, Session selection, automatic Slot views, caller-bound function, object, and class feature cleanup, Store identity and pruning, public constructors, JavaScript string conversion, Vitest-shaped settings spies, and idempotent teardown. The optimized ESM package builds through `cargo xtask wasm-package`; its curated exports exclude dependency APIs, and its package metadata resolves every required artifact. A dedicated built-package gate imports the generated entry under real Vitest, React, Testing Library, and jsdom, initializes the embedded WASM without a fetch, checks class identities and helpers, creates a live runtime, mounts and disposes a class plugin, adds a Session, and disposes the runtime. The same gate type-checks a generated consumer to prove that augmented `SlotMap` keys and owner props remain enforced by the public declarations.
 
 ## Alternatives considered

@@ -45,6 +45,11 @@ describe('built Rust/WASM client test runtime', () => {
     expect(runtime.root).toBeInstanceOf(TestRoot)
     expect(runtime.sessions).toBeInstanceOf(TestSessions)
     expect(runtime.workspaces).toBeInstanceOf(TestWorkspaces)
+    const sourceService = { ctx: runtime.ctx, [Symbol.for('cordis.tracker')]: { property: 'ctx' }, read() { return this.ctx } }
+    const traced = runtime.ctx.reflect.trace(sourceService)
+    expect(traced.read()).toBe(runtime.ctx)
+    const bound = runtime.ctx.reflect.bind(function (value) { return value.read() })
+    expect(bound(sourceService)).toBe(runtime.ctx)
     const inheritedInject = { slots: null }
     const classInject = Object.create(inheritedInject)
     classInject[Symbol.for('cordis.checkProto')] = true

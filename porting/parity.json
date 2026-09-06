@@ -87593,7 +87593,7 @@
         "cargo xtask remote-gateway-oracle",
         "cargo xtask web-assembled --export"
       ],
-      "note": "Native event semantics, ordinary browser lifecycle/interception, and the assembled export path pass. Specialized per-Fiber internal/update routing and callback argument service tracing remain open in the existing GUI Web client architecture record."
+      "note": "Native event semantics, ordinary browser lifecycle/interception, callback service tracing with listener-owned effect cleanup, and the assembled export path pass. Specialized per-Fiber internal/update routing remains open in the existing GUI Web client architecture record."
     },
     {
       "source": "vendor/cordis/src/fiber.ts",

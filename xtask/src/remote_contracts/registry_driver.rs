@@ -33,6 +33,69 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves callback service tracing, method receivers, and effect ownership', async () => {
+  const root = new Context(), origin = root.extend({ label: 'origin' }), tracker = Symbol.for('cordis.tracker'), shadow = Symbol.for('cordis.shadow'), original = Symbol.for('cordis.original')
+  class NamedService extends Service { constructor(ctx) { super(ctx, 'traced-named') } }
+  const named = new NamedService(root)
+  expect(Service.tracker).toBe(tracker)
+  expect(Object.getOwnPropertyDescriptor(named, tracker)).toEqual({ value: { property: 'ctx', associate: 'traced-named' }, writable: true, enumerable: false, configurable: false })
+  const service = { ctx: origin, [tracker]: { property: 'ctx' }, read() { return this.ctx }, attach(log) { this.ctx.effect(() => () => log.push('disposed')) }, get contextView() { return this.ctx } }
+  const listenerContext = root.extend({ label: 'listener' })
+  const traced = listenerContext.reflect.trace(service)
+  expect(traced.ctx).toBe(listenerContext)
+  expect(traced[original]).toBe(service)
+  expect(traced.read()).toBe(listenerContext)
+  expect(traced.contextView[shadow]).toBe(origin)
+  expect(Object.getPrototypeOf(traced.contextView)).toBe(listenerContext)
+  expect(Reflect.set(traced, 'ctx', root)).toBe(false)
+  expect(Reflect.set(traced, original, root)).toBe(false)
+  const external = { ctx: root }
+  expect(traced.read.call(external)).toBe(root)
+  const child = { ctx: origin, [tracker]: { property: 'ctx' } }
+  service.child = child
+  service.returnChild = () => child
+  expect(traced.child.ctx).toBe(listenerContext)
+  expect(traced.returnChild().ctx).toBe(listenerContext)
+  const identityAware = { ctx: origin, [tracker]: { property: 'ctx', noShadow: true }, method() { return this.ctx }, get origin() { return this.ctx[shadow] } }
+  const identityTrace = listenerContext.reflect.trace(identityAware)
+  expect(identityTrace.method).toBe(identityAware.method)
+  expect(identityTrace.origin).toBe(origin)
+  const shadowCaller = listenerContext.extend({ [shadow]: origin })
+  expect(shadowCaller.reflect.trace(service).ctx).toBe(listenerContext)
+  expect(shadowCaller.reflect.trace(identityAware).ctx).toBe(shadowCaller)
+  const callable = function () { return 'raw' }
+  callable.ctx = origin
+  callable[tracker] = { property: 'ctx' }
+  callable[Symbol.for('cordis.invoke')] = function () { return this.ctx }
+  expect(listenerContext.reflect.trace(callable)()).toBe(listenerContext)
+  root.provide('trace-space.value', 17)
+  const associated = { ctx: origin, [tracker]: { property: 'ctx', associate: 'trace-space' } }
+  const associatedTrace = listenerContext.reflect.trace(associated)
+  expect(associatedTrace.value).toBe(17)
+  associatedTrace.value = 23
+  expect(root.get('trace-space.value')).toBe(23)
+  const plain = {}, received = []
+  const bound = listenerContext.reflect.bind(function (argument, untouched) { received.push(this.ctx, argument.ctx, untouched); return argument.read() })
+  expect(bound.call(service, service, plain)).toBe(listenerContext)
+  expect(received).toEqual([listenerContext, listenerContext, plain])
+  function Receiver(argument) { this.argument = argument }
+  const Constructed = listenerContext.reflect.bind(Receiver)
+  const instance = new Constructed(service)
+  expect(instance).toBeInstanceOf(Receiver)
+  expect(instance.argument.ctx).toBe(listenerContext)
+  const log = []
+  let registered
+  const fiber = root.plugin({ name: 'traced-listener', apply(ctx) {
+    registered = ctx
+    ctx.on('trace/callback', function (argument) { expect(this.ctx).toBe(ctx); argument.attach(log); return argument.read() })
+  } })
+  await fiber
+  expect(root.bail(service, 'trace/callback', service)).toBe(registered)
+  await fiber.dispose()
+  expect(log).toEqual(['disposed'])
+  expect(root.bail(service, 'trace/callback', service)).toBe(undefined)
+})
+
 it('preserves Context branding and the dynamic brand-key contract', () => {
   const root = new Context(), Ctor = root.constructor, brand = Symbol.for('cordis.is')
   expect(Ctor.is(root)).toBe(true)

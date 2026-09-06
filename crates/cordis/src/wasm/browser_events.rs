@@ -46,6 +46,9 @@ pub(super) fn register(
         Some(owner) => owner,
         None => wrap_context(context.clone_for_binding())?,
     };
+    let listener = super::tracing::Tracer::new(context.inner.clone(), owner.clone())
+        .bind(&listener)?
+        .dyn_into::<Function>()?;
     let interception = Array::of4(
         &owner,
         &JsValue::from_str("internal/listener"),

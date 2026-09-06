@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub(crate) mod browser_events;
+mod tracing;
 
 thread_local! {
     static CONTEXT_WRAPPER: RefCell<Option<Function>> = const { RefCell::new(None) };
@@ -570,6 +571,15 @@ impl WasmContext {
     /// Returns JavaScript object-construction failures.
     #[wasm_bindgen(getter)]
     pub fn reflect(&self) -> Result<JsValue, JsValue> {
+        self.reflection_face(wrap_context(self.clone_for_binding())?)
+    }
+
+    /// Builds the reflection binding for the exact calling JavaScript Context.
+    ///
+    /// # Errors
+    /// Returns property construction or binding failures.
+    #[wasm_bindgen(js_name = reflectionFace)]
+    pub fn reflection_face(&self, owner: JsValue) -> Result<JsValue, JsValue> {
         let context = self.inner.clone();
         let provide = Closure::wrap(Box::new(
             move |name: String, value: JsValue, _check: JsValue| -> Result<Function, JsValue> {
@@ -580,7 +590,29 @@ impl WasmContext {
             },
         )
             as Box<dyn FnMut(String, JsValue, JsValue) -> Result<Function, JsValue>>);
-        object(&[("provide", provide.into_js_value())]).map(Into::into)
+        let tracer = tracing::Tracer::new(self.inner.clone(), owner);
+        let binder = tracer.clone();
+        let trace = Closure::wrap(Box::new(move |value: JsValue| tracer.trace(&value))
+            as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>)
+        .into_js_value();
+        let bind = Closure::wrap(Box::new(move |value: JsValue| binder.bind(&value))
+            as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>)
+        .into_js_value();
+        object(&[
+            ("provide", provide.into_js_value()),
+            ("trace", trace),
+            ("bind", bind),
+        ])
+        .map(Into::into)
+    }
+
+    /// Traces a service value to the calling JavaScript Context.
+    ///
+    /// # Errors
+    /// Returns tracker or property lookup failures unchanged.
+    #[wasm_bindgen(js_name = traceService)]
+    pub fn trace_service(&self, value: &JsValue, owner: JsValue) -> Result<JsValue, JsValue> {
+        tracing::Tracer::new(self.inner.clone(), owner).trace(value)
     }
 
     /// Registry compatibility face. Lifecycle still runs in the Rust registry.

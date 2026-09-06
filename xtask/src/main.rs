@@ -968,17 +968,17 @@ fn wasm_foundation_esm_package(
     }
     let (wrapper, declarations, invariant) = match module_id {
         "@seekdeep-ai/seekdeep-client-ui-slots" => (
-            ui_slots_esm_wrapper(),
+            ui_slots_esm_wrapper().to_owned(),
             ui_slots_esm_declarations(),
             "client-ui-slots-invariant",
         ),
         "@seekdeep-ai/seekdeep-client-schema-form" => (
-            schema_form_esm_wrapper(),
+            schema_form_esm_wrapper().to_owned(),
             schema_form_esm_declarations(),
             "client-schema-form-invariant",
         ),
         "@seekdeep-ai/seekdeep-client-web-react" => (
-            client_web_react_esm_wrapper(),
+            client_web_react_esm_wrapper().to_owned(),
             client_web_react_esm_declarations(),
             "client-web-react-invariant",
         ),
@@ -996,7 +996,7 @@ fn wasm_foundation_esm_package(
                 .encode(std::fs::read(staging.join("wasm_bg.wasm"))?),
         )
     } else {
-        wrapper.to_owned()
+        wrapper
     };
     std::fs::write(out_dir.join("index.js"), wrapper)?;
     std::fs::write(
@@ -1133,7 +1133,7 @@ export type UseSession<Snap extends object = object> = SnapshotSelectorHook<Snap
 }
 
 #[allow(clippy::too_many_lines)] // The self-contained ESM boundary stays reviewable as one artifact.
-fn client_test_runtime_esm_wrapper() -> &'static str {
+fn client_test_runtime_esm_wrapper() -> String {
     r"import * as wasm from './wasm.js';
 import * as React from 'react';
 import { act, render } from '@testing-library/react';
@@ -1144,11 +1144,7 @@ import { produce } from 'immer';
 const binary = atob('__SEEKDEEP_WASM_BASE64__');
 wasm.initSync({ module: Uint8Array.from(binary, value => value.charCodeAt(0)) });
 
-const FILTER = Symbol.for('cordis.filter');
-const EFFECT = Symbol.for('cordis.effect');
-const ISOLATE = Symbol.for('cordis.isolate');
-const INTERCEPT = Symbol.for('cordis.intercept');
-const SERVICE_TRACKER = Symbol.for('cordis.service.tracker');
+__SEEKDEEP_CONTEXT_BINDING__
 const INIT_HOOKS = Symbol.for('cordis.initHooks');
 const INIT = Symbol.for('cordis.init');
 const CHECK_PROTO = Symbol.for('cordis.checkProto');
@@ -1179,60 +1175,6 @@ function resolveInject(inject, result = Object.create(null)) {
   }
   return Object.keys(result);
 }
-function traceService(ctx, value) {
-  if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[SERVICE_TRACKER] !== true) return value;
-  let proxy;
-  proxy = new Proxy(value, {
-    get(target, key, receiver) {
-      if (key === 'ctx') return ctx;
-      const inner = Reflect.get(target, key, receiver);
-      return typeof inner === 'function' ? (...args) => Reflect.apply(inner, proxy, args) : inner;
-    },
-    set(target, key, next, receiver) {
-      if (key === 'ctx') return false;
-      return Reflect.set(target, key, next, receiver);
-    },
-  });
-  return proxy;
-}
-function wrapContext(core) {
-  let context;
-  context = new Proxy(core, {
-    get(target, key, receiver) {
-      if (key === 'emit') return (name, ...args) => target.emitArgs(name, args);
-      if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args);
-      if (key === 'serial') return (name, ...args) => target.serialArgs(name, args);
-      if (key === 'bail') return (name, ...args) => target.bailArgs(name, args);
-      if (key === 'get') return (name, strict) => traceService(context, target.serviceGet(name, strict));
-      if (key === 'constructor') return wasm.WasmContext;
-      if (Reflect.has(target, key)) {
-        const value = Reflect.get(target, key, receiver);
-        return typeof value === 'function' ? value.bind(target) : value;
-      }
-      const metadata = target.metaGet(key);
-      if (metadata !== undefined) return metadata;
-      return typeof key === 'string' ? traceService(context, target.get(key)) : undefined;
-    },
-    set(target, key, value, receiver) {
-      if (Reflect.has(target, key) || typeof key !== 'string') return Reflect.set(target, key, value, receiver);
-      return target.setProperty(key, value);
-    },
-    has(target, key) {
-      if (Reflect.has(target, key)) return true;
-      if (target.metaGet(key) !== undefined) return true;
-      return typeof key === 'string' && target.get(key) !== undefined;
-    },
-  });
-  return context;
-}
-Object.defineProperties(wasm.WasmContext, {
-  filter: { value: FILTER },
-  effect: { value: EFFECT },
-  isolate: { value: ISOLATE },
-  intercept: { value: INTERCEPT },
-});
-wasm.configureContextWrapper(wrapContext);
-
 export const domSnapshotSerializer = {
   test(value) {
     return typeof Element !== 'undefined'
@@ -1323,7 +1265,7 @@ export function usePinnedBrowserLanguages(primary, ...rest) {
   beforeEach(() => { pin = new wasm.WasmBrowserLanguagePin(primary, Array.from(rest)); });
   afterEach(() => { pin?.dispose(); pin = undefined; });
 }
-"
+".replace("__SEEKDEEP_CONTEXT_BINDING__", cordis_context_binding())
 }
 
 #[allow(clippy::too_many_lines)] // The source-compatible declaration surface is one closed artifact.
@@ -1684,36 +1626,11 @@ export default plugin;
 "
 }
 
-#[allow(clippy::too_many_lines)] // The Context Proxy, branding, and Service bindings form one ESM face.
-fn cordis_esm_wrapper() -> &'static str {
-    r"import init, * as wasm from './client.js';
-
-await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
-
-const FILTER = Symbol.for('cordis.filter');
+fn cordis_context_binding() -> &'static str {
+    r"const FILTER = Symbol.for('cordis.filter');
 const EFFECT = Symbol.for('cordis.effect');
 const ISOLATE = Symbol.for('cordis.isolate');
 const INTERCEPT = Symbol.for('cordis.intercept');
-const SERVICE_TRACKER = Symbol.for('cordis.service.tracker');
-
-function traceService(ctx, value) {
-  if ((typeof value !== 'object' && typeof value !== 'function') || value === null || value[SERVICE_TRACKER] !== true) return value;
-  let proxy;
-  proxy = new Proxy(value, {
-    get(target, key, receiver) {
-      if (key === 'ctx') return ctx;
-      const inner = Reflect.get(target, key, receiver);
-      return typeof inner === 'function'
-        ? (...args) => Reflect.apply(inner, proxy, args)
-        : inner;
-    },
-    set(target, key, next, receiver) {
-      if (key === 'ctx') return false;
-      return Reflect.set(target, key, next, receiver);
-    },
-  });
-  return proxy;
-}
 
 function wrapContext(core) {
   let context;
@@ -1731,14 +1648,15 @@ function wrapContext(core) {
       if (key === 'once') return (name, listener, options) => core.once(name, listener, options, receiver);
       if (key === 'events') return receiver;
       if (key === 'emit' || key === 'parallel' || key === 'serial' || key === 'bail' || key === 'waterfall') return (...args) => core.eventArgs(key, args);
-      if (key === 'get') return (name, strict) => traceService(receiver, core.serviceGet(name, strict));
+      if (key === 'get') return (name, strict) => core.traceService(core.serviceGet(name, strict), receiver);
+      if (key === 'reflect') return core.reflectionFace(receiver);
       if (key === 'constructor') return Context;
       if (Reflect.has(Context.prototype, key)) return Reflect.get(Context.prototype, key, receiver);
       if (Reflect.has(core, key)) {
         const value = Reflect.get(core, key, core);
         return typeof value === 'function' ? value.bind(core) : value;
       }
-      return typeof key === 'string' ? traceService(receiver, core.get(key)) : undefined;
+      return typeof key === 'string' ? core.traceService(core.get(key), receiver) : undefined;
     },
     set(target, key, value, receiver) {
       if (core.metaHas(key, Context.prototype) || typeof key !== 'string') return core.metaSet(key, value, receiver);
@@ -1761,7 +1679,7 @@ Object.defineProperties(wasm.WasmContext, {
 });
 wasm.configureContextWrapper(wrapContext);
 
-export class Context {
+class Context {
   static filter = FILTER;
   static effect = EFFECT;
   static isolate = ISOLATE;
@@ -1773,19 +1691,29 @@ export class Context {
   }
   constructor() { return wasm.createContext(); }
 }
+"
+}
 
+fn cordis_esm_wrapper() -> String {
+    r"import init, * as wasm from './client.js';
+
+await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
+
+__SEEKDEEP_CONTEXT_BINDING__
+
+export { Context };
 export const Fiber = wasm.WasmFiber;
 export const FiberState = Object.freeze({ PENDING: 0, LOADING: 1, ACTIVE: 2, FAILED: 3, DISPOSED: 4, UNLOADING: 5 });
 export const symbols = Object.freeze({ filter: FILTER, effect: EFFECT, isolate: ISOLATE, intercept: INTERCEPT });
 export class Service {
   static config = Symbol.for('cordis.service.config');
-  static tracker = Symbol.for('cordis.service.tracker');
+  static tracker = Symbol.for('cordis.tracker');
   static check = Symbol.for('cordis.service.check');
   static init = Symbol.for('cordis.service.init');
   constructor(ctx, name) {
     this.ctx = ctx;
     this.name = name;
-    Object.defineProperty(this, SERVICE_TRACKER, { value: true });
+    Object.defineProperty(this, Service.tracker, { value: { property: 'ctx', associate: name }, writable: true });
     ctx.provide(name, this);
   }
 }
@@ -1793,7 +1721,7 @@ export class CordisError extends Error {
   constructor(code, message) { super(message ?? code); this.code = code; }
 }
 export function Inject() { return value => value; }
-"
+".replace("__SEEKDEEP_CONTEXT_BINDING__", cordis_context_binding())
 }
 
 fn cordis_esm_declarations() -> &'static str {
@@ -1822,7 +1750,7 @@ export declare class Context {
   static is(value: unknown): value is Context;
   readonly root: Context;
   readonly fiber: Fiber;
-  readonly reflect: { provide(name: string, value: unknown, check?: unknown): Disposable };
+  readonly reflect: { provide(name: string, value: unknown, check?: unknown): Disposable; trace<T>(value: T): T; bind<T extends Function>(callback: T): T };
   readonly registry: { plugin(plugin: Plugin, config?: unknown): Fiber };
   readonly events: Context;
   constructor();
@@ -2691,7 +2619,7 @@ fn module_factory(global: &str, module_id: &str) -> String {
     if module_id == "@seekdeep-ai/seekdeep-api-gateway" {
         return format!(
             r"() => {{
-  const tracker = Symbol.for('cordis.service.tracker');
+  const tracker = Symbol.for('cordis.tracker');
   const remoteFactory = (ctx, core) => {{
     const service = {{
       ctx,
@@ -2699,7 +2627,7 @@ fn module_factory(global: &str, module_id: &str) -> String {
       $on(event, listener) {{ return core.on(this.ctx, event, listener); }},
       $dispatch(event, args) {{ return core.dispatch(event, args); }},
     }};
-    Object.defineProperty(service, tracker, {{ value: true }});
+    Object.defineProperty(service, tracker, {{ value: {{ property: 'ctx', associate: 'remote' }}, writable: true }});
     ctx.provide('remote', service);
     return service;
   }};
@@ -2718,7 +2646,7 @@ fn module_factory(global: &str, module_id: &str) -> String {
       }},
       remove(method) {{ delete this[method]; }},
     }};
-    Object.defineProperty(service, tracker, {{ value: true }});
+    Object.defineProperty(service, tracker, {{ value: {{ property: 'ctx', associate: 'remote.' + namespace }}, writable: true }});
     Object.defineProperty(service, 'invokeRemote', {{ value: invoke }});
     const dispose = ctx.provide('remote.' + namespace, service);
     return {{ service, dispose }};
@@ -6095,15 +6023,15 @@ mod tests {
         for expected in [
             "await init({ module_or_path:",
             "wasm.configureContextWrapper(wrapContext)",
-            "traceService(receiver, core.get(key))",
-            "if (key === 'get') return (name, strict) => traceService(receiver, core.serviceGet(name, strict))",
+            "core.traceService(core.get(key), receiver)",
+            "if (key === 'get') return (name, strict) => core.traceService(core.serviceGet(name, strict), receiver)",
             "new Proxy(data,",
             "core.metaHas(key, Context.prototype)",
             "core.metaGet(key, receiver)",
             "core.metaSet(key, value, receiver)",
             "core.extend(metadata, receiver)",
             "constructor() { return wasm.createContext(); }",
-            "Object.defineProperty(this, SERVICE_TRACKER",
+            "Object.defineProperty(this, Service.tracker",
             "ctx.provide(name, this)",
         ] {
             assert!(cordis.contains(expected), "missing Cordis {expected:?}");

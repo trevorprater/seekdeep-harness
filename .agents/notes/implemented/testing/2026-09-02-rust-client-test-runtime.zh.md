@@ -30,6 +30,8 @@ WASM Sessions 测试替身保留稳定的 fixture 快照与 projection face、li
 
 ## 验证
 
+生成的 Context 绑定与生产 Cordis 包共用，保留调用方 identity 和继承的 shadow 元数据。构建产物冒烟测试检查服务方法与绑定回调是否使用运行时精确的公开 Context；另建简化 Context proxy 会掩盖生产 tracing 缺陷。
+
 完整的固定 source 运行时套件通过全部 26 项测试。原生 Rust 测试固定订阅顺序、dispose、错误传播、settings 发布与写入记录、翻译转换、Workspace 稳定化、每项 action 默认实现与 stub、浏览取消、archive 发布、class 折叠、UTF-16 指纹和目标 Session 默认值。14 项实时 WASM 测试覆盖每个可复用 helper，以及组装后的根启动顺序、renderer 更新、Session 选择、自动 Slot view、绑定调用方的 function、object 与 class 功能清理、Store identity 与清理、公开构造器、JavaScript 字符串转换、Vitest 形态 settings spy 和幂等 teardown。优化 ESM 包通过 `cargo xtask wasm-package` 构建；精简 export 不包含依赖 API，包元数据也可解析每项必需 artifact。专用构建产物门禁在真实 Vitest、React、Testing Library 与 jsdom 下导入生成的入口，在不发起 fetch 的情况下初始化嵌入式 WASM，检查 class identity 与 helper，创建实时运行时，挂载并 dispose class plugin、添加 Session，再将运行时 dispose。同一门禁还会对生成的 consumer 执行类型检查，证明公开 declaration 继续强制约束扩展后的 `SlotMap` key 与 owner prop。
 
 ## 曾考虑的替代方案

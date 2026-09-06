@@ -91,6 +91,23 @@ try {
     const foreign = new realm.contentWindow.Object(); foreign[realm.contentWindow.Symbol.for('cordis.is')] = true;
     if (foreign instanceof Object || !cordis.Context.is(foreign)) throw new Error('Context brand does not cross browser realms');
     realm.remove();
+    class TracedService extends cordis.Service {
+      constructor(ctx) { super(ctx, 'trace-probe'); }
+      current() { return this.ctx; }
+      own(log) { this.ctx.effect(() => () => log.push('disposed'), 'traced callback effect'); }
+    }
+    const tracedService = new TracedService(client), traceLog = [];
+    const traceFiber = client.plugin({ name: 'callback-service-tracing', apply(ctx) {
+      ctx.on('probe/traced-callback', function (argument) {
+        if (this.ctx !== ctx || argument.ctx !== ctx) throw new Error('callback lost its registering context');
+        argument.own(traceLog);
+        return argument.current();
+      });
+    } });
+    await traceFiber;
+    if (client.bail(tracedService, 'probe/traced-callback', tracedService) !== traceFiber.ctx) throw new Error('tracked method return lost its caller');
+    await traceFiber.dispose();
+    if (traceLog.join(',') !== 'disposed') throw new Error('traced callback effect escaped its owner');
     const eventTrace = [];
     let eventOwner;
     const interceptedDisposer = () => {};
