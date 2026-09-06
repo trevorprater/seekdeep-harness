@@ -250,7 +250,11 @@ fn corpus(source: &Path, gateway: bool, source_regressions: bool) -> anyhow::Res
         .to_owned();
     let directory = super::cargo_metadata()?
         .target_directory
-        .join("xtask/remote-registry-oracle");
+        .join(if source_regressions {
+            "xtask/remote-source-regressions"
+        } else {
+            "xtask/remote-registry-oracle"
+        });
     std::fs::create_dir_all(&directory)?;
     let (adapter, gateway_adapter) = write_corpus_adapters(&root, &directory)?;
     let fixture = directory.join("registry.test.ts");

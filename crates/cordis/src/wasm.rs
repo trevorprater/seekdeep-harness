@@ -225,44 +225,22 @@ impl WasmContext {
         listener: JsValue,
         options: JsValue,
         owner: Option<JsValue>,
-    ) -> Result<Function, JsValue> {
-        let listener = listener
-            .dyn_into::<Function>()
-            .map_err(|_| js_sys::Error::new("ctx.on listener must be a function"))?;
-        let registration = event_options(&options)?;
-        let once = bool_property(&options, "once")?;
-        let browser_listener = listener.clone();
-        let owner = match owner {
-            Some(owner) => owner,
-            None => wrap_context(self.clone_for_binding())?,
-        };
-        let browser = browser_events::BrowserHook {
-            owner,
-            callback: Arc::new(move |receiver, args| browser_listener.apply(receiver, args)),
-        };
-        let root_face = self.root_face.clone();
-        let metadata = self.metadata.clone();
-        let callback = move |context: Context, args: EventArgs| {
-            let listener = listener.clone();
-            let root_face = root_face.clone();
-            let metadata = metadata.clone();
-            Box::pin(async move {
-                let this = wrap_detached_context(context, metadata, root_face)?;
-                let returned = listener
-                    .apply(&this, &event_args_to_js(&args))
-                    .map_err(|error| js_anyhow(&error))?;
-                let settled = JsFuture::from(Promise::resolve(&returned))
-                    .await
-                    .map_err(|error| js_anyhow(&error))?;
-                Ok(event_reply_from_js(settled))
-            }) as crate::events::ListenerFuture
-        };
-        let effect = self
-            .inner
-            .events()
-            .on_browser(&self.inner, name, callback, registration, once, browser)
-            .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-        Ok(effect_disposer(effect))
+    ) -> Result<JsValue, JsValue> {
+        browser_events::register(self, name, listener, options, owner)
+    }
+
+    /// Registers a listener removed before its first invocation, including reentry.
+    ///
+    /// # Errors
+    /// Returns interception, malformed option, or inactive-Fiber failures.
+    pub fn once(
+        &self,
+        name: String,
+        listener: &JsValue,
+        options: JsValue,
+        owner: Option<JsValue>,
+    ) -> Result<JsValue, JsValue> {
+        browser_events::once(self, name, listener, options, owner)
     }
 
     /// Emits one event and detaches asynchronous listener work.
@@ -988,22 +966,6 @@ fn inject_names(value: &JsValue) -> Result<Vec<String>, JsValue> {
             .collect());
     }
     Err(js_sys::Error::new("plugin inject must be an array or object").into())
-}
-
-fn event_options(value: &JsValue) -> Result<EventOptions, JsValue> {
-    Ok(EventOptions {
-        prepend: value.as_bool().unwrap_or(bool_property(value, "prepend")?),
-        global: bool_property(value, "global")?,
-    })
-}
-
-fn bool_property(value: &JsValue, key: &str) -> Result<bool, JsValue> {
-    if !value.is_object() || value.is_null() {
-        return Ok(false);
-    }
-    Ok(Reflect::get(value, &JsValue::from_str(key))?
-        .as_bool()
-        .unwrap_or(false))
 }
 
 fn string_property(value: &JsValue, key: &str) -> Result<Option<String>, JsValue> {

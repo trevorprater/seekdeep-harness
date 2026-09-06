@@ -1727,7 +1727,9 @@ function wrapContext(core) {
       if (key === 'plugin') return (plugin, config) => core.plugin(plugin, config, receiver);
       if (key === 'inject') return (dependencies, callback) => core.inject(dependencies, callback, receiver);
       if (key === 'on') return (name, listener, options) => core.on(name, listener, options, receiver);
-      if (key === 'emit' || key === 'parallel' || key === 'serial' || key === 'bail') return (...args) => core.eventArgs(key, args);
+      if (key === 'once') return (name, listener, options) => core.once(name, listener, options, receiver);
+      if (key === 'events') return receiver;
+      if (key === 'emit' || key === 'parallel' || key === 'serial' || key === 'bail' || key === 'waterfall') return (...args) => core.eventArgs(key, args);
       if (key === 'get') return (name, strict) => traceService(receiver, core.serviceGet(name, strict));
       if (key === 'constructor') return Context;
       if (Reflect.has(Context.prototype, key)) return Reflect.get(Context.prototype, key, receiver);
@@ -1795,7 +1797,7 @@ export type Disposable = () => Awaitable<void>;
 export type Inject = readonly string[] | Readonly<Record<string, unknown>>;
 export interface PluginObject<T = unknown> { name?: string; inject?: Inject; apply(ctx: Context, config: T): unknown }
 export type Plugin<T = unknown> = PluginObject<T> | ((ctx: Context, config: T) => unknown);
-export interface EventOptions { prepend?: boolean; global?: boolean; once?: boolean }
+export interface EventOptions { prepend?: boolean; global?: boolean }
 export declare class Fiber {
   readonly ctx: Context;
   readonly state: number;
@@ -1824,6 +1826,7 @@ export declare class Context {
   plugin(plugin: Plugin, config?: unknown): Fiber;
   inject(dependencies: Inject, callback: Plugin): Fiber;
   on(name: string, listener: Function, options?: boolean | EventOptions): Disposable;
+  once(name: string, listener: Function, options?: boolean | EventOptions): Disposable;
   dispatch(mode: string, args: unknown[]): Function[];
   emit(name: string, ...args: unknown[]): void;
   emit(thisArg: object | null, name: string, ...args: unknown[]): void;
@@ -1833,6 +1836,8 @@ export declare class Context {
   serial(thisArg: object | null, name: string, ...args: unknown[]): Promise<unknown>;
   bail(name: string, ...args: unknown[]): unknown;
   bail(thisArg: object | null, name: string, ...args: unknown[]): unknown;
+  waterfall(name: string, ...args: unknown[]): unknown;
+  waterfall(thisArg: object | null, name: string, ...args: unknown[]): unknown;
   effect(setup: () => unknown, label?: string): Disposable;
   extend(metadata?: object): Context;
   isolate(name: string, label?: string): Context;

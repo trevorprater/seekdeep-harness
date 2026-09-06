@@ -5,12 +5,16 @@ use std::{
     task::{Context as TaskContext, Poll},
 };
 
-use futures::{future::join_all, task::noop_waker_ref};
+use futures::task::noop_waker_ref;
 use js_sys::{Array, Function, Promise, Reflect, Symbol};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
-use super::{WasmContext, event_args_from_js, event_reply_to_js, js_error, wrap_detached_context};
+use super::{
+    Context, EventArgs, EventOptions, FiberState, WasmContext, effect_disposer, event_args_from_js,
+    event_args_to_js, event_reply_from_js, event_reply_to_js, js_anyhow, js_error, object,
+    wrap_context, wrap_detached_context,
+};
 
 type BrowserCallback = Arc<dyn Fn(&JsValue, &Array) -> Result<JsValue, JsValue> + Send + Sync>;
 
@@ -18,6 +22,111 @@ type BrowserCallback = Arc<dyn Fn(&JsValue, &Array) -> Result<JsValue, JsValue> 
 pub(crate) struct BrowserHook {
     pub owner: JsValue,
     pub callback: BrowserCallback,
+}
+
+pub(super) fn register(
+    context: &WasmContext,
+    name: String,
+    listener: JsValue,
+    options: JsValue,
+    owner: Option<JsValue>,
+) -> Result<JsValue, JsValue> {
+    if context.inner.fiber().state() == FiberState::Disposed {
+        return Err(js_sys::Error::new(&crate::CordisError::InactiveEffect.to_string()).into());
+    }
+    let listener = listener
+        .dyn_into::<Function>()
+        .map_err(|_| js_sys::TypeError::new("ctx.on listener must be a function"))?;
+    let options = if options.is_object() || options.is_null() {
+        options
+    } else {
+        object(&[("prepend", options)])?.into()
+    };
+    let owner = match owner {
+        Some(owner) => owner,
+        None => wrap_context(context.clone_for_binding())?,
+    };
+    let interception = Array::of4(
+        &owner,
+        &JsValue::from_str("internal/listener"),
+        &JsValue::from_str(&name),
+        &listener,
+    );
+    interception.push(&options);
+    let intercepted = invoke(context, "bail", &interception)?;
+    if intercepted.is_truthy() {
+        return Ok(intercepted);
+    }
+    let registration = EventOptions {
+        prepend: Reflect::get(&options, &JsValue::from_str("prepend"))?.is_truthy(),
+        global: Reflect::get(&options, &JsValue::from_str("global"))?.is_truthy(),
+    };
+    let browser_listener = listener.clone();
+    let browser = BrowserHook {
+        owner,
+        callback: Arc::new(move |receiver, args| browser_listener.apply(receiver, args)),
+    };
+    let root_face = context.root_face.clone();
+    let metadata = context.metadata.clone();
+    let callback = move |context: Context, args: EventArgs| {
+        let listener = listener.clone();
+        let root_face = root_face.clone();
+        let metadata = metadata.clone();
+        Box::pin(async move {
+            let this = wrap_detached_context(context, metadata, root_face)?;
+            let returned = listener
+                .apply(&this, &event_args_to_js(&args))
+                .map_err(|error| js_anyhow(&error))?;
+            let settled = JsFuture::from(Promise::resolve(&returned))
+                .await
+                .map_err(|error| js_anyhow(&error))?;
+            Ok(event_reply_from_js(settled))
+        }) as crate::events::ListenerFuture
+    };
+    let effect = context
+        .inner
+        .events()
+        .on_browser(&context.inner, name, callback, registration, browser)
+        .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+    Ok(effect_disposer(effect).into())
+}
+
+pub(super) fn once(
+    context: &WasmContext,
+    name: String,
+    listener: &JsValue,
+    options: JsValue,
+    owner: Option<JsValue>,
+) -> Result<JsValue, JsValue> {
+    let disposer = Array::new();
+    let invoke = Closure::wrap(Box::new(
+        move |receiver: JsValue, args: Array, listener: JsValue, slot: Array| {
+            if slot.length() == 0 {
+                return Err(js_sys::ReferenceError::new(
+                    "Cannot access 'dispose' before initialization",
+                )
+                .into());
+            }
+            call(&slot.get(0), &Array::new())?;
+            listener
+                .dyn_into::<Function>()
+                .map_err(|_| js_sys::TypeError::new("event listener must be callable"))?
+                .apply(&receiver, &args)
+        },
+    )
+        as Box<dyn Fn(JsValue, Array, JsValue, Array) -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    let wrapper = Function::new_with_args(
+        "invoke,listener,slot",
+        "'use strict'; return function (...args) { return invoke(this, args, listener, slot); }",
+    )
+    .apply(
+        &JsValue::UNDEFINED,
+        &Array::of3(&invoke, listener, &disposer),
+    )?;
+    let registered = register(context, name, wrapper, options, owner)?;
+    disposer.push(&registered);
+    Ok(registered)
 }
 
 pub(super) fn dispatch(context: &WasmContext, mode: &str, args: &Array) -> Result<Array, JsValue> {
@@ -116,7 +225,14 @@ pub(super) fn invoke(context: &WasmContext, mode: &str, args: &Array) -> Result<
         context,
         if mode == "parallel" { "emit" } else { mode },
         args,
-    )?;
+    );
+    let callbacks = match callbacks {
+        Ok(callbacks) => callbacks,
+        Err(error) if matches!(mode, "serial" | "parallel") => {
+            return Ok(Promise::reject(&error).into());
+        }
+        Err(error) => return Err(error),
+    };
     match mode {
         "emit" => {
             for callback in callbacks.iter() {
@@ -133,42 +249,94 @@ pub(super) fn invoke(context: &WasmContext, mode: &str, args: &Array) -> Result<
             }
             Ok(JsValue::UNDEFINED)
         }
-        "serial" => {
-            let args = args.clone();
-            Ok(future_to_promise(async move {
-                for callback in callbacks.iter() {
-                    let result = JsFuture::from(Promise::resolve(&call(&callback, &args)?)).await?;
-                    if bailed(&result) {
-                        return Ok(result);
-                    }
-                }
-                Ok(JsValue::UNDEFINED)
-            })
-            .into())
-        }
+        "serial" => Ok(serial(callbacks, args.clone())?.into()),
         "parallel" => {
-            let pending = callbacks
-                .iter()
-                .map(|callback| {
-                    let result = call(&callback, args);
-                    async move { JsFuture::from(Promise::resolve(&result?)).await }
-                })
-                .collect::<Vec<_>>();
-            Ok(future_to_promise(async move {
-                let errors = Array::new();
-                for result in join_all(pending).await {
-                    if let Err(error) = result {
-                        errors.push(&error);
+            let pending = Array::new();
+            for callback in callbacks.iter() {
+                pending.push(&match call(&callback, args) {
+                    Ok(value) => Promise::resolve(&value).into(),
+                    Err(error) => Promise::reject(&error).into(),
+                });
+            }
+            let settled =
+                Closure::wrap(Box::new(move |results: Array| -> Result<JsValue, JsValue> {
+                    let errors = Array::new();
+                    for result in results.iter() {
+                        if Reflect::get(&result, &JsValue::from_str("status"))?
+                            .as_string()
+                            .as_deref()
+                            == Some("rejected")
+                        {
+                            errors.push(&Reflect::get(&result, &JsValue::from_str("reason"))?);
+                        }
                     }
-                }
-                if errors.length() == 0 {
-                    Ok(JsValue::UNDEFINED)
-                } else {
-                    Err(js_sys::AggregateError::new(&errors.to_vec()).into())
-                }
-            })
-            .into())
+                    if errors.length() == 0 {
+                        Ok(JsValue::UNDEFINED)
+                    } else {
+                        Err(js_sys::AggregateError::new(&errors.to_vec()).into())
+                    }
+                })
+                    as Box<dyn Fn(Array) -> Result<JsValue, JsValue>>)
+                .into_js_value();
+            then(&Promise::all_settled(&pending), &settled).map(Into::into)
         }
+        "waterfall" => waterfall(&callbacks, args),
         _ => Err(js_sys::TypeError::new("unsupported browser event dispatch mode").into()),
     }
+}
+
+fn then(promise: &Promise, continuation: &JsValue) -> Result<Promise, JsValue> {
+    Reflect::get(promise, &JsValue::from_str("then"))?
+        .dyn_into::<Function>()?
+        .call1(promise, continuation)
+        .map(wasm_bindgen::JsCast::unchecked_into)
+}
+
+fn serial(callbacks: Array, args: Array) -> Result<Promise, JsValue> {
+    let callback = callbacks.shift();
+    if callback.is_undefined() {
+        return Ok(Promise::resolve(&JsValue::UNDEFINED));
+    }
+    let result = match call(&callback, &args) {
+        Ok(result) => result,
+        Err(error) => return Ok(Promise::reject(&error)),
+    };
+    let settled = Closure::wrap(Box::new(move |value: JsValue| -> Result<JsValue, JsValue> {
+        if bailed(&value) {
+            Ok(value)
+        } else {
+            serial(callbacks.clone(), args.clone()).map(Into::into)
+        }
+    }) as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    then(&Promise::resolve(&result), &settled)
+}
+
+fn waterfall(callbacks: &Array, args: &Array) -> Result<JsValue, JsValue> {
+    let inner = args.pop();
+    let invoke = Closure::wrap(
+        Box::new(move |callbacks: Array, args: Array, inner: JsValue| {
+            let callback = callbacks.shift();
+            call(
+                if callback.is_undefined() {
+                    &inner
+                } else {
+                    &callback
+                },
+                &args,
+            )
+        }) as Box<dyn Fn(Array, Array, JsValue) -> Result<JsValue, JsValue>>,
+    )
+    .into_js_value();
+    // The continuation's self-reference is a JavaScript-only cycle, collectible by the browser.
+    let next = Function::new_with_args(
+        "invoke,callbacks,args,inner",
+        "return function next() { return invoke(callbacks, args, inner); }",
+    )
+    .apply(
+        &JsValue::UNDEFINED,
+        &Array::of4(&invoke, callbacks, args, &inner),
+    )?;
+    args.push(&next);
+    call(&next, &Array::new())
 }

@@ -77,6 +77,32 @@ try {
     const cordis = await import(module);
     const handoffs = new Map();
     const client = new cordis.Context();
+    const eventTrace = [];
+    let eventOwner;
+    const interceptedDisposer = () => {};
+    const eventFiber = client.plugin({ name: 'browser-event-lifecycle', apply(ctx) {
+      eventOwner = ctx;
+      ctx.once('probe/once', () => { eventTrace.push('once'); client.emit('probe/once'); });
+      ctx.on('probe/waterfall', (value, next) => next() + value);
+      ctx.on('internal/listener', function (name) {
+        if (name === 'probe/intercepted') {
+          if (this !== ctx) throw new Error('listener interception lost its registering Context');
+          return interceptedDisposer;
+        }
+      });
+      if (ctx.on('probe/intercepted', () => { throw new Error('interception did not replace registration'); }) !== interceptedDisposer) throw new Error('interceptor return identity changed');
+    } });
+    await eventFiber;
+    client.emit('probe/once');
+    client.emit('probe/once');
+    if (eventTrace.join(',') !== 'once' || client.waterfall('probe/waterfall', 3, () => 4) !== 7) throw new Error('browser once or waterfall semantics changed');
+    await eventFiber.dispose();
+    client.emit('probe/once');
+    client.emit('probe/intercepted');
+    if (client.waterfall('probe/waterfall', 3, () => 4) !== 4 || eventTrace.length !== 1) throw new Error('browser event handlers survived plugin teardown');
+    let inactiveRejected = false;
+    try { eventOwner.on('probe/intercepted', () => {}); } catch { inactiveRejected = true; }
+    if (!inactiveRejected) throw new Error('inactive event owner accepted registration');
     let metadataReads = 0, getterReceiver, setterReceiver;
     const getter = function () { metadataReads++; getterReceiver = this; return this.contextMarker; };
     const setter = function (value) { setterReceiver = this; this.contextMarker = value; };
@@ -313,7 +339,7 @@ try {
   if (requests.filter(path => path === '/api/commands/execute').length !== 1) throw new Error('pre-aborted command reached the Host');
   await page.evaluate(result => { const pre = document.createElement('pre'); pre.textContent = JSON.stringify(result, null, 2); document.body.replaceChildren(pre); }, result);
   await page.screenshot({ path: join(output, 'remote-path.png'), fullPage: true });
-  console.log(JSON.stringify({ ...result, browser: await browser.version(), requests }));
+  console.log(JSON.stringify({ ...result, browserEventLifecycle: true, browser: await browser.version(), requests }));
 } finally {
   if (browser) await browser.close();
   if (server && server.exitCode === null) { server.kill('SIGINT'); await once(server, 'exit'); }

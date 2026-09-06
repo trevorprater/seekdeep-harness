@@ -33,6 +33,62 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves browser event lifecycle, interception, and async entry timing', async () => {
+  const root = new Context(), trace = []
+  root.once('test/once', () => { trace.push('once'); root.emit('test/once') })
+  root.emit('test/once')
+  root.emit('test/once')
+  expect(trace).toEqual(['once'])
+  root.on('test/order', () => trace.push('last'))
+  root.on('test/order', () => trace.push('first'), true)
+  root.emit('test/order')
+  expect(trace).toEqual(['once', 'first', 'last'])
+  let shared
+  root.on('internal/dispatch', (mode, name, args) => { if (name === 'test/waterfall') shared = args })
+  root.on('test/waterfall', (value, next) => { trace.push('outer:' + value); shared[0] = 2; return next() + 1 })
+  root.on('test/waterfall', (value, next) => { trace.push('inner:' + value); return next() * 2 })
+  expect(root.waterfall('test/waterfall', 1, value => value + 10)).toBe(25)
+  expect(trace.slice(-2)).toEqual(['outer:1', 'inner:2'])
+  root.on('test/veto', () => false)
+  expect(root.waterfall('test/veto', () => { throw new Error('veto ignored') })).toBe(false)
+  const sentinel = () => 'intercepted'
+  let intercepted
+  root.on('internal/listener', function (name, listener, options) {
+    if (name === 'test/intercepted') { intercepted = [this === root, typeof listener, options.prepend]; return sentinel }
+  })
+  expect(root.on('test/intercepted', () => { throw new Error('intercepted registration escaped') }, true)).toBe(sentinel)
+  expect(intercepted).toEqual([true, 'function', true])
+  root.emit('test/intercepted')
+  let captured, disposals = 0, onceReceiver
+  root.on('internal/listener', (_name, listener) => {
+    if (_name === 'test/intercepted-once') { captured = listener; return () => { disposals++ } }
+  })
+  root.once('test/intercepted-once', function () { onceReceiver = this; expect(disposals).toBe(1) })
+  captured.call(null)
+  expect(onceReceiver).toBe(null)
+  expect(disposals).toBe(1)
+  const entered = []
+  root.on('test/serial-entry', () => { entered.push('serial'); return false })
+  const serial = root.serial('test/serial-entry')
+  expect(entered).toEqual(['serial'])
+  await serial
+  root.on('test/parallel-entry', () => entered.push('parallel'))
+  const parallel = root.parallel('test/parallel-entry')
+  expect(entered).toEqual(['serial', 'parallel'])
+  await parallel
+  const rejection = new Error('dispatch refusal')
+  root.on('internal/dispatch', (_mode, name) => { if (name === 'test/rejected') throw rejection })
+  await expect(root.serial('test/rejected')).rejects.toBe(rejection)
+  await expect(root.parallel('test/rejected')).rejects.toBe(rejection)
+  let child, calls = 0
+  const fiber = root.plugin({ name: 'event-lifecycle', apply(ctx) { child = ctx; ctx.once('test/disposed', () => calls++) } })
+  await fiber
+  await fiber.dispose()
+  root.emit('test/disposed')
+  expect(calls).toBe(0)
+  expect(() => child.on('test/intercepted', () => {})).toThrow()
+})
+
 it('preserves browser event receivers, filtering, raw dispatch, and synchronous bail values', async () => {
   const root = new Context(), left = root.extend({ lane: 'left' }), right = root.extend({ lane: 'right' })
   const seen = [], payload = {}

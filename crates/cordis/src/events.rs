@@ -402,7 +402,6 @@ impl EventBus {
         name: String,
         listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
         options: EventOptions,
-        once: bool,
         browser: crate::wasm::browser_events::BrowserHook,
     ) -> Result<EffectHandle, CordisError> {
         self.register_hook(
@@ -410,7 +409,7 @@ impl EventBus {
             name,
             Arc::new(listener),
             options,
-            once,
+            false,
             Some(browser),
         )
     }
@@ -430,19 +429,6 @@ impl EventBus {
         #[cfg(target_arch = "wasm32")] browser: Option<crate::wasm::browser_events::BrowserHook>,
     ) -> Result<EffectHandle, CordisError> {
         let id = Uuid::now_v7();
-        #[cfg(target_arch = "wasm32")]
-        let browser = browser.map(|mut browser| {
-            if once {
-                let registry = self.hooks.clone();
-                let event_name = name.clone();
-                let callback = browser.callback.clone();
-                browser.callback = Arc::new(move |receiver, args| {
-                    remove_hook(&registry, &event_name, id);
-                    callback(receiver, args)
-                });
-            }
-            browser
-        });
         let listener = if once {
             let registry = self.hooks.clone();
             let event_name = name.clone();

@@ -12,8 +12,9 @@ use wasm_bindgen_test::wasm_bindgen_test;
 export function cordisContextWrapper() {
   return core => new Proxy(core, {
     get(target, key, receiver) {
-      if (['emit','parallel','serial','bail'].includes(key)) return (...args) => target.eventArgs(key, args)
-      if (key === 'on') return (name, listener, options) => target.on(name, listener, options, receiver)
+      if (['emit','parallel','serial','bail','waterfall'].includes(key)) return (...args) => target.eventArgs(key, args)
+      if (key === 'on' || key === 'once') return (name, listener, options) => target[key](name, listener, options, receiver)
+      if (key === 'events') return receiver
       if (Reflect.has(target, key)) {
         const value = Reflect.get(target, key, receiver)
         return typeof value === 'function' ? value.bind(target) : value
@@ -105,6 +106,19 @@ export async function cordisExplicitEvents(root) {
   }
   return true
 }
+export function cordisLifecycleEvents(root) {
+  let calls = 0
+  root.once('once', () => { calls++; root.emit('once') })
+  root.emit('once'); root.emit('once')
+  if (calls !== 1) throw new Error('once reentered')
+  root.on('waterfall', (value, next) => next() + value)
+  if (root.waterfall('waterfall', 2, () => 3) !== 5) throw new Error('waterfall lost its continuation')
+  let intercepted, disposed = false
+  root.on('internal/listener', (name, listener) => { if (name === 'intercepted') { intercepted = listener; return () => { disposed = true } } })
+  root.once('intercepted', function () { if (!disposed || this !== null) throw new Error('intercepted once lost disposal or receiver') })
+  intercepted.call(null)
+  return true
+}
 "#)]
 extern "C" {
     fn cordisContextWrapper() -> JsValue;
@@ -126,6 +140,13 @@ extern "C" {
     fn cordisListener(value: &JsValue) -> Function;
     fn cordisBail(root: &JsValue, name: &str) -> JsValue;
     fn cordisExplicitEvents(root: &JsValue) -> Promise;
+    fn cordisLifecycleEvents(root: &JsValue) -> bool;
+}
+
+#[wasm_bindgen_test]
+fn browser_events_keep_once_interception_and_waterfall_synchronous() {
+    configure_context_wrapper(cordisContextWrapper()).unwrap();
+    assert!(cordisLifecycleEvents(&create_context().unwrap()));
 }
 
 #[wasm_bindgen_test(async)]
