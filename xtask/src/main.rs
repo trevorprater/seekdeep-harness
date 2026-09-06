@@ -17,6 +17,7 @@ mod remote_built_smoke_driver;
 mod remote_contracts;
 mod web_assembled;
 mod web_assembled_driver;
+mod web_models_settings_driver;
 mod web_settings;
 mod web_settings_driver;
 mod web_workspaces;
@@ -39,6 +40,11 @@ enum Command {
     },
     /// Verify settings, defaults, and cross-origin preference persistence in the built Web app.
     WebSettings {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Verify provider configuration and write-only credentials through the real Web profile.
+    WebModelsSettings {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
     },
@@ -263,6 +269,7 @@ fn main() -> anyhow::Result<()> {
         Command::WebAssembled { source, export } => web_assembled::run(&source, export),
         Command::WebWorkspaces { source } => web_workspaces::run(&source),
         Command::WebSettings { source } => web_settings::run(&source),
+        Command::WebModelsSettings { source } => web_settings::run_models(&source),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {
@@ -1104,7 +1111,7 @@ export const deletePath = wasm.deletePath;
 }
 
 fn schema_form_esm_declarations() -> &'static str {
-    r"export interface SchemaNode { readonly type: string; __seekdeepValidate(draft: unknown): void; __seekdeepNodeAtPath(path: readonly string[]): SchemaNode | undefined }
+    r"export interface SchemaNode { readonly type: string; readonly meta: Record<string, unknown>; readonly list?: readonly SchemaNode[]; readonly dict?: Readonly<Record<string, SchemaNode>>; readonly inner?: SchemaNode; readonly key?: SchemaNode; readonly value?: unknown; __seekdeepValidate(draft: unknown): void; __seekdeepNodeAtPath(path: readonly string[]): SchemaNode | undefined }
 export declare function rehydrateSchema(serialized: unknown): SchemaNode;
 export declare function validateDraft(schema: SchemaNode, draft: unknown): string | undefined;
 export declare function nodeAtPath(schema: SchemaNode, path: readonly string[]): SchemaNode | undefined;

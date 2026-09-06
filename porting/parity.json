@@ -24820,7 +24820,19 @@
     {
       "source": "apps/web/tests/models-settings.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_models_settings_driver.rs",
+        "xtask/src/web_settings.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-schema-form/tests/wasm_model_parity.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-models-settings: all ten source scenarios in Chromium against the production Rust Web profile and all seven exact source aria goldens",
+        "real settings/credentials persistence, write-only API key handling, schema-derived custom provider creation, protocol/name edits, and credential/profile deletion",
+        "real Chromium WASM schema regression verifies structural children, constant values, metadata, and shared node identity without mocked protocol helpers",
+        "global provider-stream guard and teardown audit prove zero model calls; no browser errors or connection/gap warnings"
+      ]
     },
     {
       "source": "apps/web/tests/navigation-panes.e2e.ts",

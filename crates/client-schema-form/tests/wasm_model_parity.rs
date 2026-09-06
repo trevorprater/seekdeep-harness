@@ -18,11 +18,83 @@ fn strings(values: &[&str]) -> Array {
 }
 
 #[wasm_bindgen_test]
+fn real_schema_relations_preserve_protocol_choices_metadata_and_identity() {
+    let protocols = Schema::union([
+        Schema::constant("openai-completions"),
+        Schema::constant("anthropic-messages"),
+    ]);
+    let schema = Schema::object([(
+        "providers",
+        Schema::dict(Schema::object([
+            ("api", protocols),
+            ("apiKeyEnv", Schema::string().role("credential-ref")),
+            ("nullable", Schema::constant(serde_json::Value::Null)),
+        ])),
+    )]);
+    let root =
+        rehydrate_schema_js(serde_wasm_bindgen::to_value(&schema.to_json()).unwrap()).unwrap();
+    let api = node_at_path_js(root.clone(), strings(&["providers", "\0probe", "api"]));
+    let list = Reflect::get(&api, &"list".into())
+        .unwrap()
+        .dyn_into::<Array>()
+        .unwrap();
+    assert_eq!(list.length(), 2);
+    assert_eq!(
+        Reflect::get(&list.get(0), &"value".into())
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("openai-completions")
+    );
+    assert!(Object::is(
+        &list,
+        &Reflect::get(&api, &"list".into()).unwrap()
+    ));
+    let provider = node_at_path_js(root.clone(), strings(&["providers"]));
+    let dict = Reflect::get(&root, &"dict".into()).unwrap();
+    assert!(Object::is(
+        &provider,
+        &Reflect::get(&dict, &"providers".into()).unwrap()
+    ));
+    let profile = Reflect::get(&provider, &"inner".into()).unwrap();
+    let fields = Reflect::get(&profile, &"dict".into()).unwrap();
+    assert!(Object::is(
+        &api,
+        &Reflect::get(&fields, &"api".into()).unwrap()
+    ));
+    let key = Reflect::get(&fields, &"apiKeyEnv".into()).unwrap();
+    let meta = Reflect::get(&key, &"meta".into()).unwrap();
+    assert_eq!(
+        Reflect::get(&meta, &"role".into())
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some("credential-ref")
+    );
+    assert!(Object::is(
+        &meta,
+        &Reflect::get(&key, &"meta".into()).unwrap()
+    ));
+    assert!(
+        Reflect::get(
+            &Reflect::get(&fields, &"nullable".into()).unwrap(),
+            &"value".into()
+        )
+        .unwrap()
+        .is_null()
+    );
+    assert!(Object::is(
+        &root,
+        &node_at_path_js(root.clone(), Array::new())
+    ));
+    assert!(Reflect::get(&key, &"list".into()).unwrap().is_undefined());
+}
+
+#[wasm_bindgen_test]
 fn validates_hostile_throws_and_rehydrated_nodes() {
     let schema = Schema::object([("name", Schema::string().required())]);
     let wire = serde_wasm_bindgen::to_value(&schema.to_json()).unwrap();
     let root = rehydrate_schema_js(wire).unwrap();
-    let root: JsValue = root.into();
     assert_eq!(
         validate_draft_js(
             root.clone(),

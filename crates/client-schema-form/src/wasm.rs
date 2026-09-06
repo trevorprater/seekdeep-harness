@@ -1,13 +1,53 @@
 //! JavaScript-compatible path and validator facade compiled into WASM.
 
-use js_sys::{Array, Function, Object, Reflect};
-use seekdeep_schemastery::Schema;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
+use js_sys::{Array, Function, Object, Reflect, WeakRef};
+use seekdeep_schemastery::{Schema, SchemaKind};
 use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 
 /// Opaque live schema node returned to browser settings editors.
 #[wasm_bindgen]
 pub struct WasmSchemaNode {
     schema: Schema,
+    graph: NodeGraph,
+    properties: RefCell<HashMap<&'static str, JsValue>>,
+}
+
+type NodeGraph = Rc<RefCell<HashMap<u64, WeakRef>>>;
+
+fn node_face(schema: Schema, graph: &NodeGraph) -> JsValue {
+    let id = schema.uid();
+    if let Some(reference) = graph.borrow().get(&id)
+        && let Some(value) = reference.deref()
+    {
+        return value.into();
+    }
+    let value: JsValue = WasmSchemaNode {
+        schema,
+        graph: graph.clone(),
+        properties: RefCell::default(),
+    }
+    .into();
+    graph
+        .borrow_mut()
+        .insert(id, WeakRef::new(value.unchecked_ref::<Object>()));
+    value
+}
+
+impl WasmSchemaNode {
+    fn property(
+        &self,
+        name: &'static str,
+        build: impl FnOnce() -> Result<JsValue, JsValue>,
+    ) -> Result<JsValue, JsValue> {
+        if let Some(value) = self.properties.borrow().get(name) {
+            return Ok(value.clone());
+        }
+        let value = build()?;
+        self.properties.borrow_mut().insert(name, value.clone());
+        Ok(value)
+    }
 }
 
 #[wasm_bindgen]
@@ -30,15 +70,103 @@ impl WasmSchemaNode {
     #[wasm_bindgen(js_name = __seekdeepNodeAtPath)]
     /// Resolves one child node for the compatibility free function.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn node_at_path(&self, path: Array) -> Option<WasmSchemaNode> {
+    pub fn node_at_path(&self, path: Array) -> Option<JsValue> {
         let path = string_path(&path).ok()?;
-        crate::node_at_path(&self.schema, &path).map(|schema| Self { schema })
+        crate::node_at_path(&self.schema, &path).map(|schema| node_face(schema, &self.graph))
     }
 
     /// Structural node type.
     #[wasm_bindgen(getter, js_name = type)]
     pub fn kind(&self) -> String {
         self.schema.kind_name().to_owned()
+    }
+
+    /// Stable renderer metadata from the rehydrated schema.
+    ///
+    /// # Errors
+    /// Returns metadata conversion failures.
+    #[wasm_bindgen(getter)]
+    pub fn meta(&self) -> Result<JsValue, JsValue> {
+        self.property("meta", || {
+            js_sys::JSON::parse(
+                &serde_json::to_string(self.schema.meta())
+                    .map_err(|error| js_sys::Error::new(&error.to_string()))?,
+            )
+        })
+    }
+
+    /// Ordered tuple, union, or intersection children; absent for other node kinds.
+    ///
+    /// # Errors
+    /// Returns relation construction failures.
+    #[wasm_bindgen(getter)]
+    pub fn list(&self) -> Result<JsValue, JsValue> {
+        self.property("list", || {
+            let (SchemaKind::Tuple(children)
+            | SchemaKind::Union(children)
+            | SchemaKind::Intersect(children)) = self.schema.kind()
+            else {
+                return Ok(JsValue::UNDEFINED);
+            };
+            Ok(children
+                .iter()
+                .map(|child| node_face(child.clone(), &self.graph))
+                .collect::<Array>()
+                .into())
+        })
+    }
+
+    /// Declared object fields with identity shared by path lookup.
+    ///
+    /// # Errors
+    /// Returns JavaScript property construction failures.
+    #[wasm_bindgen(getter)]
+    pub fn dict(&self) -> Result<JsValue, JsValue> {
+        self.property("dict", || {
+            let SchemaKind::Object(fields) = self.schema.kind() else {
+                return Ok(JsValue::UNDEFINED);
+            };
+            let result = Object::new();
+            for (name, child) in fields {
+                Reflect::set(
+                    &result,
+                    &JsValue::from_str(name),
+                    &node_face(child.clone(), &self.graph),
+                )?;
+            }
+            Ok(result.into())
+        })
+    }
+
+    /// Shared array or dictionary element node.
+    #[wasm_bindgen(getter)]
+    pub fn inner(&self) -> JsValue {
+        self.schema
+            .inner()
+            .map_or(JsValue::UNDEFINED, |schema| node_face(schema, &self.graph))
+    }
+
+    /// Dictionary key constraint; absent for other node kinds.
+    #[wasm_bindgen(getter)]
+    pub fn key(&self) -> JsValue {
+        let SchemaKind::Dict { key, .. } = self.schema.kind() else {
+            return JsValue::UNDEFINED;
+        };
+        node_face(key.clone(), &self.graph)
+    }
+
+    /// Exact constant value, including null; absent for non-constant nodes.
+    ///
+    /// # Errors
+    /// Returns constant conversion failures.
+    #[wasm_bindgen(getter)]
+    pub fn value(&self) -> Result<JsValue, JsValue> {
+        self.property("value", || {
+            let SchemaKind::Const(value) = self.schema.kind() else {
+                return Ok(JsValue::UNDEFINED);
+            };
+            js_sys::JSON::parse(&value.to_string())
+        })
     }
 }
 
@@ -49,13 +177,12 @@ impl WasmSchemaNode {
 /// Returns malformed graph failures as JavaScript errors.
 #[wasm_bindgen(js_name = rehydrateSchema)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn rehydrate_schema_js(serialized: JsValue) -> Result<WasmSchemaNode, JsValue> {
+pub fn rehydrate_schema_js(serialized: JsValue) -> Result<JsValue, JsValue> {
     let serialized: serde_json::Value = serde_wasm_bindgen::from_value(serialized)
         .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-    Ok(WasmSchemaNode {
-        schema: crate::rehydrate_schema(&serialized)
-            .map_err(|error| js_sys::Error::new(&error.to_string()))?,
-    })
+    let schema = crate::rehydrate_schema(&serialized)
+        .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+    Ok(node_face(schema, &Rc::default()))
 }
 
 /// Validates a draft and stringifies Error and non-Error throws.

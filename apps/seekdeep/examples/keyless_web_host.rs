@@ -23,7 +23,7 @@ use seekdeep_host_webserver::{
 };
 use seekdeep_llm::{
     AbortSignal, AdapterStream, GenerateOptions, LLM, LlmAdapter, LlmModelContext, LlmModelInfo,
-    LlmProviderInfo, LlmResolvedModelInfo, ModelId, ProviderId,
+    LlmProviderInfo, LlmResolvedModelInfo, LlmStream, ModelId, ProviderId,
 };
 use seekdeep_typert_loader::TypertArtifactRegistry;
 use seekdeep_util::launch_environment::{
@@ -193,6 +193,28 @@ fn isolated_environment(home: &Path) -> LaunchEnvironmentSnapshot {
     }])
 }
 
+fn install_keyless_routes(context: &Context, calls: &Arc<AtomicUsize>) -> anyhow::Result<()> {
+    let llm = context
+        .get(LLM)
+        .ok_or_else(|| anyhow::anyhow!("Web profile has no llm"))?;
+    llm.register_adapter(
+        &["deepseek-official".to_owned()],
+        Arc::new(RouteOnly(calls.clone())),
+    )?;
+    let calls = calls.clone();
+    llm.register_stream_middleware(
+        context,
+        Arc::new(move |_, _| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            LlmStream::new(futures::stream::once(async {
+                anyhow::bail!("keyless Web fixture refuses model calls on every provider")
+            }))
+        }),
+        true,
+    )?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
@@ -235,13 +257,7 @@ async fn main() -> anyhow::Result<()> {
     let application = boot_profile(plan, &catalog, Some(prepare)).await?;
     let calls = Arc::new(AtomicUsize::new(0));
     let context = application.context();
-    context
-        .get(LLM)
-        .ok_or_else(|| anyhow::anyhow!("Web profile has no llm"))?
-        .register_adapter(
-            &["deepseek-official".to_owned()],
-            Arc::new(RouteOnly(calls.clone())),
-        )?;
+    install_keyless_routes(context, &calls)?;
     let registry = context
         .get(WORKSPACE_REGISTRY)
         .ok_or_else(|| anyhow::anyhow!("Web profile has no workspace registry"))?;

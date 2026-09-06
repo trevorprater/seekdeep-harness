@@ -1,5 +1,7 @@
 //! Rehydration, schema navigation, and immutable path edit parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::Arc;
 
 use seekdeep_client_schema_form::*;
