@@ -22,7 +22,7 @@ pub use events::{
     BailReply, DispatchMode, EventArgs, EventBus, EventOptions, EventReply, EventSubjectToken,
     EventValue, PreparedEmission,
 };
-pub use fiber::{CordisError, Fiber, FiberState};
+pub use fiber::{CordisError, DisposalScheduling, Fiber, FiberState};
 pub use logger::{
     CordisClock, LogExporter, LogFormatter, LogMessage, Logger, LoggerLevel, LoggerOptions,
     LoggerService, LoggerType, SystemCordisClock,

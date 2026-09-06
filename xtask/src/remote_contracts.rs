@@ -314,7 +314,7 @@ fn corpus(source: &Path, gateway: bool, source_regressions: bool) -> anyhow::Res
     if source_regressions {
         command.args([
             "-t",
-            "preserves immediate-remount|owns pending|clears retained|preserves metadata|preserves strict|keeps explicit|preserves browser event|preserves Context branding|preserves callback service tracing|preserves per-Fiber update|preserves symbol event",
+            "preserves immediate-remount|owns pending|clears retained|preserves metadata|preserves strict|keeps explicit|preserves browser event|preserves Context branding|preserves callback service tracing|preserves per-Fiber update|preserves symbol event|preserves concurrent Fiber teardown",
         ]);
     }
     let status = command.status()?;

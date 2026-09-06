@@ -137,6 +137,22 @@ try {
     recoveringUpdate.update({}); await recoveringUpdate.await();
     if (recoveringUpdate.state !== 2) throw new Error('failed Fiber did not recover');
     await recoveringUpdate.dispose();
+    const teardownStarted = [], teardownCompleted = [];
+    let finishTeardown, releaseDependency;
+    const teardownGate = new Promise(resolve => { finishTeardown = resolve; });
+    const teardownDependency = new Promise(resolve => { releaseDependency = resolve; });
+    const teardownFiber = client.plugin({ name: 'dependent-disposers', apply(ctx) {
+      ctx.effect(() => async () => { teardownStarted.push('first'); releaseDependency(); await teardownGate; teardownCompleted.push('first'); });
+      ctx.effect(() => async () => { teardownStarted.push('second'); await teardownDependency; teardownCompleted.push('second'); });
+    } });
+    await teardownFiber;
+    let teardownSettled = false;
+    const teardown = teardownFiber.dispose().then(() => { teardownSettled = true; });
+    try {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (teardownStarted.join(',') !== 'second,first' || teardownCompleted.join(',') !== 'second' || teardownSettled) throw new Error('dependent async disposers did not start together or were not joined');
+    } finally { releaseDependency(); finishTeardown(); await teardown; }
+    if (teardownCompleted.join(',') !== 'second,first' || !teardownSettled) throw new Error('async teardown did not settle completely');
     const symbolEvent = Symbol('owned-event'), symbolValues = [];
     const symbolFiber = client.plugin({ name: 'symbol-event-owner', apply(ctx) { ctx.on(symbolEvent, value => symbolValues.push(value)); } });
     await symbolFiber;

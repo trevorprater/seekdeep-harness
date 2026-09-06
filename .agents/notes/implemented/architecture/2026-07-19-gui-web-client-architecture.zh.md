@@ -46,7 +46,9 @@ Client Runtime factory 以相同名称公开 source barrel 的完整 value roste
 
 Symbol 事件名称在 Rust 事件注册表中保留 identity，并共用原生 Fiber teardown。分发调用名称实际的 `startsWith` 方法：普通 symbol 产生源实现的 TypeError，而显式提供该方法后即可分发，不会混淆描述相同的 symbol。源实现对照与 Chromium 覆盖注册拦截、不同 key、`once` 和撤销。
 
-浏览器绑定仍缺少源实现公开的 `ctx.events._hooks` 表。完整的逐句柄生命周期状态遮蔽也仍待完成：重启挂载句柄不会改变源实现底层 Fiber 的状态，而 Rust 基础实现共享该状态转换。浏览器异步 disposer 仍串行执行；源实现按逆序启动截取的列表并并发等待，使有依赖关系的 disposer 能够共同推进。这些缺口不削弱原生事务更新约定。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
+浏览器根上下文显式选择并发 Fiber dispose；关联的子级继承注入的调度策略。每次 teardown 只截取一次 effect 列表，按注册逆序启动 disposer，并等待所有操作完成后才允许 restart 激活下一份配置。因此，有依赖关系的异步 disposer 能够相互释放，不会因串行执行而死锁。源实现对照与 Chromium 固定该推进和结算行为；含 64 个 disposer 的原生测试固定策略继承、调用方共同等待和稳定的失败顺序。原生根上下文默认仍串行 dispose。
+
+浏览器绑定仍缺少源实现公开的 `ctx.events._hooks` 表。完整的逐句柄生命周期状态遮蔽也仍待完成：重启挂载句柄不会改变源实现底层 Fiber 的状态，而 Rust 基础实现共享该状态转换。这些缺口不削弱原生事务更新约定。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
 
 活动轮次证据使用正常的 Rust Web profile、现有 Rust session-log replay 适配器，以及固定源实现的 provider catalog 和 workspace-picker 交互。浏览器调用公开的 `connectWorkspace` 导出，创建 Session、提交提示词，观察中间文本与运行态 Stop 控件，并重新加载已结算的响应。夹具在 Host 关闭后审计完整 replay 消费及冷读 JSONL 工件。Projection frame 保留 null 值，同时仍拒绝缺失的 `value`；Host 运行／空闲 frame 来自 Agent status 事件，stream 所有的监听器会在取消或 drop 时释放。此无密钥 replay 不是真实模型运行。
 

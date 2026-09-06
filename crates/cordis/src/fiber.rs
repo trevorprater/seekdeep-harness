@@ -71,6 +71,16 @@ pub enum FiberState {
     Disposed,
 }
 
+/// Scheduling policy for one captured Fiber teardown batch.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DisposalScheduling {
+    /// Finish each disposer before starting the next, in reverse registration order.
+    #[default]
+    Serial,
+    /// Start in reverse registration order and join all captured disposers concurrently.
+    Concurrent,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum EffectOutcome {
     Ok,
@@ -219,6 +229,7 @@ pub struct Fiber {
     name: String,
     root: bool,
     parent: Option<Weak<Fiber>>,
+    disposal_scheduling: DisposalScheduling,
     inner: Mutex<FiberInner>,
     disposal_requested: AtomicBool,
     disposal_notify: Notify,
@@ -228,11 +239,18 @@ impl Fiber {
     /// Creates the permanently active root fiber.
     #[must_use]
     pub fn root() -> Arc<Self> {
+        Self::root_with_disposal_scheduling(DisposalScheduling::Serial)
+    }
+
+    /// Creates a root with an explicit teardown policy inherited by linked children.
+    #[must_use]
+    pub fn root_with_disposal_scheduling(disposal_scheduling: DisposalScheduling) -> Arc<Self> {
         Arc::new(Self {
             id: Uuid::nil(),
             name: "root".to_owned(),
             root: true,
             parent: None,
+            disposal_scheduling,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Active,
                 effects: Vec::new(),
@@ -252,6 +270,7 @@ impl Fiber {
             name: name.into(),
             root: false,
             parent: None,
+            disposal_scheduling: DisposalScheduling::Serial,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Pending,
                 effects: Vec::new(),
@@ -271,6 +290,7 @@ impl Fiber {
             name: name.into(),
             root: false,
             parent: Some(Arc::downgrade(parent)),
+            disposal_scheduling: parent.disposal_scheduling,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Pending,
                 effects: Vec::new(),
@@ -290,6 +310,7 @@ impl Fiber {
             name: name.into(),
             root: false,
             parent: None,
+            disposal_scheduling: DisposalScheduling::Serial,
             inner: Mutex::new(FiberInner {
                 state: FiberState::Active,
                 effects: Vec::new(),
@@ -436,12 +457,30 @@ impl Fiber {
             Clear::Join(transition) => return effect_outcome(transition.wait().await),
             Clear::Done(outcome) => return effect_outcome(outcome),
         };
-        let mut errors = Vec::new();
-        for effect in effects.into_iter().rev() {
-            if let Err(error) = effect.dispose().await {
-                errors.push(format!("{}: {error:#}", effect.label()));
+        let errors = match self.disposal_scheduling {
+            DisposalScheduling::Serial => {
+                let mut errors = Vec::new();
+                for effect in effects.into_iter().rev() {
+                    if let Err(error) = effect.dispose().await {
+                        errors.push(format!("{}: {error:#}", effect.label()));
+                    }
+                }
+                errors
             }
-        }
+            DisposalScheduling::Concurrent => {
+                futures::future::join_all(effects.into_iter().rev().map(|effect| async move {
+                    effect
+                        .dispose()
+                        .await
+                        .err()
+                        .map(|error| format!("{}: {error:#}", effect.label()))
+                }))
+                .await
+                .into_iter()
+                .flatten()
+                .collect()
+            }
+        };
         let outcome = if errors.is_empty() {
             EffectOutcome::Ok
         } else {
@@ -476,6 +515,47 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
+
+    #[test]
+    fn concurrent_disposal_inherits_policy_starts_every_effect_and_joins_errors() {
+        let root = Fiber::root_with_disposal_scheduling(DisposalScheduling::Concurrent);
+        let fiber = Fiber::child_of("concurrent child", &root);
+        let started = Arc::new(Mutex::new(Vec::new()));
+        let (release, released) = futures::channel::oneshot::channel::<()>();
+        let gate = released.shared();
+        for index in 0..64 {
+            let started = started.clone();
+            let gate = gate.clone();
+            fiber
+                .own(EffectHandle::new(format!("effect-{index}"), move || {
+                    Box::pin(async move {
+                        started.lock().push(index);
+                        gate.await?;
+                        anyhow::ensure!(index != 0 && index != 63, "failure {index}");
+                        Ok(())
+                    })
+                }))
+                .unwrap();
+        }
+        let mut first = Box::pin(fiber.dispose());
+        assert!(first.as_mut().now_or_never().is_none());
+        let mut second = Box::pin(fiber.dispose());
+        assert!(second.as_mut().now_or_never().is_none());
+        let before_release = started.lock().clone();
+        release.send(()).unwrap();
+        let (first, second) = futures::executor::block_on(async { futures::join!(first, second) });
+        assert_eq!(before_release, (0..64).rev().collect::<Vec<_>>());
+        let expected = "effect-63: failure 63\neffect-0: failure 0";
+        assert_eq!(first.unwrap_err().to_string(), expected);
+        assert_eq!(second.unwrap_err().to_string(), expected);
+        assert_eq!(fiber.state(), FiberState::Disposed);
+        assert_eq!(
+            futures::executor::block_on(fiber.dispose())
+                .unwrap_err()
+                .to_string(),
+            expected
+        );
+    }
 
     #[tokio::test]
     async fn synchronous_disposal_is_ready_after_cooperative_budget_exhaustion() {

@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     events::EventBus,
-    fiber::{CordisError, EffectHandle, Fiber},
+    fiber::{CordisError, DisposalScheduling, EffectHandle, Fiber},
     logger::{CordisClock, Logger, LoggerService, SystemCordisClock},
     plugin::{Plugin, PluginFiber, PluginRegistry},
     service::{Service, ServiceKey, ServiceProviderSnapshot, ServiceSlot, ServiceStore},
@@ -175,7 +175,16 @@ impl Context {
     /// Creates a root context with an injected wall-clock boundary.
     #[must_use]
     pub fn new_with_clock(clock: Arc<dyn CordisClock>) -> Self {
-        let fiber = Fiber::root();
+        Self::new_with_clock_and_disposal(clock, DisposalScheduling::Serial)
+    }
+
+    /// Creates a root with injected time and an inherited teardown scheduling policy.
+    #[must_use]
+    pub fn new_with_clock_and_disposal(
+        clock: Arc<dyn CordisClock>,
+        disposal: DisposalScheduling,
+    ) -> Self {
+        let fiber = Fiber::root_with_disposal_scheduling(disposal);
         let root = Arc::new(Root {
             events: EventBus::new(),
             services: Arc::new(ServiceStore::default()),

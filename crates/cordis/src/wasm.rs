@@ -78,7 +78,10 @@ pub fn create_context() -> Result<JsValue, JsValue> {
     let root_face = empty_face_slot();
     let fiber_face = empty_face_slot();
     let context = WasmContext::new(
-        Context::new(),
+        Context::new_with_clock_and_disposal(
+            Arc::new(crate::SystemCordisClock),
+            crate::DisposalScheduling::Concurrent,
+        ),
         Object::new().into(),
         root_face.clone(),
         fiber_face.clone(),

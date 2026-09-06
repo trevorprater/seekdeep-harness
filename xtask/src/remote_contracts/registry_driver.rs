@@ -33,6 +33,58 @@ export class Context {
 ";
 
 pub(super) const GATEWAY_ADDITIONAL: &str = r"
+it('preserves concurrent Fiber teardown start order and joined completion', async () => {
+  const root = new Context(), started = [], completed = []
+  let release, releaseDependency
+  const gate = new Promise(resolve => { release = resolve })
+  const dependency = new Promise(resolve => { releaseDependency = resolve })
+  const fiber = root.plugin({ apply(ctx) {
+    for (const name of ['first', 'second']) ctx.effect(() => async () => {
+      started.push(name)
+      if (name === 'first') { releaseDependency(); await gate }
+      else await dependency
+      completed.push(name)
+    })
+  } })
+  await fiber
+  let settled = false
+  const first = fiber.dispose().then(() => { settled = true })
+  const second = fiber.dispose()
+  try {
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(started).toEqual(['second', 'first'])
+    expect(completed).toEqual(['second'])
+    expect(settled).toBe(false)
+  } finally {
+    release()
+    releaseDependency()
+    await Promise.all([first, second])
+  }
+  expect(completed).toEqual(['second', 'first'])
+  expect(settled).toBe(true)
+  expect(fiber.state).toBe(4)
+})
+
+it('preserves concurrent Fiber teardown before restarting the next config', async () => {
+  const root = new Context(), applied = [], started = []
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const fiber = await root.plugin({ apply(ctx, config) {
+    applied.push(config.version)
+    for (const name of ['first', 'second']) ctx.effect(() => async () => {
+      started.push([config.version, name]); await gate
+    })
+  } }, { version: 1 })
+  const restart = fiber.update({ version: 2 })
+  try {
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(started).toEqual([[1, 'second'], [1, 'first']])
+    expect(applied).toEqual([1])
+  } finally { release(); await restart }
+  expect(applied).toEqual([1, 2])
+  await fiber.dispose()
+})
+
 it('preserves symbol event registration, dispatch failure, identity, and disposal', async () => {
   const root = new Context(), event = Symbol('event'), other = Symbol('event'), values = [], intercepted = []
   root.on('internal/listener', (name) => { if (typeof name === 'symbol') intercepted.push(name) })
