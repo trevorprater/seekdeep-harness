@@ -441,19 +441,43 @@ fn render_header(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, J
     )
 }
 
+struct BrowserDownloadSnapshot {
+    state: Rc<SessionLogDownloadState>,
+    value: JsValue,
+}
+
 fn notify_store(controller: &Rc<SessionLogDownloadController>) -> Result<JsValue, JsValue> {
     let snapshot_controller = Rc::downgrade(controller);
+    let cache = RefCell::new(None::<BrowserDownloadSnapshot>);
+    let empty = Rc::new(SessionLogDownloadState::default());
     let get_snapshot = Closure::wrap(Box::new(move || -> Result<JsValue, JsValue> {
-        let Some(controller) = snapshot_controller.upgrade() else {
-            return SessionLogDownloadState::default()
-                .serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
-                .map_err(|error| js_sys::Error::new(&error.to_string()).into());
-        };
-        controller
-            .state()
+        let state = snapshot_controller
+            .upgrade()
+            .map_or_else(|| empty.clone(), |controller| controller.snapshot());
+        if let Some(previous) = cache.borrow().as_ref()
+            && Rc::ptr_eq(&previous.state, &state)
+        {
+            return Ok(previous.value.clone());
+        }
+        let value = state
             .serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
-            .map_err(|error| js_sys::Error::new(&error.to_string()).into())
-    }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
+            .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+        if let Some(previous) = cache.borrow().as_ref() {
+            let entries = required(&value, "bySession", "Session log snapshot")?;
+            let previous_entries = required(&previous.value, "bySession", "Session log snapshot")?;
+            for (id, entry) in &state.by_session {
+                if previous.state.by_session.get(id) == Some(entry) {
+                    let key = JsValue::from_str(id);
+                    Reflect::set(&entries, &key, &Reflect::get(&previous_entries, &key)?)?;
+                }
+            }
+        }
+        *cache.borrow_mut() = Some(BrowserDownloadSnapshot {
+            state,
+            value: value.clone(),
+        });
+        Ok(value)
+    }) as Box<dyn Fn() -> Result<JsValue, JsValue>>);
     let subscribe_controller = Rc::downgrade(controller);
     let subscribe = Closure::wrap(Box::new(move |listener: Function| -> JsValue {
         let Some(controller) = subscribe_controller.upgrade() else {

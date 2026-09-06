@@ -72554,7 +72554,7 @@
     {
       "source": "packages/session/session-persistence-jsonl/src/format.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/session-persistence-jsonl/src/format.rs",
         "crates/session-persistence-jsonl/src/backend.rs"
@@ -72562,9 +72562,10 @@
       "evidence": [
         "pnpm exec vitest --run packages/session/session-persistence-jsonl/tests/jsonl.spec.ts",
         "cargo test -p seekdeep-session-persistence-jsonl --all-features",
-        "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-session-persistence-jsonl --all-targets --all-features -- -D warnings",
+        "SEEKDEEP_PARITY_SOURCE=/Users/trevor/ws/deepseek-harness cargo test -p seekdeep-session-persistence-jsonl --test header_number_parity -- --include-ignored"
       ],
-      "note": "Reopened: literal -0 loses its sign under serde_json/arbitrary_precision before metadata validation; the two signed-zero format tests fail. The owning record is .agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.md."
+      "note": "Raw signed-zero metadata tokens preserve source refusal under arbitrary precision, including duplicate and escaped keys; 16 source-differential cases and the complete JSONL suite pass. Foreign-version refusal retains precedence."
     },
     {
       "source": "packages/session/session-persistence-jsonl/src/index.ts",

@@ -32,6 +32,9 @@ enum Command {
     WebAssembled {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
+        /// Verify the Header download against the exact persisted Session text.
+        #[arg(long)]
+        export: bool,
     },
     /// Verify browser Loader ownership of the real Remote dependency graph.
     RemoteLoader {
@@ -243,7 +246,7 @@ fn main() -> anyhow::Result<()> {
         }
         Command::Parity { source, scope } => parity(&source, scope),
         Command::WebBuild => web_assembled::build(),
-        Command::WebAssembled { source } => web_assembled::run(&source),
+        Command::WebAssembled { source, export } => web_assembled::run(&source, export),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {

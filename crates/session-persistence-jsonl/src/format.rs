@@ -212,14 +212,14 @@ pub fn header_line(header: &SessionHeader) -> anyhow::Result<String> {
 ///
 /// Returns an unsupported-version error.
 pub fn parse_header_meta(line: &str) -> anyhow::Result<Option<SessionHeader>> {
-    let Ok(Value::Object(object)) = serde_json::from_str::<Value>(line) else {
+    let Ok(Value::Object(object)) = parse_header_value(line) else {
         return Ok(None);
     };
     parse_current_header_shape(&object)
 }
 
 fn parse_header_record(line: &str) -> anyhow::Result<SessionHeader> {
-    let parsed: Value = serde_json::from_str(line)
+    let parsed = parse_header_value(line)
         .map_err(|_| anyhow::anyhow!("corrupt session log: header line is not valid JSON"))?;
     if let Value::Object(object) = &parsed
         && let Some(version) = object.get("version")
@@ -240,6 +240,23 @@ fn parse_header_record(line: &str) -> anyhow::Result<SessionHeader> {
     };
     parse_current_header_shape(&object)?
         .ok_or_else(|| anyhow::anyhow!("corrupt session log: first line is not a session header"))
+}
+
+fn parse_header_value(line: &str) -> serde_json::Result<Value> {
+    let mut value: Value = serde_json::from_str(line)?;
+    if line.contains("-0")
+        && let Value::Object(object) = &mut value
+    {
+        // The arbitrary-precision parser converts integer -0 to i64 zero.
+        let raw: std::collections::BTreeMap<String, &serde_json::value::RawValue> =
+            serde_json::from_str(line)?;
+        for key in ["createdAt", "delegationDepth"] {
+            if raw.get(key).is_some_and(|value| value.get() == "-0") {
+                object.insert(key.to_owned(), serde_json::json!(-0.0));
+            }
+        }
+    }
+    Ok(value)
 }
 
 fn value_as_javascript_string(value: &Value) -> String {

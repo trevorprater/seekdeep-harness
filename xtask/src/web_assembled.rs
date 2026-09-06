@@ -13,7 +13,7 @@ use seekdeep_session_persistence_jsonl::{
     zstd::compress_zstd_frame,
 };
 
-pub(super) fn run(source: &Path) -> anyhow::Result<()> {
+pub(super) fn run(source: &Path, export: bool) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;
     let temporary = tempfile::tempdir()?;
@@ -24,10 +24,11 @@ pub(super) fn run(source: &Path) -> anyhow::Result<()> {
         home.join("cordis.patch.yml"),
         "- id: session-query-sqlite\n  config:\n    path: ':memory:'\n    openAt: first-search\n",
     )?;
-    let id = "web-assembled-seed";
-    tokio::runtime::Runtime::new()?.block_on(seed(source, &home, &workspace, id))?;
+    let id = SessionId::new("web-assembled-seed");
+    let raw = tokio::runtime::Runtime::new()?.block_on(seed(source, &home, &workspace, &id))?;
     let output = metadata.target_directory.join("xtask/web-assembled");
     std::fs::create_dir_all(&output)?;
+    std::fs::write(output.join("expected-session.jsonl"), raw)?;
     let driver = output.join("browser.mjs");
     std::fs::write(&driver, super::web_assembled_driver::DRIVER)?;
     let status = Command::new("node")
@@ -37,18 +38,30 @@ pub(super) fn run(source: &Path) -> anyhow::Result<()> {
         .arg(&home)
         .arg(&workspace)
         .arg(&output)
-        .arg(id)
+        .arg(id.as_str())
+        .arg(if export { "export" } else { "history" })
+        .arg(log_path(
+            &home.join("sessions"),
+            Some(&workspace.to_string_lossy()),
+            &id,
+            JsonlCompression::Zstd,
+        )?)
         .current_dir(&metadata.workspace_root)
         .status()?;
     anyhow::ensure!(status.success(), "assembled Web browser path failed");
     Ok(())
 }
 
-async fn seed(source: &Path, home: &Path, workspace: &Path, id: &str) -> anyhow::Result<()> {
+async fn seed(
+    source: &Path,
+    home: &Path,
+    workspace: &Path,
+    id: &SessionId,
+) -> anyhow::Result<String> {
     let fixture = std::fs::read_to_string(
         source.join("apps/web/tests/snapshots/navigation-panes/seed.jsonl"),
     )?
-    .replace("{{sessionId}}", id)
+    .replace("{{sessionId}}", id.as_str())
     .replace("{{cwd}}/workspace", &workspace.to_string_lossy())
     .replace("{{cwd}}", &workspace.to_string_lossy());
     let mut events: Vec<SessionEvent> = Vec::new();
@@ -68,7 +81,7 @@ async fn seed(source: &Path, home: &Path, workspace: &Path, id: &str) -> anyhow:
         SessionStore::install(&context)?,
         JsonlConfig::new(home.join("sessions")),
     )?;
-    let mut header = SessionHeader::new(SessionId::new(id));
+    let mut header = SessionHeader::new(id.clone());
     header.cwd = Some(workspace.to_string_lossy().into_owned());
     header.delegation_depth = Some(0);
     let result = async {
@@ -86,7 +99,7 @@ async fn seed(source: &Path, home: &Path, workspace: &Path, id: &str) -> anyhow:
         bytes.extend(compress_zstd_frame(body.as_bytes())?);
         std::fs::write(path, bytes)?;
         persistence.inspect(&header.id, None).await?;
-        Ok(())
+        Ok(format!("{}\n{body}", header_line(&header)?))
     }
     .await;
     context.root_fiber().dispose().await?;

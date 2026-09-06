@@ -109,6 +109,8 @@ async fn controller_face_publishes_one_flight_success_failure_and_dismissal() {
     )
     .unwrap();
     let store = property(&controller, "store");
+    let initial = call(&store, "getSnapshot", &[]);
+    assert!(Object::is(&initial, &call(&store, "getSnapshot", &[])));
     let notifications = Array::new();
     let captured = notifications.clone();
     let listener = Closure::wrap(Box::new(move || {
@@ -121,6 +123,8 @@ async fn controller_face_publishes_one_flight_success_failure_and_dismissal() {
     let first = call(&controller, "download", &[JsValue::from_str("a/b")]);
     let second = call(&controller, "download", &[JsValue::from_str("a/b")]);
     let state = call(&store, "getSnapshot", &[]);
+    assert!(!Object::is(&initial, &state));
+    assert!(Object::is(&state, &call(&store, "getSnapshot", &[])));
     assert_eq!(
         property(&property(&state, "bySession"), "a/b")
             .dyn_into::<Object>()
@@ -174,6 +178,12 @@ async fn controller_face_publishes_one_flight_success_failure_and_dismissal() {
     .await
     .unwrap();
     let failed = call(&store, "getSnapshot", &[]);
+    assert!(!Object::is(&dismissed, &failed));
+    assert!(Object::is(&failed, &call(&store, "getSnapshot", &[])));
+    assert!(Object::is(
+        &property(&property(&dismissed, "bySession"), "a/b"),
+        &property(&property(&failed, "bySession"), "a/b")
+    ));
     assert!(
         property(&property(&failed, "bySession"), "failure")
             .dyn_into::<Object>()

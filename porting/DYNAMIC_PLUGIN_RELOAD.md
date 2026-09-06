@@ -531,6 +531,9 @@ CI=true pnpm --dir support/browser-dependencies install --ignore-workspace --ign
 CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo build --locked -p seekdeep -p xtask
 CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo xtask web-build
 CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo xtask web-assembled
+CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0 cargo xtask web-assembled --export
 ```
 
 `web-build` builds the shell's static Rust/WASM libraries and runs the generated Vite configuration through normal package exports. Dynamic Client plugins must have their current `lib/client.js` bundles built before `web-assembled`; the Host serves those package-owned artifacts. Use one `CARGO_TARGET_DIR` throughout and serialize the commands. The source checkout supplies the recorded Session and installed Playwright; production code and build dependencies come from this repository.
+
+The `--export` variant also exercises the real Header's HEAD preflight, native browser ZIP download, and success-dialog dismissal. It compares the archive with independently decoded durable JSONL bytes and requires the original history to remain an unchanged prefix. It makes no model call and does not verify the slash-command entry point.

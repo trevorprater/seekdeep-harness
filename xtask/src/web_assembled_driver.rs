@@ -3,9 +3,23 @@
 pub(super) const DRIVER: &str = r"import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { readFile } from 'node:fs/promises';
+import { zstdDecompressSync } from 'node:zlib';
 import { join } from 'node:path';
-const [source, host, home, workspace, output, sessionId] = process.argv.slice(2);
+const [source, host, home, workspace, output, sessionId, mode, artifact] = process.argv.slice(2);
 const { chromium } = createRequire(join(source, 'apps/web/package.json'))('playwright');
+function decodeFrames(bytes) {
+  const chunks = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    const decoded = zstdDecompressSync(bytes.subarray(offset), { info: true });
+    const consumed = decoded.engine.bytesWritten;
+    if (!Number.isSafeInteger(consumed) || consumed <= 0 || consumed > bytes.length - offset) throw new Error('Zstandard decoder made invalid progress');
+    chunks.push(decoded.buffer);
+    offset += consumed;
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
 let server, browser;
 try {
   server = spawn(host, ['web', '--host', '127.0.0.1', '--port', '0'], {
@@ -65,8 +79,37 @@ try {
       await page.screenshot({ path: join(output, 'conversation.png'), fullPage: true });
       await page.reload();
       await page.getByText('FIRST_DONE', { exact: true }).waitFor();
+      let exported;
+      if (mode === 'export') {
+        const methods = [];
+        page.context().on('request', request => { if (new URL(request.url()).pathname === '/api/session.export') methods.push(request.method()); });
+        const pending = page.waitForEvent('download');
+        await page.getByRole('button', { name: 'Session log', exact: true }).click();
+        const download = await pending;
+        const downloadUrl = new URL(download.url());
+        if (downloadUrl.origin !== new URL(origin).origin || downloadUrl.pathname !== '/api/session.export'
+          || downloadUrl.searchParams.get('sessionId') !== sessionId || downloadUrl.searchParams.get('includeDescendants') !== 'true') throw new Error('incorrect browser download URL: ' + download.url());
+        if (download.suggestedFilename() !== `seekdeep-session-${sessionId}.zip`) throw new Error('incorrect Session archive filename');
+        const filename = join(output, 'session.zip');
+        await download.saveAs(filename);
+        const { unzipSync, strFromU8 } = createRequire(join(source, 'apps/web/package.json'))('fflate');
+        const entries = unzipSync(await readFile(filename));
+        if (Object.keys(entries).join(',') !== 'session.jsonl') throw new Error('unexpected Session archive entries: ' + Object.keys(entries));
+        const persisted = decodeFrames(await readFile(artifact));
+        if (!persisted.startsWith(await readFile(join(output, 'expected-session.jsonl'), 'utf8'))) throw new Error('opening the session rewrote its recorded history');
+        if (strFromU8(entries['session.jsonl']) !== persisted) throw new Error('export changed persisted Session bytes');
+        const dialog = page.getByRole('dialog', { name: 'Session download started', exact: true });
+        await dialog.waitFor();
+        await page.screenshot({ path: join(output, 'export-success.png'), fullPage: true });
+        await dialog.getByText('Close', { exact: true }).click();
+        await dialog.waitFor({ state: 'detached' });
+        // Chromium may omit browser-owned downloads from request events; Download supplies their URL and bytes.
+        if (methods.filter(method => method === 'HEAD').length !== 1 || methods.some(method => method !== 'HEAD' && method !== 'GET')
+          || methods.filter(method => method === 'GET').length > 1) throw new Error('unexpected export preflight requests: ' + methods);
+        exported = { exactBytes: true, preflight: 'HEAD', observedMethods: methods, browserDownload: download.url(), filename: download.suggestedFilename() };
+      }
       if (failures.length) throw new Error(failures.join('\n'));
-      console.log(JSON.stringify({ browser: browser.version(), workspace: true, persistedHistory: true, renderedConversation: true, reload: true, search: 'first-search', sessionId }));
+      console.log(JSON.stringify({ browser: browser.version(), workspace: true, persistedHistory: true, renderedConversation: true, reload: true, search: 'first-search', sessionId, ...(exported ? { exported } : {}) }));
     })(), pageFailure]);
   } catch (error) {
     await page.screenshot({ path: join(output, 'failure.png'), fullPage: true });

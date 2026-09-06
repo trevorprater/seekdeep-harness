@@ -86,7 +86,7 @@ struct ActiveDownload {
 
 /// Owns one in-flight browser download per Session and publishes modal state.
 pub struct SessionLogDownloadController {
-    state: RefCell<SessionLogDownloadState>,
+    state: RefCell<Rc<SessionLogDownloadState>>,
     active: RefCell<BTreeMap<SessionId, ActiveDownload>>,
     disposed: Cell<bool>,
     listeners: RefCell<BTreeMap<u64, Rc<dyn Fn()>>>,
@@ -187,7 +187,7 @@ impl SessionLogDownloadController {
     #[must_use]
     pub fn new(fetcher: DownloadFetcher, save: DownloadSaver, origin: Option<&str>) -> Rc<Self> {
         Rc::new(Self {
-            state: RefCell::new(SessionLogDownloadState::default()),
+            state: RefCell::new(Rc::new(SessionLogDownloadState::default())),
             active: RefCell::new(BTreeMap::new()),
             disposed: Cell::new(false),
             listeners: RefCell::new(BTreeMap::new()),
@@ -201,12 +201,17 @@ impl SessionLogDownloadController {
     /// Returns a detached current state snapshot.
     #[must_use]
     pub fn state(&self) -> SessionLogDownloadState {
+        self.state.borrow().as_ref().clone()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn snapshot(&self) -> Rc<SessionLogDownloadState> {
         self.state.borrow().clone()
     }
 
     /// Replaces state, mirroring an external snapshot-store clear.
     pub fn set_state(&self, state: SessionLogDownloadState) {
-        *self.state.borrow_mut() = state;
+        *self.state.borrow_mut() = Rc::new(state);
         self.notify();
     }
 
@@ -364,8 +369,7 @@ impl SessionLogDownloadController {
     }
 
     fn publish(&self, session_id: &SessionId, entry: SessionLogDownloadEntry) {
-        self.state
-            .borrow_mut()
+        Rc::make_mut(&mut self.state.borrow_mut())
             .by_session
             .insert(session_id.as_str().to_owned(), entry);
         self.notify();
