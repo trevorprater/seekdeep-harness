@@ -7,8 +7,12 @@ use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen
 
 use crate::browser_code_block::inject_namespaced_style;
 
+/// Compiled `JsonBlock.module.css`; injected once as
+/// `<style data-plugin-css="@seekdeep-ai/seekdeep-client-ui-primitives/JsonBlock.module.css">`.
 const JSON_BLOCK_CSS: &str =
     include_str!("../../../packages/client/ui-primitives/src/markdown/JsonBlock.module.css");
+/// Compiled `MessageText.module.css`; injected once as
+/// `<style data-plugin-css="@seekdeep-ai/seekdeep-client-ui-primitives/MessageText.module.css">`.
 const MESSAGE_TEXT_CSS: &str =
     include_str!("../../../packages/client/ui-primitives/src/markdown/MessageText.module.css");
 const MAX_JSON_CHARS: u32 = 20_000;

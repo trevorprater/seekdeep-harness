@@ -30,7 +30,7 @@
 {"type":"step/end","seq":28,"time":1788403488399,"data":{"turn":1,"step":2}}
 {"type":"agent/inbox/spliced","seq":29,"time":1788403488400,"data":{"target":"next-step","start":0,"removedCount":1,"inserted":[]}}
 {"type":"step/start","seq":30,"time":1788403488411,"data":{"turn":1,"step":3}}
-{"type":"user/message","seq":31,"time":1788403488411,"data":{"content":[{"type":"text","text":"background job bash-1 (bash: true) finished [status: killed, killed before exit]. Read its output with job_output."}],"source":{"kind":"plugin","summary":"bash true [status: killed, killed before exit]","plugin":"tool-jobs","form":"notice"},"role":"user","id":"989e3c2b-5b21-4694-83d5-6cddac55ce0e"},"surfaceOp":"append"}
+{"type":"user/message","seq":31,"time":1788403488411,"data":{"content":[{"type":"text","text":"background job bash-1 (bash: true) finished [status: killed, killed before exit]. Read its output with job_output."}],"source":{"kind":"plugin","plugin":"tool-jobs","form":"notice","summary":"bash true [status: killed, killed before exit]"},"role":"user","id":"989e3c2b-5b21-4694-83d5-6cddac55ce0e"},"surfaceOp":"append"}
 {"type":"assistant/chunk","seq":32,"time":1785825343607,"data":{"turn":1,"step":3,"chunk":{"type":"block-start","index":0,"blockType":"tool-call"}}}
 {"type":"assistant/chunk","seq":33,"time":1785825343607,"data":{"turn":1,"step":3,"chunk":{"type":"tool-call-delta","index":0,"id":"missing-runner-output","name":"job_output","argumentsDelta":"{\"job_id\":\"bash-1\",\"wait\":true}"}}}
 {"type":"assistant/chunk","seq":34,"time":1785916902524,"data":{"turn":1,"step":3,"chunk":{"type":"block-end","index":0,"block":{"type":"tool-call","id":"missing-runner-output","name":"job_output","arguments":"{\"job_id\":\"bash-1\",\"wait\":true}"}}}}

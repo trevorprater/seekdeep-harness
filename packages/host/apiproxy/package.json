@@ -4,6 +4,10 @@
   "description": "API gateway: the ApiProxy contract (api/), the fetch carrier pair (fetch/), and the host-side gateway plugin providing ctx.apiProxy",
   "type": "module",
   "exports": {
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
     "./api": {
       "types": "./lib/types/api/index.d.ts"
     },
@@ -12,6 +16,7 @@
     }
   },
   "files": [
+    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -25,5 +30,11 @@
     "@seekdeep-ai/seekdeep-tools": "workspace:^",
     "@seekdeep-ai/seekdeep-user-approval": "workspace:^",
     "@seekdeep-ai/seekdeep-user-questions": "workspace:^"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
   }
 }

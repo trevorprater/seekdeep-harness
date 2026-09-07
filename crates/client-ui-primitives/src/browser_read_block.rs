@@ -10,6 +10,8 @@ use crate::{
     write_clipboard,
 };
 
+/// Compiled `ReadBlock.module.css`; injected once as
+/// `<style data-plugin-css="@seekdeep-ai/seekdeep-client-ui-primitives/ReadBlock.module.css">`.
 const READ_BLOCK_CSS: &str =
     include_str!("../../../packages/client/ui-primitives/src/ReadBlock.module.css");
 /// Source-compatible default height cap.

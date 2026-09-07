@@ -7,6 +7,10 @@
     ".": {
       "types": "./lib/types/index.d.ts"
     },
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
     "./types": {
       "types": "./lib/types/types.d.ts"
     },
@@ -18,6 +22,7 @@
     }
   },
   "files": [
+    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -26,5 +31,11 @@
     "@seekdeep-ai/schemastery": "workspace:^",
     "@seekdeep-ai/seekdeep-attachment": "workspace:^",
     "@seekdeep-ai/seekdeep-brand": "workspace:^"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
   }
 }

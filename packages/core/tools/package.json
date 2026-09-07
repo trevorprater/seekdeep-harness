@@ -4,15 +4,26 @@
   "description": "Tool registry and execution pipeline for the SeekDeep Harness",
   "type": "module",
   "exports": {
+    "./invariant": {
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/invariant.js"
+    },
     "./presentation": {
       "types": "./lib/types/presentation.d.ts"
     }
   },
   "files": [
+    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "dependencies": {
     "@seekdeep-ai/seekdeep-llm": "workspace:^"
+  },
+  "peerDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
+  },
+  "devDependencies": {
+    "@seekdeep-ai/seekdeep-invariants": "workspace:^"
   }
 }

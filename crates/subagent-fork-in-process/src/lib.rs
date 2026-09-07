@@ -94,6 +94,7 @@ impl SubagentProvider for ForkInProcessProvider {
             request,
             InProcessRunOptions {
                 seed: (!seed.is_empty()).then_some(seed),
+                deliver_prompt: None,
             },
         )
         .await

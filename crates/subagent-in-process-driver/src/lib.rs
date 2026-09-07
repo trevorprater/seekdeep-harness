@@ -38,11 +38,33 @@ pub const STRUCTURED_OUTPUT_TOOL: &str = "structured_output";
 /// Child-local instruction paired with [`STRUCTURED_OUTPUT_TOOL`].
 pub const STRUCTURED_OUTPUT_INSTRUCTION: &str = "When you have your final answer, you MUST report it by calling the `structured_output` tool with arguments matching its parameter schema exactly. Do not finish with a plain text answer: only the tool call counts as your result.";
 
+/// Delivers the one-shot prompt to the published child.
+///
+/// The source drives the prompt through the child's `followup`, which callers may replace on the
+/// created handle. Rust exposes that replacement as an explicit seam so harnesses can fail the
+/// first follow-up after publication exactly as the source does.
+pub type PromptDelivery = Arc<dyn Fn(&Arc<Agent>, UserMessage) -> anyhow::Result<()> + Send + Sync>;
+
 /// Completed-turn seed for fork, or none for a fresh spawn.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct InProcessRunOptions {
     /// Prefix copied into the child before its own activation.
     pub seed: Option<Vec<SessionEvent>>,
+    /// Replaces the child's own `followup` for the first prompt; `None` delivers directly.
+    pub deliver_prompt: Option<PromptDelivery>,
+}
+
+impl std::fmt::Debug for InProcessRunOptions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("InProcessRunOptions")
+            .field("seed", &self.seed)
+            .field(
+                "deliver_prompt",
+                &self.deliver_prompt.as_ref().map(|_| "<custom>"),
+            )
+            .finish()
+    }
 }
 
 #[derive(Default)]
@@ -242,7 +264,8 @@ fn attach_descriptor_append(
     Ok(())
 }
 
-type SharedResult = Shared<BoxFuture<'static, SubagentResult>>;
+/// The run fault channel: a failed first follow-up rejects the result exactly like the source.
+type SharedResult = Shared<BoxFuture<'static, Result<SubagentResult, String>>>;
 
 struct InProcessRun {
     id: SessionId,
@@ -263,7 +286,11 @@ impl SubagentRun for InProcessRun {
     }
 
     fn result(&self) -> BoxFuture<'static, anyhow::Result<SubagentResult>> {
-        Box::pin(self.result.clone().map(Ok))
+        Box::pin(
+            self.result
+                .clone()
+                .map(|result| result.map_err(|error| anyhow::anyhow!(error))),
+        )
     }
 
     fn dispose(&self) -> BoxFuture<'static, anyhow::Result<()>> {
@@ -304,7 +331,10 @@ pub async fn start_in_process_run(
     let parent = request.request.parent.clone();
     let child_depth = resolve_child_depth(&parent, request.request.max_depth)?;
     let child_id = SessionId::new(Uuid::new_v4().to_string());
-    let seed = options.seed;
+    let InProcessRunOptions {
+        seed,
+        deliver_prompt,
+    } = options;
     let boundary = seed.as_ref().map_or(0, Vec::len);
     let inherited = capture_delegated_policy_overrides(&parent);
     let composition = ChildComposition {
@@ -356,6 +386,7 @@ pub async fn start_in_process_run(
         child_id,
         boundary,
         structured,
+        deliver_prompt,
     ))
 }
 
@@ -366,21 +397,29 @@ fn drive_published_run(
     child_id: SessionId,
     boundary: usize,
     structured: Option<StructuredAttachment>,
+    deliver_prompt: Option<PromptDelivery>,
 ) -> Arc<dyn SubagentRun> {
     let child = handle.agent.clone();
     let cancelled = Arc::new(AtomicBool::new(false));
+    // The source's `result` promise rejects when the first follow-up throws; the
+    // published child then never receives its prompt.
     let prompt_started = if signal.is_aborted() {
         cancelled.store(true, Ordering::Release);
         let _ = child.cancel(AgentCancelCause::Parent, CancelOptions::default());
-        false
+        Ok(false)
     } else {
-        child
-            .followup(UserMessage::new(prompt, MessageSource::user()))
-            .is_ok()
+        let message = UserMessage::new(prompt, MessageSource::user());
+        match deliver_prompt {
+            Some(deliver) => deliver(&child, message),
+            None => child.followup(message).map_err(anyhow::Error::from),
+        }
+        .map(|()| true)
+        .map_err(|error| format!("{error:#}"))
     };
     let result_child = child.clone();
     let result_cancelled = Arc::clone(&cancelled);
     let result = async move {
+        let prompt_started = prompt_started?;
         if signal.is_aborted() {
             cancel_child(&result_child, &result_cancelled).await;
         } else if prompt_started {
@@ -394,12 +433,12 @@ fn drive_published_run(
                 } => {}
             }
         }
-        read_result(
+        Ok(read_result(
             &result_child,
             boundary,
             result_cancelled.load(Ordering::Acquire),
             structured.as_ref(),
-        )
+        ))
     }
     .boxed()
     .shared();

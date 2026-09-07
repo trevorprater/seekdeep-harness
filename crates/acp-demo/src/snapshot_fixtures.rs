@@ -17,7 +17,7 @@ use seekdeep_agent_loop::{AgentInboxMessage, AgentPreStepEvent};
 use seekdeep_compaction::{CompactionId, compact_checkpoint_source};
 use seekdeep_cordis::{EventOptions, EventReply, Plugin, fiber::EffectHandle};
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent, SessionId, SurfaceOp};
-use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
+use seekdeep_llm::{ContentBlock, MessageSource, UserMessage};
 use seekdeep_sandbox::{
     ConfinedArgv, RunnerFailureRule, SandboxEnforcement, SandboxPolicy, SandboxProvider,
     SandboxService,
@@ -600,9 +600,10 @@ impl DurabilityFixtureState {
     }
 }
 
+/// Mirrors the source overlay: the published child's first follow-up throws, so its prompt never
+/// runs, and the published handle also fails disposal after releasing the child.
 struct PublishedFailureRun {
     inner: Arc<dyn SubagentRun>,
-    signal: AbortSignal,
 }
 
 #[async_trait]
@@ -619,16 +620,12 @@ impl SubagentRun for PublishedFailureRun {
         &self,
     ) -> futures::future::BoxFuture<'static, anyhow::Result<seekdeep_subagent::SubagentResult>>
     {
-        Box::pin(async { anyhow::bail!("Error: snapshot published run failed") })
+        self.inner.result()
     }
 
     fn dispose(&self) -> futures::future::BoxFuture<'static, anyhow::Result<()>> {
         let inner = self.inner.clone();
-        let signal = self.signal.clone();
         Box::pin(async move {
-            signal.abort_with_reason(serde_json::Value::String(
-                "snapshot published run failed".to_owned(),
-            ));
             inner.dispose().await?;
             anyhow::bail!("Error: snapshot published handle disposal failed")
         })
@@ -672,23 +669,21 @@ impl SubagentProvider for SnapshotSpawnProvider {
 
     async fn start(
         &self,
-        mut request: ResolvedSubagentStartRequest,
+        request: ResolvedSubagentStartRequest,
     ) -> anyhow::Result<Arc<dyn SubagentRun>> {
         let published_failure =
             std::env::var("SEEKDEEP_SUBAGENT_PUBLISHED_FAILURE").as_deref() == Ok("1");
-        let signal = if published_failure {
-            let signal = AbortSignal::default();
-            request.request.signal = signal.clone();
-            signal
-        } else {
-            request.request.signal.clone()
-        };
-        let run = start_in_process_run(request, InProcessRunOptions::default()).await?;
-        if published_failure {
-            Ok(Arc::new(PublishedFailureRun { inner: run, signal }))
-        } else {
-            Ok(run)
+        if !published_failure {
+            return start_in_process_run(request, InProcessRunOptions::default()).await;
         }
+        let options = InProcessRunOptions {
+            deliver_prompt: Some(Arc::new(|_, _| {
+                anyhow::bail!("Error: snapshot published run failed")
+            })),
+            ..InProcessRunOptions::default()
+        };
+        let run = start_in_process_run(request, options).await?;
+        Ok(Arc::new(PublishedFailureRun { inner: run }))
     }
 
     async fn prepare_continuable(
