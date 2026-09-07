@@ -88447,7 +88447,22 @@
     {
       "source": "vendor/include/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/lib.rs",
+        "crates/loader/src/profile_patch.rs",
+        "crates/loader/tests/include_patch_oracle.rs",
+        "crates/loader/tests/profile_patch_parity.rs",
+        "crates/app-boot/tests/watch_parity.rs",
+        "crates/app-boot/tests/user_patch_watch_parity.rs"
+      ],
+      "evidence": [
+        "crates/loader/tests/include_patch_oracle.rs: pinned applyEntryPatches under Node equals the Rust composer entries and skipped-patch diagnostics",
+        "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings",
+        "porting/DYNAMIC_PLUGIN_RELOAD.md records the Loader/Include/Schemastery port decisions"
+      ],
+      "note": "entry-list YAML dialect with !!js nodes, applyEntryPatches insert/override/warning semantics including later patches targeting inserted rows, read/parse/validate stage errors, initial write on a missing file, refresh only on changed content with transactional subtree update and last-good retention, serialized applies; runtime write-back of programmatic subtree mutations (debounced .tmp rename with EACCES/EBUSY/EPERM retry, readonly detection, loader/config-update) is not implemented because no shipped consumer mutates an Include subtree at runtime"
     },
     {
       "source": "vendor/include/tsconfig.json",
@@ -88496,37 +88511,115 @@
     {
       "source": "vendor/loader/src/config/entry.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/app-boot/tests/reload_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings",
+        "porting/DYNAMIC_PLUGIN_RELOAD.md records the Loader/Include/Schemastery port decisions"
+      ],
+      "note": "diff-classified update (config/patch-context) versus name/inject/group replacement, disposal before candidate apply, previous-plugin reconstruction on failure, aggregate rollback failures, stage-tagged failed-to-import/apply messages, inherited disabled state with !!js evaluation; self-dispose write-back of disabled: true is unreachable from shipped consumers (only whole-app and root dynamic fibers dispose themselves)"
     },
     {
       "source": "vendor/loader/src/config/group.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/app-boot/tests/reload_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings",
+        "porting/DYNAMIC_PLUGIN_RELOAD.md records the Loader/Include/Schemastery port decisions"
+      ],
+      "note": "duplicate loader entry id rejection, sibling creation with aggregated failures, rollback restoring the prior list, nested Group plugin"
     },
     {
       "source": "vendor/loader/src/config/isolate.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings"
+      ],
+      "note": "entry-local and labelled isolation realms shared across sibling entries, intercept maps, realm release on disposal"
     },
     {
       "source": "vendor/loader/src/config/tree.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/app-boot/tests/reload_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings",
+        "porting/DYNAMIC_PLUGIN_RELOAD.md records the Loader/Include/Schemastery port decisions"
+      ],
+      "note": "colon-separated nested ids resolve across Include subtrees; create/remove/update with move and rollback restoring parent, position, config, and fiber identity; settlement awaiting aggregates fiber failures; generated ids at the materialization seam; import is the plugin catalog"
     },
     {
       "source": "vendor/loader/src/config/utils.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/expression.rs",
+        "crates/loader/src/profile_patch.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/app-boot/tests/user_patch_watch_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings"
+      ],
+      "note": "evaluate/interpolate: !!js expression nodes evaluated against the loader context with an injected process facade; nested arrays and objects interpolated recursively; raw expressions preserved for write-back"
     },
     {
       "source": "vendor/loader/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/lib.rs",
+        "crates/loader/src/expression.rs",
+        "crates/loader/src/javascript_plugin.rs",
+        "crates/loader/tests/runtime_parity.rs",
+        "crates/app-boot/tests/reload_parity.rs",
+        "crates/app-boot/tests/boot_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings",
+        "porting/DYNAMIC_PLUGIN_RELOAD.md records the Loader/Include/Schemastery port decisions"
+      ],
+      "note": "Loader service is the Rust composition runtime: entry attachment and inject resolution, !!js config interpolation with tree carriers kept literal, disabled interpolation, the await intercept as the exact-generation settlement barrier, locate; module import and default-export interop live in the plugin catalog and hosted JavaScript realm; showLog fires only under enableLogs, which no shipped configuration sets; loader/* Cordis events have no Rust consumer; the in-memory root tree write is a no-op as in the source"
     },
     {
       "source": "vendor/loader/src/internal.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/src/javascript_plugin.rs",
+        "crates/hmr/src/lib.rs",
+        "crates/loader/tests/runtime_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-loader -p seekdeep-app-boot --all-features (runtime_parity, profile_patch_parity, cordis_launcher, include_patch_oracle; app-boot reload/watch/user-patch/boot parity mirror the pinned app-boot specs that drive the Loader)",
+        "cargo clippy -p seekdeep-loader --all-targets --all-features -- -D warnings",
+        "porting/DYNAMIC_PLUGIN_RELOAD.md records the Loader/Include/Schemastery port decisions"
+      ],
+      "note": "intentional architecture: Node internal ESM ModuleLoader hooks are replaced by the Rust-hosted JavaScript module realm with ESM/CJS interop and HMR generation invalidation"
     },
     {
       "source": "vendor/loader/tsconfig.json",
@@ -88542,7 +88635,14 @@
     {
       "source": "vendor/loader/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/loader/Cargo.toml",
+        "crates/loader/src/lib.rs"
+      ],
+      "evidence": [
+        "Cargo target selection provides the native Rust Loader crate; the browser Loader is crates/client-loader; no JavaScript bundle is produced from Rust sources"
+      ]
     },
     {
       "source": "vendor/logger-console/LICENSE",
@@ -88678,7 +88778,20 @@
     {
       "source": "vendor/schemastery/src/index.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schemastery/src/lib.rs",
+        "crates/settings/tests/settings_parity.rs",
+        "crates/settings-file/tests/file_parity.rs",
+        "crates/client-schema-form/tests/model_parity.rs",
+        "crates/host-apiproxy/tests/api_proxy_configuration_service_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-schemastery -p seekdeep-settings -p seekdeep-settings-file -p seekdeep-client-schema-form --all-features",
+        "cargo clippy -p seekdeep-schemastery --all-targets --all-features -- -D warnings",
+        "porting/DYNAMIC_PLUGIN_RELOAD.md records the Loader/Include/Schemastery port decisions"
+      ],
+      "note": "string/number/boolean/any/never/const/array/dict/tuple/object/union/intersect with required/default/role/min/max/step/pattern/description meta, process-local uids, { uid, refs } serialization and fromJSON, undeclared-property retention, and path-bearing ValidationError cover every schema the product constructs; factories the product never uses (lazy, transform, bitset, percent, natural, date, regExp, arrayBuffer, custom extend, simplify) are not ported; Typert schemas are zod"
     },
     {
       "source": "vendor/schemastery/tsconfig.json",
@@ -88694,7 +88807,14 @@
     {
       "source": "vendor/schemastery/tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/schemastery/Cargo.toml",
+        "crates/schemastery/src/lib.rs"
+      ],
+      "evidence": [
+        "Cargo target selection provides the native and wasm32 Rust schema crate; no JavaScript bundle is produced from Rust sources"
+      ]
     },
     {
       "source": "vendor/timer/LICENSE",
