@@ -168,8 +168,39 @@ fn settings_fixture_routes(
         cap,
         count,
         session_fixture_route(context, server)?,
+        sessions_fixture_route(context, server)?,
         cold_blank_fixture_route(context, server)?,
     ])
+}
+
+/// Lists every live Session with its header and events: the browser driver's stand-in for the
+/// source scaffold's in-process `ctx.on('session/event')` taps and `ctx.sessions.list()`.
+fn sessions_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let sessions = context
+        .get(SESSIONS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Sessions"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/sessions".to_owned(),
+        handler: Arc::new(move |request| {
+            let sessions = sessions.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "GET",
+                    "fixture Session listing requires GET"
+                );
+                let listed = sessions
+                    .list()
+                    .iter()
+                    .map(|session| json!({"header": session.header(), "events": session.events()}))
+                    .collect::<Vec<_>>();
+                Ok(response(200_u16.try_into()?, serde_json::to_vec(&listed)?))
+            })
+        }),
+    })
 }
 
 fn cold_blank_fixture_route(
@@ -301,8 +332,17 @@ fn seed_log_fixture_route(
                                 .ok_or_else(|| anyhow::anyhow!("invalid fixture Session path"))?,
                         )
                     };
-                    let mut raw = tokio::fs::read_to_string(path)
+                    // A non-empty body is the fixture text itself: the source scaffold's
+                    // `seedSession(scaffold, fixtureText, id)` for generated recordings.
+                    let body = http_body_util::BodyExt::collect(request.into_body())
                         .await?
+                        .to_bytes();
+                    let text = if body.is_empty() {
+                        tokio::fs::read_to_string(path).await?
+                    } else {
+                        String::from_utf8(body.to_vec())?
+                    };
+                    let mut raw = text
                         .replace("{{sessionId}}", id.as_str())
                         .replace("{{cwd}}", &workspace.to_string_lossy());
                     let fixture_header: serde_json::Value = serde_json::from_str(
@@ -310,11 +350,8 @@ fn seed_log_fixture_route(
                             .next()
                             .ok_or_else(|| anyhow::anyhow!("fixture header absent"))?,
                     )?;
-                    anyhow::ensure!(
-                        fixture_header.get("id").and_then(serde_json::Value::as_str)
-                            == Some(id.as_str()),
-                        "fixture Session identity mismatch"
-                    );
+                    // The source `seedSession` keeps the realized events under its own header,
+                    // so a recording minted under another id seeds fine; only the cwd is rebased.
                     if let Some(cwd) = fixture_header.get("cwd") {
                         let cwd = cwd
                             .as_str()
@@ -454,13 +491,15 @@ fn idle_fixture_route(context: &Context, server: &WebServer) -> anyhow::Result<W
 fn install_fixture_replay(
     context: &Context,
     file: &Path,
+    override_file: Option<PathBuf>,
+    child_files: Vec<PathBuf>,
 ) -> anyhow::Result<seekdeep_llm_replay::ReplayHandle> {
     seekdeep_llm_replay::install_llm_replay(
         context,
         seekdeep_llm_replay::ReplayConfig {
             file: file.canonicalize()?,
-            override_file: None,
-            child_files: Vec::new(),
+            override_file,
+            child_files,
             providers: serde_json::from_value(json!([{
                 "id":"deepseek-official","name":"DeepSeek",
                 "models":[{"id":"deepseek-v4-flash","name":"DeepSeek-V4-Flash","contextWindow":128_000}]
@@ -514,6 +553,37 @@ async fn finish_fixture(
     Ok(())
 }
 
+/// Mirrors the source scaffold's prepended `approval/request` listener: with
+/// `SEEKDEEP_KEYLESS_AUTO_APPROVE=allowed-once`, every approval resolves allowed-once before any
+/// browser answerer sees it, so a policy scenario drives escalations without a composer gesture.
+fn install_auto_approval(context: &Context) -> anyhow::Result<()> {
+    let Ok(policy) = std::env::var("SEEKDEEP_KEYLESS_AUTO_APPROVE") else {
+        return Ok(());
+    };
+    anyhow::ensure!(
+        policy == "allowed-once",
+        "SEEKDEEP_KEYLESS_AUTO_APPROVE only supports allowed-once"
+    );
+    context.events().on_waterfall(
+        context,
+        "approval/request",
+        |_, _, _| {
+            Box::pin(async {
+                Ok(seekdeep_cordis::EventReply::Value(Arc::new(
+                    seekdeep_user_approval::ApprovalAnswer::Outcome(
+                        seekdeep_user_approval::ApprovalOutcome::AllowedOnce,
+                    ),
+                )))
+            })
+        },
+        seekdeep_cordis::EventOptions {
+            prepend: true,
+            global: true,
+        },
+    )?;
+    Ok(())
+}
+
 fn install_keyless_routes(
     context: &Context,
     calls: &Arc<AtomicUsize>,
@@ -548,12 +618,36 @@ fn install_keyless_routes(
     Ok(())
 }
 
+/// Replay fixture, the source scaffold's `replayOverride` sidecar, and `replayChildFixtures`.
+type ReplayFiles = (PathBuf, Option<PathBuf>, Vec<PathBuf>);
+
+fn replay_files(arguments: &[std::ffi::OsString]) -> anyhow::Result<Option<ReplayFiles>> {
+    let Some(path) = arguments.get(7) else {
+        return Ok(None);
+    };
+    let override_file = arguments
+        .get(8)
+        .filter(|value| value.to_string_lossy() != "-")
+        .map(|value| Path::new(value).canonicalize())
+        .transpose()?;
+    let child_files = arguments
+        .iter()
+        .skip(9)
+        .map(|value| Path::new(value).canonicalize())
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Some((
+        Path::new(path).canonicalize()?,
+        override_file,
+        child_files,
+    )))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     anyhow::ensure!(
-        matches!(arguments.len(), 3..=8),
-        "expected harness-home, workspace, seed id, optional isolated data root, mode, extra overlay, seed log, and replay log"
+        arguments.len() >= 3,
+        "expected harness-home, workspace, seed id, optional isolated data root, mode, extra overlay, seed log, replay log, replay override (or -), and child replay logs"
     );
     let mode = match arguments
         .get(4)
@@ -566,8 +660,8 @@ async fn main() -> anyhow::Result<()> {
         Some(value) => anyhow::bail!("unknown keyless fixture mode {value:?}"),
     };
     anyhow::ensure!(
-        (mode == FixtureMode::Replay) == (arguments.len() == 8),
-        "replay mode requires exactly one replay log"
+        (mode == FixtureMode::Replay) == (arguments.len() >= 8),
+        "replay mode requires a replay log"
     );
     let home = PathBuf::from(&arguments[0]).canonicalize()?;
     let workspace = PathBuf::from(&arguments[1]).canonicalize()?;
@@ -609,8 +703,9 @@ async fn main() -> anyhow::Result<()> {
     let calls = Arc::new(AtomicUsize::new(0));
     let context = application.context();
     install_keyless_routes(context, &calls, mode)?;
-    let replay = if let Some(path) = arguments.get(7) {
-        match install_fixture_replay(context, Path::new(path)) {
+    install_auto_approval(context)?;
+    let replay = if let Some((fixture, override_file, child_files)) = replay_files(&arguments)? {
+        match install_fixture_replay(context, &fixture, override_file, child_files) {
             Ok(replay) => Some(replay),
             Err(error) => {
                 application.dispose().await?;

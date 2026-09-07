@@ -840,13 +840,15 @@ impl SessionManager {
             .find(|summary| summary.session_id == *source_session_id)
             .cloned();
         let result = self
-            .call_folded(
-                "session.fork",
-                json!({
-                    "sessionId":source_session_id.as_str(),
-                    "atSeq":at_seq
-                }),
-            )
+            .call_folded("session.fork", {
+                let mut payload = json!({"sessionId": source_session_id.as_str()});
+                if let Some(at_seq) = at_seq {
+                    // The source spreads `atSeq` only when defined; JSON serialization drops
+                    // `undefined`, and the Host schema rejects an explicit null.
+                    payload["atSeq"] = json!(at_seq);
+                }
+                payload
+            })
             .await;
         let child_id = match &result {
             ClientRpcResult::Success(Some(value)) => value

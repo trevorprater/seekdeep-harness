@@ -8,10 +8,14 @@ use crate::DeliverablesTurnData;
 pub const SHOWN_LIMIT: usize = 6;
 
 /// Files produced no later than one closing Assistant sequence, in first-seen order.
+///
+/// The closing sequence is a plain number like the source's: an interrupted Assistant closes at
+/// a synthetic fractional seq, and `None` (the source's `Number.POSITIVE_INFINITY` default)
+/// keeps every produced file.
 #[must_use]
 pub fn produced_for_closing(
     data: Option<&DeliverablesTurnData>,
-    closing_seq: Option<u64>,
+    closing_seq: Option<f64>,
 ) -> Vec<String> {
     let Some(data) = data else {
         return Vec::new();
@@ -19,7 +23,7 @@ pub fn produced_for_closing(
     let mut paths = Vec::new();
     let mut seen = BTreeSet::new();
     for produced in &data.produced {
-        if closing_seq.is_some_and(|closing| produced.seq > closing)
+        if closing_seq.is_some_and(|closing| seq_as_f64(produced.seq) > closing)
             || !seen.insert(produced.path.clone())
         {
             continue;
@@ -33,10 +37,17 @@ pub fn produced_for_closing(
 #[must_use]
 pub fn select_produced_files(
     data: Option<&DeliverablesTurnData>,
-    closing_seq: u64,
+    closing_seq: f64,
 ) -> Option<Vec<String>> {
     let paths = produced_for_closing(data, Some(closing_seq));
     (!paths.is_empty()).then_some(paths)
+}
+
+/// Session sequences stay far below 2^53, so the comparison is exact.
+fn seq_as_f64(seq: u64) -> f64 {
+    #[allow(clippy::cast_precision_loss)]
+    let value = seq as f64;
+    value
 }
 
 /// Returns the trailing slash- or backslash-separated path segment.

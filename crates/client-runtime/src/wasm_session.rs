@@ -642,6 +642,7 @@ fn views_face(session: &Rc<ClientSession>) -> Result<JsValue, JsValue> {
                 previous
                     .as_ref()
                     .map(|(previous, value)| (previous.as_ref(), value)),
+                &session.location_timeline(),
             )?
         } else {
             session.conversation_snapshot_to_browser(&target, &snapshot)?
@@ -766,6 +767,7 @@ pub(crate) fn empty_chat_snapshot() -> Result<JsValue, JsValue> {
 pub(crate) fn chat_snapshot_to_js_reusing(
     chat: &Value,
     previous: Option<(&Value, &JsValue)>,
+    timeline: &crate::ConversationTimelineSnapshot,
 ) -> Result<JsValue, JsValue> {
     if chat.get("encoding").and_then(Value::as_str) != Some("seekdeep-chat-v1") {
         return json_to_js(chat);
@@ -781,7 +783,7 @@ pub(crate) fn chat_snapshot_to_js_reusing(
     let (timeline, turns, steps) = if let Some(previous) = previous_timeline {
         chat_timeline_faces_from_existing(timeline_data, previous)?
     } else {
-        chat_timeline_to_js(timeline_data)?
+        chat_timeline_to_js(timeline_data, timeline)?
     };
     let encoded_nodes = chat
         .get("nodes")
@@ -1007,7 +1009,63 @@ fn chat_timeline_faces_from_existing(
     Ok((timeline, turns, steps))
 }
 
-fn chat_timeline_to_js(value: &Value) -> Result<ChatTimelineFaces, JsValue> {
+/// Encodes one Step row of the Chat timeline, preferring the live keyed data store.
+fn chat_step_to_js(
+    turn_number: u64,
+    step_row: &Value,
+    live_turn: Option<&crate::conversation_location::TurnLocation>,
+) -> Result<(u64, JsValue), JsValue> {
+    let step_number = step_row
+        .get("step")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| js_sys::Error::new("encoded Chat Step omitted step"))?;
+    let step = Object::new();
+    set(
+        &step,
+        "turn",
+        &JsValue::from_f64(js_safe_number(turn_number)?),
+    )?;
+    set(
+        &step,
+        "step",
+        &JsValue::from_f64(js_safe_number(step_number)?),
+    )?;
+    set_optional_json(&step, "start", step_row.get("start"))?;
+    set_optional_json(&step, "end", step_row.get("end"))?;
+    set(
+        &step,
+        "status",
+        &JsValue::from_str(
+            step_row
+                .get("status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+        ),
+    )?;
+    let live_step = live_turn.and_then(|live_turn| {
+        live_turn
+            .steps
+            .iter()
+            .find(|candidate| candidate.step == step_number)
+    });
+    set(
+        &step,
+        "data",
+        &match live_step {
+            Some(live_step) => crate::wasm_conversation_adapter::data_store_face(&live_step.data)?,
+            None => chat_data_store_to_js(step_row.get("data"))?,
+        },
+    )?;
+    Ok((step_number, step.into()))
+}
+
+// The encoded timeline carries each Turn's data as a copy taken at encoding time; the source
+// hands renderers the live keyed reader, so a Definition publishing later (deliverables after
+// the chat view) stays visible. Live stores win; the copy only covers Turns the index lacks.
+fn chat_timeline_to_js(
+    value: &Value,
+    live: &crate::ConversationTimelineSnapshot,
+) -> Result<ChatTimelineFaces, JsValue> {
     let rows = value
         .get("turns")
         .and_then(Value::as_array)
@@ -1037,7 +1095,17 @@ fn chat_timeline_to_js(value: &Value) -> Result<ChatTimelineFaces, JsValue> {
                     .unwrap_or("unknown"),
             ),
         )?;
-        set(&turn, "data", &chat_data_store_to_js(row.get("data"))?)?;
+        let live_turn = live.turns.get(&turn_number);
+        set(
+            &turn,
+            "data",
+            &match live_turn {
+                Some(live_turn) => {
+                    crate::wasm_conversation_adapter::data_store_face(&live_turn.data)?
+                }
+                None => chat_data_store_to_js(row.get("data"))?,
+            },
+        )?;
         let step_values = Array::new();
         for step_row in row
             .get("steps")
@@ -1045,35 +1113,8 @@ fn chat_timeline_to_js(value: &Value) -> Result<ChatTimelineFaces, JsValue> {
             .into_iter()
             .flatten()
         {
-            let step_number = step_row
-                .get("step")
-                .and_then(Value::as_u64)
-                .ok_or_else(|| js_sys::Error::new("encoded Chat Step omitted step"))?;
-            let step = Object::new();
-            set(
-                &step,
-                "turn",
-                &JsValue::from_f64(js_safe_number(turn_number)?),
-            )?;
-            set(
-                &step,
-                "step",
-                &JsValue::from_f64(js_safe_number(step_number)?),
-            )?;
-            set_optional_json(&step, "start", step_row.get("start"))?;
-            set_optional_json(&step, "end", step_row.get("end"))?;
-            set(
-                &step,
-                "status",
-                &JsValue::from_str(
-                    step_row
-                        .get("status")
-                        .and_then(Value::as_str)
-                        .unwrap_or("unknown"),
-                ),
-            )?;
-            set(&step, "data", &chat_data_store_to_js(step_row.get("data"))?)?;
-            let step_value: JsValue = step.into();
+            let (step_number, step_value) =
+                chat_step_to_js(turn_number, step_row, live_turn.map(|turn| &**turn))?;
             steps.insert(format!("{turn_number}:{step_number}"), step_value.clone());
             step_values.push(&step_value);
         }
@@ -1839,6 +1880,7 @@ impl WasmClientSession {
             cache
                 .as_ref()
                 .map(|(previous, value)| (previous.as_ref(), value)),
+            &self.session.location_timeline(),
         )?;
         drop(cache);
         *self.chat_cache.borrow_mut() = Some((chat.clone(), value.clone()));

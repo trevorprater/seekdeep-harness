@@ -24581,7 +24581,15 @@
     {
       "source": "apps/web/tests/access-confirmation.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-permission-presets/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source zh-CN case runs unchanged in Chromium against a real Rust Host; the Full access risk dialog golden compares byte for byte, the disabled-until-acknowledged enable button, in-body modal placement, and the pushed access-mode label are verified; snapshot inventory closed and zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/agent-preset-authoring.e2e.ts",
@@ -24607,7 +24615,16 @@
     {
       "source": "apps/web/tests/approval-composer.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/permission-presets/src/index.rs",
+        "crates/client-ui-conversation/src/browser_approval_panel.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned replay drives a real Rust Agent bash escalation under Read Only switched through the shipped access-mode chip; both source cases pass: the composer text cap measured live, the takeover panel golden byte for byte, the capped scroll region with both actions inside the card and viewport at two viewport heights, Allow once landing as approval/decided allowed-once, the escalated command writing notes.txt, the DONE continuation, the restored composer, full replay consumption, and a closed inventory; the permission slash command now mounts as a lazy commands child exactly like the source"
+      ]
     },
     {
       "source": "apps/web/tests/assembled-boot.ts",
@@ -24622,7 +24639,15 @@
     {
       "source": "apps/web/tests/bash-abort-row.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-tool/src/browser_views.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned cancel-tool-calls recording seeds cold; both source cases run unchanged in Chromium and the aborted Bash row disclosure golden compares byte for byte; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/built-boot.snapshot.ts",
@@ -24811,12 +24836,28 @@
     {
       "source": "apps/web/tests/goal-command-presentation.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: both pinned source cases run unchanged in Chromium against a real Rust Host; the bare /goal command input, its log-only result row, the exact centerCol golden, the persisted command/run and command/done lifecycle without any turn, and the reload replay are verified through the Host fixture session listing; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/goal-multi-turn-actions.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-conversation/src/conversation_nodes/message.rs",
+        "crates/client-ui-conversation/src/browser_context_body.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned two-round Goal replay with its override sidecar drives a real Rust Agent through both autonomous rounds; the source case verifies the fixture objectives and rounds, turn/end for turns 1 and 2, goal-sourced rounds 1 and 2 in the durable log, two enabled Branch actions, the exact transcript golden (goal and tool-goal context injections included) except product identity, a clean console, full replay consumption, and a closed inventory"
+      ]
     },
     {
       "source": "apps/web/tests/hmr-live.e2e.ts",
@@ -24841,7 +24882,15 @@
     {
       "source": "apps/web/tests/markdown-cjk-strong.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-primitives/src/browser_markdown_render.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the source fixture builder runs through the pinned dsh-session and dsh-llm modules, the recording seeds cold as a request body, and the source case verifies every CJK-adjacent strong span plus the exact golden; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/markdown-images.e2e.ts",
@@ -24851,12 +24900,28 @@
     {
       "source": "apps/web/tests/markdown-inline-code-links.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-primitives/src/browser_markdown_render.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the source inline-code-link fixture seeds cold against the live Host origin; the pinned case verifies the linkable code anchor attributes, focus, the real popup navigation, inert command and javascript: code, and the exact golden; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/math-rendering.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-primitives/src/browser_markdown_render.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the source math fixture seeds cold and the pinned case verifies six KaTeX renders, two display blocks, zero KaTeX errors, the stats line, and the exact golden; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/max-tokens-notice.snapshot.ts",
@@ -24866,7 +24931,16 @@
     {
       "source": "apps/web/tests/message-actions.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-runtime/src/session_manager.rs",
+        "crates/client-ui-workspace/src/browser_apply.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the source completed-tail fixture adapter runs unchanged and seeds cold; all four pinned cases pass: branch enabled only on the completed tail with its tooltip, the exact IconActions/clocks golden, message-action and row-menu forks observed through the Host session listing with the exact sessions-tree golden, zero model calls and a closed inventory"
+      ]
     },
     {
       "source": "apps/web/tests/message-feedback-protocol.snapshot.ts",
@@ -24876,7 +24950,15 @@
     {
       "source": "apps/web/tests/message-feedback.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-message-feedback/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the borrowed seeded-history recording seeds cold; both pinned cases pass with the source nested opener: rating, note, cold reload restore from the Host feedback sidecar, retraction with the note, and a clean console; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/minimal-preset.snapshot.ts",
@@ -24949,7 +25031,14 @@
     {
       "source": "apps/web/tests/permission-policy-context.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all three pinned source cases run unchanged in Chromium against a real Rust Host replaying the recorded fixture with a prepended global approval/request waterfall answering allowed-once; the /permission read-only, danger-full-access, workspace-write, read-only GUI command path, the exact durable request/header system, the four runtime-context messages (policy sentences renamed to SeekDeep, canonical workspace path), assistant answers, tool-call turn and sandbox_permissions arguments, the read-only sandbox denial, approval/asked, and the written policy-neutral.txt are verified from the Host fixture session listing; recorded user prompts kept verbatim; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/pin-browse-picker.overlay.yml",
@@ -24965,7 +25054,18 @@
     {
       "source": "apps/web/tests/plan-review.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-user-questions/src/wasm.rs",
+        "crates/client-ui-conversation/src/browser_assistant.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned replay drives a real Rust Agent plan turn; the source case verifies the plan review takeover card, its sidebar warning row, both goldens, the approval landing in tool/result, the DONE continuation, and the approved transcript golden exact except product identity; replay fully consumed and zero non-replay model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/plugin-config.e2e.ts",
@@ -24988,7 +25088,17 @@
     {
       "source": "apps/web/tests/produced-file-mentions.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-runtime/src/wasm_session.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs",
+        "crates/client-ui-deliverables/src/wasm.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the source write-turn fixture builder runs through the pinned dsh-session and dsh-llm modules and seeds cold; the pinned case verifies the single linked prose mention with its Open label and full-path title, inert ambiguous and unknown code, the produced-files row, a clean console, and zero model calls; encoded Chat timelines now hand renderers the live Location data stores"
+      ]
     },
     {
       "source": "apps/web/tests/produced-files.e2e.ts",
@@ -25040,7 +25150,15 @@
     {
       "source": "apps/web/tests/question-composer.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-user-questions/src/wasm.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned replay drives a real Rust Agent ask_user_question turn; both source cases pass: the resident composer takeover, its sidebar warning row, the ui/sidebar/composed goldens byte for byte, the squeeze geometry at three seat heights, the answer landing in tool/result exactly, the DONE continuation, the answered transcript golden exact except product identity, full replay consumption, and a closed inventory"
+      ]
     },
     {
       "source": "apps/web/tests/queue-actions.e2e.ts",
@@ -25050,7 +25168,14 @@
     {
       "source": "apps/web/tests/remote-welcome.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source case runs unchanged in Chromium against a real Rust Host booted with the connection row's trustedHosts patched to remote.localhost and the welcome notice pending; the zh-CN dialog, the inert root, the process-local advance on Continue, and the notice returning after reload (loopback-only settings API unreachable from the non-loopback authority) are verified with an empty console tripwire; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/replay-round-trip.e2e.ts",
@@ -25126,12 +25251,32 @@
     {
       "source": "apps/web/tests/skill-invocation-policy.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/skill-filesystem/src/lib.rs",
+        "crates/client-ui-input-trigger/src/locales.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the source seeds all four policy quadrants into the connected workspace; the pinned case verifies the slash trigger listbox lists only user-invocable skills with the user-only marker, the exact menu golden, and zero model calls"
+      ]
     },
     {
       "source": "apps/web/tests/skill-tool-row.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-skill/src/wasm.rs",
+        "crates/client-ui-primitives/src/icon_data.rs",
+        "crates/token-meter/src/breakdown_projection.rs",
+        "crates/host-apiproxy/src/session_runtime.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned skill-load recording seeds cold through production persistence; both source cases run unchanged and the ui.expected.md golden compares byte for byte, including the aria-hidden Inspect glyph, the session title projection, and the token usage stats restored from the scrubbed request header; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/skill-user-invoke.e2e.ts",
@@ -26582,7 +26727,15 @@
     {
       "source": "apps/web/tests/stats-paged-history.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-conversation/src/browser_stats_line.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the source 28-turn seed builder runs unchanged and seeds cold as a request body; all three pinned cases pass: whole-log turn/step counts on the partial tail page, unchanged strip figures after Load earlier, one turn-tail footer per settled turn, the exact paged-stats golden, and zero model calls"
+      ]
     },
     {
       "source": "apps/web/tests/steering.e2e.ts",
@@ -26627,7 +26780,14 @@
     {
       "source": "apps/web/tests/turn-tail-actions.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the two pinned replay cases run unchanged in Chromium against a real Rust Host replaying the recorded fixture with the source's hang sidecar override on the second model call; the narration paragraph and single user Copy while parked, the running centerCol golden, Stop generating writing the aborted turn/end, the frozen partial with its Stopped marker taking the footer, and the settled centerCol golden are byte-compared; fixed the deliverables turn-tail reader rejecting the interrupted Assistant's fractional closing seq; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/vite-entry.e2e.ts",

@@ -329,15 +329,16 @@ fn render_question_flow(
         Some(&class("seekdeep-question-headingBlock")?),
         &header_copy,
     )?;
-    let cancel = action_button(
+    let cancel = icon_flow_button(
         ui,
         runtime,
         bump,
         translate,
         "beginCancel",
         "nav.cancel",
+        "IconCloseOutline16",
+        true,
         disabled,
-        Some("seekdeep-question-iconButton"),
         SendKind::Cancel,
     )?;
     let header = ui.tag(
@@ -436,16 +437,44 @@ fn render_question_flow(
                 ("onKeyDown", on_key_down.into_js_value()),
             ])?),
             &[
+                if question.multi_select == Some(true) {
+                    // Source: a decorative check box, ticked with the check glyph when selected.
+                    let mark = if selected {
+                        vec![ui.primitive(
+                            "IconCheckOutline14",
+                            Some(&object(&[("size", JsValue::from_f64(12.0))])?),
+                            &[],
+                        )?]
+                    } else {
+                        Vec::new()
+                    };
+                    ui.tag(
+                        "span",
+                        Some(&object(&[
+                            (
+                                "className",
+                                JsValue::from_str(if selected {
+                                    "seekdeep-question-checkbox seekdeep-question-checkboxChecked"
+                                } else {
+                                    "seekdeep-question-checkbox"
+                                }),
+                            ),
+                            ("aria-hidden", JsValue::from_str("true")),
+                        ])?),
+                        &mark,
+                    )?
+                } else {
+                    ui.tag(
+                        "span",
+                        Some(&class("seekdeep-question-number")?),
+                        &[JsValue::from_str(&(option_index + 1).to_string())],
+                    )?
+                },
                 ui.tag(
                     "span",
-                    Some(&class(if question.multi_select == Some(true) {
-                        "seekdeep-question-checkbox"
-                    } else {
-                        "seekdeep-question-number"
-                    })?),
-                    &[JsValue::from_str(&(option_index + 1).to_string())],
+                    Some(&class("seekdeep-question-optionCopy")?),
+                    &[ui.tag("span", Some(&class("seekdeep-question-optionLine")?), &copy)?],
                 )?,
-                ui.tag("span", Some(&class("seekdeep-question-optionCopy")?), &copy)?,
             ],
         )?);
     }
@@ -483,6 +512,7 @@ fn render_question_flow(
         translate,
         "previous",
         "nav.prev",
+        "IconChevronLeftOutline14",
         snapshot.index == 0 || disabled,
     )?;
     let next = simple_flow_button(
@@ -492,6 +522,7 @@ fn render_question_flow(
         translate,
         "next",
         "nav.next",
+        "IconChevronRightOutline14",
         snapshot.index + 1 == snapshot.questions.len() || disabled,
     )?;
     let progress = ui.tag(
@@ -520,6 +551,10 @@ fn render_question_flow(
         "action.skip",
         disabled,
         None,
+        ButtonStyle {
+            variant: Some("outline"),
+            icon: None,
+        },
         SendKind::Answer,
     )?;
     let continue_label = if snapshot.busy == Some(QuestionBusy::Answer) {
@@ -538,6 +573,10 @@ fn render_question_flow(
         continue_label,
         disabled || !answered(draft),
         None,
+        ButtonStyle {
+            variant: Some("primary"),
+            icon: None,
+        },
         SendKind::Answer,
     )?;
     let footer = ui.tag(
@@ -676,15 +715,15 @@ fn custom_input(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_plan_review(
+/// Discuss, optional decline, and approve buttons of one plan review, in source order.
+fn plan_review_actions(
     ui: &ReactUi,
     runtime: &JsValue,
     bump: &Function,
     translate: &Function,
-    snapshot: &SnapshotValue,
     review: &PlanReview,
-) -> Result<JsValue, JsValue> {
-    let disabled = snapshot.busy.is_some();
+    disabled: bool,
+) -> Result<Vec<JsValue>, JsValue> {
     let discuss = action_button(
         ui,
         runtime,
@@ -694,6 +733,10 @@ fn render_plan_review(
         "plan.discuss",
         disabled,
         Some("seekdeep-plan-review-discuss"),
+        ButtonStyle {
+            variant: Some("ghost"),
+            icon: Some("IconEditOutline16"),
+        },
         SendKind::Cancel,
     )?;
     let mut actions = vec![discuss];
@@ -705,7 +748,10 @@ fn render_plan_review(
             translate,
             decline,
             "plan.decline",
-            disabled,
+            DecisionStyle {
+                variant: "outline",
+                disabled,
+            },
         )?);
     }
     actions.push(plan_decision_button(
@@ -715,8 +761,24 @@ fn render_plan_review(
         translate,
         &review.approve,
         "plan.approve",
-        disabled,
+        DecisionStyle {
+            variant: "primary",
+            disabled,
+        },
     )?);
+    Ok(actions)
+}
+
+fn render_plan_review(
+    ui: &ReactUi,
+    runtime: &JsValue,
+    bump: &Function,
+    translate: &Function,
+    snapshot: &SnapshotValue,
+    review: &PlanReview,
+) -> Result<JsValue, JsValue> {
+    let disabled = snapshot.busy.is_some();
+    let actions = plan_review_actions(ui, runtime, bump, translate, review, disabled)?;
     let feedback = ui.tag(
         "div",
         Some(&object(&[
@@ -786,6 +848,14 @@ enum SendKind {
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Source `Button` styling: the variant name and an optional leading 14px primitive icon.
+#[derive(Clone, Copy, Default)]
+struct ButtonStyle {
+    variant: Option<&'static str>,
+    icon: Option<&'static str>,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn action_button(
     ui: &ReactUi,
     runtime: &JsValue,
@@ -795,6 +865,7 @@ fn action_button(
     label_key: &str,
     disabled: bool,
     class_name: Option<&str>,
+    style: ButtonStyle,
     send_kind: SendKind,
 ) -> Result<JsValue, JsValue> {
     let action_runtime = runtime.clone();
@@ -811,14 +882,30 @@ fn action_button(
             SendKind::Answer => Ok(()),
         }
     }) as Box<dyn FnMut() -> Result<(), JsValue>>);
+    let icon = style
+        .icon
+        .map(|name| {
+            ui.primitive(
+                name,
+                Some(&object(&[("size", JsValue::from_f64(14.0))])?),
+                &[],
+            )
+        })
+        .transpose()?
+        .unwrap_or(JsValue::UNDEFINED);
     ui.primitive(
         "Button",
         Some(&object(&[
             ("type", JsValue::from_str("button")),
             (
+                "variant",
+                style.variant.map_or(JsValue::UNDEFINED, JsValue::from_str),
+            ),
+            (
                 "className",
                 class_name.map_or(JsValue::UNDEFINED, JsValue::from_str),
             ),
+            ("icon", icon),
             ("disabled", JsValue::from_bool(disabled)),
             ("onClick", on_click.into_js_value()),
         ])?),
@@ -826,6 +913,53 @@ fn action_button(
     )
 }
 
+/// The source's icon-only header cancel: a plain button whose label is its title and aria-label.
+#[allow(clippy::too_many_arguments)]
+fn icon_flow_button(
+    ui: &ReactUi,
+    runtime: &JsValue,
+    bump: &Function,
+    translate: &Function,
+    method: &str,
+    label_key: &str,
+    icon: &str,
+    titled: bool,
+    disabled: bool,
+    send_kind: SendKind,
+) -> Result<JsValue, JsValue> {
+    let action_runtime = runtime.clone();
+    let action_bump = bump.clone();
+    let method = method.to_owned();
+    let on_click = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
+        let answer = call_method(&action_runtime, &method, &[])?;
+        action_bump.call0(&JsValue::UNDEFINED)?;
+        match send_kind {
+            SendKind::Answer if !answer.is_null() => {
+                send_answer(&action_runtime, &action_bump, answer)
+            }
+            SendKind::Cancel => send_cancel(&action_runtime, &action_bump),
+            SendKind::Answer => Ok(()),
+        }
+    }) as Box<dyn FnMut() -> Result<(), JsValue>>);
+    let label = translated(translate, label_key)?;
+    ui.tag(
+        "button",
+        Some(&object(&[
+            ("type", JsValue::from_str("button")),
+            (
+                "className",
+                JsValue::from_str("seekdeep-question-iconButton"),
+            ),
+            ("aria-label", label.clone()),
+            ("title", if titled { label } else { JsValue::UNDEFINED }),
+            ("disabled", JsValue::from_bool(disabled)),
+            ("onClick", on_click.into_js_value()),
+        ])?),
+        &[ui.primitive(icon, None, &[])?],
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 fn simple_flow_button(
     ui: &ReactUi,
     runtime: &JsValue,
@@ -833,6 +967,7 @@ fn simple_flow_button(
     translate: &Function,
     method: &str,
     label_key: &str,
+    icon: &str,
     disabled: bool,
 ) -> Result<JsValue, JsValue> {
     let action_runtime = runtime.clone();
@@ -855,8 +990,14 @@ fn simple_flow_button(
             ("disabled", JsValue::from_bool(disabled)),
             ("onClick", on_click.into_js_value()),
         ])?),
-        &[],
+        &[ui.primitive(icon, None, &[])?],
     )
+}
+
+/// Button variant and enablement of one plan decision.
+struct DecisionStyle {
+    variant: &'static str,
+    disabled: bool,
 }
 
 fn plan_decision_button(
@@ -866,7 +1007,7 @@ fn plan_decision_button(
     translate: &Function,
     option: &seekdeep_user_questions_contract::AskUserQuestionOption,
     label_key: &str,
-    disabled: bool,
+    DecisionStyle { variant, disabled }: DecisionStyle,
 ) -> Result<JsValue, JsValue> {
     let decision_runtime = runtime.clone();
     let decision_bump = bump.clone();
@@ -885,6 +1026,7 @@ fn plan_decision_button(
         "Button",
         Some(&object(&[
             ("type", JsValue::from_str("button")),
+            ("variant", JsValue::from_str(variant)),
             (
                 "title",
                 option

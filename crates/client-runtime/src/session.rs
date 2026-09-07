@@ -469,7 +469,13 @@ impl ClientSession {
         self.conversation.borrow().snapshot(target)
     }
 
-    #[cfg(target_arch = "wasm32")]
+    /// The live Location timeline behind every encoded Chat snapshot.
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
+    pub(crate) fn location_timeline(&self) -> Rc<crate::ConversationTimelineSnapshot> {
+        self.conversation.borrow().timeline()
+    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
     pub(crate) fn conversation_snapshot_to_browser(
         &self,
         target: &str,

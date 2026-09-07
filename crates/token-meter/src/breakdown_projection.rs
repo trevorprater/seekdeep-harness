@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    estimate::{estimate_system_tokens, estimate_tools_tokens},
+    estimate::{estimate_recorded_header, estimate_system_tokens, estimate_tools_tokens},
     projection::ContextBreakdownProjection,
     surface_projection::{ShadowPriceClaim, fold_surface_projection},
 };
@@ -44,16 +44,23 @@ fn apply(state: &Value, event: &SessionEvent) -> anyhow::Result<ProjectionTransi
     let fold = fold_surface_projection(state.claim.as_ref(), event)?;
     let mut next = state.clone();
     if event.event_type == "request/header" {
-        let header: EpochHeader = serde_json::from_value(
-            event
-                .data
-                .get("header")
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("request/header lacks header"))?,
-        )?;
-        let header = canonical_header(header);
-        next.system_tokens = estimate_system_tokens(Some(&header));
-        next.tools_tokens = estimate_tools_tokens(Some(&header));
+        let recorded = event
+            .data
+            .get("header")
+            .ok_or_else(|| anyhow::anyhow!("request/header lacks header"))?;
+        (next.system_tokens, next.tools_tokens) =
+            match serde_json::from_value::<EpochHeader>(recorded.clone()) {
+                Ok(header) => {
+                    let header = canonical_header(header);
+                    (
+                        estimate_system_tokens(Some(&header)),
+                        estimate_tools_tokens(Some(&header)),
+                    )
+                }
+                // Scrubbed recordings carry placeholder strings where the typed header expects
+                // a system prompt and a schema list; the source prices them by length.
+                Err(_) => estimate_recorded_header(recorded),
+            };
     }
     next.message_tokens = next
         .message_tokens

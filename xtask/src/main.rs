@@ -20,6 +20,7 @@ mod web_assembled;
 mod web_assembled_driver;
 mod web_composer_driver;
 mod web_details_driver;
+mod web_keyless_driver;
 mod web_model_selection_driver;
 mod web_models_settings_driver;
 mod web_navigation_driver;
@@ -96,6 +97,14 @@ enum Command {
     WebDetails {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
+    },
+    /// Run pinned keyless source browser suites unchanged against the real Rust Host.
+    WebKeyless {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Optional comma-separated source scenario filter (for example `plan-review,question-composer`).
+        #[arg(long)]
+        scenario: Option<String>,
     },
     /// Run the pinned Typert generator spec corpus against the Rust generator runner.
     TypertCorpus {
@@ -371,6 +380,9 @@ fn main() -> anyhow::Result<()> {
         Command::WebScrollbars { source } => web_settings::run_scrollbars(&source),
         Command::WebNavigation { source } => web_settings::run_navigation(&source),
         Command::WebDetails { source } => web_settings::run_details(&source),
+        Command::WebKeyless { source, scenario } => {
+            web_settings::run_keyless(&source, scenario.as_deref())
+        }
         Command::TypertCorpus { source, filter } => typert_corpus::run(&source, filter.as_deref()),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),

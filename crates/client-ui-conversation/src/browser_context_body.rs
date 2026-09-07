@@ -417,7 +417,7 @@ fn resolve_body(
             body: render_opaque(modules, props)?,
         })
     };
-    if form.is_null() {
+    if form.is_null() || form.is_undefined() {
         return opaque();
     }
     match form.as_string().as_deref() {

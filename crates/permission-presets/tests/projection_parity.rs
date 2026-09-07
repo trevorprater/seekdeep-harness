@@ -180,6 +180,39 @@ async fn permission_command_switches_through_live_approval_and_records_lifecycle
 }
 
 #[tokio::test]
+async fn permission_command_mounts_when_commands_arrive_after_the_presets() {
+    // Source: `ctx.inject(['commands'], …)` — the slash command is a lazy child, so the
+    // composition order between the presets and the commands service never decides whether
+    // `/permission` exists.
+    let harness = mount(default_config(), MountOptions::default())
+        .await
+        .unwrap();
+    assert!(harness.context.get(COMMANDS).is_none());
+    seekdeep_commands::install(&harness.context).unwrap();
+    harness.context.registry().await_quiescent().await;
+    let session = create_session(&harness, "permission-command-late", None);
+    let (agent, _controller) = agent(session.clone());
+    let execution = harness
+        .context
+        .get(COMMANDS)
+        .unwrap()
+        .execute(
+            agent,
+            "/permission danger-full-access",
+            AbortSignal::default(),
+        )
+        .await
+        .unwrap()
+        .expect("the permission command is registered once commands mount");
+    assert_eq!(execution.result.kind(), "success");
+    assert_eq!(execution.result.text(), Some("preset danger-full-access"));
+    assert_eq!(
+        harness.service.current(&session.events()),
+        "danger-full-access"
+    );
+}
+
+#[tokio::test]
 async fn bare_and_unknown_permission_commands_report_without_domain_mutation() {
     let harness = mount(
         default_config(),

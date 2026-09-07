@@ -129,6 +129,7 @@ impl WasmConversationNodeAssembler {
             cache
                 .as_ref()
                 .map(|(previous, rendered)| (previous.as_ref(), rendered)),
+            &self.assembler.timeline(),
         )?;
         drop(cache);
         *self.chat_cache.borrow_mut() = Some((value, rendered.clone()));

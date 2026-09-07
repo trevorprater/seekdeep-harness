@@ -105,29 +105,37 @@ struct OwnedLocationData {
     value: Rc<Value>,
 }
 
+/// A keyed reader served by another module's live store through its JavaScript face.
+#[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
+pub(crate) type RemoteLocationDataReader = Rc<dyn Fn(&str) -> Option<Rc<Value>>>;
+
 /// Stable keyed reader for independently owned Location business values.
 #[derive(Default)]
 pub struct ConversationLocationDataStore {
     entries: RefCell<IndexMap<String, OwnedLocationData>>,
+    /// The source contract is one `get(key)` reader; a Definition compiled into another
+    /// module reads the engine's live store through that face instead of a copy.
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
+    remote: Option<RemoteLocationDataReader>,
 }
 
 impl ConversationLocationDataStore {
     /// Reads the latest immutable value for one business key.
     #[must_use]
     pub fn get(&self, key: &str) -> Option<Rc<Value>> {
-        self.entries
+        if let Some(value) = self
+            .entries
             .borrow()
             .get(key)
             .map(|entry| entry.value.clone())
-    }
-
-    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
-    pub(crate) fn snapshot_values(&self) -> IndexMap<String, Rc<Value>> {
-        self.entries
-            .borrow()
-            .iter()
-            .map(|(key, entry)| (key.clone(), entry.value.clone()))
-            .collect()
+        {
+            return Some(value);
+        }
+        #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
+        if let Some(remote) = &self.remote {
+            return remote(key);
+        }
+        None
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
@@ -147,6 +155,15 @@ impl ConversationLocationDataStore {
                     })
                     .collect(),
             ),
+            remote: None,
+        }
+    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
+    pub(crate) fn from_reader(reader: RemoteLocationDataReader) -> Self {
+        Self {
+            entries: RefCell::new(IndexMap::new()),
+            remote: Some(reader),
         }
     }
 

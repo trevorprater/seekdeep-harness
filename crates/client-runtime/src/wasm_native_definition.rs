@@ -15,9 +15,95 @@ use crate::{
     ConversationPreviousContext, ConversationPublication, ConversationTimelineSnapshot,
     ConversationViewNode, ConversationViewPlacement, ConversationVisibility, StepLocation,
     TurnLocation,
-    wasm_conversation_adapter::view_node_to_js,
+    wasm_conversation_adapter::{
+        recover_event, recover_match, recover_node, recover_step, recover_store, recover_turn,
+        recover_value, view_node_to_js,
+    },
     wasm_session::{js_to_json, json_to_js, parse_event},
 };
+
+/// Parsed engine values keyed by the identity of the face they were parsed from.
+///
+/// A Definition compiled into another module cannot share the engine's `Rc` values, so it
+/// parses the faces it is handed. The adapter hands out one stable face per engine value, so
+/// each face parses once here and later callbacks reuse the parse; a bounded FIFO keeps the
+/// parsed copies from outliving the conversation they mirror.
+struct ParsedFaces<T> {
+    ids: js_sys::WeakMap,
+    values: IndexMap<u32, Rc<T>>,
+    next: u32,
+}
+
+impl<T> ParsedFaces<T> {
+    const CAPACITY: usize = 4096;
+
+    fn new() -> Self {
+        Self {
+            ids: js_sys::WeakMap::new(),
+            values: IndexMap::new(),
+            next: 0,
+        }
+    }
+
+    fn get_or_parse(
+        &mut self,
+        face: &JsValue,
+        parse: impl FnOnce() -> Result<Rc<T>, JsValue>,
+    ) -> Result<Rc<T>, JsValue> {
+        if !face.is_object() {
+            return parse();
+        }
+        let key: &Object = face.unchecked_ref();
+        if let Some(id) = self.ids.get(key).as_f64().and_then(parsed_face_id)
+            && let Some(value) = self.values.get(&id)
+        {
+            return Ok(value.clone());
+        }
+        let value = parse()?;
+        while self.values.len() >= Self::CAPACITY {
+            self.values.shift_remove_index(0);
+        }
+        let id = self.next;
+        self.next = self.next.wrapping_add(1);
+        self.values.insert(id, value.clone());
+        self.ids.set(key, &JsValue::from_f64(f64::from(id)));
+        Ok(value)
+    }
+}
+
+thread_local! {
+    static PARSED_TURNS: RefCell<ParsedFaces<TurnLocation>> = RefCell::new(ParsedFaces::new());
+    static PARSED_STEPS: RefCell<ParsedFaces<StepLocation>> = RefCell::new(ParsedFaces::new());
+    static PARSED_STORES: RefCell<ParsedFaces<ConversationLocationDataStore>> = RefCell::new(ParsedFaces::new());
+    static PARSED_EVENTS: RefCell<ParsedFaces<crate::ConversationLocationEvent>> = RefCell::new(ParsedFaces::new());
+    static PARSED_MATCHES: RefCell<ParsedFaces<ConversationMatch>> = RefCell::new(ParsedFaces::new());
+    static PARSED_NODES: RefCell<ParsedFaces<ConversationViewNode>> = RefCell::new(ParsedFaces::new());
+    static PARSED_VALUES: RefCell<ParsedFaces<serde_json::Value>> = RefCell::new(ParsedFaces::new());
+}
+
+/// The immutable JSON behind a face, or a fresh parse of a foreign object.
+fn json_value_from_js(value: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
+    if let Some(recovered) = recover_value(value) {
+        return Ok(recovered);
+    }
+    PARSED_VALUES.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_parse(value, || js_to_json(value).map(Rc::new))
+    })
+}
+
+/// The engine event behind a face, or a fresh parse of a foreign object.
+fn event_from_js(value: &JsValue) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
+    if let Some(recovered) = recover_event(value) {
+        return Ok(recovered);
+    }
+    PARSED_EVENTS.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_parse(value, || parse_event(value))
+    })
+}
 
 // Native codec metadata must not reserve string properties on arbitrary Client View Builders.
 pub(crate) const VIEW_SNAPSHOT_CODEC: &str =
@@ -58,7 +144,7 @@ pub fn native_conversation_node_definition_to_js(
     let start = Closure::wrap(Box::new(
         move |context: JsValue, accepted: JsValue, reader: JsValue| -> Result<JsValue, JsValue> {
             let context = context_from_js(&context)?;
-            let accepted = Rc::new(match_from_js(&accepted)?);
+            let accepted = match_from_js(&accepted)?;
             let mut reader = BrowserContextReader::new(reader);
             let state =
                 (starter.start)(&context, &accepted, &mut reader).map_err(assembler_error)?;
@@ -75,7 +161,7 @@ pub fn native_conversation_node_definition_to_js(
     let update = Closure::wrap(Box::new(
         move |context: JsValue, accepted: JsValue| -> Result<JsValue, JsValue> {
             let context = context_from_js(&context)?;
-            let accepted = Rc::new(match_from_js(&accepted)?);
+            let accepted = match_from_js(&accepted)?;
             (updater.update)(&context, &accepted)
                 .map_err(assembler_error)
                 .and_then(|state| optional_json_to_js(state.as_deref()))
@@ -88,7 +174,7 @@ pub fn native_conversation_node_definition_to_js(
         let publication = publication.clone();
         let callback = Closure::wrap(
             Box::new(move |accepted: JsValue| -> Result<String, JsValue> {
-                publication(&match_from_js(&accepted)?)
+                publication(&*match_from_js(&accepted)?)
                     .map(publication_name)
                     .map(str::to_owned)
                     .map_err(assembler_error)
@@ -277,7 +363,7 @@ fn view_nodes_from_input(
 ) -> Result<Vec<Rc<ConversationViewNode>>, JsValue> {
     Array::from(&required(input, key, "Conversation view builder input")?)
         .iter()
-        .map(|node| view_node_from_js(&node).map(Rc::new))
+        .map(|node| view_node_from_js(&node))
         .collect()
 }
 
@@ -322,15 +408,15 @@ fn match_result_to_js(result: &ConversationMatchResult) -> Result<JsValue, JsVal
 fn context_from_js(value: &JsValue) -> Result<ConversationNodeContext, JsValue> {
     let matches = Array::from(&required(value, "matches", "Conversation Context")?)
         .iter()
-        .map(|accepted| match_from_js(&accepted).map(Rc::new))
+        .map(|accepted| match_from_js(&accepted))
         .collect::<Result<Vec<_>, _>>()?;
     let start = optional(value, "start")?
         .filter(|accepted| !accepted.is_null())
-        .map(|accepted| match_from_js(&accepted).map(Rc::new))
+        .map(|accepted| match_from_js(&accepted))
         .transpose()?;
     let state = optional(value, "state")?
         .filter(|state| !state.is_null())
-        .map(|state| js_to_json(&state).map(Rc::new))
+        .map(|state| json_value_from_js(&state))
         .transpose()?;
     let current_value = required(value, "current", "Conversation Context")?;
     let mut current = IndexMap::new();
@@ -346,7 +432,7 @@ fn context_from_js(value: &JsValue) -> Result<ConversationNodeContext, JsValue> 
         current.insert(
             target,
             (!node.is_null())
-                .then(|| view_node_from_js(&node).map(Rc::new))
+                .then(|| view_node_from_js(&node))
                 .transpose()?,
         );
     }
@@ -361,7 +447,18 @@ fn context_from_js(value: &JsValue) -> Result<ConversationNodeContext, JsValue> 
     })
 }
 
-fn match_from_js(value: &JsValue) -> Result<ConversationMatch, JsValue> {
+fn match_from_js(value: &JsValue) -> Result<Rc<ConversationMatch>, JsValue> {
+    if let Some(accepted) = recover_match(value) {
+        return Ok(accepted);
+    }
+    PARSED_MATCHES.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_parse(value, || parse_match(value))
+    })
+}
+
+fn parse_match(value: &JsValue) -> Result<Rc<ConversationMatch>, JsValue> {
     let role = match required_string(value, "role", "Conversation match")?.as_str() {
         "start" => ConversationMatchRole::Start,
         "update" => ConversationMatchRole::Update,
@@ -372,15 +469,15 @@ fn match_from_js(value: &JsValue) -> Result<ConversationMatch, JsValue> {
             .into());
         }
     };
-    Ok(ConversationMatch {
-        event: parse_event(&required(value, "event", "Conversation match")?)?,
+    Ok(Rc::new(ConversationMatch {
+        event: event_from_js(&required(value, "event", "Conversation match")?)?,
         view: optional(value, "view")?
             .filter(|view| !view.is_null())
-            .map(|view| js_to_json(&view).map(Rc::new))
+            .map(|view| json_value_from_js(&view))
             .transpose()?,
         role,
         location: location_from_js(&required(value, "location", "Conversation match")?)?,
-    })
+    }))
 }
 
 fn location_from_js(value: &JsValue) -> Result<ConversationLocation, JsValue> {
@@ -401,6 +498,13 @@ fn location_from_js(value: &JsValue) -> Result<ConversationLocation, JsValue> {
 }
 
 fn turn_from_js(value: &JsValue) -> Result<Rc<TurnLocation>, JsValue> {
+    if let Some(turn) = recover_turn(value) {
+        return Ok(turn);
+    }
+    PARSED_TURNS.with(|cache| cache.borrow_mut().get_or_parse(value, || parse_turn(value)))
+}
+
+fn parse_turn(value: &JsValue) -> Result<Rc<TurnLocation>, JsValue> {
     let steps = optional(value, "steps")?
         .map(|steps| {
             Array::from(&steps)
@@ -421,6 +525,13 @@ fn turn_from_js(value: &JsValue) -> Result<Rc<TurnLocation>, JsValue> {
 }
 
 fn step_from_js(value: &JsValue) -> Result<Rc<StepLocation>, JsValue> {
+    if let Some(step) = recover_step(value) {
+        return Ok(step);
+    }
+    PARSED_STEPS.with(|cache| cache.borrow_mut().get_or_parse(value, || parse_step(value)))
+}
+
+fn parse_step(value: &JsValue) -> Result<Rc<StepLocation>, JsValue> {
     Ok(Rc::new(StepLocation {
         turn: required_u64(value, "turn", "Step location")?,
         step: required_u64(value, "step", "Step location")?,
@@ -435,7 +546,34 @@ fn data_store_from_js(value: &JsValue) -> Result<Rc<ConversationLocationDataStor
     let Some(data) = optional(value, "data")? else {
         return Ok(Rc::new(ConversationLocationDataStore::default()));
     };
-    let entries = Reflect::get(&data, &JsValue::from_str("entries"))?;
+    if let Some(store) = recover_store(&data) {
+        return Ok(store);
+    }
+    PARSED_STORES.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_parse(&data, || parse_data_store(&data))
+    })
+}
+
+fn parse_data_store(data: &JsValue) -> Result<Rc<ConversationLocationDataStore>, JsValue> {
+    // The source contract is the `get(key)` reader: read the live store behind the face on
+    // demand rather than copying whatever it holds at parse time.
+    if let Ok(get) = Reflect::get(data, &JsValue::from_str("get"))
+        && let Ok(get) = get.dyn_into::<Function>()
+    {
+        let owner = data.clone();
+        let reader: crate::conversation_location::RemoteLocationDataReader =
+            Rc::new(move |key: &str| {
+                let value = get.call1(&owner, &JsValue::from_str(key)).ok()?;
+                if value.is_undefined() || value.is_null() {
+                    return None;
+                }
+                json_value_from_js(&value).ok()
+            });
+        return Ok(Rc::new(ConversationLocationDataStore::from_reader(reader)));
+    }
+    let entries = Reflect::get(data, &JsValue::from_str("entries"))?;
     if entries.is_undefined() || entries.is_null() {
         return Ok(Rc::new(ConversationLocationDataStore::default()));
     }
@@ -474,11 +612,22 @@ fn optional_event(
 ) -> Result<Option<Rc<crate::ConversationLocationEvent>>, JsValue> {
     optional(value, key)?
         .filter(|event| !event.is_null())
-        .map(|event| parse_event(&event))
+        .map(|event| event_from_js(&event))
         .transpose()
 }
 
-fn view_node_from_js(value: &JsValue) -> Result<ConversationViewNode, JsValue> {
+fn view_node_from_js(value: &JsValue) -> Result<Rc<ConversationViewNode>, JsValue> {
+    if let Some(node) = recover_node(value) {
+        return Ok(node);
+    }
+    PARSED_NODES.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_parse(value, || parse_view_node(value))
+    })
+}
+
+fn parse_view_node(value: &JsValue) -> Result<Rc<ConversationViewNode>, JsValue> {
     let target = required_string(value, "target", "Conversation view Node")?;
     let anchor = optional(value, "anchorSeq")?.and_then(|anchor| anchor.as_f64());
     let location = optional(value, "location")?;
@@ -519,19 +668,15 @@ fn view_node_from_js(value: &JsValue) -> Result<ConversationViewNode, JsValue> {
     } else {
         None
     };
-    Ok(ConversationViewNode {
+    Ok(Rc::new(ConversationViewNode {
         key: required_string(value, "key", "Conversation view Node")?,
         kind: required_string(value, "kind", "Conversation view Node")?,
         id: required_string(value, "id", "Conversation view Node")?,
         target,
-        data: Rc::new(js_to_json(&required(
-            value,
-            "data",
-            "Conversation view Node",
-        )?)?),
+        data: json_value_from_js(&required(value, "data", "Conversation view Node")?)?,
         placement,
         chat,
-    })
+    }))
 }
 
 struct BrowserContextReader {
@@ -581,18 +726,14 @@ fn previous_context_from_js(value: &JsValue) -> Result<ConversationPreviousConte
         "previous Conversation Context",
     )?)
     .iter()
-    .map(|accepted| match_from_js(&accepted).map(Rc::new))
+    .map(|accepted| match_from_js(&accepted))
     .collect::<Result<Vec<_>, _>>()?;
     Ok(ConversationPreviousContext {
         key: required_string(value, "key", "previous Conversation Context")?,
         kind: required_string(value, "kind", "previous Conversation Context")?,
         id: required_string(value, "id", "previous Conversation Context")?,
         start_seq: required_u64(value, "startSeq", "previous Conversation Context")?,
-        state: Rc::new(js_to_json(&required(
-            value,
-            "state",
-            "previous Conversation Context",
-        )?)?),
+        state: json_value_from_js(&required(value, "state", "previous Conversation Context")?)?,
         matches: Rc::new(RefCell::new(matches)),
     })
 }
@@ -682,4 +823,13 @@ fn js_error_text(value: &JsValue) -> String {
         .and_then(|message| message.as_string())
         .or_else(|| value.as_string())
         .unwrap_or_else(|| format!("{value:?}"))
+}
+
+/// Decodes a parsed-face id written by the cache; anything else is not one of its ids.
+fn parsed_face_id(value: f64) -> Option<u32> {
+    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 || value > f64::from(u32::MAX) {
+        return None;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Some(value as u32)
 }

@@ -469,54 +469,77 @@ impl PermissionPresetService {
                 },
             ),
         )?;
-        if let Some(commands) = context.get(COMMANDS) {
-            let service = self.clone();
-            commands.register(
-                context,
-                CommandDefinition::new(
-                    "permission",
-                    "Switch the permission preset (sandbox mode + approval policy)",
-                    Arc::new(move |invocation: CommandInvocation| {
-                        let service = service.clone();
-                        Box::pin(async move {
-                            let name = invocation.raw_input.trim();
-                            let result = if name.is_empty() {
-                                CommandResult::success(Some(format!(
-                                    "current preset {} (available: {})",
-                                    service.current(&invocation.agent.session().events()),
-                                    service.names().join(", ")
-                                )))
-                            } else if !service.names().contains(&name.to_owned()) {
-                                CommandResult::error(format!(
-                                    "unknown preset \"{name}\" (available: {})",
-                                    service.names().join(", ")
-                                ))
-                            } else {
-                                let switched = service
-                                    .context
-                                    .get(APPROVAL)
-                                    .ok_or_else(|| {
-                                        anyhow::anyhow!("permission-presets requires approval")
-                                    })
-                                    .and_then(|approval| {
-                                        service.apply(invocation.agent.session(), name, &|policy| {
-                                            approval.set_policy(invocation.agent.as_ref(), policy)
-                                        })
-                                    });
-                                match switched {
-                                    Ok(()) => {
-                                        CommandResult::success(Some(format!("preset {name}")))
-                                    }
-                                    Err(error) => CommandResult::error(error.to_string()),
-                                }
-                            };
-                            Ok(result)
-                        })
-                    }),
-                )
-                .with_input("<preset>"),
-            )?;
-        }
+        // Source: `ctx.inject(['commands'], …)` — the slash command is an optional child that
+        // activates whenever the commands service is mounted, in any composition order.
+        let service = self.clone();
+        let child = Plugin::new(
+            "permission-presets:command",
+            [COMMANDS.name()],
+            move |context, _| {
+                let service = service.clone();
+                Box::pin(async move {
+                    let commands = context.get(COMMANDS).ok_or_else(|| {
+                        anyhow::anyhow!("permission command child activated without commands")
+                    })?;
+                    commands.register(
+                        &context,
+                        CommandDefinition::new(
+                            "permission",
+                            "Switch the permission preset (sandbox mode + approval policy)",
+                            Arc::new(move |invocation: CommandInvocation| {
+                                let service = service.clone();
+                                Box::pin(async move {
+                                    let name = invocation.raw_input.trim();
+                                    let result = if name.is_empty() {
+                                        CommandResult::success(Some(format!(
+                                            "current preset {} (available: {})",
+                                            service.current(&invocation.agent.session().events()),
+                                            service.names().join(", ")
+                                        )))
+                                    } else if !service.names().contains(&name.to_owned()) {
+                                        CommandResult::error(format!(
+                                            "unknown preset \"{name}\" (available: {})",
+                                            service.names().join(", ")
+                                        ))
+                                    } else {
+                                        let switched = service
+                                            .context
+                                            .get(APPROVAL)
+                                            .ok_or_else(|| {
+                                                anyhow::anyhow!(
+                                                    "permission-presets requires approval"
+                                                )
+                                            })
+                                            .and_then(|approval| {
+                                                service.apply(
+                                                    invocation.agent.session(),
+                                                    name,
+                                                    &|policy| {
+                                                        approval.set_policy(
+                                                            invocation.agent.as_ref(),
+                                                            policy,
+                                                        )
+                                                    },
+                                                )
+                                            });
+                                        match switched {
+                                            Ok(()) => CommandResult::success(Some(format!(
+                                                "preset {name}"
+                                            ))),
+                                            Err(error) => CommandResult::error(error.to_string()),
+                                        }
+                                    };
+                                    Ok(result)
+                                })
+                            }),
+                        )
+                        .with_input("<preset>"),
+                    )?;
+                    Ok(())
+                })
+            },
+        );
+        context.plugin(child, Value::Null)?;
         Ok(())
     }
 }

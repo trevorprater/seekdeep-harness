@@ -160,10 +160,10 @@ pub fn exported_produced_for_closing(
     let closing_seq = match closing_seq {
         None => None,
         Some(value) if value == f64::INFINITY => None,
-        Some(value) => Some(
-            f64_to_u64(value)
-                .ok_or_else(|| js_sys::Error::new("closing sequence must be a finite u64"))?,
-        ),
+        Some(value) if value.is_nan() || value == f64::NEG_INFINITY => {
+            return Err(js_sys::Error::new("closing sequence must be a number").into());
+        }
+        Some(value) => Some(value),
     };
     let paths = Array::new();
     for path in produced_for_closing(data.as_ref(), closing_seq) {
@@ -539,8 +539,6 @@ fn select_paths_vec(owner: &JsValue) -> Result<Option<Vec<String>>, JsValue> {
     let data = serde_wasm_bindgen::from_value::<DeliverablesTurnData>(value)
         .map_err(js_error_from_display)?;
     let seq = required_number(owner, "seq", "turn-tail owner")?;
-    let seq =
-        f64_to_u64(seq).ok_or_else(|| js_sys::Error::new("turn-tail owner seq must be a u64"))?;
     Ok(select_produced_files(Some(&data), seq))
 }
 
@@ -742,14 +740,6 @@ fn f64_to_usize(value: f64) -> Option<usize> {
     }
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     Some(value as usize)
-}
-
-fn f64_to_u64(value: f64) -> Option<u64> {
-    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 {
-        return None;
-    }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    Some(value as u64)
 }
 
 fn usize_as_f64(value: usize) -> f64 {

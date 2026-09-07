@@ -1,0 +1,600 @@
+//! Unchanged keyless source browser suites over the Rust/WASM client and a fresh Rust Host each.
+//!
+//! Every scenario below boots its own isolated Host and Chromium profile exactly as the source
+//! `beforeAll` hooks do, then compiles the pinned `it` callbacks with the source scaffold helpers
+//! bound to Rust-Host equivalents: session events and listings come from the `/fixture/sessions`
+//! route instead of in-process Cordis taps, and goldens compare byte-for-byte in replay mode.
+
+pub(super) const DRIVER: &str = r#"import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { once } from 'node:events';
+import { mkdirSync, existsSync } from 'node:fs';
+import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
+import { join, basename, dirname } from 'node:path';
+const [source, host, world, output] = process.argv.slice(2), require = createRequire(join(source, 'apps/web/package.json'));
+const { chromium } = require('playwright'), { expect } = require('playwright/test'), ts = require('typescript');
+const exec = promisify(execFile), MODE = 'replay', TESTS = join(source, 'apps/web/tests'), checks = [], filter = process.env.SEEKDEEP_KEYLESS_SCENARIO;
+const selected = name => !filter || filter.split(',').includes(name);
+// Source assertions pinned to product identity: the Rust product renames the DeepSeek Harness
+// prose, so the same case reads the renamed policy context, exactly like the golden rewrite.
+function adaptSelectors(code) {
+  return code
+    .replaceAll('[class*="centerCol"]', '[class*="seekdeep-layout-center-col"]')
+    .replaceAll('Current DSH file policy', 'Current SeekDeep file policy')
+    .replaceAll('DSH file sandbox', 'SeekDeep file sandbox')
+    .replaceAll("'@deepseek-ai/dsh-system-prompt'", "'@seekdeep-ai/seekdeep-system-prompt'");
+}
+async function sourceFile(file) {
+  const body = await readFile(join(TESTS, file), 'utf8');
+  return ts.createSourceFile(file, body, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+}
+function declarations(ast, names) {
+  const selected = ast.statements.filter(node => {
+    const declared = ts.isVariableStatement(node) ? node.declarationList.declarations.map(value => value.name.getText(ast)) : node.name ? [node.name.getText(ast)] : [];
+    return declared.some(name => names.includes(name));
+  });
+  assert.equal(selected.length, names.length, 'source helper inventory for ' + names.join(','));
+  return selected.map(node => node.getText(ast).replace(/^export\s+/, '')).join('\n');
+}
+// Helpers a suite declares inside its describe callback (they close over the shared page).
+function nestedDeclarations(ast, names) {
+  const found = [];
+  function visit(node) {
+    if ((ts.isFunctionDeclaration(node) || ts.isVariableStatement(node)) && !ast.statements.includes(node)) {
+      const declared = ts.isVariableStatement(node) ? node.declarationList.declarations.map(value => value.name.getText(ast)) : node.name ? [node.name.getText(ast)] : [];
+      if (declared.some(name => names.includes(name))) found.push(node.getText(ast));
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  assert.equal(found.length, names.length, 'nested source helper inventory for ' + names.join(','));
+  return found.join('\n');
+}
+function sourceCases(ast) {
+  const cases = [];
+  function visit(node) {
+    if (ts.isCallExpression(node) && ts.isStringLiteral(node.arguments[0] ?? ts.factory.createNull()) && node.arguments[1] && ts.isArrowFunction(node.arguments[1])) {
+      const callee = node.expression.getText(ast);
+      if (callee === 'it' || callee.startsWith('it.')) cases.push({ name: node.arguments[0].text, callback: node.arguments[1].getText(ast), skipped: callee.includes("skipIf(MODE !== 'record')") });
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  return cases;
+}
+function compile(code, bindings, { adapt = true } = {}) {
+  const emitted = ts.transpileModule(adapt ? adaptSelectors(code) : code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  return new Function(...Object.keys(bindings), emitted)(...Object.values(bindings));
+}
+// Recorded user text is fixture data, not product identity: it stays verbatim.
+function verbatimConstant(ast, name) {
+  return compile(declarations(ast, [name]) + '\nreturn ' + name + ';', {}, { adapt: false });
+}
+async function readiness(server, stderr) {
+  return new Promise((resolve, reject) => {
+    let stdout = ''; const timer = setTimeout(() => reject(new Error('Host readiness: ' + stderr())), 30000);
+    server.stdout.on('data', value => { stdout += value; const match = /seekdeep web: (http:\/\/\S+)/.exec(stdout); if (match) { clearTimeout(timer); resolve(match[1]); } });
+    server.once('exit', code => { clearTimeout(timer); reject(new Error('Host exit ' + code + ': ' + stderr())); });
+  });
+}
+async function bootHost(name, options) {
+  // The source scaffold's `workspaceCwd` is a temp root the Host runs in; scenarios connect the
+  // `workspace` folder they create inside it, so the root's own basename never reaches the UI.
+  const root = join(world, name), home = join(root, 'home'), workspace = join(root, 'e2e-ws'), overlay = join(root, 'overlay.patch.yml');
+  await mkdir(home, { recursive: true }); await mkdir(workspace, { recursive: true });
+  await writeFile(overlay, options.overlay ?? '[]\n');
+  let stderr = '', sequence = 0;
+  // The seed-log route mounts only with a seed path; generated fixtures arrive as request bodies.
+  const seedPath = join(root, 'unused-seed.jsonl'); await writeFile(seedPath, '');
+  const args = [home, workspace, name + '-seed', home, options.replay ? 'replay' : 'route-only', overlay, options.seedFile ?? seedPath, ...options.replay ? [options.replay, options.replayOverride ?? '-', ...options.replayChildFixtures ?? []] : []];
+  // Skill discovery is model-visible input: the preset-mounted skill roots resolve from the
+  // process environment, so pin every host-level root inside the owned world as the source
+  // scaffold's `skillRootEnvironment` does.
+  const server = spawn(host, args, { cwd: process.cwd(), env: { ...process.env, SEEKDEEP_HOME: home, SEEKDEEP_AGENTS_HOME: join(home, 'agents'), SEEKDEEP_BUNDLED_SKILL_DIR: join(home, 'bundled-skills'), SEEKDEEP_TELEMETRY_DISABLED: '1', ...options.env ?? {} }, stdio: ['ignore', 'pipe', 'pipe'] });
+  server.stderr.on('data', value => { stderr += value; });
+  const origin = await readiness(server, () => stderr);
+  const invoke = async (method, payload) => { const rpcId = name + '-' + ++sequence; const response = await fetch(origin + '/api/' + method, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId, method, payload }) }); assert(response.ok); const body = await response.json(); assert.equal(body.rpcId, rpcId); assert.equal(body.result.ok, true, JSON.stringify(body)); return body.result.value; };
+  if (!options.welcomePending) await invoke('settings.mutate', { ns: options.welcome.namespace, ops: [{ op: 'set', path: [options.welcome.field], value: options.welcome.version }] });
+  const seedSession = async (id, text) => { const seeded = await fetch(origin + '/fixture/seed-log/' + encodeURIComponent(id), { method: 'POST', ...text === undefined ? {} : { body: text } }); assert(seeded.ok, 'seed ' + id + ': ' + await seeded.text() + '\n' + stderr); };
+  return { origin, home, workspace, invoke, seedSession, stderr: () => stderr, async stop() {
+    if (server.exitCode === null) { const exited = once(server, 'exit'); server.kill('SIGINT'); const [code] = await exited; await writeFile(join(output, name + '-host-stderr.txt'), stderr); assert.equal(code, 0, stderr); }
+    const audit = JSON.parse(await readFile(join(home, 'model-call-audit.json'), 'utf8'));
+    assert.equal(audit.calls, 0, 'keyless scenario made a non-replay model call');
+    if (options.replay) assert.equal(audit.replayConsumed, true, 'replay fixture was not fully consumed');
+  } };
+}
+// Session events and listings the source reads from its in-process Context come from the Rust
+// Host's fixture listing; every settled `expect.poll` refreshes them so the case's synchronous
+// event assertions observe the Host state that produced the settled UI.
+function liveSessions(origin) {
+  const events = [], sessions = [];
+  const refresh = async () => {
+    const response = await fetch(origin + '/fixture/sessions'); assert(response.ok, 'fixture session listing HTTP ' + response.status);
+    const listed = await response.json();
+    sessions.splice(0, sessions.length, ...listed.map(entry => ({ id: entry.header.id, header: entry.header, events: entry.events })));
+    events.splice(0, events.length, ...listed.flatMap(entry => entry.events));
+  };
+  const wrapMatchers = target => new Proxy(target, { get(inner, key) {
+    const value = Reflect.get(inner, key);
+    if (typeof value === 'function') return (...args) => { const result = value.apply(inner, args); return result && typeof result.then === 'function' ? result.then(async settled => { await refresh(); return settled; }) : result; };
+    return value && typeof value === 'object' ? wrapMatchers(value) : value;
+  } });
+  const liveExpect = new Proxy(expect, {
+    apply(target, thisArg, args) { return Reflect.apply(target, thisArg, args); },
+    get(target, key) { return key === 'poll' ? (probe, options) => wrapMatchers(target.poll(probe, options)) : Reflect.get(target, key); },
+  });
+  // The source barrier is an in-process turn/end tap followed by a flush; the Rust Host equivalent
+  // observes the first closed turn through the listing and settles it through the idle barrier.
+  let stopped = false;
+  const turnEnds = session => session.events.filter(event => event.type === 'turn/end').length;
+  // Armed like the source tap: the barrier resolves on the first turn/end appended after arming.
+  const whenTurnSettled = (timeoutMs = 30000) => { const baseline = new Map(sessions.map(session => [session.id, turnEnds(session)])); const pending = (async () => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (stopped) throw new Error('Host stopped before the turn settled');
+      await refresh();
+      const closed = sessions.find(session => turnEnds(session) > (baseline.get(session.id) ?? 0));
+      if (closed) {
+        const settled = await fetch(origin + '/fixture/idle/' + encodeURIComponent(closed.id), { method: 'POST', signal: AbortSignal.timeout(timeoutMs) });
+        assert(settled.ok, 'idle barrier HTTP ' + settled.status + ': ' + await settled.clone().text());
+        await refresh(); return closed.id;
+      }
+      if (Date.now() > deadline) throw new Error('no turn/end within ' + timeoutMs + 'ms');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  })(); pending.catch(() => {}); return pending; };
+  // The source's `whenTurnsSettled` counts durable turn ends through the same in-process tap.
+  const whenTurnsSettled = (count, timeoutMs) => { const pending = (async () => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (stopped) throw new Error('Host stopped before the turns settled');
+      await refresh();
+      const closed = sessions.find(session => session.events.filter(event => event.type === 'turn/end').length >= count);
+      if (closed) {
+        const settled = await fetch(origin + '/fixture/idle/' + encodeURIComponent(closed.id), { method: 'POST', signal: AbortSignal.timeout(timeoutMs) });
+        assert(settled.ok, 'idle barrier HTTP ' + settled.status + ': ' + await settled.clone().text());
+        await refresh(); return closed.id;
+      }
+      if (Date.now() > deadline) throw new Error('only some of ' + count + ' Goal turns ended within ' + timeoutMs + 'ms');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  })(); pending.catch(() => {}); return pending; };
+  const stop = () => { stopped = true; };
+  // `ctx.agents.list()` is synchronous in the source; here each call returns the latest listing
+  // and kicks a background refresh so a polled predicate observes the Host within its window.
+  const agents = { list: () => { if (!stopped) refresh().catch(() => {}); return sessions.map(session => ({ session: { header: session.header, id: session.id } })); } };
+  return { events, sessions, refresh, expect: liveExpect, whenTurnSettled, whenTurnsSettled, agents, stop };
+}
+// A saturated main thread: sample where the time goes, with wasm frames named by their name section.
+async function startProfile(page) {
+  const session = await page.context().newCDPSession(page);
+  await session.send('Profiler.enable'); await session.send('Profiler.setSamplingInterval', { interval: 250 }); await session.send('Profiler.start');
+  return async () => { const { profile } = await session.send('Profiler.stop'); await session.detach().catch(() => {}); return summarizeProfile(profile); };
+}
+async function cpuProfile(page) {
+  const stop = await startProfile(page);
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  return stop();
+}
+function summarizeProfile(profile) {
+  const nodes = new Map(profile.nodes.map(node => [node.id, node])), parents = new Map();
+  for (const node of profile.nodes) for (const child of node.children ?? []) parents.set(child, node.id);
+  const self = new Map(); for (const id of profile.samples) self.set(id, (self.get(id) ?? 0) + 1);
+  const chain = id => { const names = []; let current = id; while (current !== undefined && names.length < 80) { const node = nodes.get(current); names.push(node.callFrame.functionName || '(anonymous)'); current = parents.get(current); } return names; };
+  return [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([id, count]) => ({ samples: count, url: nodes.get(id).callFrame.url.slice(-60), chain: chain(id) }));
+}
+async function pausedStack(page) {
+  const session = await page.context().newCDPSession(page);
+  const paused = new Promise(resolve => session.once('Debugger.paused', event => resolve(event.callFrames.map(frame => ({ function: frame.functionName, url: frame.url, callFrameId: frame.callFrameId, scriptId: frame.location.scriptId, line: frame.location.lineNumber, column: frame.location.columnNumber })))));
+  await session.send('Debugger.enable');
+  await session.send('Debugger.pause');
+  const frames = await Promise.race([paused, new Promise((_, reject) => setTimeout(() => reject(new Error('no pause within 8s')), 8000))]).catch(async error => { await session.send('Debugger.disable').catch(() => {}); await session.detach().catch(() => {}); throw error; });
+  const sources = new Map();
+  for (const frame of frames) {
+    // React's dispatch frames name the DOM event `t` and the native event `s`.
+    const probe = await session.send('Debugger.evaluateOnCallFrame', { callFrameId: frame.callFrameId, returnByValue: true, expression: 'JSON.stringify({ event: typeof t === "string" ? t : undefined, native: s && s.type, animation: s && s.animationName, sameTarget: s && s.target === window.__seekdeepLastTarget, attached: s && s.target && document.contains(s.target), computedAnimation: s && s.target && getComputedStyle(s.target).animationName, target: s && s.target && s.target.outerHTML ? s.target.outerHTML.slice(0, 300) : undefined, tracked: (window.__seekdeepLastTarget = s && s.target, true) })' }).catch(error => ({ result: { value: 'probe failed: ' + String(error) } }));
+    frame.probe = probe.result?.value; delete frame.callFrameId;
+    if (!sources.has(frame.scriptId)) {
+      const { scriptSource } = await session.send('Debugger.getScriptSource', { scriptId: frame.scriptId }).catch(() => ({ scriptSource: '' }));
+      const lines = scriptSource.split('\n');
+      sources.set(frame.scriptId, { length: scriptSource.length, identity: (scriptSource.match(/@seekdeep-ai\/[a-z-]+/g) ?? []).slice(0, 3), lines });
+    }
+    const source = sources.get(frame.scriptId);
+    frame.identity = source.identity; frame.scriptLength = source.length;
+    frame.snippet = source.lines.slice(Math.max(0, frame.line - 2), frame.line + 3).map(line => line.length > 400 ? line.slice(Math.max(0, frame.column - 200), frame.column + 200) : line);
+  }
+  await session.send('Debugger.resume').catch(() => {});
+  await session.send('Debugger.disable').catch(() => {});
+  await session.detach().catch(() => {});
+  return frames;
+}
+let planned = 0;
+async function runCases(scenario, cases, page, bindings, tripwire) {
+  for (const entry of cases) {
+    if (entry.skipped) { console.log('keyless: ' + scenario + ' skips record-only case ' + entry.name); continue; }
+    planned += 1;
+    const hooks = [];
+    const callback = compile(bindings.prelude + '\nreturn (' + entry.callback + ');', { ...bindings.values, onTestFailed: hook => hooks.push(hook), saveFailureShot: (target, name) => target.screenshot({ path: join(output, name + '.png'), fullPage: true }).catch(() => {}) });
+    const stopProfile = process.env.SEEKDEEP_KEYLESS_PROFILE ? await startProfile(page) : undefined;
+    const startedAt = Date.now();
+    try { await callback(); if (stopProfile) await stopProfile(); } catch (error) {
+      if (stopProfile) await writeFile(join(output, scenario + '-case-profile.json'), JSON.stringify({ elapsedMs: Date.now() - startedAt, animationStarts: await page.evaluate(() => window.__seekdeepAnimationStarts).catch(() => 'unavailable'), hot: await stopProfile().catch(failure => String(failure)) }, null, 2));
+      const probes = {};
+      probes.evaluate = await Promise.race([page.evaluate('1 + 1'), new Promise(resolve => setTimeout(() => resolve('timed out'), 5000))]).then(String, failure => 'failed: ' + String(failure));
+      if (probes.evaluate !== '2') {
+        // A hung main thread answers no locator: interrupt it through CDP and record where it
+        // spins. A responsive page must not be paused — a pending pause blocks every later probe.
+        const stack = await pausedStack(page).catch(failure => 'unavailable: ' + String(failure));
+        await writeFile(join(output, scenario + '-hang-stack.json'), JSON.stringify(stack, null, 2));
+        const profile = await cpuProfile(page).catch(failure => 'unavailable: ' + String(failure));
+        await writeFile(join(output, scenario + '-hang-profile.json'), JSON.stringify(profile, null, 2));
+      }
+      probes.dom = await page.evaluate(() => ({ done: document.body.innerText.includes('DONE'), planCard: document.querySelectorAll('[data-plan-review-key]').length, reasoningStates: [...document.querySelectorAll('[data-variant="think"]')].map(node => node.getAttribute('data-state')), textareaEnabled: !document.querySelector('textarea')?.disabled, phase: document.querySelector('div[data-phase]')?.getAttribute('data-phase') })).catch(failure => 'failed: ' + String(failure));
+      probes.animationStartsPerSecond = await page.evaluate(() => new Promise(resolve => { let count = 0; const handler = () => { count += 1; }; document.addEventListener('animationstart', handler, true); setTimeout(() => { document.removeEventListener('animationstart', handler, true); resolve(count); }, 1000); })).catch(failure => 'failed: ' + String(failure));
+      probes.aria = await page.locator('body').ariaSnapshot({ timeout: 5000 }).then(() => 'ok', failure => 'failed: ' + String(failure).slice(0, 300));
+      probes.screenshot = await page.screenshot({ path: join(output, scenario + '-probe.png'), timeout: 5000 }).then(() => 'ok', failure => 'failed: ' + String(failure).slice(0, 300));
+      if (process.env.SEEKDEEP_KEYLESS_PROBE) probes.custom = await page.evaluate(process.env.SEEKDEEP_KEYLESS_PROBE).then(value => JSON.stringify(value), failure => 'failed: ' + String(failure));
+      await writeFile(join(output, scenario + '-hang-probes.json'), JSON.stringify(probes, null, 2));
+      await Promise.all(hooks.map(hook => hook().catch(() => {})));
+      await writeFile(join(output, scenario + '-failure-aria.txt'), await page.locator('body').ariaSnapshot().catch(() => 'unavailable'));
+      await writeFile(join(output, scenario + '-failure.json'), JSON.stringify({ case: entry.name, error: String(error), closed: page.isClosed(), tripwire, console: pageConsoles.get(page) ?? [] }, null, 2));
+      console.error('keyless: ' + scenario + ': ' + entry.name + ' failed: ' + String(error));
+      caseFailure = error;
+      throw error;
+    }
+    checks.push(scenario + ': ' + entry.name); console.log('keyless: ' + scenario + ': ' + entry.name);
+  }
+}
+const scaffoldAst = await sourceFile('scaffold.ts'), supportAst = await sourceFile('support.ts');
+const helpers = declarations(scaffoldAst, ['normalizeAria', 'captureStableAria', 'watchConsole', 'acknowledgeReloadConnectionLoss', 'WELCOME_NOTICE_SETTINGS_NAMESPACE', 'WELCOME_NOTICE_ACK_FIELD', 'WELCOME_NOTICE_VERSION']);
+const welcomeValues = compile(helpers + '\nreturn {WELCOME_NOTICE_SETTINGS_NAMESPACE,WELCOME_NOTICE_ACK_FIELD,WELCOME_NOTICE_VERSION};', { expect });
+const welcome = { namespace: welcomeValues.WELCOME_NOTICE_SETTINGS_NAMESPACE, field: welcomeValues.WELCOME_NOTICE_ACK_FIELD, version: welcomeValues.WELCOME_NOTICE_VERSION };
+// Live Rust runs render SeekDeep package identities where the source goldens pin DeepSeek ones;
+// seeded recordings keep the identities their fixtures carry. Either spelling of the golden is exact.
+const productIdentity = text => text.replaceAll('@deepseek-ai/dsh-', '@seekdeep-ai/seekdeep-');
+const goldenTools = scenario => ({
+  compareOrRefreshGolden: async (path, actual, mode) => {
+    assert.equal(mode, 'replay'); await writeFile(join(output, scenario + '-' + basename(path) + '.actual'), actual + '\n');
+    const expected = await readFile(path, 'utf8');
+    if (actual + '\n' !== expected) assert.equal(actual + '\n', productIdentity(expected), 'golden ' + basename(path));
+  },
+  assertFixtureInventory: async (path, names) => assert.deepEqual((await readdir(path)).sort(), [...names].sort()),
+});
+// Teardown reports its own failures without masking the case error that preceded it: after a
+// failed case the audit (an unconsumed replay, say) is a consequence, so it is logged, not thrown.
+let caseFailure;
+async function teardown(browser, server) {
+  const failures = [];
+  await browser.close().catch(error => failures.push(error));
+  await server.stop().catch(error => failures.push(error));
+  if (caseFailure !== undefined) { for (const error of failures) console.error('keyless: teardown after a failed case: ' + String(error)); return; }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) throw new AggregateError(failures, 'scenario teardown failed');
+}
+const pageConsoles = new WeakMap();
+async function openPage(name, locale, viewport = { width: 1680, height: 1000 }) {
+  const profile = join(world, name, 'browser');
+  const context = await chromium.launchPersistentContext(profile, { headless: true, locale, viewport, args: ['--remote-debugging-port=0'] });
+  const cdp = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0];
+  const page = context.pages()[0] ?? await context.newPage(); page.setDefaultTimeout(15000);
+  await page.addInitScript(() => { window.__seekdeepAnimationStarts = 0; document.addEventListener('animationstart', () => { window.__seekdeepAnimationStarts += 1; }, true); });
+  const console = []; page.on('console', message => console.push({ type: message.type(), text: message.text() }));
+  page.on('response', response => { const url = new URL(response.url()); if (url.pathname.startsWith('/api/')) response.text().then(body => console.push({ type: 'rpc', text: url.pathname + ' ' + response.status() + ' ' + body.slice(0, 400), request: (response.request().postData() ?? '').slice(0, 400) })).catch(() => {}); }); page.on('pageerror', error => console.push({ type: 'pageerror', text: String(error) })); page.on('crash', () => console.push({ type: 'crash', text: 'page crashed' }));
+  pageConsoles.set(page, console);
+  return { context, page, cdp, async screenshot(label) { await exec('agent-browser', ['--session', 'seekdeep-keyless-' + name, '--cdp', cdp, 'screenshot', '--annotate', join(output, name + '-' + label + '.png')]); }, async close() { await exec('agent-browser', ['--session', 'seekdeep-keyless-' + name, 'close']).catch(() => {}); await context.close(); } };
+}
+const { tsImport } = require('tsx/esm/api');
+const { parseSessionLog } = await tsImport(join(source, 'packages/test-support/llm-replay/src/index.ts'), { parentURL: import.meta.url, tsconfig: join(source, 'tsconfig.base.json') });
+const sourceModule = path => tsImport(join(source, path), { parentURL: import.meta.url, tsconfig: join(source, 'tsconfig.base.json') });
+const sessionModule = await sourceModule('packages/core/session/src/index.ts'), llmModule = await sourceModule('packages/llm/llm/src/index.ts'), llmBrandModule = await sourceModule('packages/llm/llm/src/brand.ts');
+const fixtureHelpers = declarations(scaffoldAst, ['fixtureUserPrompts']);
+const { fixtureUserPrompts } = compile(fixtureHelpers + '\nreturn {fixtureUserPrompts};', { parseSessionLog });
+// The source `beforeAll` opens the seeded Session from the sidebar before its cases run.
+async function openSeededSession(page, ready) {
+  const groupRow = page.locator('[role="treeitem"]').first(); await groupRow.waitFor({ timeout: 15000 }); await groupRow.click();
+  const sessionRow = page.locator('[role="treeitem"]').nth(1); await sessionRow.waitFor({ timeout: 10000 }); await sessionRow.click();
+  await ready(page);
+}
+async function seededScenario(name, options) {
+  const ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, options.cases, 'source case inventory');
+  const constants = declarations(ast, options.constants);
+  const values = compile(constants + '\nreturn {' + options.constants.join(',') + '};', options.constantBindings ?? {});
+  const server = await bootHost(name, { welcome, seedFile: options.seedFile });
+  const browser = await openPage(name, 'en-US');
+  try {
+    const api = compile(helpers + '\nreturn {watchConsole};', { expect });
+    const seedText = options.seedText ? options.seedText(server, values) : undefined;
+    if (options.seedFile) assert.deepEqual(fixtureUserPrompts(await readFile(options.seedFile, 'utf8')), [values.PROMPT]);
+    await server.seedSession(values.SEED_ID, seedText);
+    // The seeded tail page must carry its projection baseline before the browser reads it.
+    const probe = await fetch(server.origin + '/api/session.history', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId: name + '-history-probe', method: 'session.history', payload: { sessionId: values.SEED_ID } }) });
+    const probed = await probe.json(); await writeFile(join(output, name + '-history-probe.json'), JSON.stringify(probed, null, 2));
+    assert.equal(probed.result?.ok, true, 'seeded history tail: ' + JSON.stringify(probed.result ?? probed));
+    assert(probed.result.value.projections !== undefined, 'seeded history tail carries no projection baseline');
+    const tripwire = api.watchConsole(browser.page);
+    await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+    if (options.ready !== undefined) await openSeededSession(browser.page, options.ready);
+    const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin };
+    const extra = options.bindings ? options.bindings(server, values) : {};
+    await runCases(name, cases, browser.page, { prelude: helpers + '\n' + constants, values: { expect, page: browser.page, scaffold, tripwire, MODE, SNAPSHOT_DIR: join(TESTS, 'snapshots', name), UI_EXPECTED: join(TESTS, 'snapshots', name, 'ui.expected.md'), mkdirSync, join, readFile, ...goldenTools(name), ...extra } }, tripwire);
+    await browser.screenshot('settled');
+  } finally { await browser.close(); await server.stop(); }
+}
+const generatedSeed = (builder) => (server, values) => {
+  const module = { Session: sessionModule.Session, SessionId: sessionModule.SessionId, SESSION_FORMAT_VERSION: sessionModule.SESSION_FORMAT_VERSION, createMessage: llmModule.createMessage, createUserMessage: llmModule.createUserMessage, createAssistantMessage: llmModule.createAssistantMessage, createToolResultMessage: llmModule.createToolResultMessage, CallId: llmBrandModule.CallId };
+  return builder(module, server, values);
+};
+// A pinned replay suite: the recorded session.jsonl drives a real Rust Agent turn while the
+// source case supplies every gesture, and the turn settles through the Host idle barrier.
+async function replayScenario(name, options) {
+  const ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, options.cases, 'source case inventory');
+  const constants = declarations(ast, options.constants), support = declarations(supportAst, ['connectFreshWorkspace']);
+  const FIXTURE = join(TESTS, 'snapshots', name, 'session.jsonl');
+  const server = await bootHost(name, { welcome, replay: FIXTURE });
+  const browser = await openPage(name, 'en-US');
+  try {
+    const live = liveSessions(server.origin);
+    const api = compile(helpers + '\n' + support + '\nreturn {watchConsole, connectFreshWorkspace};', { expect, mkdirSync, join });
+    const tripwire = api.watchConsole(browser.page);
+    await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+    await api.connectFreshWorkspace(browser.page, server.workspace);
+    const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, whenTurnSettled: live.whenTurnSettled };
+    const goldens = Object.fromEntries(options.goldens.map(golden => [golden.toUpperCase() + '_EXPECTED', join(TESTS, 'snapshots', name, golden + '.expected.md')]));
+    try {
+      await runCases(name, cases, browser.page, { prelude: helpers + '\n' + fixtureHelpers + '\n' + constants, values: { expect: live.expect, page: browser.page, scaffold, tripwire, sessionEvents: live.events, MODE, FIXTURE, SNAPSHOT_DIR: join(TESTS, 'snapshots', name), ...goldens, readFile, join, parseSessionLog, recordFixture: () => { throw new Error('record mode is not a replay lane'); }, ...goldenTools(name) } }, tripwire);
+    } finally {
+      await live.refresh().catch(() => {});
+      live.stop();
+      await writeFile(join(output, name + '-sessions.json'), JSON.stringify(live.sessions, null, 2));
+    }
+    await browser.screenshot('settled');
+  } finally { await teardown(browser, server); }
+}
+const SCENARIOS = {
+  async 'skill-tool-row'() {
+    await seededScenario('skill-tool-row', { cases: 2, constants: ['SEED_ID', 'PROMPT'], seedFile: join(source, 'examples/acp-agent/tests/snapshots/skill-load/session.jsonl'), ready: page => page.locator('[data-tool="skill"]').waitFor({ timeout: 15000 }) });
+  },
+  async 'bash-abort-row'() {
+    await seededScenario('bash-abort-row', { cases: 2, constants: ['SEED_ID', 'PROMPT'], seedFile: join(source, 'examples/acp-agent/tests/snapshots/cancel-tool-calls/session.jsonl'), ready: page => page.locator('[data-sample="bash"]').nth(1).waitFor({ timeout: 15000 }) });
+  },
+  async 'markdown-cjk-strong'() {
+    const ast = await sourceFile('markdown-cjk-strong.e2e.ts'), builder = declarations(ast, ['CASES', 'DONE', 'markdownFixture']);
+    await seededScenario('markdown-cjk-strong', { cases: 1, constants: ['SEED_ID', 'DONE', 'CASES'], seedText: generatedSeed(module => compile(builder + '\nreturn markdownFixture();', module)) });
+  },
+  async 'math-rendering'() {
+    const ast = await sourceFile('math-rendering.e2e.ts'), builder = declarations(ast, ['DONE', 'mathFixture']);
+    await seededScenario('math-rendering', { cases: 1, constants: ['SEED_ID', 'DONE'], seedText: generatedSeed(module => compile(builder + '\nreturn mathFixture();', module)) });
+  },
+  async 'markdown-inline-code-links'() {
+    const ast = await sourceFile('markdown-inline-code-links.e2e.ts'), builder = declarations(ast, ['DONE', 'markdownFixture']);
+    let linkUrl;
+    await seededScenario('markdown-inline-code-links', { cases: 1, constants: ['SEED_ID', 'DONE'], seedText: generatedSeed((module, server) => { linkUrl = new URL('/?demo=1', server.origin).toString(); return compile(builder + '\nreturn markdownFixture(linkUrl);', { ...module, linkUrl }); }), bindings: () => ({ get linkUrl() { return linkUrl; } }) });
+  },
+  async 'stats-paged-history'() {
+    const ast = await sourceFile('stats-paged-history.e2e.ts'), builder = declarations(ast, ['TURNS', 'buildSeed']);
+    await seededScenario('stats-paged-history', { cases: 3, constants: ['SEED_ID', 'TURNS', 'FULL_COUNTS'], seedText: () => compile(builder + '\nreturn buildSeed(TURNS);', {}) });
+  },
+  async 'message-feedback'() {
+    const name = 'message-feedback', ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 2, 'source case inventory');
+    const constants = declarations(ast, ['SEED_ID', 'NOTE']), nested = nestedDeclarations(ast, ['openSeededSession']);
+    const values = compile(constants + '\nreturn {SEED_ID, NOTE};', {});
+    const server = await bootHost(name, { welcome, seedFile: join(TESTS, 'snapshots/seeded-history/seed.jsonl') });
+    const browser = await openPage(name, 'en-US');
+    try {
+      await server.seedSession(values.SEED_ID);
+      const api = compile(helpers + '\nreturn {watchConsole};', { expect });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin };
+      await runCases(name, cases, browser.page, { prelude: helpers + '\n' + constants + '\n' + nested, values: { expect, page: browser.page, scaffold, tripwire, MODE, ...goldenTools(name) } }, tripwire);
+      await browser.screenshot('retracted');
+    } finally { await teardown(browser, server); }
+  },
+  async 'skill-invocation-policy'() {
+    const name = 'skill-invocation-policy', ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 1, 'source case inventory');
+    const seeding = declarations(ast, ['SKILLS', 'seedSkills']), support = declarations(supportAst, ['connectFreshWorkspace']);
+    const server = await bootHost(name, { welcome });
+    const browser = await openPage(name, 'en-US');
+    try {
+      const { seedSkills } = compile(seeding + '\nreturn {seedSkills};', { mkdir, writeFile, join });
+      await seedSkills(server.workspace);
+      const api = compile(helpers + '\n' + support + '\nreturn {watchConsole, connectFreshWorkspace};', { expect, mkdirSync, join });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      await api.connectFreshWorkspace(browser.page, server.workspace);
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin };
+      await runCases(name, cases, browser.page, { prelude: helpers + '\n' + seeding, values: { expect, page: browser.page, scaffold, tripwire, MODE, SNAPSHOT_DIR: join(TESTS, 'snapshots', name), MENU_EXPECTED: join(TESTS, 'snapshots', name, 'menu.expected.md'), mkdir, writeFile, join, ...goldenTools(name) } }, tripwire);
+      await browser.screenshot('menu');
+    } finally { await teardown(browser, server); }
+  },
+  async 'produced-file-mentions'() {
+    const ast = await sourceFile('produced-file-mentions.e2e.ts'), builder = declarations(ast, ['DONE', 'text', 'WRITES', 'mentionFixture']);
+    await seededScenario('produced-file-mentions', { cases: 1, constants: ['SEED_ID', 'DONE'], seedText: generatedSeed(module => compile(builder + '\nreturn mentionFixture();', module)) });
+  },
+  async 'message-actions'() {
+    const name = 'message-actions', ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 4, 'source case inventory');
+    const constants = declarations(ast, ['SEED_ID', 'PROMPT', 'MID_TURN_TEXT', 'SECOND_PROMPT', 'completedTailFixture']);
+    const values = compile(constants + '\nreturn {SEED_ID, PROMPT, SECOND_PROMPT, completedTailFixture};', {});
+    const server = await bootHost(name, { welcome });
+    const browser = await openPage(name, 'en-US');
+    try {
+      const live = liveSessions(server.origin);
+      const sessionCwd = join(server.workspace, 'workspace');
+      await mkdir(sessionCwd, { recursive: true }); await writeFile(join(sessionCwd, 'a.txt'), 'alpha\n'); await writeFile(join(sessionCwd, 'b.txt'), 'beta\n');
+      const raw = values.completedTailFixture(await readFile(join(TESTS, 'snapshots/seeded-history/seed.jsonl'), 'utf8'));
+      assert.deepEqual(fixtureUserPrompts(raw), [values.PROMPT, values.SECOND_PROMPT], 'adapted seed must carry both prompts');
+      await server.seedSession(values.SEED_ID, raw);
+      const api = compile(helpers + '\nreturn {watchConsole};', { expect });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, ctx: { agents: live.agents } };
+      try {
+        await runCases(name, cases, browser.page, { prelude: helpers + '\n' + constants, values: { expect: live.expect, page: browser.page, scaffold, tripwire, MODE, SNAPSHOT_DIR: join(TESTS, 'snapshots', name), UI_EXPECTED: join(TESTS, 'snapshots', name, 'ui.expected.md'), FORK_EXPECTED: join(TESTS, 'snapshots', name, 'fork.expected.md'), SessionId: id => id, ...goldenTools(name) } }, tripwire);
+      } finally {
+        await live.refresh().catch(() => {});
+        await writeFile(join(output, name + '-sessions.json'), JSON.stringify(live.sessions.map(session => ({ header: session.header, events: session.events.length })), null, 2));
+      }
+      await browser.screenshot('forked');
+    } finally { await teardown(browser, server); }
+  },
+  async 'goal-multi-turn-actions'() {
+    const name = 'goal-multi-turn-actions', ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 3, 'source case inventory');
+    const constants = declarations(ast, ['PROMPT', 'COMMAND', 'PACKAGE_FILES', 'seedPackageInventory', 'goalRounds', 'createdObjectives']), support = declarations(supportAst, ['connectFreshWorkspace']);
+    const nested = nestedDeclarations(ast, ['runGoal']);
+    const FIXTURE = join(TESTS, 'snapshots', name, 'session.jsonl'), OVERRIDE = join(TESTS, 'snapshots', name, 'replay.override.json');
+    const server = await bootHost(name, { welcome, replay: FIXTURE, replayOverride: OVERRIDE });
+    const browser = await openPage(name, 'en-US');
+    try {
+      const live = liveSessions(server.origin);
+      const { seedPackageInventory } = compile(constants + '\nreturn {seedPackageInventory};', { mkdir, writeFile, join, dirname });
+      await seedPackageInventory(server.workspace);
+      const api = compile(helpers + '\n' + support + '\nreturn {watchConsole, connectFreshWorkspace};', { expect, mkdirSync, join });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      await api.connectFreshWorkspace(browser.page, server.workspace);
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, whenTurnSettled: live.whenTurnSettled };
+      // The source `launch` boots the scaffold the driver already prepared; the case sees the same page.
+      try {
+        await runCases(name, cases, browser.page, { prelude: helpers + '\n' + fixtureHelpers + '\n' + constants + '\n' + nested, values: { expect: live.expect, page: browser.page, scaffold, tripwire, sessionEvents: live.events, MODE, FIXTURE, OVERRIDE, SNAPSHOT_DIR: join(TESTS, 'snapshots', name), UI_EXPECTED: join(TESTS, 'snapshots', name, 'ui.expected.md'), readFile, join, dirname, mkdir, writeFile, parseSessionLog, launch: async () => {}, whenTurnsSettled: (_scaffold, count, timeoutMs) => live.whenTurnsSettled(count, timeoutMs), recordFixture: () => { throw new Error('record mode is not a replay lane'); }, ...goldenTools(name) } }, tripwire);
+      } finally {
+        await live.refresh().catch(() => {});
+        live.stop();
+        await writeFile(join(output, name + '-sessions.json'), JSON.stringify(live.sessions, null, 2));
+      }
+      await browser.screenshot('settled');
+    } finally { await teardown(browser, server); }
+  },
+  async 'remote-welcome'() {
+    const name = 'remote-welcome', ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 1, 'source case inventory');
+    const copy = declarations(scaffoldAst, ['WELCOME_NOTICE_COPY']);
+    // Source: `remoteAuthority: 'remote.localhost'` patches the connection row's trusted hosts; the
+    // browser resolves the authority to loopback while the Host stays bound to 127.0.0.1.
+    const server = await bootHost(name, { welcome, welcomePending: true, overlay: JSON.stringify([{ id: 'connection', config: { trustedHosts: ['remote.localhost'] } }]) + '\n' });
+    const browser = await openPage(name, 'zh-CN', { width: 1440, height: 960 });
+    try {
+      const remoteOrigin = server.origin.replace('127.0.0.1', 'remote.localhost');
+      const api = compile(helpers + '\nreturn {watchConsole};', { expect });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(remoteOrigin, { waitUntil: 'load' }); await browser.page.waitForSelector('#root', { timeout: 30000 });
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: remoteOrigin };
+      await runCases(name, cases, browser.page, { prelude: helpers + '\n' + copy, values: { expect, page: browser.page, scaffold, tripwire, MODE, ...goldenTools(name) } }, tripwire);
+      await browser.screenshot('welcome');
+    } finally { await teardown(browser, server); }
+  },
+  async 'turn-tail-actions'() {
+    const name = 'turn-tail-actions', ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 3, 'source case inventory');
+    const constants = declarations(ast, ['NARRATION', 'PROMPT']), nested = nestedDeclarations(ast, ['sendPrompt']), support = declarations(supportAst, ['connectFreshWorkspace']);
+    const FIXTURE = join(TESTS, 'snapshots', name, 'session.jsonl');
+    // The source materializes the hang sidecar before the replay row installs; the marker path is
+    // the case's own synchronization, so the sidecar home is created here and handed to `launch`.
+    const sidecarDir = join(world, name, 'sidecar'); await mkdir(sidecarDir, { recursive: true });
+    const overridePath = join(sidecarDir, 'replay.override.json');
+    await writeFile(overridePath, JSON.stringify({ patches: [{ at: 1, entry: { kind: 'hang', readyFile: join(sidecarDir, '.hang-ready') } }] }));
+    const server = await bootHost(name, { welcome, replay: FIXTURE, replayOverride: overridePath });
+    const browser = await openPage(name, 'en-US');
+    try {
+      const live = liveSessions(server.origin);
+      const api = compile(helpers + '\n' + support + '\nreturn {watchConsole, connectFreshWorkspace};', { expect, mkdirSync, join });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      await api.connectFreshWorkspace(browser.page, server.workspace);
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, whenTurnSettled: live.whenTurnSettled };
+      try {
+        await runCases(name, cases, browser.page, { prelude: helpers + '\n' + fixtureHelpers + '\n' + constants + '\n' + nested, values: { expect: live.expect, page: browser.page, scaffold, tripwire, sessionEvents: live.events, MODE, FIXTURE, SNAPSHOT_DIR: join(TESTS, 'snapshots', name), RUNNING_EXPECTED: join(TESTS, 'snapshots', name, 'running.expected.md'), SETTLED_EXPECTED: join(TESTS, 'snapshots', name, 'settled.expected.md'), readFile, join, existsSync, parseSessionLog, launch: async buildOverride => { if (buildOverride) assert.deepEqual(buildOverride(sidecarDir), JSON.parse(await readFile(overridePath, 'utf8')), 'the case builds the override the Host was booted with'); }, recordFixture: () => { throw new Error('record mode is not a replay lane'); }, ...goldenTools(name) } }, tripwire);
+      } finally {
+        await live.refresh().catch(() => {});
+        live.stop();
+        await writeFile(join(output, name + '-sessions.json'), JSON.stringify(live.sessions, null, 2));
+      }
+      await browser.screenshot('settled');
+    } finally { await teardown(browser, server); }
+  },
+  async 'permission-policy-context'() {
+    const name = 'permission-policy-context', ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 3, 'source case inventory');
+    const constants = declarations(ast, ['PRESET_LABELS', 'requestSystems', 'runtimeContexts', 'assistantTexts', 'callArgs']), support = declarations(supportAst, ['connectFreshWorkspace']);
+    const PROMPTS = verbatimConstant(ast, 'PROMPTS');
+    const { canonicalPath } = await sourceModule('packages/sandbox/sandbox/src/roots.ts');
+    const FIXTURE = join(TESTS, 'snapshots', name, 'session.jsonl');
+    // Source: `ctx.on('approval/request', () => 'allowed-once', { prepend: true })` on the Host.
+    const server = await bootHost(name, { welcome, replay: FIXTURE, env: { SEEKDEEP_KEYLESS_AUTO_APPROVE: 'allowed-once' } });
+    const browser = await openPage(name, 'en-US');
+    try {
+      const live = liveSessions(server.origin);
+      const api = compile(helpers + '\n' + support + '\nreturn {watchConsole, connectFreshWorkspace};', { expect, mkdirSync, join });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      await api.connectFreshWorkspace(browser.page, server.workspace);
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, whenTurnSettled: live.whenTurnSettled };
+      const sessionWorkspace = { get value() { return live.sessions.find(session => session.header.cwd)?.header.cwd; } };
+      try {
+        await runCases(name, cases, browser.page, { prelude: helpers + '\n' + fixtureHelpers + '\n' + constants + '\nlet sessionWorkspace = sessionWorkspaceRef.value;\n', values: { expect: live.expect, page: browser.page, scaffold, tripwire, sessionEvents: live.events, sessionWorkspaceRef: sessionWorkspace, PROMPTS, MODE, FIXTURE, SNAPSHOT_DIR: join(TESTS, 'snapshots', name), readFile, join, parseSessionLog, canonicalPath, recordFixture: () => { throw new Error('record mode is not a replay lane'); }, ...goldenTools(name) } }, tripwire);
+      } finally {
+        await live.refresh().catch(() => {});
+        live.stop();
+        await writeFile(join(output, name + '-sessions.json'), JSON.stringify(live.sessions, null, 2));
+      }
+      await browser.screenshot('settled');
+    } finally { await teardown(browser, server); }
+  },
+  async 'plan-review'() {
+    await replayScenario('plan-review', { cases: 2, constants: ['TASK', 'LINE'], goldens: ['review', 'sidebar', 'approved'] });
+  },
+  async 'question-composer'() {
+    await replayScenario('question-composer', { cases: 2, constants: ['PROMPT'], goldens: ['ui', 'sidebar', 'composed', 'answered'] });
+  },
+  async 'approval-composer'() {
+    await replayScenario('approval-composer', { cases: 2, constants: ['TOKENS', 'PROMPT', 'CAP_PROBE'], goldens: ['ui'] });
+  },
+  async 'goal-command-presentation'() {
+    const ast = await sourceFile('goal-command-presentation.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 2, 'source case inventory');
+    const support = declarations(supportAst, ['connectFreshWorkspace']);
+    const server = await bootHost('goal-command-presentation', { welcome });
+    const browser = await openPage('goal-command-presentation', 'en-US');
+    try {
+      const live = liveSessions(server.origin);
+      const api = compile(helpers + '\n' + support + '\nreturn {watchConsole, connectFreshWorkspace};', { expect, mkdirSync, join });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      await api.connectFreshWorkspace(browser.page, server.workspace);
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, ctx: { sessions: { list: () => live.sessions } } };
+      await runCases('goal-command-presentation', cases, browser.page, { prelude: helpers + '\n' + support, values: { expect: live.expect, page: browser.page, scaffold, tripwire, events: live.events, MODE, SNAPSHOT_DIR: join(TESTS, 'snapshots/goal-command-presentation'), UI_EXPECTED: join(TESTS, 'snapshots/goal-command-presentation/ui.expected.md'), mkdirSync, join, ...goldenTools('goal-command-presentation') } }, tripwire);
+      await browser.screenshot('reloaded');
+    } finally { await teardown(browser, server); }
+  },
+  async 'access-confirmation'() {
+    const ast = await sourceFile('access-confirmation.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, 2, 'source case inventory');
+    const support = declarations(supportAst, ['connectFreshWorkspaceZh']);
+    const server = await bootHost('access-confirmation', { welcome });
+    const browser = await openPage('access-confirmation', 'zh-CN');
+    try {
+      const api = compile(helpers + '\n' + support + '\nreturn {watchConsole, connectFreshWorkspaceZh};', { expect, mkdirSync, join });
+      const tripwire = api.watchConsole(browser.page);
+      await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      await api.connectFreshWorkspaceZh(browser.page, server.workspace);
+      const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin };
+      await runCases('access-confirmation', cases, browser.page, { prelude: helpers + '\n' + support, values: { expect, page: browser.page, scaffold, tripwire, MODE, SNAPSHOT_DIR: join(TESTS, 'snapshots/access-confirmation'), UI_EXPECTED: join(TESTS, 'snapshots/access-confirmation/ui.expected.md'), mkdirSync, join, ...goldenTools('access-confirmation') } }, tripwire);
+      await browser.screenshot('full-access');
+    } finally { await teardown(browser, server); }
+  },
+};
+// Every selected scenario runs even after an earlier one fails, so one lane run reports the
+// complete picture; the run still fails on any failure.
+const scenarioFailures = [];
+for (const [name, run] of Object.entries(SCENARIOS)) {
+  if (!selected(name)) continue;
+  try { await run(); } catch (error) { scenarioFailures.push({ scenario: name, error: String(error), stack: error?.stack }); console.error('keyless: scenario ' + name + ' failed: ' + String(error).split('\n')[0]); }
+}
+let runError;
+try {
+  assert.deepEqual(scenarioFailures.map(failure => failure.scenario), [], 'scenarios failed');
+  assert.equal(checks.length, planned, 'every selected source case must run');
+  assert(planned > 0, 'no scenario matched ' + filter);
+} catch (error) {
+  runError = error;
+  await writeFile(join(output, 'failures.json'), JSON.stringify({ error: String(error), failures: scenarioFailures, checks }, null, 2));
+}
+if (runError) throw runError;
+await writeFile(join(output, 'result.json'), JSON.stringify({ checks, modelCalls: 0 }, null, 2));
+"#;

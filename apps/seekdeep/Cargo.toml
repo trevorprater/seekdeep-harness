@@ -164,6 +164,7 @@ terminal_size.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+http-body-util.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 nix.workspace = true

@@ -841,11 +841,11 @@ impl SessionApiProxyRuntime {
         } else {
             None
         };
+        // The source's detached tail fold throws on a unit failure, so the page fails loud
+        // instead of quietly serving a transcript without its projection baseline.
         let projections = if payload.before_seq.is_none() {
             self.projections
-                .snapshot_for_events(&source.events)
-                .ok()
-                .flatten()
+                .snapshot_for_events(&source.events)?
                 .map(projection_block)
         } else {
             None

@@ -1,6 +1,10 @@
 //! JavaScript Definition adapters for the Rust-owned Conversation assembler.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    rc::{Rc, Weak},
+};
 
 use indexmap::IndexSet;
 use js_sys::{Array, Function, Map, Object, Reflect};
@@ -20,6 +24,177 @@ use crate::{
 
 type BrowserNode = ConversationNodeDefinition<JsValue>;
 type BrowserView = crate::ConversationViewDefinition<JsValue>;
+
+/// Identity-keyed JavaScript faces for the engine's shared `Rc` values.
+///
+/// The source hands Definitions the live Location, Match, and Node objects, so a streaming Turn
+/// costs one object per value for its whole life. The Rust engine shares those values by `Rc`
+/// identity (an unchanged Turn or Step keeps its `Rc` across appends), so each value converts to
+/// JavaScript once and every later callback receives the same face. A `Weak` pins the allocation,
+/// which keeps the pointer key unambiguous until the entry is pruned.
+struct FaceCache<T> {
+    entries: HashMap<usize, (Weak<T>, JsValue)>,
+    /// Face object back to its entry key, so a native Definition recovers the engine value
+    /// instead of re-parsing the face it was handed.
+    faces: js_sys::WeakMap,
+}
+
+impl<T> FaceCache<T> {
+    const PRUNE_ABOVE: usize = 4096;
+
+    fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+            faces: js_sys::WeakMap::new(),
+        }
+    }
+
+    fn get_or_build(
+        &mut self,
+        value: &Rc<T>,
+        build: impl FnOnce() -> Result<JsValue, JsValue>,
+    ) -> Result<JsValue, JsValue> {
+        let key = Rc::as_ptr(value) as usize;
+        if let Some((weak, face)) = self.entries.get(&key)
+            && weak.upgrade().is_some_and(|live| Rc::ptr_eq(&live, value))
+        {
+            return Ok(face.clone());
+        }
+        let face = build()?;
+        if self.entries.len() >= Self::PRUNE_ABOVE {
+            self.entries.retain(|_, (weak, _)| weak.strong_count() > 0);
+        }
+        self.entries
+            .insert(key, (Rc::downgrade(value), face.clone()));
+        if face.is_object() {
+            self.faces
+                .set(&face.clone().unchecked_into(), &face_key_to_js(key)?);
+        }
+        Ok(face)
+    }
+
+    fn recover(&self, face: &JsValue) -> Option<Rc<T>> {
+        if !face.is_object() {
+            return None;
+        }
+        let key = face_key_from_js(self.faces.get(&face.clone().unchecked_into()).as_f64()?)?;
+        self.entries.get(&key).and_then(|(weak, _)| weak.upgrade())
+    }
+}
+
+/// Encodes one pointer key as a JavaScript number (wasm32 addresses fit a `u32`).
+fn face_key_to_js(key: usize) -> Result<JsValue, JsValue> {
+    let key = u32::try_from(key)
+        .map_err(|_| js_sys::Error::new("conversation face key exceeds the JavaScript range"))?;
+    Ok(JsValue::from(key))
+}
+
+/// Decodes a pointer key written by [`face_key_to_js`]; anything else is not a face key.
+fn face_key_from_js(value: f64) -> Option<usize> {
+    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 || value > f64::from(u32::MAX) {
+        return None;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let key = value as u32;
+    usize::try_from(key).ok()
+}
+
+/// Recovers the engine Turn behind one face the adapter handed out.
+pub(crate) fn recover_turn(face: &JsValue) -> Option<Rc<TurnLocation>> {
+    TURN_FACES.with(|cache| cache.borrow().recover(face))
+}
+
+/// Recovers the engine Step behind one face the adapter handed out.
+pub(crate) fn recover_step(face: &JsValue) -> Option<Rc<StepLocation>> {
+    STEP_FACES.with(|cache| cache.borrow().recover(face))
+}
+
+/// Recovers the engine Location data store behind one face the adapter handed out.
+pub(crate) fn recover_store(face: &JsValue) -> Option<Rc<ConversationLocationDataStore>> {
+    STORE_FACES.with(|cache| cache.borrow().recover(face))
+}
+
+/// Recovers the engine Location event behind one face the adapter handed out.
+pub(crate) fn recover_event(face: &JsValue) -> Option<Rc<ConversationLocationEvent>> {
+    EVENT_FACES.with(|cache| cache.borrow().recover(face))
+}
+
+/// Recovers the engine Match behind one face the adapter handed out.
+pub(crate) fn recover_match(face: &JsValue) -> Option<Rc<ConversationMatch>> {
+    MATCH_FACES.with(|cache| cache.borrow().recover(face))
+}
+
+/// Recovers the engine view Node behind one face the adapter handed out.
+pub(crate) fn recover_node(face: &JsValue) -> Option<Rc<ConversationViewNode>> {
+    NODE_FACES.with(|cache| cache.borrow().recover(face))
+}
+
+/// Recovers the immutable JSON value behind one face the adapter handed out.
+pub(crate) fn recover_value(face: &JsValue) -> Option<Rc<serde_json::Value>> {
+    VALUE_FACES.with(|cache| cache.borrow().recover(face))
+}
+
+thread_local! {
+    static EVENT_FACES: RefCell<FaceCache<ConversationLocationEvent>> = RefCell::new(FaceCache::new());
+    static MATCH_FACES: RefCell<FaceCache<ConversationMatch>> = RefCell::new(FaceCache::new());
+    static TURN_FACES: RefCell<FaceCache<TurnLocation>> = RefCell::new(FaceCache::new());
+    static STEP_FACES: RefCell<FaceCache<StepLocation>> = RefCell::new(FaceCache::new());
+    static STORE_FACES: RefCell<FaceCache<ConversationLocationDataStore>> = RefCell::new(FaceCache::new());
+    static NODE_FACES: RefCell<FaceCache<ConversationViewNode>> = RefCell::new(FaceCache::new());
+    static VALUE_FACES: RefCell<FaceCache<serde_json::Value>> = RefCell::new(FaceCache::new());
+    static MATCH_LISTS: RefCell<HashMap<usize, MatchListEntry>> = RefCell::new(HashMap::new());
+}
+
+/// One shared Match list pinned by `Weak` beside its append-only JavaScript Array face.
+type MatchListEntry = (Weak<RefCell<Vec<Rc<ConversationMatch>>>>, Array);
+
+fn event_face(event: &Rc<ConversationLocationEvent>) -> Result<JsValue, JsValue> {
+    EVENT_FACES.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_build(event, || event_to_js(event))
+    })
+}
+
+fn match_face(accepted: &Rc<ConversationMatch>) -> Result<JsValue, JsValue> {
+    MATCH_FACES.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_build(accepted, || match_to_js(accepted))
+    })
+}
+
+fn value_face(value: &Rc<serde_json::Value>) -> Result<JsValue, JsValue> {
+    VALUE_FACES.with(|cache| cache.borrow_mut().get_or_build(value, || json_to_js(value)))
+}
+
+/// The append-only Match list of one Context as one live JavaScript array, extended in place.
+fn match_list_face(matches: &Rc<RefCell<Vec<Rc<ConversationMatch>>>>) -> Result<Array, JsValue> {
+    let key = Rc::as_ptr(matches) as usize;
+    let list = matches.borrow();
+    let array = MATCH_LISTS.with(|lists| {
+        let mut lists = lists.borrow_mut();
+        let existing = lists.get(&key).and_then(|(weak, array)| {
+            (weak
+                .upgrade()
+                .is_some_and(|live| Rc::ptr_eq(&live, matches))
+                && array.length() as usize <= list.len())
+            .then(|| array.clone())
+        });
+        existing.unwrap_or_else(|| {
+            if lists.len() >= FaceCache::<()>::PRUNE_ABOVE {
+                lists.retain(|_, (weak, _)| weak.strong_count() > 0);
+            }
+            let array = Array::new();
+            lists.insert(key, (Rc::downgrade(matches), array.clone()));
+            array
+        })
+    });
+    for accepted in list.iter().skip(array.length() as usize) {
+        array.push(&match_face(accepted)?);
+    }
+    Ok(array)
+}
 
 pub(crate) fn browser_event_definitions(
     registry: Rc<ConversationEventRegistry<JsValue>>,
@@ -171,7 +346,7 @@ fn adapt_node_definition(
                 "start",
                 &[
                     context_to_js(context).map_err(adapter_error)?,
-                    match_to_js(accepted).map_err(adapter_error)?,
+                    match_face(accepted).map_err(adapter_error)?,
                     reader_face.into(),
                 ],
             )
@@ -191,7 +366,7 @@ fn adapt_node_definition(
                 "update",
                 &[
                     context_to_js(context).map_err(adapter_error)?,
-                    match_to_js(accepted).map_err(adapter_error)?,
+                    match_face(accepted).map_err(adapter_error)?,
                 ],
             )
             .map_err(adapter_error)?;
@@ -387,14 +562,14 @@ fn event_to_js(event: &ConversationLocationEvent) -> Result<JsValue, JsValue> {
 
 fn match_to_js(accepted: &ConversationMatch) -> Result<JsValue, JsValue> {
     let value = Object::new();
-    set(&value, "event", &event_to_js(&accepted.event)?)?;
+    set(&value, "event", &event_face(&accepted.event)?)?;
     set(
         &value,
         "view",
         &accepted
             .view
             .as_ref()
-            .map(|view| json_to_js(view))
+            .map(value_face)
             .transpose()?
             .unwrap_or(JsValue::UNDEFINED),
     )?;
@@ -415,18 +590,18 @@ fn context_to_js(context: &ConversationNodeContext) -> Result<JsValue, JsValue> 
     set(&value, "key", &JsValue::from_str(&context.key))?;
     set(&value, "kind", &JsValue::from_str(&context.kind))?;
     set(&value, "id", &JsValue::from_str(&context.id))?;
-    let matches = Array::new();
-    for accepted in context.matches.borrow().iter() {
-        matches.push(&match_to_js(accepted)?);
-    }
-    set(&value, "matches", &matches)?;
+    set(
+        &value,
+        "matches",
+        &match_list_face(&context.matches)?.into(),
+    )?;
     set(
         &value,
         "start",
         &context
             .start
             .as_ref()
-            .map(|accepted| match_to_js(accepted))
+            .map(match_face)
             .transpose()?
             .unwrap_or(JsValue::UNDEFINED),
     )?;
@@ -436,7 +611,7 @@ fn context_to_js(context: &ConversationNodeContext) -> Result<JsValue, JsValue> 
         &context
             .state
             .as_ref()
-            .map(|state| json_to_js(state))
+            .map(value_face)
             .transpose()?
             .unwrap_or(JsValue::UNDEFINED),
     )?;
@@ -446,7 +621,7 @@ fn context_to_js(context: &ConversationNodeContext) -> Result<JsValue, JsValue> 
             &JsValue::from_str(target),
             &node
                 .as_ref()
-                .map(|node| view_node_to_js(node))
+                .map(view_node_to_js)
                 .transpose()?
                 .unwrap_or(JsValue::NULL),
         );
@@ -461,12 +636,12 @@ fn previous_context_to_js(context: &ConversationPreviousContext) -> Result<JsVal
     set(&value, "kind", &JsValue::from_str(&context.kind))?;
     set(&value, "id", &JsValue::from_str(&context.id))?;
     set(&value, "startSeq", &js_number(context.start_seq))?;
-    set(&value, "state", &json_to_js(&context.state)?)?;
-    let matches = Array::new();
-    for accepted in context.matches.borrow().iter() {
-        matches.push(&match_to_js(accepted)?);
-    }
-    set(&value, "matches", &matches)?;
+    set(&value, "state", &value_face(&context.state)?)?;
+    set(
+        &value,
+        "matches",
+        &match_list_face(&context.matches)?.into(),
+    )?;
     Ok(value.into())
 }
 
@@ -476,12 +651,12 @@ pub(crate) fn location_to_js(location: &ConversationLocation) -> Result<JsValue,
         ConversationLocation::Session => set(&value, "kind", &JsValue::from_str("session"))?,
         ConversationLocation::Turn { turn } => {
             set(&value, "kind", &JsValue::from_str("turn"))?;
-            set(&value, "turn", &turn_to_js(turn)?)?;
+            set(&value, "turn", &turn_face(turn)?)?;
         }
         ConversationLocation::Step { turn, step } => {
             set(&value, "kind", &JsValue::from_str("step"))?;
-            set(&value, "turn", &turn_to_js(turn)?)?;
-            set(&value, "step", &step_to_js(step)?)?;
+            set(&value, "turn", &turn_face(turn)?)?;
+            set(&value, "step", &step_face(step)?)?;
         }
         ConversationLocation::Unresolved => {
             set(&value, "kind", &JsValue::from_str("unresolved"))?;
@@ -490,11 +665,19 @@ pub(crate) fn location_to_js(location: &ConversationLocation) -> Result<JsValue,
     Ok(value.into())
 }
 
+fn turn_face(turn: &Rc<TurnLocation>) -> Result<JsValue, JsValue> {
+    TURN_FACES.with(|cache| cache.borrow_mut().get_or_build(turn, || turn_to_js(turn)))
+}
+
+fn step_face(step: &Rc<StepLocation>) -> Result<JsValue, JsValue> {
+    STEP_FACES.with(|cache| cache.borrow_mut().get_or_build(step, || step_to_js(step)))
+}
+
 fn turn_to_js(turn: &TurnLocation) -> Result<JsValue, JsValue> {
     let value = Object::new();
     set(&value, "turn", &js_number(turn.turn))?;
-    set_optional_event(&value, "start", turn.start.as_deref())?;
-    set_optional_event(&value, "end", turn.end.as_deref())?;
+    set_optional_event(&value, "start", turn.start.as_ref())?;
+    set_optional_event(&value, "end", turn.end.as_ref())?;
     set(
         &value,
         "status",
@@ -502,10 +685,10 @@ fn turn_to_js(turn: &TurnLocation) -> Result<JsValue, JsValue> {
     )?;
     let steps = Array::new();
     for step in turn.steps.iter() {
-        steps.push(&step_to_js(step)?);
+        steps.push(&step_face(step)?);
     }
     set(&value, "steps", &steps)?;
-    set(&value, "data", &data_store_to_js(turn.data.clone())?)?;
+    set(&value, "data", &data_store_face(&turn.data)?)?;
     Ok(value.into())
 }
 
@@ -513,33 +696,38 @@ fn step_to_js(step: &StepLocation) -> Result<JsValue, JsValue> {
     let value = Object::new();
     set(&value, "turn", &js_number(step.turn))?;
     set(&value, "step", &js_number(step.step))?;
-    set_optional_event(&value, "start", step.start.as_deref())?;
-    set_optional_event(&value, "end", step.end.as_deref())?;
+    set_optional_event(&value, "start", step.start.as_ref())?;
+    set_optional_event(&value, "end", step.end.as_ref())?;
     set(
         &value,
         "status",
         &JsValue::from_str(status_name(step.status)),
     )?;
-    set(&value, "data", &data_store_to_js(step.data.clone())?)?;
+    set(&value, "data", &data_store_face(&step.data)?)?;
     Ok(value.into())
 }
 
-fn data_store_to_js(store: Rc<ConversationLocationDataStore>) -> Result<JsValue, JsValue> {
-    let value = Object::new();
-    let entries = Map::new();
-    for (key, entry) in store.snapshot_values() {
-        entries.set(&JsValue::from_str(&key), &json_to_js(&entry)?);
-    }
-    set(&value, "entries", &entries)?;
-    let get = Closure::wrap(Box::new(move |key: String| -> Result<JsValue, JsValue> {
-        store
-            .get(&key)
-            .map(|value| json_to_js(&value))
-            .transpose()
-            .map(|value| value.unwrap_or(JsValue::UNDEFINED))
-    }) as Box<dyn FnMut(String) -> Result<JsValue, JsValue>>);
-    set(&value, "get", &get.into_js_value())?;
-    Ok(value.into())
+/// The source contract is one stable keyed reader per Location: `get(key)` reads the latest
+/// published value on demand, so the face converts nothing until a Definition asks for a key.
+pub(crate) fn data_store_face(
+    store: &Rc<ConversationLocationDataStore>,
+) -> Result<JsValue, JsValue> {
+    STORE_FACES.with(|cache| {
+        cache.borrow_mut().get_or_build(store, || {
+            let value = Object::new();
+            let reader = store.clone();
+            let get = Closure::wrap(Box::new(move |key: String| -> Result<JsValue, JsValue> {
+                reader
+                    .get(&key)
+                    .map(|value| value_face(&value))
+                    .transpose()
+                    .map(|value| value.unwrap_or(JsValue::UNDEFINED))
+            })
+                as Box<dyn FnMut(String) -> Result<JsValue, JsValue>>);
+            set(&value, "get", &get.into_js_value())?;
+            Ok(value.into())
+        })
+    })
 }
 
 pub(crate) fn timeline_to_js(timeline: &ConversationTimelineSnapshot) -> Result<JsValue, JsValue> {
@@ -551,13 +739,21 @@ pub(crate) fn timeline_to_js(timeline: &ConversationTimelineSnapshot) -> Result<
     set(&value, "turnOrder", &order)?;
     let turns = Map::new();
     for (number, turn) in timeline.turns.iter() {
-        turns.set(&js_number(*number), &turn_to_js(turn)?);
+        turns.set(&js_number(*number), &turn_face(turn)?);
     }
     set(&value, "turns", &turns)?;
     Ok(value.into())
 }
 
-pub(crate) fn view_node_to_js(node: &ConversationViewNode) -> Result<JsValue, JsValue> {
+pub(crate) fn view_node_to_js(node: &Rc<ConversationViewNode>) -> Result<JsValue, JsValue> {
+    NODE_FACES.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_build(node, || view_node_value_to_js(node))
+    })
+}
+
+fn view_node_value_to_js(node: &ConversationViewNode) -> Result<JsValue, JsValue> {
     let value = Object::new();
     set(&value, "key", &JsValue::from_str(&node.key))?;
     set(&value, "kind", &JsValue::from_str(&node.kind))?;
@@ -583,7 +779,7 @@ pub(crate) fn view_node_to_js(node: &ConversationViewNode) -> Result<JsValue, Js
             }),
         )?;
     }
-    set(&value, "data", &json_to_js(&node.data)?)?;
+    set(&value, "data", &value_face(&node.data)?)?;
     Ok(value.into())
 }
 
@@ -787,13 +983,13 @@ fn optional_json(
 fn set_optional_event(
     object: &Object,
     key: &str,
-    event: Option<&ConversationLocationEvent>,
+    event: Option<&Rc<ConversationLocationEvent>>,
 ) -> Result<(), JsValue> {
     set(
         object,
         key,
         &event
-            .map(event_to_js)
+            .map(event_face)
             .transpose()?
             .unwrap_or(JsValue::UNDEFINED),
     )

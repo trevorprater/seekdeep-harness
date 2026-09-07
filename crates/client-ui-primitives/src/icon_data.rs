@@ -316,7 +316,7 @@ pub const ICON_DEFINITIONS: &[IconDefinition] = &[
         height_factor: 1.0,
         view_box: r#"0 0 16 16"#,
         inner_html: r#"<path d="M16 8L10.8571 12V10.552L14.1383 8L10.8571 5.448V4L16 8ZM5.14286 10.552L1.86171 8L5.14286 5.448V4L0 8L5.14286 12V10.552ZM9.02514 4L5.59657 12H6.84057L10.2691 4H9.02514Z" fill="currentColor"></path>"#,
-        aria_hidden: false,
+        aria_hidden: true,
     },
     IconDefinition {
         name: r#"IconLightOutline16"#,

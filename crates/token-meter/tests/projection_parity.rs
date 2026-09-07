@@ -295,6 +295,23 @@ fn breakdown_prices_latest_envelope_surface_and_metered_replacement() {
 }
 
 #[test]
+fn breakdown_prices_scrubbed_recorded_headers_by_length() {
+    // Committed recordings scrub the envelope to `{{system}}` / `{{tools}}`; the source prices
+    // both placeholders by their (serialized) length: ceil(10 / 4) + 4 and ceil(11 / 4) + 4.
+    let definition = context_breakdown_definition();
+    let events = vec![event(
+        0,
+        "request/header",
+        json!({"header":{"config":{"provider":"deepseek-official","model":"deepseek-v4-flash"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}),
+        None,
+    )];
+    let (_, view, _) = fold(&definition, &events).unwrap();
+    assert_eq!(view["systemTokens"], 7);
+    assert_eq!(view["toolsTokens"], 7);
+    assert_eq!(view["messageTokens"], 0);
+}
+
+#[test]
 fn breakdown_empty_assistant_and_restatement_emit_no_spurious_change() {
     let definition = context_breakdown_definition();
     let envelope = header(Some("same"), None);

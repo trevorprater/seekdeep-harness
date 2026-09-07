@@ -86,9 +86,11 @@ pub fn conversation_message_definition() -> AssemblerNodeDefinition {
                     ("source".to_owned(), source.clone()),
                     ("provenance".to_owned(), provenance_value(&provenance)),
                 ]);
-                if let Some(form) = context_form(&source) {
-                    state.insert("form".to_owned(), json!(form_name(form)));
-                }
+                // Source: `form: contextForm(source)` — null, not absent, for an unknown form.
+                state.insert(
+                    "form".to_owned(),
+                    context_form(&source).map_or(Value::Null, |form| json!(form_name(form))),
+                );
                 Value::Object(state)
             };
             Ok(Some(Rc::new(state)))

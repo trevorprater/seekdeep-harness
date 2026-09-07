@@ -634,6 +634,7 @@ fn connected_generation_refreshes_list_and_resyncs_only_opened_instances() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn search_create_fork_and_preset_echo_preserve_results_and_publish_real_sessions() {
     let mut pool = LocalPool::new();
     let transport = Rc::new(Transport::default());
@@ -654,6 +655,9 @@ fn search_create_fork_and_preset_echo_preserve_results_and_publish_real_sessions
         }))),
         CallPlan::Ready(Ok(ClientRpcResult::Success(Some(json!({
             "sessionId":"forked"
+        }))))),
+        CallPlan::Ready(Ok(ClientRpcResult::Success(Some(json!({
+            "sessionId":"forked-tail"
         }))))),
     ]);
     let manager = manager(
@@ -726,6 +730,21 @@ fn search_create_fork_and_preset_echo_preserve_results_and_publish_real_sessions
     assert_eq!(transport.calls.borrow()[0].method, "session.search");
     assert_eq!(transport.calls.borrow()[1].method, "session.create");
     assert_eq!(transport.calls.borrow()[3].method, "session.fork");
+    assert_eq!(
+        transport.calls.borrow()[3].payload,
+        json!({"sessionId":"source","atSeq":4})
+    );
+    // The source spreads `atSeq` only when defined: a fork at the last completed turn sends
+    // no anchor at all, which the Host schema requires (an explicit null is rejected).
+    assert!(
+        pool.run_until(manager.fork(&SessionId::new("source"), None))
+            .is_ok()
+    );
+    assert_eq!(transport.calls.borrow()[4].method, "session.fork");
+    assert_eq!(
+        transport.calls.borrow()[4].payload,
+        json!({"sessionId":"source"})
+    );
 }
 
 #[allow(clippy::needless_pass_by_value)]

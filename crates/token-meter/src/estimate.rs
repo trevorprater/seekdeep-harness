@@ -72,6 +72,33 @@ pub fn estimate_tools_tokens(header: Option<&EpochHeader>) -> u64 {
         })
 }
 
+/// Prices a recorded `request/header` envelope that no longer parses as a typed header.
+///
+/// Committed recordings scrub `system` and `tools` to placeholder strings. The source prices
+/// whatever the log carries by its length, so the same scrubbed fixture must fold to the same
+/// figures here: a non-empty `system` string prices as prose and a non-empty `tools` value that
+/// is not a schema list prices by its serialized JSON length.
+#[must_use]
+pub fn estimate_recorded_header(header: &serde_json::Value) -> (u64, u64) {
+    let system = header
+        .get("system")
+        .and_then(serde_json::Value::as_str)
+        .filter(|system| !system.is_empty())
+        .map_or(0, |system| {
+            dense_tokens(system).saturating_add(ROLE_OVERHEAD)
+        });
+    let tools = match header.get("tools") {
+        Some(serde_json::Value::String(tools)) if !tools.is_empty() => {
+            serialized_tokens(tools).saturating_add(BLOCK_OVERHEAD)
+        }
+        Some(serde_json::Value::Array(tools)) if !tools.is_empty() => {
+            serialized_tokens(tools).saturating_add(BLOCK_OVERHEAD)
+        }
+        _ => 0,
+    };
+    (system, tools)
+}
+
 /// Prices the complete non-surface request envelope.
 #[must_use]
 pub fn estimate_header(header: Option<&EpochHeader>) -> u64 {

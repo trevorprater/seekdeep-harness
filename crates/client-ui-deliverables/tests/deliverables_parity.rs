@@ -329,10 +329,20 @@ fn closing_selection_mentions_and_cross_platform_basenames_are_exact() {
             },
         ],
     };
-    let paths = produced_for_closing(Some(&data), Some(6));
+    let paths = produced_for_closing(Some(&data), Some(6.0));
     assert_eq!(paths, ["out/index.html", "a/style.css"]);
-    assert_eq!(select_produced_files(Some(&data), 6), Some(paths.clone()));
-    assert_eq!(select_produced_files(None, 6), None);
+    assert_eq!(select_produced_files(Some(&data), 6.0), Some(paths.clone()));
+    assert_eq!(select_produced_files(None, 6.0), None);
+    // An interrupted Assistant closes at a synthetic fractional seq (boundary - 0.9), which
+    // bounds the produced files like any other number instead of being rejected.
+    assert_eq!(
+        produced_for_closing(Some(&data), Some(5.1)),
+        produced_for_closing(Some(&data), Some(5.0))
+    );
+    assert_eq!(
+        select_produced_files(Some(&data), 0.1),
+        select_produced_files(Some(&data), 0.0)
+    );
     assert_eq!(basename(r"a\b\c.txt"), "c.txt");
     assert_eq!(basename("a/b/"), "");
 

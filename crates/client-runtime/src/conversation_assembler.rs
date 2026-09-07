@@ -244,7 +244,7 @@ pub trait AssemblerViewBuilder {
     /// # Errors
     ///
     /// Returns conversion failures from the target-owned projection.
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
     fn snapshot_to_browser(
         &self,
         snapshot: &Value,
@@ -627,7 +627,13 @@ impl ConversationNodeAssembler {
         self.views.get(target).map(|view| view.snapshot.clone())
     }
 
-    #[cfg(target_arch = "wasm32")]
+    /// The live Turn/Step Location timeline whose data stores Definitions publish into.
+    #[must_use]
+    pub fn timeline(&self) -> Rc<ConversationTimelineSnapshot> {
+        self.location_index.snapshot()
+    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
     pub(crate) fn snapshot_to_browser(
         &self,
         target: &str,

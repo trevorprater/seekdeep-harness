@@ -66,7 +66,28 @@ pub(super) fn run_details(source: &Path) -> anyhow::Result<()> {
     run_case(source, "web-details", super::web_details_driver::DRIVER)
 }
 
+pub(super) fn run_keyless(source: &Path, scenario: Option<&str>) -> anyhow::Result<()> {
+    let environment = scenario
+        .map(|scenario| vec![("SEEKDEEP_KEYLESS_SCENARIO", scenario)])
+        .unwrap_or_default();
+    run_case_with(
+        source,
+        "web-keyless",
+        super::web_keyless_driver::DRIVER,
+        &environment,
+    )
+}
+
 fn run_case(source: &Path, name: &str, script: &str) -> anyhow::Result<()> {
+    run_case_with(source, name, script, &[])
+}
+
+fn run_case_with(
+    source: &Path,
+    name: &str,
+    script: &str,
+    environment: &[(&str, &str)],
+) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;
     let host = metadata
@@ -88,6 +109,7 @@ fn run_case(source: &Path, name: &str, script: &str) -> anyhow::Result<()> {
         .arg(host)
         .arg(world)
         .arg(output)
+        .envs(environment.iter().copied())
         .current_dir(metadata.workspace_root)
         .status()?;
     anyhow::ensure!(status.success(), "settings browser path failed");

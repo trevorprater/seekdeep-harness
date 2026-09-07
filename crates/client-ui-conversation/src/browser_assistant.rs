@@ -314,6 +314,10 @@ fn render_assistant_node_view(
         {
             return Ok(JsValue::UNDEFINED);
         }
+        // Source: `tail?.closing?.finalNode.seq` — no tail yet means no owner.
+        if owner_tail.is_null() || owner_tail.is_undefined() {
+            return Ok(JsValue::UNDEFINED);
+        }
         let closing = Reflect::get(&owner_tail, &JsValue::from_str("closing"))?;
         if closing.is_null() || closing.is_undefined() {
             return Ok(JsValue::UNDEFINED);
