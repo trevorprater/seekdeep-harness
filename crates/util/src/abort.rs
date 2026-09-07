@@ -157,6 +157,16 @@ impl AbortSignal {
             .map(|(_, signal)| signal)
     }
 
+    /// The process-wide abort sequence number of the signal that aborted this
+    /// one, or `None` while it is live. Later aborts carry larger numbers, so
+    /// callers can order cancellations across independent signals.
+    #[must_use]
+    pub fn abort_order(&self) -> Option<u64> {
+        self.winning_signal()
+            .map(|signal| signal.0.order.load(Ordering::Acquire))
+            .filter(|order| *order != 0)
+    }
+
     /// Resolves when this signal or any fused source is cancelled.
     #[must_use]
     pub fn cancelled(&self) -> BoxFuture<'static, ()> {

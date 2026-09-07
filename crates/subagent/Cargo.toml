@@ -34,6 +34,10 @@ tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+seekdeep-agent-loop-testkit = { path = "../agent-loop-testkit" }
+seekdeep-session-persistence-jsonl = { path = "../session-persistence-jsonl" }
+seekdeep-subagent-fork-in-process = { path = "../subagent-fork-in-process" }
+seekdeep-subagent-spawn-in-process = { path = "../subagent-spawn-in-process" }
 tempfile.workspace = true
 
 [lints]

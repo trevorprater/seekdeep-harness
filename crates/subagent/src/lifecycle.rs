@@ -15,32 +15,42 @@ use crate::types::{
 };
 
 /// Emits one subagent lifecycle edge with per-listener containment.
+///
+/// # Errors
+///
+/// Returns a dispatch interception failure (`internal/dispatch` vetoing the
+/// publication); listener failures are contained and logged.
 #[allow(clippy::needless_pass_by_value)]
 pub fn emit_subagent_lifecycle(
     context: &Context,
     name: &str,
     args: EventArgs,
     parent: Option<&Agent>,
-) {
+) -> anyhow::Result<()> {
     let dispatch = parent.map_or_else(
         || context.clone(),
         |parent| scope_target(context, Some(parent.scope_key())),
     );
-    match context.events().prepare_emit(&dispatch, name, &args) {
-        Ok(emission) => emission.emit_contained(|error| {
+    context
+        .events()
+        .prepare_emit(&dispatch, name, &args)?
+        .emit_contained(|error| {
             tracing::warn!(event = name, %error, "subagent listener failed");
-        }),
-        Err(error) => tracing::warn!(event = name, %error, "subagent dispatch failed"),
-    }
+        });
+    Ok(())
 }
 
 /// Wraps a one-shot run with its start/end lifecycle pair.
+///
+/// # Errors
+///
+/// Returns the start-edge publication failure.
 pub fn observe_run(
     context: &Context,
     provider: &str,
     parent: &Arc<Agent>,
     run: Arc<dyn SubagentRun>,
-) -> Arc<dyn SubagentRun> {
+) -> anyhow::Result<Arc<dyn SubagentRun>> {
     let identity = SubagentRunInfo {
         run_id: SubagentRunId::new(Uuid::new_v4().to_string()),
         provider: provider.to_owned(),
@@ -72,20 +82,22 @@ pub fn observe_run(
                 Some(output)
             },
         };
-        emit_subagent_lifecycle(
+        if let Err(error) = emit_subagent_lifecycle(
             &ctx,
             "subagent/end",
             EventArgs::one(info),
             Some(&parent_end),
-        );
+        ) {
+            tracing::warn!(%error, "subagent end publication was vetoed");
+        }
     });
     emit_subagent_lifecycle(
         context,
         "subagent/start",
         EventArgs::one(identity),
         Some(parent),
-    );
-    run
+    )?;
+    Ok(run)
 }
 
 /// Derives one epoch's terminal stop reason from consumed work.
@@ -150,18 +162,28 @@ pub struct ActivationObserver {
     parent: Arc<Agent>,
     boundary: parking_lot::Mutex<usize>,
     captured: parking_lot::Mutex<ActivationTerminal>,
+    /// Whether the start edge was published; an unpublished epoch has no end edge.
+    published: std::sync::atomic::AtomicBool,
 }
 
 impl ActivationObserver {
     /// Publish the start edge once the epoch is resident.
-    pub fn start(&self, child: &Agent) {
+    ///
+    /// # Errors
+    ///
+    /// Returns the publication failure so the caller rolls the unpublished
+    /// Activation back.
+    pub fn start(&self, child: &Agent) -> anyhow::Result<()> {
         *self.boundary.lock() = child.session().events().len();
         emit_subagent_lifecycle(
             &self.context,
             "subagent/start",
             EventArgs::one(self.identity.clone()),
             Some(self.parent.as_ref()),
-        );
+        )?;
+        self.published
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
     }
 
     /// Snapshot the child-dependent terminal facts while the child is still
@@ -191,6 +213,9 @@ impl ActivationObserver {
 
     /// Publish the terminal edge exactly once, after the disposal outcome is known.
     pub fn settle(&self, failure: Option<&anyhow::Error>) {
+        if !self.published.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
         let terminal = self.terminal(failure);
         let info = SubagentRunEndInfo {
             run_id: self.identity.run_id.clone(),
@@ -200,12 +225,14 @@ impl ActivationObserver {
             stop_reason: terminal.stop_reason,
             last_assistant_message: terminal.output,
         };
-        emit_subagent_lifecycle(
+        if let Err(error) = emit_subagent_lifecycle(
             &self.context,
             "subagent/end",
             EventArgs::one(info),
             Some(self.parent.as_ref()),
-        );
+        ) {
+            tracing::warn!(%error, "subagent end publication was vetoed");
+        }
     }
 }
 
@@ -232,5 +259,6 @@ pub fn create_activation_observer(
             stop_reason: SubagentStopReason::Completed,
             output: None,
         }),
+        published: std::sync::atomic::AtomicBool::new(false),
     }
 }

@@ -213,7 +213,7 @@ impl SubagentRuntime {
             descriptor,
         };
         let run = provider.start(resolved).await?;
-        Ok(observe_run(&self.context, name, &parent, run))
+        observe_run(&self.context, name, &parent, run)
     }
 
     /// Establish one durable continuable child and deliver its initial prompt.
@@ -302,15 +302,15 @@ impl SubagentRuntime {
     /// # Errors
     ///
     /// Returns an aggregate error after all branches settle when any failed.
-    pub async fn drain_continuable_descendants(
+    pub fn drain_continuable_descendants(
         &self,
         parents: &[Arc<Agent>],
-    ) -> anyhow::Result<()> {
+    ) -> futures::future::BoxFuture<'static, anyhow::Result<()>> {
         let manager = self.continuations.lock().clone();
         let Some(manager) = manager else {
-            return Ok(());
+            return Box::pin(async { Ok(()) });
         };
-        manager.drain_descendants(parents).await
+        manager.drain_descendants(parents)
     }
 
     /// Enumerate the parent's direct session-backed subagents.
@@ -349,6 +349,14 @@ impl SubagentRuntime {
         })
     }
 
+    /// The package-private continuation owner, exposed so teardown tests can
+    /// drain the whole manager without adding the irreversible operation to
+    /// the public service contract.
+    #[must_use]
+    pub fn continuations(&self) -> Option<Arc<SubagentContinuationManager>> {
+        self.continuations.lock().clone()
+    }
+
     fn require_continuations(&self) -> anyhow::Result<Arc<SubagentContinuationManager>> {
         self.continuations.lock().clone().ok_or_else(|| {
             SubagentError::new(
@@ -365,6 +373,15 @@ impl SubagentRuntime {
         request: ContinuableCreateRequest,
     ) -> anyhow::Result<ContinuableCreateSpec> {
         let provider = self.expect_provider(name)?;
+        if !provider.supports_continuable() {
+            return Err(SubagentError::new(
+                format!(
+                    "subagent provider \"{name}\" does not support continuable children (no prepareContinuable capability)"
+                ),
+                "UNSUPPORTED_CAPABILITY",
+            )
+            .into());
+        }
         provider.prepare_continuable(request).await
     }
 
@@ -416,12 +433,14 @@ impl SubagentRuntime {
     }
 
     fn emit_provider_removed(&self, name: &str) {
-        emit_subagent_lifecycle(
+        if let Err(error) = emit_subagent_lifecycle(
             &self.context,
             "subagent/provider-removed",
             seekdeep_cordis::EventArgs::one(name.to_owned()),
             None,
-        );
+        ) {
+            tracing::warn!(%error, "subagent provider-removed publication was vetoed");
+        }
     }
 }
 

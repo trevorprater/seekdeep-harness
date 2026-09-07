@@ -153,7 +153,7 @@ pub async fn list_children(
         })
         .collect();
     candidates.sort_by(|a, b| compare_records(a, b));
-    resolve_rows(ctx, &candidates, signal)
+    resolve_rows(ctx, &candidates, &corpus, signal)
         .await
         .map(|rows| rows.into_iter().flatten().collect())
 }
@@ -171,7 +171,7 @@ pub async fn list_descendants(
     let corpus = build_corpus(ctx, signal).await?;
     let positioned = descendant_candidates(&corpus, root_session_id);
     let records: Vec<&CorpusRecord> = positioned.iter().map(|p| p.record).collect();
-    let rows = resolve_rows(ctx, &records, signal).await?;
+    let rows = resolve_rows(ctx, &records, &corpus, signal).await?;
     let mut entries = Vec::new();
     for (index, position) in positioned.iter().enumerate() {
         if let Some(row) = rows.get(index).cloned().flatten() {
@@ -228,6 +228,7 @@ async fn build_corpus(
 async fn resolve_rows(
     ctx: &seekdeep_cordis::Context,
     candidates: &[&CorpusRecord],
+    corpus: &HashMap<SessionId, CorpusRecord>,
     signal: Option<&AbortSignal>,
 ) -> anyhow::Result<Vec<Option<SubagentListEntry>>> {
     let projections = ctx
@@ -237,22 +238,30 @@ async fn resolve_rows(
     let mut rows: Vec<Option<SubagentListEntry>> = Vec::with_capacity(candidates.len());
     for candidate in candidates {
         let child_id = candidate.header.id.clone();
-        let has_children = candidates
-            .iter()
-            .any(|c| c.header.parent_session.as_ref() == Some(&child_id));
+        // The hint counts every origin-classified record below this child in
+        // the whole corpus (headers only; a grandchild is never inspected).
+        let has_children = corpus.values().any(|record| {
+            record.header.parent_session.as_ref() == Some(&child_id)
+                && record.header.origin == Some(seekdeep_core::session::SessionOrigin::Subagent)
+        });
         if let Some(live) = &candidate.live {
-            let identity = projections
-                .snapshot(live)
-                .ok()
-                .and_then(|snapshot| identity_of(snapshot.values.get("subagent")));
-            match identity {
-                Some(identity) => rows.push(Some(child_row(
-                    &child_id,
-                    identity,
-                    SubagentActivity::Running,
-                    has_children,
-                ))),
-                None => rows.push(None),
+            // A foreign unit's view failure stays contained to this child as a
+            // corrupt diagnostic; a served null or absent identity is the
+            // creation window and is omitted.
+            match projections.snapshot(live) {
+                Ok(snapshot) => match identity_of(snapshot.values.get("subagent")) {
+                    Some(identity) => rows.push(Some(child_row(
+                        &child_id,
+                        identity,
+                        SubagentActivity::Running,
+                        has_children,
+                    ))),
+                    None => rows.push(None),
+                },
+                Err(_) => rows.push(Some(SubagentListEntry::Diagnostic {
+                    id: child_id,
+                    reason: SubagentDiagnosticReason::Corrupt,
+                })),
             }
         } else if let Some(persistence) = &persistence {
             let row = resolve_cold(
@@ -262,7 +271,7 @@ async fn resolve_rows(
                 has_children,
                 signal,
             )
-            .await;
+            .await?;
             rows.push(row);
         } else {
             rows.push(None);
@@ -272,38 +281,52 @@ async fn resolve_rows(
     Ok(rows)
 }
 
+/// Fold one cold child from its persisted log.
+///
+/// Cancellation is checked before the read, after it, and around a failed
+/// read, so an abort can never be reported as a successful listing or as an
+/// unavailable diagnostic; a plain read failure degrades to one unavailable
+/// row while its siblings stay complete.
 async fn resolve_cold(
     persistence: &Arc<dyn seekdeep_session_persistence::SessionPersistence>,
     projections: &seekdeep_session_projection::SessionProjectionRegistry,
     header: &SessionHeader,
     has_children: bool,
     signal: Option<&AbortSignal>,
-) -> Option<SubagentListEntry> {
+) -> anyhow::Result<Option<SubagentListEntry>> {
     let child_id = header.id.clone();
-    assert_not_cancelled(signal).ok()?;
-    let inspected = persistence.inspect(&child_id, signal.cloned()).await.ok()?;
-    assert_not_cancelled(signal).ok()?;
+    assert_not_cancelled(signal)?;
+    let Ok(inspected) = persistence.inspect(&child_id, signal.cloned()).await else {
+        assert_not_cancelled(signal)?;
+        return Ok(Some(SubagentListEntry::Diagnostic {
+            id: child_id,
+            reason: SubagentDiagnosticReason::Unavailable,
+        }));
+    };
+    assert_not_cancelled(signal)?;
     if !same_lifecycle(&inspected.meta, header) {
-        return Some(SubagentListEntry::Diagnostic {
+        return Ok(Some(SubagentListEntry::Diagnostic {
             id: child_id,
             reason: SubagentDiagnosticReason::Corrupt,
-        });
+        }));
     }
     let restored = projections
         .restore(&indexmap::IndexMap::new(), &inspected.events, 0)
         .ok();
-    match restored.and_then(|restore| identity_of(restore.snapshot.values.get("subagent"))) {
-        Some(identity) => Some(child_row(
-            &child_id,
-            identity,
-            SubagentActivity::Inactive,
-            has_children,
-        )),
-        None => Some(SubagentListEntry::Diagnostic {
-            id: child_id,
-            reason: SubagentDiagnosticReason::Corrupt,
-        }),
-    }
+    Ok(Some(
+        match restored.and_then(|restore| identity_of(restore.snapshot.values.get("subagent"))) {
+            Some(identity) => child_row(
+                &child_id,
+                identity,
+                SubagentActivity::Inactive,
+                has_children,
+            ),
+            None => SubagentListEntry::Diagnostic {
+                id: child_id,
+                reason: SubagentDiagnosticReason::Corrupt,
+            },
+        },
+    ))
 }
 
 fn same_lifecycle(meta: &SessionHeader, expected: &SessionHeader) -> bool {

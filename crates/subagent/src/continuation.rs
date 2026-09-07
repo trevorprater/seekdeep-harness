@@ -10,6 +10,7 @@
 //! still running. The Agent inbox is the only turn queue, so this manager owns
 //! residency while the Agent loop owns all turn ordering and execution.
 
+use indexmap::IndexMap;
 use std::{
     collections::{HashMap, HashSet},
     sync::{
@@ -346,7 +347,9 @@ pub struct SubagentContinuationManager {
     host: Arc<dyn ContinuationHost>,
     setup_registry: Arc<SubagentActivationSetupRegistry>,
     self_weak: Weak<Self>,
-    activations: Mutex<HashMap<SessionId, Arc<Activation>>>,
+    /// Insertion-ordered like the source `Map`, so forest cutoffs and disposal
+    /// visit Activations in the order they were established.
+    activations: Mutex<IndexMap<SessionId, Arc<Activation>>>,
     materializations: Mutex<Vec<Arc<Materialization>>>,
     locks: ChildLock,
     closing_scopes: Mutex<HashMap<usize, Arc<ClosingScope>>>,
@@ -426,7 +429,7 @@ impl SubagentContinuationManager {
             host,
             setup_registry,
             self_weak: weak.clone(),
-            activations: Mutex::new(HashMap::new()),
+            activations: Mutex::new(IndexMap::new()),
             materializations: Mutex::new(Vec::new()),
             locks: ChildLock::new(),
             closing_scopes: Mutex::new(HashMap::new()),
@@ -824,30 +827,33 @@ impl SubagentContinuationManager {
     /// # Errors
     ///
     /// Returns an aggregate error when any branch failed to release.
-    pub async fn drain(&self) -> anyhow::Result<()> {
+    pub fn drain(&self) -> BoxFuture<'static, anyhow::Result<()>> {
         self.draining.store(true, Ordering::Release);
-        let materializations = self.materializations.lock().clone();
-        for materialization in materializations {
-            materialization.wait_settled().await;
-        }
-        let owned: HashSet<SessionId> = {
-            let activations = self.activations.lock();
-            let mut owned = HashSet::new();
-            for activation in activations.values() {
-                for child in activation.owned_children.lock().iter() {
-                    owned.insert(child.clone());
-                }
+        let this = self.arc_self();
+        Box::pin(async move {
+            let materializations = this.materializations.lock().clone();
+            for materialization in materializations {
+                materialization.wait_settled().await;
             }
-            owned
-        };
-        let roots: Vec<Arc<Activation>> = self
-            .activations
-            .lock()
-            .values()
-            .filter(|a| !owned.contains(&a.child_id))
-            .cloned()
-            .collect();
-        self.dispose_roots(&roots, "activation(s)").await
+            let owned: HashSet<SessionId> = {
+                let activations = this.activations.lock();
+                let mut owned = HashSet::new();
+                for activation in activations.values() {
+                    for child in activation.owned_children.lock().iter() {
+                        owned.insert(child.clone());
+                    }
+                }
+                owned
+            };
+            let roots: Vec<Arc<Activation>> = this
+                .activations
+                .lock()
+                .values()
+                .filter(|a| !owned.contains(&a.child_id))
+                .cloned()
+                .collect();
+            this.dispose_roots(&roots, "activation(s)").await
+        })
     }
 
     /// Stop only the continuable descendants of exact live host-owned parents.
@@ -855,7 +861,10 @@ impl SubagentContinuationManager {
     /// # Errors
     ///
     /// Returns an aggregate error after all scoped branches settle when any failed.
-    pub async fn drain_descendants(&self, parents: &[Arc<Agent>]) -> anyhow::Result<()> {
+    pub fn drain_descendants(
+        &self,
+        parents: &[Arc<Agent>],
+    ) -> BoxFuture<'static, anyhow::Result<()>> {
         let roots: Vec<Arc<Agent>> = parents
             .iter()
             .filter(|parent| {
@@ -866,7 +875,7 @@ impl SubagentContinuationManager {
             .cloned()
             .collect();
         if roots.is_empty() {
-            return Ok(());
+            return Box::pin(async { Ok(()) });
         }
 
         for root in &roots {
@@ -954,11 +963,14 @@ impl SubagentContinuationManager {
             });
         }
 
-        for materialization in materializations {
-            materialization.wait_settled().await;
-        }
-        self.dispose_roots(&target_roots, "scoped activation(s)")
-            .await
+        let this = self.arc_self();
+        Box::pin(async move {
+            for materialization in materializations {
+                materialization.wait_settled().await;
+            }
+            this.dispose_roots(&target_roots, "scoped activation(s)")
+                .await
+        })
     }
 
     async fn dispose_roots(
@@ -1324,7 +1336,7 @@ impl SubagentContinuationManager {
                 )?;
             }
 
-            activation.observer.start(child_agent.as_ref());
+            activation.observer.start(child_agent.as_ref())?;
             Ok(())
         })();
 
@@ -1668,7 +1680,7 @@ impl SubagentContinuationManager {
             ),
         };
 
-        self.activations.lock().remove(&child_id);
+        self.activations.lock().shift_remove(&child_id);
         let terminal = activation.observer.terminal(failure.as_ref());
         self.notify_settlement(activation, &terminal);
         self.release_ownership(&child_id);

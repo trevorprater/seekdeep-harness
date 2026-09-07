@@ -78422,8 +78422,10 @@
       ],
       "evidence": [
         "cargo test -p seekdeep-subagent --all-features",
-        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
-      ]
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-subagent --all-features (continuation_parity, continuation_routing_parity, continuation_settlement_parity, continuation_inheritance_parity, list_children_parity: 102 spec cases against the assembled Rust stack with JSONL persistence and the in-process providers)"
+      ],
+      "note": "drain and drainDescendants return futures whose admission cutoff and scoped cancellations run synchronously at the call, matching the source async function prefix; activations keep insertion order"
     },
     {
       "source": "packages/subagent/subagent/src/depth.ts",
@@ -78482,9 +78484,10 @@
       ],
       "evidence": [
         "cargo test -p seekdeep-subagent --all-features",
-        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-subagent --all-features (continuation_parity, continuation_routing_parity, continuation_settlement_parity, continuation_inheritance_parity, list_children_parity: 102 spec cases against the assembled Rust stack with JSONL persistence and the in-process providers)"
       ],
-      "note": "projection registration reacts to the service-change bus only, which does not fire when a registry whose owning plugin was still loading at provide time becomes active; session-title, tool-todo, and permission-presets moved to seekdeep_session_projection::register_when_mounted (an inject-gated child mirroring ctx.inject) after the details lifecycle gate exposed the miss; this crate still uses the bus binding and should migrate the same way"
+      "note": "projection registration reacts to the service-change bus only, which does not fire when a registry whose owning plugin was still loading at provide time becomes active; session-title, tool-todo, and permission-presets moved to seekdeep_session_projection::register_when_mounted (an inject-gated child mirroring ctx.inject) after the details lifecycle gate exposed the miss; this crate still uses the bus binding and should migrate the same way; prepareContinuable rejects providers without the continuable capability before preparation"
     },
     {
       "source": "packages/subagent/subagent/src/invariant.ts",
@@ -78507,8 +78510,10 @@
       ],
       "evidence": [
         "cargo test -p seekdeep-subagent --all-features",
-        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
-      ]
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-subagent --all-features (continuation_parity, continuation_routing_parity, continuation_settlement_parity, continuation_inheritance_parity, list_children_parity: 102 spec cases against the assembled Rust stack with JSONL persistence and the in-process providers)"
+      ],
+      "note": "emit_subagent_lifecycle propagates a dispatch veto so a failed start publication rolls the unpublished Activation back with no end edge; listener failures stay contained"
     },
     {
       "source": "packages/subagent/subagent/src/list-children.ts",
@@ -78519,8 +78524,10 @@
       ],
       "evidence": [
         "cargo test -p seekdeep-subagent --all-features",
-        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
-      ]
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-subagent --all-features (continuation_parity, continuation_routing_parity, continuation_settlement_parity, continuation_inheritance_parity, list_children_parity: 102 spec cases against the assembled Rust stack with JSONL persistence and the in-process providers)"
+      ],
+      "note": "hasChildren scans the whole corpus; failed cold inspection is an unavailable diagnostic; live foreign-unit view failures are corrupt diagnostics"
     },
     {
       "source": "packages/subagent/subagent/src/out-of-process.ts",
@@ -78613,12 +78620,33 @@
     {
       "source": "packages/subagent/subagent/tests/continuation-inheritance.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/tests/continuation_inheritance_parity.rs",
+        "crates/subagent/tests/support/continuation.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features (continuation_parity, continuation_routing_parity, continuation_settlement_parity, continuation_inheritance_parity, list_children_parity: 102 spec cases against the assembled Rust stack with JSONL persistence and the in-process providers)",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ],
+      "note": "all 7 cases ported against the real sandbox-policy and approval services"
     },
     {
       "source": "packages/subagent/subagent/tests/continuation.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/tests/continuation_parity.rs",
+        "crates/subagent/tests/continuation_routing_parity.rs",
+        "crates/subagent/tests/continuation_settlement_parity.rs",
+        "crates/subagent/tests/support/continuation.rs",
+        "crates/subagent/tests/support/providers.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features (continuation_parity, continuation_routing_parity, continuation_settlement_parity, continuation_inheritance_parity, list_children_parity: 102 spec cases against the assembled Rust stack with JSONL persistence and the in-process providers)",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ],
+      "note": "58 of 78 cases ported; the remaining cases monkey-patch package internals (handle.dispose, observer.capture, activation.accepted, ownedChildren, agents.create/resume spies, logger.warn capture, session/flush throw, the NaN depth cap that the u64 type excludes) and are covered by the equivalent Rust paths only where an observable substitute exists; porting exposed and fixed runtime gaps: continuable preparation now checks supportsContinuable before preparation, a vetoed subagent/start publication propagates and rolls the unpublished Activation back without an end edge, Activations are insertion-ordered like the source Map so forest cutoffs cancel parent-first, and drain/drainDescendants set their cutoff synchronously before their first await"
     },
     {
       "source": "packages/subagent/subagent/tests/invariant.spec.ts",
@@ -78638,7 +78666,16 @@
     {
       "source": "packages/subagent/subagent/tests/list-children.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/subagent/tests/list_children_parity.rs",
+        "crates/subagent/tests/support/continuation.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-subagent --all-features (continuation_parity, continuation_routing_parity, continuation_settlement_parity, continuation_inheritance_parity, list_children_parity: 102 spec cases against the assembled Rust stack with JSONL persistence and the in-process providers)",
+        "cargo clippy -p seekdeep-subagent --all-targets --all-features -- -D warnings"
+      ],
+      "note": "37 of 60 cases ported; cases that replace sessionPersistence.list/inspect or sessionProjectionCache.cachedSnapshot in place, or count inspection calls, are not portable to the typed Rust services; porting exposed and fixed runtime gaps: the hasChildren hint scans the whole corpus for origin-classified records, a failed cold inspection degrades to one unavailable diagnostic (cancellation still fails the listing), and a foreign projection unit failure on a live child is contained as a corrupt diagnostic"
     },
     {
       "source": "packages/subagent/subagent/tests/out-of-process.spec.ts",
@@ -86354,7 +86391,17 @@
     {
       "source": "scripts/gen-translation-brief.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/translation_brief_command.rs",
+        "crates/repository-tools/src/bin/gen-translation-brief.rs",
+        "crates/repository-tools/tests/translation_brief_command_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --test translation_brief_parity --test translation_brief_command_parity (pinned spec cases plus temporary-repository command runs: consistent/out-of-scope/incomplete requests, unit and section and document scopes, mechanical --apply splice)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ],
+      "note": "pair discovery walks the working tree with the source scope excludes; blobs are read through git cat-file and diffs through git diff --no-index; exit codes 0/2 and stderr notices match the source"
     },
     {
       "source": "scripts/install-lefthook.mjs",
@@ -87107,12 +87154,27 @@
     {
       "source": "scripts/translation-brief.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/translation_brief_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --test translation_brief_parity --test translation_brief_command_parity (pinned spec cases plus temporary-repository command runs: consistent/out-of-scope/incomplete requests, unit and section and document scopes, mechanical --apply splice)"
+      ]
     },
     {
       "source": "scripts/translation-brief.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/translation_brief.rs",
+        "crates/repository-tools/tests/translation_brief_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --test translation_brief_parity --test translation_brief_command_parity (pinned spec cases plus temporary-repository command runs: consistent/out-of-scope/incomplete requests, unit and section and document scopes, mechanical --apply splice)",
+        "cargo clippy -p seekdeep-repository-tools --all-targets --all-features -- -D warnings"
+      ],
+      "note": "span offsets are reported in UTF-16 units as the source does; the code-fence mask token is SEEKDEEP_TRANSLATION_CODE_<n>"
     },
     {
       "source": "scripts/translation-pairing-git.ts",
