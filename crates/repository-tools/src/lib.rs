@@ -72,6 +72,10 @@ pub mod scoped_events_generator;
 pub mod skill_invocation_metadata;
 /// Client slot contract and registration scans.
 pub mod slot_walk;
+/// Minimal-update translation briefing assembly.
+pub mod translation_brief;
+/// The `gen-translation-brief` command over a repository root.
+pub mod translation_brief_command;
 pub mod translation_pairing;
 pub mod translation_pairing_command;
 pub mod translation_pairing_git;
