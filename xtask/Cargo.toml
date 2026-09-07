@@ -11,6 +11,7 @@ async-trait.workspace = true
 base64.workspace = true
 clap.workspace = true
 futures.workspace = true
+indexmap.workspace = true
 oxc_allocator.workspace = true
 oxc_ast.workspace = true
 oxc_codegen.workspace = true
@@ -33,6 +34,7 @@ seekdeep-llm = { path = "../crates/llm" }
 seekdeep-lsp = { path = "../crates/lsp" }
 seekdeep-plan-mode = { path = "../crates/plan-mode" }
 seekdeep-pwsh-local = { path = "../crates/pwsh-local" }
+seekdeep-repository-tools = { path = "../crates/repository-tools" }
 seekdeep-schedule = { path = "../crates/schedule" }
 seekdeep-scope = { path = "../crates/scope" }
 seekdeep-session-persistence = { path = "../crates/session-persistence" }

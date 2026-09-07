@@ -309,6 +309,7 @@ oxc_diagnostics = "=0.122.0"
 oxc_parser = "=0.122.0"
 oxc_semantic = "=0.122.0"
 oxc_span = "=0.122.0"
+oxc_syntax = "=0.122.0"
 oxc_transformer = "=0.122.0"
 parking_lot = "0.12.5"
 nix = { version = "0.30.1", default-features = false, features = ["process", "signal"] }

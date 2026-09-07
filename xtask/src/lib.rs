@@ -2,6 +2,8 @@
 
 /// Rust-owned plugin configuration catalog generation and validation.
 pub mod config_catalog;
+/// Cordis catalog, client slot catalog, and inspect catalog generators over the pinned source tree.
+pub mod cordis_catalog;
 /// macOS runtime-wheel deployment-target validation.
 pub mod macos_deployment;
 /// Session persistence catalog generation and validation.

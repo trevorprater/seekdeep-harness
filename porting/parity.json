@@ -27197,7 +27197,8 @@
         "docs/cordis-api/context.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "mechanical documentation rename port (dsh to seekdeep)",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
       ]
     },
     {
@@ -27230,7 +27231,8 @@
         "docs/cordis-api/events.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "mechanical documentation rename port (dsh to seekdeep)",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
       ]
     },
     {
@@ -27263,7 +27265,8 @@
         "docs/cordis-api/fiber.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "mechanical documentation rename port (dsh to seekdeep)",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
       ]
     },
     {
@@ -27285,7 +27288,8 @@
         "docs/cordis-api/inherited.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "mechanical documentation rename port (dsh to seekdeep)",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
       ]
     },
     {
@@ -27307,7 +27311,8 @@
         "docs/cordis-api/registry.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "mechanical documentation rename port (dsh to seekdeep)",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
       ]
     },
     {
@@ -27340,7 +27345,8 @@
         "docs/cordis-api/service.md"
       ],
       "evidence": [
-        "mechanical documentation rename port (dsh to seekdeep)"
+        "mechanical documentation rename port (dsh to seekdeep)",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
       ]
     },
     {
@@ -59560,7 +59566,8 @@
       "evidence": [
         "pinned SOURCE_SNAPSHOT generator extracts Service/Event/Type/inherited tables and every compact/exact query fixture",
         "cargo test -p seekdeep-cordis-client-runner --test api_catalog_parity --all-features (every generated Service/Event query compared)",
-        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings",
+        "cargo xtask cordis-inspect-catalog --check: the Client face projection filtered by CLIENT_SERVICES/CLIENT_EVENTS reproduces crates/cordis-client-runner/data/api-catalog.json"
       ],
       "note": "all Client Service, Event, Type, and inherited Context entries are generated from the pinned source; shared native/WASM Rust queries compute projections from catalog records and preserve the generated source helper's backspace-delimited type matching, including its empty ordinary-signature results"
     },
@@ -59711,7 +59718,8 @@
       "evidence": [
         "pinned SOURCE_SNAPSHOT generator extracts CLIENT_NOTES and every CLIENT_SLOT_API entry",
         "cargo test -p seekdeep-cordis-client-runner --test slot_catalog_parity --all-features",
-        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-cordis-client-runner --all-targets --all-features -- -D warnings",
+        "cargo xtask client-catalog --check: the Rust lexical scan and projection reproduce crates/cordis-client-runner/data/slot-catalog.json from the pinned source"
       ],
       "note": "all Client Slot notes and contracts are generated in source order; Rust owns compact recursive navigation, registration summaries, key domains, guarded self-only keys, selected full contracts, declaredBy, live occupants, and exact optional requested-root fields"
     },
@@ -60219,14 +60227,16 @@
         "crates/tool-cordis/data/api-catalog.json",
         "crates/tool-cordis/data/api-query-fixtures.json",
         "crates/tool-cordis/src/api_catalog.rs",
-        "crates/tool-cordis/tests/catalog_present_prompt.rs"
+        "crates/tool-cordis/tests/catalog_present_prompt.rs",
+        "xtask/src/cordis_catalog.rs"
       ],
       "evidence": [
         "pinned-source generator extracted all 55 Services, 56 Events, 510 types, 10 inherited Context entries, and every exact query result",
         "Host query responses are computed by shared Rust from generated catalog records; expected-response fixtures are test-only",
         "16 caller-supplied query differentials cover source delimiters, transitive closure, duplicate type names, retained method metadata, key quoting, and exact errors",
         "cargo test -p seekdeep-tool-cordis -p seekdeep-cordis-api-catalog --all-features",
-        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings"
+        "cargo clippy -p seekdeep-tool-cordis --all-targets --all-features -- -D warnings",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
       ]
     },
     {
@@ -85955,17 +85965,41 @@
     {
       "source": "scripts/cordis-core-api.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/cordis_core_api_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --all-features"
+      ]
     },
     {
       "source": "scripts/cordis-core-api.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/cordis_core_api.rs",
+        "crates/repository-tools/tests/cordis_core_api_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --all-features: the five pages rendered from the pinned vendor declarations equal docs/cordis-api/{context,events,fiber,registry,service}.md byte for byte",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
+      ]
     },
     {
       "source": "scripts/cordis-walk.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/cordis_walk.rs",
+        "crates/repository-tools/src/ts_lexical.rs",
+        "crates/repository-tools/tests/cordis_walk_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --all-features",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
+      ],
+      "note": "oxc-based lexical scan reproducing the compiler conventions (module blocks, property-signature keys, method and property event names, computed-name text)"
     },
     {
       "source": "scripts/coverage-exempt.spec.ts",
@@ -86113,12 +86147,29 @@
     {
       "source": "scripts/gen-client-catalog.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/client_catalog_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --all-features"
+      ]
     },
     {
       "source": "scripts/gen-client-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/client_catalog.rs",
+        "crates/repository-tools/tests/client_catalog_parity.rs",
+        "xtask/src/cordis_catalog.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask client-catalog --check: the Rust lexical scan and projection reproduce crates/cordis-client-runner/data/slot-catalog.json from the pinned source",
+        "cargo test -p seekdeep-repository-tools --all-features: the pinned spec cases plus the real-workspace collection equal the committed catalog"
+      ],
+      "note": "the generated TypeScript data module renderer is ported; the port embeds the same data as JSON"
     },
     {
       "source": "scripts/gen-config-catalog.ts",
@@ -86140,27 +86191,69 @@
     {
       "source": "scripts/gen-cordis-api.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/cordis_catalog.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
+      ],
+      "note": "compatibility entry point: cargo xtask cordis-catalog is the unified command; the generated banner text is preserved by the renderers"
     },
     {
       "source": "scripts/gen-cordis-catalog-partition.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/cordis_catalog_partition_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --all-features"
+      ]
     },
     {
       "source": "scripts/gen-cordis-catalog-record.spec.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/tests/cordis_catalog_partition_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --all-features"
+      ]
     },
     {
       "source": "scripts/gen-cordis-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/cordis_catalog.rs",
+        "xtask/src/main.rs",
+        "crates/repository-tools/src/cordis_catalog_partition.rs",
+        "crates/repository-tools/tests/cordis_catalog_partition_parity.rs",
+        "xtask/tests/cordis_catalog_parity.rs"
+      ],
+      "evidence": [
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run",
+        "cargo test -p seekdeep-repository-tools --all-features",
+        "cargo test -p xtask --test cordis_catalog_parity"
+      ],
+      "note": "documentation artifacts use the port identity (dsh- to seekdeep-, dsh.client to seekdeep.client, @dshScopeScan to @seekdeepScopeScan); the runtime API module is the Rust runtime catalog JSON (crates/tool-cordis/data/api-catalog.json), which keeps the dsh.client manifest spelling the committed data already carries"
     },
     {
       "source": "scripts/gen-cordis-inspect-catalog.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/cordis_catalog.rs",
+        "xtask/src/main.rs",
+        "xtask/tests/cordis_catalog_parity.rs"
+      ],
+      "evidence": [
+        "cargo xtask cordis-inspect-catalog --check: the Client face projection filtered by CLIENT_SERVICES/CLIENT_EVENTS reproduces crates/cordis-client-runner/data/api-catalog.json",
+        "cargo test -p xtask --test cordis_catalog_parity"
+      ]
     },
     {
       "source": "scripts/gen-doc-graphs.spec.ts",
@@ -86298,7 +86391,15 @@
     {
       "source": "scripts/jsdoc.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/jsdoc.rs",
+        "crates/repository-tools/tests/jsdoc_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --all-features",
+        "cargo xtask cordis-catalog --check: 93 artifacts (bilingual subsystem regions, inherited page, tool-cordis api-catalog.json, five core API pages) reproduce the committed port artifacts from the pinned source with the Rust analyzer, scans, and renderers; the curated policy tables are pinned against the source scripts on every run"
+      ]
     },
     {
       "source": "scripts/lint-rule-fingerprint.spec.ts",
@@ -86871,7 +86972,16 @@
     {
       "source": "scripts/slot-walk.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/repository-tools/src/slot_walk.rs",
+        "crates/repository-tools/src/ts_lexical.rs",
+        "crates/repository-tools/tests/slot_walk_parity.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep-repository-tools --all-features",
+        "cargo xtask client-catalog --check: the Rust lexical scan and projection reproduce crates/cordis-client-runner/data/slot-catalog.json from the pinned source"
+      ]
     },
     {
       "source": "scripts/smoke-python-runtime.py",

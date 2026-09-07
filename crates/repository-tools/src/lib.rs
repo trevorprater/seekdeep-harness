@@ -8,13 +8,20 @@ pub mod archived_agent_notes;
 pub mod browser_gif;
 pub mod built_package_invariants;
 pub mod clean;
+/// Model-facing client slot catalog projection.
+pub mod client_catalog;
 pub mod client_domain_graph;
 /// Shipped configuration credential/endpoint source-ownership policy.
 pub mod config_source_ownership;
 /// Cordis Loader configuration discovery.
+pub mod cordis_catalog_partition;
 pub mod cordis_config_files;
 pub mod cordis_config_metadata;
 pub mod cordis_config_verifier;
+/// Detailed Cordis core API page renderer over pinned vendor declarations.
+pub mod cordis_core_api;
+/// Cordis module-merge scans shared by the catalog generators.
+pub mod cordis_walk;
 pub mod coverage_exempt;
 pub mod doc_site_fragments;
 /// Workspace source-alias to built-declaration path mapping.
@@ -22,6 +29,8 @@ pub mod doc_typecheck_paths;
 /// Standing-document word-budget policy.
 pub mod document_budgets;
 pub mod fixture_cleanup;
+/// Shared `JSDoc` parsing and completeness checks for the Cordis catalogs.
+pub mod jsdoc;
 pub mod lefthook_installer;
 pub mod markdown_util;
 pub mod md_links;
@@ -61,6 +70,8 @@ pub mod runtime_closure;
 pub mod scoped_events_generator;
 /// Cross-product Skill invocation metadata policy.
 pub mod skill_invocation_metadata;
+/// Client slot contract and registration scans.
+pub mod slot_walk;
 pub mod translation_pairing;
 pub mod translation_pairing_command;
 pub mod translation_pairing_git;
@@ -68,6 +79,8 @@ pub mod translation_pairing_merge;
 pub mod translation_pairing_record;
 pub mod translation_prompt;
 pub mod translation_prompt_verifier;
+/// Lexical TypeScript scanning helpers.
+pub mod ts_lexical;
 /// Vendored package lockfile link-integrity policy.
 pub mod vendored_links;
 pub mod workspace_constraints;

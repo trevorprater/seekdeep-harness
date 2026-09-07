@@ -187,6 +187,33 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Generate or verify the Cordis catalog regions, inherited page, runtime API data, and core API pages from the pinned source tree.
+    CordisCatalog {
+        /// Pinned source checkout containing the TypeScript packages and vendor declarations.
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Verify the tracked outputs without writing them.
+        #[arg(long)]
+        check: bool,
+    },
+    /// Generate or verify the client slot catalog data from the pinned source tree.
+    ClientCatalog {
+        /// Pinned source checkout containing the client packages.
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Verify the tracked output without writing it.
+        #[arg(long)]
+        check: bool,
+    },
+    /// Generate or verify the model-visible Client Service and Event inspect catalog from the pinned source tree.
+    CordisInspectCatalog {
+        /// Pinned source checkout containing the client packages.
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Verify the tracked output without writing it.
+        #[arg(long)]
+        check: bool,
+    },
     /// Verify every exported Rust API has documentation and all prose-adjacent lints pass.
     Docs,
     /// Synchronize the tracked source-file inventory while preserving evidence.
@@ -305,6 +332,15 @@ fn main() -> anyhow::Result<()> {
         } => remote_contracts::run(capture_source.as_deref(), check),
         Command::ConfigCatalog { source, check } => {
             xtask::config_catalog::run(Path::new("."), &source, check)
+        }
+        Command::CordisCatalog { source, check } => {
+            xtask::cordis_catalog::run(Path::new("."), &source, check)
+        }
+        Command::ClientCatalog { source, check } => {
+            xtask::cordis_catalog::run_client_catalog(Path::new("."), &source, check)
+        }
+        Command::CordisInspectCatalog { source, check } => {
+            xtask::cordis_catalog::run_inspect_catalog(Path::new("."), &source, check)
         }
         Command::Docs => docs(),
         Command::Inventory { source } => inventory(&source),
@@ -4723,6 +4759,7 @@ fn verify_rust_only() -> anyhow::Result<()> {
                 .components()
                 .any(|part| matches!(part.as_os_str().to_str(), Some(".git" | "target")))
                 && !is_generated_output(entry.path())
+                && !is_analysis_fixture(entry.path())
         })
     {
         let entry = entry?;
@@ -4744,6 +4781,17 @@ fn verify_rust_only() -> anyhow::Result<()> {
         violations.join(", ")
     );
     Ok(())
+}
+
+/// Pinned TypeScript workspaces the Rust Typert analyzer parses as test
+/// input: data for the analyzer, not an implementation.
+fn is_analysis_fixture(path: &Path) -> bool {
+    let parts = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .filter(|component| *component != ".")
+        .collect::<Vec<_>>();
+    parts.starts_with(&["packages", "typert", "generator", "tests", "fixtures"])
 }
 
 fn is_generated_output(path: &Path) -> bool {
