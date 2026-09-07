@@ -202,6 +202,7 @@ pub(crate) async fn mount_permission(base: BaseHarness, config: Value) -> anyhow
     } = base;
     let plugin = context.plugin(seekdeep_permission_presets::plugin(), config)?;
     plugin.await_settled().await?;
+    context.registry().await_quiescent().await;
     let service = context
         .get(PERMISSION_PRESETS)
         .ok_or_else(|| anyhow::anyhow!("permission service did not activate"))?;

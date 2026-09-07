@@ -1,13 +1,16 @@
 //! Compiler-independent Typert analysis models and artifact generation.
 
+pub mod analyzer;
 pub mod catalog;
 pub mod emitter;
 pub mod model;
+pub mod plugin;
 mod remote;
 pub mod renderer;
 mod schema;
 mod source_map;
 mod text;
+pub mod workspace;
 
 /// Source-classified failure from model traversal or artifact generation.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -30,13 +33,16 @@ pub enum TypertGeneratorError {
     /// Invalid source workspace or authored type contract.
     #[error("{0}")]
     Analysis(String),
+    /// Filesystem or workspace ownership failure outside type analysis.
+    #[error("{0}")]
+    Workspace(String),
 }
 
 impl TypertGeneratorError {
     /// Source-compatible error class name.
     pub const fn name(&self) -> &'static str {
         match self {
-            Self::Model(_) | Self::Catalog(_) => "Error",
+            Self::Model(_) | Self::Catalog(_) | Self::Workspace(_) => "Error",
             Self::Syntax(_) => "SyntaxError",
             Self::Render(_) => "TypeGraphRenderError",
             Self::Emit(_) => "TypertEmitError",

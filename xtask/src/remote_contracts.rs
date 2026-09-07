@@ -64,7 +64,36 @@ pub(super) fn run(source: Option<&Path>, check: bool) -> anyhow::Result<()> {
         None
     };
     let face_value = if let Some(value) = &captured {
-        value["face"].clone()
+        // The Rust analyzer produces the pinned model; the source capture is the oracle.
+        let source = source
+            .ok_or_else(|| anyhow::anyhow!("source capture without a source root"))?
+            .to_owned();
+        let analyzed = seekdeep_typert_generator::analyzer::run_with_stack(move || {
+            seekdeep_typert_generator::analyzer::WorkspaceAnalyzer::new(
+                seekdeep_typert_generator::analyzer::WorkspaceAnalyzerOptions {
+                    root: source,
+                    packages: Some(ORDER.iter().map(|name| (*name).to_owned()).collect()),
+                    faces: Some(vec![seekdeep_typert_generator::model::TypertFace::Host]),
+                    ..Default::default()
+                },
+            )?
+            .analyze()
+        })?;
+        let face = analyzed
+            .faces
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Rust analyzer produced no Host face"))?;
+        let face_value = serde_json::to_value(&face)?;
+        anyhow::ensure!(
+            face_value == value["face"],
+            "Rust analyzer Host face model differs from the source analyzer"
+        );
+        println!(
+            "Rust analyzer reproduced the source Host face model for {} packages",
+            ORDER.len()
+        );
+        face_value
     } else {
         let model = serde_json::from_slice::<Value>(&std::fs::read(&model_path)?)?;
         anyhow::ensure!(
@@ -504,6 +533,7 @@ pub(super) fn codec_oracle(source: &Path) -> anyhow::Result<()> {
 
 pub(super) fn milestone(source: &Path) -> anyhow::Result<()> {
     let started = std::time::Instant::now();
+    super::typert_corpus::run(source, None)?;
     run(Some(source), true)?;
     let metadata = super::cargo_metadata()?;
     let build_started = std::time::Instant::now();

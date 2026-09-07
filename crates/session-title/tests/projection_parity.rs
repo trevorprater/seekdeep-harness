@@ -18,7 +18,7 @@ const CONFIG: SessionTitleConfig = SessionTitleConfig {
     max_title_bytes: 256,
 };
 
-fn harness(
+async fn harness(
     with_title_service: bool,
 ) -> (
     Context,
@@ -31,6 +31,7 @@ fn harness(
     let projections = SessionProjectionRegistry::install(&context).expect("projections");
     if with_title_service {
         SessionTitleService::install(&context, CONFIG).expect("title service");
+        context.registry().await_quiescent().await;
     }
     let session = sessions
         .create(&context, None, CreateSessionOptions::default())
@@ -52,16 +53,16 @@ fn title_value(value: &Value) -> &str {
     value.as_str().expect("title string")
 }
 
-#[test]
-fn serves_null_before_the_first_title_event() {
-    let (_, _, projections, session) = harness(true);
+#[tokio::test]
+async fn serves_null_before_the_first_title_event() {
+    let (_, _, projections, session) = harness(true).await;
     let snapshot = projections.snapshot(&session).expect("snapshot");
     assert!(snapshot.values["title"].is_null());
 }
 
-#[test]
-fn serves_the_latest_title_last_wins_and_notifies_the_change_feed() {
-    let (context, _, projections, session) = harness(true);
+#[tokio::test]
+async fn serves_the_latest_title_last_wins_and_notifies_the_change_feed() {
+    let (context, _, projections, session) = harness(true).await;
     let changes = Arc::new(Mutex::new(Vec::new()));
     let observed = Arc::clone(&changes);
     projections
@@ -95,18 +96,19 @@ fn serves_the_latest_title_last_wins_and_notifies_the_change_feed() {
     );
 }
 
-#[test]
-fn folds_titles_already_in_the_log_when_the_service_mounts_late() {
-    let (context, _, projections, session) = harness(false);
+#[tokio::test]
+async fn folds_titles_already_in_the_log_when_the_service_mounts_late() {
+    let (context, _, projections, session) = harness(false).await;
     append_title(&session, "Pre-mount title");
     SessionTitleService::install(&context, CONFIG).expect("title service");
+    context.registry().await_quiescent().await;
     let snapshot = projections.snapshot(&session).expect("snapshot");
     assert_eq!(title_value(&snapshot.values["title"]), "Pre-mount title");
 }
 
 #[tokio::test]
 async fn has_no_title_key_without_the_service_and_drops_it_on_unload() {
-    let (context, _, projections, session) = harness(false);
+    let (context, _, projections, session) = harness(false).await;
     assert!(
         !projections
             .snapshot(&session)
@@ -131,4 +133,19 @@ async fn has_no_title_key_without_the_service_and_drops_it_on_unload() {
             .values
             .contains_key("title")
     );
+}
+
+#[tokio::test]
+async fn registers_the_title_unit_when_the_registry_mounts_later() {
+    let context = Context::new();
+    let sessions = SessionStore::install(&context).expect("sessions");
+    SessionTitleService::install(&context, CONFIG).expect("title service before projections");
+    let projections = SessionProjectionRegistry::install(&context).expect("projections");
+    context.registry().await_quiescent().await;
+    let session = sessions
+        .create(&context, None, CreateSessionOptions::default())
+        .expect("session");
+    append_title(&session, "Late registry");
+    let snapshot = projections.snapshot(&session).expect("snapshot");
+    assert_eq!(title_value(&snapshot.values["title"]), "Late registry");
 }

@@ -243,14 +243,20 @@ impl PluginRegistry {
 
     /// Re-evaluates dependency epochs for every live plugin.
     pub fn notify_service_change(&self) {
-        let fibers = {
-            let mut fibers = self.inner.fibers.lock();
-            let live = fibers.iter().filter_map(Weak::upgrade).collect::<Vec<_>>();
-            fibers.retain(|fiber| fiber.strong_count() > 0);
-            live
-        };
-        for fiber in fibers {
+        for fiber in self.live_fibers() {
             fiber.schedule();
+        }
+    }
+
+    /// Waits until every mounted fiber, including children mounted while
+    /// others activate, has settled with no pending lifecycle work.
+    pub async fn await_quiescent(&self) {
+        loop {
+            let fibers = self.live_fibers();
+            PluginFiber::await_all_quiescent(&fibers).await;
+            if self.live_fibers().len() == fibers.len() {
+                return;
+            }
         }
     }
 

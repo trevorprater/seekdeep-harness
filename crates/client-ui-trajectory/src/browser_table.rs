@@ -912,12 +912,24 @@ fn render_table_row(
             vec![
                 ui.tag(
                     "span",
-                    Some(&class("seekdeep-trajectory-table-turnLabelFull")?),
+                    Some(&object(&[
+                        (
+                            "className",
+                            JsValue::from_str("seekdeep-trajectory-table-turnLabelFull"),
+                        ),
+                        ("aria-hidden", JsValue::TRUE),
+                    ])?),
                     &[JsValue::from_str(&format!("Turn {turn}"))],
                 )?,
                 ui.tag(
                     "span",
-                    Some(&class("seekdeep-trajectory-table-turnLabelCompact")?),
+                    Some(&object(&[
+                        (
+                            "className",
+                            JsValue::from_str("seekdeep-trajectory-table-turnLabelCompact"),
+                        ),
+                        ("aria-hidden", JsValue::TRUE),
+                    ])?),
                     &[JsValue::from_str(&format!("#{turn}"))],
                 )?,
             ]
@@ -993,13 +1005,73 @@ fn render_table_row(
             &[JsValue::from_str(&format!("…{summary}"))],
         )?
     } else {
-        let mut children = vec![JsValue::from_str(&list_display)];
+        let mut request_content = Vec::new();
+        if tool_only {
+            request_content.push(ui.tag(
+                "span",
+                Some(&class("seekdeep-trajectory-table-toolCallOnly")?),
+                &[JsValue::from_str("(tool call only)")],
+            )?);
+        } else if let Some(parts) = &tool_parts {
+            request_content.push(ui.tag(
+                "span",
+                Some(&class("seekdeep-trajectory-table-toolCallNameTypeface")?),
+                &[JsValue::from_str(if parts.name.is_empty() {
+                    "—"
+                } else {
+                    &parts.name
+                })],
+            )?);
+            if let Some(arguments) = &parts.arguments {
+                request_content.push(ui.tag(
+                    "span",
+                    Some(&class("seekdeep-trajectory-table-toolCallPayload")?),
+                    &[JsValue::from_str(arguments)],
+                )?);
+            }
+        } else {
+            request_content.push(JsValue::from_str(if display.is_empty() {
+                "—"
+            } else {
+                &display
+            }));
+        }
+        let mut children = vec![
+            ui.tag(
+                "span",
+                result
+                    .as_ref()
+                    .map(|_| class("seekdeep-trajectory-table-resultRequest"))
+                    .transpose()?
+                    .as_ref(),
+                &request_content,
+            )?,
+        ];
         if let Some(result) = &result {
-            children.push(JsValue::from_str(&format!(" → {result}")));
+            children.push(ui.tag("span", Some(&class(if record.cell.is_error == Some(true) { "seekdeep-trajectory-table-inlineResult seekdeep-trajectory-table-error" } else { "seekdeep-trajectory-table-inlineResult" })?), &[
+                ui.tag("span", Some(&class("seekdeep-trajectory-table-arrow")?), &[JsValue::from_str("→")])?,
+                ui.tag("span", Some(&class(if result == "No output" { "seekdeep-trajectory-table-inlineResultText seekdeep-trajectory-table-noOutputText" } else { "seekdeep-trajectory-table-inlineResultText" })?), &[JsValue::from_str(result)])?,
+            ])?);
         }
         ui.tag(
             "span",
-            Some(&class("seekdeep-trajectory-table-contentText")?),
+            Some(&object(&[
+                (
+                    "className",
+                    JsValue::from_str(if result.is_some() {
+                        "seekdeep-trajectory-table-resultPreview"
+                    } else {
+                        "seekdeep-trajectory-table-contentText"
+                    }),
+                ),
+                (
+                    "title",
+                    JsValue::from_str(&result.as_ref().map_or_else(
+                        || list_display.clone(),
+                        |result| format!("{list_display} → {result}"),
+                    )),
+                ),
+            ])?),
             &children,
         )?
     };
@@ -1143,11 +1215,14 @@ fn render_table_row(
         format!("Request {}, compaction", request.unwrap_or(0))
     } else {
         format!(
-            "{}{}, {}, {}",
+            "{}{}, {}",
             request.map_or_else(String::new, |request| format!("Request {request}, ")),
             kind_label(record.cell.kind),
-            list_display,
-            result.as_deref().unwrap_or("")
+            if list_display.is_empty() {
+                "no content"
+            } else {
+                &list_display
+            }
         )
     };
     ui.tag(
@@ -1271,15 +1346,7 @@ fn role_tag(ui: &ReactUi, kind: TrajectoryCellKind) -> Result<JsValue, JsValue> 
         ])?),
         &[icon],
     )?;
-    let color_class = match kind {
-        TrajectoryCellKind::System => "seekdeep-trajectory-table-systemNeutral",
-        TrajectoryCellKind::User => "seekdeep-trajectory-table-user",
-        TrajectoryCellKind::Context => "seekdeep-trajectory-table-contextGreen",
-        TrajectoryCellKind::Compacted => "seekdeep-trajectory-table-compacted",
-        TrajectoryCellKind::Message => "seekdeep-trajectory-table-assistantVioletBright",
-        TrajectoryCellKind::Tool => "seekdeep-trajectory-table-toolAmber",
-        TrajectoryCellKind::Subtool => "seekdeep-trajectory-table-subtoolAmber",
-    };
+    let color_class = kind_color_class(kind);
     ui.tag(
         "span",
         Some(&object(&[
@@ -1475,6 +1542,15 @@ fn render_inspector(
                 |number| format!("Request #{number}"),
             ))],
         )?);
+    } else if let Some(record) = selected {
+        header_identity.push(ui.tag(
+            "span",
+            Some(&class(&format!(
+                "seekdeep-trajectory-table-kindTag {}",
+                kind_color_class(record.cell.kind)
+            ))?),
+            &[JsValue::from_str(kind_label(record.cell.kind))],
+        )?);
     }
     header_identity.push(ui.tag(
         "span",
@@ -1502,7 +1578,11 @@ fn render_inspector(
                     ("aria-label", JsValue::from_str("Close details")),
                     ("onClick", close.into_js_value()),
                 ])?),
-                &[JsValue::from_str("×")],
+                &[ui.tag(
+                    "span",
+                    Some(&object(&[("aria-hidden", JsValue::TRUE)])?),
+                    &[JsValue::from_str("×")],
+                )?],
             )?,
         ],
     )?;
@@ -1561,6 +1641,8 @@ fn render_inspector(
                     }),
                 ),
                 ("role", JsValue::from_str("tab")),
+                ("id", JsValue::from_str(&format!("trajectory-detail-{}", tab.as_str()))),
+                ("aria-controls", JsValue::from_str("trajectory-detail-panel")),
                 ("aria-selected", JsValue::from_bool(state.active_tab == tab)),
                 ("aria-label", JsValue::from_str(label)),
                 ("onClick", on_click.into_js_value()),
@@ -1786,11 +1868,18 @@ fn render_inspector_body(
                         }
                     }
                 }
-                children.push(definition_list(ui, &rows)?);
-                let parents = crate::trajectory_parent_records(all_records, record);
-                if parents.message.is_some() || parents.tool.is_some() {
-                    children.push(render_parent_links(ui, controller, bump, parents)?);
+                if matches!(
+                    record.cell.kind,
+                    TrajectoryCellKind::Tool | TrajectoryCellKind::Subtool
+                ) {
+                    rows.retain(|(label, _)| *label != "Duration");
                 }
+                let parents = crate::trajectory_parent_records(all_records, record);
+                let mut prefix = Vec::new();
+                if parents.message.is_some() || parents.tool.is_some() {
+                    prefix.push(render_parent_links(ui, controller, bump, parents)?);
+                }
+                children.push(definition_list_with_prefix(ui, &rows, prefix)?);
                 if matches!(
                     record.cell.kind,
                     TrajectoryCellKind::User
@@ -1798,6 +1887,51 @@ fn render_inspector_body(
                         | TrajectoryCellKind::Message
                 ) {
                     children.push(summary_preview(ui, controller, bump, state, record)?);
+                } else if matches!(
+                    record.cell.kind,
+                    TrajectoryCellKind::Tool | TrajectoryCellKind::Subtool
+                ) {
+                    let mut sections = Vec::new();
+                    for (label, tab, input) in
+                        [("Payload", "input", true), ("Result", "output", false)]
+                    {
+                        let captured = if input {
+                            &record.cell.input_detail
+                        } else {
+                            &record.cell.output_detail
+                        };
+                        if captured.as_ref().is_some_and(|value| !value.is_empty()) {
+                            sections.push(overview_section(
+                                ui,
+                                controller,
+                                bump,
+                                label,
+                                tab,
+                                render_record_payload(ui, record, input, true)?,
+                            )?);
+                        }
+                    }
+                    sections.push(overview_section(
+                        ui,
+                        controller,
+                        bump,
+                        "Schema",
+                        "schema",
+                        render_record_schema(ui, record)?,
+                    )?);
+                    sections.push(overview_section(
+                        ui,
+                        controller,
+                        bump,
+                        "Timing",
+                        "timing",
+                        render_record_timing(ui, controller, bump, state, record)?,
+                    )?);
+                    children.push(ui.tag(
+                        "div",
+                        Some(&class("seekdeep-trajectory-table-overviewSections")?),
+                        &sections,
+                    )?);
                 }
                 if record.cell.kind == TrajectoryCellKind::Message {
                     let request_controller = controller.clone();
@@ -1853,10 +1987,10 @@ fn render_inspector_body(
                 children.push(render_record_timing(ui, controller, bump, state, record)?);
             }
             TrajectoryDetailTab::Output => {
-                children.push(render_record_payload(ui, record, false)?);
+                children.push(render_record_payload(ui, record, false, false)?);
             }
             TrajectoryDetailTab::Input => {
-                children.push(render_record_payload(ui, record, true)?);
+                children.push(render_record_payload(ui, record, true, false)?);
             }
             TrajectoryDetailTab::Rendered | TrajectoryDetailTab::Raw => {
                 children.push(render_markdown_record(
@@ -1989,6 +2123,8 @@ fn render_inspector_body(
         "div",
         Some(&object(&[
             ("role", JsValue::from_str("tabpanel")),
+            ("id", JsValue::from_str("trajectory-detail-panel")),
+            ("aria-labelledby", JsValue::from_str(&format!("trajectory-detail-{}", state.active_tab.as_str()))),
             (
                 "className",
                 JsValue::from_str(if state.active_tab == TrajectoryDetailTab::Overview {
@@ -2045,11 +2181,15 @@ fn render_parent_links(
         )?);
     }
     ui.tag(
-        "section",
-        Some(&class("seekdeep-trajectory-table-overviewParentLinks")?),
+        "div",
+        None,
         &[
-            ui.tag("h3", None, &[JsValue::from_str("Hierarchy")])?,
-            ui.tag("div", None, &links)?,
+            ui.tag("dt", None, &[JsValue::from_str("Hierarchy")])?,
+            ui.tag(
+                "dd",
+                Some(&class("seekdeep-trajectory-table-overviewParentLinks")?),
+                &links,
+            )?,
         ],
     )
 }
@@ -2093,6 +2233,56 @@ fn summary_preview(
         ])?),
         &[heading, content],
     )
+}
+
+fn overview_section(
+    ui: &ReactUi,
+    controller: &JsValue,
+    bump: &Function,
+    label: &str,
+    tab: &str,
+    content: JsValue,
+) -> Result<JsValue, JsValue> {
+    let controller = controller.clone();
+    let bump = bump.clone();
+    let tab = tab.to_owned();
+    let open = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
+        call_method(&controller, "activateTab", &[JsValue::from_str(&tab)])?;
+        bump.call0(&JsValue::UNDEFINED)?;
+        Ok(())
+    }) as Box<dyn FnMut() -> Result<(), JsValue>>);
+    let button = ui.tag(
+        "button",
+        Some(&object(&[
+            ("type", JsValue::from_str("button")),
+            (
+                "className",
+                JsValue::from_str("seekdeep-trajectory-table-overviewTitle"),
+            ),
+            ("onClick", open.into_js_value()),
+        ])?),
+        &[
+            ui.tag("span", None, &[JsValue::from_str(label)])?,
+            ui.primitive(
+                "IconChevronRightOutline14",
+                Some(&object(&[
+                    (
+                        "className",
+                        JsValue::from_str("seekdeep-trajectory-table-overviewTitleIcon"),
+                    ),
+                    ("size", JsValue::from_f64(12.0)),
+                ])?),
+                &[],
+            )?,
+        ],
+    )?;
+    ui.tag("section", Some(&class("seekdeep-trajectory-table-overviewSection")?), &[
+        ui.tag("h3", Some(&class("seekdeep-trajectory-table-overviewHeading")?), &[button])?,
+        ui.tag("div", Some(&object(&[
+            ("className", JsValue::from_str("seekdeep-trajectory-table-overviewPreview seekdeep-trajectory-table-summaryScrollRegion")),
+            ("data-summary-scroll-region", JsValue::from_str("")),
+        ])?), &[content])?,
+    ])
 }
 
 fn render_markdown_record(
@@ -2201,6 +2391,7 @@ fn render_record_payload(
     ui: &ReactUi,
     record: &TrajectoryTableRecord,
     input: bool,
+    preview: bool,
 ) -> Result<JsValue, JsValue> {
     let value = if input {
         record.cell.input_detail.as_deref()
@@ -2219,39 +2410,51 @@ fn render_record_payload(
         );
     };
     let error = !input && record.cell.is_error == Some(true);
-    let class_name = if error {
-        "seekdeep-trajectory-table-payload seekdeep-trajectory-table-errorPayload"
+    let error_class = if error {
+        " seekdeep-trajectory-table-errorPayload"
     } else {
-        "seekdeep-trajectory-table-payload"
+        ""
     };
-    let single_text_result = !input
-        && record.cell.output_blocks.len() == 1
-        && record.cell.output_blocks[0].kind == "text";
-    if (single_text_result || record.cell.output_blocks.is_empty())
-        && let Some(json) = crate::parse_trajectory_json_container(value)
-    {
-        return ui.primitive(
+    let json_class = format!(
+        "{}{error_class}",
+        if preview {
+            "seekdeep-trajectory-table-jsonPreview"
+        } else {
+            "seekdeep-trajectory-table-jsonPayload"
+        }
+    );
+    let json = crate::parse_trajectory_json_container(value);
+    let render_json = |json: &serde_json::Value| {
+        ui.primitive(
             "JsonTree",
             Some(&object(&[
                 (
                     "data",
-                    serde_wasm_bindgen::to_value(&json).map_err(js_error_from_display)?,
+                    js_sys::JSON::parse(
+                        &serde_json::to_string(json).map_err(js_error_from_display)?,
+                    )?,
                 ),
                 (
                     "label",
                     JsValue::from_str(if input { "Payload JSON" } else { "Result JSON" }),
                 ),
-                ("className", JsValue::from_str(class_name)),
+                ("className", JsValue::from_str(&json_class)),
             ])?),
             &[],
-        );
-    }
-    let blocks = if input {
-        &record.cell.source_blocks
-    } else {
-        &record.cell.output_blocks
+        )
     };
-    if !blocks.is_empty() {
+    let single_text_result = !input
+        && record.cell.output_blocks.len() == 1
+        && record.cell.output_blocks[0].kind == "text";
+    if single_text_result && let Some(json) = &json {
+        return render_json(json);
+    }
+    let blocks = &record.cell.output_blocks;
+    if !input
+        && blocks
+            .iter()
+            .any(|block| block.image_src.is_some() || !block.content.is_empty())
+    {
         let mut children = Vec::new();
         for block in blocks {
             if let Some(source) = &block.image_src {
@@ -2267,18 +2470,65 @@ fn render_record_payload(
                     &[],
                 )?);
             } else if !block.content.is_empty() {
-                children.push(ui.tag("pre", None, &[JsValue::from_str(&block.content)])?);
+                children.push(ui.tag(
+                    "pre",
+                    Some(&class("seekdeep-trajectory-table-resultBlockText")?),
+                    &[JsValue::from_str(&block.content)],
+                )?);
             }
         }
         return ui.tag(
             "div",
-            Some(&object(&[("className", JsValue::from_str(class_name))])?),
+            Some(&class(&format!(
+                "seekdeep-trajectory-table-resultBlocks{}{error_class}",
+                if preview {
+                    " seekdeep-trajectory-table-resultBlocksPreview"
+                } else {
+                    ""
+                }
+            ))?),
             &children,
         );
     }
+    if (input
+        && matches!(
+            record.cell.kind,
+            TrajectoryCellKind::User | TrajectoryCellKind::Context
+        ))
+        || (!input && record.cell.kind == TrajectoryCellKind::Message)
+    {
+        return ui.tag(
+            "div",
+            Some(&class(&format!(
+                "{}{error_class}",
+                if preview {
+                    "seekdeep-trajectory-table-markdownPreview"
+                } else {
+                    "seekdeep-trajectory-table-markdownPayload"
+                }
+            ))?),
+            &[markdown_text(ui, value, false)?],
+        );
+    }
+    if let Some(json) = &json {
+        return render_json(json);
+    }
+    let class_name = format!(
+        "seekdeep-trajectory-table-payload{}{}{error_class}",
+        if preview {
+            " seekdeep-trajectory-table-payloadPreview"
+        } else {
+            ""
+        },
+        if value == "No output" {
+            " seekdeep-trajectory-table-noOutputText"
+        } else {
+            ""
+        }
+    );
     ui.tag(
         "pre",
-        Some(&object(&[("className", JsValue::from_str(class_name))])?),
+        Some(&class(&class_name)?),
         &[JsValue::from_str(value)],
     )
 }
@@ -2824,7 +3074,14 @@ fn usage_rows(ui: &ReactUi, usage: Option<crate::TrajectoryUsage>) -> Result<JsV
 }
 
 fn definition_list(ui: &ReactUi, rows: &[(&str, String)]) -> Result<JsValue, JsValue> {
-    let mut children = Vec::new();
+    definition_list_with_prefix(ui, rows, Vec::new())
+}
+
+fn definition_list_with_prefix(
+    ui: &ReactUi,
+    rows: &[(&str, String)],
+    mut children: Vec<JsValue>,
+) -> Result<JsValue, JsValue> {
     for (label, value) in rows {
         children.push(ui.tag(
             "div",
@@ -3457,6 +3714,18 @@ fn kind_label(kind: TrajectoryCellKind) -> &'static str {
         TrajectoryCellKind::Message => "ASSISTANT",
         TrajectoryCellKind::Tool => "TOOL",
         TrajectoryCellKind::Subtool => "SUBTOOL",
+    }
+}
+
+const fn kind_color_class(kind: TrajectoryCellKind) -> &'static str {
+    match kind {
+        TrajectoryCellKind::System => "seekdeep-trajectory-table-systemNeutral",
+        TrajectoryCellKind::User => "seekdeep-trajectory-table-user",
+        TrajectoryCellKind::Context => "seekdeep-trajectory-table-contextGreen",
+        TrajectoryCellKind::Compacted => "seekdeep-trajectory-table-compacted",
+        TrajectoryCellKind::Message => "seekdeep-trajectory-table-assistantVioletBright",
+        TrajectoryCellKind::Tool => "seekdeep-trajectory-table-toolAmber",
+        TrajectoryCellKind::Subtool => "seekdeep-trajectory-table-subtoolAmber",
     }
 }
 

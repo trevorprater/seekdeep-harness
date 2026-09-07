@@ -9994,11 +9994,14 @@ dependencies = [
  "indexmap 2.14.0",
  "regex",
  "regress 0.11.1",
+ "ryu-js",
  "seekdeep-cordis-api-catalog",
  "serde",
  "serde_json",
  "sys-locale",
+ "tempfile",
  "thiserror 2.0.20",
+ "v8",
 ]
 
 [[package]]

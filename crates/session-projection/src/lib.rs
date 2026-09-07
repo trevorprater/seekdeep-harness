@@ -6,7 +6,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use indexmap::IndexMap;
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey, fiber::EffectHandle};
+use seekdeep_cordis::{
+    Context, CordisError, EventOptions, EventReply, Plugin, PluginFiber, ServiceKey,
+    fiber::EffectHandle,
+};
 use seekdeep_core::session::{Session, SessionEvent};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
 use serde::{Deserialize, Serialize};
@@ -635,6 +638,36 @@ fn sequence_before(next_seq: u64) -> i64 {
     i64::try_from(next_seq)
         .unwrap_or(i64::MAX)
         .saturating_sub(1)
+}
+
+/// Registers `definition` whenever a projection registry is mounted.
+///
+/// The child plugin declares `sessionProjections` as its dependency, so it
+/// activates once a registry's owning plugin is active, re-runs when the
+/// registry is replaced, and releases the registration when it is withdrawn.
+/// This mirrors the source's `ctx.inject(['sessionProjections'], …)` unit
+/// child; headless assemblies without a registry stay unaffected. Activation
+/// is asynchronous: callers that must observe the registration await
+/// [`seekdeep_cordis::PluginRegistry::await_quiescent`].
+///
+/// # Errors
+/// Returns the child plugin mount failure.
+pub fn register_when_mounted(
+    context: &Context,
+    definition: ProjectionDefinition,
+) -> Result<Arc<PluginFiber>, CordisError> {
+    let name = format!("session-projection:{}", definition.key);
+    let child = Plugin::new(name, [SESSION_PROJECTIONS.name()], move |context, _| {
+        let definition = definition.clone();
+        Box::pin(async move {
+            let registry = context.get(SESSION_PROJECTIONS).ok_or_else(|| {
+                anyhow::anyhow!("session projection child activated without sessionProjections")
+            })?;
+            registry.register(&context, definition)?;
+            Ok(())
+        })
+    });
+    context.plugin(child, Value::Null)
 }
 
 /// Registers the registry package's explained empty invariant companion.

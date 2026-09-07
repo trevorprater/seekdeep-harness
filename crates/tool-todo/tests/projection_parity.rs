@@ -34,6 +34,7 @@ impl Bench {
                 .plugin(plugin(), json!({"allowParallelInProgress": true}))
                 .expect("mount todo");
             fiber.await_settled().await.expect("settle todo");
+            context.registry().await_quiescent().await;
             Some(fiber)
         } else {
             None

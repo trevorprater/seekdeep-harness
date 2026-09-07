@@ -11,9 +11,7 @@ use seekdeep_core::session_store::SESSIONS;
 use seekdeep_sandbox::SandboxMode;
 use seekdeep_sandbox_policy::{effective_sandbox_mode, set_sandbox_mode};
 use seekdeep_schemastery::Schema;
-use seekdeep_session_projection::{
-    ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS,
-};
+use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
 use seekdeep_settings::{install_settings_section, settings_namespace};
 use seekdeep_shell::SHELL;
 use seekdeep_user_approval::{
@@ -454,25 +452,23 @@ impl PermissionPresetService {
     }
 
     fn register_children(self: &Arc<Self>, context: &Context) -> anyhow::Result<()> {
-        if let Some(projections) = context.get(SESSION_PROJECTIONS) {
-            let service = self.clone();
-            projections.register(
-                context,
-                ProjectionDefinition::new(
-                    "permissions",
-                    1,
-                    || Ok(serde_json::to_value(KnobState::default())?),
-                    move |state, event| {
-                        let state: KnobState = serde_json::from_value(state.clone())?;
-                        Ok(apply_knob_event(&state, event))
-                    },
-                    move |state| {
-                        let state: KnobState = serde_json::from_value(state.clone())?;
-                        Ok(serde_json::to_value(service.select_for(&state))?)
-                    },
-                ),
-            )?;
-        }
+        let service = self.clone();
+        seekdeep_session_projection::register_when_mounted(
+            context,
+            ProjectionDefinition::new(
+                "permissions",
+                1,
+                || Ok(serde_json::to_value(KnobState::default())?),
+                move |state, event| {
+                    let state: KnobState = serde_json::from_value(state.clone())?;
+                    Ok(apply_knob_event(&state, event))
+                },
+                move |state| {
+                    let state: KnobState = serde_json::from_value(state.clone())?;
+                    Ok(serde_json::to_value(service.select_for(&state))?)
+                },
+            ),
+        )?;
         if let Some(commands) = context.get(COMMANDS) {
             let service = self.clone();
             commands.register(

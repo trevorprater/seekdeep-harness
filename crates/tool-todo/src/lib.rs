@@ -14,9 +14,7 @@ use seekdeep_invariants::{
 };
 use seekdeep_llm::ContentBlock;
 use seekdeep_schemastery::Schema;
-use seekdeep_session_projection::{
-    ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS, SessionProjectionRegistry,
-};
+use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
 use seekdeep_tools::{
     DefineToolOptions, DefineToolOutput, GenericCallView, TOOLS, ToolCallKind, ToolCallView,
     ToolRunContext, ToolRuntime, define_tool,
@@ -308,9 +306,7 @@ pub fn todos_projection() -> ProjectionDefinition {
 ///
 /// Returns when a dependency is absent or registration fails.
 pub fn apply(context: &Context, config: Config) -> anyhow::Result<EffectHandle> {
-    if let Some(projections) = context.get::<SessionProjectionRegistry>(SESSION_PROJECTIONS) {
-        projections.register(context, todos_projection())?;
-    }
+    seekdeep_session_projection::register_when_mounted(context, todos_projection())?;
     let tools: Arc<ToolRuntime> = context
         .get(TOOLS)
         .ok_or_else(|| anyhow::anyhow!("tool-todo requires tools"))?;

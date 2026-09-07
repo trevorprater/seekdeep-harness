@@ -39,6 +39,7 @@ struct RouteOnly(Arc<AtomicUsize>);
 enum FixtureMode {
     RouteOnly,
     MissingCredential,
+    Replay,
 }
 
 #[async_trait]
@@ -100,7 +101,7 @@ fn write_overlay(home: &Path, data: &Path, mode: FixtureMode) -> anyhow::Result<
         serde_json::to_string_pretty(&json!([
             {"id":"webserver","config":{"host":"127.0.0.1","port":0}},
             {"id":"web-runtime","config":{"printUrl":false,"surfaceContext":true}},
-            {"id":"llm-deepseek","disabled":mode == FixtureMode::RouteOnly},
+            {"id":"llm-deepseek","disabled":mode != FixtureMode::MissingCredential},
             {"id":"agent-instructions","disabled":true},
             {"id":"session-title-llm","disabled":true},
             {"id":"session-telemetry-otel","disabled":true},
@@ -407,6 +408,112 @@ fn isolated_environment(home: &Path) -> LaunchEnvironmentSnapshot {
     }])
 }
 
+fn idle_fixture_route(context: &Context, server: &WebServer) -> anyhow::Result<WebRegistration> {
+    let agents = context
+        .get(seekdeep_agent::AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
+    let sessions = context
+        .get(SESSIONS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Sessions"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/idle".to_owned(),
+        handler: Arc::new(move |request| {
+            let agents = agents.clone();
+            let sessions = sessions.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "idle barrier requires POST"
+                );
+                let id = SessionId::new(
+                    request
+                        .uri()
+                        .path()
+                        .strip_prefix("/fixture/idle/")
+                        .filter(|id| !id.is_empty())
+                        .ok_or_else(|| anyhow::anyhow!("idle Session id absent"))?,
+                );
+                let agent = agents
+                    .get(&id)
+                    .ok_or_else(|| anyhow::anyhow!("idle Agent absent"))?;
+                agent.when_idle()?.await?;
+                let session = sessions
+                    .get(&id)
+                    .ok_or_else(|| anyhow::anyhow!("idle Session absent"))?;
+                sessions.flush(&session).await?;
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&session.events())?,
+                ))
+            })
+        }),
+    })
+}
+
+fn install_fixture_replay(
+    context: &Context,
+    file: &Path,
+) -> anyhow::Result<seekdeep_llm_replay::ReplayHandle> {
+    seekdeep_llm_replay::install_llm_replay(
+        context,
+        seekdeep_llm_replay::ReplayConfig {
+            file: file.canonicalize()?,
+            override_file: None,
+            child_files: Vec::new(),
+            providers: serde_json::from_value(json!([{
+                "id":"deepseek-official","name":"DeepSeek",
+                "models":[{"id":"deepseek-v4-flash","name":"DeepSeek-V4-Flash","contextWindow":128_000}]
+            }]))?,
+            pace_ms: 5.0,
+        },
+    )
+}
+
+async fn finish_fixture(
+    application: seekdeep::profile_boot::ProfileBootApplication,
+    replay: Option<seekdeep_llm_replay::ReplayHandle>,
+    calls: &AtomicUsize,
+    data: &Path,
+) -> anyhow::Result<()> {
+    let mut errors = Vec::new();
+    let mut audit = json!({"calls":calls.load(Ordering::SeqCst)});
+    if let Some(replay) = replay {
+        let consumed = replay.assert_consumed();
+        audit["replayConsumed"] = json!(consumed.is_ok());
+        if let Err(error) = consumed {
+            errors.push(error);
+        }
+        if let Err(error) = replay.dispose().await {
+            errors.push(error);
+        }
+    }
+    if let Err(error) = application.dispose().await {
+        errors.push(error);
+    }
+    if let Err(error) = std::fs::write(
+        data.join("model-call-audit.json"),
+        serde_json::to_vec(&audit)?,
+    ) {
+        errors.push(error.into());
+    }
+    if calls.load(Ordering::SeqCst) != 0 {
+        errors.push(anyhow::anyhow!(
+            "keyless Web scenario made a non-replay model call"
+        ));
+    }
+    anyhow::ensure!(
+        errors.is_empty(),
+        "fixture teardown: {}",
+        errors
+            .iter()
+            .map(|error| format!("{error:#}"))
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+    Ok(())
+}
+
 fn install_keyless_routes(
     context: &Context,
     calls: &Arc<AtomicUsize>,
@@ -424,7 +531,13 @@ fn install_keyless_routes(
     let calls = calls.clone();
     llm.register_stream_middleware(
         context,
-        Arc::new(move |_, _| {
+        Arc::new(move |options, next| {
+            if mode == FixtureMode::Replay
+                && options.provider.as_str() == "deepseek-official"
+                && options.model.as_str() == "deepseek-v4-flash"
+            {
+                return next(options);
+            }
             calls.fetch_add(1, Ordering::SeqCst);
             LlmStream::new(futures::stream::once(async {
                 anyhow::bail!("keyless Web fixture refuses model calls on every provider")
@@ -439,8 +552,8 @@ fn install_keyless_routes(
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     anyhow::ensure!(
-        matches!(arguments.len(), 3..=7),
-        "expected harness-home, workspace, seed id, optional isolated data root, mode, extra overlay, and seed log"
+        matches!(arguments.len(), 3..=8),
+        "expected harness-home, workspace, seed id, optional isolated data root, mode, extra overlay, seed log, and replay log"
     );
     let mode = match arguments
         .get(4)
@@ -449,8 +562,13 @@ async fn main() -> anyhow::Result<()> {
     {
         None | Some("route-only") => FixtureMode::RouteOnly,
         Some("missing-credential") => FixtureMode::MissingCredential,
+        Some("replay") => FixtureMode::Replay,
         Some(value) => anyhow::bail!("unknown keyless fixture mode {value:?}"),
     };
+    anyhow::ensure!(
+        (mode == FixtureMode::Replay) == (arguments.len() == 8),
+        "replay mode requires exactly one replay log"
+    );
     let home = PathBuf::from(&arguments[0]).canonicalize()?;
     let workspace = PathBuf::from(&arguments[1]).canonicalize()?;
     let seed = SessionId::new(arguments[2].to_string_lossy());
@@ -491,10 +609,24 @@ async fn main() -> anyhow::Result<()> {
     let calls = Arc::new(AtomicUsize::new(0));
     let context = application.context();
     install_keyless_routes(context, &calls, mode)?;
+    let replay = if let Some(path) = arguments.get(7) {
+        match install_fixture_replay(context, Path::new(path)) {
+            Ok(replay) => Some(replay),
+            Err(error) => {
+                application.dispose().await?;
+                return Err(error);
+            }
+        }
+    } else {
+        None
+    };
     let server = context
         .get(WEB_SERVER)
         .ok_or_else(|| anyhow::anyhow!("Web profile has no server"))?;
     let mut settings_routes = settings_fixture_routes(context, &server)?;
+    if replay.is_some() {
+        settings_routes.push(idle_fixture_route(context, &server)?);
+    }
     if let Some(path) = arguments.get(6) {
         settings_routes.push(seed_log_fixture_route(
             context,
@@ -511,14 +643,5 @@ async fn main() -> anyhow::Result<()> {
     for route in settings_routes {
         route.dispose();
     }
-    application.dispose().await?;
-    std::fs::write(
-        data.join("model-call-audit.json"),
-        serde_json::to_vec(&json!({"calls":calls.load(Ordering::SeqCst)}))?,
-    )?;
-    anyhow::ensure!(
-        calls.load(Ordering::SeqCst) == 0,
-        "keyless Web scenario made a model call"
-    );
-    Ok(())
+    finish_fixture(application, replay, &calls, &data).await
 }

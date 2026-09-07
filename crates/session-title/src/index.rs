@@ -22,9 +22,7 @@ use seekdeep_cordis::{
 use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
 use seekdeep_core::session_store::{SESSIONS, SessionStore};
 use seekdeep_llm::{AbortSignal, GenerateOptions, LLM, is_agent_loop_request};
-use seekdeep_session_projection::{
-    ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS,
-};
+use seekdeep_session_projection::{ProjectionDefinition, ProjectionTransition};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::{Notify, oneshot};
@@ -543,10 +541,11 @@ impl SessionTitleService {
         Ok(())
     }
 
+    /// The title projection unit: a pure last-wins fold of `session/title`
+    /// events serving the plain title string list rows read. The unit child
+    /// activates only when a projection registry is composed, so headless
+    /// assemblies stay unaffected and later-mounted registries still receive it.
     fn register_projection(context: &Context) -> anyhow::Result<()> {
-        let Some(registry) = context.get(SESSION_PROJECTIONS) else {
-            return Ok(());
-        };
         let definition = ProjectionDefinition::new(
             "title",
             1,
@@ -565,7 +564,7 @@ impl SessionTitleService {
             },
             |state: &Value| Ok(state.clone()),
         );
-        registry.register(context, definition)?;
+        seekdeep_session_projection::register_when_mounted(context, definition)?;
         Ok(())
     }
 

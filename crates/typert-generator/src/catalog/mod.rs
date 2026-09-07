@@ -752,3 +752,101 @@ impl SignatureNames<'_, '_> {
         Ok(())
     }
 }
+
+/// One workspace projection: the analyzed face, its lexical declaration index,
+/// and the validated catalog model.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CordisCatalogProjection {
+    /// The analyzed target face.
+    pub face: FaceModel,
+    /// Top-level exported declarations indexed for ambiguity checks.
+    pub source_declarations: Vec<SourceDeclarationModel>,
+    /// The validated catalog model.
+    pub model: CordisCatalogModel,
+}
+
+/// Analyzes the target face once and projects it through the catalog policy.
+///
+/// Discovery, bounded batched analysis, and the declaration index share one
+/// compiler memo, exactly as the source's `projectCordisCatalog` does.
+///
+/// # Errors
+/// Propagates analysis failures, a face the workspace does not produce, and
+/// catalog documentation violations.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn project_cordis_catalog(
+    scan_root: &std::path::Path,
+    policy: &CordisCatalogPolicy,
+    target_face: TypertFace,
+) -> Result<CordisCatalogProjection> {
+    use crate::analyzer::{WorkspaceAnalyzer, WorkspaceAnalyzerOptions, WorkspaceCaches};
+
+    let caches = std::rc::Rc::new(std::cell::RefCell::new(WorkspaceCaches::for_workspace(
+        scan_root,
+    )?));
+    let options = || WorkspaceAnalyzerOptions {
+        root: scan_root.to_owned(),
+        faces: Some(vec![target_face]),
+        check_diagnostics: Some(false),
+        caches: Some(caches.clone()),
+        ..Default::default()
+    };
+    let discovery = WorkspaceAnalyzer::new(options())?.discover_packages()?;
+    let packages = discovery
+        .into_iter()
+        .filter(|candidate| candidate.faces.contains(&target_face))
+        .map(|candidate| candidate.package)
+        .collect::<Vec<_>>();
+    let workspace = WorkspaceAnalyzer::new(WorkspaceAnalyzerOptions {
+        packages: Some(packages),
+        ..options()
+    })?
+    .analyze_in_batches(8)?;
+    let Some(face) = workspace
+        .faces
+        .into_iter()
+        .find(|candidate| candidate.face == target_face)
+    else {
+        return Err(TypertGeneratorError::Workspace(format!(
+            "gen-cordis-catalog: Typert produced no {} face",
+            target_face.as_str()
+        )));
+    };
+    let source_declarations = WorkspaceAnalyzer::new(options())?.index_source_declarations()?;
+    let model = CordisCatalogProjector::new(&face, &source_declarations, policy).project()?;
+    Ok(CordisCatalogProjection {
+        face,
+        source_declarations,
+        model,
+    })
+}
+
+/// Collects all modeled events for relationship-document consumers.
+///
+/// # Errors
+/// Propagates projection failures.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn collect_events(
+    scan_root: &std::path::Path,
+    policy: &CordisCatalogPolicy,
+) -> Result<Vec<EventEntry>> {
+    Ok(project_cordis_catalog(scan_root, policy, TypertFace::Host)?
+        .model
+        .events)
+}
+
+/// Collects all modeled services for relationship-document consumers.
+///
+/// # Errors
+/// Propagates projection failures.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn collect_services(
+    scan_root: &std::path::Path,
+    policy: &CordisCatalogPolicy,
+) -> Result<Vec<ServiceEntry>> {
+    Ok(project_cordis_catalog(scan_root, policy, TypertFace::Host)?
+        .model
+        .services)
+}

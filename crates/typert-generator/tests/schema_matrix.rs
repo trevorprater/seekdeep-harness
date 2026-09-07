@@ -92,7 +92,7 @@ fn generated_schemas_execute_the_source_acceptance_and_rejection_cases() {
     let mut child = Command::new("node")
         .current_dir(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../packages/typert/generator"),
+                .join("../../support/browser-dependencies"),
         )
         .args(["-e", EXECUTE])
         .stdin(Stdio::piped())

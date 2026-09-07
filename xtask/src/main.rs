@@ -15,11 +15,14 @@ use serde::{Deserialize, Serialize};
 mod client_test_runtime_built_smoke_driver;
 mod remote_built_smoke_driver;
 mod remote_contracts;
+mod typert_corpus;
 mod web_assembled;
 mod web_assembled_driver;
 mod web_composer_driver;
+mod web_details_driver;
 mod web_model_selection_driver;
 mod web_models_settings_driver;
+mod web_navigation_driver;
 mod web_onboarding_driver;
 mod web_plugin_settings_driver;
 mod web_scrollbars_driver;
@@ -83,6 +86,24 @@ enum Command {
     WebScrollbars {
         #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
         source: PathBuf,
+    },
+    /// Run the pinned navigation assertions against the built Client and real Rust Host.
+    WebNavigation {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Verify details-panel ownership through a real replayed Rust Agent turn.
+    WebDetails {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+    },
+    /// Run the pinned Typert generator spec corpus against the Rust generator runner.
+    TypertCorpus {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Optional Vitest name filter for a focused run.
+        #[arg(long)]
+        filter: Option<String>,
     },
     /// Verify the built Web application against persisted source history and a real Rust Host.
     WebAssembled {
@@ -312,6 +333,9 @@ fn main() -> anyhow::Result<()> {
         Command::WebStartup { source } => web_settings::run_startup(&source),
         Command::WebComposer { source } => web_settings::run_composer(&source),
         Command::WebScrollbars { source } => web_settings::run_scrollbars(&source),
+        Command::WebNavigation { source } => web_settings::run_navigation(&source),
+        Command::WebDetails { source } => web_settings::run_details(&source),
+        Command::TypertCorpus { source, filter } => typert_corpus::run(&source, filter.as_deref()),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
         Command::PersistenceCatalog { source, check } => {

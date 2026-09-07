@@ -54,6 +54,18 @@ pub(super) fn run_scrollbars(source: &Path) -> anyhow::Result<()> {
     )
 }
 
+pub(super) fn run_navigation(source: &Path) -> anyhow::Result<()> {
+    run_case(
+        source,
+        "web-navigation",
+        super::web_navigation_driver::DRIVER,
+    )
+}
+
+pub(super) fn run_details(source: &Path) -> anyhow::Result<()> {
+    run_case(source, "web-details", super::web_details_driver::DRIVER)
+}
+
 fn run_case(source: &Path, name: &str, script: &str) -> anyhow::Result<()> {
     super::verify_source(source)?;
     let metadata = super::cargo_metadata()?;

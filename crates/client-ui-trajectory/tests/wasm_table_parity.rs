@@ -183,7 +183,7 @@ export function makeTableBench(kind = 'ordinary') {
   return {
     react,
     React: react.React,
-    primitives: { Tooltip: 'Tooltip', MarkdownText: 'MarkdownText', JsonTree: 'JsonTree' },
+    primitives: { Tooltip: 'Tooltip', MarkdownText: 'MarkdownText', JsonTree: 'JsonTree', IconChevronRightOutline14: 'IconChevronRightOutline14' },
     props,
     calls,
     resolveLoad,
@@ -463,6 +463,37 @@ fn selection_tokens_timing_and_prepend_stability_are_live() {
         Some(false)
     );
     assert!(!tableFindText(&shifted_render, "Request #2").is_undefined());
+}
+
+#[wasm_bindgen_test]
+fn tool_summary_sections_preserve_headings_and_tab_navigation() {
+    let bench = makeTableBench("ordinary");
+    let component = component(&bench);
+    let first = settled_render(&bench, &component);
+    let tool = tableRowsContaining(&first, "false").get(0);
+    tableInvoke(&tool, "onClick", &JsValue::UNDEFINED);
+    let summary = tableRender(&bench, &component);
+    let headings = tableFindAll(
+        &summary,
+        "className",
+        &JsValue::from_str("seekdeep-trajectory-table-overviewHeading"),
+    );
+    assert_eq!(
+        headings
+            .iter()
+            .map(|heading| tableText(&heading))
+            .collect::<Vec<_>>(),
+        ["Payload", "Result", "Schema", "Timing"]
+    );
+    let payload = tableFind(
+        &headings.get(0),
+        "className",
+        &JsValue::from_str("seekdeep-trajectory-table-overviewTitle"),
+    );
+    tableInvoke(&payload, "onClick", &JsValue::UNDEFINED);
+    let rendered = tableRender(&bench, &component);
+    let tab = tableFindText(&rendered, "Payload");
+    assert_eq!(tableProp(&tab, "aria-selected").as_bool(), Some(true));
 }
 
 #[wasm_bindgen_test(async)]

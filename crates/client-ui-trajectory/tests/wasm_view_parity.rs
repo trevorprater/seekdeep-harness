@@ -154,6 +154,7 @@ export function makeViewBench(kind = 'full') {
     primitives: {
       Tooltip: 'Tooltip', MarkdownText: 'MarkdownText', JsonTree: 'JsonTree',
       IconSearchOutline16: 'IconSearchOutline16',
+      IconChevronRightOutline14: 'IconChevronRightOutline14',
     },
     duration: false,
     session,
