@@ -969,7 +969,10 @@ fn queue_injected(context: &JsValue, session_id: &JsValue) -> Result<JsValue, Js
     if conversation.is_undefined() {
         return Err(js_sys::Error::new("queue dock: conversation service unavailable").into());
     }
-    let update_conversation = conversation.clone();
+    // Source: `actx.get('conversation')` is scope-bound by the Cordis service tracker; the Rust
+    // controller binds the session scope explicitly, exactly like the composer's cancel path.
+    let update_conversation =
+        call_method(&conversation, "forContext", std::slice::from_ref(&actx))?;
     let update_queue = Closure::wrap(Box::new(
         move |item_id: JsValue, action: JsValue| -> Result<JsValue, JsValue> {
             required_function(&update_conversation, "updateQueue", "conversation service")?

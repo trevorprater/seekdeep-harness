@@ -465,6 +465,26 @@ fn session_fixture_route(context: &Context, server: &WebServer) -> anyhow::Resul
                     .strip_prefix("/fixture/session/")
                     .filter(|id| !id.is_empty())
                     .ok_or_else(|| anyhow::anyhow!("fixture session id absent"))?;
+                // Source: `scaffold.ctx.sessions.list()[i].append(type, data)` on a live Session.
+                if let Some(id) = id.strip_suffix("/append") {
+                    anyhow::ensure!(
+                        request.method().as_str() == "POST",
+                        "fixture session append requires POST"
+                    );
+                    let session = sessions
+                        .get(&SessionId::new(id))
+                        .ok_or_else(|| anyhow::anyhow!("fixture session absent"))?;
+                    let body = json_body(request).await?;
+                    session.append(
+                        required_str(&body, "type")?,
+                        body.get("data").cloned().unwrap_or(json!({})),
+                        seekdeep_core::session::AppendOptions::default(),
+                    )?;
+                    return Ok(response(
+                        200_u16.try_into()?,
+                        serde_json::to_vec(&session.events())?,
+                    ));
+                }
                 let id = SessionId::new(id);
                 let session = if request.method().as_str() == "POST" {
                     sessions.create(&owner, Some(id), CreateSessionOptions::default())?
@@ -706,7 +726,7 @@ fn install_fixture_replay(
     seekdeep_llm_replay::install_llm_replay(
         context,
         seekdeep_llm_replay::ReplayConfig {
-            file: file.canonicalize()?,
+            file: file.to_path_buf(),
             override_file,
             child_files,
             providers: serde_json::from_value(json!([{
@@ -848,11 +868,15 @@ fn replay_files(arguments: &[std::ffi::OsString]) -> anyhow::Result<Option<Repla
         .skip(9)
         .map(|value| Path::new(value).canonicalize())
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Some((
-        Path::new(path).canonicalize()?,
-        override_file,
-        child_files,
-    )))
+    // Source: an override-only replay names a fixture path that never exists; the override
+    // document carries every script.
+    let fixture = Path::new(path);
+    let fixture = if fixture.exists() {
+        fixture.canonicalize()?
+    } else {
+        std::path::absolute(fixture)?
+    };
+    Ok(Some((fixture, override_file, child_files)))
 }
 
 /// Routes standing in for the source scaffold's in-process `ctx` calls (tools, jobs,

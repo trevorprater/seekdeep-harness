@@ -33,14 +33,15 @@ struct UsageValue {
     reasoning_tokens: Option<u64>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RetryValue {
     message: String,
     retry: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     max_retries: Option<u64>,
-    delay_ms: u64,
+    /// The source's jittered backoff is a plain number, not an integer.
+    delay_ms: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -470,7 +471,7 @@ fn retry_state(
         max_retries: (data.get("mode").and_then(Value::as_str) == Some("normal"))
             .then(|| data.get("maxRetries").and_then(Value::as_u64))
             .flatten(),
-        delay_ms: required_u64(data, "delayMs")?,
+        delay_ms: required_number(data, "delayMs")?,
     });
     Ok(state)
 }
@@ -853,6 +854,13 @@ fn required_i64(value: &Value, key: &str) -> Result<i64, ConversationAssemblerEr
     value
         .get(key)
         .and_then(Value::as_i64)
+        .ok_or_else(|| ConversationAssemblerError::new(format!("assistant event omitted {key}")))
+}
+
+fn required_number(value: &Value, key: &str) -> Result<f64, ConversationAssemblerError> {
+    value
+        .get(key)
+        .and_then(Value::as_f64)
         .ok_or_else(|| ConversationAssemblerError::new(format!("assistant event omitted {key}")))
 }
 

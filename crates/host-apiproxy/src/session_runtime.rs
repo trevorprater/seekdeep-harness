@@ -1207,6 +1207,22 @@ impl SessionApiProxyRuntime {
                             view,
                         },
                     ));
+                    // Source: every inbox splice broadcasts the complete pending queue of the
+                    // live Agent owning this exact Session.
+                    if event.event_type == "agent/inbox/spliced"
+                        && let Some(agent) = runtime.agents.get(session.id())
+                        && Arc::ptr_eq(agent.session(), &session)
+                    {
+                        match queue_items(&agent, Some(&event.data)) {
+                            Ok(items) => {
+                                let _ = event_sender
+                                    .send(queue_envelope(session.id().clone(), items));
+                            }
+                            Err(error) => {
+                                tracing::warn!(session = %session.id(), %error, "API Proxy could not project the pending queue");
+                            }
+                        }
+                    }
                     Ok(EventReply::Undefined)
                 },
                 EventOptions::default(),
@@ -1418,6 +1434,19 @@ impl SessionApiProxyRuntime {
                     let views = job_views(jobs.list(agent.as_ref()));
                     if !views.is_empty() {
                         baseline.push(job_envelope(session.id().clone(), views));
+                    }
+                }
+                // Queue snapshot baseline: a reconnecting client rebuilds its queue view from
+                // these frames alone (source precedent: pending questions).
+                if let Some(agent) = self.agents.get(session.id())
+                    && Arc::ptr_eq(agent.session(), &session)
+                    && agent.inbox().has_pending()
+                {
+                    match queue_items(&agent, None) {
+                        Ok(items) => baseline.push(queue_envelope(session.id().clone(), items)),
+                        Err(error) => {
+                            tracing::warn!(session = %session.id(), %error, "API Proxy could not project the pending queue baseline");
+                        }
                     }
                 }
             }
@@ -2159,6 +2188,83 @@ fn subscribed_envelope(session: &Session) -> RpcRequest<MuxFrame> {
                 .saturating_sub(1),
         },
     )
+}
+
+fn queue_envelope(
+    session_id: SessionId,
+    items: Vec<crate::api::events::QueuedInboxItem>,
+) -> RpcRequest<MuxFrame> {
+    RpcRequest::new(
+        next_session_frame_id(),
+        MuxFrame::SessionQueue { session_id, items },
+    )
+}
+
+/// The complete pending queue of one live Agent, with the just-committed splice applied: the
+/// `agent/inbox/spliced` event is appended before the inbox state changes (source order).
+fn queue_items(
+    agent: &Agent,
+    splice: Option<&Value>,
+) -> anyhow::Result<Vec<crate::api::events::QueuedInboxItem>> {
+    use crate::api::events::{QueuePlacement, QueuedInboxItem, WireMessage};
+    let project =
+        |target: &str, messages: Vec<seekdeep_llm::UserMessage>| -> anyhow::Result<Vec<Value>> {
+            let mut values = messages
+                .iter()
+                .map(serde_json::to_value)
+                .collect::<Result<Vec<_>, _>>()?;
+            if let Some(splice) =
+                splice.filter(|splice| splice.get("target").and_then(Value::as_str) == Some(target))
+            {
+                let index = |key: &str| {
+                    splice
+                        .get(key)
+                        .and_then(Value::as_u64)
+                        .map_or(0, |value| usize::try_from(value).unwrap_or(usize::MAX))
+                };
+                let start = index("start").min(values.len());
+                let end = start
+                    .saturating_add(index("removedCount"))
+                    .min(values.len());
+                let inserted = splice
+                    .get("inserted")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                values.splice(start..end, inserted);
+            }
+            Ok(values)
+        };
+    let item = |value: &Value, placement: QueuePlacement| -> anyhow::Result<QueuedInboxItem> {
+        let id = value
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("pending inbox message has no id"))?;
+        Ok(QueuedInboxItem {
+            id: seekdeep_llm::MessageId::new(id),
+            placement,
+            message: serde_json::from_value::<WireMessage>(value.clone())?,
+        })
+    };
+    let mut items = Vec::new();
+    for value in project("next-turn", agent.inbox().next_turn())? {
+        items.push(item(&value, QueuePlacement::Queued)?);
+    }
+    for value in project("next-step", agent.inbox().next_step())? {
+        // Only user-origin messages are steering; injected context is not a user action.
+        let placement = if value
+            .get("source")
+            .and_then(|source| source.get("kind"))
+            .and_then(Value::as_str)
+            == Some("user")
+        {
+            QueuePlacement::Steering
+        } else {
+            QueuePlacement::Context
+        };
+        items.push(item(&value, placement)?);
+    }
+    Ok(items)
 }
 
 fn job_envelope(session_id: SessionId, jobs: Vec<JobView>) -> RpcRequest<MuxFrame> {

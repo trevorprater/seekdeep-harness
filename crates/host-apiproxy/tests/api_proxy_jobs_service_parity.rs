@@ -7,7 +7,9 @@ use std::sync::{
 
 use futures::{FutureExt as _, StreamExt as _, future::BoxFuture};
 use parking_lot::Mutex;
-use seekdeep_agent::{Agent, AgentOptions, AgentRegistry, Inbox, NoopInboxNotifications};
+use seekdeep_agent::{
+    Agent, AgentOptions, AgentRegistry, Inbox, InboxTarget, NoopInboxNotifications,
+};
 use seekdeep_client_connection::{HttpResponse, RpcResult};
 use seekdeep_cordis::{Context, fiber::EffectHandle};
 use seekdeep_core::{
@@ -24,7 +26,7 @@ use seekdeep_host_apiproxy::{
 };
 use seekdeep_jobs::{JobHooks, JobOutcome, JobRegistry, JobStart, JobTerminalStatus};
 use seekdeep_jobs_local::{Config as JobsConfig, LocalJobRegistry};
-use seekdeep_llm::AbortSignal;
+use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
 use seekdeep_scope::{ScopeKey, create_scope};
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
@@ -316,5 +318,78 @@ async fn unowned_changes_fan_out_and_new_sessions_receive_the_existing_unowned_s
     let (third, jobs) = next_jobs(&mut mux).await;
     assert_eq!(third, SessionId::new("third"));
     assert_eq!(jobs[0]["label"], "visible to every caller");
+    signal.abort();
+}
+
+async fn next_queue(stream: &mut ApiDownlinkStream<MuxFrame>) -> (SessionId, Vec<Value>) {
+    loop {
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(2), stream.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        if let MuxFrame::SessionQueue { session_id, items } = frame.payload {
+            return (
+                session_id,
+                items
+                    .into_iter()
+                    .map(|item| serde_json::to_value(item).unwrap())
+                    .collect(),
+            );
+        }
+    }
+}
+
+// Source: every `agent/inbox/spliced` broadcasts the live Agent's complete pending queue
+// (the splice applied to the pre-splice lists, since the event precedes the state change), and
+// a new mux subscription replays the queue of every session whose inbox holds pending work.
+#[tokio::test]
+async fn inbox_splices_broadcast_the_pending_queue_and_attach_replays_it() {
+    let harness = Harness::new();
+    let agent = harness.agent("queued");
+    let signal = AbortSignal::default();
+    let mut mux = harness.mux(signal.clone());
+    let message = UserMessage::new(
+        vec![ContentBlock::Text {
+            text: "Queue item to edit".to_owned(),
+        }],
+        MessageSource::user(),
+    );
+    agent
+        .inbox()
+        .append(InboxTarget::NextTurn, message.clone())
+        .unwrap();
+    let (session_id, items) = next_queue(&mut mux).await;
+    assert_eq!(session_id.as_str(), "queued");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["placement"], "queued");
+    assert_eq!(items[0]["id"], json!(message.id().as_str()));
+    assert_eq!(
+        items[0]["message"]["content"][0]["text"],
+        "Queue item to edit"
+    );
+    let steer = UserMessage::new(
+        vec![ContentBlock::Text {
+            text: "steer now".to_owned(),
+        }],
+        MessageSource::user(),
+    );
+    agent.inbox().append(InboxTarget::NextStep, steer).unwrap();
+    let (_, items) = next_queue(&mut mux).await;
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| item["placement"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>(),
+        ["queued", "steering"]
+    );
+    signal.abort();
+
+    // A fresh subscription replays the pending queue as its baseline.
+    let signal = AbortSignal::default();
+    let mut fresh = harness.mux(signal.clone());
+    let (session_id, items) = next_queue(&mut fresh).await;
+    assert_eq!(session_id.as_str(), "queued");
+    assert_eq!(items.len(), 2);
     signal.abort();
 }

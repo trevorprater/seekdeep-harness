@@ -24916,7 +24916,15 @@
     {
       "source": "apps/web/tests/live-interactions.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-trajectory/src/assistant_definition.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all five pinned replay cases run unchanged in Chromium, each booting its own keyless Rust Host from the case's launch helper with the case-authored replay sidecar (hang with readyFile, throw AUTH, patched SERVER throw plus the fixture's own derived success); mid-stream cancel from the parked hang with the loading and cancel goldens, the non-retryable AUTH failure with redacted key, the trajectory request marker geometry, and llm-retry recovery with the retry golden are verified from the Host session listing; fixed the trajectory Assistant definition rejecting the source's fractional retry delayMs, which silently dropped every later boundary event in the browser; replay fully consumed per Host and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/markdown-cjk-strong.e2e.ts",
@@ -25216,7 +25224,16 @@
     {
       "source": "apps/web/tests/queue-actions.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/host-apiproxy/src/session_runtime.rs",
+        "crates/client-ui-conversation/src/browser_queue_dock.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all three pinned replay cases run unchanged in Chromium, each booting its own keyless Rust Host with the case-authored override script over the live-interactions fixture; the collapsed, editing, ui, preserved, and layout goldens, the exact-occurrence edit and remove, the 640px dock insets against the composer's dock-inset variable, Queue preserved across stop and drained FIFO with the exact durable user prompts, the todo/write append through the Host session-append fixture route, and the Todo/Goal/Queue card column geometry are verified; fixed the api-proxy never broadcasting session/queue frames (inbox splices and the attach baseline, with a parity test) and the queue dock losing its session scope on updates; replay fully consumed per Host and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/remote-welcome.e2e.ts",
@@ -25341,7 +25358,14 @@
     {
       "source": "apps/web/tests/skill-user-invoke.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: both pinned source cases run unchanged in Chromium against a real Rust Host replaying an override-only script (the fixture path never exists; the override document carries the reply) with a user-only skill seeded under the workspace's .agents/skills; the slash menu lists the model-hidden skill, the /name args gesture bubble, the skill-named context-injection row whose expanded body carries the canonical skill_content block without the user's text, the replayed answer, and the conversation golden are verified; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/smoke-real.e2e.ts",

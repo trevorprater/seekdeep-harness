@@ -221,7 +221,7 @@ fn retry_resets_blocks_retains_usage_and_first_token_then_interruption_closes_re
                     "llm/retry",
                     json!({
                         "turn": 1, "step": 1, "mode": "normal", "retry": 1,
-                        "maxRetries": 2, "delayMs": 25,
+                        "maxRetries": 2, "delayMs": 25.5,
                         "failure": {"code": "TRANSPORT", "message": "temporary failure"},
                     }),
                 ),
@@ -260,7 +260,8 @@ fn retry_resets_blocks_retains_usage_and_first_token_then_interruption_closes_re
     assert_eq!(request["error"], "temporary failure");
     assert_eq!(request["retry"], 1);
     assert_eq!(request["maxRetries"], 2);
-    assert_eq!(request["retryDelayMs"], 25);
+    // The source's jittered backoff is fractional; the projection keeps the number as recorded.
+    assert_eq!(request["retryDelayMs"], 25.5);
     assert_eq!(request["completedAt"], 1_700_000_000_008_i64);
     assert_eq!(
         request["usage"],

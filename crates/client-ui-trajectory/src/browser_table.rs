@@ -2387,6 +2387,7 @@ fn markdown_text(ui: &ReactUi, text: &str, preview: bool) -> Result<JsValue, JsV
     )
 }
 
+#[allow(clippy::too_many_lines)]
 fn render_record_payload(
     ui: &ReactUi,
     record: &TrajectoryTableRecord,
