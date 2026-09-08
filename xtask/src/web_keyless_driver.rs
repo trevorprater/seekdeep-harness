@@ -12,7 +12,7 @@ import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { mkdirSync, existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, readFile, writeFile, readdir } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, readFile, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 const [source, host, world, output] = process.argv.slice(2), require = createRequire(join(source, 'apps/web/package.json'));
@@ -594,6 +594,8 @@ async function describeScenario(name, options) {
     // `const x = init` evaluates once per describe against the same prelude.
     const initializers = block.variables.filter(variable => variable.initializer !== undefined);
     for (const variable of block.variables) shared[variable.name] = undefined;
+    // Module-level `let` state assigned from hooks (a suite-wide browser) lives in the same scope.
+    for (const name of options.moduleLets ?? []) shared[name] = undefined;
     if (initializers.length) Object.assign(shared, compile(prelude + '\nreturn {' + initializers.map(variable => variable.name + ': (' + variable.initializer + ')').join(', ') + '};', values));
     const tripwireProxy = new Proxy({}, { get: (_, key) => (shared.tripwire ?? { warnings: [], pageErrors: [] })[key] });
     const pageShim = { __console: () => pageConsoles.get(shared.page) ?? [], isClosed: () => (shared.page ? shared.page.isClosed() : true), evaluate: (...args) => shared.page ? shared.page.evaluate(...args) : Promise.reject(new Error('no page')), locator: (...args) => shared.page.locator(...args), screenshot: (...args) => shared.page ? shared.page.screenshot(...args) : Promise.resolve() };
@@ -873,6 +875,17 @@ const SCENARIOS = {
     const dir = join(TESTS, 'snapshots', 'trajectory-virtualization');
     await describeScenario('trajectory-virtualization', { describes: 1, cases: 1, constants: ['SESSION_ID', 'FIXTURE', 'MAX_MOUNTED_ROWS', 'GEOMETRY_TOLERANCE', 'STREAM_MARKER', 'STREAM_TEXT', 'STREAM_CHUNKS', 'openSeed', 'openTrajectory', 'logicalRows', 'mountedRows', 'geometry', 'nextPaint', 'scrollToRatio', 'firstVisibleRow', 'rowTop', 'loadToFirstTurn'], goldens: ['load-more'],
       values: { SNAPSHOT_DIR: dir, createChatScrollFixture: chatScrollFixtureModule.createChatScrollFixture, seedSession: seedSessionShim } });
+  },
+  async 'chat-continuous-conversation'() {
+    await describeScenario('chat-continuous-conversation', { describes: 1, cases: 1, constants: ['TURN_COUNT', 'TOOL_TURNS', 'STREAM_PACE_MS', 'suffix', 'longFinalPrompt', 'turnSpec', 'textStream', 'toolStream', 'replayScript', 'userText', 'assistantText', 'toolResultText', 'messageKey', 'assistantKey'],
+      values: { CallId: llmModule.CallId, conversationContextKey: compile(declarations(supportAst, ['conversationContextKey']) + '\nreturn conversationContextKey;', {}), SessionId: id => id } });
+  },
+  async 'chat-scroll-contract'() {
+    // Each case launches its own scroll world (Host + page) through the scaffold shims and
+    // closes it; the suite-wide Chromium is module-level `let` state assigned from beforeAll.
+    await describeScenario('chat-scroll-contract', { describes: 1, cases: 5, moduleLets: ['browser'],
+      constants: ['HISTORY_SESSION_ID', 'TOOL_SESSION_ID', 'RESTORE_SESSION_A_ID', 'RESTORE_SESSION_B_ID', 'REPLAY_CONTEXT_WINDOW', 'STREAM_PACE_MS', 'GEOMETRY_TOLERANCE', 'LIVE_TEXT_PROMPT', 'LIVE_TEXT_FIRST', 'LIVE_TEXT_DONE', 'LIVE_TOOL_PROMPT', 'LIVE_TOOL_CALL_ID', 'LIVE_TOOL_RESULT', 'LIVE_TOOL_FIRST', 'LIVE_TOOL_DONE', 'TOOL_READY_FILE', 'TOOL_RELEASE_FILE', 'INPUTS_SESSION_ID', 'FLING_SESSION_ID', 'LIVE_FLING_PROMPT', 'LIVE_FLING_FIRST', 'LIVE_FLING_DONE', 'HISTORY_FIXTURE', 'TOOL_FIXTURE', 'RESTORE_FIXTURE_A', 'RESTORE_FIXTURE_B', 'INPUTS_FIXTURE', 'textStream', 'toolStream', 'replayEntry', 'launchScrollWorld', 'closeScrollWorld', 'withScrollWorld', 'nextPaint', 'scrollGeometry', 'loadedFlowRows', 'openSeed', 'wheelTranscript', 'flingTranscript', 'wheelToHistoryStart', 'wheelUntilMounted', 'wheelUntilVisible', 'visibleFlowAnchor', 'flowTop', 'expectSameFlowTop', 'expectBottom', 'expectMarkerAboveComposer', 'loadEarlierWithAnchor', 'fileExists', 'eventCarries', 'assertClean'],
+      values: { createChatScrollFixture: chatScrollFixtureModule.createChatScrollFixture, CallId: llmModule.CallId, seedSession: seedSessionShim, access } });
   },
   async 'seeded-history'() {
     const dir = join(TESTS, 'snapshots', 'seeded-history');

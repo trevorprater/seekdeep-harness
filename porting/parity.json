@@ -24671,7 +24671,14 @@
     {
       "source": "apps/web/tests/chat-continuous-conversation.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium against a keyless Rust Host replaying a generated twelve-turn override-only script at the source's 10ms pace with a 10M-token replay context window; the case grows the conversation through the composer, verifying every user, assistant-step and bash tool row bound to its semantic anchor key and call id, tool disclosures toggling on the expanded terminal output, twelve completed turn/end events on the live session read through the synchronous Host listing, more than thirty streamed chunks on the long final turn, and zero console warnings or page errors"
+      ]
     },
     {
       "source": "apps/web/tests/chat-long-interactions.e2e.ts",
@@ -24689,12 +24696,25 @@
     {
       "source": "apps/web/tests/chat-scroll-contract.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium; each of the five cases launches its own scroll world (keyless Rust Host seeded through the seed fixture route with the source's chat-scroll fixture builder, override-only replay at the source pace) and closes it; verified: the reader anchor across concurrent history paging and streaming, streaming ownership and bash tool disclosure state across a scroll-away cycle with a file-gated live bash tool, tab/session position restore and composer resizing on the right scroll owner, keyboard paging bottom-follow, and touch-style fling bottom-follow, each with a clean console and fully consumed replay"
+      ]
     },
     {
       "source": "apps/web/tests/chat-scroll-fixture.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs"
+      ],
+      "evidence": [
+        "test support executed unchanged: the driver compiles the source fixture builder against its path-loaded session and llm modules (compiledSourceModule) and the chat-long-interactions, trajectory-virtualization and chat-scroll-contract suites build their seeded histories through it against the Rust Host"
+      ]
     },
     {
       "source": "apps/web/tests/code-mode-round.e2e.ts",
@@ -25277,7 +25297,13 @@
     {
       "source": "apps/web/tests/scaffold-hermetic.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/tests/web_scaffold_contracts.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep --test web_scaffold_contracts: the source case runs natively; ambient SEEKDEEP_HOME, SEEKDEEP_AGENTS_HOME and SEEKDEEP_BUNDLED_SKILL_DIR roots each carrying a skill enter the Host's launch environment, and the scaffold composition's pinned skill roots keep every ambient skill out of the preset-mounted agent's skill listing"
+      ]
     },
     {
       "source": "apps/web/tests/scaffold.ts",
@@ -25325,7 +25351,14 @@
     {
       "source": "apps/web/tests/shipped-composition.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/tests/web_scaffold_contracts.rs",
+        "crates/user-approval/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo test -p seekdeep --test web_scaffold_contracts: the two source cases run natively against the Web scaffold composition (the shipped web profile under the keyless Host's patch set booted in-process through boot_profile); verified: an unscoped empty tool catalog, the exact 23-tool shipped catalog plus glob/grep for a preset-mounted agent, the ui:deliverable-file-references prompt section equal to the file-reference-prompt golden, workspace-write writable roots covering /tmp and the platform temp dir, the workspace-write default sandbox mode, the ask approval policy (ApprovalService::config exposed as in source), the workspace-write default permission preset, the feedback command descriptor for a cwd-bound agent, and a preset producer starting bash-1 in the background, listing it and collecting SHIPPED_BACKGROUND_OK through job_output"
+      ]
     },
     {
       "source": "apps/web/tests/sidebar-scrollbar.e2e.ts",

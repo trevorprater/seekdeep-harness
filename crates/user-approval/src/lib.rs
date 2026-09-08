@@ -268,6 +268,12 @@ impl ApprovalService {
         self.config.policy
     }
 
+    /// Deployment configuration this service was composed with (source: `approval.config`).
+    #[must_use]
+    pub const fn config(&self) -> &ApprovalConfig {
+        &self.config
+    }
+
     /// Registers a typed scoped answerer.
     ///
     /// # Errors

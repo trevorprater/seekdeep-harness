@@ -174,6 +174,7 @@ seekdeep-acp-snapshot = { path = "../../crates/acp-snapshot" }
 seekdeep-credentials = { path = "../../crates/credentials" }
 seekdeep-jobs = { path = "../../crates/jobs" }
 seekdeep-llm-replay = { path = "../../crates/llm-replay" }
+seekdeep-sandbox = { path = "../../crates/sandbox" }
 seekdeep-workflow = { path = "../../crates/workflow" }
 tempfile.workspace = true
 
