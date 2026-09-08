@@ -41,8 +41,10 @@ pub fn install_browser(context: &Context, config: &Config) -> anyhow::Result<Eff
         let values = Array::new();
         values.push(&JsValue::from_str(&prefix));
         for value in args {
+            // JSON text is the bridge: parsing preserves browser numbers, whereas `serde_json`'s
+            // arbitrary-precision `Number` would otherwise cross as a private wrapper object.
             values.push(
-                &serde_wasm_bindgen::to_value(&value)
+                &js_sys::JSON::parse(&value.to_string())
                     .unwrap_or_else(|_| JsValue::from_str(&value.to_string())),
             );
         }

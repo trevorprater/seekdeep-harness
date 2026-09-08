@@ -15,6 +15,9 @@ const RISK_CSS: &str =
 
 thread_local! {
     static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
+    // One React component identity per configuration: a render-time caller must never mint a new
+    // component type (React would remount the subtree on every render).
+    static MODAL_COMPONENT: RefCell<Option<JsValue>> = const { RefCell::new(None) };
 }
 
 #[derive(Clone)]
@@ -35,6 +38,7 @@ pub fn configure_client_ui_primitive_dialogs(
     react_dom: JsValue,
 ) -> Result<(), JsValue> {
     MODULES.with(|slot| *slot.borrow_mut() = Some(BrowserModules { react, react_dom }));
+    MODAL_COMPONENT.with(|cached| *cached.borrow_mut() = None);
     inject_style(
         "Modal",
         MODAL_CSS,
@@ -85,12 +89,19 @@ pub fn configure_client_ui_primitive_dialogs(
 /// Returns missing module configuration.
 #[wasm_bindgen(js_name = modalComponent)]
 pub fn modal_component() -> Result<JsValue, JsValue> {
-    let modules = configured_modules()?;
-    Ok(Closure::wrap(
-        Box::new(move |props: JsValue| render_modal(&modules, &props))
-            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>,
-    )
-    .into_js_value())
+    if let Some(component) = MODAL_COMPONENT.with(|cached| cached.borrow().clone()) {
+        return Ok(component);
+    }
+    let component = (|| -> Result<JsValue, JsValue> {
+        let modules = configured_modules()?;
+        Ok(Closure::wrap(
+            Box::new(move |props: JsValue| render_modal(&modules, &props))
+                as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>,
+        )
+        .into_js_value())
+    })()?;
+    MODAL_COMPONENT.with(|cached| *cached.borrow_mut() = Some(component.clone()));
+    Ok(component)
 }
 
 /// Returns the compiled `DisclosureRow` component.

@@ -371,8 +371,14 @@ fn to_js(value: &impl Serialize) -> anyhow::Result<JsValue> {
     to_js_json(value).map_err(Into::into)
 }
 
+/// JSON text is the bridge: parsing preserves browser numbers, whereas `serde_json`'s
+/// arbitrary-precision `Number` would otherwise cross as a private wrapper object.
 pub(crate) fn to_js_json(value: &impl Serialize) -> Result<JsValue, serde_wasm_bindgen::Error> {
-    value.serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+    let text = serde_json::to_string(value).map_err(|error| {
+        serde_wasm_bindgen::Error::new(format!("JSON serialization failed: {error}"))
+    })?;
+    js_sys::JSON::parse(&text)
+        .map_err(|error| serde_wasm_bindgen::Error::new(format!("JSON parse failed: {error:?}")))
 }
 
 fn from_js<T: for<'de> Deserialize<'de>>(value: JsValue) -> anyhow::Result<T> {

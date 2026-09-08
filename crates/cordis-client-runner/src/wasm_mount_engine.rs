@@ -28,6 +28,8 @@ struct WasmMountedRecord {
     plugin_run_id: CordisDynamicPluginRunId,
     entry_id: String,
     styles: Arc<DynamicCordisStyles>,
+    /// Slot registrations the package made through its guarded `ctx.slots`, withdrawn on teardown.
+    disposers: Array,
 }
 
 /// Actual browser adapter: Rust owns sequencing and policy while JavaScript
@@ -148,8 +150,9 @@ impl WasmClientMountEngine {
             name: request.name.clone(),
         };
         let ledger = Array::new();
+        let disposers = Array::new();
         let surface = self
-            .guarded_surface(&package, &request.agent_id, &plugin, &ledger)
+            .guarded_surface(&package, &request.agent_id, &plugin, &ledger, &disposers)
             .map_err(|error| rejected(&error))?;
         let module_id = module_id(&request.plugin_id);
         self.invalidate(&module_id)
@@ -179,7 +182,7 @@ impl WasmClientMountEngine {
         let fiber = Reflect::get(&resolved, &JsValue::from_str("fiber"))
             .map_err(|error| rejected(&error))?;
         if fiber.is_undefined() {
-            self.teardown_parts(&request.plugin_id, &entry_id, &styles)
+            self.teardown_parts(&request.plugin_id, &entry_id, &styles, &disposers)
                 .await
                 .map_err(|error| {
                     let error: JsValue = js_sys::Error::new(&format!("{error:#}")).into();
@@ -194,7 +197,7 @@ impl WasmClientMountEngine {
         let activation = call_method(&fiber, "await", &[]).map_err(|error| rejected(&error))?;
         let activation = Promise::resolve(&activation);
         if let Err(error) = promise_result(&activation).await {
-            self.teardown_parts(&request.plugin_id, &entry_id, &styles)
+            self.teardown_parts(&request.plugin_id, &entry_id, &styles, &disposers)
                 .await
                 .map_err(|cleanup| {
                     let error: JsValue = js_sys::Error::new(&format!("{cleanup:#}")).into();
@@ -212,6 +215,7 @@ impl WasmClientMountEngine {
                 plugin_run_id: request.plugin_run_id,
                 entry_id,
                 styles,
+                disposers,
             },
         );
         Ok(MountedClientPackage {
@@ -227,6 +231,7 @@ impl WasmClientMountEngine {
         agent_id: &SessionId,
         plugin: &JsValue,
         ledger: &Array,
+        disposers: &Array,
     ) -> Result<JsValue, JsValue> {
         let owner = Object::new();
         set(&owner, "agentId", &JsValue::from_str(agent_id.as_str()))?;
@@ -252,6 +257,7 @@ impl WasmClientMountEngine {
         let guarded_module_id = module_id(&package.plugin_id);
         let guard_package = package.clone();
         let ledger_for_guard = ledger.clone();
+        let disposers_for_guard = disposers.clone();
         let claim_for_guard = claim.clone();
         let report_for_guard = report_failure.clone();
         let guard = Closure::wrap(Box::new(move |ctx: JsValue| {
@@ -265,6 +271,7 @@ impl WasmClientMountEngine {
                     priorities.clone(),
                 ),
                 ledger_for_guard.clone(),
+                disposers_for_guard.clone(),
                 claim_for_guard.clone(),
                 report_for_guard.clone(),
                 is_context,
@@ -302,7 +309,17 @@ return {
         plugin_id: &CordisDynamicPluginId,
         entry_id: &str,
         styles: &DynamicCordisStyles,
+        disposers: &Array,
     ) -> anyhow::Result<()> {
+        // Withdraw the package's Slot entries first so no page keeps rendering a torn-down half.
+        for disposer in disposers.iter() {
+            if let Some(dispose) = disposer.dyn_ref::<Function>() {
+                dispose
+                    .call0(&JsValue::UNDEFINED)
+                    .map_err(|error| js_anyhow(&error))?;
+            }
+        }
+        disposers.set_length(0);
         let removal = call_method(&self.loader, "remove", &[JsValue::from_str(entry_id)])
             .map_err(|error| js_anyhow(&error))?;
         let removal = Promise::resolve(&removal);
@@ -347,7 +364,12 @@ impl ClientMountEngine for WasmClientMountEngine {
                 records.remove(&plugin_id).expect("record existed")
             };
             engine
-                .teardown_parts(&plugin_id, &record.entry_id, &record.styles)
+                .teardown_parts(
+                    &plugin_id,
+                    &record.entry_id,
+                    &record.styles,
+                    &record.disposers,
+                )
                 .await
         }
         .boxed()

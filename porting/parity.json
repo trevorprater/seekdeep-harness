@@ -24634,7 +24634,14 @@
     {
       "source": "apps/web/tests/background-job-list.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all three pinned source cases run unchanged in Chromium against a real Rust Host; the fresh-round-trip fixture is cold-seeded, the live Agent resumes on open, a real run_in_background bash call executes through the Host tool-execute fixture route with that Agent, the header trigger and jobs list render without a refresh (running golden byte-compared), the registry kill through the Host job-kill route flips the list to the cancelled outcome (settled golden byte-compared); zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/bash-abort-row.e2e.ts",
@@ -24677,7 +24684,14 @@
     {
       "source": "apps/web/tests/code-mode-round.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all six pinned source cases run unchanged in Chromium against a real Rust Host booted with the tools row in code mode and replaying the recorded fixture; the durable log carries only run_code calls with full-content tool/code-dispatch sub-dispatches (bash CODE_ROUND_OK, tolerated failing read), the code parent row renders always-visible nested sub-rows in the bash sample and error state, a sub-row click leaves the details panel closed, and the conversation golden is byte-compared; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/cold-blank-session.e2e.ts",
@@ -24744,7 +24758,16 @@
     {
       "source": "apps/web/tests/cordis-tool-round.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/host-apiproxy/src/configuration.rs",
+        "crates/cordis-client-runner/src/wasm_mount_engine.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all five pinned source cases run unchanged in Chromium against a real Rust Host with the tool-cordis row inserted and the recorded fixture replayed at the source pace; the inspect/define/run lifecycle, the approval gate proven by the browser half's probe (absent before the click, mounted after), the stop turn withdrawing the probe, the durable four-call lifecycle, the localized cards with the define card's source tabs, and the conversation golden are verified; fixed the api-proxy forwarding the api-remotes allowlist (cordis/* and commands/change) as verbatim remote-event frames, the cordis crates' JSON bridges (serde_json arbitrary-precision numbers crossed as private wrapper objects), and the mount engine withdrawing a torn-down package's Slot registrations; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/declared-reasoning.e2e.ts",
@@ -24815,7 +24838,14 @@
     {
       "source": "apps/web/tests/feedback-command.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all three pinned source cases run unchanged in Chromium against a real Rust Host replaying the recorded fixture with the session-telemetry-otel row mounted in FULL mode against the loopback discard endpoint; ported the /feedback acknowledgement's sharing disclosure to read the mounted telemetry service's policy (Session sharing is enabled) instead of a fixed sentence; the command row renders the session id and disclosure and the ack golden is byte-compared; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/goal-bar.e2e.ts",
@@ -24872,7 +24902,16 @@
     {
       "source": "apps/web/tests/lifecycle-chrome.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-runtime/src/session.rs",
+        "crates/client-ui-conversation/src/browser_assistant.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all seven pinned source cases run unchanged in Chromium against a real Rust Host replaying the recorded fixture at the source's 100ms pace, with the active-Plan case booting its own second route-only Host; the shared slash menu and fuzzy goldens, the plan-active frame golden (a bare /plan on a blank session keeps the hero: fixed the composer blank predicate reading the encoded chat snapshot's node array), the hero golden and first send whose running Think summary follows its end at a 480px viewport (fixed the Node view minting a new AssistantMarkdown component per render, which remounted the message subtree on every chunk), the materialized workspace and session cwd, the reload-recovered conversation golden, and the dark-theme cascade are verified; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/live-interactions.e2e.ts",
@@ -24895,7 +24934,14 @@
     {
       "source": "apps/web/tests/markdown-images.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source case runs unchanged in Chromium against a real Rust Host; the suite's own Node image origin serves the remote PNG, the generated Session log is cold-seeded through the Host seed route, the remote image loads with the pinned decoding/loading/referrer attributes while the local-path image stays inert alt text, the origin sees exactly one referrer-less request, and the conversation golden is byte-compared; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/markdown-inline-code-links.e2e.ts",
@@ -25103,7 +25149,14 @@
     {
       "source": "apps/web/tests/produced-files.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source case runs unchanged in Chromium against a real Rust Host booted with the source overlay (api-gateway nativeOpen); the generated ten-write Session log is cold-seeded, the narrow one-line summary keeps two chips plus '+ 8 files' and the Show in folder action, the wire host.openPath request carries the session folder path (recorded by the Host stub route standing in for the source's vi.spyOn), and the row geometry assertions hold; zero model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/produced-files.overlay.yml",
@@ -25180,7 +25233,14 @@
     {
       "source": "apps/web/tests/replay-round-trip.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all seven pinned source cases run unchanged in Chromium against a real Rust Host replaying the fresh-round-trip fixture at the source pace; the system-prompt prefix golden (checkout root, Web GUI URL, session cwd; product prose renamed to SeekDeep) and the conversation golden are byte-compared, the real bash tool executed through the Host tool-execute route prints SEEKDEEP_WEB_URL, the durable bash result, single completed turn/end, and chunk incrementality are read from the Host session listing, and the reasoning fold toggles; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/scaffold-hermetic.e2e.ts",
@@ -26811,7 +26871,14 @@
     {
       "source": "apps/web/tests/web-search-round.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all six pinned source cases run unchanged in Chromium against a real Rust Host replaying the recorded fixture with the web-search-deepseek row pointed at the suite's own Messages double and the credential set through the Host credential route; the double receives one request with the exact body and API key, the durable web/deepseek-search-llm-request event, the capped structured result and meta, the search card golden, the 320px scrolling source list, and the marker padding are verified; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/workflow-run.e2e.ts",

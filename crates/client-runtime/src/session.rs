@@ -1396,16 +1396,57 @@ fn internal_error(message: impl Into<String>) -> ClientRpcError {
     }
 }
 
+/// A generic command row alone remains control-plane content; every other visible Chat Node
+/// activates the conversation. The encoded Chat snapshot lists its nodes as an array keyed by
+/// `key`; a keyed object is the legacy shape.
 fn chat_has_visible_content(chat: &Value) -> bool {
-    chat.get("order")
-        .and_then(Value::as_array)
-        .is_some_and(|order| {
-            order.iter().filter_map(Value::as_str).any(|key| {
-                chat.get("nodes")
-                    .and_then(|nodes| nodes.get(key))
-                    .and_then(|node| node.get("kind"))
-                    .and_then(Value::as_str)
-                    != Some("command")
-            })
-        })
+    let Some(order) = chat.get("order").and_then(Value::as_array) else {
+        return false;
+    };
+    let node_kind = |key: &str| -> Option<&str> {
+        let nodes = chat.get("nodes")?;
+        let node = match nodes {
+            Value::Array(nodes) => nodes
+                .iter()
+                .find(|node| node.get("key").and_then(Value::as_str) == Some(key))?,
+            Value::Object(nodes) => nodes.get(key)?,
+            _ => return None,
+        };
+        node.get("kind").and_then(Value::as_str)
+    };
+    order
+        .iter()
+        .filter_map(Value::as_str)
+        .any(|key| node_kind(key) != Some("command"))
+}
+
+#[cfg(test)]
+mod visible_content_tests {
+    use serde_json::json;
+
+    use super::chat_has_visible_content;
+
+    #[test]
+    fn a_lone_command_row_keeps_the_conversation_blank_in_both_snapshot_shapes() {
+        let encoded = json!({
+            "encoding": "seekdeep-chat-v1",
+            "order": ["9:command1"],
+            "nodes": [{"key": "9:command1", "kind": "command"}],
+        });
+        assert!(!chat_has_visible_content(&encoded));
+        let legacy = json!({
+            "order": ["9:command1"],
+            "nodes": {"9:command1": {"kind": "command"}},
+        });
+        assert!(!chat_has_visible_content(&legacy));
+        let activated = json!({
+            "encoding": "seekdeep-chat-v1",
+            "order": ["9:command1", "13:input-message1"],
+            "nodes": [
+                {"key": "9:command1", "kind": "command"},
+                {"key": "13:input-message1", "kind": "input-message"}
+            ],
+        });
+        assert!(chat_has_visible_content(&activated));
+    }
 }

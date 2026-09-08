@@ -467,9 +467,11 @@ fn set(target: &Object, key: &str, value: &JsValue) -> Result<(), JsValue> {
 }
 
 fn to_js(value: &impl serde::Serialize) -> Result<JsValue, JsValue> {
-    value
-        .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
-        .map_err(|error| js_sys::Error::new(&error.to_string()).into())
+    // JSON text is the bridge: parsing preserves browser numbers, whereas `serde_json`'s
+    // arbitrary-precision `Number` would otherwise cross as a private wrapper object.
+    let text =
+        serde_json::to_string(value).map_err(|error| js_sys::Error::new(&error.to_string()))?;
+    js_sys::JSON::parse(&text)
 }
 
 fn js_error(error: &JsValue) -> anyhow::Error {

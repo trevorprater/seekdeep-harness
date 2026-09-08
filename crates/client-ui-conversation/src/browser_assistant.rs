@@ -16,6 +16,10 @@ const ASSISTANT_CSS: &str = include_str!(
 
 thread_local! {
     static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
+    // One React component identity per configuration: the source module declares
+    // `AssistantMarkdown` once, so a Node view render must never mint a new memo wrapper (a new
+    // element type remounts the whole message subtree on every streamed chunk).
+    static ASSISTANT_MARKDOWN: RefCell<Option<JsValue>> = const { RefCell::new(None) };
 }
 
 #[derive(Clone)]
@@ -59,6 +63,7 @@ pub fn configure_client_ui_conversation_assistant(
         ],
     )?;
     MODULES.with(|configured| *configured.borrow_mut() = Some(modules));
+    ASSISTANT_MARKDOWN.with(|cached| *cached.borrow_mut() = None);
     Ok(())
 }
 
@@ -69,7 +74,12 @@ pub fn configure_client_ui_conversation_assistant(
 /// Returns before configuration.
 #[wasm_bindgen(js_name = assistantMarkdownComponent)]
 pub fn assistant_markdown_component() -> Result<JsValue, JsValue> {
-    memoized_component(render_assistant_markdown)
+    if let Some(component) = ASSISTANT_MARKDOWN.with(|cached| cached.borrow().clone()) {
+        return Ok(component);
+    }
+    let component = memoized_component(render_assistant_markdown)?;
+    ASSISTANT_MARKDOWN.with(|cached| *cached.borrow_mut() = Some(component.clone()));
+    Ok(component)
 }
 
 /// Returns the memoized compiled `AssistantNodeView` component.

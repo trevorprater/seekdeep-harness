@@ -458,6 +458,7 @@ fn guarded_context(bench: &JsValue, declared: &[&str]) -> (JsValue, js_sys::Arra
         field::<Object>(bench, "ctx").into(),
         policy,
         ledger.clone(),
+        js_sys::Array::new(),
         field(bench, "claim"),
         field(bench, "report"),
         field(bench, "isContext"),

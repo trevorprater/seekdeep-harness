@@ -22,6 +22,9 @@ const TOAST_FADE_MS: u32 = 1_000;
 
 thread_local! {
     static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
+    // One React component identity per configuration: a render-time caller must never mint a new
+    // component type (React would remount the subtree on every render).
+    static BUTTON_COMPONENT: RefCell<Option<JsValue>> = const { RefCell::new(None) };
 }
 
 #[derive(Clone)]
@@ -42,6 +45,7 @@ pub fn configure_client_ui_primitive_atoms(
     react_dom: JsValue,
 ) -> Result<(), JsValue> {
     MODULES.with(|slot| *slot.borrow_mut() = Some(BrowserModules { react, react_dom }));
+    BUTTON_COMPONENT.with(|cached| *cached.borrow_mut() = None);
     for (name, css, classes) in [
         (
             "Button",
@@ -73,12 +77,19 @@ pub fn configure_client_ui_primitive_atoms(
 /// Returns an error when the browser modules have not been configured.
 #[wasm_bindgen(js_name = buttonComponent)]
 pub fn button_component() -> Result<JsValue, JsValue> {
-    let ui = configured_ui()?;
-    Ok(
-        Closure::wrap(Box::new(move |props: JsValue| render_button(&ui, &props))
-            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>)
-        .into_js_value(),
-    )
+    if let Some(component) = BUTTON_COMPONENT.with(|cached| cached.borrow().clone()) {
+        return Ok(component);
+    }
+    let component = (|| -> Result<JsValue, JsValue> {
+        let ui = configured_ui()?;
+        Ok(
+            Closure::wrap(Box::new(move |props: JsValue| render_button(&ui, &props))
+                as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>)
+            .into_js_value(),
+        )
+    })()?;
+    BUTTON_COMPONENT.with(|cached| *cached.borrow_mut() = Some(component.clone()));
+    Ok(component)
 }
 
 /// Returns the compiled `Pill` component.

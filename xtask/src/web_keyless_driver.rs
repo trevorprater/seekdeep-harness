@@ -10,11 +10,21 @@ import { createRequire } from 'node:module';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
+import { createServer } from 'node:http';
 import { mkdirSync, existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { join, basename, dirname } from 'node:path';
 const [source, host, world, output] = process.argv.slice(2), require = createRequire(join(source, 'apps/web/package.json'));
-const { chromium } = require('playwright'), { expect } = require('playwright/test'), ts = require('typescript');
+const { chromium } = require('playwright'), { expect: playwrightExpect } = require('playwright/test'), ts = require('typescript');
+// The source suites run under vitest, whose `expect.poll` honours `interval`; Playwright's poll
+// option is `intervals`, and its default 100/250/500/1000ms schedule misses sub-second windows.
+const expect = new Proxy(playwrightExpect, {
+  apply(target, thisArg, args) { return Reflect.apply(target, thisArg, args); },
+  get(target, key) {
+    if (key !== 'poll') return Reflect.get(target, key);
+    return (probe, options) => target.poll(probe, options && options.interval !== undefined ? { ...options, intervals: [options.interval] } : options);
+  },
+});
 const exec = promisify(execFile), MODE = 'replay', TESTS = join(source, 'apps/web/tests'), checks = [], filter = process.env.SEEKDEEP_KEYLESS_SCENARIO;
 const selected = name => !filter || filter.split(',').includes(name);
 // Source assertions pinned to product identity: the Rust product renames the DeepSeek Harness
@@ -24,7 +34,8 @@ function adaptSelectors(code) {
     .replaceAll('[class*="centerCol"]', '[class*="seekdeep-layout-center-col"]')
     .replaceAll('Current DSH file policy', 'Current SeekDeep file policy')
     .replaceAll('DSH file sandbox', 'SeekDeep file sandbox')
-    .replaceAll("'@deepseek-ai/dsh-system-prompt'", "'@seekdeep-ai/seekdeep-system-prompt'");
+    .replaceAll("'@deepseek-ai/dsh-system-prompt'", "'@seekdeep-ai/seekdeep-system-prompt'")
+    .replaceAll('"$DSH_WEB_URL"', '"$SEEKDEEP_WEB_URL"');
 }
 async function sourceFile(file) {
   const body = await readFile(join(TESTS, file), 'utf8');
@@ -64,9 +75,12 @@ function sourceCases(ast) {
   visit(ast);
   return cases;
 }
-function compile(code, bindings, { adapt = true } = {}) {
+// `shared` carries a suite's describe-scope `let` state between cases: the emitted case body runs
+// inside `with (shared)`, so a bare assignment in one case is the next case's read.
+function compile(code, bindings, { adapt = true, shared } = {}) {
   const emitted = ts.transpileModule(adapt ? adaptSelectors(code) : code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
-  return new Function(...Object.keys(bindings), emitted)(...Object.values(bindings));
+  const body = shared === undefined ? emitted : 'with (__shared) {\n' + emitted + '\n}';
+  return new Function(...Object.keys(bindings), '__shared', body)(...Object.values(bindings), shared);
 }
 // Recorded user text is fixture data, not product identity: it stays verbatim.
 function verbatimConstant(ast, name) {
@@ -92,7 +106,9 @@ async function bootHost(name, options) {
   // Skill discovery is model-visible input: the preset-mounted skill roots resolve from the
   // process environment, so pin every host-level root inside the owned world as the source
   // scaffold's `skillRootEnvironment` does.
-  const server = spawn(host, args, { cwd: process.cwd(), env: { ...process.env, SEEKDEEP_HOME: home, SEEKDEEP_AGENTS_HOME: join(home, 'agents'), SEEKDEEP_BUNDLED_SKILL_DIR: join(home, 'bundled-skills'), SEEKDEEP_TELEMETRY_DISABLED: '1', ...options.env ?? {} }, stdio: ['ignore', 'pipe', 'pipe'] });
+  // An `undefined` override unsets a pinned variable (the telemetry disclosure scenario).
+  const env = Object.fromEntries(Object.entries({ ...process.env, SEEKDEEP_HOME: home, SEEKDEEP_AGENTS_HOME: join(home, 'agents'), SEEKDEEP_BUNDLED_SKILL_DIR: join(home, 'bundled-skills'), SEEKDEEP_TELEMETRY_DISABLED: '1', ...options.env ?? {} }).filter(([, value]) => value !== undefined));
+  const server = spawn(host, args, { cwd: process.cwd(), env, stdio: ['ignore', 'pipe', 'pipe'] });
   server.stderr.on('data', value => { stderr += value; });
   const origin = await readiness(server, () => stderr);
   const invoke = async (method, payload) => { const rpcId = name + '-' + ++sequence; const response = await fetch(origin + '/api/' + method, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId, method, payload }) }); assert(response.ok); const body = await response.json(); assert.equal(body.rpcId, rpcId); assert.equal(body.result.ok, true, JSON.stringify(body)); return body.result.value; };
@@ -216,7 +232,7 @@ async function runCases(scenario, cases, page, bindings, tripwire) {
     if (entry.skipped) { console.log('keyless: ' + scenario + ' skips record-only case ' + entry.name); continue; }
     planned += 1;
     const hooks = [];
-    const callback = compile(bindings.prelude + '\nreturn (' + entry.callback + ');', { ...bindings.values, onTestFailed: hook => hooks.push(hook), saveFailureShot: (target, name) => target.screenshot({ path: join(output, name + '.png'), fullPage: true }).catch(() => {}) });
+    const callback = compile(bindings.prelude + '\nreturn (' + entry.callback + ');', { ...bindings.values, onTestFailed: hook => hooks.push(hook), saveFailureShot: (target, name) => target.screenshot({ path: join(output, name + '.png'), fullPage: true }).catch(() => {}) }, { shared: bindings.shared });
     const stopProfile = process.env.SEEKDEEP_KEYLESS_PROFILE ? await startProfile(page) : undefined;
     const startedAt = Date.now();
     try { await callback(); if (stopProfile) await stopProfile(); } catch (error) {
@@ -253,7 +269,15 @@ const welcomeValues = compile(helpers + '\nreturn {WELCOME_NOTICE_SETTINGS_NAMES
 const welcome = { namespace: welcomeValues.WELCOME_NOTICE_SETTINGS_NAMESPACE, field: welcomeValues.WELCOME_NOTICE_ACK_FIELD, version: welcomeValues.WELCOME_NOTICE_VERSION };
 // Live Rust runs render SeekDeep package identities where the source goldens pin DeepSeek ones;
 // seeded recordings keep the identities their fixtures carry. Either spelling of the golden is exact.
-const productIdentity = text => text.replaceAll('@deepseek-ai/dsh-', '@seekdeep-ai/seekdeep-');
+// Product-facing prose the Rust product renames (AGENTS.md): package ids, the product name, and
+// the CLI/boot identifiers the Web GUI system prompt names.
+const productIdentity = text => text
+  .replaceAll('@deepseek-ai/dsh-', '@seekdeep-ai/seekdeep-')
+  .replaceAll('powered by DeepSeek Harness', 'powered by SeekDeep Harness')
+  .replaceAll('The DeepSeek Harness implementation checkout', 'The SeekDeep Harness implementation checkout')
+  .replaceAll('through the DeepSeek Harness Web GUI', 'through the SeekDeep Harness Web GUI')
+  .replaceAll('extend DSH itself', 'extend SeekDeep itself')
+  .replaceAll('only dsh web injects window.__DSH_BOOT__', 'only seekdeep web injects window.__SEEKDEEP_BOOT__');
 const goldenTools = scenario => ({
   compareOrRefreshGolden: async (path, actual, mode) => {
     assert.equal(mode, 'replay'); await writeFile(join(output, scenario + '-' + basename(path) + '.actual'), actual + '\n');
@@ -322,35 +346,82 @@ async function seededScenario(name, options) {
     await browser.screenshot('settled');
   } finally { await browser.close(); await server.stop(); }
 }
-const generatedSeed = (builder) => (server, values) => {
-  const module = { Session: sessionModule.Session, SessionId: sessionModule.SessionId, SESSION_FORMAT_VERSION: sessionModule.SESSION_FORMAT_VERSION, createMessage: llmModule.createMessage, createUserMessage: llmModule.createUserMessage, createAssistantMessage: llmModule.createAssistantMessage, createToolResultMessage: llmModule.createToolResultMessage, CallId: llmBrandModule.CallId };
-  return builder(module, server, values);
-};
+const seedModule = () => ({ Session: sessionModule.Session, SessionId: sessionModule.SessionId, SESSION_FORMAT_VERSION: sessionModule.SESSION_FORMAT_VERSION, createMessage: llmModule.createMessage, createUserMessage: llmModule.createUserMessage, createAssistantMessage: llmModule.createAssistantMessage, createToolResultMessage: llmModule.createToolResultMessage, CallId: llmBrandModule.CallId });
+const generatedSeed = (builder) => (server, values) => builder(seedModule(), server, values);
+// The source hands cases its in-process Context; the Rust Host answers the same calls over its
+// fixture routes. `agents.get` mirrors the source's synchronous read: it answers from the latest
+// listing and kicks a refresh, so a polled `liveAgent` observes the Host resuming the Session.
+function hostContext(server, live) {
+  const post = async (path, body) => { const response = await fetch(server.origin + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const text = await response.text(); assert(response.ok, path + ' HTTP ' + response.status + ': ' + text); return JSON.parse(text); };
+  const agentOf = id => ({ sessionId: id, session: { get header() { return live.sessions.find(session => session.id === id)?.header; }, requestHeader: () => live.sessions.find(session => session.id === id)?.events.filter(event => event.type === 'request/header').at(-1)?.data.header } });
+  return {
+    agents: { get: id => { if (live.sessions.some(session => session.id === id)) return agentOf(id); live.refresh().catch(() => {}); return undefined; }, list: live.agents.list },
+    sessions: { list: () => live.sessions.map(session => ({ id: session.id, header: session.header })) },
+    tools: { execute: ({ callId, name, arguments: args, agent }) => post('/fixture/tool/execute', { sessionId: agent.sessionId, callId, name, arguments: args }) },
+    jobs: { kill: (jobId, agent, reason) => post('/fixture/job/kill', { jobId, sessionId: agent.sessionId, reason }) },
+    credentials: { set: (ref, value) => post('/fixture/credential', { ref, value }) },
+  };
+}
 // A pinned replay suite: the recorded session.jsonl drives a real Rust Agent turn while the
 // source case supplies every gesture, and the turn settles through the Host idle barrier.
 async function replayScenario(name, options) {
   const ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, options.cases, 'source case inventory');
   const constants = declarations(ast, options.constants), support = declarations(supportAst, ['connectFreshWorkspace']);
-  const FIXTURE = join(TESTS, 'snapshots', name, 'session.jsonl');
-  const server = await bootHost(name, { welcome, replay: FIXTURE });
+  const constantValues = compile(constants + '\nreturn {' + options.constants.join(',') + '};', options.constantBindings ?? {});
+  const dir = join(TESTS, 'snapshots', options.dir ?? name), FIXTURE = join(dir, 'session.jsonl');
+  const prepared = options.prepare ? await options.prepare(constantValues) : {};
+  const overlay = typeof options.overlay === 'function' ? options.overlay(constantValues, prepared) : options.overlay;
+  const server = await bootHost(name, { welcome, replay: FIXTURE, overlay, env: { ...options.pace === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(options.pace) }, ...options.env ?? {} } });
   const browser = await openPage(name, 'en-US');
   try {
     const live = liveSessions(server.origin);
+    const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, whenTurnSettled: live.whenTurnSettled, ctx: hostContext(server, live) };
+    if (options.booted) await options.booted(scaffold, prepared, constantValues);
     const api = compile(helpers + '\n' + support + '\nreturn {watchConsole, connectFreshWorkspace};', { expect, mkdirSync, join });
     const tripwire = api.watchConsole(browser.page);
     await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
     await api.connectFreshWorkspace(browser.page, server.workspace);
-    const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, whenTurnSettled: live.whenTurnSettled };
-    const goldens = Object.fromEntries(options.goldens.map(golden => [golden.toUpperCase() + '_EXPECTED', join(TESTS, 'snapshots', name, golden + '.expected.md')]));
+    const goldens = Object.fromEntries(options.goldens.map(golden => Array.isArray(golden) ? [golden[0], join(dir, golden[1] + '.expected.md')] : [golden.toUpperCase().replaceAll('-', '_') + '_EXPECTED', join(dir, golden + '.expected.md')]));
+    const extra = options.values ? options.values({ server, browser, live, scaffold, prepared, name }) : {};
+    if (options.adaptCases) for (const entry of cases) entry.callback = options.adaptCases(entry.callback);
     try {
-      await runCases(name, cases, browser.page, { prelude: helpers + '\n' + fixtureHelpers + '\n' + constants, values: { expect: live.expect, page: browser.page, scaffold, tripwire, sessionEvents: live.events, MODE, FIXTURE, SNAPSHOT_DIR: join(TESTS, 'snapshots', name), ...goldens, readFile, join, parseSessionLog, recordFixture: () => { throw new Error('record mode is not a replay lane'); }, ...goldenTools(name) } }, tripwire);
+      await runCases(name, cases, browser.page, { prelude: helpers + '\n' + fixtureHelpers + '\n' + constants + '\n' + (options.prelude ?? ''), shared: options.shared, values: { expect: live.expect, page: browser.page, scaffold, tripwire, sessionEvents: live.events, MODE, FIXTURE, SNAPSHOT_DIR: dir, ...goldens, readFile, join, parseSessionLog, recordFixture: () => { throw new Error('record mode is not a replay lane'); }, ...goldenTools(name), ...prepared.values ?? {}, ...extra } }, tripwire);
     } finally {
       await live.refresh().catch(() => {});
       live.stop();
       await writeFile(join(output, name + '-sessions.json'), JSON.stringify(live.sessions, null, 2));
     }
     await browser.screenshot('settled');
-  } finally { await teardown(browser, server); }
+  } finally { await teardown(browser, server); if (options.finish) await options.finish(prepared); }
+}
+// A cold-seeded suite over a generated or recorded log: the source `beforeAll` seeds, then the
+// cases open the Session from the sidebar themselves.
+async function seededCustomScenario(name, options) {
+  const ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, options.cases, 'source case inventory');
+  const constants = declarations(ast, options.constants);
+  const values = compile(constants + '\nreturn {' + options.constants.join(',') + '};', { ...seedModule(), createServer, ...options.constantBindings ?? {} });
+  const prepared = options.prepare ? await options.prepare(values) : {};
+  const server = await bootHost(name, { welcome, overlay: options.overlay, env: options.env, seedFile: options.seedFile });
+  const browser = await openPage(name, 'en-US');
+  try {
+    const live = liveSessions(server.origin);
+    await server.seedSession(values.SEED_ID, options.seedText ? options.seedText(values, prepared) : undefined);
+    const scaffold = { workspaceCwd: server.workspace, baseUrl: server.origin, ctx: hostContext(server, live), ...options.scaffold ?? {} };
+    if (options.viewport) await browser.page.setViewportSize(options.viewport);
+    const api = compile(helpers + '\nreturn {watchConsole};', { expect });
+    const tripwire = api.watchConsole(browser.page);
+    await browser.page.goto(server.origin, { waitUntil: 'load' }); await browser.page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+    const shared = options.shared ? await options.shared({ server, browser, live, scaffold, values, constants }) : undefined;
+    if (options.adaptCases) for (const entry of cases) entry.callback = options.adaptCases(entry.callback);
+    const dir = join(TESTS, 'snapshots', name);
+    const goldens = Object.fromEntries((options.goldens ?? []).map(golden => [golden.toUpperCase().replaceAll('-', '_') + '_EXPECTED', join(dir, golden + '.expected.md')]));
+    const extra = options.values ? options.values({ server, browser, live, scaffold, values, prepared }) : {};
+    try {
+      await runCases(name, cases, browser.page, { prelude: helpers + '\n' + constants, shared, values: { expect: live.expect, page: browser.page, scaffold, tripwire, MODE, SNAPSHOT_DIR: dir, ...goldens, ...seedModule(), createServer, ...goldenTools(name), ...prepared.values ?? {}, ...extra } }, tripwire);
+      if (options.verify) await options.verify({ server, browser, live, scaffold, values, prepared });
+    } finally { live.stop(); }
+    await browser.screenshot('settled');
+  } finally { await teardown(browser, server); if (options.finish) await options.finish(prepared); }
 }
 const SCENARIOS = {
   async 'skill-tool-row'() {
@@ -577,6 +648,65 @@ const SCENARIOS = {
       await runCases('access-confirmation', cases, browser.page, { prelude: helpers + '\n' + support, values: { expect, page: browser.page, scaffold, tripwire, MODE, SNAPSHOT_DIR: join(TESTS, 'snapshots/access-confirmation'), UI_EXPECTED: join(TESTS, 'snapshots/access-confirmation/ui.expected.md'), mkdirSync, join, ...goldenTools('access-confirmation') } }, tripwire);
       await browser.screenshot('full-access');
     } finally { await teardown(browser, server); }
+  },
+  async 'markdown-images'() {
+    // The remote image origin is the suite's own Node server; the Host never sees it.
+    await seededCustomScenario('markdown-images', { cases: 1, constants: ['SEED_ID', 'REMOTE_ALT', 'LOCAL_ALT', 'PNG', 'startImageOrigin', 'stopServer', 'markdownImageFixture'], goldens: ['ui'],
+      prepare: async values => { const imageOrigin = await values.startImageOrigin(); return { imageOrigin, values: { imageOrigin } }; },
+      seedText: (values, prepared) => values.markdownImageFixture(prepared.imageOrigin.url),
+      finish: async prepared => { await new Promise((resolve, reject) => prepared.imageOrigin.server.close(error => error === undefined ? resolve() : reject(error))); } });
+  },
+  async 'produced-files'() {
+    // Source: `vi.spyOn(scaffold.ctx.apiProxy.host, 'openPath')` replaces the Host method behind
+    // the wire request. The Host's stub answers the same request; the spy records the wire
+    // requests the page issues and the Host stub's own record is checked after the case.
+    await seededCustomScenario('produced-files', { cases: 1, constants: ['SEED_ID', 'DONE', 'PRODUCED', 'producedFixture'],
+      overlay: await readFile(join(TESTS, 'produced-files.overlay.yml'), 'utf8'), env: { SEEKDEEP_KEYLESS_STUB_OPEN_PATH: '1' }, viewport: { width: 1280, height: 900 },
+      seedText: values => values.producedFixture(), scaffold: { ctx: { apiProxy: { host: {} } } },
+      adaptCases: text => text.replace('expect(openPath).toHaveBeenCalledTimes(1)', 'expect(openPath.mock.calls.length).toBe(1)'),
+      values: ({ browser }) => ({ vi: { spyOn: (target, method) => { assert.equal(method, 'openPath'); const calls = []; const listener = request => { if (new URL(request.url()).pathname === '/api/host.openPath') calls.push([request.postDataJSON()]); }; browser.page.on('request', listener); return { _isMockFunction: true, getMockName: () => method, mock: { calls }, mockImplementation() { return this; }, mockRestore: () => browser.page.off('request', listener) }; } } }),
+      verify: async ({ server }) => { const stubbed = await (await fetch(server.origin + '/fixture/open-path')).json(); assert.deepEqual(stubbed, [{ path: server.workspace + '/.' }], 'the Host open-path stub received the folder request'); } });
+  },
+  async 'background-job-list'() {
+    // The source calls its in-process registry synchronously; over the wire the kill is one request.
+    await seededCustomScenario('background-job-list', { cases: 3, constants: ['SEED_ID', 'COMMAND', 'liveAgent'], seedFile: join(TESTS, 'snapshots', 'fresh-round-trip', 'session.jsonl'), goldens: ['running', 'settled'],
+      constantBindings: { SessionId: id => id },
+      shared: async ({ browser, scaffold, values }) => { await openSeededSession(browser.page, async () => {}); return { agent: await values.liveAgent(scaffold, values.SEED_ID), jobId: undefined }; },
+      // The port names classes `seekdeep-<package>-<local>`; the source's bare `menu` local name is the jobs list's.
+      adaptCases: text => text.replace('expect(scaffold.ctx.jobs.kill(', 'expect(await scaffold.ctx.jobs.kill(').replaceAll('[class*="menu"]', '[class*="seekdeep-jobs-menu"]'),
+      values: () => ({ CallId: id => id, JobId: id => id, SessionId: id => id }) });
+  },
+  async 'replay-round-trip'() {
+    // The port's checkout is the workspace root the lane runs from; the golden's `{{sourceRoot}}`.
+    await replayScenario('replay-round-trip', { cases: 7, dir: 'fresh-round-trip', constants: ['PROMPT'], goldens: ['ui', ['SYSTEM_PROMPT_EXPECTED', 'system-prompt']], pace: 15, shared: { settledSessionId: undefined },
+      values: () => ({ CallId: id => id, REPO_ROOT: process.cwd() }) });
+  },
+  async 'code-mode-round'() {
+    await replayScenario('code-mode-round', { cases: 6, constants: ['PROMPT'], goldens: ['ui'], pace: 15, overlay: JSON.stringify([{ id: 'tools', config: { mode: 'code' } }]) + '\n' });
+  },
+  async 'cordis-tool-round'() {
+    await replayScenario('cordis-tool-round', { cases: 5, constants: ['CORDIS_TOOLS', 'PACKAGE_CODE', 'CLIENT_CODE', 'PROMPT', 'STOP_PROMPT', 'assertCompleteCordisLifecycle'], goldens: ['ui'], pace: 15,
+      overlay: JSON.stringify([{ insert: [{ id: 'tool-cordis', name: '@seekdeep-ai/seekdeep-tool-cordis' }] }]) + '\n' });
+  },
+  async 'feedback-command'() {
+    // Source: the telemetry row stays mounted in FULL mode against a loopback discard port.
+    await replayScenario('feedback-command', { cases: 3, constants: ['TELEMETRY_URL', 'PROMPT'], goldens: ['ack'], env: { SEEKDEEP_TELEMETRY_DISABLED: undefined },
+      overlay: values => JSON.stringify([{ id: 'session-telemetry-otel', disabled: false, config: { mode: 'FULL', exporter: { url: values.TELEMETRY_URL }, shutdownTimeoutMillis: 1000 } }]) + '\n' });
+  },
+  async 'lifecycle-chrome'() {
+    // The active-Plan case boots its own scaffold: a second keyless Host in route-only mode.
+    await replayScenario('lifecycle-chrome', { cases: 7, constants: ['PROMPT', 'REPLAY_PACE_MS'], prelude: declarations(supportAst, ['connectFreshWorkspace']), goldens: ['hero', 'command-menu', ['FUZZY_COMMAND_MENU_EXPECTED', 'command-menu-fuzzy'], 'plan-active', 'reloaded'], pace: 100,
+      values: ({ browser, name }) => ({ mkdirSync, browser: browser.context, launchWebScaffold: async () => { const active = await bootHost(name + '-active', { welcome }); return { baseUrl: active.origin, workspaceCwd: active.workspace, close: async () => { await writeFile(join(output, name + '-active-sessions.json'), await (await fetch(active.origin + '/fixture/sessions')).text()); await active.stop(); } }; }, newEnglishPage: async (owner, height = 1000) => { const page = await owner.newPage({ viewport: { width: 1680, height } }); page.setDefaultTimeout(15000); return page; } }) });
+  },
+  async 'web-search-round'() {
+    const searchAst = await sourceFile('../../../packages/web/tool-web/src/search.ts');
+    const { WEB_SEARCH_MAX_RESULTS } = compile(declarations(searchAst, ['WEB_SEARCH_MAX_RESULTS']) + '\nreturn {WEB_SEARCH_MAX_RESULTS};', {});
+    await replayScenario('web-search-round', { cases: 6, constants: ['QUERY', 'PROMPT', 'SEARCH_CREDENTIAL_REF', 'SEARCH_CREDENTIAL', 'PROVIDER_RESULT_COUNT', 'resultUrl', 'resultTitle', 'resultSnippet', 'resultPageAge', 'RESULT_ORDINALS', 'startSearchServer'], goldens: ['ui'], pace: 15,
+      constantBindings: { credentialRef: reference => reference, createServer },
+      prepare: async values => { const searchRequests = []; const search = await values.startSearchServer(searchRequests); return { search, values: { searchRequests, searchBaseURL: search.baseURL, WEB_SEARCH_MAX_RESULTS, credentialRef: reference => reference, createServer } }; },
+      overlay: (values, prepared) => JSON.stringify([{ id: 'web-search-deepseek', config: { apiKeyEnv: values.SEARCH_CREDENTIAL_REF, baseURL: prepared.search.baseURL } }]) + '\n',
+      booted: async (scaffold, _prepared, values) => { await scaffold.ctx.credentials.set(values.SEARCH_CREDENTIAL_REF, values.SEARCH_CREDENTIAL); },
+      finish: async prepared => { await new Promise((resolve, reject) => prepared.search.server.close(error => error === undefined ? resolve() : reject(error))); } });
   },
 };
 // Every selected scenario runs even after an earlier one fails, so one lane run reports the

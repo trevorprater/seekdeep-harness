@@ -142,6 +142,7 @@ pub fn create_client_context(
     ctx: JsValue,
     policy: WasmClientGuardPolicy,
     ledger: Array,
+    disposers: Array,
     claim: Function,
     report_failure: Function,
     is_context: Function,
@@ -194,6 +195,7 @@ pub fn create_client_context(
             "slotPolicy",
             "themePolicy",
             "ledger",
+            "disposers",
             "claim",
             "reportFailure",
             "isContext",
@@ -210,6 +212,7 @@ pub fn create_client_context(
     arguments.push(&slot_policy.into_js_value());
     arguments.push(&theme_policy.into_js_value());
     arguments.push(&ledger);
+    arguments.push(&disposers);
     arguments.push(&claim);
     arguments.push(&report_failure);
     arguments.push(&is_context);
@@ -250,6 +253,9 @@ const guardSlots = slots => new Proxy(slots, {
           spec?.kind,
         ));
         const dispose = Reflect.apply(value, target, [normalized.options, component]);
+        // The source disposes a dynamic package's Slot entries with its fiber on entry removal;
+        // the Run's teardown owns the same withdrawal here.
+        if (typeof dispose === 'function') disposers.push(dispose);
         ledger.push({ slot: normalized.slot, priority: normalized.priority ?? undefined });
         claim(component);
         return dispose;

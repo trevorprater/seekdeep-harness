@@ -273,9 +273,12 @@ fn decode<T: serde::de::DeserializeOwned>(value: JsValue) -> Result<T, JsValue> 
         .map_err(|error| js_sys::Error::new(&error.to_string()).into())
 }
 
+/// JSON text is the bridge: parsing preserves browser numbers, whereas `serde_json`'s
+/// arbitrary-precision `Number` would otherwise cross as a private wrapper object.
 fn encode<T: serde::Serialize + ?Sized>(value: &T) -> Result<JsValue, JsValue> {
-    serde_wasm_bindgen::to_value(value)
-        .map_err(|error| js_sys::Error::new(&error.to_string()).into())
+    let text =
+        serde_json::to_string(value).map_err(|error| js_sys::Error::new(&error.to_string()))?;
+    js_sys::JSON::parse(&text)
 }
 
 fn inventory_snapshot(inventory: &CordisInventory) -> Result<JsValue, JsValue> {

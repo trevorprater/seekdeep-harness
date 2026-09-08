@@ -16,6 +16,8 @@ const CARD_GAP: f64 = 4.0;
 
 thread_local! {
     static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
+    // One React component identity per configuration (a render-time caller must never mint a new type).
+    static MENU_COMPONENT: RefCell<Option<JsValue>> = const { RefCell::new(None) };
 }
 
 #[derive(Clone)]
@@ -36,6 +38,7 @@ pub fn configure_client_ui_primitive_menu(
     react_dom: JsValue,
 ) -> Result<(), JsValue> {
     configure_client_ui_primitive_hooks(react.clone());
+    MENU_COMPONENT.with(|cached| *cached.borrow_mut() = None);
     MODULES.with(|modules| {
         *modules.borrow_mut() = Some(BrowserModules { react, react_dom });
     });
@@ -49,12 +52,19 @@ pub fn configure_client_ui_primitive_menu(
 /// Returns before the browser modules are configured.
 #[wasm_bindgen(js_name = menuComponent)]
 pub fn menu_component() -> Result<JsValue, JsValue> {
-    let modules = configured_modules()?;
-    Ok(Closure::wrap(
-        Box::new(move |props: JsValue| render_menu(&modules, &props))
-            as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>,
-    )
-    .into_js_value())
+    if let Some(component) = MENU_COMPONENT.with(|cached| cached.borrow().clone()) {
+        return Ok(component);
+    }
+    let component = (|| -> Result<JsValue, JsValue> {
+        let modules = configured_modules()?;
+        Ok(Closure::wrap(
+            Box::new(move |props: JsValue| render_menu(&modules, &props))
+                as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>,
+        )
+        .into_js_value())
+    })()?;
+    MENU_COMPONENT.with(|cached| *cached.borrow_mut() = Some(component.clone()));
+    Ok(component)
 }
 
 #[allow(clippy::too_many_lines)]

@@ -24,6 +24,7 @@ seekdeep-agent-presets = { path = "../agent-presets" }
 seekdeep-api-remotes = { path = "../api-remotes" }
 seekdeep-client-connection = { path = "../client-connection" }
 seekdeep-cordis = { path = "../cordis" }
+seekdeep-cordis-dynamic-types = { path = "../cordis-dynamic-types" }
 seekdeep-core = { path = "../core" }
 seekdeep-credentials = { path = "../credentials" }
 seekdeep-goal = { path = "../goal" }

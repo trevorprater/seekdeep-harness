@@ -12,6 +12,7 @@ seekdeep-commands = { path = "../commands" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
+seekdeep-session-telemetry = { path = "../session-telemetry" }
 serde_json.workspace = true
 
 [dev-dependencies]

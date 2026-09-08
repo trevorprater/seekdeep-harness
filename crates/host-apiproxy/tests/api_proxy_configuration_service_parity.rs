@@ -1371,3 +1371,48 @@ async fn settings_events_forward_product_and_non_remote_write_commits() {
     );
     signal.abort();
 }
+
+#[tokio::test]
+async fn allowlisted_host_events_ride_verbatim_remote_event_frames() {
+    let harness = Harness::new(None, false, ConfigurationApiProxyOptions::default()).await;
+    let signal = AbortSignal::default();
+    let mut events = harness.runtime.host(request(json!({})), signal.clone());
+    let run_request: seekdeep_cordis_dynamic_types::DynamicCordisRunRequest =
+        serde_json::from_value(json!({
+            "requestId": "run-1",
+            "agentId": "session-1",
+            "pluginId": "snap-1",
+            "packageId": "pkg-1",
+            "mode": "run",
+            "name": "snapshot noop",
+            "purpose": "does nothing, for the snapshot",
+            "requiresApproval": true
+        }))
+        .unwrap();
+    harness
+        .context
+        .events()
+        .emit(
+            &harness.context,
+            "cordis/request-run",
+            &seekdeep_cordis::EventArgs::one(run_request.clone()),
+        )
+        .unwrap();
+    let (event, args) = next_remote_event(&mut events).await;
+    assert_eq!(event, "cordis/request-run");
+    assert_eq!(args, vec![serde_json::to_value(&run_request).unwrap()]);
+    harness
+        .context
+        .events()
+        .emit(
+            &harness.context,
+            "commands/change",
+            &seekdeep_cordis::EventArgs::new(),
+        )
+        .unwrap();
+    assert_eq!(
+        next_remote_event(&mut events).await,
+        ("commands/change".to_owned(), Vec::new())
+    );
+    signal.abort();
+}

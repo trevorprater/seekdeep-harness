@@ -94,6 +94,12 @@ impl LlmAdapter for RouteOnly {
     }
 }
 
+/// The driver pins `SEEKDEEP_TELEMETRY_DISABLED`; a scenario pinning a telemetry backend
+/// disclosure unsets it and patches the row to a local dead endpoint instead.
+fn telemetry_disabled() -> bool {
+    std::env::var_os(seekdeep::profile_boot::TELEMETRY_DISABLED_ENV).is_some()
+}
+
 fn write_overlay(home: &Path, data: &Path, mode: FixtureMode) -> anyhow::Result<PathBuf> {
     let overlay = data.join("keyless.patch.yml");
     std::fs::write(
@@ -104,7 +110,7 @@ fn write_overlay(home: &Path, data: &Path, mode: FixtureMode) -> anyhow::Result<
             {"id":"llm-deepseek","disabled":mode != FixtureMode::MissingCredential},
             {"id":"agent-instructions","disabled":true},
             {"id":"session-title-llm","disabled":true},
-            {"id":"session-telemetry-otel","disabled":true},
+            {"id":"session-telemetry-otel","disabled":telemetry_disabled()},
             {"id":"settings","config":{"seekdeepHome":home}},
             {"id":"credentials","config":{"seekdeepHome":home}},
             {"id":"storage-json","config":{"root":data.join("storages")}},
@@ -201,6 +207,200 @@ fn sessions_fixture_route(
             })
         }),
     })
+}
+
+/// Reads one JSON request body.
+async fn json_body(
+    request: seekdeep_host_webserver::WebRequest,
+) -> anyhow::Result<serde_json::Value> {
+    let body = http_body_util::BodyExt::collect(request.into_body())
+        .await?
+        .to_bytes();
+    Ok(serde_json::from_slice(&body)?)
+}
+
+fn required_str<'a>(value: &'a serde_json::Value, key: &str) -> anyhow::Result<&'a str> {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow::anyhow!("fixture request omitted {key}"))
+}
+
+// The source scaffold hands cases its in-process `ctx.tools.execute` with the live Agent of an
+// open Session; the Rust Host exposes the same call over a fixture route.
+fn tool_execute_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let agents = context
+        .get(seekdeep_agent::AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
+    let tools = context
+        .get(seekdeep_tools::TOOLS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Tools"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/tool/execute".to_owned(),
+        handler: Arc::new(move |request| {
+            let agents = agents.clone();
+            let tools = tools.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture tool execution requires POST"
+                );
+                let body = json_body(request).await?;
+                let agent = agents
+                    .get(&SessionId::new(required_str(&body, "sessionId")?))
+                    .ok_or_else(|| anyhow::anyhow!("fixture tool execution: Agent absent"))?;
+                let mut input = seekdeep_tools::ToolExecutionInput::new(
+                    seekdeep_llm::CallId::new(required_str(&body, "callId")?),
+                    required_str(&body, "name")?,
+                    body.get("arguments").cloned().unwrap_or(json!({})),
+                    AbortSignal::default(),
+                );
+                input.agent = Some(agent);
+                let result = tools.execute(input).await;
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&json!({
+                        "isError": result.is_error(),
+                        "content": result.content(),
+                        "meta": result.meta(),
+                        "value": result.value(),
+                    }))?,
+                ))
+            })
+        }),
+    })
+}
+
+// Source: `scaffold.ctx.jobs.kill(jobId, agent, reason)`.
+fn job_kill_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let agents = context
+        .get(seekdeep_agent::AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
+    let jobs = context
+        .get(seekdeep_jobs::JOBS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Jobs"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/job/kill".to_owned(),
+        handler: Arc::new(move |request| {
+            let agents = agents.clone();
+            let jobs = jobs.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture job kill requires POST"
+                );
+                let body = json_body(request).await?;
+                let agent = agents
+                    .get(&SessionId::new(required_str(&body, "sessionId")?))
+                    .ok_or_else(|| anyhow::anyhow!("fixture job kill: Agent absent"))?;
+                let outcome = jobs.kill(
+                    &seekdeep_jobs::JobId::new(required_str(&body, "jobId")?),
+                    Some(&agent),
+                    body.get("reason").and_then(serde_json::Value::as_str),
+                )?;
+                Ok(response(200_u16.try_into()?, serde_json::to_vec(&outcome)?))
+            })
+        }),
+    })
+}
+
+// Source: `await scaffold.ctx.credentials.set(ref, value)`.
+fn credential_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let credentials = context
+        .get(seekdeep_credentials::CREDENTIALS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Credentials"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/credential".to_owned(),
+        handler: Arc::new(move |request| {
+            let credentials = credentials.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture credential requires POST"
+                );
+                let body = json_body(request).await?;
+                credentials
+                    .set(
+                        &seekdeep_credentials::CredentialRef::new(required_str(&body, "ref")?),
+                        required_str(&body, "value")?,
+                    )
+                    .await?;
+                Ok(response(200_u16.try_into()?, b"{}".to_vec()))
+            })
+        }),
+    })
+}
+
+// Source: `vi.spyOn(scaffold.ctx.apiProxy.host, 'openPath').mockImplementation(...)` replaces the
+// Host method behind `/api/host.openPath` and records its payloads. The exact route shadows the
+// API prefix route for the same wire request; GET lists the recorded payloads.
+fn open_path_stub_fixture_route(
+    server: &WebServer,
+) -> anyhow::Result<(WebRegistration, WebRegistration)> {
+    let calls: Arc<std::sync::Mutex<Vec<serde_json::Value>>> =
+        Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = calls.clone();
+    let stub = server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/api/host.openPath".to_owned(),
+        handler: Arc::new(move |request| {
+            let recorded = recorded.clone();
+            Box::pin(async move {
+                let body = json_body(request).await?;
+                let rpc_id = body
+                    .get("rpcId")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                recorded
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("open-path stub poisoned"))?
+                    .push(
+                        body.get("payload")
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null),
+                    );
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&json!({
+                        "type": "server-response",
+                        "rpcId": rpc_id,
+                        "result": {"ok": true, "value": {"opened": true}},
+                    }))?,
+                ))
+            })
+        }),
+    })?;
+    let listing = server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/open-path".to_owned(),
+        handler: Arc::new(move |request| {
+            let calls = calls.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "GET",
+                    "open-path listing requires GET"
+                );
+                let listed = calls
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("open-path stub poisoned"))?
+                    .clone();
+                Ok(response(200_u16.try_into()?, serde_json::to_vec(&listed)?))
+            })
+        }),
+    })?;
+    Ok((stub, listing))
 }
 
 fn cold_blank_fixture_route(
@@ -428,20 +628,29 @@ fn attach_seed_fixture_route(
 }
 
 fn isolated_environment(home: &Path) -> LaunchEnvironmentSnapshot {
+    let pinned = [
+        (
+            "SEEKDEEP_HOME".to_owned(),
+            home.to_string_lossy().into_owned(),
+        ),
+        (
+            "SEEKDEEP_AGENTS_HOME".to_owned(),
+            home.join("agents").to_string_lossy().into_owned(),
+        ),
+    ];
+    let telemetry = telemetry_disabled().then(|| {
+        (
+            seekdeep::profile_boot::TELEMETRY_DISABLED_ENV.to_owned(),
+            "1".to_owned(),
+        )
+    });
     create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
         source: LaunchEnvironmentSource::Process,
         path: None,
-        values: BTreeMap::from([
-            (
-                "SEEKDEEP_HOME".to_owned(),
-                home.to_string_lossy().into_owned(),
-            ),
-            (
-                "SEEKDEEP_AGENTS_HOME".to_owned(),
-                home.join("agents").to_string_lossy().into_owned(),
-            ),
-            ("SEEKDEEP_TELEMETRY_DISABLED".to_owned(), "1".to_owned()),
-        ]),
+        values: pinned
+            .into_iter()
+            .chain(telemetry)
+            .collect::<BTreeMap<_, _>>(),
     }])
 }
 
@@ -504,7 +713,11 @@ fn install_fixture_replay(
                 "id":"deepseek-official","name":"DeepSeek",
                 "models":[{"id":"deepseek-v4-flash","name":"DeepSeek-V4-Flash","contextWindow":128_000}]
             }]))?,
-            pace_ms: 5.0,
+            // Source scaffold `paceMs`: the scenario's own replay pacing.
+            pace_ms: match std::env::var("SEEKDEEP_KEYLESS_REPLAY_PACE_MS") {
+                Ok(value) => value.parse()?,
+                Err(_) => 5.0,
+            },
         },
     )
 }
@@ -642,6 +855,24 @@ fn replay_files(arguments: &[std::ffi::OsString]) -> anyhow::Result<Option<Repla
     )))
 }
 
+/// Routes standing in for the source scaffold's in-process `ctx` calls (tools, jobs,
+/// credentials) and its `vi.spyOn(apiProxy.host, 'openPath')` stub.
+fn install_scaffold_context_routes(
+    context: &Context,
+    server: &WebServer,
+    routes: &mut Vec<WebRegistration>,
+) -> anyhow::Result<()> {
+    routes.push(tool_execute_fixture_route(context, server)?);
+    routes.push(job_kill_fixture_route(context, server)?);
+    routes.push(credential_fixture_route(context, server)?);
+    if std::env::var_os("SEEKDEEP_KEYLESS_STUB_OPEN_PATH").is_some() {
+        let (stub, listing) = open_path_stub_fixture_route(server)?;
+        routes.push(stub);
+        routes.push(listing);
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
@@ -683,7 +914,7 @@ async fn main() -> anyhow::Result<()> {
         &home,
         &home.join("profiles/.seekdeep-installation/package.json"),
         &shipped_preset_root(),
-        Some("1"),
+        telemetry_disabled().then_some("1"),
     )?;
     let prepare: BootPrepare = Arc::new(move |context| {
         let environment = environment.clone();
@@ -722,6 +953,7 @@ async fn main() -> anyhow::Result<()> {
     if replay.is_some() {
         settings_routes.push(idle_fixture_route(context, &server)?);
     }
+    install_scaffold_context_routes(context, &server, &mut settings_routes)?;
     if let Some(path) = arguments.get(6) {
         settings_routes.push(seed_log_fixture_route(
             context,

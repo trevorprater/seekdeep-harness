@@ -575,6 +575,7 @@ impl ConfigurationApiProxyRuntime {
                 },
                 EventOptions::default(),
             )?);
+            let forward_sender = sender.clone();
             effects.push(self.context.events().on_sync(
                 &self.context,
                 "llm/adapters-updated",
@@ -588,6 +589,7 @@ impl ConfigurationApiProxyRuntime {
                 },
                 EventOptions::default(),
             )?);
+            forward_allowlisted_events(&self.context, &forward_sender, &mut effects)?;
             Ok(())
         })();
         if let Err(error) = register {
@@ -943,6 +945,95 @@ fn required_event_arg<T: std::any::Any + Send + Sync>(
 ) -> anyhow::Result<Arc<T>> {
     args.get(index)
         .ok_or_else(|| anyhow::anyhow!("{event} argument {index} has the wrong type or is absent"))
+}
+
+/// The rest of the api-remotes allowlist rides one verbatim wrapper frame each: the commands
+/// runtime emits without arguments; the Cordis dynamic runner's events carry one
+/// JSON-serializable payload that `ctx.remote.$on` consumers read as-is.
+fn forward_allowlisted_events(
+    context: &Context,
+    sender: &tokio::sync::mpsc::UnboundedSender<HostFrame>,
+    effects: &mut Vec<EffectHandle>,
+) -> anyhow::Result<()> {
+    forward_argless_event(context, sender, effects, "commands/change")?;
+    forward_typed_event::<seekdeep_cordis_dynamic_types::DynamicCordisRunRequest>(
+        context,
+        sender,
+        effects,
+        "cordis/request-run",
+    )?;
+    forward_typed_event::<seekdeep_cordis_dynamic_types::DynamicCordisRequestResolved>(
+        context,
+        sender,
+        effects,
+        "cordis/request-run-resolved",
+    )?;
+    forward_typed_event::<seekdeep_cordis_dynamic_types::DynamicCordisPackage>(
+        context,
+        sender,
+        effects,
+        "cordis/dynamic-package",
+    )?;
+    forward_typed_event::<seekdeep_cordis_dynamic_types::DynamicCordisRetracted>(
+        context,
+        sender,
+        effects,
+        "cordis/dynamic-retract",
+    )?;
+    forward_typed_event::<seekdeep_cordis_dynamic_types::CordisInspectQueryRequest>(
+        context,
+        sender,
+        effects,
+        "cordis/inspect-query",
+    )?;
+    forward_typed_event::<seekdeep_cordis_dynamic_types::CordisInspectQueryResolved>(
+        context,
+        sender,
+        effects,
+        "cordis/inspect-query-resolved",
+    )?;
+    Ok(())
+}
+
+/// Forwards one allowlisted argument-less Host event verbatim.
+fn forward_argless_event(
+    context: &Context,
+    sender: &tokio::sync::mpsc::UnboundedSender<HostFrame>,
+    effects: &mut Vec<EffectHandle>,
+    event: &'static str,
+) -> anyhow::Result<()> {
+    let sender = sender.clone();
+    effects.push(context.events().on_sync(
+        context,
+        event,
+        move |_, _| {
+            send_remote_event(&sender, event, Vec::new());
+            Ok(EventReply::Undefined)
+        },
+        EventOptions::default(),
+    )?);
+    Ok(())
+}
+
+/// Forwards one allowlisted Host event whose single argument is a JSON-serializable payload.
+fn forward_typed_event<T: serde::Serialize + Send + Sync + 'static>(
+    context: &Context,
+    sender: &tokio::sync::mpsc::UnboundedSender<HostFrame>,
+    effects: &mut Vec<EffectHandle>,
+    event: &'static str,
+) -> anyhow::Result<()> {
+    let sender = sender.clone();
+    effects.push(context.events().on_sync(
+        context,
+        event,
+        move |_, args| {
+            let payload = required_event_arg::<T>(event, &args, 0)?;
+            send_remote_event(&sender, event, vec![serde_json::to_value(&*payload)?]);
+            Ok(EventReply::Undefined)
+        },
+        EventOptions::default(),
+    )?);
+    Ok(())
 }
 
 fn send_remote_event(
