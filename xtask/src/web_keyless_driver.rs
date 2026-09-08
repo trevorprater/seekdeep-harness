@@ -7,7 +7,7 @@
 
 pub(super) const DRIVER: &str = r#"import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { spawn, execFile } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
@@ -115,7 +115,7 @@ async function bootHost(name, options) {
   const origin = await readiness(server, () => stderr);
   const invoke = async (method, payload) => { const rpcId = name + '-' + ++sequence; const response = await fetch(origin + '/api/' + method, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId, method, payload }) }); assert(response.ok); const body = await response.json(); assert.equal(body.rpcId, rpcId); assert.equal(body.result.ok, true, JSON.stringify(body)); return body.result.value; };
   if (!options.welcomePending) await invoke('settings.mutate', { ns: options.welcome.namespace, ops: [{ op: 'set', path: [options.welcome.field], value: options.welcome.version }] });
-  const seedSession = async (id, text) => { const seeded = await fetch(origin + '/fixture/seed-log/' + encodeURIComponent(id), { method: 'POST', ...text === undefined ? {} : { body: text } }); assert(seeded.ok, 'seed ' + id + ': ' + await seeded.text() + '\n' + stderr); };
+  const seedSession = async (id, text, agentPreset) => { const seeded = await fetch(origin + '/fixture/seed-log/' + encodeURIComponent(id) + (agentPreset === undefined ? '' : '?agentPreset=' + encodeURIComponent(agentPreset)), { method: 'POST', ...text === undefined ? {} : { body: text } }); assert(seeded.ok, 'seed ' + id + ': ' + await seeded.text() + '\n' + stderr); };
   return { origin, home, workspace, invoke, seedSession, stderr: () => stderr, async stop() {
     if (server.exitCode === null) { const exited = once(server, 'exit'); server.kill('SIGINT'); const [code] = await exited; await writeFile(join(output, name + '-host-stderr.txt'), stderr); assert.equal(code, 0, stderr); }
     const audit = JSON.parse(await readFile(join(home, 'model-call-audit.json'), 'utf8'));
@@ -128,20 +128,30 @@ async function bootHost(name, options) {
 // event assertions observe the Host state that produced the settled UI.
 function liveSessions(origin) {
   const events = [], sessions = [], listeners = [], seen = new Map();
-  const refresh = async () => {
-    const response = await fetch(origin + '/fixture/sessions'); assert(response.ok, 'fixture session listing HTTP ' + response.status);
-    const listed = await response.json();
+  const apply = listed => {
     sessions.splice(0, sessions.length, ...listed.map(entry => ({ id: entry.header.id, header: entry.header, events: entry.events })));
     events.splice(0, events.length, ...listed.flatMap(entry => entry.events));
     // Source: `ctx.on('session/event', (session, event) => ...)` observes every appended event
     // once; the listing delivers the events appended since the previous refresh, in order.
     for (const entry of listed) {
       const delivered = seen.get(entry.header.id) ?? 0;
-      for (const event of entry.events.slice(delivered)) for (const listener of listeners) listener({ id: entry.header.id, header: entry.header }, event);
+      // Mark the batch delivered before dispatching: a listener may read the listing again
+      // synchronously (workflow-run awaits the agent's idle barrier), which must not redeliver.
       seen.set(entry.header.id, entry.events.length);
+      for (const event of entry.events.slice(delivered)) for (const listener of listeners) listener({ id: entry.header.id, header: entry.header }, event);
     }
   };
-  const onEvent = listener => { listeners.push(listener); };
+  const refresh = async () => {
+    const response = await fetch(origin + '/fixture/sessions'); assert(response.ok, 'fixture session listing HTTP ' + response.status);
+    apply(await response.json());
+  };
+  // Source: `ctx.agents.get` is a synchronous read of the in-process registry; the listing is
+  // fetched synchronously so the answer reflects the Host's current state, not the last poll.
+  const refreshSync = () => apply(JSON.parse(execFileSync('curl', ['-sS', '--fail', origin + '/fixture/sessions'], { encoding: 'utf8', maxBuffer: 1 << 28 })));
+  // The source listener fires on the in-process append; here a background poll keeps the
+  // listing fresh while listeners exist, so a case waiting on plain locators still observes it.
+  let poller;
+  const onEvent = listener => { listeners.push(listener); if (poller === undefined) poller = setInterval(() => { if (!stopped) refresh().catch(() => {}); }, 100); };
   const wrapMatchers = target => new Proxy(target, { get(inner, key) {
     const value = Reflect.get(inner, key);
     if (typeof value === 'function') return (...args) => { const result = value.apply(inner, args); return result && typeof result.then === 'function' ? result.then(async settled => { await refresh(); return settled; }) : result; };
@@ -187,11 +197,11 @@ function liveSessions(origin) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   })(); pending.catch(() => {}); return pending; };
-  const stop = () => { stopped = true; };
+  const stop = () => { stopped = true; if (poller !== undefined) { clearInterval(poller); poller = undefined; } };
   // `ctx.agents.list()` is synchronous in the source; here each call returns the latest listing
   // and kicks a background refresh so a polled predicate observes the Host within its window.
   const agents = { list: () => { if (!stopped) refresh().catch(() => {}); return sessions.map(session => ({ session: { header: session.header, id: session.id } })); } };
-  return { events, sessions, refresh, expect: liveExpect, whenTurnSettled, whenTurnsSettled, agents, onEvent, stop };
+  return { events, sessions, refresh, refreshSync, expect: liveExpect, whenTurnSettled, whenTurnsSettled, agents, onEvent, stop };
 }
 // A saturated main thread: sample where the time goes, with wasm frames named by their name section.
 async function startProfile(page) {
@@ -349,7 +359,23 @@ const { tsImport } = require('tsx/esm/api');
 const { parseSessionLog, deriveReplayScript } = await tsImport(join(source, 'packages/test-support/llm-replay/src/index.ts'), { parentURL: import.meta.url, tsconfig: join(source, 'tsconfig.base.json') });
 const sourceModule = path => tsImport(join(source, path), { parentURL: import.meta.url, tsconfig: join(source, 'tsconfig.base.json') });
 const sessionModule = await sourceModule('packages/core/session/src/index.ts'), llmModule = await sourceModule('packages/llm/llm/src/index.ts'), llmBrandModule = await sourceModule('packages/llm/llm/src/brand.ts');
+// Fixture builders that price or shape content use the source's own pure helpers: the port's
+// rendering of that content is what the goldens then compare.
+const tokenMeterModule = await sourceModule('packages/llm/token-meter/src/estimate.ts');
+// Modules that import the session package by its package name deadlock tsx once the driver holds
+// that package by path, so their statements compile against the path-loaded instances instead.
+async function compiledSourceModule(path, bindings, exported) {
+  const ast = ts.createSourceFile(path, await readFile(join(source, path), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  for (const [name, value] of Object.entries(bindings)) assert.notEqual(value, undefined, path + ' binding ' + name);
+  const body = ast.statements.filter(node => !ts.isImportDeclaration(node) && !ts.isModuleDeclaration(node)).map(node => node.getText(ast).replace(/^export\s+/, '')).join('\n');
+  return compile(body + '\nreturn {' + exported.join(', ') + '};', bindings, { adapt: false });
+}
+const chatScrollFixtureModule = await compiledSourceModule('apps/web/tests/chat-scroll-fixture.ts', { CallId: llmModule.CallId, createAssistantMessage: llmModule.createAssistantMessage, createToolResultMessage: llmModule.createToolResultMessage, createUserMessage: llmModule.createUserMessage, SESSION_FORMAT_VERSION: sessionModule.SESSION_FORMAT_VERSION, Session: sessionModule.Session, SessionId: sessionModule.SessionId }, ['createChatScrollFixture']);
+const subagentDescriptorModule = await compiledSourceModule('packages/subagent/subagent/src/descriptor.ts', { snapshotJsonValue: sessionModule.snapshotJsonValue }, ['snapshotSubagentDescriptor']);
+const realizeSeedFixture = compile(declarations(scaffoldAst, ['realizeSeedFixture']) + '\nreturn realizeSeedFixture;', {});
+const seedSessionShim = async (scaffold, text, id, agentPreset) => { await scaffold.server.seedSession(id, text, agentPreset); return id; };
 const fixtureHelpers = declarations(scaffoldAst, ['fixtureUserPrompts']);
+let fixturePrompt;
 const { fixtureUserPrompts } = compile(fixtureHelpers + '\nreturn {fixtureUserPrompts};', { parseSessionLog });
 // The source `beforeAll` opens the seeded Session from the sidebar before its cases run.
 async function openSeededSession(page, ready) {
@@ -389,16 +415,23 @@ const generatedSeed = (builder) => (server, values) => builder(seedModule(), ser
 // listing and kicks a refresh, so a polled `liveAgent` observes the Host resuming the Session.
 function hostContext(server, live) {
   const post = async (path, body) => { const response = await fetch(server.origin + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const text = await response.text(); assert(response.ok, path + ' HTTP ' + response.status + ': ' + text); return JSON.parse(text); };
-  const agentOf = id => ({ sessionId: id, session: { get header() { return live.sessions.find(session => session.id === id)?.header; }, requestHeader: () => live.sessions.find(session => session.id === id)?.events.filter(event => event.type === 'request/header').at(-1)?.data.header } });
+  const agentOf = id => ({ sessionId: id, session: { id, get header() { return live.sessions.find(session => session.id === id)?.header; }, get events() { return live.sessions.find(session => session.id === id)?.events ?? []; }, append: (type, data, options = {}) => { post('/fixture/session/' + encodeURIComponent(id) + '/append', { type, data, ...options }).then(() => live.refresh()).catch(error => console.error('keyless: agent session append failed: ' + String(error))); }, requestHeader: () => live.sessions.find(session => session.id === id)?.events.filter(event => event.type === 'request/header').at(-1)?.data.header }, whenIdle: async () => { const settled = await fetch(server.origin + '/fixture/idle/' + encodeURIComponent(id), { method: 'POST' }); assert(settled.ok, 'idle barrier HTTP ' + settled.status + ': ' + await settled.text()); await live.refresh(); } });
   return {
-    agents: { get: id => { if (live.sessions.some(session => session.id === id)) return agentOf(id); live.refresh().catch(() => {}); return undefined; }, list: live.agents.list },
-    sessions: { list: () => live.sessions.map(session => ({ id: session.id, header: session.header, append: (type, data) => post('/fixture/session/' + encodeURIComponent(session.id) + '/append', { type, data }).catch(error => console.error('keyless: session append failed: ' + String(error))) })) },
+    agents: { get: id => { live.refreshSync(); return live.sessions.some(session => session.id === id) ? agentOf(id) : undefined; }, list: () => live.agents.list().map(entry => agentOf(entry.session.id)) },
+    sessions: { flush: async () => { await live.refresh(); }, list: () => live.sessions.map(session => ({ id: session.id, header: session.header, append: (type, data) => post('/fixture/session/' + encodeURIComponent(session.id) + '/append', { type, data }).catch(error => console.error('keyless: session append failed: ' + String(error))) })) },
     on: (event, listener) => { assert.equal(event, 'session/event', 'only session/event listeners are shimmed'); live.onEvent(listener); return () => {}; },
     tools: { execute: ({ callId, name, arguments: args, agent }) => post('/fixture/tool/execute', { sessionId: agent.sessionId, callId, name, arguments: args }) },
     jobs: { kill: (jobId, agent, reason) => post('/fixture/job/kill', { jobId, sessionId: agent.sessionId, reason }) },
     credentials: { set: (ref, value) => post('/fixture/credential', { ref, value }) },
+    // Source: `ctx.sessionPersistence.create(header)` then `append(id, events)`; one complete log
+    // reaches the Host persist route on the first append (the seeds here append exactly once).
+    sessionPersistence: { create: async header => { pendingPersist.set(header.id, { header, events: [] }); }, append: async (id, events) => { const entry = pendingPersist.get(id); assert(entry, 'persist append before create: ' + id); entry.events.push(...events); const text = [JSON.stringify({ type: 'session', ...entry.header }), ...entry.events.map(event => JSON.stringify(event)), ''].join('\n'); const response = await fetch(server.origin + '/fixture/persist/' + encodeURIComponent(id), { method: 'POST', body: text }); assert(response.ok, 'persist ' + id + ': ' + await response.text()); } },
+    // The Host projects cold snapshots on demand; the source warms its cache explicitly.
+    sessionProjectionCache: { coldSnapshot: async () => {} },
+    get: name => { assert.equal(name, 'tokenMeter', 'only the token meter is shimmed through ctx.get'); return { estimateMessage: message => tokenMeterModule.estimateMessage(message) }; },
   };
 }
+const pendingPersist = new Map();
 // A pinned replay suite: the recorded session.jsonl drives a real Rust Agent turn while the
 // source case supplies every gesture, and the turn settles through the Host idle barrier.
 async function replayScenario(name, options) {
@@ -409,7 +442,7 @@ async function replayScenario(name, options) {
   const prepared = options.prepare ? await options.prepare(constantValues) : {};
   const FIXTURE = prepared.fixture ?? join(dir, 'session.jsonl');
   const overlay = typeof options.overlay === 'function' ? options.overlay(constantValues, prepared) : options.overlay;
-  const server = await bootHost(name, { welcome, replay: FIXTURE, replayOverride: prepared.replayOverride, overlay, env: { ...options.pace === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(options.pace) }, ...options.env ?? {} } });
+  const server = await bootHost(name, { welcome, replay: FIXTURE, replayOverride: prepared.replayOverride, replayChildFixtures: prepared.replayChildFixtures, overlay, env: { ...options.pace === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(options.pace) }, ...options.env ?? {} } });
   const browser = await openPage(name, 'en-US');
   try {
     const live = liveSessions(server.origin);
@@ -469,7 +502,7 @@ function scaffoldShims(name, options = {}) {
   const openHosts = new Set(), openBrowsers = new Set();
   const launchWebScaffold = async (scaffoldOptions = {}) => {
     hosts += 1;
-    const server = await bootHost(name + '-' + hosts, { welcome, replay: scaffoldOptions.replayFixture, replayOverride: scaffoldOptions.replayOverride, replayChildFixtures: scaffoldOptions.replayChildFixtures, overlay: options.overlay, env: { ...scaffoldOptions.paceMs === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(scaffoldOptions.paceMs) }, ...options.env ?? {} } });
+    const server = await bootHost(name + '-' + hosts, { welcome, replay: scaffoldOptions.replayFixture, replayOverride: scaffoldOptions.replayOverride, replayChildFixtures: scaffoldOptions.replayChildFixtures, overlay: options.overlay, env: { ...scaffoldOptions.paceMs === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(scaffoldOptions.paceMs) }, ...scaffoldOptions.replayContextWindow === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_CONTEXT_WINDOW: String(scaffoldOptions.replayContextWindow) }, ...options.env ?? {} } });
     const live = liveSessions(server.origin);
     const scaffold = { baseUrl: server.origin, workspaceCwd: server.workspace, whenTurnSettled: live.whenTurnSettled, whenTurnsSettled: live.whenTurnsSettled, ctx: hostContext(server, live), live, server, async close() { openHosts.delete(scaffold); await live.refresh().catch(() => {}); live.stop(); await writeFile(join(output, name + '-' + hosts + '-sessions.json'), JSON.stringify(live.sessions, null, 2)); await server.stop(); } };
     openHosts.add(scaffold);
@@ -508,6 +541,72 @@ async function perCaseScenario(name, options) {
   const api = compile(helpers + '\nreturn {watchConsole};', { expect });
   const tripwireProxy = new Proxy({}, { get: (_, key) => (shared.tripwire ?? { warnings: [], pageErrors: [] })[key] });
   await runCases(name, cases, { __console: () => pageConsoles.get(shared.page) ?? [], isClosed: () => (shared.page ? shared.page.isClosed() : true), evaluate: (...args) => shared.page ? shared.page.evaluate(...args) : Promise.reject(new Error('no page')), locator: (...args) => shared.page.locator(...args), screenshot: (...args) => shared.page ? shared.page.screenshot(...args) : Promise.resolve() }, { prelude: helpers + '\n' + fixtureHelpers + '\n' + support + '\n' + constants + '\n' + nested, shared, afterEach, values: { expect, MODE, FIXTURE, SNAPSHOT_DIR: dir, ...goldens, readFile, writeFile, mkdtemp, rm, tmpdir, join, existsSync, mkdirSync, parseSessionLog, deriveReplayScript, watchConsole: api.watchConsole, recordFixture: () => { throw new Error('record mode is not a replay lane'); }, ...shims, ...goldenTools(name), ...options.values ?? {} } }, tripwireProxy);
+}
+// Suites whose `describe` blocks boot their own scaffold in `beforeAll`: each describe runs in
+// order with its own shared scope (describe-level declarations hoisted), its `beforeAll`, its
+// cases, and its `afterAll`, all through the scaffold shims.
+function describeBlocks(ast) {
+  const blocks = [];
+  function visit(node) {
+    if (ts.isCallExpression(node) && node.arguments.length >= 2 && ts.isArrowFunction(node.arguments[1])) {
+      const callee = node.expression.getText(ast);
+      if (callee === 'describe' || callee.startsWith('describe.')) {
+        const body = node.arguments[1].body;
+        const block = { name: node.arguments[0].getText(ast), variables: [], functions: [], beforeAll: undefined, afterAll: undefined, cases: [], skipped: callee.includes("skipIf(MODE === 'record')") };
+        for (const statement of ts.isBlock(body) ? body.statements : []) {
+          if (ts.isVariableStatement(statement)) {
+            for (const declaration of statement.declarationList.declarations) block.variables.push({ name: declaration.name.getText(ast), initializer: declaration.initializer ? declaration.initializer.getText(ast) : undefined });
+          } else if (ts.isFunctionDeclaration(statement)) {
+            block.functions.push(statement.getText(ast));
+          } else if (ts.isExpressionStatement(statement) && ts.isCallExpression(statement.expression)) {
+            const hook = statement.expression.expression.getText(ast), callback = statement.expression.arguments[0];
+            if (hook === 'beforeAll' && callback && ts.isArrowFunction(callback)) block.beforeAll = callback.getText(ast);
+            if (hook === 'afterAll' && callback && ts.isArrowFunction(callback)) block.afterAll = callback.getText(ast);
+          }
+        }
+        const cases = [];
+        (function collect(inner) { if (ts.isCallExpression(inner) && ts.isStringLiteral(inner.arguments[0] ?? ts.factory.createNull()) && inner.arguments[1] && ts.isArrowFunction(inner.arguments[1])) { const callee = inner.expression.getText(ast); if (callee === 'it' || callee.startsWith('it.')) cases.push({ name: inner.arguments[0].text, callback: inner.arguments[1].getText(ast), skipped: callee.includes("skipIf(MODE !== 'record')") }); } ts.forEachChild(inner, collect); })(body);
+        block.cases = cases;
+        blocks.push(block);
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  return blocks;
+}
+async function describeScenario(name, options) {
+  const ast = await sourceFile(name + '.e2e.ts'), blocks = describeBlocks(ast);
+  assert.equal(blocks.length, options.describes, 'source describe inventory');
+  assert.equal(blocks.reduce((total, block) => total + block.cases.length, 0), options.cases, 'source case inventory');
+  const constants = declarations(ast, options.constants), support = declarations(supportAst, ['connectFreshWorkspace']);
+  const dir = join(TESTS, 'snapshots', name);
+  const goldens = Object.fromEntries((options.goldens ?? []).map(golden => Array.isArray(golden) ? [golden[0], join(dir, golden[1] + '.expected.md')] : [golden.toUpperCase().replaceAll('-', '_') + '_EXPECTED', join(dir, golden + '.expected.md')]));
+  const shims = scaffoldShims(name, options);
+  const api = compile(helpers + '\nreturn {watchConsole};', { expect });
+  for (const block of blocks) {
+    if (block.skipped) { console.log('keyless: ' + name + ' skips record-only describe ' + block.name); continue; }
+    const shared = {};
+    const prelude = helpers + '\n' + fixtureHelpers + '\n' + support + '\n' + constants + '\n' + block.functions.join('\n');
+    const values = { expect, MODE, SNAPSHOT_DIR: dir, ...goldens, readFile, writeFile, mkdtemp, rm, tmpdir, join, existsSync, mkdirSync, parseSessionLog, deriveReplayScript, watchConsole: api.watchConsole, recordFixture: () => { throw new Error('record mode is not a replay lane'); }, ...shims, ...goldenTools(name), ...options.values ?? {} };
+    // Describe-level declarations become shared scope entries: `let x` stays undefined; a
+    // `const x = init` evaluates once per describe against the same prelude.
+    const initializers = block.variables.filter(variable => variable.initializer !== undefined);
+    for (const variable of block.variables) shared[variable.name] = undefined;
+    if (initializers.length) Object.assign(shared, compile(prelude + '\nreturn {' + initializers.map(variable => variable.name + ': (' + variable.initializer + ')').join(', ') + '};', values));
+    const tripwireProxy = new Proxy({}, { get: (_, key) => (shared.tripwire ?? { warnings: [], pageErrors: [] })[key] });
+    const pageShim = { __console: () => pageConsoles.get(shared.page) ?? [], isClosed: () => (shared.page ? shared.page.isClosed() : true), evaluate: (...args) => shared.page ? shared.page.evaluate(...args) : Promise.reject(new Error('no page')), locator: (...args) => shared.page.locator(...args), screenshot: (...args) => shared.page ? shared.page.screenshot(...args) : Promise.resolve() };
+    try {
+      if (block.beforeAll) await compile(prelude + '\nreturn (' + block.beforeAll + ');', values, { shared })();
+      await runCases(name, block.cases, pageShim, { prelude, shared, values }, tripwireProxy);
+    } finally {
+      const failures = [];
+      if (block.afterAll) await compile(prelude + '\nreturn (' + block.afterAll + ');', values, { shared })().catch(error => failures.push(error));
+      await shims.closeAll().catch(error => failures.push(error));
+      if (failures.length) throw failures.length === 1 ? failures[0] : new AggregateError(failures, name + ' describe teardown failed');
+    }
+  }
 }
 const SCENARIOS = {
   async 'skill-tool-row'() {
@@ -748,6 +847,43 @@ const SCENARIOS = {
       prepare: async values => { const replayDir = await mkdtemp(join(tmpdir(), 'seekdeep-skill-user-invoke-replay-')); const replayOverride = join(replayDir, 'replay.override.json'); await writeFile(replayOverride, JSON.stringify(values.REPLAY)); return { replayDir, fixture: join(replayDir, 'override-only.jsonl'), replayOverride }; },
       booted: async (scaffold, _prepared, values) => { await values.seedUserOnlySkill(scaffold.workspaceCwd); },
       finish: async prepared => { await rm(prepared.replayDir, { recursive: true, force: true }); } });
+  },
+  async 'workflow-run'() {
+    // The recorded parent/child model fixtures live at the same repository-relative path in the
+    // port; the real workflow tool, worker, subagent provider, and navigation run during replay.
+    const parent = join(process.cwd(), 'examples/acp-agent/tests/snapshots/workflow-run/session.jsonl');
+    await replayScenario('workflow-run', { cases: 3, constants: ['CHILD_PROMPT'], goldens: ['ui'], pace: 25,
+      prepare: async () => ({ fixture: (fixturePrompt = fixtureUserPrompts(await readFile(parent, 'utf8'))[0], parent), replayChildFixtures: [join(process.cwd(), 'examples/acp-agent/tests/snapshots/workflow-run/session.1.jsonl')] }),
+      prelude: "const PARENT_FIXTURE = join(REPO_ROOT, 'examples/acp-agent/tests/snapshots/workflow-run/session.jsonl');\nconst CHILD_FIXTURE = join(REPO_ROOT, 'examples/acp-agent/tests/snapshots/workflow-run/session.1.jsonl');\nlet prompt = promptRef.value;\n" + nestedDeclarations(await sourceFile('workflow-run.e2e.ts'), ['waitForParentSettlement']),
+      values: async => ({ REPO_ROOT: process.cwd(), promptRef: { get value() { return fixturePrompt; } } }) });
+  },
+  async 'agent-preset-selection'() {
+    // The keyless Host mounts the shipped roster with `standard` as the default, the source's
+    // `agentPresets` option for this lane; the seeded minimal session and its subagent child are
+    // persisted through the seed and persist fixture routes.
+    const dir = join(TESTS, 'snapshots', 'agent-preset-selection');
+    await describeScenario('agent-preset-selection', { describes: 1, cases: 6, constants: ['SEED_ID', 'SKILL_NAME', 'seedWorkspaceSkill', 'menuOptions', 'seedLog', 'seedSubagent', 'livePreset'],
+      values: { SNAPSHOT_DIR: dir, HERO_EXPECTED: join(dir, 'hero.expected.md'), MENU_EXPECTED: join(dir, 'menu.expected.md'), HEADER_EXPECTED: join(dir, 'header.expected.md'), SHIPPED_PRESETS: join(process.cwd(), 'apps/cli/config/agent-presets'), sessionId: id => id, SESSION_FORMAT_VERSION: sessionModule.SESSION_FORMAT_VERSION, snapshotSubagentDescriptor: subagentDescriptorModule.snapshotSubagentDescriptor, mkdir, seedSession: seedSessionShim } });
+  },
+  async 'chat-long-interactions'() {
+    await describeScenario('chat-long-interactions', { describes: 1, cases: 1, constants: ['SESSION_ID', 'FIXTURE_TURNS', 'TOOL_TURN', 'BRANCH_TURN', 'TARGET_CALL_1', 'TARGET_CALL_2', 'CONTINUE_PROMPT', 'CONTINUE_FIRST', 'CONTINUE_DONE', 'FIXTURE', 'continuationChunks', 'replayEntry', 'carries', 'textContent', 'nextPaint', 'openSeed', 'wheelUntilMounted', 'requiredEvent', 'messageKey', 'assistantKey', 'turnTailKey'],
+      values: { createChatScrollFixture: chatScrollFixtureModule.createChatScrollFixture, conversationContextKey: compile(declarations(supportAst, ['conversationContextKey']) + '\nreturn conversationContextKey;', {}), SessionId: id => id, seedSession: seedSessionShim } });
+  },
+  async 'trajectory-virtualization'() {
+    const dir = join(TESTS, 'snapshots', 'trajectory-virtualization');
+    await describeScenario('trajectory-virtualization', { describes: 1, cases: 1, constants: ['SESSION_ID', 'FIXTURE', 'MAX_MOUNTED_ROWS', 'GEOMETRY_TOLERANCE', 'STREAM_MARKER', 'STREAM_TEXT', 'STREAM_CHUNKS', 'openSeed', 'openTrajectory', 'logicalRows', 'mountedRows', 'geometry', 'nextPaint', 'scrollToRatio', 'firstVisibleRow', 'rowTop', 'loadToFirstTurn'], goldens: ['load-more'],
+      values: { SNAPSHOT_DIR: dir, createChatScrollFixture: chatScrollFixtureModule.createChatScrollFixture, seedSession: seedSessionShim } });
+  },
+  async 'seeded-history'() {
+    const dir = join(TESTS, 'snapshots', 'seeded-history');
+    await describeScenario('seeded-history', { describes: 1, cases: 11, constants: ['SEED_ID', 'PROMPT', 'withCompaction'], goldens: ['ui', 'command-row', 'feedback-row'],
+      values: { SNAPSHOT_DIR: dir, SEED: join(dir, 'seed.jsonl'), UI_EXPECTED: join(dir, 'ui.expected.md'), COMMAND_ROW_EXPECTED: join(dir, 'command-row.expected.md'), FEEDBACK_ROW_EXPECTED: join(dir, 'feedback-row.expected.md'), realizeSeedFixture, seedSession: seedSessionShim, createUserMessage: llmModule.createUserMessage, deriveEventMessage: sessionModule.deriveEventMessage, SessionId: id => id, mkdir } });
+  },
+  async 'steering'() {
+    // Four describes, each booting its own scaffold; the last one replays an override-only fixture.
+    const steer = join(TESTS, 'snapshots', 'steering'), steerAll = join(TESTS, 'snapshots', 'steer-all');
+    await describeScenario('steering', { describes: 4, cases: 6, constants: ['REPLAY_PACE_MS', 'PROMPT', 'STEER', 'STEER_ONE', 'STEER_TWO', 'assistantText', 'claimedMessages'],
+      values: { SNAPSHOT_DIR: steer, FIXTURE: join(steer, 'session.jsonl'), MID_EXPECTED: join(steer, 'mid-steer.expected.md'), SETTLED_EXPECTED: join(steer, 'settled.expected.md'), STEER_ALL_DIR: steerAll, STEER_ALL_FIXTURE: join(steerAll, 'session.jsonl'), STEER_ALL_OVERRIDE: join(steerAll, 'replay.override.json'), STEER_ALL_MID: join(steerAll, 'mid-steer.expected.md'), STEER_ALL_SETTLED: join(steerAll, 'settled.expected.md') } });
   },
   async 'markdown-images'() {
     // The remote image origin is the suite's own Node server; the Host never sees it.

@@ -24610,7 +24610,14 @@
     {
       "source": "apps/web/tests/agent-preset-selection.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium against a keyless Rust Host booted with the shipped agent presets and a seeded workspace skill; the six cases verify the preset chip beside the workspace picker with the hero golden, the menu naming every preset with the menu golden, the staged pick applied to the blank session and honored by the Host (session header agentPreset), the slash catalog re-read through the switched composition, a resumed session labeled with the preset it was created under (seeded through the seed and persist fixture routes with a subagent descriptor child) with the header golden, and zero page errors or stream warnings"
+      ]
     },
     {
       "source": "apps/web/tests/approval-composer.e2e.ts",
@@ -24669,7 +24676,15 @@
     {
       "source": "apps/web/tests/chat-long-interactions.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-conversation/src/browser_queue_dock.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium against a keyless Rust Host replaying the override-only continuation fixture at the source's 18ms pace with a 10M-token replay context window; the seeded long history is built by the source's own chat-scroll fixture builder compiled against the path-loaded session and llm modules; the case verifies heterogeneous rows and their actions bound to exact semantic identities (anchor keys, call ids, flow kinds, disclosure toggles), the copy action's clipboard text, the branch action creating a child whose seed length and events match the boundary, the breadcrumb, and the continuation turn settling in the child alone; agents are read through the synchronous Host session listing and replay fully consumed with zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/chat-scroll-contract.e2e.ts",
@@ -25282,7 +25297,14 @@
     {
       "source": "apps/web/tests/seeded-history.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium against a keyless Rust Host with the seed realized through the source's realizeSeedFixture and persisted through the persist fixture route; the ten non-record cases verify the projections baseline on the composition tail page, the cold session listing rendering history from the log, the historical conversation aria golden, the Figma context disclosure geometry, details-inert file-path tool rows, the expanded cold-resumed compact summary, the Access-chip switch command row golden, the two-line feedback correlation row with its golden, short logged context without a scrollport, and zero model calls with a clean console; context injections appended live through the Host session append route with their surfaceOp"
+      ]
     },
     {
       "source": "apps/web/tests/settings-chrome.e2e.ts",
@@ -26824,7 +26846,14 @@
     {
       "source": "apps/web/tests/steering.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all four pinned source describes run unchanged in Chromium, each booting its own keyless Rust Host from its beforeAll through the scaffold shims (three replay the steering fixture at the source's 100ms pace, the fourth replays the steer-all override-only fixture); the strict steer of one queued row with the mid-steer and settled goldens and the durable claimed interjection, Cmd+Enter steering without a Queue row, the swapped busy behavior queuing Cmd+Enter when Enter steers, and the empty-draft Cmd+Enter flushing two queued messages with their goldens are verified from the Host session listing; replay fully consumed per Host and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/subagent-conversation.e2e.ts",
@@ -26859,7 +26888,16 @@
     {
       "source": "apps/web/tests/trajectory-virtualization.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "crates/client-ui-trajectory/src/browser_table.rs",
+        "crates/client-ui-trajectory/src/virtual_rows.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium against a keyless Rust Host replaying the override-only streaming fixture; the seeded 88-turn ledger is built by the source's chat-scroll fixture builder; the case verifies the load-more golden, the held older-history load (disabled button, loading label), the anchored first visible row keeping its percent-encoded data-trajectory-row-key, geometry within tolerance and its selection across the prepend (source @tanstack/virtual-core end anchoring ported into the table renderer), the bounded mounted row count at the middle and tail, the tail assistant marker, and the streamed turn settling without extra scrollTo calls; replay fully consumed with zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/turn-tail-actions.e2e.ts",
@@ -26907,7 +26945,14 @@
     {
       "source": "apps/web/tests/workflow-run.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: all three pinned source cases run unchanged in Chromium against a real Rust Host replaying the recorded workflow parent fixture with its child fixture at the source pace; the live running workflow node with non-interactive run and phase headers, the member link's dark narrow-layout geometry, opening the local child, the parent settling through the Host idle barrier after the child completes, the settled workflow record beside the tool row with its expandable run and phase, the terminal record rebuilt from history after reload, and the chat-flow golden are verified; replay fully consumed and zero live model calls audited"
+      ]
     },
     {
       "source": "apps/web/tests/workspace-management.e2e.ts",

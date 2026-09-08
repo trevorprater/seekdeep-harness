@@ -275,6 +275,51 @@ fn tool_execute_fixture_route(
     })
 }
 
+// Source: `scaffold.ctx.sessionPersistence.create(header)` + `append(id, events)`: the body is one
+// complete log whose header (origin, parent, depth, preset) is persisted as written.
+fn persist_fixture_route(context: &Context, server: &WebServer) -> anyhow::Result<WebRegistration> {
+    let persistence = context
+        .get(seekdeep_session_persistence::SESSION_PERSISTENCE)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no persistence"))?
+        .persistence();
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/persist".to_owned(),
+        handler: Arc::new(move |request| {
+            let persistence = persistence.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture persist requires POST"
+                );
+                let body = http_body_util::BodyExt::collect(request.into_body())
+                    .await?
+                    .to_bytes();
+                let text = String::from_utf8(body.to_vec())?;
+                let header_line = text
+                    .lines()
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("persist fixture header absent"))?;
+                // The source header line carries the `type: "session"` discriminator.
+                let mut header_value: serde_json::Value = serde_json::from_str(header_line)?;
+                if let Some(object) = header_value.as_object_mut() {
+                    object.remove("type");
+                }
+                let header: seekdeep_core::session::SessionHeader =
+                    serde_json::from_value(header_value)?;
+                let events = seekdeep_llm_replay::parse_session_log(&text)?;
+                let id = header.id.clone();
+                persistence.create(&header).await?;
+                if !events.is_empty() {
+                    persistence.append(&id, &events).await?;
+                }
+                persistence.inspect(&id, None).await?;
+                Ok(response(200_u16.try_into()?, serde_json::to_vec(&header)?))
+            })
+        }),
+    })
+}
+
 // Source: `scaffold.ctx.jobs.kill(jobId, agent, reason)`.
 fn job_kill_fixture_route(
     context: &Context,
@@ -475,10 +520,25 @@ fn session_fixture_route(context: &Context, server: &WebServer) -> anyhow::Resul
                         .get(&SessionId::new(id))
                         .ok_or_else(|| anyhow::anyhow!("fixture session absent"))?;
                     let body = json_body(request).await?;
+                    // Source: `append(type, data, { surfaceOp, sourceEventSeqs, ignorable })`.
+                    let options = seekdeep_core::session::AppendOptions {
+                        surface_op: body
+                            .get("surfaceOp")
+                            .map(|value| serde_json::from_value(value.clone()))
+                            .transpose()?,
+                        source_event_seqs: body
+                            .get("sourceEventSeqs")
+                            .map(|value| serde_json::from_value(value.clone()))
+                            .transpose()?,
+                        ignorable: body
+                            .get("ignorable")
+                            .and_then(serde_json::Value::as_bool)
+                            .unwrap_or(false),
+                    };
                     session.append(
                         required_str(&body, "type")?,
                         body.get("data").cloned().unwrap_or(json!({})),
-                        seekdeep_core::session::AppendOptions::default(),
+                        options,
                     )?;
                     return Ok(response(
                         200_u16.try_into()?,
@@ -540,6 +600,7 @@ fn seed_log_fixture_route(
                         request.method().as_str() == "POST",
                         "fixture seed requires POST"
                     );
+                    let query = request.uri().query().map(str::to_owned);
                     let id = if request.uri().path() == "/fixture/seed-log" {
                         id
                     } else {
@@ -583,6 +644,15 @@ fn seed_log_fixture_route(
                     header.created_at = header.created_at.saturating_sub(60_000);
                     header.cwd = Some(workspace.to_string_lossy().into_owned());
                     header.delegation_depth = Some(0);
+                    // Source `seedSession(scaffold, text, id, agentPreset)`: the seeded Session
+                    // records the preset it was created under.
+                    if let Some(preset) = query
+                        .as_deref()
+                        .and_then(|query| query.strip_prefix("agentPreset="))
+                        .filter(|preset| !preset.is_empty())
+                    {
+                        header.agent_preset = Some(preset.to_owned());
+                    }
                     anyhow::ensure!(
                         events
                             .last()
@@ -729,9 +799,13 @@ fn install_fixture_replay(
             file: file.to_path_buf(),
             override_file,
             child_files,
+            // Source scaffold `replayContextWindow`: the replay provider's advertised window.
             providers: serde_json::from_value(json!([{
                 "id":"deepseek-official","name":"DeepSeek",
-                "models":[{"id":"deepseek-v4-flash","name":"DeepSeek-V4-Flash","contextWindow":128_000}]
+                "models":[{"id":"deepseek-v4-flash","name":"DeepSeek-V4-Flash","contextWindow":match std::env::var("SEEKDEEP_KEYLESS_REPLAY_CONTEXT_WINDOW") {
+                    Ok(value) => value.parse::<u64>()?,
+                    Err(_) => 128_000,
+                }}]
             }]))?,
             // Source scaffold `paceMs`: the scenario's own replay pacing.
             pace_ms: match std::env::var("SEEKDEEP_KEYLESS_REPLAY_PACE_MS") {
@@ -887,6 +961,7 @@ fn install_scaffold_context_routes(
     routes: &mut Vec<WebRegistration>,
 ) -> anyhow::Result<()> {
     routes.push(tool_execute_fixture_route(context, server)?);
+    routes.push(persist_fixture_route(context, server)?);
     routes.push(job_kill_fixture_route(context, server)?);
     routes.push(credential_fixture_route(context, server)?);
     if std::env::var_os("SEEKDEEP_KEYLESS_STUB_OPEN_PATH").is_some() {

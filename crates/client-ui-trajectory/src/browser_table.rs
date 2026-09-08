@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use js_sys::{Array, Function, Object, Promise, Reflect};
+use js_sys::{Array, Float64Array, Function, Object, Promise, Reflect};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
@@ -14,15 +14,16 @@ use crate::{
     SelectedTrajectoryRequest, TrajectoryCell, TrajectoryCellKind, TrajectoryDetailTab,
     TrajectoryRecordState, TrajectoryRequestNumber, TrajectoryTableController,
     TrajectoryTableControllerSnapshot, TrajectoryTableRecord, TrajectoryTableScrollAction,
-    TrajectoryTableScrollMetrics, TrajectoryTurnModel, VirtualizableTrajectoryRecord,
-    collapse_trajectory_assistant_records, collapse_trajectory_turn_records,
-    filter_trajectory_table_records, flatten_trajectory_table_records,
-    group_trajectory_virtual_rows, index_trajectory_request_boundaries,
-    index_trajectory_request_boundary_runs, index_trajectory_request_numbers,
-    trajectory_assistant_tool_calls, trajectory_browser_modules, trajectory_detail_tabs,
-    trajectory_is_tool_call_only, trajectory_record_display_text, trajectory_record_id,
-    trajectory_record_result_text, trajectory_record_state, trajectory_request_key,
-    trajectory_section_label, trajectory_status_label, trajectory_tool_call_text_parts,
+    TrajectoryTableScrollMetrics, TrajectoryTurnModel, TrajectoryVirtualRow,
+    VirtualizableTrajectoryRecord, collapse_trajectory_assistant_records,
+    collapse_trajectory_turn_records, filter_trajectory_table_records,
+    flatten_trajectory_table_records, group_trajectory_virtual_rows,
+    index_trajectory_request_boundaries, index_trajectory_request_boundary_runs,
+    index_trajectory_request_numbers, trajectory_assistant_tool_calls, trajectory_browser_modules,
+    trajectory_detail_tabs, trajectory_is_tool_call_only, trajectory_record_display_text,
+    trajectory_record_id, trajectory_record_result_text, trajectory_record_state,
+    trajectory_request_key, trajectory_row_key, trajectory_section_label, trajectory_status_label,
+    trajectory_tool_call_text_parts,
 };
 
 const VIRTUALIZATION_THRESHOLD: usize = 100;
@@ -447,14 +448,42 @@ fn render_table(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
 
     let has_older = optional_bool(props, "hasOlderRecords")?.unwrap_or(false);
     let virtualization_enabled = has_older || records.len() > VIRTUALIZATION_THRESHOLD;
-    let window = rendered_window(&records, virtualization_enabled, has_older, viewport);
+    let rows = virtualization_enabled.then(|| virtual_row_structure(&records));
+    let anchor_ref = use_ref(&ui.react, &JsValue::UNDEFINED)?;
+    let anchored = if let Some(rows) = &rows {
+        anchor_virtual_offset(
+            &anchor_ref,
+            rows,
+            if has_older {
+                HISTORY_LOAD_ROW_HEIGHT_PX
+            } else {
+                0.0
+            },
+            viewport.scroll_top,
+        )?
+    } else {
+        Reflect::set(
+            &anchor_ref,
+            &JsValue::from_str("current"),
+            &JsValue::UNDEFINED,
+        )?;
+        None
+    };
+    let viewport = ViewportState {
+        scroll_top: anchored.unwrap_or(viewport.scroll_top),
+        height: viewport.height,
+    };
+    let window = rendered_window(&records, rows.as_deref(), has_older, viewport);
     install_scroll_reconciliation_effect(
         ui,
         props,
         &controller,
         &pane_ref,
         &bump,
-        virtualization_enabled,
+        VirtualScroll {
+            enabled: virtualization_enabled,
+            anchored,
+        },
         &turns_value,
     )?;
 
@@ -678,13 +707,82 @@ fn render_table(ui: &ReactUi, props: &JsValue) -> Result<JsValue, JsValue> {
     )
 }
 
+fn virtual_row_structure(records: &[TrajectoryTableRecord]) -> Vec<TrajectoryVirtualRow> {
+    let virtualizable = records
+        .iter()
+        .map(|record| VirtualizableTrajectoryRecord {
+            collapsed_summary_kind: record.collapsed_summary_kind,
+            cell: record.cell.clone(),
+        })
+        .collect::<Vec<_>>();
+    group_trajectory_virtual_rows(&virtualizable)
+}
+
+/// Source (`@tanstack/virtual-core`, `anchorTo: 'end'`): when the virtual row set gains or
+/// loses edge rows between renders, the row under the scroll offset keeps its on-screen
+/// position, so a prepended history page never shifts the rows in view. The previous
+/// structure lives on a ref as one joined key string plus the row starts.
+fn anchor_virtual_offset(
+    anchor_ref: &JsValue,
+    rows: &[TrajectoryVirtualRow],
+    margin: f64,
+    scroll_top: f64,
+) -> Result<Option<f64>, JsValue> {
+    let mut starts = Vec::with_capacity(rows.len());
+    let mut offset = margin;
+    for row in rows {
+        starts.push(offset);
+        offset += f64::from(row.height);
+    }
+    let previous = Reflect::get(anchor_ref, &JsValue::from_str("current"))?;
+    let mut anchored = None;
+    if !previous.is_undefined() && !previous.is_null() {
+        let keys = required_string(&previous, "keys", "virtual anchor")?;
+        let keys = if keys.is_empty() {
+            Vec::new()
+        } else {
+            keys.split('\u{1}').collect::<Vec<_>>()
+        };
+        let previous_starts =
+            Float64Array::from(required(&previous, "starts", "virtual anchor")?).to_vec();
+        let edge_changed = keys.len() != rows.len()
+            || keys.first().copied() != rows.first().map(|row| row.key.as_str())
+            || keys.last().copied() != rows.last().map(|row| row.key.as_str());
+        if edge_changed && !keys.is_empty() {
+            let at = previous_starts
+                .iter()
+                .rposition(|start| *start <= scroll_top)
+                .unwrap_or(0);
+            let within = scroll_top - previous_starts[at];
+            if let Some(index) = rows.iter().position(|row| row.key == keys[at]) {
+                let next = (starts[index] + within).max(0.0);
+                // Source compares the offsets strictly (`newOffset !== this.scrollOffset`).
+                if next.to_bits() != scroll_top.to_bits() {
+                    anchored = Some(next);
+                }
+            }
+        }
+    }
+    let joined = rows
+        .iter()
+        .map(|row| row.key.as_str())
+        .collect::<Vec<_>>()
+        .join("\u{1}");
+    let record = object(&[
+        ("keys", JsValue::from_str(&joined)),
+        ("starts", Float64Array::from(starts.as_slice()).into()),
+    ])?;
+    Reflect::set(anchor_ref, &JsValue::from_str("current"), &record)?;
+    Ok(anchored)
+}
+
 fn rendered_window(
     records: &[TrajectoryTableRecord],
-    virtualized: bool,
+    rows: Option<&[TrajectoryVirtualRow]>,
     has_older: bool,
     viewport: ViewportState,
 ) -> RenderedWindow {
-    if !virtualized {
+    let Some(rows) = rows else {
         return RenderedWindow {
             records: records
                 .iter()
@@ -700,15 +798,7 @@ fn rendered_window(
             top: 0.0,
             bottom: 0.0,
         };
-    }
-    let virtualizable = records
-        .iter()
-        .map(|record| VirtualizableTrajectoryRecord {
-            collapsed_summary_kind: record.collapsed_summary_kind,
-            cell: record.cell.clone(),
-        })
-        .collect::<Vec<_>>();
-    let rows = group_trajectory_virtual_rows(&virtualizable);
+    };
     let heights = rows
         .iter()
         .map(|row| f64::from(row.height))
@@ -1245,7 +1335,10 @@ fn render_table_row(
             ("data-kind", JsValue::from_str(record.cell.kind.as_str())),
             (
                 "data-trajectory-row-key",
-                JsValue::from_str(&trajectory_record_id(&record.cell)),
+                JsValue::from_str(&trajectory_row_key(
+                    &record.cell,
+                    record.collapsed_summary_kind,
+                )),
             ),
             (
                 "data-virtual-position",
@@ -1421,11 +1514,16 @@ fn history_row(
     if let Some(spinner) = spinner {
         button_children.push(spinner);
     }
-    button_children.push(JsValue::from_str(if busy {
-        "Loading earlier history…"
-    } else {
-        "Load earlier history"
-    }));
+    // Source: the visible label is a hidden span; `aria-label` alone names the button.
+    button_children.push(ui.tag(
+        "span",
+        Some(&object(&[("aria-hidden", JsValue::TRUE)])?),
+        &[JsValue::from_str(if busy {
+            "Loading earlier history…"
+        } else {
+            "Load earlier history"
+        })],
+    )?);
     button_children.push(status);
     let button = ui.tag(
         "button",
@@ -3450,15 +3548,27 @@ fn install_timeline_focus_effect(
     )
 }
 
+/// Virtualization inputs to one scroll reconciliation pass.
+#[derive(Clone, Copy)]
+struct VirtualScroll {
+    enabled: bool,
+    /// Offset the virtualizer's end anchor rewrote for this render, if any.
+    anchored: Option<f64>,
+}
+
 fn install_scroll_reconciliation_effect(
     ui: &ReactUi,
     props: &JsValue,
     controller: &JsValue,
     pane_ref: &JsValue,
     bump: &Function,
-    virtualized: bool,
+    virtual_scroll: VirtualScroll,
     turns: &JsValue,
 ) -> Result<(), JsValue> {
+    let VirtualScroll {
+        enabled: virtualized,
+        anchored,
+    } = virtual_scroll;
     let history_loading = optional_bool(props, "historyLoading")?.unwrap_or(false);
     let history_start = optional_number(props, "historyStartSeq");
     let effect_controller = controller.clone();
@@ -3468,6 +3578,14 @@ fn install_scroll_reconciliation_effect(
         let pane = Reflect::get(&effect_ref, &JsValue::from_str("current"))?;
         if pane.is_null() || pane.is_undefined() {
             return Ok(());
+        }
+        // The virtualizer's anchor write lands before the component's own reconciliation.
+        if let Some(offset) = anchored {
+            Reflect::set(
+                &pane,
+                &JsValue::from_str("scrollTop"),
+                &JsValue::from_f64(offset),
+            )?;
         }
         let request = object(&[
             ("historyLoading", JsValue::from_bool(history_loading)),
@@ -3506,6 +3624,7 @@ fn install_scroll_reconciliation_effect(
     dependencies.push(&history_start.map_or(JsValue::UNDEFINED, JsValue::from_f64));
     dependencies.push(turns);
     dependencies.push(&JsValue::from_bool(virtualized));
+    dependencies.push(&anchored.map_or(JsValue::UNDEFINED, JsValue::from_f64));
     use_layout_effect(&ui.react, &effect.into_js_value(), &dependencies)
 }
 

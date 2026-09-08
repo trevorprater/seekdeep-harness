@@ -83,9 +83,19 @@ pub struct TrajectoryVirtualRow {
 /// Derives the DOM-safe stable identity shared by React and the virtualizer.
 #[must_use]
 pub fn trajectory_virtual_record_key(record: &VirtualizableTrajectoryRecord) -> String {
-    let record_id = trajectory_record_id(&record.cell);
+    trajectory_row_key(&record.cell, record.collapsed_summary_kind)
+}
+
+/// The same identity for a rendered row: source `data-trajectory-row-key` carries the
+/// percent-encoded record id so a JSON-quoted selector matches it verbatim.
+#[must_use]
+pub fn trajectory_row_key(
+    cell: &TrajectoryCell,
+    summary_kind: Option<CollapsedSummaryKind>,
+) -> String {
+    let record_id = trajectory_record_id(cell);
     let identity = utf8_percent_encode(&record_id, ENCODE_URI_COMPONENT);
-    match record.collapsed_summary_kind {
+    match summary_kind {
         Some(kind) => format!("{identity}\0summary\0{}", kind.as_str()),
         None => identity.to_string(),
     }
