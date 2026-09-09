@@ -394,7 +394,7 @@ pub(crate) fn inject_style(
     {
         return Ok(());
     }
-    let mut css = source.to_owned();
+    let mut css = seekdeep_client_ui_primitives::unwrap_global_selectors(source);
     for (source, target) in replacements {
         css = css.replace(&format!(".{source}"), &format!(".{target}"));
     }

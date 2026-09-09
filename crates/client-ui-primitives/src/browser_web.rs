@@ -291,7 +291,7 @@ fn inject_style() -> Result<(), JsValue> {
     {
         return Ok(());
     }
-    let mut css = WEB_CSS.to_owned();
+    let mut css = crate::css_modules::unwrap_global_selectors(WEB_CSS);
     for local in [
         "sourceLink",
         "fetchMeta",

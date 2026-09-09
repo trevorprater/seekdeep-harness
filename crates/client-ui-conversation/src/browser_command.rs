@@ -7,8 +7,6 @@ use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen
 
 use crate::browser_reasoning::inject_style;
 
-const CHAT_CSS: &str =
-    include_str!("../../../packages/client/ui-conversation/src/client/chat/ChatView.module.css");
 const COMMAND_CSS: &str = include_str!(
     "../../../packages/client/ui-conversation/src/client/chat/GenericCommandCard.module.css"
 );
@@ -695,7 +693,7 @@ fn translate_value(
 fn inject_command_styles() -> Result<(), JsValue> {
     inject_style(
         "ChatView",
-        CHAT_CSS,
+        &crate::browser_chat_view::chat_view_styles(),
         &[
             ("callRow", "seekdeep-conversation-chat-callRow"),
             ("column", "seekdeep-conversation-chat-column"),

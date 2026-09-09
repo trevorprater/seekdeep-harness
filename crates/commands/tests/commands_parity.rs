@@ -66,7 +66,7 @@ fn exposes_list_and_execute_as_direct_typert_remote_methods() {
 #[test]
 fn generated_typert_descriptors_match_strict_agent_projected_artifact() {
     let contribution = typert_remote_contribution();
-    assert_eq!(contribution.package, "@deepseek-ai/seekdeep-commands");
+    assert_eq!(contribution.package, "@seekdeep-ai/seekdeep-commands");
     assert_eq!(
         contribution
             .descriptors
@@ -78,7 +78,7 @@ fn generated_typert_descriptors_match_strict_agent_projected_artifact() {
     let execute = &contribution.descriptors[0];
     assert_eq!(
         execute.id,
-        "@deepseek-ai/seekdeep-commands#commands/execute"
+        "@seekdeep-ai/seekdeep-commands#commands/execute"
     );
     assert!(matches!(execute.invocation, InvocationReceiver::Direct));
     assert_eq!(execute.scope.as_ref().unwrap().context, "agent");

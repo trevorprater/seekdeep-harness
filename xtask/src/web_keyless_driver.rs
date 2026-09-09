@@ -341,6 +341,8 @@ async function teardown(browser, server) {
   if (failures.length > 1) throw new AggregateError(failures, 'scenario teardown failed');
 }
 const pageConsoles = new WeakMap();
+// Every opened page's console, by page name, for failure diagnostics of suites whose pages are not the describe's shared page.
+const allConsoles = new Map();
 async function openPage(name, locale, viewport = { width: 1680, height: 1000 }, timezoneId) {
   const profile = join(world, name, 'browser');
   const context = await chromium.launchPersistentContext(profile, { headless: true, locale, viewport, ...(timezoneId === undefined ? {} : { timezoneId }), args: ['--remote-debugging-port=0'] });
@@ -371,7 +373,7 @@ async function openPage(name, locale, viewport = { width: 1680, height: 1000 }, 
   await page.addInitScript(() => { window.__seekdeepAnimationStarts = 0; document.addEventListener('animationstart', () => { window.__seekdeepAnimationStarts += 1; }, true); });
   const console = []; page.on('console', message => console.push({ type: message.type(), text: message.text() }));
   page.on('response', response => { const url = new URL(response.url()); if (url.pathname.startsWith('/api/')) response.text().then(body => console.push({ type: 'rpc', text: url.pathname + ' ' + response.status() + ' ' + body.slice(0, 400), request: (response.request().postData() ?? '').slice(0, 400) })).catch(() => {}); }); page.on('pageerror', error => console.push({ type: 'pageerror', text: String(error) })); page.on('crash', () => console.push({ type: 'crash', text: 'page crashed' }));
-  pageConsoles.set(page, console);
+  pageConsoles.set(page, console); allConsoles.set(name, console);
   return { context, page, cdp, async screenshot(label) { await exec('agent-browser', ['--session', 'seekdeep-keyless-' + name, '--cdp', cdp, 'screenshot', '--annotate', join(output, name + '-' + label + '.png')]); }, async close() { await exec('agent-browser', ['--session', 'seekdeep-keyless-' + name, 'close']).catch(() => {}); await context.close(); } };
 }
 const { tsImport } = require('tsx/esm/api');
@@ -683,6 +685,7 @@ async function describeScenario(name, options) {
       // Diagnostics before afterAll disposes the agents: every open Host's live session listing.
       let index = 0;
       for (const open of shims.hosts) { index += 1; await open.live.refresh().catch(() => {}); await writeFile(join(output, name + '-failure-' + index + '-sessions.json'), JSON.stringify(open.live.sessions, null, 2)).catch(() => {}); }
+      for (const [pageName, entries] of allConsoles) await writeFile(join(output, name + '-failure-console-' + pageName.replaceAll('/', '_') + '.json'), JSON.stringify(entries.slice(-400), null, 1)).catch(() => {});
       caseError = error;
       throw error;
     } finally {
@@ -1109,9 +1112,10 @@ const SCENARIOS = {
 // complete picture; the run still fails on any failure.
 const scenarioFailures = [];
 // Scenarios whose Host or client surface is still pending run only when named explicitly.
-const DEFERRED = new Set(['goal-bar', 'message-feedback-protocol']);
+const DEFERRED = new Set(['goal-bar']);
 for (const [name, run] of Object.entries(SCENARIOS)) {
   if (!selected(name) || (DEFERRED.has(name) && !filter)) continue;
+  allConsoles.clear();
   try { await run(); } catch (error) { scenarioFailures.push({ scenario: name, error: String(error), stack: error?.stack }); console.error('keyless: scenario ' + name + ' failed: ' + String(error).split('\n')[0]); if (error?.matcherResult) console.error('keyless: matcher ' + JSON.stringify({ expected: error.matcherResult.expected, actual: error.matcherResult.actual }).slice(0, 600)); console.error(String(error?.stack ?? '').split('\n').slice(1, 8).join('\n')); }
 }
 let runError;

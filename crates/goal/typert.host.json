@@ -1,0 +1,4446 @@
+{
+  "package": "@seekdeep-ai/seekdeep-goal",
+  "face": "host",
+  "model": {
+    "services": [
+      {
+        "description": "Goal service (`ctx.goals`) backed exclusively by the owning session log.",
+        "summary": "Goal service (`ctx.goals`) backed exclusively by the owning session log.",
+        "tags": [],
+        "jsDoc": "/** Goal service (`ctx.goals`) backed exclusively by the owning session log. */",
+        "key": "goals",
+        "exportName": "GoalService",
+        "members": [
+          {
+            "kind": "method",
+            "name": "get",
+            "signature": "get(agent: Agent): GoalView | undefined",
+            "summary": "Read the current goal for one exact live agent.",
+            "jsDoc": "/**\n * Read the current goal for one exact live agent.\n * @param agent - owning live agent.\n * @returns a fresh view or `undefined` when no goal is current.\n * @throws {@link GoalError} when the agent is not the registry's live instance.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "disarm",
+            "signature": "disarm(agent: Agent): GoalView | undefined",
+            "summary": "Remove process-local continuation authority without changing durable goal phase or revision.",
+            "jsDoc": "/**\n * Remove process-local continuation authority without changing durable goal\n * phase or revision. Lifecycle owners use this before unloading a driver;\n * a later human-authorized {@link resume} records the new activation edge.\n * @param agent - owning live agent.\n * @returns a fresh disarmed view, or `undefined` when no goal is current.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "create",
+            "signature": "create(agent: Agent, request: CreateGoalRequest): GoalView",
+            "summary": "Create and arm a goal.",
+            "jsDoc": "/**\n * Create and arm a goal. A completed goal may be replaced; every other\n * current phase must be cleared or resumed instead.\n * @param agent - owning live agent.\n * @param request - objective and optional round cap.\n * @returns the created live view.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "edit",
+            "signature": "@Remote('edit') edit(agent: Agent, ref: GoalRef, request: EditGoalRequest): GoalView",
+            "summary": "Edit objective and/or round cap without changing phase.",
+            "jsDoc": "/**\n * Edit objective and/or round cap without changing phase.\n * @param agent - owning live agent.\n * @param ref - expected current revision.\n * @param request - at least one replacement field.\n * @returns the edited view.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "pause",
+            "signature": "@Remote('pause') pause(agent: Agent, ref: GoalRef): GoalView",
+            "summary": "Pause an active goal and disarm automatic continuation.",
+            "jsDoc": "/**\n * Pause an active goal and disarm automatic continuation.\n * @param agent - owning live agent.\n * @param ref - expected current revision.\n * @returns the paused view.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "resume",
+            "signature": "@Remote('resume') resume(agent: Agent, ref: GoalRef): GoalView",
+            "summary": "Resume and arm a stopped goal, or rearm an active goal after a session-start edge, while its round budget still has capacity.",
+            "jsDoc": "/**\n * Resume and arm a stopped goal, or rearm an active goal after a\n * session-start edge, while its round budget still has capacity.\n * @param agent - owning live agent.\n * @param ref - expected current revision.\n * @returns the active view.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "complete",
+            "signature": "@Remote('complete') complete(agent: Agent, ref: GoalRef): GoalView",
+            "summary": "Mark a current non-complete goal complete and disarm it.",
+            "jsDoc": "/**\n * Mark a current non-complete goal complete and disarm it.\n * @param agent - owning live agent.\n * @param ref - expected current revision.\n * @returns the completed view.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "block",
+            "signature": "block(agent: Agent, ref: GoalRef, reason: GoalBlockReason): GoalView",
+            "summary": "Mark an active goal blocked and disarm it.",
+            "jsDoc": "/**\n * Mark an active goal blocked and disarm it.\n * @param agent - owning live agent.\n * @param ref - expected current revision.\n * @param reason - policy-owned stable code and human-readable explanation.\n * @returns the blocked view with its durable reason.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "clear",
+            "signature": "@Remote('clear') clear(agent: Agent, ref: GoalRef): GoalRef",
+            "summary": "Clear the current goal while retaining a durable tombstone and history.",
+            "jsDoc": "/**\n * Clear the current goal while retaining a durable tombstone and history.\n * @param agent - owning live agent.\n * @param ref - expected current revision.\n * @returns the tombstone ref whose revision is one past the cleared snapshot.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "remoteExportCreate",
+            "signature": "@Remote('create') remoteExportCreate(agent: Agent, request: CreateGoalRequest): CreateGoalResult",
+            "summary": "Create one Goal through the remote boundary.",
+            "jsDoc": "/**\n * Create one Goal through the remote boundary.\n * @param agent - exact live Agent resolved from the wire identity.\n * @param request - objective and optional round cap.\n * @returns the created Goal identity.\n */"
+          }
+        ],
+        "types": [
+          {
+            "name": "Agent",
+            "declaration": "export interface Agent {\n    readonly id: SessionId;\n    readonly options: AgentOptions;\n    readonly session: Session;\n    readonly inbox: Inbox;\n    readonly status: AgentStatus;\n    readonly ctx: Context;\n    cancel(cause: AgentCancelCause, options?: CancelOptions): void;\n    whenIdle(): Promise<void>;\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n    send(message: UserMessage, target: InboxTarget, wakeup: boolean): void;\n    followup(message: UserMessage): void;\n    steer(message: UserMessage): void;\n    inject(message: UserMessage): void;\n}"
+          },
+          {
+            "name": "AgentCancelCause",
+            "declaration": "export type AgentCancelCause = { readonly kind: 'user'; } | { readonly kind: 'parent'; } | { readonly kind: 'hook'; readonly reason: string; } | { readonly kind: 'disposed'; };"
+          },
+          {
+            "name": "AgentOptions",
+            "declaration": "export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    maxTokens?: number;\n}"
+          },
+          {
+            "name": "AgentStatus",
+            "declaration": "export type AgentStatus = 'idle' | 'running';"
+          },
+          {
+            "name": "ApprovalOutcome",
+            "declaration": "export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';"
+          },
+          {
+            "name": "ApprovalPolicy",
+            "declaration": "export type ApprovalPolicy = 'ask' | 'never';"
+          },
+          {
+            "name": "ApprovalRequestId",
+            "declaration": "export type ApprovalRequestId = Branded<'ApprovalRequestId'>;"
+          },
+          {
+            "name": "AssistantMessage",
+            "declaration": "export interface AssistantMessage extends Message {\n    readonly role: 'assistant';\n    readonly source: ModelMessageSource;\n}"
+          },
+          {
+            "name": "AssistantProvenance",
+            "declaration": "export interface AssistantProvenance {\n    provider: string;\n    model: string;\n    replayState?: unknown;\n}"
+          },
+          {
+            "name": "AttachmentId",
+            "declaration": "export type AttachmentId = Branded<'AttachmentId'>;"
+          },
+          {
+            "name": "Branded",
+            "declaration": "export type Branded<B extends string> = string & { readonly [BRAND]: B; };"
+          },
+          {
+            "name": "CallId",
+            "declaration": "export type CallId = Branded<'CallId'>;"
+          },
+          {
+            "name": "CancelOptions",
+            "declaration": "export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}"
+          },
+          {
+            "name": "CodeDispatchEventData",
+            "declaration": "export interface CodeDispatchEventData extends CodeDispatchStartEventData {\n    isError: boolean;\n    content: ContentBlock[];\n}"
+          },
+          {
+            "name": "CodeDispatchStartEventData",
+            "declaration": "export interface CodeDispatchStartEventData {\n    rootCallId: CallId;\n    parentCallId: CallId;\n    subCallId: CallId;\n    name: string;\n    arguments: unknown;\n}"
+          },
+          {
+            "name": "CommandId",
+            "declaration": "export type CommandId = Branded<'CommandId'>;"
+          },
+          {
+            "name": "CommandSource",
+            "declaration": "export type CommandSource = CommandSourceMap[keyof CommandSourceMap];"
+          },
+          {
+            "name": "CommandSourceMap",
+            "declaration": "export interface CommandSourceMap {\n    user: { kind: 'user'; };\n}"
+          },
+          {
+            "name": "ContentBlock",
+            "declaration": "export type ContentBlock = ContentBlockMap[ContentBlockType];"
+          },
+          {
+            "name": "ContentBlockMap",
+            "declaration": "export interface ContentBlockMap {\n    text: TextBlock;\n    reasoning: ReasoningBlock;\n    image: ImageBlock;\n    'tool-call': ToolCallBlock;\n    'tool-result': ToolResultBlock;\n}"
+          },
+          {
+            "name": "ContentBlockType",
+            "declaration": "export type ContentBlockType = keyof ContentBlockMap;"
+          },
+          {
+            "name": "ContextFormed",
+            "declaration": "export type ContextFormed = { readonly form?: never; } | { readonly form: 'instructions'; } | { readonly form: 'catalog'; } | { readonly form: 'snapshot'; readonly sections: readonly ContextSnapshotSection[]; } | { readonly form: 'notice'; readonly summary: string; } | { readonly form: 'relay'; } | { readonly form: 'recall'; };"
+          },
+          {
+            "name": "ContextSnapshotSection",
+            "declaration": "export interface ContextSnapshotSection {\n    readonly name: string;\n    readonly text: string;\n}"
+          },
+          {
+            "name": "CreateGoalRequest",
+            "declaration": "export interface CreateGoalRequest {\n    readonly objective: string;\n    readonly maxGoalRounds?: number;\n}"
+          },
+          {
+            "name": "CreateGoalResult",
+            "declaration": "export interface CreateGoalResult {\n    readonly ref: GoalRef;\n}"
+          },
+          {
+            "name": "EditGoalRequest",
+            "declaration": "export interface EditGoalRequest {\n    readonly objective?: string;\n    readonly maxGoalRounds?: number;\n}"
+          },
+          {
+            "name": "EpochHeader",
+            "declaration": "export interface EpochHeader {\n    config: LlmCallConfig;\n    adapterDefaults?: LlmCallConfigAdapterDefaults;\n    system?: string;\n    tools?: ToolSchema[];\n}"
+          },
+          {
+            "name": "FinishReason",
+            "declaration": "export type FinishReason = FinishReasonMap[keyof FinishReasonMap];"
+          },
+          {
+            "name": "FinishReasonMap",
+            "declaration": "export interface FinishReasonMap {\n    stop: { kind: 'stop'; };\n    'tool-calls': { kind: 'tool-calls'; };\n    'max-tokens': { kind: 'max-tokens'; };\n    aborted: { kind: 'aborted'; failure: LlmFailure; };\n    error: { kind: 'error'; failure: LlmFailure; };\n}"
+          },
+          {
+            "name": "GoalActivation",
+            "declaration": "export type GoalActivation = 'armed' | 'disarmed';"
+          },
+          {
+            "name": "GoalBlockReason",
+            "declaration": "export interface GoalBlockReason {\n    readonly code: string;\n    readonly message: string;\n}"
+          },
+          {
+            "name": "GoalChangeMeta",
+            "declaration": "export type GoalChangeMeta = GoalSnapshotChangeMeta | GoalClearChangeMeta;"
+          },
+          {
+            "name": "GoalClearChangeMeta",
+            "declaration": "export interface GoalClearChangeMeta {\n    readonly kind: 'goal/change';\n    readonly version: 1;\n    readonly operation: 'clear';\n    readonly cleared: GoalRef;\n    readonly clearedAt: number;\n}"
+          },
+          {
+            "name": "GoalId",
+            "declaration": "export type GoalId = Branded<'GoalId'>;"
+          },
+          {
+            "name": "GoalMessageSource",
+            "declaration": "export interface GoalMessageSource {\n    readonly kind: 'goal';\n    readonly goalId: GoalId;\n    readonly revision: number;\n    readonly round: number;\n}"
+          },
+          {
+            "name": "GoalOperation",
+            "declaration": "export type GoalOperation = 'create' | 'edit' | 'pause' | 'resume' | 'complete' | 'block' | 'clear';"
+          },
+          {
+            "name": "GoalPhase",
+            "declaration": "export type GoalPhase = 'active' | 'paused' | 'blocked' | 'complete';"
+          },
+          {
+            "name": "GoalRef",
+            "declaration": "export interface GoalRef {\n    readonly id: GoalId;\n    readonly revision: number;\n}"
+          },
+          {
+            "name": "GoalSnapshot",
+            "declaration": "export interface GoalSnapshot extends GoalRef {\n    readonly objective: string;\n    readonly phase: GoalPhase;\n    readonly blockedReason?: GoalBlockReason;\n    readonly maxGoalRounds: number;\n}"
+          },
+          {
+            "name": "GoalSnapshotChangeMeta",
+            "declaration": "export interface GoalSnapshotChangeMeta {\n    readonly kind: 'goal/change';\n    readonly version: 1;\n    readonly operation: Exclude<GoalOperation, 'clear'>;\n    readonly goal: GoalSnapshot;\n    readonly roundsStarted: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}"
+          },
+          {
+            "name": "GoalView",
+            "declaration": "export interface GoalView extends GoalSnapshot {\n    readonly roundsStarted: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly activation: GoalActivation;\n}"
+          },
+          {
+            "name": "ImageAttachmentRef",
+            "declaration": "export interface ImageAttachmentRef {\n    attachmentId: AttachmentId;\n    mediaType: ImageMediaType;\n    bytes: number;\n    width: number;\n    height: number;\n    name?: string;\n}"
+          },
+          {
+            "name": "ImageBlock",
+            "declaration": "export interface ImageBlock {\n    type: 'image';\n    attachment: ImageAttachmentRef;\n}"
+          },
+          {
+            "name": "ImageMediaType",
+            "declaration": "export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';"
+          },
+          {
+            "name": "Inbox",
+            "declaration": "export class Inbox {\n    get nextTurn(): readonly UserMessage[];\n    get nextStep(): readonly UserMessage[];\n    get hasPending(): boolean;\n    clear(): void;\n    claim(target: InboxTarget, turn: number): UserMessage[];\n    append(target: InboxTarget, message: UserMessage): void;\n    prepend(target: InboxTarget, message: UserMessage): void;\n    replace(messageId: MessageId, newMessage: UserMessage): boolean;\n    remove(messageId: MessageId): boolean;\n    splice(target: InboxTarget, start: number, deleteCount: number, inserted: UserMessage[]): UserMessage[];\n}"
+          },
+          {
+            "name": "InboxTarget",
+            "declaration": "export type InboxTarget = 'next-turn' | 'next-step';"
+          },
+          {
+            "name": "JsonValue",
+            "declaration": "export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue; };"
+          },
+          {
+            "name": "LlmCallConfig",
+            "declaration": "export interface LlmCallConfig {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReasoningEffortId;\n    temperature?: number;\n    maxTokens?: number;\n    stop?: string[];\n}"
+          },
+          {
+            "name": "LlmCallConfigAdapterDefaults",
+            "declaration": "export interface LlmCallConfigAdapterDefaults {\n    reasoningEffort?: true;\n    maxTokens?: true;\n}"
+          },
+          {
+            "name": "LlmFailure",
+            "declaration": "export interface LlmFailure {\n    readonly message: string;\n    readonly code: string;\n    readonly status?: number;\n    readonly providerRetryAfterMs?: number;\n    readonly requestId?: ProviderRequestId;\n}"
+          },
+          {
+            "name": "Message",
+            "declaration": "export interface Message {\n    readonly id: MessageId;\n    readonly role: 'system' | 'user' | 'assistant';\n    readonly content: ContentBlock[];\n    readonly source: MessageSource;\n}"
+          },
+          {
+            "name": "MessageId",
+            "declaration": "export type MessageId = Branded<'MessageId'>;"
+          },
+          {
+            "name": "MessageSource",
+            "declaration": "export type MessageSource = MessageSourceMap[keyof MessageSourceMap];"
+          },
+          {
+            "name": "MessageSourceMap",
+            "declaration": "export interface MessageSourceMap {\n    user: { kind: 'user'; };\n    plugin: { kind: 'plugin'; plugin: string; } & ContextFormed;\n    model: ModelMessageSource;\n    tool: ToolMessageSource;\n    goal: GoalMessageSource;\n}"
+          },
+          {
+            "name": "ModelMessageSource",
+            "declaration": "export interface ModelMessageSource extends AssistantProvenance {\n    kind: 'model';\n}"
+          },
+          {
+            "name": "ProviderRequestId",
+            "declaration": "export type ProviderRequestId = Branded<'ProviderRequestId'>;"
+          },
+          {
+            "name": "ReasoningBlock",
+            "declaration": "export interface ReasoningBlock {\n    type: 'reasoning';\n    text: string;\n}"
+          },
+          {
+            "name": "ReasoningEffortId",
+            "declaration": "export type ReasoningEffortId = Branded<'ReasoningEffortId'>;"
+          },
+          {
+            "name": "RequestContext",
+            "declaration": "export interface RequestContext {\n    provider: string;\n    model: string;\n    contextWindow?: number;\n}"
+          },
+          {
+            "name": "RequestHeaderReason",
+            "declaration": "export type RequestHeaderReason = 'initial' | 'resume' | 'change';"
+          },
+          {
+            "name": "Session",
+            "declaration": "export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    get id(): SessionId;\n    readonly firstLiveSeq: number;\n    get events(): readonly SessionEvent[];\n    get seq(): number;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}"
+          },
+          {
+            "name": "SessionEvent",
+            "declaration": "export type SessionEvent<T extends SessionEventType = SessionEventType> = { [K in SessionEventType]: { type: K; seq: number; time: number; data: SessionEventMap[K]; ignorable?: true; } & (K extends SurfaceEventType ? { sourceEventSeqs?: number[]; surfaceOp?: SurfaceOp; } : object) }[T];"
+          },
+          {
+            "name": "SessionEventMap",
+            "declaration": "export interface SessionEventMap {\n    'turn/start': { turn: number; };\n    'turn/end': { turn: number; reason: TurnEndReason; };\n    'step/start': { turn: number; step: number; };\n    'step/end': { turn: number; step: number; };\n    'user/message': UserMessage;\n    'assistant/chunk': { turn: number; step: number; chunk: StreamChunk; };\n    'assistant/message': { turn: number; step: number; message: AssistantMessage; usage?: TokenUsage; };\n    'tool/call': { turn: number; step: number; callId: CallId; name: string; arguments: string; };\n    'tool/result': { turn: number; step: number; message: ToolResultMessage; error?: { name: string; code: string; }; meta?: JsonValue; };\n    'todo/write': { todos: TodoItem[]; };\n    'request/header': { header: EpochHeader; reason: RequestHeaderReason; };\n    'request/context': RequestContext;\n    'session/end-seed': Record<string, never>;\n    'agent/inbox/spliced': { target: InboxTarget; start: number; removedCount?: number; inserted: UserMessage[]; outcome?: 'canceled'; };\n    'command/run': { commandId: CommandId; name: string; args?: string; source: CommandSource; };\n    'command/done': { commandId: CommandId; kind: 'success' | 'error'; text?: string; sourceEventSeq?: number; };\n    'approval/asked': { id: ApprovalRequestId; toolName: string; callId?: CallId; reason?: string; };\n    'approval/decided': { id: ApprovalRequestId; outcome: ApprovalOutcome; };\n    'approval/policy': { policy: ApprovalPolicy; source?: 'delegation'; };\n    'tool/code-dispatch-start': CodeDispatchStartEventData;\n    'tool/code-dispatch': CodeDispatchEventData;\n    'goal/change': GoalChangeMeta;\n}"
+          },
+          {
+            "name": "SessionEventType",
+            "declaration": "export type SessionEventType = keyof SessionEventMap;"
+          },
+          {
+            "name": "SessionHeader",
+            "declaration": "export interface SessionHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly seedLength?: number;\n    readonly origin?: 'subagent';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}"
+          },
+          {
+            "name": "SessionId",
+            "declaration": "export type SessionId = Branded<'SessionId'>;"
+          },
+          {
+            "name": "SessionSurface",
+            "declaration": "export interface SessionSurface {\n    readonly nodes: readonly number[];\n    readonly replaceGeneration: number;\n}"
+          },
+          {
+            "name": "StreamChunk",
+            "declaration": "export type StreamChunk = { type: 'block-start'; index: number; blockType: ContentBlockType; } | { type: 'text-delta'; index: number; text: string; } | { type: 'reasoning-delta'; index: number; text: string; } | { type: 'tool-call-delta'; index: number; id: CallId; name?: string; argumentsDelta: string; } | { type: 'block-end'; index: number; block: ContentBlock; } | { type: 'usage'; usage: TokenUsage; } | { type: 'finish'; reason: FinishReason; replayState?: unknown; };"
+          },
+          {
+            "name": "SurfaceEventType",
+            "declaration": "export type SurfaceEventType = 'user/message' | 'assistant/message' | 'tool/result';"
+          },
+          {
+            "name": "SurfaceIntent",
+            "declaration": "export interface SurfaceIntent {\n    surfaceOp: SurfaceOp;\n    sourceEventSeqs?: number[];\n}"
+          },
+          {
+            "name": "SurfaceOp",
+            "declaration": "export type SurfaceOp = 'append' | { op: 'replace'; start: number; end: number; };"
+          },
+          {
+            "name": "TextBlock",
+            "declaration": "export interface TextBlock {\n    type: 'text';\n    text: string;\n}"
+          },
+          {
+            "name": "TodoItem",
+            "declaration": "export interface TodoItem {\n    content: string;\n    status: 'pending' | 'in_progress' | 'completed';\n}"
+          },
+          {
+            "name": "TokenUsage",
+            "declaration": "export interface TokenUsage {\n    inputTokens: number;\n    outputTokens: number;\n    cacheReadTokens?: number;\n    cacheWriteTokens?: number;\n    reasoningTokens?: number;\n}"
+          },
+          {
+            "name": "ToolCallBlock",
+            "declaration": "export interface ToolCallBlock {\n    type: 'tool-call';\n    id: CallId;\n    name: string;\n    arguments: string;\n}"
+          },
+          {
+            "name": "ToolMessageSource",
+            "declaration": "export interface ToolMessageSource {\n    kind: 'tool';\n    callId: CallId;\n}"
+          },
+          {
+            "name": "ToolResultBlock",
+            "declaration": "export interface ToolResultBlock {\n    type: 'tool-result';\n    toolCallId: CallId;\n    content: ContentBlock[];\n    isError?: boolean;\n}"
+          },
+          {
+            "name": "ToolResultMessage",
+            "declaration": "export interface ToolResultMessage extends Message {\n    readonly role: 'user';\n    readonly content: [ToolResultBlock];\n    readonly source: ToolMessageSource;\n}"
+          },
+          {
+            "name": "ToolSchema",
+            "declaration": "export interface ToolSchema {\n    name: string;\n    description: string;\n    parameters: Record<string, unknown>;\n}"
+          },
+          {
+            "name": "TurnEndCancelCause",
+            "declaration": "export type TurnEndCancelCause = AgentCancelCause | { readonly kind: 'legacy'; };"
+          },
+          {
+            "name": "TurnEndReason",
+            "declaration": "export type TurnEndReason = TurnEndReasonMap[keyof TurnEndReasonMap];"
+          },
+          {
+            "name": "TurnEndReasonMap",
+            "declaration": "export interface TurnEndReasonMap {\n    completed: { kind: 'completed'; };\n    aborted: { kind: 'aborted'; reason: TurnEndCancelCause; };\n    blocked: { kind: 'blocked'; };\n    error: { kind: 'error'; error: LlmFailure; };\n    'max-tokens': { kind: 'max-tokens'; };\n    interrupted: { kind: 'interrupted'; };\n}"
+          },
+          {
+            "name": "UserMessage",
+            "declaration": "export interface UserMessage extends Message {\n    readonly role: 'user';\n}"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "description": "Goal mutation accepted by one live agent. The matching `goal/change` session event has already committed. Listener failures are contained. Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent.",
+        "summary": "Goal mutation accepted by one live agent.",
+        "tags": [
+          {
+            "name": "param",
+            "argument": "payload.agent",
+            "comment": "- agent whose session owns the goal.",
+            "text": "@param payload.agent - agent whose session owns the goal.\n     *"
+          },
+          {
+            "name": "param",
+            "argument": "payload.change",
+            "comment": "- fresh current projection or clear tombstone.",
+            "text": "@param payload.change - fresh current projection or clear tombstone.\n     *"
+          },
+          {
+            "name": "mode",
+            "comment": "emit",
+            "text": "@mode emit"
+          }
+        ],
+        "jsDoc": "/**\n * Goal mutation accepted by one live agent. The matching `goal/change`\n * session event has already committed. Listener failures are contained.\n * Scope-filtered dispatch (`@seekdeep-ai/seekdeep-scope`): agent-scoped listeners receive only that agent.\n * @param payload.agent - agent whose session owns the goal.\n * @param payload.change - fresh current projection or clear tombstone.\n * @mode emit\n */",
+        "name": "goal/changed",
+        "mode": "emit",
+        "signature": "'goal/changed'(this: import('@seekdeep-ai/seekdeep-scope').Scoped<Agent>, payload: { agent: Agent; change: GoalChanged; }): void"
+      }
+    ],
+    "objects": []
+  },
+  "invocations": [
+    {
+      "id": "@seekdeep-ai/seekdeep-goal#goals/clear",
+      "service": "goals",
+      "namespace": "goals",
+      "method": "clear",
+      "invocation": {
+        "kind": "direct"
+      },
+      "scope": {
+        "context": "agent",
+        "wire": "agentId"
+      },
+      "parameters": [
+        {
+          "name": "agent",
+          "wire": "agentId",
+          "source": "lookup",
+          "lookup": "agent",
+          "boundary": {
+            "type": "type:packages/core/agent/src/index.ts:28:32#71",
+            "codecType": "type:packages/core/agent/src/index.ts:28:32#72",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-session/types#SessionId",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+                "specifier": "@seekdeep-ai/seekdeep-session/types",
+                "name": "SessionId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ref",
+          "wire": "ref",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/goal/goal/src/index.ts:377:28#2",
+            "codecType": "type:packages/goal/goal/src/index.ts:377:28#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalRef",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef",
+                "specifier": "@seekdeep-ai/seekdeep-goal/client",
+                "name": "GoalRef"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/goal/goal/src/index.ts:377:38#2",
+        "codecType": "type:packages/goal/goal/src/index.ts:377:38#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalRef",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef",
+            "specifier": "@seekdeep-ai/seekdeep-goal/client",
+            "name": "GoalRef"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/goal/goal/src/index.ts",
+        "line": 377,
+        "column": 3
+      }
+    },
+    {
+      "id": "@seekdeep-ai/seekdeep-goal#goals/complete",
+      "service": "goals",
+      "namespace": "goals",
+      "method": "complete",
+      "invocation": {
+        "kind": "direct"
+      },
+      "scope": {
+        "context": "agent",
+        "wire": "agentId"
+      },
+      "parameters": [
+        {
+          "name": "agent",
+          "wire": "agentId",
+          "source": "lookup",
+          "lookup": "agent",
+          "boundary": {
+            "type": "type:packages/core/agent/src/index.ts:28:32#66",
+            "codecType": "type:packages/core/agent/src/index.ts:28:32#67",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-session/types#SessionId",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+                "specifier": "@seekdeep-ai/seekdeep-session/types",
+                "name": "SessionId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ref",
+          "wire": "ref",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/goal/goal/src/index.ts:337:31#2",
+            "codecType": "type:packages/goal/goal/src/index.ts:337:31#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalRef",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef",
+                "specifier": "@seekdeep-ai/seekdeep-goal/client",
+                "name": "GoalRef"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/goal/goal/src/index.ts:337:41#2",
+        "codecType": "type:packages/goal/goal/src/index.ts:337:41#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalView",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView",
+            "specifier": "@seekdeep-ai/seekdeep-goal/client",
+            "name": "GoalView"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/goal/goal/src/index.ts",
+        "line": 337,
+        "column": 3
+      }
+    },
+    {
+      "id": "@seekdeep-ai/seekdeep-goal#goals/create",
+      "service": "goals",
+      "namespace": "goals",
+      "method": "create",
+      "implementation": "remoteExportCreate",
+      "invocation": {
+        "kind": "direct"
+      },
+      "scope": {
+        "context": "agent",
+        "wire": "agentId"
+      },
+      "parameters": [
+        {
+          "name": "agent",
+          "wire": "agentId",
+          "source": "lookup",
+          "lookup": "agent",
+          "boundary": {
+            "type": "type:packages/core/agent/src/index.ts:28:32#76",
+            "codecType": "type:packages/core/agent/src/index.ts:28:32#77",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-session/types#SessionId",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+                "specifier": "@seekdeep-ai/seekdeep-session/types",
+                "name": "SessionId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "request",
+          "wire": "request",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/goal/goal/src/index.ts:586:45#2",
+            "codecType": "type:packages/goal/goal/src/index.ts:586:45#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#CreateGoalRequest",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalRequest",
+                "specifier": "@seekdeep-ai/seekdeep-goal/client",
+                "name": "CreateGoalRequest"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/goal/goal/src/index.ts:586:65#2",
+        "codecType": "type:packages/goal/goal/src/index.ts:586:65#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#CreateGoalResult",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalResult",
+            "specifier": "@seekdeep-ai/seekdeep-goal/client",
+            "name": "CreateGoalResult"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/goal/goal/src/index.ts",
+        "line": 586,
+        "column": 3
+      }
+    },
+    {
+      "id": "@seekdeep-ai/seekdeep-goal#goals/edit",
+      "service": "goals",
+      "namespace": "goals",
+      "method": "edit",
+      "invocation": {
+        "kind": "direct"
+      },
+      "scope": {
+        "context": "agent",
+        "wire": "agentId"
+      },
+      "parameters": [
+        {
+          "name": "agent",
+          "wire": "agentId",
+          "source": "lookup",
+          "lookup": "agent",
+          "boundary": {
+            "type": "type:packages/core/agent/src/index.ts:28:32#51",
+            "codecType": "type:packages/core/agent/src/index.ts:28:32#52",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-session/types#SessionId",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+                "specifier": "@seekdeep-ai/seekdeep-session/types",
+                "name": "SessionId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ref",
+          "wire": "ref",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/goal/goal/src/index.ts:277:27#2",
+            "codecType": "type:packages/goal/goal/src/index.ts:277:27#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalRef",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef",
+                "specifier": "@seekdeep-ai/seekdeep-goal/client",
+                "name": "GoalRef"
+              }
+            ]
+          }
+        },
+        {
+          "name": "request",
+          "wire": "request",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/goal/goal/src/index.ts:277:45#2",
+            "codecType": "type:packages/goal/goal/src/index.ts:277:45#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#EditGoalRequest",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#EditGoalRequest",
+                "specifier": "@seekdeep-ai/seekdeep-goal/client",
+                "name": "EditGoalRequest"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/goal/goal/src/index.ts:277:63#2",
+        "codecType": "type:packages/goal/goal/src/index.ts:277:63#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalView",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView",
+            "specifier": "@seekdeep-ai/seekdeep-goal/client",
+            "name": "GoalView"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/goal/goal/src/index.ts",
+        "line": 277,
+        "column": 3
+      }
+    },
+    {
+      "id": "@seekdeep-ai/seekdeep-goal#goals/pause",
+      "service": "goals",
+      "namespace": "goals",
+      "method": "pause",
+      "invocation": {
+        "kind": "direct"
+      },
+      "scope": {
+        "context": "agent",
+        "wire": "agentId"
+      },
+      "parameters": [
+        {
+          "name": "agent",
+          "wire": "agentId",
+          "source": "lookup",
+          "lookup": "agent",
+          "boundary": {
+            "type": "type:packages/core/agent/src/index.ts:28:32#56",
+            "codecType": "type:packages/core/agent/src/index.ts:28:32#57",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-session/types#SessionId",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+                "specifier": "@seekdeep-ai/seekdeep-session/types",
+                "name": "SessionId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ref",
+          "wire": "ref",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/goal/goal/src/index.ts:299:28#2",
+            "codecType": "type:packages/goal/goal/src/index.ts:299:28#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalRef",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef",
+                "specifier": "@seekdeep-ai/seekdeep-goal/client",
+                "name": "GoalRef"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/goal/goal/src/index.ts:299:38#2",
+        "codecType": "type:packages/goal/goal/src/index.ts:299:38#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalView",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView",
+            "specifier": "@seekdeep-ai/seekdeep-goal/client",
+            "name": "GoalView"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/goal/goal/src/index.ts",
+        "line": 299,
+        "column": 3
+      }
+    },
+    {
+      "id": "@seekdeep-ai/seekdeep-goal#goals/resume",
+      "service": "goals",
+      "namespace": "goals",
+      "method": "resume",
+      "invocation": {
+        "kind": "direct"
+      },
+      "scope": {
+        "context": "agent",
+        "wire": "agentId"
+      },
+      "parameters": [
+        {
+          "name": "agent",
+          "wire": "agentId",
+          "source": "lookup",
+          "lookup": "agent",
+          "boundary": {
+            "type": "type:packages/core/agent/src/index.ts:28:32#61",
+            "codecType": "type:packages/core/agent/src/index.ts:28:32#62",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-session/types#SessionId",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+                "specifier": "@seekdeep-ai/seekdeep-session/types",
+                "name": "SessionId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ref",
+          "wire": "ref",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/goal/goal/src/index.ts:311:29#2",
+            "codecType": "type:packages/goal/goal/src/index.ts:311:29#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalRef",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef",
+                "specifier": "@seekdeep-ai/seekdeep-goal/client",
+                "name": "GoalRef"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/goal/goal/src/index.ts:311:39#2",
+        "codecType": "type:packages/goal/goal/src/index.ts:311:39#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-goal/client#GoalView",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView",
+            "specifier": "@seekdeep-ai/seekdeep-goal/client",
+            "name": "GoalView"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/goal/goal/src/index.ts",
+        "line": 311,
+        "column": 3
+      }
+    }
+  ],
+  "graph": {
+    "declarations": [
+      {
+        "description": "A string carrying a compile-time-only brand `B`.",
+        "summary": "A string carrying a compile-time-only brand `B`.",
+        "tags": [],
+        "jsDoc": "/** A string carrying a compile-time-only brand `B`. */",
+        "id": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded",
+        "package": "@seekdeep-ai/seekdeep-brand",
+        "name": "Branded",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/util/brand/src/index.ts",
+          "line": 27,
+          "column": 1
+        },
+        "text": "export type Branded<B extends string> = string & {\n    readonly [BRAND]: B;\n};",
+        "typeParameters": [
+          {
+            "id": "packages/util/brand/src/index.ts:27:21#B",
+            "name": "B",
+            "const": false,
+            "constraint": "type:packages/util/brand/src/index.ts:27:31#1"
+          }
+        ],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/util/brand/src/index.ts:27:41#1"
+      },
+      {
+        "description": "Input whose omitted round cap is resolved by the service configuration.",
+        "summary": "Input whose omitted round cap is resolved by the service configuration.",
+        "tags": [],
+        "jsDoc": "/** Input whose omitted round cap is resolved by the service configuration. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalRequest",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "CreateGoalRequest",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 27,
+          "column": 1
+        },
+        "text": "export interface CreateGoalRequest {\n    readonly objective: string;\n    readonly maxGoalRounds?: number;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalRequest#objective@1066",
+            "name": "objective",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 28,
+              "column": 3
+            },
+            "text": "readonly objective: string",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:28:23#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalRequest#maxGoalRounds@1095",
+            "name": "maxGoalRounds",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 29,
+              "column": 3
+            },
+            "text": "readonly maxGoalRounds?: number",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:29:28#1"
+          }
+        ]
+      },
+      {
+        "description": "Wire-safe acknowledgement of one created goal.",
+        "summary": "Wire-safe acknowledgement of one created goal.",
+        "tags": [],
+        "jsDoc": "/** Wire-safe acknowledgement of one created goal. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalResult",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "CreateGoalResult",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 33,
+          "column": 1
+        },
+        "text": "export interface CreateGoalResult {\n    readonly ref: GoalRef;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalResult#ref@1222",
+            "name": "ref",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 34,
+              "column": 3
+            },
+            "text": "readonly ref: GoalRef",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:34:17#1"
+          }
+        ]
+      },
+      {
+        "description": "Fields changed by an edit; at least one must be present.",
+        "summary": "Fields changed by an edit; at least one must be present.",
+        "tags": [],
+        "jsDoc": "/** Fields changed by an edit; at least one must be present. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#EditGoalRequest",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "EditGoalRequest",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 38,
+          "column": 1
+        },
+        "text": "export interface EditGoalRequest {\n    readonly objective?: string;\n    readonly maxGoalRounds?: number;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#EditGoalRequest#objective@1348",
+            "name": "objective",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 39,
+              "column": 3
+            },
+            "text": "readonly objective?: string",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:39:24#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#EditGoalRequest#maxGoalRounds@1378",
+            "name": "maxGoalRounds",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 40,
+              "column": 3
+            },
+            "text": "readonly maxGoalRounds?: number",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:40:28#1"
+          }
+        ]
+      },
+      {
+        "description": "Whether this live process may automatically continue an active goal.",
+        "summary": "Whether this live process may automatically continue an active goal.",
+        "tags": [],
+        "jsDoc": "/** Whether this live process may automatically continue an active goal. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalActivation",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "GoalActivation",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 71,
+          "column": 1
+        },
+        "text": "export type GoalActivation = 'armed' | 'disarmed';",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/goal/goal/src/types.ts:71:30#1"
+      },
+      {
+        "description": "Machine-routable and human-readable explanation for a blocked goal.",
+        "summary": "Machine-routable and human-readable explanation for a blocked goal.",
+        "tags": [],
+        "jsDoc": "/** Machine-routable and human-readable explanation for a blocked goal. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalBlockReason",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "GoalBlockReason",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 51,
+          "column": 1
+        },
+        "text": "export interface GoalBlockReason {\n    readonly code: string;\n    readonly message: string;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Stable lower-kebab-case classification chosen by the blocking policy.",
+            "summary": "Stable lower-kebab-case classification chosen by the blocking policy.",
+            "tags": [],
+            "jsDoc": "/** Stable lower-kebab-case classification chosen by the blocking policy. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalBlockReason#code@1761",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 53,
+              "column": 3
+            },
+            "text": "readonly code: string",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:53:18#1"
+          },
+          {
+            "description": "Non-empty explanation shown to humans and models.",
+            "summary": "Non-empty explanation shown to humans and models.",
+            "tags": [],
+            "jsDoc": "/** Non-empty explanation shown to humans and models. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalBlockReason#message@1844",
+            "name": "message",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 55,
+              "column": 3
+            },
+            "text": "readonly message: string",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:55:21#1"
+          }
+        ]
+      },
+      {
+        "description": "Identifies one goal across its durable revisions.",
+        "summary": "Identifies one goal across its durable revisions.",
+        "tags": [],
+        "jsDoc": "/** Identifies one goal across its durable revisions. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalId",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "GoalId",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 16,
+          "column": 1
+        },
+        "text": "export type GoalId = Branded<'GoalId'>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/goal/goal/src/types.ts:16:22#1"
+      },
+      {
+        "description": "Durable continuation phase. Activation is process-local and separate.",
+        "summary": "Durable continuation phase.",
+        "tags": [],
+        "jsDoc": "/** Durable continuation phase. Activation is process-local and separate. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalPhase",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "GoalPhase",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 44,
+          "column": 1
+        },
+        "text": "export type GoalPhase = 'active' | 'paused' | 'blocked' | 'complete';",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/goal/goal/src/types.ts:45:3#1"
+      },
+      {
+        "description": "Compare-and-set identity for one exact goal revision.",
+        "summary": "Compare-and-set identity for one exact goal revision.",
+        "tags": [],
+        "jsDoc": "/** Compare-and-set identity for one exact goal revision. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "GoalRef",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 19,
+          "column": 1
+        },
+        "text": "export interface GoalRef {\n    readonly id: GoalId;\n    readonly revision: number;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Stable goal identity.",
+            "summary": "Stable goal identity.",
+            "tags": [],
+            "jsDoc": "/** Stable goal identity. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef#id@831",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 21,
+              "column": 3
+            },
+            "text": "readonly id: GoalId",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:21:16#1"
+          },
+          {
+            "description": "Positive revision; every durable mutation increments it.",
+            "summary": "Positive revision; every durable mutation increments it.",
+            "tags": [],
+            "jsDoc": "/** Positive revision; every durable mutation increments it. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef#revision@919",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 23,
+              "column": 3
+            },
+            "text": "readonly revision: number",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:23:22#1"
+          }
+        ]
+      },
+      {
+        "description": "Full durable state written by every non-clear goal mutation.",
+        "summary": "Full durable state written by every non-clear goal mutation.",
+        "tags": [],
+        "jsDoc": "/** Full durable state written by every non-clear goal mutation. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalSnapshot",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "GoalSnapshot",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 59,
+          "column": 1
+        },
+        "text": "export interface GoalSnapshot extends GoalRef {\n    readonly objective: string;\n    readonly phase: GoalPhase;\n    readonly blockedReason?: GoalBlockReason;\n    readonly maxGoalRounds: number;\n}",
+        "typeParameters": [],
+        "extends": [
+          "type:packages/goal/goal/src/types.ts:59:39#1"
+        ],
+        "implements": [],
+        "members": [
+          {
+            "description": "Human-requested completion objective.",
+            "summary": "Human-requested completion objective.",
+            "tags": [],
+            "jsDoc": "/** Human-requested completion objective. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalSnapshot#objective@2037",
+            "name": "objective",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 61,
+              "column": 3
+            },
+            "text": "readonly objective: string",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:61:23#1"
+          },
+          {
+            "description": "Durable lifecycle phase.",
+            "summary": "Durable lifecycle phase.",
+            "tags": [],
+            "jsDoc": "/** Durable lifecycle phase. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalSnapshot#phase@2100",
+            "name": "phase",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 63,
+              "column": 3
+            },
+            "text": "readonly phase: GoalPhase",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:63:19#1"
+          },
+          {
+            "description": "Present exactly while `phase` is `blocked`.",
+            "summary": "Present exactly while `phase` is `blocked`.",
+            "tags": [],
+            "jsDoc": "/** Present exactly while `phase` is `blocked`. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalSnapshot#blockedReason@2181",
+            "name": "blockedReason",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 65,
+              "column": 3
+            },
+            "text": "readonly blockedReason?: GoalBlockReason",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:65:28#1"
+          },
+          {
+            "description": "Total admitted goal-round cap.",
+            "summary": "Total admitted goal-round cap.",
+            "tags": [],
+            "jsDoc": "/** Total admitted goal-round cap. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalSnapshot#maxGoalRounds@2264",
+            "name": "maxGoalRounds",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 67,
+              "column": 3
+            },
+            "text": "readonly maxGoalRounds: number",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:67:27#1"
+          }
+        ]
+      },
+      {
+        "description": "Current goal projection, including values derived from the session log.",
+        "summary": "Current goal projection, including values derived from the session log.",
+        "tags": [],
+        "jsDoc": "/** Current goal projection, including values derived from the session log. */",
+        "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView",
+        "package": "@seekdeep-ai/seekdeep-goal",
+        "name": "GoalView",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/goal/goal/src/types.ts",
+          "line": 74,
+          "column": 1
+        },
+        "text": "export interface GoalView extends GoalSnapshot {\n    readonly roundsStarted: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n    readonly activation: GoalActivation;\n}",
+        "typeParameters": [],
+        "extends": [
+          "type:packages/goal/goal/src/types.ts:74:35#1"
+        ],
+        "implements": [],
+        "members": [
+          {
+            "description": "Highest admitted round number for this goal.",
+            "summary": "Highest admitted round number for this goal.",
+            "tags": [],
+            "jsDoc": "/** Highest admitted round number for this goal. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView#roundsStarted@2609",
+            "name": "roundsStarted",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 76,
+              "column": 3
+            },
+            "text": "readonly roundsStarted: number",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:76:27#1"
+          },
+          {
+            "description": "Epoch milliseconds of the create mutation.",
+            "summary": "Epoch milliseconds of the create mutation.",
+            "tags": [],
+            "jsDoc": "/** Epoch milliseconds of the create mutation. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView#createdAt@2694",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 78,
+              "column": 3
+            },
+            "text": "readonly createdAt: number",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:78:23#1"
+          },
+          {
+            "description": "Epoch milliseconds of the latest mutation.",
+            "summary": "Epoch milliseconds of the latest mutation.",
+            "tags": [],
+            "jsDoc": "/** Epoch milliseconds of the latest mutation. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView#updatedAt@2775",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 80,
+              "column": 3
+            },
+            "text": "readonly updatedAt: number",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:80:23#1"
+          },
+          {
+            "description": "Process-local continuation eligibility; never persisted.",
+            "summary": "Process-local continuation eligibility; never persisted.",
+            "tags": [],
+            "jsDoc": "/** Process-local continuation eligibility; never persisted. */",
+            "id": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView#activation@2870",
+            "name": "activation",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/types.ts",
+              "line": 82,
+              "column": 3
+            },
+            "text": "readonly activation: GoalActivation",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/types.ts:82:24#1"
+          }
+        ]
+      },
+      {
+        "description": "Identifies one session in the store (and its persistence artifacts).",
+        "summary": "Identifies one session in the store (and its persistence artifacts).",
+        "tags": [],
+        "jsDoc": "/** Identifies one session in the store (and its persistence artifacts). */",
+        "id": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+        "package": "@seekdeep-ai/seekdeep-session",
+        "name": "SessionId",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/core/session/src/types.ts",
+          "line": 22,
+          "column": 1
+        },
+        "text": "export type SessionId = Branded<'SessionId'>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/core/session/src/types.ts:22:25#1"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#51",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#52",
+        "kind": "intersection",
+        "types": [
+          "type:packages/core/agent/src/index.ts:28:32#53",
+          "type:packages/core/agent/src/index.ts:28:32#54"
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#53",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#54",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/core/agent/src/index.ts:28:32#54#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/core/agent/src/index.ts",
+              "line": 28,
+              "column": 32
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/core/agent/src/index.ts:28:32#55"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#55",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#56",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#57",
+        "kind": "intersection",
+        "types": [
+          "type:packages/core/agent/src/index.ts:28:32#58",
+          "type:packages/core/agent/src/index.ts:28:32#59"
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#58",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#59",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/core/agent/src/index.ts:28:32#59#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/core/agent/src/index.ts",
+              "line": 28,
+              "column": 32
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/core/agent/src/index.ts:28:32#60"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#60",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#61",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#62",
+        "kind": "intersection",
+        "types": [
+          "type:packages/core/agent/src/index.ts:28:32#63",
+          "type:packages/core/agent/src/index.ts:28:32#64"
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#63",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#64",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/core/agent/src/index.ts:28:32#64#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/core/agent/src/index.ts",
+              "line": 28,
+              "column": 32
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/core/agent/src/index.ts:28:32#65"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#65",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#66",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#67",
+        "kind": "intersection",
+        "types": [
+          "type:packages/core/agent/src/index.ts:28:32#68",
+          "type:packages/core/agent/src/index.ts:28:32#69"
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#68",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#69",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/core/agent/src/index.ts:28:32#69#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/core/agent/src/index.ts",
+              "line": 28,
+              "column": 32
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/core/agent/src/index.ts:28:32#70"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#70",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#71",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#72",
+        "kind": "intersection",
+        "types": [
+          "type:packages/core/agent/src/index.ts:28:32#73",
+          "type:packages/core/agent/src/index.ts:28:32#74"
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#73",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#74",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/core/agent/src/index.ts:28:32#74#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/core/agent/src/index.ts",
+              "line": 28,
+              "column": 32
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/core/agent/src/index.ts:28:32#75"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#75",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#76",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#77",
+        "kind": "intersection",
+        "types": [
+          "type:packages/core/agent/src/index.ts:28:32#78",
+          "type:packages/core/agent/src/index.ts:28:32#79"
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#78",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#79",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/core/agent/src/index.ts:28:32#79#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/core/agent/src/index.ts",
+              "line": 28,
+              "column": 32
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/core/agent/src/index.ts:28:32#80"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/core/agent/src/index.ts:28:32#80",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/core/session/src/types.ts:22:25#1",
+        "kind": "reference",
+        "name": "Branded",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded"
+        },
+        "arguments": [
+          "type:packages/core/session/src/types.ts:22:33#1"
+        ]
+      },
+      {
+        "id": "type:packages/core/session/src/types.ts:22:33#1",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "'SessionId'"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:27#2",
+        "kind": "reference",
+        "name": "GoalRef",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:27#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:27#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 27
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:27#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:27#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 27
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:27#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:27#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:277:27#5",
+          "type:packages/goal/goal/src/index.ts:277:27#6"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:27#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:27#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:27#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 27
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:27#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:27#7",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:27#8",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:45#2",
+        "kind": "reference",
+        "name": "EditGoalRequest",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#EditGoalRequest"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:45#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:45#3#objective",
+            "name": "objective",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 45
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:45#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:45#3#maxGoalRounds",
+            "name": "maxGoalRounds",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 45
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:45#5"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:45#4",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:45#5",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#10",
+        "kind": "literal",
+        "value": "active",
+        "text": "\"active\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#11",
+        "kind": "literal",
+        "value": "paused",
+        "text": "\"paused\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#12",
+        "kind": "literal",
+        "value": "blocked",
+        "text": "\"blocked\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#13",
+        "kind": "literal",
+        "value": "complete",
+        "text": "\"complete\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#14",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#14#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#14#message",
+            "name": "message",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#15",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:277:63#8",
+          "type:packages/goal/goal/src/index.ts:277:63#16"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#16",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#16#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#17"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#17",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#2",
+        "kind": "reference",
+        "name": "GoalView",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#roundsStarted",
+            "name": "roundsStarted",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#createdAt",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#updatedAt",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#activation",
+            "name": "activation",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#objective",
+            "name": "objective",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#phase",
+            "name": "phase",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#9"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#blockedReason",
+            "name": "blockedReason",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#14"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#maxGoalRounds",
+            "name": "maxGoalRounds",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#15"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:277:63#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 277,
+              "column": 63
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:277:63#4"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#4",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#5",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:277:63#6",
+          "type:packages/goal/goal/src/index.ts:277:63#7"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#6",
+        "kind": "literal",
+        "value": "armed",
+        "text": "\"armed\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#7",
+        "kind": "literal",
+        "value": "disarmed",
+        "text": "\"disarmed\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#8",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:277:63#9",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:277:63#10",
+          "type:packages/goal/goal/src/index.ts:277:63#11",
+          "type:packages/goal/goal/src/index.ts:277:63#12",
+          "type:packages/goal/goal/src/index.ts:277:63#13"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:28#2",
+        "kind": "reference",
+        "name": "GoalRef",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:28#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:28#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 28
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:28#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:28#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 28
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:28#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:28#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:299:28#5",
+          "type:packages/goal/goal/src/index.ts:299:28#6"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:28#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:28#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:28#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 28
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:28#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:28#7",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:28#8",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#10",
+        "kind": "literal",
+        "value": "active",
+        "text": "\"active\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#11",
+        "kind": "literal",
+        "value": "paused",
+        "text": "\"paused\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#12",
+        "kind": "literal",
+        "value": "blocked",
+        "text": "\"blocked\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#13",
+        "kind": "literal",
+        "value": "complete",
+        "text": "\"complete\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#14",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#14#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#14#message",
+            "name": "message",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#15",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:299:38#8",
+          "type:packages/goal/goal/src/index.ts:299:38#16"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#16",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#16#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#17"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#17",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#2",
+        "kind": "reference",
+        "name": "GoalView",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#roundsStarted",
+            "name": "roundsStarted",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#createdAt",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#updatedAt",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#activation",
+            "name": "activation",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#objective",
+            "name": "objective",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#phase",
+            "name": "phase",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#9"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#blockedReason",
+            "name": "blockedReason",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#14"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#maxGoalRounds",
+            "name": "maxGoalRounds",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#15"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:299:38#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 299,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:299:38#4"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#4",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#5",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:299:38#6",
+          "type:packages/goal/goal/src/index.ts:299:38#7"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#6",
+        "kind": "literal",
+        "value": "armed",
+        "text": "\"armed\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#7",
+        "kind": "literal",
+        "value": "disarmed",
+        "text": "\"disarmed\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#8",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:299:38#9",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:299:38#10",
+          "type:packages/goal/goal/src/index.ts:299:38#11",
+          "type:packages/goal/goal/src/index.ts:299:38#12",
+          "type:packages/goal/goal/src/index.ts:299:38#13"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:29#2",
+        "kind": "reference",
+        "name": "GoalRef",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:29#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:29#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 29
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:29#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:29#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 29
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:29#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:29#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:311:29#5",
+          "type:packages/goal/goal/src/index.ts:311:29#6"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:29#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:29#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:29#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 29
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:29#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:29#7",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:29#8",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#10",
+        "kind": "literal",
+        "value": "active",
+        "text": "\"active\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#11",
+        "kind": "literal",
+        "value": "paused",
+        "text": "\"paused\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#12",
+        "kind": "literal",
+        "value": "blocked",
+        "text": "\"blocked\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#13",
+        "kind": "literal",
+        "value": "complete",
+        "text": "\"complete\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#14",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#14#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#14#message",
+            "name": "message",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#15",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:311:39#8",
+          "type:packages/goal/goal/src/index.ts:311:39#16"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#16",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#16#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#17"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#17",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#2",
+        "kind": "reference",
+        "name": "GoalView",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#roundsStarted",
+            "name": "roundsStarted",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#createdAt",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#updatedAt",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#activation",
+            "name": "activation",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#objective",
+            "name": "objective",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#phase",
+            "name": "phase",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#9"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#blockedReason",
+            "name": "blockedReason",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#14"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#maxGoalRounds",
+            "name": "maxGoalRounds",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#15"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:311:39#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 311,
+              "column": 39
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:311:39#4"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#4",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#5",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:311:39#6",
+          "type:packages/goal/goal/src/index.ts:311:39#7"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#6",
+        "kind": "literal",
+        "value": "armed",
+        "text": "\"armed\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#7",
+        "kind": "literal",
+        "value": "disarmed",
+        "text": "\"disarmed\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#8",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:311:39#9",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:311:39#10",
+          "type:packages/goal/goal/src/index.ts:311:39#11",
+          "type:packages/goal/goal/src/index.ts:311:39#12",
+          "type:packages/goal/goal/src/index.ts:311:39#13"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:31#2",
+        "kind": "reference",
+        "name": "GoalRef",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:31#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:31#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 31
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:31#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:31#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 31
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:31#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:31#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:337:31#5",
+          "type:packages/goal/goal/src/index.ts:337:31#6"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:31#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:31#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:31#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 31
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:31#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:31#7",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:31#8",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#10",
+        "kind": "literal",
+        "value": "active",
+        "text": "\"active\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#11",
+        "kind": "literal",
+        "value": "paused",
+        "text": "\"paused\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#12",
+        "kind": "literal",
+        "value": "blocked",
+        "text": "\"blocked\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#13",
+        "kind": "literal",
+        "value": "complete",
+        "text": "\"complete\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#14",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#14#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#14#message",
+            "name": "message",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#15",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:337:41#8",
+          "type:packages/goal/goal/src/index.ts:337:41#16"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#16",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#16#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#17"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#17",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#2",
+        "kind": "reference",
+        "name": "GoalView",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalView"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#roundsStarted",
+            "name": "roundsStarted",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#createdAt",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#updatedAt",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#activation",
+            "name": "activation",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#objective",
+            "name": "objective",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#phase",
+            "name": "phase",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#9"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#blockedReason",
+            "name": "blockedReason",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#14"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#maxGoalRounds",
+            "name": "maxGoalRounds",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#15"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:337:41#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 337,
+              "column": 41
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:337:41#4"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#4",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#5",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:337:41#6",
+          "type:packages/goal/goal/src/index.ts:337:41#7"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#6",
+        "kind": "literal",
+        "value": "armed",
+        "text": "\"armed\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#7",
+        "kind": "literal",
+        "value": "disarmed",
+        "text": "\"disarmed\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#8",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:337:41#9",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:337:41#10",
+          "type:packages/goal/goal/src/index.ts:337:41#11",
+          "type:packages/goal/goal/src/index.ts:337:41#12",
+          "type:packages/goal/goal/src/index.ts:337:41#13"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:28#2",
+        "kind": "reference",
+        "name": "GoalRef",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:28#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:377:28#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 377,
+              "column": 28
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:377:28#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:377:28#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 377,
+              "column": 28
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:377:28#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:28#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:377:28#5",
+          "type:packages/goal/goal/src/index.ts:377:28#6"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:28#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:28#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:377:28#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 377,
+              "column": 28
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:377:28#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:28#7",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:28#8",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:38#2",
+        "kind": "reference",
+        "name": "GoalRef",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:38#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:377:38#3#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 377,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:377:38#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:377:38#3#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 377,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:377:38#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:38#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:377:38#5",
+          "type:packages/goal/goal/src/index.ts:377:38#6"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:38#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:38#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:377:38#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 377,
+              "column": 38
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:377:38#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:38#7",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:377:38#8",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:45#2",
+        "kind": "reference",
+        "name": "CreateGoalRequest",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalRequest"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:45#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:586:45#3#objective",
+            "name": "objective",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 586,
+              "column": 45
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:586:45#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:586:45#3#maxGoalRounds",
+            "name": "maxGoalRounds",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 586,
+              "column": 45
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:586:45#5"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:45#4",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:45#5",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:65#2",
+        "kind": "reference",
+        "name": "CreateGoalResult",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#CreateGoalResult"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:65#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:586:65#3#ref",
+            "name": "ref",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 586,
+              "column": 65
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:586:65#4"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:65#4",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:586:65#4#id",
+            "name": "id",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 586,
+              "column": 65
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:586:65#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:586:65#4#revision",
+            "name": "revision",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 586,
+              "column": 65
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:586:65#9"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:65#5",
+        "kind": "intersection",
+        "types": [
+          "type:packages/goal/goal/src/index.ts:586:65#6",
+          "type:packages/goal/goal/src/index.ts:586:65#7"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:65#6",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:65#7",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/goal/goal/src/index.ts:586:65#7#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/goal/goal/src/index.ts",
+              "line": 586,
+              "column": 65
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/goal/goal/src/index.ts:586:65#8"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:65#8",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "\"GoalId\""
+      },
+      {
+        "id": "type:packages/goal/goal/src/index.ts:586:65#9",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:16:22#1",
+        "kind": "reference",
+        "name": "Branded",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded"
+        },
+        "arguments": [
+          "type:packages/goal/goal/src/types.ts:16:30#1"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:16:30#1",
+        "kind": "literal",
+        "value": "GoalId",
+        "text": "'GoalId'"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:21:16#1",
+        "kind": "reference",
+        "name": "GoalId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:23:22#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:28:23#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:29:28#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:34:17#1",
+        "kind": "reference",
+        "name": "GoalRef",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:39:24#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:40:28#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:45:3#1",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/types.ts:45:5#1",
+          "type:packages/goal/goal/src/types.ts:46:5#1",
+          "type:packages/goal/goal/src/types.ts:47:5#1",
+          "type:packages/goal/goal/src/types.ts:48:5#1"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:45:5#1",
+        "kind": "literal",
+        "value": "active",
+        "text": "'active'"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:46:5#1",
+        "kind": "literal",
+        "value": "paused",
+        "text": "'paused'"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:47:5#1",
+        "kind": "literal",
+        "value": "blocked",
+        "text": "'blocked'"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:48:5#1",
+        "kind": "literal",
+        "value": "complete",
+        "text": "'complete'"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:53:18#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:55:21#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:59:39#1",
+        "kind": "reference",
+        "name": "GoalRef",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalRef"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:61:23#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:63:19#1",
+        "kind": "reference",
+        "name": "GoalPhase",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalPhase"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:65:28#1",
+        "kind": "reference",
+        "name": "GoalBlockReason",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalBlockReason"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:67:27#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:71:30#1",
+        "kind": "union",
+        "types": [
+          "type:packages/goal/goal/src/types.ts:71:30#2",
+          "type:packages/goal/goal/src/types.ts:71:40#1"
+        ]
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:71:30#2",
+        "kind": "literal",
+        "value": "armed",
+        "text": "'armed'"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:71:40#1",
+        "kind": "literal",
+        "value": "disarmed",
+        "text": "'disarmed'"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:74:35#1",
+        "kind": "reference",
+        "name": "GoalSnapshot",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalSnapshot"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:76:27#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:78:23#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:80:23#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/goal/goal/src/types.ts:82:24#1",
+        "kind": "reference",
+        "name": "GoalActivation",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-goal:packages/goal/goal/src/types.ts#GoalActivation"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:31#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:41#1",
+        "kind": "intersection",
+        "types": [
+          "type:packages/util/brand/src/index.ts:27:41#2",
+          "type:packages/util/brand/src/index.ts:27:50#1"
+        ]
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:41#2",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:50#1",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/util/brand/src/index.ts:27:50#1#[BRAND]@1293",
+            "name": "[BRAND]",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/util/brand/src/index.ts",
+              "line": 27,
+              "column": 52
+            },
+            "text": "readonly [BRAND]: B",
+            "kind": "property",
+            "type": "type:packages/util/brand/src/index.ts:27:70#1"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:70#1",
+        "kind": "reference",
+        "name": "B",
+        "target": {
+          "kind": "type-parameter",
+          "parameter": "packages/util/brand/src/index.ts:27:21#B"
+        },
+        "arguments": []
+      }
+    ]
+  }
+}

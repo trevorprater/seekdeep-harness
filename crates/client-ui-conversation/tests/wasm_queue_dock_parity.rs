@@ -121,8 +121,9 @@ export function queueDockFindAllKind(value, kind) {
 export function queueDockChangeEvent(value) { return { currentTarget: { value } } }
 export function queueDockKeyEvent(key, composing = false) { return { key, nativeEvent: { isComposing: composing }, prevented: false, preventDefault() { this.prevented = true } } }
 export function queueDockContext(mode = 'ok') {
+  // Source `actx.get('conversation')` is scope-bound; the port binds the scope through `forContext`.
   const conversation = {
-    updateQueue(id, action) { updates.push({ id, action, injected: true }); return Promise.resolve() },
+    forContext(scope) { return { updateQueue(id, action) { updates.push({ id, action, injected: scope === actx }); return Promise.resolve() } } },
     input: { for(actx) { return { notify(level, text) { notices.push({ level, text, actx }) } } } },
   }
   const actx = { get(name) { return mode === 'no-conversation' ? undefined : name === 'conversation' ? conversation : undefined } }

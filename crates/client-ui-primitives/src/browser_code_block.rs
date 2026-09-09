@@ -253,7 +253,7 @@ pub(crate) fn inject_namespaced_style(
     {
         return Ok(());
     }
-    let mut css = source.to_owned();
+    let mut css = crate::css_modules::unwrap_global_selectors(source);
     for (source, target) in replacements {
         css = css.replace(&format!(".{source}"), &format!(".{target}"));
     }

@@ -20,6 +20,7 @@ seekdeep-api-gateway = { path = "../api-gateway" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-loader = { path = "../loader" }
 seekdeep-tools = { path = "../tools" }
+seekdeep-typert-host-artifact = { path = "../typert-host-artifact" }
 seekdeep-typert-protocol = { path = "../typert-protocol" }
 serde.workspace = true
 serde_json.workspace = true

@@ -109,7 +109,12 @@ impl<'a> FaceModelEmitter<'a> {
         })
     }
 
-    fn runtime_model(&self, package: &PackageModel) -> Result<Value> {
+    /// The runtime `model` section of a Host artifact: services, events and objects.
+    ///
+    /// # Errors
+    ///
+    /// Returns a rendering failure.
+    pub fn runtime_model(&self, package: &PackageModel) -> Result<Value> {
         let services = package.services.iter().map(|service| {
             let members = service.members.iter().map(|id| self.runtime_member(self.renderer.member(id)?)).collect::<Result<Vec<_>>>()?;
             let mut value = documentation_literal(&service.documentation);

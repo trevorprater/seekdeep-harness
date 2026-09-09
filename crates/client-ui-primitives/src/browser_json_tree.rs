@@ -1454,10 +1454,7 @@ fn inject_style() -> Result<(), JsValue> {
         ("root", "seekdeep-primitive-json-tree-root"),
         ("row", "seekdeep-primitive-json-tree-row"),
     ];
-    let mut css = JSON_TREE_CSS.replace(
-        ":global(body[data-ds-dark-theme])",
-        "body[data-ds-dark-theme]",
-    );
+    let mut css = crate::css_modules::unwrap_global_selectors(JSON_TREE_CSS);
     for (source, target) in replacements {
         css = css.replace(&format!(".{source}"), &format!(".{target}"));
     }

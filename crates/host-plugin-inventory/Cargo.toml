@@ -14,6 +14,7 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-api-gateway = { path = "../api-gateway" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-loader = { path = "../loader" }
+seekdeep-typert-host-artifact = { path = "../typert-host-artifact" }
 seekdeep-typert-protocol = { path = "../typert-protocol" }
 serde_json.workspace = true
 

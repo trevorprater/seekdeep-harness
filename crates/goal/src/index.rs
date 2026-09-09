@@ -1104,11 +1104,20 @@ fn parse_config(config: &Value) -> anyhow::Result<Config> {
     Ok(serde_json::from_value(config.clone())?)
 }
 
+/// Source: the package's generated `./typert` Host artifact (`cargo xtask typert-host-artifacts`).
+/// The package's embedded Host typert artifact (`typert.host.json`), registered at load by
+/// the shipping host and otherwise at plugin apply.
+pub const TYPERT_HOST_ARTIFACT: &str = include_str!("../typert.host.json");
+
 /// Builds the loader-compatible goal plugin.
 #[must_use]
 pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), move |context, config| {
         Box::pin(async move {
+            context.own(seekdeep_typert_host_artifact::register(
+                &context,
+                TYPERT_HOST_ARTIFACT,
+            )?)?;
             GoalService::install(&context, parse_config(&config)?)?;
             register_invocable_service_if_available(&context, GOAL)?;
             Ok(())

@@ -17,6 +17,7 @@ seekdeep-core = { path = "../core" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-llm = { path = "../llm" }
 seekdeep-session-projection = { path = "../session-projection" }
+seekdeep-typert-host-artifact = { path = "../typert-host-artifact" }
 seekdeep-typert-protocol = { path = "../typert-protocol" }
 seekdeep-util = { path = "../util" }
 serde.workspace = true

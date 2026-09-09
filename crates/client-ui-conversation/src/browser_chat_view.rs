@@ -11,6 +11,13 @@ const CHAT_CSS: &str =
     include_str!("../../../packages/client/ui-conversation/src/client/chat/ChatView.module.css");
 const FOLLOW_THRESHOLD: f64 = 24.0;
 
+/// The `ChatView` stylesheet as injected: the composer seat publishes its live
+/// height under the renamed `--seekdeep-composer-height` custom property, so
+/// the back-to-bottom clearance rule must read the same name.
+pub(crate) fn chat_view_styles() -> String {
+    CHAT_CSS.replace("--dsh-composer-height", "--seekdeep-composer-height")
+}
+
 thread_local! {
     static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
     static COMPONENTS: RefCell<Option<ChatComponents>> = const { RefCell::new(None) };
@@ -1291,7 +1298,7 @@ fn set_number_property(value: &JsValue, key: &str, number: f64) -> Result<(), Js
 fn inject_chat_styles() -> Result<(), JsValue> {
     inject_style(
         "ChatView",
-        CHAT_CSS,
+        &chat_view_styles(),
         &[
             ("callRow", "seekdeep-conversation-chat-callRow"),
             ("column", "seekdeep-conversation-chat-column"),

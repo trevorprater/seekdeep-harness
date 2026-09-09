@@ -25044,7 +25044,18 @@
     {
       "source": "apps/web/tests/message-feedback-protocol.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/typert-host-artifact/src/lib.rs",
+        "crates/typert-model/src/lib.rs",
+        "xtask/src/typert_host_artifacts.rs",
+        "crates/message-feedback/typert.host.json",
+        "crates/api-gateway/src/lib.rs",
+        "xtask/src/web_keyless_driver.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged against the keyless Rust Host's real HTTP carrier with the seeded session; the strict list, put, conflict and delete exchanges match the protocol golden byte for byte, including the typert gateway's boundary-validation rejection of an invalid rating. Port: every package the source ships with a ./typert export (commands, goal, cordis-host-runner, host-plugin-inventory, message-feedback) now embeds a Host artifact derived from the pinned Host face model (cargo xtask typert-host-artifacts, checked in gates) and registers it at plugin apply; a model-driven TypertSchema interprets the generated Zod projection, and the gateway maps artifact export names through the Rust services' Remote markers"
+      ]
     },
     {
       "source": "apps/web/tests/message-feedback.e2e.ts",

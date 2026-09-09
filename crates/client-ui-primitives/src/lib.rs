@@ -33,6 +33,7 @@ mod browser_tooltip;
 mod browser_util;
 #[cfg(target_arch = "wasm32")]
 mod browser_web;
+mod css_modules;
 mod head_tail_cap;
 #[allow(clippy::needless_raw_string_hashes, clippy::unreadable_literal)]
 mod icon_data;
@@ -69,6 +70,7 @@ pub use browser_tooltip::*;
 pub use browser_util::*;
 #[cfg(target_arch = "wasm32")]
 pub use browser_web::*;
+pub use css_modules::*;
 pub use head_tail_cap::*;
 pub use icon_data::*;
 pub use markdown::*;

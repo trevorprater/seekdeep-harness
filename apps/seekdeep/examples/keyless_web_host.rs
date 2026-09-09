@@ -20,8 +20,8 @@ use seekdeep_agent::{
 use seekdeep_agent_presets::AGENT_PRESETS;
 use seekdeep_app_boot::BootPrepare;
 use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
-use seekdeep_cordis::Context;
-use seekdeep_core::session::{AgentCancelCause, SessionId};
+use seekdeep_cordis::{Context, EventOptions, EventReply};
+use seekdeep_core::session::{AgentCancelCause, Session, SessionEvent, SessionId};
 use seekdeep_core::session_store::{CreateSessionOptions, SESSIONS};
 use seekdeep_host_webserver::{
     WEB_SERVER, WebRegistration, WebRoute, WebRouteKind, WebServer, response,
@@ -287,6 +287,38 @@ fn settings_fixture_routes(
 
 /// Lists every live Session with its header and events: the browser driver's stand-in for the
 /// source scaffold's in-process `ctx.on('session/event')` taps and `ctx.sessions.list()`.
+/// Every event appended to a Session the Host has hosted, kept past detach.
+///
+/// Source `ctx.on('session/event')` observes each in-process append, including the
+/// last events of a continuable child whose Agent disposes and detaches its
+/// Session before the driver's next listing poll; the ledger lets the listing
+/// keep delivering those sessions after they leave the live registry.
+#[derive(Default)]
+struct SessionLedger {
+    entries: BTreeMap<String, LedgerEntry>,
+}
+
+struct LedgerEntry {
+    header: serde_json::Value,
+    events: BTreeMap<u64, SessionEvent>,
+}
+
+impl SessionLedger {
+    fn record(&mut self, session: &Session, events: impl IntoIterator<Item = SessionEvent>) {
+        let entry = self
+            .entries
+            .entry(session.id().to_string())
+            .or_insert_with(|| LedgerEntry {
+                header: json!(session.header()),
+                events: BTreeMap::new(),
+            });
+        entry.header = json!(session.header());
+        for event in events {
+            entry.events.insert(event.seq, event);
+        }
+    }
+}
+
 fn sessions_fixture_route(
     context: &Context,
     server: &WebServer,
@@ -297,12 +329,34 @@ fn sessions_fixture_route(
     let agents = context
         .get(AGENTS)
         .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
+    let ledger: Arc<Mutex<SessionLedger>> = Arc::default();
+    let recorder = ledger.clone();
+    let listener = context.events().on_sync(
+        context,
+        "session/event",
+        move |_, args| {
+            let (Some(session), Some(event)) =
+                (args.get::<Session>(0), args.get::<SessionEvent>(1))
+            else {
+                return Ok(EventReply::Undefined);
+            };
+            recorder
+                .lock()
+                .expect("session ledger poisoned")
+                .record(&session, [event.as_ref().clone()]);
+            Ok(EventReply::Undefined)
+        },
+        EventOptions::default(),
+    )?;
+    let listener = Arc::new(listener);
     server.register(WebRoute {
         kind: WebRouteKind::Exact,
         path: "/fixture/sessions".to_owned(),
         handler: Arc::new(move |request| {
             let sessions = sessions.clone();
             let agents = agents.clone();
+            let ledger = ledger.clone();
+            let _listener = listener.clone();
             Box::pin(async move {
                 anyhow::ensure!(
                     request.method().as_str() == "GET",
@@ -310,8 +364,12 @@ fn sessions_fixture_route(
                 );
                 // Source `ctx.agents.get(id)` answers only for live Agents; the listing carries
                 // each Session's live Agent status so the driver can tell the two apart.
-                let listed = sessions
-                    .list()
+                let live = sessions.list();
+                let mut ledger = ledger.lock().expect("session ledger poisoned");
+                for session in &live {
+                    ledger.record(session, session.events());
+                }
+                let mut listed = live
                     .iter()
                     .map(|session| {
                         json!({
@@ -324,6 +382,23 @@ fn sessions_fixture_route(
                         })
                     })
                     .collect::<Vec<_>>();
+                let live_ids = live
+                    .iter()
+                    .map(|session| session.id().to_string())
+                    .collect::<HashSet<_>>();
+                listed.extend(
+                    ledger
+                        .entries
+                        .iter()
+                        .filter(|(id, _)| !live_ids.contains(id.as_str()))
+                        .map(|(_, entry)| {
+                            json!({
+                                "header": entry.header,
+                                "events": entry.events.values().collect::<Vec<_>>(),
+                                "agent": serde_json::Value::Null,
+                            })
+                        }),
+                );
                 Ok(response(200_u16.try_into()?, serde_json::to_vec(&listed)?))
             })
         }),

@@ -83,8 +83,9 @@ export function installChatBench() {
   globalThis.setInterval = (callback, delay) => { const id = nextTimer++; timers.set(id, { callback, delay, due: now + delay }); return id }
   globalThis.clearInterval = id => { timers.delete(id) }
   globalThis.ResizeObserver = BenchResizeObserver
+  const styles = []
   globalThis.document = {
-    head: { appendChild() {} }, createElement() { return { setAttribute() {} } }, querySelector() { return null },
+    head: { appendChild(style) { styles.push(style.textContent) } }, createElement() { return { setAttribute() {} } }, querySelector() { return null },
     elementsFromPoint() { return hitRow === null ? [] : [hitRow] },
   }
   const React = {
@@ -138,7 +139,7 @@ export function installChatBench() {
     renderSlot() {}, sessionId: 's1', openFile() {}, loadOlder() { loadOlderCalls += 1 }, loadImage() {}, inspectCall() {},
     chatScroll, forkAt() {}, fileMentions() {}, t: translate,
   }
-  return { React, uiPrimitives, dependencies, props }
+  return { React, uiPrimitives, dependencies, props, styles }
 }
 export function chatRender(component) {
   cursor = 0; pendingLayouts = []; pendingEffects = []
@@ -322,6 +323,35 @@ fn setup() -> (JsValue, JsValue) {
         chat_view_component().unwrap(),
         turn_status_component().unwrap(),
     )
+}
+
+#[wasm_bindgen_test]
+fn injects_the_chat_stylesheet_with_compiled_global_scopes_and_the_renamed_seat_height() {
+    let bench = install_chat_bench();
+    configure_client_ui_conversation_chat_view(
+        property(&bench, "React"),
+        property(&bench, "uiPrimitives"),
+        property(&bench, "dependencies"),
+    )
+    .unwrap();
+    let chat_style = Array::from(&property(&bench, "styles"))
+        .iter()
+        .filter_map(|value| value.as_string())
+        .find(|value| value.contains("seekdeep-conversation-chat-toBottomSlot"))
+        .unwrap();
+    // CSS Modules `:global(...)` scopes compile to their inner selector; a raw
+    // wrapper would make the browser drop the whole rule, leaving the chat
+    // scroller as its own overflow container and the sticky slot pinned to it.
+    assert!(!chat_style.contains(":global("));
+    assert!(chat_style.contains("[data-conversation-scroll] .seekdeep-conversation-chat-scroll {"));
+    assert!(chat_style.contains("[data-conversation-scroll] .seekdeep-conversation-chat-root {"));
+    // The clearance reads the seat height under the name ConversationRoot publishes.
+    assert!(
+        chat_style
+            .contains("[data-conversation-scroll] .seekdeep-conversation-chat-toBottomSlot {")
+    );
+    assert!(chat_style.contains("bottom: calc(var(--seekdeep-composer-height, 152px) + 16px);"));
+    assert!(!chat_style.contains("--dsh-composer-height"));
 }
 
 #[wasm_bindgen_test]

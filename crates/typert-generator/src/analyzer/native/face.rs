@@ -18,10 +18,10 @@ use crate::{
         source_path_for_export,
     },
     model::{
-        CrossFaceLink, DeclarationKind, DefinedMember, DefinedTypeNode, DocumentationModel,
-        EnumMemberModel, EventModel, ExportModel, FaceModel, MemberBase, MemberId, MemberKind,
-        MemberModel, ObjectModel, ObjectPassing, PackageModel, ParameterBinding, ParameterModel,
-        SchemaModel, ServiceModel, SignatureModel, SourceLocation, SymbolId, TypeDeclarationModel,
+        CrossFaceLink, DeclarationKind, DefinedMember, DefinedTypeNode, EnumMemberModel,
+        EventModel, ExportModel, FaceModel, MemberBase, MemberId, MemberKind, MemberModel,
+        ObjectModel, ObjectPassing, PackageModel, ParameterBinding, ParameterModel, SchemaModel,
+        ServiceModel, SignatureModel, SourceLocation, SymbolId, TypeDeclarationModel,
         TypeDeclarationPartModel, TypeGraph, TypeNodeId, TypeNodeKind, TypeNodeModel,
         TypeOperatorName, TypeParameterId, TypeParameterModel, TypeTargetModel, TypertFace,
         Variance,
@@ -2410,11 +2410,5 @@ pub(crate) fn exposable_member(member: &MemberModel) -> bool {
                 && !member.base.is_static
         }
         MemberModel::Unsupported(_) => false,
-    }
-}
-
-impl DocumentationModel {
-    pub(crate) fn empty() -> Self {
-        Self::default()
     }
 }

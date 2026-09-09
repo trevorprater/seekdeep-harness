@@ -233,6 +233,8 @@ members = [
   "crates/typert-loader",
   "crates/typert-protocol",
   "crates/typert-generator",
+  "crates/typert-model",
+  "crates/typert-host-artifact",
   "crates/typert-registry",
   "crates/web",
   "crates/web-app",

@@ -171,6 +171,11 @@ fn fiber_phase(state: FiberState) -> Option<PluginFiberPhase> {
     }
 }
 
+/// Source: the package's generated `./typert` Host artifact (`cargo xtask typert-host-artifacts`).
+/// The package's embedded Host typert artifact (`typert.host.json`), registered at load by
+/// the shipping host and otherwise at plugin apply.
+pub const TYPERT_HOST_ARTIFACT: &str = include_str!("../typert.host.json");
+
 /// Builds the Loader-compatible inventory plugin.
 #[must_use]
 pub fn plugin() -> Plugin {
@@ -179,6 +184,10 @@ pub fn plugin() -> Plugin {
             let loader = context
                 .get(LOADER)
                 .ok_or_else(|| anyhow::anyhow!("plugin inventory requires loader"))?;
+            context.own(seekdeep_typert_host_artifact::register(
+                &context,
+                TYPERT_HOST_ARTIFACT,
+            )?)?;
             let inventory = PluginInventoryService::new(loader);
             context.provide(PLUGIN_INVENTORY, inventory)?;
             register_invocable_service_if_available(&context, PLUGIN_INVENTORY)?;

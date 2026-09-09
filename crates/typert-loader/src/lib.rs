@@ -147,6 +147,12 @@ impl TypertArtifactRegistry {
             .get(package)
             .map(|stored| stored.artifact.clone())
     }
+
+    /// Whether a package artifact is currently registered.
+    #[must_use]
+    pub fn contains(&self, package: &str) -> bool {
+        self.artifacts.lock().contains_key(package)
+    }
 }
 
 #[derive(Clone)]

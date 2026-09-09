@@ -92,6 +92,7 @@ seekdeep-llm-pi-ai = { path = "../../crates/llm-pi-ai" }
 seekdeep-llm-retry = { path = "../../crates/llm-retry" }
 seekdeep-loader = { path = "../../crates/loader" }
 seekdeep-message-feedback = { path = "../../crates/message-feedback" }
+seekdeep-typert-host-artifact = { path = "../../crates/typert-host-artifact" }
 seekdeep-mcp-client = { path = "../../crates/mcp-client" }
 seekdeep-permission-presets = { path = "../../crates/permission-presets" }
 seekdeep-persona = { path = "../../crates/persona" }

@@ -16,10 +16,7 @@ const ROOT_CSS: &str = include_str!(
 );
 
 pub(crate) fn conversation_root_styles() -> String {
-    ROOT_CSS.replace(
-        ":global([data-slot='conversation.session'])",
-        "[data-slot='conversation.session']",
-    )
+    seekdeep_client_ui_primitives::unwrap_global_selectors(ROOT_CSS)
 }
 
 thread_local! {

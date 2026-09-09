@@ -491,10 +491,22 @@ impl TypertGatewayService {
                 request.signal.clone().unwrap_or_default(),
             ));
         }
-        let implementation = descriptor
+        let declared = descriptor
             .implementation
             .as_deref()
             .unwrap_or(&descriptor.method);
+        // A compiled artifact names the source method; a Rust service reaches it through the
+        // Remote marker whose export is that name.
+        let implementation = if service.has_method(declared) {
+            declared.to_owned()
+        } else {
+            service
+                .remote_methods()
+                .into_iter()
+                .find(|marker| marker.export_name.as_deref().unwrap_or(&marker.method) == declared)
+                .map_or_else(|| declared.to_owned(), |marker| marker.method)
+        };
+        let implementation = implementation.as_str();
         if !service.has_method(implementation) {
             return Err(gateway(
                 TypertGatewayErrorCode::MethodUnavailable,

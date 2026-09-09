@@ -26,11 +26,8 @@ use seekdeep_scope::{
     store::{LayerEffectOptions, NamedEntries, ScopeLayer, ScopedLayers},
 };
 use seekdeep_typert_protocol::{
-    InvocationDescriptor, InvocationParameterDescriptor, InvocationParameterSource,
-    InvocationReceiver, InvocationScope, InvocationSourceLocation, RemoteMethodMarker,
-    TypertBoundaryValue, TypertCodec, TypertHostArgument, TypertInvocableService,
-    TypertInvocationFuture, TypertRemoteContribution, TypertRemoteService, TypertSchema,
-    typert_remote_method,
+    RemoteMethodMarker, TypertBoundaryValue, TypertHostArgument, TypertInvocableService,
+    TypertInvocationFuture, TypertRemoteContribution, TypertRemoteService, typert_remote_method,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -590,160 +587,19 @@ fn signal_argument(argument: &TypertHostArgument) -> anyhow::Result<AbortSignal>
     Ok(signal.clone())
 }
 
-/// Generated strict Client/Host Remote descriptors for the Commands package.
+/// Generated strict Client/Host Remote descriptors for the Commands package: the embedded Host
+/// artifact's invocations (source: the package's `./typert` export).
+///
+/// # Panics
+///
+/// Panics when the embedded artifact does not build, which the crate's tests pin.
 #[must_use]
 pub fn typert_remote_contribution() -> TypertRemoteContribution {
+    let contribution = seekdeep_typert_host_artifact::contribution(TYPERT_HOST_ARTIFACT)
+        .expect("the embedded commands Host artifact builds");
     TypertRemoteContribution {
-        package: "@deepseek-ai/seekdeep-commands".to_owned(),
-        descriptors: vec![execute_descriptor(), list_descriptor()],
-    }
-}
-
-fn execute_descriptor() -> InvocationDescriptor {
-    InvocationDescriptor {
-        id: "@deepseek-ai/seekdeep-commands#commands/execute".to_owned(),
-        service: "commands".to_owned(),
-        namespace: "commands".to_owned(),
-        method: "execute".to_owned(),
-        implementation: None,
-        invocation: InvocationReceiver::Direct,
-        scope: Some(InvocationScope {
-            context: "agent".to_owned(),
-            wire: "agentId".to_owned(),
-        }),
-        parameters: vec![
-            InvocationParameterDescriptor {
-                name: "agent".to_owned(),
-                wire: "agentId".to_owned(),
-                source: InvocationParameterSource::Lookup,
-                lookup: Some("agent".to_owned()),
-                codec: strict(
-                    "@deepseek-ai/seekdeep-session/types#SessionId",
-                    Arc::new(StringBoundarySchema),
-                ),
-                accepts_undefined: None,
-            },
-            InvocationParameterDescriptor {
-                name: "line".to_owned(),
-                wire: "line".to_owned(),
-                source: InvocationParameterSource::Json,
-                lookup: None,
-                codec: strict(
-                    "@deepseek-ai/seekdeep-commands#commands/execute:line",
-                    Arc::new(StringBoundarySchema),
-                ),
-                accepts_undefined: None,
-            },
-        ],
-        cancellation: true,
-        result: strict(
-            "@deepseek-ai/seekdeep-commands#commands/execute:result",
-            Arc::new(CommandExecutionBoundarySchema),
-        ),
-        source_location: Some(InvocationSourceLocation {
-            file: "packages/interaction/commands/src/index.ts".to_owned(),
-            line: 297,
-            column: 9,
-        }),
-    }
-}
-
-fn list_descriptor() -> InvocationDescriptor {
-    InvocationDescriptor {
-        id: "@deepseek-ai/seekdeep-commands#commands/list".to_owned(),
-        service: "commands".to_owned(),
-        namespace: "commands".to_owned(),
-        method: "list".to_owned(),
-        implementation: None,
-        invocation: InvocationReceiver::Direct,
-        scope: Some(InvocationScope {
-            context: "agent".to_owned(),
-            wire: "agentId".to_owned(),
-        }),
-        parameters: vec![InvocationParameterDescriptor {
-            name: "agent".to_owned(),
-            wire: "agentId".to_owned(),
-            source: InvocationParameterSource::Lookup,
-            lookup: Some("agent".to_owned()),
-            codec: strict(
-                "@deepseek-ai/seekdeep-session/types#SessionId",
-                Arc::new(StringBoundarySchema),
-            ),
-            accepts_undefined: None,
-        }],
-        cancellation: false,
-        result: strict(
-            "@deepseek-ai/seekdeep-commands#commands/list:result",
-            Arc::new(CommandListBoundarySchema),
-        ),
-        source_location: Some(InvocationSourceLocation {
-            file: "packages/interaction/commands/src/index.ts".to_owned(),
-            line: 260,
-            column: 3,
-        }),
-    }
-}
-
-fn strict(type_symbol: &str, schema: Arc<dyn TypertSchema>) -> TypertCodec {
-    TypertCodec::Strict {
-        type_symbol: type_symbol.to_owned(),
-        schema,
-    }
-}
-
-#[derive(Debug)]
-struct StringBoundarySchema;
-
-impl TypertSchema for StringBoundarySchema {
-    fn parse(&self, value: TypertBoundaryValue) -> anyhow::Result<TypertBoundaryValue> {
-        anyhow::ensure!(
-            value.as_json().is_some_and(Value::is_string),
-            "expected string"
-        );
-        Ok(value)
-    }
-
-    fn to_json_schema(&self) -> anyhow::Result<Value> {
-        Ok(json!({"type": "string"}))
-    }
-}
-
-#[derive(Debug)]
-struct CommandExecutionBoundarySchema;
-
-impl TypertSchema for CommandExecutionBoundarySchema {
-    fn parse(&self, value: TypertBoundaryValue) -> anyhow::Result<TypertBoundaryValue> {
-        let TypertBoundaryValue::Json(value) = value else {
-            return Ok(TypertBoundaryValue::Undefined);
-        };
-        let execution = serde_json::from_value::<CommandExecution>(value)?;
-        Ok(TypertBoundaryValue::Json(serde_json::to_value(execution)?))
-    }
-
-    fn to_json_schema(&self) -> anyhow::Result<Value> {
-        Ok(json!({"oneOf": [
-            {"type": "null", "description": "carrier omission represents undefined"},
-            {"type": "object"}
-        ]}))
-    }
-}
-
-#[derive(Debug)]
-struct CommandListBoundarySchema;
-
-impl TypertSchema for CommandListBoundarySchema {
-    fn parse(&self, value: TypertBoundaryValue) -> anyhow::Result<TypertBoundaryValue> {
-        let TypertBoundaryValue::Json(value) = value else {
-            anyhow::bail!("expected command descriptor array");
-        };
-        let descriptors = serde_json::from_value::<Vec<CommandDescriptor>>(value)?;
-        Ok(TypertBoundaryValue::Json(serde_json::to_value(
-            descriptors,
-        )?))
-    }
-
-    fn to_json_schema(&self) -> anyhow::Result<Value> {
-        Ok(json!({"type": "array", "items": {"type": "object"}}))
+        package: contribution.package,
+        descriptors: contribution.invocations,
     }
 }
 
@@ -947,11 +803,20 @@ pub fn install(context: &Context) -> anyhow::Result<Arc<CommandRuntime>> {
     Ok(runtime)
 }
 
+/// Source: the package's generated `./typert` Host artifact (`cargo xtask typert-host-artifacts`).
+/// The package's embedded Host typert artifact (`typert.host.json`), registered at load by
+/// the shipping host and otherwise at plugin apply.
+pub const TYPERT_HOST_ARTIFACT: &str = include_str!("../typert.host.json");
+
 /// Builds the Loader-compatible command registry plugin.
 #[must_use]
 pub fn plugin() -> Plugin {
     Plugin::new(PLUGIN_NAME, PLUGIN_INJECT.iter().copied(), |context, _| {
         Box::pin(async move {
+            context.own(seekdeep_typert_host_artifact::register(
+                &context,
+                TYPERT_HOST_ARTIFACT,
+            )?)?;
             install(&context)?;
             Ok(())
         })

@@ -23,6 +23,11 @@ pub use sandbox::{
 };
 pub use seekdeep_cordis_dynamic_types::*;
 
+/// Source: the package's generated `./typert` Host artifact (`cargo xtask typert-host-artifacts`).
+/// The package's embedded Host typert artifact (`typert.host.json`), registered at load by
+/// the shipping host and otherwise at plugin apply.
+pub const TYPERT_HOST_ARTIFACT: &str = include_str!("../typert.host.json");
+
 /// Cordis plugin entrypoint for production composition.
 #[must_use]
 pub fn plugin() -> seekdeep_cordis::Plugin {
@@ -33,6 +38,10 @@ pub fn plugin() -> seekdeep_cordis::Plugin {
             } else {
                 serde_json::from_value(config)?
             };
+            context.own(seekdeep_typert_host_artifact::register(
+                &context,
+                TYPERT_HOST_ARTIFACT,
+            )?)?;
             DynamicCordisRunner::try_install(&context, config)?;
             seekdeep_api_gateway::register_invocable_service_if_available(
                 &context,

@@ -5040,6 +5040,7 @@ dependencies = [
  "seekdeep-tool-web",
  "seekdeep-tool-workflow",
  "seekdeep-tools",
+ "seekdeep-typert-host-artifact",
  "seekdeep-typert-loader",
  "seekdeep-typert-registry",
  "seekdeep-user-approval",
@@ -6540,6 +6541,7 @@ dependencies = [
  "seekdeep-llm",
  "seekdeep-scope",
  "seekdeep-system-prompt",
+ "seekdeep-typert-host-artifact",
  "seekdeep-typert-protocol",
  "serde",
  "serde_json",
@@ -6713,6 +6715,7 @@ dependencies = [
  "seekdeep-loader",
  "seekdeep-scope",
  "seekdeep-tools",
+ "seekdeep-typert-host-artifact",
  "seekdeep-typert-protocol",
  "seekdeep-typert-registry",
  "serde",
@@ -6966,6 +6969,7 @@ dependencies = [
  "seekdeep-system-prompt",
  "seekdeep-tool-todo",
  "seekdeep-tools",
+ "seekdeep-typert-host-artifact",
  "seekdeep-typert-protocol",
  "seekdeep-util",
  "serde",
@@ -7313,6 +7317,7 @@ dependencies = [
  "seekdeep-cordis",
  "seekdeep-invariants",
  "seekdeep-loader",
+ "seekdeep-typert-host-artifact",
  "seekdeep-typert-protocol",
  "serde",
  "serde_json",
@@ -7766,6 +7771,7 @@ dependencies = [
  "seekdeep-storage",
  "seekdeep-storage-domain",
  "seekdeep-storage-json",
+ "seekdeep-typert-host-artifact",
  "seekdeep-typert-protocol",
  "serde",
  "serde_json",
@@ -10019,12 +10025,27 @@ dependencies = [
  "regress 0.11.1",
  "ryu-js",
  "seekdeep-cordis-api-catalog",
+ "seekdeep-typert-model",
  "serde",
  "serde_json",
  "sys-locale",
  "tempfile",
  "thiserror 2.0.20",
  "v8",
+]
+
+[[package]]
+name = "seekdeep-typert-host-artifact"
+version = "0.1.0-rc.5"
+dependencies = [
+ "anyhow",
+ "seekdeep-cordis",
+ "seekdeep-typert-loader",
+ "seekdeep-typert-model",
+ "seekdeep-typert-protocol",
+ "seekdeep-typert-registry",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -10043,6 +10064,15 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "seekdeep-typert-model"
+version = "0.1.0-rc.5"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

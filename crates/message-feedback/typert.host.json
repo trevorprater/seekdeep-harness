@@ -1,0 +1,4422 @@
+{
+  "package": "@seekdeep-ai/seekdeep-message-feedback",
+  "face": "host",
+  "model": {
+    "services": [
+      {
+        "description": "Storage-domain sidecar service. It inspects persisted Session history and never creates or resumes an Agent or Session.",
+        "summary": "Storage-domain sidecar service.",
+        "tags": [],
+        "jsDoc": "/**\n * Storage-domain sidecar service. It inspects persisted Session history and\n * never creates or resumes an Agent or Session.\n */",
+        "key": "messageFeedback",
+        "exportName": "MessageFeedbackService",
+        "members": [
+          {
+            "kind": "method",
+            "name": "list",
+            "signature": "@Remote('list') async list(request: MessageFeedbackListRequest): Promise<MessageFeedbackListResult>",
+            "summary": "Read feedback belonging to the current persisted Session lifecycle.",
+            "jsDoc": "/**\n * Read feedback belonging to the current persisted Session lifecycle.\n * A stale row from a reused Session id is invisible.\n * @param request - Session identity to inspect and list.\n * @returns current immutable items or `session-not-found`.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "put",
+            "signature": "@Remote('put') put(request: MessageFeedbackPutRequest): Promise<MessageFeedbackPutResult>",
+            "summary": "Create or replace feedback for one derived append-origin assistant message.",
+            "jsDoc": "/**\n * Create or replace feedback for one derived append-origin assistant\n * message. Every request must match the addressed item's current version;\n * a matching no-op returns the stored item without changing its revision.\n * @param request - target, desired value, and observed item version.\n * @returns the committed item or an explicit business failure.\n */"
+          },
+          {
+            "kind": "method",
+            "name": "delete",
+            "signature": "@Remote('delete') delete(request: MessageFeedbackDeleteRequest): Promise<MessageFeedbackDeleteResult>",
+            "summary": "Delete one feedback item.",
+            "jsDoc": "/**\n * Delete one feedback item. Absence is successful regardless of the\n * supplied version; an existing item requires an exact version match.\n * @param request - Session, message, and observed item version.\n * @returns the stable absent postcondition, or an explicit failure.\n */"
+          }
+        ],
+        "types": [
+          {
+            "name": "Branded",
+            "declaration": "export type Branded<B extends string> = string & { readonly [BRAND]: B; };"
+          },
+          {
+            "name": "MessageFeedbackDeleteRequest",
+            "declaration": "export interface MessageFeedbackDeleteRequest {\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n    readonly ifVersion: MessageFeedbackVersion;\n}"
+          },
+          {
+            "name": "MessageFeedbackDeleteResult",
+            "declaration": "export type MessageFeedbackDeleteResult = MessageFeedbackSuccess<MessageFeedbackDeleteValue> | MessageFeedbackRejected<MessageFeedbackSessionNotFound | MessageFeedbackVersionConflict>;"
+          },
+          {
+            "name": "MessageFeedbackDeleteValue",
+            "declaration": "export interface MessageFeedbackDeleteValue {\n    readonly absent: true;\n}"
+          },
+          {
+            "name": "MessageFeedbackFailure",
+            "declaration": "export type MessageFeedbackFailure = MessageFeedbackSessionNotFound | MessageFeedbackTargetNotFound | MessageFeedbackVersionConflict | MessageFeedbackNoteBlank | MessageFeedbackNoteTooLarge;"
+          },
+          {
+            "name": "MessageFeedbackItem",
+            "declaration": "export interface MessageFeedbackItem {\n    readonly messageId: MessageId;\n    readonly rating: MessageFeedbackRating;\n    readonly note?: string;\n    readonly version: MessageFeedbackVersion;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}"
+          },
+          {
+            "name": "MessageFeedbackListRequest",
+            "declaration": "export interface MessageFeedbackListRequest {\n    readonly sessionId: SessionId;\n}"
+          },
+          {
+            "name": "MessageFeedbackListResult",
+            "declaration": "export type MessageFeedbackListResult = MessageFeedbackSuccess<MessageFeedbackListValue> | MessageFeedbackRejected<MessageFeedbackSessionNotFound>;"
+          },
+          {
+            "name": "MessageFeedbackListValue",
+            "declaration": "export interface MessageFeedbackListValue {\n    readonly items: readonly MessageFeedbackItem[];\n}"
+          },
+          {
+            "name": "MessageFeedbackNoteBlank",
+            "declaration": "export interface MessageFeedbackNoteBlank {\n    readonly code: 'note-blank';\n}"
+          },
+          {
+            "name": "MessageFeedbackNoteTooLarge",
+            "declaration": "export interface MessageFeedbackNoteTooLarge {\n    readonly code: 'note-too-large';\n    readonly maxBytes: number;\n    readonly actualBytes: number;\n}"
+          },
+          {
+            "name": "MessageFeedbackPutRequest",
+            "declaration": "export interface MessageFeedbackPutRequest {\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n    readonly rating: MessageFeedbackRating;\n    readonly note?: string;\n    readonly ifVersion: MessageFeedbackVersion | null;\n}"
+          },
+          {
+            "name": "MessageFeedbackPutResult",
+            "declaration": "export type MessageFeedbackPutResult = MessageFeedbackSuccess<MessageFeedbackItem> | MessageFeedbackRejected<MessageFeedbackSessionNotFound | MessageFeedbackTargetNotFound | MessageFeedbackVersionConflict | MessageFeedbackNoteBlank | MessageFeedbackNoteTooLarge>;"
+          },
+          {
+            "name": "MessageFeedbackRating",
+            "declaration": "export type MessageFeedbackRating = 'positive' | 'negative';"
+          },
+          {
+            "name": "MessageFeedbackRejected",
+            "declaration": "export interface MessageFeedbackRejected<E extends MessageFeedbackFailure> {\n    readonly ok: false;\n    readonly error: E;\n}"
+          },
+          {
+            "name": "MessageFeedbackSessionNotFound",
+            "declaration": "export interface MessageFeedbackSessionNotFound {\n    readonly code: 'session-not-found';\n    readonly sessionId: SessionId;\n}"
+          },
+          {
+            "name": "MessageFeedbackSuccess",
+            "declaration": "export interface MessageFeedbackSuccess<T> {\n    readonly ok: true;\n    readonly value: T;\n}"
+          },
+          {
+            "name": "MessageFeedbackTargetNotFound",
+            "declaration": "export interface MessageFeedbackTargetNotFound {\n    readonly code: 'target-not-found';\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n}"
+          },
+          {
+            "name": "MessageFeedbackVersion",
+            "declaration": "export type MessageFeedbackVersion = Branded<'MessageFeedbackVersion'>;"
+          },
+          {
+            "name": "MessageFeedbackVersionConflict",
+            "declaration": "export interface MessageFeedbackVersionConflict {\n    readonly code: 'version-conflict';\n    readonly current: MessageFeedbackItem | null;\n}"
+          },
+          {
+            "name": "MessageId",
+            "declaration": "export type MessageId = Branded<'MessageId'>;"
+          },
+          {
+            "name": "SessionId",
+            "declaration": "export type SessionId = Branded<'SessionId'>;"
+          }
+        ]
+      }
+    ],
+    "events": [],
+    "objects": []
+  },
+  "invocations": [
+    {
+      "id": "@seekdeep-ai/seekdeep-message-feedback#messageFeedback/delete",
+      "service": "messageFeedback",
+      "namespace": "messageFeedback",
+      "method": "delete",
+      "invocation": {
+        "kind": "direct"
+      },
+      "parameters": [
+        {
+          "name": "request",
+          "wire": "request",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:19#2",
+            "codecType": "type:packages/feedback/message-feedback/src/index.ts:272:19#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-message-feedback/types#MessageFeedbackDeleteRequest",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteRequest",
+                "specifier": "@seekdeep-ai/seekdeep-message-feedback/types",
+                "name": "MessageFeedbackDeleteRequest"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#2",
+        "codecType": "type:packages/feedback/message-feedback/src/index.ts:272:58#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-message-feedback/types#MessageFeedbackDeleteResult",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteResult",
+            "specifier": "@seekdeep-ai/seekdeep-message-feedback/types",
+            "name": "MessageFeedbackDeleteResult"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/feedback/message-feedback/src/index.ts",
+        "line": 272,
+        "column": 3
+      }
+    },
+    {
+      "id": "@seekdeep-ai/seekdeep-message-feedback#messageFeedback/list",
+      "service": "messageFeedback",
+      "namespace": "messageFeedback",
+      "method": "list",
+      "invocation": {
+        "kind": "direct"
+      },
+      "parameters": [
+        {
+          "name": "request",
+          "wire": "request",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:23#2",
+            "codecType": "type:packages/feedback/message-feedback/src/index.ts:190:23#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-message-feedback/types#MessageFeedbackListRequest",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListRequest",
+                "specifier": "@seekdeep-ai/seekdeep-message-feedback/types",
+                "name": "MessageFeedbackListRequest"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#2",
+        "codecType": "type:packages/feedback/message-feedback/src/index.ts:190:60#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-message-feedback/types#MessageFeedbackListResult",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListResult",
+            "specifier": "@seekdeep-ai/seekdeep-message-feedback/types",
+            "name": "MessageFeedbackListResult"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/feedback/message-feedback/src/index.ts",
+        "line": 190,
+        "column": 9
+      }
+    },
+    {
+      "id": "@seekdeep-ai/seekdeep-message-feedback#messageFeedback/put",
+      "service": "messageFeedback",
+      "namespace": "messageFeedback",
+      "method": "put",
+      "invocation": {
+        "kind": "direct"
+      },
+      "parameters": [
+        {
+          "name": "request",
+          "wire": "request",
+          "source": "json",
+          "boundary": {
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#2",
+            "codecType": "type:packages/feedback/message-feedback/src/index.ts:206:16#3",
+            "acceptsUndefined": false,
+            "typeSymbol": "@seekdeep-ai/seekdeep-message-feedback/types#MessageFeedbackPutRequest",
+            "imports": [
+              {
+                "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutRequest",
+                "specifier": "@seekdeep-ai/seekdeep-message-feedback/types",
+                "name": "MessageFeedbackPutRequest"
+              }
+            ]
+          }
+        }
+      ],
+      "result": {
+        "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#2",
+        "codecType": "type:packages/feedback/message-feedback/src/index.ts:206:52#3",
+        "acceptsUndefined": false,
+        "typeSymbol": "@seekdeep-ai/seekdeep-message-feedback/types#MessageFeedbackPutResult",
+        "imports": [
+          {
+            "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutResult",
+            "specifier": "@seekdeep-ai/seekdeep-message-feedback/types",
+            "name": "MessageFeedbackPutResult"
+          }
+        ]
+      },
+      "location": {
+        "file": "packages/feedback/message-feedback/src/index.ts",
+        "line": 206,
+        "column": 3
+      }
+    }
+  ],
+  "graph": {
+    "declarations": [
+      {
+        "description": "A string carrying a compile-time-only brand `B`.",
+        "summary": "A string carrying a compile-time-only brand `B`.",
+        "tags": [],
+        "jsDoc": "/** A string carrying a compile-time-only brand `B`. */",
+        "id": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded",
+        "package": "@seekdeep-ai/seekdeep-brand",
+        "name": "Branded",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/util/brand/src/index.ts",
+          "line": 27,
+          "column": 1
+        },
+        "text": "export type Branded<B extends string> = string & {\n    readonly [BRAND]: B;\n};",
+        "typeParameters": [
+          {
+            "id": "packages/util/brand/src/index.ts:27:21#B",
+            "name": "B",
+            "const": false,
+            "constraint": "type:packages/util/brand/src/index.ts:27:31#1"
+          }
+        ],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/util/brand/src/index.ts:27:41#1"
+      },
+      {
+        "description": "Stable identity carried by one message across inbox, log, and model-request boundaries.",
+        "summary": "Stable identity carried by one message across inbox, log, and model-request boundaries.",
+        "tags": [],
+        "jsDoc": "/** Stable identity carried by one message across inbox, log, and model-request boundaries. */",
+        "id": "@seekdeep-ai/seekdeep-llm:packages/llm/llm/src/brand.ts#MessageId",
+        "package": "@seekdeep-ai/seekdeep-llm",
+        "name": "MessageId",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/llm/llm/src/brand.ts",
+          "line": 16,
+          "column": 1
+        },
+        "text": "export type MessageId = Branded<'MessageId'>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/llm/llm/src/brand.ts:16:25#1"
+      },
+      {
+        "description": "Delete feedback for one message after observing its current version.",
+        "summary": "Delete feedback for one message after observing its current version.",
+        "tags": [],
+        "jsDoc": "/** Delete feedback for one message after observing its current version. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteRequest",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackDeleteRequest",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 61,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackDeleteRequest {\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n    readonly ifVersion: MessageFeedbackVersion;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Persisted Session that owns the sidecar.",
+            "summary": "Persisted Session that owns the sidecar.",
+            "tags": [],
+            "jsDoc": "/** Persisted Session that owns the sidecar. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteRequest#sessionId@2548",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 63,
+              "column": 3
+            },
+            "text": "readonly sessionId: SessionId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:63:23#1"
+          },
+          {
+            "description": "Message whose feedback should be absent after this operation.",
+            "summary": "Message whose feedback should be absent after this operation.",
+            "tags": [],
+            "jsDoc": "/** Message whose feedback should be absent after this operation. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteRequest#messageId@2651",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 65,
+              "column": 3
+            },
+            "text": "readonly messageId: MessageId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:65:23#1"
+          },
+          {
+            "description": "Observed item version; ignored when the item is already absent.",
+            "summary": "Observed item version; ignored when the item is already absent.",
+            "tags": [],
+            "jsDoc": "/** Observed item version; ignored when the item is already absent. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteRequest#ifVersion@2756",
+            "name": "ifVersion",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 67,
+              "column": 3
+            },
+            "text": "readonly ifVersion: MessageFeedbackVersion",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:67:23#1"
+          }
+        ]
+      },
+      {
+        "description": "Result returned by the message-feedback `delete` operation.",
+        "summary": "Result returned by the message-feedback `delete` operation.",
+        "tags": [],
+        "jsDoc": "/** Result returned by the message-feedback `delete` operation. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteResult",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackDeleteResult",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 145,
+          "column": 1
+        },
+        "text": "export type MessageFeedbackDeleteResult = MessageFeedbackSuccess<MessageFeedbackDeleteValue> | MessageFeedbackRejected<MessageFeedbackSessionNotFound | MessageFeedbackVersionConflict>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/feedback/message-feedback/src/types.ts:146:3#1"
+      },
+      {
+        "description": "Idempotent deletion acknowledgement.",
+        "summary": "Idempotent deletion acknowledgement.",
+        "tags": [],
+        "jsDoc": "/** Idempotent deletion acknowledgement. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteValue",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackDeleteValue",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 71,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackDeleteValue {\n    readonly absent: true;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Stable postcondition shared by the first deletion and every retry.",
+            "summary": "Stable postcondition shared by the first deletion and every retry.",
+            "tags": [],
+            "jsDoc": "/** Stable postcondition shared by the first deletion and every retry. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteValue#absent@2970",
+            "name": "absent",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 73,
+              "column": 3
+            },
+            "text": "readonly absent: true",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:73:20#1"
+          }
+        ]
+      },
+      {
+        "description": "Failures shared by the public message-feedback operations.",
+        "summary": "Failures shared by the public message-feedback operations.",
+        "tags": [],
+        "jsDoc": "/** Failures shared by the public message-feedback operations. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackFailure",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackFailure",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 109,
+          "column": 1
+        },
+        "text": "export type MessageFeedbackFailure = MessageFeedbackSessionNotFound | MessageFeedbackTargetNotFound | MessageFeedbackVersionConflict | MessageFeedbackNoteBlank | MessageFeedbackNoteTooLarge;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/feedback/message-feedback/src/types.ts:110:3#1"
+      },
+      {
+        "description": "One current feedback value and its opaque mutation token.",
+        "summary": "One current feedback value and its opaque mutation token.",
+        "tags": [],
+        "jsDoc": "/** One current feedback value and its opaque mutation token. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackItem",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 19,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackItem {\n    readonly messageId: MessageId;\n    readonly rating: MessageFeedbackRating;\n    readonly note?: string;\n    readonly version: MessageFeedbackVersion;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Stable identity of the assistant message inside the owning Session.",
+            "summary": "Stable identity of the assistant message inside the owning Session.",
+            "tags": [],
+            "jsDoc": "/** Stable identity of the assistant message inside the owning Session. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem#messageId@884",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 21,
+              "column": 3
+            },
+            "text": "readonly messageId: MessageId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:21:23#1"
+          },
+          {
+            "description": "Overall positive or negative judgment.",
+            "summary": "Overall positive or negative judgment.",
+            "tags": [],
+            "jsDoc": "/** Overall positive or negative judgment. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem#rating@964",
+            "name": "rating",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 23,
+              "column": 3
+            },
+            "text": "readonly rating: MessageFeedbackRating",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:23:20#1"
+          },
+          {
+            "description": "Optional explanation, preserved verbatim after validation.",
+            "summary": "Optional explanation, preserved verbatim after validation.",
+            "tags": [],
+            "jsDoc": "/** Optional explanation, preserved verbatim after validation. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem#note@1073",
+            "name": "note",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 25,
+              "column": 3
+            },
+            "text": "readonly note?: string",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:25:19#1"
+          },
+          {
+            "description": "Equality-only token replaced by every material create or update.",
+            "summary": "Equality-only token replaced by every material create or update.",
+            "tags": [],
+            "jsDoc": "/** Equality-only token replaced by every material create or update. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem#version@1172",
+            "name": "version",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 27,
+              "column": 3
+            },
+            "text": "readonly version: MessageFeedbackVersion",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:27:21#1"
+          },
+          {
+            "description": "Host-assigned creation time in Unix epoch milliseconds.",
+            "summary": "Host-assigned creation time in Unix epoch milliseconds.",
+            "tags": [],
+            "jsDoc": "/** Host-assigned creation time in Unix epoch milliseconds. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem#createdAt@1280",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 29,
+              "column": 3
+            },
+            "text": "readonly createdAt: number",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:29:23#1"
+          },
+          {
+            "description": "Host-assigned time of the most recent material update.",
+            "summary": "Host-assigned time of the most recent material update.",
+            "tags": [],
+            "jsDoc": "/** Host-assigned time of the most recent material update. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem#updatedAt@1373",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 31,
+              "column": 3
+            },
+            "text": "readonly updatedAt: number",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:31:23#1"
+          }
+        ]
+      },
+      {
+        "description": "Read all message feedback belonging to one persisted Session lifecycle.",
+        "summary": "Read all message feedback belonging to one persisted Session lifecycle.",
+        "tags": [],
+        "jsDoc": "/** Read all message feedback belonging to one persisted Session lifecycle. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListRequest",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackListRequest",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 35,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackListRequest {\n    readonly sessionId: SessionId;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Persisted Session whose sidecar should be read.",
+            "summary": "Persisted Session whose sidecar should be read.",
+            "tags": [],
+            "jsDoc": "/** Persisted Session whose sidecar should be read. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListRequest#sessionId@1587",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 37,
+              "column": 3
+            },
+            "text": "readonly sessionId: SessionId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:37:23#1"
+          }
+        ]
+      },
+      {
+        "description": "Result returned by the message-feedback `list` operation.",
+        "summary": "Result returned by the message-feedback `list` operation.",
+        "tags": [],
+        "jsDoc": "/** Result returned by the message-feedback `list` operation. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListResult",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackListResult",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 129,
+          "column": 1
+        },
+        "text": "export type MessageFeedbackListResult = MessageFeedbackSuccess<MessageFeedbackListValue> | MessageFeedbackRejected<MessageFeedbackSessionNotFound>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/feedback/message-feedback/src/types.ts:130:3#1"
+      },
+      {
+        "description": "Current feedback values for one Session, in first-creation order.",
+        "summary": "Current feedback values for one Session, in first-creation order.",
+        "tags": [],
+        "jsDoc": "/** Current feedback values for one Session, in first-creation order. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListValue",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackListValue",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 41,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackListValue {\n    readonly items: readonly MessageFeedbackItem[];\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Fresh immutable item snapshots.",
+            "summary": "Fresh immutable item snapshots.",
+            "tags": [],
+            "jsDoc": "/** Fresh immutable item snapshots. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListValue#items@1780",
+            "name": "items",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 43,
+              "column": 3
+            },
+            "text": "readonly items: readonly MessageFeedbackItem[]",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:43:19#1"
+          }
+        ]
+      },
+      {
+        "description": "A supplied note contains no non-whitespace character.",
+        "summary": "A supplied note contains no non-whitespace character.",
+        "tags": [],
+        "jsDoc": "/** A supplied note contains no non-whitespace character. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteBlank",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackNoteBlank",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 97,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackNoteBlank {\n    readonly code: 'note-blank';\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteBlank#code@3798",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 98,
+              "column": 3
+            },
+            "text": "readonly code: 'note-blank'",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:98:18#1"
+          }
+        ]
+      },
+      {
+        "description": "A supplied note exceeds the configured UTF-8 byte limit.",
+        "summary": "A supplied note exceeds the configured UTF-8 byte limit.",
+        "tags": [],
+        "jsDoc": "/** A supplied note exceeds the configured UTF-8 byte limit. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteTooLarge",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackNoteTooLarge",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 102,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackNoteTooLarge {\n    readonly code: 'note-too-large';\n    readonly maxBytes: number;\n    readonly actualBytes: number;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteTooLarge#code@3942",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 103,
+              "column": 3
+            },
+            "text": "readonly code: 'note-too-large'",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:103:18#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteTooLarge#maxBytes@3976",
+            "name": "maxBytes",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 104,
+              "column": 3
+            },
+            "text": "readonly maxBytes: number",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:104:22#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteTooLarge#actualBytes@4004",
+            "name": "actualBytes",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 105,
+              "column": 3
+            },
+            "text": "readonly actualBytes: number",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:105:25#1"
+          }
+        ]
+      },
+      {
+        "description": "Create or replace feedback for one assistant message.",
+        "summary": "Create or replace feedback for one assistant message.",
+        "tags": [],
+        "jsDoc": "/** Create or replace feedback for one assistant message. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutRequest",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackPutRequest",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 47,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackPutRequest {\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n    readonly rating: MessageFeedbackRating;\n    readonly note?: string;\n    readonly ifVersion: MessageFeedbackVersion | null;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "description": "Persisted Session that owns the target message.",
+            "summary": "Persisted Session that owns the target message.",
+            "tags": [],
+            "jsDoc": "/** Persisted Session that owns the target message. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutRequest#sessionId@1995",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 49,
+              "column": 3
+            },
+            "text": "readonly sessionId: SessionId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:49:23#1"
+          },
+          {
+            "description": "Target assistant-message identity.",
+            "summary": "Target assistant-message identity.",
+            "tags": [],
+            "jsDoc": "/** Target assistant-message identity. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutRequest#messageId@2071",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 51,
+              "column": 3
+            },
+            "text": "readonly messageId: MessageId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:51:23#1"
+          },
+          {
+            "description": "Desired overall judgment.",
+            "summary": "Desired overall judgment.",
+            "tags": [],
+            "jsDoc": "/** Desired overall judgment. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutRequest#rating@2138",
+            "name": "rating",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 53,
+              "column": 3
+            },
+            "text": "readonly rating: MessageFeedbackRating",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:53:20#1"
+          },
+          {
+            "description": "Optional non-blank explanation.",
+            "summary": "Optional non-blank explanation.",
+            "tags": [],
+            "jsDoc": "/** Optional non-blank explanation. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutRequest#note@2220",
+            "name": "note",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 55,
+              "column": 3
+            },
+            "text": "readonly note?: string",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:55:19#1"
+          },
+          {
+            "description": "Observed item version, or `null` to require that no item exists.",
+            "summary": "Observed item version, or `null` to require that no item exists.",
+            "tags": [],
+            "jsDoc": "/** Observed item version, or `null` to require that no item exists. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutRequest#ifVersion@2319",
+            "name": "ifVersion",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 57,
+              "column": 3
+            },
+            "text": "readonly ifVersion: MessageFeedbackVersion | null",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:57:23#1"
+          }
+        ]
+      },
+      {
+        "description": "Result returned by the message-feedback `put` operation.",
+        "summary": "Result returned by the message-feedback `put` operation.",
+        "tags": [],
+        "jsDoc": "/** Result returned by the message-feedback `put` operation. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutResult",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackPutResult",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 134,
+          "column": 1
+        },
+        "text": "export type MessageFeedbackPutResult = MessageFeedbackSuccess<MessageFeedbackItem> | MessageFeedbackRejected<MessageFeedbackSessionNotFound | MessageFeedbackTargetNotFound | MessageFeedbackVersionConflict | MessageFeedbackNoteBlank | MessageFeedbackNoteTooLarge>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/feedback/message-feedback/src/types.ts:135:3#1"
+      },
+      {
+        "description": "The human's overall judgment of one assistant message.",
+        "summary": "The human's overall judgment of one assistant message.",
+        "tags": [],
+        "jsDoc": "/** The human's overall judgment of one assistant message. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRating",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackRating",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 16,
+          "column": 1
+        },
+        "text": "export type MessageFeedbackRating = 'positive' | 'negative';",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/feedback/message-feedback/src/types.ts:16:37#1"
+      },
+      {
+        "description": "Rejected public operation result with a stable business failure.",
+        "summary": "Rejected public operation result with a stable business failure.",
+        "tags": [],
+        "jsDoc": "/** Rejected public operation result with a stable business failure. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRejected",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackRejected",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 123,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackRejected<E extends MessageFeedbackFailure> {\n    readonly ok: false;\n    readonly error: E;\n}",
+        "typeParameters": [
+          {
+            "id": "packages/feedback/message-feedback/src/types.ts:123:42#E",
+            "name": "E",
+            "const": false,
+            "constraint": "type:packages/feedback/message-feedback/src/types.ts:123:52#1"
+          }
+        ],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRejected#ok@4587",
+            "name": "ok",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 124,
+              "column": 3
+            },
+            "text": "readonly ok: false",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:124:16#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRejected#error@4608",
+            "name": "error",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 125,
+              "column": 3
+            },
+            "text": "readonly error: E",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:125:19#1"
+          }
+        ]
+      },
+      {
+        "description": "No persisted Session header exists for the requested id.",
+        "summary": "No persisted Session header exists for the requested id.",
+        "tags": [],
+        "jsDoc": "/** No persisted Session header exists for the requested id. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSessionNotFound",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackSessionNotFound",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 77,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackSessionNotFound {\n    readonly code: 'session-not-found';\n    readonly sessionId: SessionId;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSessionNotFound#code@3111",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 78,
+              "column": 3
+            },
+            "text": "readonly code: 'session-not-found'",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:78:18#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSessionNotFound#sessionId@3148",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 79,
+              "column": 3
+            },
+            "text": "readonly sessionId: SessionId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:79:23#1"
+          }
+        ]
+      },
+      {
+        "description": "Successful public operation result.",
+        "summary": "Successful public operation result.",
+        "tags": [],
+        "jsDoc": "/** Successful public operation result. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSuccess",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackSuccess",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 117,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackSuccess<T> {\n    readonly ok: true;\n    readonly value: T;\n}",
+        "typeParameters": [
+          {
+            "id": "packages/feedback/message-feedback/src/types.ts:117:41#T",
+            "name": "T",
+            "const": false
+          }
+        ],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSuccess#ok@4395",
+            "name": "ok",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 118,
+              "column": 3
+            },
+            "text": "readonly ok: true",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:118:16#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSuccess#value@4415",
+            "name": "value",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 119,
+              "column": 3
+            },
+            "text": "readonly value: T",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:119:19#1"
+          }
+        ]
+      },
+      {
+        "description": "The id does not name a derived, append-origin assistant message.",
+        "summary": "The id does not name a derived, append-origin assistant message.",
+        "tags": [],
+        "jsDoc": "/** The id does not name a derived, append-origin assistant message. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackTargetNotFound",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackTargetNotFound",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 83,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackTargetNotFound {\n    readonly code: 'target-not-found';\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackTargetNotFound#code@3304",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 84,
+              "column": 3
+            },
+            "text": "readonly code: 'target-not-found'",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:84:18#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackTargetNotFound#sessionId@3340",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 85,
+              "column": 3
+            },
+            "text": "readonly sessionId: SessionId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:85:23#1"
+          },
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackTargetNotFound#messageId@3372",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 86,
+              "column": 3
+            },
+            "text": "readonly messageId: MessageId",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:86:23#1"
+          }
+        ]
+      },
+      {
+        "description": "Opaque compare-and-set token for one exact feedback item revision.",
+        "summary": "Opaque compare-and-set token for one exact feedback item revision.",
+        "tags": [],
+        "jsDoc": "/** Opaque compare-and-set token for one exact feedback item revision. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersion",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackVersion",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 13,
+          "column": 1
+        },
+        "text": "export type MessageFeedbackVersion = Branded<'MessageFeedbackVersion'>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/feedback/message-feedback/src/types.ts:13:38#1"
+      },
+      {
+        "description": "A material mutation did not match the addressed item's current version.",
+        "summary": "A material mutation did not match the addressed item's current version.",
+        "tags": [],
+        "jsDoc": "/** A material mutation did not match the addressed item's current version. */",
+        "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersionConflict",
+        "package": "@seekdeep-ai/seekdeep-message-feedback",
+        "name": "MessageFeedbackVersionConflict",
+        "kind": "interface",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/feedback/message-feedback/src/types.ts",
+          "line": 90,
+          "column": 1
+        },
+        "text": "export interface MessageFeedbackVersionConflict {\n    readonly code: 'version-conflict';\n    readonly current: MessageFeedbackItem | null;\n}",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [
+          {
+            "tags": [],
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersionConflict#code@3536",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 91,
+              "column": 3
+            },
+            "text": "readonly code: 'version-conflict'",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:91:18#1"
+          },
+          {
+            "description": "Authoritative current item, or `null` when it does not exist.",
+            "summary": "Authoritative current item, or `null` when it does not exist.",
+            "tags": [],
+            "jsDoc": "/** Authoritative current item, or `null` when it does not exist. */",
+            "id": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersionConflict#current@3643",
+            "name": "current",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/types.ts",
+              "line": 93,
+              "column": 3
+            },
+            "text": "readonly current: MessageFeedbackItem | null",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/types.ts:93:21#1"
+          }
+        ]
+      },
+      {
+        "description": "Identifies one session in the store (and its persistence artifacts).",
+        "summary": "Identifies one session in the store (and its persistence artifacts).",
+        "tags": [],
+        "jsDoc": "/** Identifies one session in the store (and its persistence artifacts). */",
+        "id": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId",
+        "package": "@seekdeep-ai/seekdeep-session",
+        "name": "SessionId",
+        "kind": "alias",
+        "abstract": false,
+        "exported": true,
+        "location": {
+          "file": "packages/core/session/src/types.ts",
+          "line": 22,
+          "column": 1
+        },
+        "text": "export type SessionId = Branded<'SessionId'>;",
+        "typeParameters": [],
+        "extends": [],
+        "implements": [],
+        "members": [],
+        "type": "type:packages/core/session/src/types.ts:22:25#1"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "type:packages/core/session/src/types.ts:22:25#1",
+        "kind": "reference",
+        "name": "Branded",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded"
+        },
+        "arguments": [
+          "type:packages/core/session/src/types.ts:22:33#1"
+        ]
+      },
+      {
+        "id": "type:packages/core/session/src/types.ts:22:33#1",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "'SessionId'"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:23#2",
+        "kind": "reference",
+        "name": "MessageFeedbackListRequest",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListRequest"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:23#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:23#3#sessionId",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 23
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:23#4"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:23#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:190:23#5",
+          "type:packages/feedback/message-feedback/src/index.ts:190:23#6"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:23#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:23#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:23#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 23
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:23#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:23#7",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#10",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#11",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#11#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#12"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#12",
+        "kind": "literal",
+        "value": "MessageId",
+        "text": "\"MessageId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#13",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#14",
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#15"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#14",
+        "kind": "literal",
+        "value": "positive",
+        "text": "\"positive\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#15",
+        "kind": "literal",
+        "value": "negative",
+        "text": "\"negative\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#16",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#10",
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#17"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#17",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#17#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#18"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#18",
+        "kind": "literal",
+        "value": "MessageFeedbackVersion",
+        "text": "\"MessageFeedbackVersion\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#19",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#2",
+        "kind": "reference",
+        "name": "MessageFeedbackListResult",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListResult"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#20",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#20#ok",
+            "name": "ok",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#21"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#20#error",
+            "name": "error",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#22"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#21",
+        "kind": "literal",
+        "value": false,
+        "text": "false"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#22",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#22#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#23"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#22#sessionId",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#24"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#23",
+        "kind": "literal",
+        "value": "session-not-found",
+        "text": "\"session-not-found\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#24",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#10",
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#25"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#25",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#25#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#26"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#26",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#3",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#4",
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#20"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#4",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#4#ok",
+            "name": "ok",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#4#value",
+            "name": "value",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#6"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#5",
+        "kind": "literal",
+        "value": true,
+        "text": "true"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#6#items",
+            "name": "items",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#7",
+        "kind": "array",
+        "element": "type:packages/feedback/message-feedback/src/index.ts:190:60#8"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#8",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#8#messageId",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#9"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#8#rating",
+            "name": "rating",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#13"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#8#note",
+            "name": "note",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#10"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#8#version",
+            "name": "version",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#16"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#8#createdAt",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#19"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#8#updatedAt",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 190,
+              "column": 60
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:190:60#19"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:190:60#9",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#10",
+          "type:packages/feedback/message-feedback/src/index.ts:190:60#11"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#10",
+        "kind": "literal",
+        "value": "MessageId",
+        "text": "\"MessageId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#11",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#12",
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#13"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#12",
+        "kind": "literal",
+        "value": "positive",
+        "text": "\"positive\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#13",
+        "kind": "literal",
+        "value": "negative",
+        "text": "\"negative\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#14",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#15",
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#16"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#15",
+        "kind": "literal",
+        "value": null,
+        "text": "null"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#16",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#5",
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#17"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#17",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#17#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 16
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#18"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#18",
+        "kind": "literal",
+        "value": "MessageFeedbackVersion",
+        "text": "\"MessageFeedbackVersion\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#2",
+        "kind": "reference",
+        "name": "MessageFeedbackPutRequest",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutRequest"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#3#sessionId",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 16
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#3#messageId",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 16
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#3#rating",
+            "name": "rating",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 16
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#11"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#3#note",
+            "name": "note",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 16
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#3#ifVersion",
+            "name": "ifVersion",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 16
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#14"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#5",
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#6"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 16
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#7",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#8",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#5",
+          "type:packages/feedback/message-feedback/src/index.ts:206:16#9"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#9",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:16#9#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 16
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:16#10"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#10",
+        "kind": "literal",
+        "value": "MessageId",
+        "text": "\"MessageId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#11",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#12",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#13"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#12",
+        "kind": "literal",
+        "value": "positive",
+        "text": "\"positive\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#13",
+        "kind": "literal",
+        "value": "negative",
+        "text": "\"negative\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#14",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#8",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#15"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#15",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#15#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#16"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#16",
+        "kind": "literal",
+        "value": "MessageFeedbackVersion",
+        "text": "\"MessageFeedbackVersion\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#17",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#18",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#18#ok",
+            "name": "ok",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#19"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#18#error",
+            "name": "error",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#20"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#19",
+        "kind": "literal",
+        "value": false,
+        "text": "false"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#2",
+        "kind": "reference",
+        "name": "MessageFeedbackPutResult",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackPutResult"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#20",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#21",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#26",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#28",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#32",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#34"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#21",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#21#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#22"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#21#sessionId",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#23"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#22",
+        "kind": "literal",
+        "value": "session-not-found",
+        "text": "\"session-not-found\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#23",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#8",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#24"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#24",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#24#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#25"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#25",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#26",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#26#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#27"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#26#sessionId",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#23"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#26#messageId",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#27",
+        "kind": "literal",
+        "value": "target-not-found",
+        "text": "\"target-not-found\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#28",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#28#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#29"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#28#current",
+            "name": "current",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#30"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#29",
+        "kind": "literal",
+        "value": "version-conflict",
+        "text": "\"version-conflict\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#3",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#4",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#18"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#30",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#31",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#6"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#31",
+        "kind": "literal",
+        "value": null,
+        "text": "null"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#32",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#32#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#33"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#33",
+        "kind": "literal",
+        "value": "note-blank",
+        "text": "\"note-blank\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#34",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#34#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#35"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#34#maxBytes",
+            "name": "maxBytes",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#17"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#34#actualBytes",
+            "name": "actualBytes",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#17"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#35",
+        "kind": "literal",
+        "value": "note-too-large",
+        "text": "\"note-too-large\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#4",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#4#ok",
+            "name": "ok",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#4#value",
+            "name": "value",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#6"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#5",
+        "kind": "literal",
+        "value": true,
+        "text": "true"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#6#messageId",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#7"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#6#rating",
+            "name": "rating",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#11"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#6#note",
+            "name": "note",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#6#version",
+            "name": "version",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#14"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#6#createdAt",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#17"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#6#updatedAt",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#17"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#7",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#8",
+          "type:packages/feedback/message-feedback/src/index.ts:206:52#9"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#8",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#9",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:206:52#9#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 206,
+              "column": 52
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:206:52#10"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#10",
+        "kind": "literal",
+        "value": "MessageId",
+        "text": "\"MessageId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#11",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:19#5",
+          "type:packages/feedback/message-feedback/src/index.ts:272:19#12"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#12",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#12#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 19
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:19#13"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#13",
+        "kind": "literal",
+        "value": "MessageFeedbackVersion",
+        "text": "\"MessageFeedbackVersion\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#2",
+        "kind": "reference",
+        "name": "MessageFeedbackDeleteRequest",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteRequest"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#3",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#3#sessionId",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 19
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:19#4"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#3#messageId",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 19
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:19#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#3#ifVersion",
+            "name": "ifVersion",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 19
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:19#11"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#4",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:19#5",
+          "type:packages/feedback/message-feedback/src/index.ts:272:19#6"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#5",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#6#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 19
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:19#7"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#7",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#8",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:19#5",
+          "type:packages/feedback/message-feedback/src/index.ts:272:19#9"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#9",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:19#9#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 19
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:19#10"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#10",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#10#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#11"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#10#sessionId",
+            "name": "sessionId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#12"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#11",
+        "kind": "literal",
+        "value": "session-not-found",
+        "text": "\"session-not-found\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#12",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#13",
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#14"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#13",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#14",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#14#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#15"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#15",
+        "kind": "literal",
+        "value": "SessionId",
+        "text": "\"SessionId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#16",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#16#code",
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#17"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#16#current",
+            "name": "current",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#18"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#17",
+        "kind": "literal",
+        "value": "version-conflict",
+        "text": "\"version-conflict\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#18",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#19",
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#20"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#19",
+        "kind": "literal",
+        "value": null,
+        "text": "null"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#2",
+        "kind": "reference",
+        "name": "MessageFeedbackDeleteResult",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteResult"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#20",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#20#messageId",
+            "name": "messageId",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#21"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#20#rating",
+            "name": "rating",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#24"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#20#note",
+            "name": "note",
+            "optional": true,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#13"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#20#version",
+            "name": "version",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#27"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#20#createdAt",
+            "name": "createdAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#30"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#20#updatedAt",
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#30"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#21",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#13",
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#22"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#22",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#22#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#23"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#23",
+        "kind": "literal",
+        "value": "MessageId",
+        "text": "\"MessageId\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#24",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#25",
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#26"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#25",
+        "kind": "literal",
+        "value": "positive",
+        "text": "\"positive\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#26",
+        "kind": "literal",
+        "value": "negative",
+        "text": "\"negative\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#27",
+        "kind": "intersection",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#13",
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#28"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#28",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#28#__@BRAND@74746",
+            "name": "__@BRAND@74746",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#29"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#29",
+        "kind": "literal",
+        "value": "MessageFeedbackVersion",
+        "text": "\"MessageFeedbackVersion\""
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#3",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#4",
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#7"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#30",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#4",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#4#ok",
+            "name": "ok",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#5"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#4#value",
+            "name": "value",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#6"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#5",
+        "kind": "literal",
+        "value": true,
+        "text": "true"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#6",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#6#absent",
+            "name": "absent",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#5"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#7",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#7#ok",
+            "name": "ok",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#8"
+          },
+          {
+            "tags": [],
+            "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#7#error",
+            "name": "error",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/feedback/message-feedback/src/index.ts",
+              "line": 272,
+              "column": 58
+            },
+            "text": "",
+            "kind": "property",
+            "type": "type:packages/feedback/message-feedback/src/index.ts:272:58#9"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#8",
+        "kind": "literal",
+        "value": false,
+        "text": "false"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/index.ts:272:58#9",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#10",
+          "type:packages/feedback/message-feedback/src/index.ts:272:58#16"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:103:18#1",
+        "kind": "literal",
+        "value": "note-too-large",
+        "text": "'note-too-large'"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:104:22#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:105:25#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:110:3#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:110:5#1",
+          "type:packages/feedback/message-feedback/src/types.ts:111:5#1",
+          "type:packages/feedback/message-feedback/src/types.ts:112:5#1",
+          "type:packages/feedback/message-feedback/src/types.ts:113:5#1",
+          "type:packages/feedback/message-feedback/src/types.ts:114:5#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:110:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackSessionNotFound",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSessionNotFound"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:111:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackTargetNotFound",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackTargetNotFound"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:112:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackVersionConflict",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersionConflict"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:113:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackNoteBlank",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteBlank"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:114:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackNoteTooLarge",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteTooLarge"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:118:16#1",
+        "kind": "literal",
+        "value": true,
+        "text": "true"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:119:19#1",
+        "kind": "reference",
+        "name": "T",
+        "target": {
+          "kind": "type-parameter",
+          "parameter": "packages/feedback/message-feedback/src/types.ts:117:41#T"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:123:52#1",
+        "kind": "reference",
+        "name": "MessageFeedbackFailure",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackFailure"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:124:16#1",
+        "kind": "literal",
+        "value": false,
+        "text": "false"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:125:19#1",
+        "kind": "reference",
+        "name": "E",
+        "target": {
+          "kind": "type-parameter",
+          "parameter": "packages/feedback/message-feedback/src/types.ts:123:42#E"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:13:38#1",
+        "kind": "reference",
+        "name": "Branded",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded"
+        },
+        "arguments": [
+          "type:packages/feedback/message-feedback/src/types.ts:13:46#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:13:46#1",
+        "kind": "literal",
+        "value": "MessageFeedbackVersion",
+        "text": "'MessageFeedbackVersion'"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:130:28#1",
+        "kind": "reference",
+        "name": "MessageFeedbackListValue",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackListValue"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:130:3#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:130:5#1",
+          "type:packages/feedback/message-feedback/src/types.ts:131:5#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:130:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackSuccess",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSuccess"
+        },
+        "arguments": [
+          "type:packages/feedback/message-feedback/src/types.ts:130:28#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:131:29#1",
+        "kind": "reference",
+        "name": "MessageFeedbackSessionNotFound",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSessionNotFound"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:131:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackRejected",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRejected"
+        },
+        "arguments": [
+          "type:packages/feedback/message-feedback/src/types.ts:131:29#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:135:28#1",
+        "kind": "reference",
+        "name": "MessageFeedbackItem",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:135:3#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:135:5#1",
+          "type:packages/feedback/message-feedback/src/types.ts:136:5#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:135:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackSuccess",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSuccess"
+        },
+        "arguments": [
+          "type:packages/feedback/message-feedback/src/types.ts:135:28#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:136:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackRejected",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRejected"
+        },
+        "arguments": [
+          "type:packages/feedback/message-feedback/src/types.ts:137:5#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:137:5#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:137:7#1",
+          "type:packages/feedback/message-feedback/src/types.ts:138:7#1",
+          "type:packages/feedback/message-feedback/src/types.ts:139:7#1",
+          "type:packages/feedback/message-feedback/src/types.ts:140:7#1",
+          "type:packages/feedback/message-feedback/src/types.ts:141:7#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:137:7#1",
+        "kind": "reference",
+        "name": "MessageFeedbackSessionNotFound",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSessionNotFound"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:138:7#1",
+        "kind": "reference",
+        "name": "MessageFeedbackTargetNotFound",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackTargetNotFound"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:139:7#1",
+        "kind": "reference",
+        "name": "MessageFeedbackVersionConflict",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersionConflict"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:140:7#1",
+        "kind": "reference",
+        "name": "MessageFeedbackNoteBlank",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteBlank"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:141:7#1",
+        "kind": "reference",
+        "name": "MessageFeedbackNoteTooLarge",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackNoteTooLarge"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:146:28#1",
+        "kind": "reference",
+        "name": "MessageFeedbackDeleteValue",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackDeleteValue"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:146:3#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:146:5#1",
+          "type:packages/feedback/message-feedback/src/types.ts:147:5#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:146:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackSuccess",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSuccess"
+        },
+        "arguments": [
+          "type:packages/feedback/message-feedback/src/types.ts:146:28#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:147:29#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:147:29#2",
+          "type:packages/feedback/message-feedback/src/types.ts:147:62#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:147:29#2",
+        "kind": "reference",
+        "name": "MessageFeedbackSessionNotFound",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackSessionNotFound"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:147:5#1",
+        "kind": "reference",
+        "name": "MessageFeedbackRejected",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRejected"
+        },
+        "arguments": [
+          "type:packages/feedback/message-feedback/src/types.ts:147:29#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:147:62#1",
+        "kind": "reference",
+        "name": "MessageFeedbackVersionConflict",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersionConflict"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:16:37#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:16:37#2",
+          "type:packages/feedback/message-feedback/src/types.ts:16:50#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:16:37#2",
+        "kind": "literal",
+        "value": "positive",
+        "text": "'positive'"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:16:50#1",
+        "kind": "literal",
+        "value": "negative",
+        "text": "'negative'"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:21:23#1",
+        "kind": "reference",
+        "name": "MessageId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-llm:packages/llm/llm/src/brand.ts#MessageId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:23:20#1",
+        "kind": "reference",
+        "name": "MessageFeedbackRating",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRating"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:25:19#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:27:21#1",
+        "kind": "reference",
+        "name": "MessageFeedbackVersion",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersion"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:29:23#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:31:23#1",
+        "kind": "keyword",
+        "name": "number"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:37:23#1",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:43:19#1",
+        "kind": "operator",
+        "operator": "readonly",
+        "type": "type:packages/feedback/message-feedback/src/types.ts:43:28#1"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:43:28#1",
+        "kind": "array",
+        "element": "type:packages/feedback/message-feedback/src/types.ts:43:28#2"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:43:28#2",
+        "kind": "reference",
+        "name": "MessageFeedbackItem",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:49:23#1",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:51:23#1",
+        "kind": "reference",
+        "name": "MessageId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-llm:packages/llm/llm/src/brand.ts#MessageId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:53:20#1",
+        "kind": "reference",
+        "name": "MessageFeedbackRating",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackRating"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:55:19#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:57:23#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:57:23#2",
+          "type:packages/feedback/message-feedback/src/types.ts:57:48#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:57:23#2",
+        "kind": "reference",
+        "name": "MessageFeedbackVersion",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersion"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:57:48#1",
+        "kind": "literal",
+        "value": null,
+        "text": "null"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:63:23#1",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:65:23#1",
+        "kind": "reference",
+        "name": "MessageId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-llm:packages/llm/llm/src/brand.ts#MessageId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:67:23#1",
+        "kind": "reference",
+        "name": "MessageFeedbackVersion",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackVersion"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:73:20#1",
+        "kind": "literal",
+        "value": true,
+        "text": "true"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:78:18#1",
+        "kind": "literal",
+        "value": "session-not-found",
+        "text": "'session-not-found'"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:79:23#1",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:84:18#1",
+        "kind": "literal",
+        "value": "target-not-found",
+        "text": "'target-not-found'"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:85:23#1",
+        "kind": "reference",
+        "name": "SessionId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-session:packages/core/session/src/types.ts#SessionId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:86:23#1",
+        "kind": "reference",
+        "name": "MessageId",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-llm:packages/llm/llm/src/brand.ts#MessageId"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:91:18#1",
+        "kind": "literal",
+        "value": "version-conflict",
+        "text": "'version-conflict'"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:93:21#1",
+        "kind": "union",
+        "types": [
+          "type:packages/feedback/message-feedback/src/types.ts:93:21#2",
+          "type:packages/feedback/message-feedback/src/types.ts:93:43#1"
+        ]
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:93:21#2",
+        "kind": "reference",
+        "name": "MessageFeedbackItem",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-message-feedback:packages/feedback/message-feedback/src/types.ts#MessageFeedbackItem"
+        },
+        "arguments": []
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:93:43#1",
+        "kind": "literal",
+        "value": null,
+        "text": "null"
+      },
+      {
+        "id": "type:packages/feedback/message-feedback/src/types.ts:98:18#1",
+        "kind": "literal",
+        "value": "note-blank",
+        "text": "'note-blank'"
+      },
+      {
+        "id": "type:packages/llm/llm/src/brand.ts:16:25#1",
+        "kind": "reference",
+        "name": "Branded",
+        "target": {
+          "kind": "declaration",
+          "symbol": "@seekdeep-ai/seekdeep-brand:packages/util/brand/src/index.ts#Branded"
+        },
+        "arguments": [
+          "type:packages/llm/llm/src/brand.ts:16:33#1"
+        ]
+      },
+      {
+        "id": "type:packages/llm/llm/src/brand.ts:16:33#1",
+        "kind": "literal",
+        "value": "MessageId",
+        "text": "'MessageId'"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:31#1",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:41#1",
+        "kind": "intersection",
+        "types": [
+          "type:packages/util/brand/src/index.ts:27:41#2",
+          "type:packages/util/brand/src/index.ts:27:50#1"
+        ]
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:41#2",
+        "kind": "keyword",
+        "name": "string"
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:50#1",
+        "kind": "object",
+        "members": [
+          {
+            "tags": [],
+            "id": "type:packages/util/brand/src/index.ts:27:50#1#[BRAND]@1293",
+            "name": "[BRAND]",
+            "computed": "symbol",
+            "optional": false,
+            "readonly": true,
+            "async": false,
+            "abstract": false,
+            "static": false,
+            "visibility": "public",
+            "location": {
+              "file": "packages/util/brand/src/index.ts",
+              "line": 27,
+              "column": 52
+            },
+            "text": "readonly [BRAND]: B",
+            "kind": "property",
+            "type": "type:packages/util/brand/src/index.ts:27:70#1"
+          }
+        ]
+      },
+      {
+        "id": "type:packages/util/brand/src/index.ts:27:70#1",
+        "kind": "reference",
+        "name": "B",
+        "target": {
+          "kind": "type-parameter",
+          "parameter": "packages/util/brand/src/index.ts:27:21#B"
+        },
+        "arguments": []
+      }
+    ]
+  }
+}

@@ -29,6 +29,14 @@ use seekdeep_util::launch_environment::{LaunchEnvironmentSnapshot, SEEKDEEP_LAUN
 use crate::{process_shutdown::ProcessShutdown, profile_support};
 
 const NAME: &str = "seekdeep";
+/// Host typert artifacts of the shipped catalog packages, registered before composition.
+const SHIPPED_TYPERT_HOST_ARTIFACTS: &[&str] = &[
+    seekdeep_commands::TYPERT_HOST_ARTIFACT,
+    seekdeep_cordis_host_runner::TYPERT_HOST_ARTIFACT,
+    seekdeep_goal::index::TYPERT_HOST_ARTIFACT,
+    seekdeep_host_plugin_inventory::TYPERT_HOST_ARTIFACT,
+    seekdeep_message_feedback::TYPERT_HOST_ARTIFACT,
+];
 const TELEMETRY_ROW_ID: &str = "session-telemetry-otel";
 const AGENT_PRESETS_ROW_ID: &str = "agent-presets";
 const FRAMEWORK_TIMER_ID: &str = "profile-watch-timer";
@@ -1155,6 +1163,11 @@ pub async fn run_profile_process(
             application.publish_context(context.clone()).await?;
             context.provide(SEEKDEEP_LAUNCH_ENVIRONMENT, Arc::new(environment))?;
             TypertArtifactRegistry::install(&context)?;
+            // Source: each shipped package's `./typert` export is a static module-load fact, so
+            // the typert loader's activation pass sees every artifact before any entry applies.
+            for artifact in SHIPPED_TYPERT_HOST_ARTIFACTS {
+                context.own(seekdeep_typert_host_artifact::register(&context, artifact)?)?;
+            }
             provide_cmdline(
                 &context,
                 CmdlineHost::new(arguments, move |code| {

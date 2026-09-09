@@ -7,9 +7,6 @@ use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen
 
 use crate::browser_reasoning::inject_style;
 
-const CHAT_CSS: &str =
-    include_str!("../../../packages/client/ui-conversation/src/client/chat/ChatView.module.css");
-
 thread_local! {
     static MODULES: RefCell<Option<BrowserModules>> = const { RefCell::new(None) };
 }
@@ -37,7 +34,7 @@ pub fn configure_client_ui_conversation_chat_seat(
     let json_block = required_property(&ui_primitives, "JsonBlock", "ui-primitives")?;
     inject_style(
         "ChatView",
-        CHAT_CSS,
+        &crate::browser_chat_view::chat_view_styles(),
         &[
             ("callRow", "seekdeep-conversation-chat-callRow"),
             ("column", "seekdeep-conversation-chat-column"),

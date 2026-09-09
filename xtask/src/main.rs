@@ -16,6 +16,7 @@ mod client_test_runtime_built_smoke_driver;
 mod remote_built_smoke_driver;
 mod remote_contracts;
 mod typert_corpus;
+mod typert_host_artifacts;
 mod web_assembled;
 mod web_assembled_driver;
 mod web_composer_driver;
@@ -105,6 +106,12 @@ enum Command {
         /// Optional comma-separated source scenario filter (for example `plan-review,question-composer`).
         #[arg(long)]
         scenario: Option<String>,
+    },
+    /// Regenerate (or `--check`) each crate's embedded Host Typert artifact from the pinned
+    /// Host face model.
+    TypertHostArtifacts {
+        #[arg(long)]
+        check: bool,
     },
     /// Run the pinned Typert generator spec corpus against the Rust generator runner.
     TypertCorpus {
@@ -383,6 +390,7 @@ fn main() -> anyhow::Result<()> {
         Command::WebKeyless { source, scenario } => {
             web_settings::run_keyless(&source, scenario.as_deref())
         }
+        Command::TypertHostArtifacts { check } => typert_host_artifacts::run(check),
         Command::TypertCorpus { source, filter } => typert_corpus::run(&source, filter.as_deref()),
         Command::RemoteBuiltSmoke => remote_built_smoke(),
         Command::ClientTestRuntimeBuiltSmoke { source } => client_test_runtime_built_smoke(&source),
