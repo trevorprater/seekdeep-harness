@@ -742,6 +742,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         ),
         ("seekdeep-sandbox-local", seekdeep_sandbox_local::plugin()),
         ("seekdeep-sandbox-policy", seekdeep_sandbox_policy::plugin()),
+        ("seekdeep-schedule", seekdeep_schedule::plugin()),
         ("seekdeep-session", seekdeep_core::session_store::plugin()),
         (
             "seekdeep-session-checkpoint-policy",
@@ -806,6 +807,7 @@ pub fn register_compiled_profile_plugins(catalog: &PluginCatalog) -> anyhow::Res
         ("seekdeep-system-prompt", seekdeep_system_prompt::plugin()),
         ("seekdeep-terminal", seekdeep_terminal::plugin()),
         ("seekdeep-terminal-bash", seekdeep_terminal_bash::plugin()),
+        ("seekdeep-time-context", seekdeep_time_context::plugin()),
         ("seekdeep-token-meter", seekdeep_token_meter::plugin()),
         ("seekdeep-tool-ask-user", seekdeep_tool_ask_user::plugin()),
         ("seekdeep-tool-bash", seekdeep_tool_bash::plugin()),

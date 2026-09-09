@@ -1,29 +1,38 @@
 //! Real Web profile with isolated settings, fixture attachment, and a model-stream guard.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
 };
 
 use async_trait::async_trait;
+use futures::StreamExt as _;
 use seekdeep::profile_boot::{
     boot_profile, compose_profile_at, framework_profile_catalog, shipped_preset_root,
 };
+use seekdeep_agent::{
+    AGENTS, AgentHandle, AgentOptions, CancelOptions, CreateAgentMeta, CreateAgentOptions,
+};
+use seekdeep_agent_presets::AGENT_PRESETS;
 use seekdeep_app_boot::BootPrepare;
 use seekdeep_cmdline::{CmdlineHost, provide_cmdline};
 use seekdeep_cordis::Context;
-use seekdeep_core::session::SessionId;
+use seekdeep_core::session::{AgentCancelCause, SessionId};
 use seekdeep_core::session_store::{CreateSessionOptions, SESSIONS};
 use seekdeep_host_webserver::{
     WEB_SERVER, WebRegistration, WebRoute, WebRouteKind, WebServer, response,
 };
 use seekdeep_llm::{
-    AbortSignal, AdapterStream, GenerateOptions, LLM, LlmAdapter, LlmModelContext, LlmModelInfo,
-    LlmProviderInfo, LlmResolvedModelInfo, LlmStream, ModelId, ProviderId,
+    AbortSignal, AdapterRegistrationHandle, AdapterStream, GenerateOptions, LLM, LlmAdapter,
+    LlmModelContext, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, LlmStream, ModelId,
+    ProviderId, StreamChunk, UserMessage,
+};
+use seekdeep_subagent::{
+    ContinuableStartRequest, ContinuableStartSpec, SUBAGENTS, SubagentFollowupOptions,
 };
 use seekdeep_typert_loader::TypertArtifactRegistry;
 use seekdeep_util::launch_environment::{
@@ -34,6 +43,102 @@ use seekdeep_workspace::WORKSPACE_REGISTRY;
 use serde_json::json;
 
 struct RouteOnly(Arc<AtomicUsize>);
+
+/// Providers whose model calls the refusal middleware lets through: the source scaffold's
+/// in-process `ctx.llm.registerAdapter(...)` test adapters, registered here over a fixture route.
+type AllowedProviders = Arc<Mutex<HashSet<String>>>;
+
+/// Driver adapters registered through the fixture route, by id, with their providers.
+type AdapterRegistrations = Arc<Mutex<HashMap<String, (AdapterRegistrationHandle, Vec<String>)>>>;
+
+/// A source test adapter living in the driver process: every `stream(options)` becomes one HTTP
+/// request carrying the serialized `GenerateOptions`; the driver answers with one JSON stream
+/// chunk per line (`{"error": ...}` for a thrown adapter), and an aborted turn drops the request.
+struct DriverAdapter {
+    endpoint: String,
+    client: reqwest::Client,
+}
+
+fn aborted() -> anyhow::Error {
+    anyhow::anyhow!("driver adapter: the turn was aborted")
+}
+
+async fn driver_response(
+    client: reqwest::Client,
+    endpoint: String,
+    options: &GenerateOptions,
+) -> anyhow::Result<reqwest::Response> {
+    let request = client
+        .post(&endpoint)
+        .header("content-type", "application/json")
+        .body(serde_json::to_vec(options)?)
+        .send();
+    let response = match &options.signal {
+        Some(signal) => tokio::select! {
+            response = request => response?,
+            () = signal.cancelled() => return Err(aborted()),
+        },
+        None => request.await?,
+    };
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!("driver adapter HTTP {}", response.status()));
+    }
+    Ok(response)
+}
+
+async fn driver_bytes(
+    body: &mut (impl futures::Stream<Item = reqwest::Result<bytes::Bytes>> + Unpin),
+    signal: Option<&AbortSignal>,
+) -> anyhow::Result<Option<bytes::Bytes>> {
+    let next = match signal {
+        Some(signal) => tokio::select! {
+            next = body.next() => next,
+            () = signal.cancelled() => return Err(aborted()),
+        },
+        None => body.next().await,
+    };
+    Ok(next.transpose()?)
+}
+
+fn driver_chunks(
+    client: reqwest::Client,
+    endpoint: String,
+    options: GenerateOptions,
+) -> impl futures::Stream<Item = anyhow::Result<StreamChunk>> + Send + 'static {
+    async_stream::try_stream! {
+        let signal = options.signal.clone();
+        let response = driver_response(client, endpoint, &options).await?;
+        let mut body = response.bytes_stream();
+        let mut buffer = Vec::new();
+        while let Some(bytes) = driver_bytes(&mut body, signal.as_ref()).await? {
+            buffer.extend_from_slice(&bytes);
+            while let Some(end) = buffer.iter().position(|byte| *byte == b'\n') {
+                let line = buffer.drain(..=end).collect::<Vec<u8>>();
+                let line = String::from_utf8(line)?;
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                let value: serde_json::Value = serde_json::from_str(line)?;
+                if let Some(error) = value.get("error").and_then(serde_json::Value::as_str) {
+                    Err(anyhow::anyhow!("{error}"))?;
+                }
+                yield serde_json::from_value::<StreamChunk>(value)?;
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl LlmAdapter for DriverAdapter {
+    fn stream(&self, options: GenerateOptions) -> AdapterStream {
+        AdapterStream::new(driver_chunks(
+            self.client.clone(),
+            self.endpoint.clone(),
+            options,
+        ))
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FixtureMode {
@@ -188,20 +293,35 @@ fn sessions_fixture_route(
     let sessions = context
         .get(SESSIONS)
         .ok_or_else(|| anyhow::anyhow!("fixture has no Sessions"))?;
+    let agents = context
+        .get(AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
     server.register(WebRoute {
         kind: WebRouteKind::Exact,
         path: "/fixture/sessions".to_owned(),
         handler: Arc::new(move |request| {
             let sessions = sessions.clone();
+            let agents = agents.clone();
             Box::pin(async move {
                 anyhow::ensure!(
                     request.method().as_str() == "GET",
                     "fixture Session listing requires GET"
                 );
+                // Source `ctx.agents.get(id)` answers only for live Agents; the listing carries
+                // each Session's live Agent status so the driver can tell the two apart.
                 let listed = sessions
                     .list()
                     .iter()
-                    .map(|session| json!({"header": session.header(), "events": session.events()}))
+                    .map(|session| {
+                        json!({
+                            "header": session.header(),
+                            "events": session.events(),
+                            "agent": agents.get(session.id()).map(|agent| json!({
+                                "status": agent.status(),
+                                "inbox": {"nextTurn": agent.inbox().next_turn()},
+                            })),
+                        })
+                    })
                     .collect::<Vec<_>>();
                 Ok(response(200_u16.try_into()?, serde_json::to_vec(&listed)?))
             })
@@ -288,6 +408,23 @@ fn persist_fixture_route(context: &Context, server: &WebServer) -> anyhow::Resul
         handler: Arc::new(move |request| {
             let persistence = persistence.clone();
             Box::pin(async move {
+                // Source `ctx.sessionPersistence.load(id)`: the durable header and event log.
+                if let Some(id) = request
+                    .uri()
+                    .path()
+                    .strip_prefix("/fixture/persist/")
+                    .and_then(|rest| rest.strip_suffix("/load"))
+                {
+                    anyhow::ensure!(
+                        request.method().as_str() == "GET",
+                        "fixture persist load requires GET"
+                    );
+                    let loaded = persistence.load(&SessionId::new(id)).await?;
+                    return Ok(response(
+                        200_u16.try_into()?,
+                        serde_json::to_vec(&json!({"meta": loaded.meta, "events": loaded.events}))?,
+                    ));
+                }
                 anyhow::ensure!(
                     request.method().as_str() == "POST",
                     "fixture persist requires POST"
@@ -895,7 +1032,9 @@ fn install_keyless_routes(
     context: &Context,
     calls: &Arc<AtomicUsize>,
     mode: FixtureMode,
+    allowed: &AllowedProviders,
 ) -> anyhow::Result<()> {
+    let allowed = allowed.clone();
     let llm = context
         .get(LLM)
         .ok_or_else(|| anyhow::anyhow!("Web profile has no llm"))?;
@@ -912,6 +1051,13 @@ fn install_keyless_routes(
             if mode == FixtureMode::Replay
                 && options.provider.as_str() == "deepseek-official"
                 && options.model.as_str() == "deepseek-v4-flash"
+            {
+                return next(options);
+            }
+            if allowed
+                .lock()
+                .expect("allowed providers")
+                .contains(options.provider.as_str())
             {
                 return next(options);
             }
@@ -955,11 +1101,526 @@ fn replay_files(arguments: &[std::ffi::OsString]) -> anyhow::Result<Option<Repla
 
 /// Routes standing in for the source scaffold's in-process `ctx` calls (tools, jobs,
 /// credentials) and its `vi.spyOn(apiProxy.host, 'openPath')` stub.
+/// Source `ctx.llm.registerAdapter(providers, adapter)` for a driver-hosted adapter: the driver
+/// posts the providers and its stream endpoint; the returned id later unregisters the adapter.
+fn adapter_fixture_route(
+    context: &Context,
+    server: &WebServer,
+    allowed: &AllowedProviders,
+) -> anyhow::Result<WebRegistration> {
+    let llm = context
+        .get(LLM)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no llm"))?;
+    let allowed = allowed.clone();
+    let registrations: AdapterRegistrations = Arc::default();
+    let counter = Arc::new(AtomicUsize::new(0));
+    let client = reqwest::Client::new();
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/adapter".to_owned(),
+        handler: Arc::new(move |request| {
+            let llm = llm.clone();
+            let allowed = allowed.clone();
+            let registrations = registrations.clone();
+            let counter = counter.clone();
+            let client = client.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture adapter routes require POST"
+                );
+                let action = request.uri().path().to_owned();
+                let body = json_body(request).await?;
+                if action == "/fixture/adapter/register" {
+                    let providers = body
+                        .get("providers")
+                        .and_then(serde_json::Value::as_array)
+                        .ok_or_else(|| anyhow::anyhow!("fixture adapter omitted providers"))?
+                        .iter()
+                        .filter_map(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                        .collect::<Vec<_>>();
+                    let endpoint = required_str(&body, "endpoint")?.to_owned();
+                    let handle = llm.register_adapter(
+                        &providers,
+                        Arc::new(DriverAdapter { endpoint, client }),
+                    )?;
+                    allowed
+                        .lock()
+                        .expect("allowed providers")
+                        .extend(providers.iter().cloned());
+                    let id = format!("adapter-{}", counter.fetch_add(1, Ordering::SeqCst) + 1);
+                    registrations
+                        .lock()
+                        .expect("adapter registrations")
+                        .insert(id.clone(), (handle, providers));
+                    return Ok(response(
+                        200_u16.try_into()?,
+                        serde_json::to_vec(&json!({"id": id}))?,
+                    ));
+                }
+                anyhow::ensure!(
+                    action == "/fixture/adapter/unregister",
+                    "unknown fixture adapter route {action}"
+                );
+                let id = required_str(&body, "id")?;
+                let removed = registrations
+                    .lock()
+                    .expect("adapter registrations")
+                    .remove(id);
+                let Some((handle, providers)) = removed else {
+                    anyhow::bail!("fixture adapter {id} is not registered");
+                };
+                handle.dispose().await?;
+                let mut allowed = allowed.lock().expect("allowed providers");
+                for provider in providers {
+                    allowed.remove(&provider);
+                }
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&json!({}))?,
+                ))
+            })
+        }),
+    })
+}
+
+/// Source `ctx.agents.create({ sessionId, meta, agentOptions, setup })`, `handle.dispose()`,
+/// `handle.agent.followup(message)`, and `ctx.agents.roots()`.
+/// Source `ctx.agents.roots()`: the live root Agents' session ids.
+fn agent_roots_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let agents = context
+        .get(AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Exact,
+        path: "/fixture/agents/roots".to_owned(),
+        handler: Arc::new(move |_request| {
+            let agents = agents.clone();
+            Box::pin(async move {
+                let roots = agents
+                    .roots()
+                    .iter()
+                    .map(|agent| agent.session().id().to_string())
+                    .collect::<Vec<_>>();
+                Ok(response(200_u16.try_into()?, serde_json::to_vec(&roots)?))
+            })
+        }),
+    })
+}
+
+/// Live agents created through the fixture route, kept for `handle.dispose()`.
+type FixtureAgentHandles = Arc<Mutex<HashMap<String, AgentHandle>>>;
+
+async fn create_fixture_agent(
+    agents: &seekdeep_agent::AgentRegistry,
+    roster: &Arc<seekdeep_agent_presets::AgentPresetRegistry>,
+    handles: &FixtureAgentHandles,
+    body: &serde_json::Value,
+) -> anyhow::Result<SessionId> {
+    let session_id = SessionId::new(required_str(body, "sessionId")?);
+    let mut options = CreateAgentOptions::new(session_id.clone());
+    options.meta = CreateAgentMeta {
+        cwd: body
+            .pointer("/meta/cwd")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned),
+        ..CreateAgentMeta::default()
+    };
+    options.agent_options = AgentOptions {
+        provider: body
+            .pointer("/agentOptions/provider")
+            .and_then(serde_json::Value::as_str)
+            .map(ProviderId::new),
+        model: body
+            .pointer("/agentOptions/model")
+            .and_then(serde_json::Value::as_str)
+            .map(ModelId::new),
+        ..AgentOptions::default()
+    };
+    if body.get("setup").and_then(serde_json::Value::as_str) == Some("agentPresets") {
+        let roster = roster.clone();
+        options.setup = Some(Arc::new(move |agent_context| {
+            let roster = roster.clone();
+            Box::pin(async move {
+                roster.mount(&agent_context, None).await?;
+                Ok(None)
+            })
+        }));
+    }
+    let handle = agents.create(options).await?;
+    handles
+        .lock()
+        .expect("agent handles")
+        .insert(session_id.to_string(), handle);
+    Ok(session_id)
+}
+
+async fn fixture_agent_action(
+    agents: &seekdeep_agent::AgentRegistry,
+    handles: &FixtureAgentHandles,
+    id: &str,
+    action: &str,
+    body: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let live = || {
+        agents
+            .get(&SessionId::new(id))
+            .ok_or_else(|| anyhow::anyhow!("fixture agent {id} is not live"))
+    };
+    match action {
+        "dispose" => {
+            let removed = handles.lock().expect("agent handles").remove(id);
+            let Some(handle) = removed else {
+                anyhow::bail!("fixture agent {id} was not created here");
+            };
+            handle.dispose().await?;
+        }
+        "followup" => {
+            let message: UserMessage = serde_json::from_value(
+                body.get("message")
+                    .cloned()
+                    .ok_or_else(|| anyhow::anyhow!("followup omitted message"))?,
+            )?;
+            live()?.followup(message)?;
+        }
+        "cancel" => {
+            let cause: AgentCancelCause = body
+                .get("cause")
+                .cloned()
+                .map_or(Ok(AgentCancelCause::User), serde_json::from_value)?;
+            live()?.cancel(cause, CancelOptions::default())?;
+        }
+        other => anyhow::bail!("unknown fixture agent action {other}"),
+    }
+    Ok(())
+}
+
+fn agent_fixture_route(context: &Context, server: &WebServer) -> anyhow::Result<WebRegistration> {
+    let agents = context
+        .get(AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
+    let roster = context
+        .get(AGENT_PRESETS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no agent presets"))?;
+    let handles: FixtureAgentHandles = Arc::default();
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/agent".to_owned(),
+        handler: Arc::new(move |request| {
+            let agents = agents.clone();
+            let roster = roster.clone();
+            let handles = handles.clone();
+            Box::pin(async move {
+                let path = request.uri().path().to_owned();
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture agent routes require POST"
+                );
+                let body = json_body(request).await?;
+                if path == "/fixture/agent/create" {
+                    let session_id =
+                        create_fixture_agent(&agents, &roster, &handles, &body).await?;
+                    return Ok(response(
+                        200_u16.try_into()?,
+                        serde_json::to_vec(&json!({"sessionId": session_id}))?,
+                    ));
+                }
+                let rest = path
+                    .strip_prefix("/fixture/agent/")
+                    .ok_or_else(|| anyhow::anyhow!("unknown fixture agent route {path}"))?;
+                let (id, action) = rest
+                    .rsplit_once('/')
+                    .ok_or_else(|| anyhow::anyhow!("fixture agent route needs an action"))?;
+                fixture_agent_action(&agents, &handles, id, action, &body).await?;
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&json!({}))?,
+                ))
+            })
+        }),
+    })
+}
+
+/// Source `ctx.workspaceRegistry.resolveByPath(path)` and `workspace.attachSession(id)`.
+fn workspace_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let registry = context
+        .get(WORKSPACE_REGISTRY)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no workspace registry"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/workspace".to_owned(),
+        handler: Arc::new(move |request| {
+            let registry = registry.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture workspace routes require POST"
+                );
+                let action = request.uri().path().to_owned();
+                let body = json_body(request).await?;
+                let workspace = registry
+                    .resolve_by_path(required_str(&body, "path")?)
+                    .await?;
+                match action.as_str() {
+                    "/fixture/workspace/resolve" => Ok(response(
+                        200_u16.try_into()?,
+                        serde_json::to_vec(
+                            &workspace.map(|workspace| json!({"id": workspace.id()})),
+                        )?,
+                    )),
+                    "/fixture/workspace/attach" => {
+                        let workspace = workspace.ok_or_else(|| {
+                            anyhow::anyhow!("fixture workspace is not registered")
+                        })?;
+                        workspace
+                            .attach_session(SessionId::new(required_str(&body, "sessionId")?))
+                            .await?;
+                        Ok(response(
+                            200_u16.try_into()?,
+                            serde_json::to_vec(&json!({}))?,
+                        ))
+                    }
+                    other => anyhow::bail!("unknown fixture workspace route {other}"),
+                }
+            })
+        }),
+    })
+}
+
+/// The source wire shape of one `subagent.list` entry: activity from the live registry,
+/// camelCase fields, the mode's label lifted beside it.
+fn wire_subagent_entry(
+    entry: seekdeep_subagent::SubagentListEntry,
+    agents: &seekdeep_agent::AgentRegistry,
+) -> serde_json::Value {
+    match entry {
+        seekdeep_subagent::SubagentListEntry::Child {
+            id,
+            mode,
+            has_children,
+            ..
+        } => {
+            let running = agents
+                .get(&id)
+                .is_some_and(|agent| agent.status() == seekdeep_agent::AgentStatus::Running);
+            let (mode, label) = match mode {
+                seekdeep_subagent::SubagentListMode::OneShot { label } => ("one-shot", label),
+                seekdeep_subagent::SubagentListMode::Continuable { label } => {
+                    ("continuable", Some(label))
+                }
+            };
+            json!({
+                "kind": "child",
+                "id": id,
+                "mode": mode,
+                "activity": if running { "running" } else { "inactive" },
+                "hasChildren": has_children,
+                "label": label,
+            })
+        }
+        seekdeep_subagent::SubagentListEntry::Diagnostic { id, reason } => {
+            json!({"kind": "diagnostic", "id": id, "reason": reason})
+        }
+    }
+}
+
+/// Source `ctx.subagents.startContinuable(spec)` request body.
+fn continuable_start_spec(
+    parent: Arc<seekdeep_agent::Agent>,
+    body: &serde_json::Value,
+) -> anyhow::Result<ContinuableStartSpec> {
+    Ok(ContinuableStartSpec {
+        provider: required_str(body, "provider")?.to_owned(),
+        label: required_str(body, "label")?.to_owned(),
+        request: ContinuableStartRequest {
+            prompt: serde_json::from_value(body.get("prompt").cloned().unwrap_or(json!([])))?,
+            parent,
+            agent_options: body
+                .get("agentOptions")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()?,
+            max_depth: body.get("maxDepth").and_then(serde_json::Value::as_u64),
+            tool_filter: None,
+            persona: body
+                .get("persona")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned),
+        },
+        signal: AbortSignal::default(),
+    })
+}
+
+/// Source `ctx.subagents.startContinuable(spec)`, `listChildren(parentId)`, and
+/// `followup(parent, childId, content, options)`.
+fn subagent_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let agents = context
+        .get(AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
+    let subagents = context
+        .get(SUBAGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no subagents"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/subagent".to_owned(),
+        handler: Arc::new(move |request| {
+            let agents = agents.clone();
+            let subagents = subagents.clone();
+            Box::pin(async move {
+                let path = request.uri().path().to_owned();
+                if let Some(parent) = path.strip_prefix("/fixture/subagent/children/") {
+                    let listed = subagents
+                        .list_children(&SessionId::new(parent), None)
+                        .await?
+                        .into_iter()
+                        .map(|entry| wire_subagent_entry(entry, &agents))
+                        .collect::<Vec<_>>();
+                    return Ok(response(200_u16.try_into()?, serde_json::to_vec(&listed)?));
+                }
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture subagent routes require POST"
+                );
+                let body = json_body(request).await?;
+                let parent_id = SessionId::new(required_str(&body, "parentSessionId")?);
+                let parent = agents
+                    .get(&parent_id)
+                    .ok_or_else(|| anyhow::anyhow!("fixture parent {parent_id} is not live"))?;
+                match path.as_str() {
+                    "/fixture/subagent/start" => {
+                        let started = subagents
+                            .start_continuable(continuable_start_spec(parent, &body)?)
+                            .await?;
+                        Ok(response(
+                            200_u16.try_into()?,
+                            serde_json::to_vec(&json!({
+                                "childId": started.child_id,
+                                "messageId": started.message_id,
+                            }))?,
+                        ))
+                    }
+                    "/fixture/subagent/followup" => {
+                        let message_id = subagents
+                            .followup(
+                                &parent,
+                                &SessionId::new(required_str(&body, "childSessionId")?),
+                                serde_json::from_value(
+                                    body.get("content").cloned().unwrap_or(json!([])),
+                                )?,
+                                SubagentFollowupOptions {
+                                    source: serde_json::from_value(
+                                        body.get("source")
+                                            .cloned()
+                                            .unwrap_or(json!({"kind": "user"})),
+                                    )?,
+                                    signal: AbortSignal::default(),
+                                },
+                            )
+                            .await?;
+                        Ok(response(
+                            200_u16.try_into()?,
+                            serde_json::to_vec(&json!({"messageId": message_id}))?,
+                        ))
+                    }
+                    other => anyhow::bail!("unknown fixture subagent route {other}"),
+                }
+            })
+        }),
+    })
+}
+
+/// Source `ctx.sessionProjectionCache.coldSnapshot(id)`: warms the durable projection checkpoint
+/// of a persisted-only session so listings carry its projections.
+fn cold_snapshot_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let cache = context
+        .get(seekdeep_session_projection_cache::SESSION_PROJECTION_CACHE)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no session projection cache"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/cold-snapshot".to_owned(),
+        handler: Arc::new(move |request| {
+            let cache = cache.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture cold snapshot requires POST"
+                );
+                let id = request
+                    .uri()
+                    .path()
+                    .strip_prefix("/fixture/cold-snapshot/")
+                    .filter(|id| !id.is_empty())
+                    .ok_or_else(|| anyhow::anyhow!("fixture cold snapshot needs a session id"))?;
+                let snapshot = cache.cold_snapshot(&SessionId::new(id), None).await?;
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&json!({"asOfSeq": snapshot.as_of_seq}))?,
+                ))
+            })
+        }),
+    })
+}
+
+/// Source `ctx.sessions.flush(session)`.
+fn session_flush_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let sessions = context
+        .get(SESSIONS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Sessions"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/flush".to_owned(),
+        handler: Arc::new(move |request| {
+            let sessions = sessions.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture flush requires POST"
+                );
+                let id = request
+                    .uri()
+                    .path()
+                    .strip_prefix("/fixture/flush/")
+                    .filter(|id| !id.is_empty())
+                    .ok_or_else(|| anyhow::anyhow!("fixture flush needs a session id"))?;
+                let session = sessions
+                    .get(&SessionId::new(id))
+                    .ok_or_else(|| anyhow::anyhow!("fixture session absent"))?;
+                let flushed = sessions.flush(&session).await?;
+                Ok(response(200_u16.try_into()?, serde_json::to_vec(&flushed)?))
+            })
+        }),
+    })
+}
+
 fn install_scaffold_context_routes(
     context: &Context,
     server: &WebServer,
     routes: &mut Vec<WebRegistration>,
+    allowed: &AllowedProviders,
 ) -> anyhow::Result<()> {
+    routes.push(adapter_fixture_route(context, server, allowed)?);
+    routes.push(agent_roots_fixture_route(context, server)?);
+    routes.push(agent_fixture_route(context, server)?);
+    routes.push(workspace_fixture_route(context, server)?);
+    routes.push(subagent_fixture_route(context, server)?);
+    routes.push(session_flush_fixture_route(context, server)?);
+    routes.push(cold_snapshot_fixture_route(context, server)?);
     routes.push(tool_execute_fixture_route(context, server)?);
     routes.push(persist_fixture_route(context, server)?);
     routes.push(job_kill_fixture_route(context, server)?);
@@ -1032,7 +1693,8 @@ async fn main() -> anyhow::Result<()> {
     let application = boot_profile(plan, &catalog, Some(prepare)).await?;
     let calls = Arc::new(AtomicUsize::new(0));
     let context = application.context();
-    install_keyless_routes(context, &calls, mode)?;
+    let allowed: AllowedProviders = Arc::default();
+    install_keyless_routes(context, &calls, mode, &allowed)?;
     install_auto_approval(context)?;
     let replay = if let Some((fixture, override_file, child_files)) = replay_files(&arguments)? {
         match install_fixture_replay(context, &fixture, override_file, child_files) {
@@ -1049,10 +1711,8 @@ async fn main() -> anyhow::Result<()> {
         .get(WEB_SERVER)
         .ok_or_else(|| anyhow::anyhow!("Web profile has no server"))?;
     let mut settings_routes = settings_fixture_routes(context, &server)?;
-    if replay.is_some() {
-        settings_routes.push(idle_fixture_route(context, &server)?);
-    }
-    install_scaffold_context_routes(context, &server, &mut settings_routes)?;
+    settings_routes.push(idle_fixture_route(context, &server)?);
+    install_scaffold_context_routes(context, &server, &mut settings_routes, &allowed)?;
     if let Some(path) = arguments.get(6) {
         settings_routes.push(seed_log_fixture_route(
             context,

@@ -47,9 +47,10 @@ pub struct EveryScheduleRecord {
     pub scheduled_at: String,
 }
 
-/// Structured local-calendar input accepted by `schedule_create`.
+/// Structured local-calendar input accepted by `schedule_create` (source wire fields `date`,
+/// `time`, `time_zone`; no additional properties).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct LocalAtInput {
     /// Four-digit ISO calendar date.
     pub date: String,

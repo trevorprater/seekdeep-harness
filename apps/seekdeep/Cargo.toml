@@ -100,6 +100,7 @@ seekdeep-pwsh-sandbox = { path = "../../crates/pwsh-sandbox" }
 seekdeep-repeat-tool-reminder = { path = "../../crates/repeat-tool-reminder" }
 seekdeep-sandbox-local = { path = "../../crates/sandbox-local" }
 seekdeep-sandbox-policy = { path = "../../crates/sandbox-policy" }
+seekdeep-schedule = { path = "../../crates/schedule" }
 seekdeep-session-checkpoint-policy = { path = "../../crates/session-checkpoint-policy" }
 seekdeep-session-log-export = { path = "../../crates/session-log-export" }
 seekdeep-session-persistence = { path = "../../crates/session-persistence" }
@@ -128,6 +129,7 @@ seekdeep-subprocess-local = { path = "../../crates/subprocess-local" }
 seekdeep-system-prompt = { path = "../../crates/system-prompt" }
 seekdeep-terminal = { path = "../../crates/terminal" }
 seekdeep-terminal-bash = { path = "../../crates/terminal-bash" }
+seekdeep-time-context = { path = "../../crates/time-context" }
 seekdeep-token-meter = { path = "../../crates/token-meter" }
 seekdeep-tool-ask-user = { path = "../../crates/tool-ask-user" }
 seekdeep-tool-bash = { path = "../../crates/tool-bash" }
@@ -176,6 +178,9 @@ seekdeep-jobs = { path = "../../crates/jobs" }
 seekdeep-llm-replay = { path = "../../crates/llm-replay" }
 seekdeep-sandbox = { path = "../../crates/sandbox" }
 seekdeep-workflow = { path = "../../crates/workflow" }
+async-stream.workspace = true
+bytes.workspace = true
+reqwest.workspace = true
 tempfile.workspace = true
 
 [lints]

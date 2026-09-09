@@ -129,7 +129,7 @@ async function bootHost(name, options) {
 function liveSessions(origin) {
   const events = [], sessions = [], listeners = [], seen = new Map();
   const apply = listed => {
-    sessions.splice(0, sessions.length, ...listed.map(entry => ({ id: entry.header.id, header: entry.header, events: entry.events })));
+    sessions.splice(0, sessions.length, ...listed.map(entry => ({ id: entry.header.id, header: entry.header, events: entry.events, agent: entry.agent ?? undefined })));
     events.splice(0, events.length, ...listed.flatMap(entry => entry.events));
     // Source: `ctx.on('session/event', (session, event) => ...)` observes every appended event
     // once; the listing delivers the events appended since the previous refresh, in order.
@@ -151,7 +151,8 @@ function liveSessions(origin) {
   // The source listener fires on the in-process append; here a background poll keeps the
   // listing fresh while listeners exist, so a case waiting on plain locators still observes it.
   let poller;
-  const onEvent = listener => { listeners.push(listener); if (poller === undefined) poller = setInterval(() => { if (!stopped) refresh().catch(() => {}); }, 100); };
+  const poll = () => { if (poller === undefined) poller = setInterval(() => { if (!stopped) refresh().catch(() => {}); }, 100); };
+  const onEvent = listener => { listeners.push(listener); poll(); };
   const wrapMatchers = target => new Proxy(target, { get(inner, key) {
     const value = Reflect.get(inner, key);
     if (typeof value === 'function') return (...args) => { const result = value.apply(inner, args); return result && typeof result.then === 'function' ? result.then(async settled => { await refresh(); return settled; }) : result; };
@@ -201,7 +202,7 @@ function liveSessions(origin) {
   // `ctx.agents.list()` is synchronous in the source; here each call returns the latest listing
   // and kicks a background refresh so a polled predicate observes the Host within its window.
   const agents = { list: () => { if (!stopped) refresh().catch(() => {}); return sessions.map(session => ({ session: { header: session.header, id: session.id } })); } };
-  return { events, sessions, refresh, refreshSync, expect: liveExpect, whenTurnSettled, whenTurnsSettled, agents, onEvent, stop };
+  return { events, sessions, refresh, refreshSync, poll, expect: liveExpect, whenTurnSettled, whenTurnsSettled, agents, onEvent, stop };
 }
 // A saturated main thread: sample where the time goes, with wasm frames named by their name section.
 async function startProfile(page) {
@@ -322,9 +323,9 @@ async function teardown(browser, server) {
   if (failures.length > 1) throw new AggregateError(failures, 'scenario teardown failed');
 }
 const pageConsoles = new WeakMap();
-async function openPage(name, locale, viewport = { width: 1680, height: 1000 }) {
+async function openPage(name, locale, viewport = { width: 1680, height: 1000 }, timezoneId) {
   const profile = join(world, name, 'browser');
-  const context = await chromium.launchPersistentContext(profile, { headless: true, locale, viewport, args: ['--remote-debugging-port=0'] });
+  const context = await chromium.launchPersistentContext(profile, { headless: true, locale, viewport, ...(timezoneId === undefined ? {} : { timezoneId }), args: ['--remote-debugging-port=0'] });
   const cdp = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0];
   const page = context.pages()[0] ?? await context.newPage(); page.setDefaultTimeout(15000);
   // Diagnostics: record every stream frame the page receives (EventSource or fetch streams).
@@ -414,20 +415,69 @@ const generatedSeed = (builder) => (server, values) => builder(seedModule(), ser
 // fixture routes. `agents.get` mirrors the source's synchronous read: it answers from the latest
 // listing and kicks a refresh, so a polled `liveAgent` observes the Host resuming the Session.
 function hostContext(server, live) {
-  const post = async (path, body) => { const response = await fetch(server.origin + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const text = await response.text(); assert(response.ok, path + ' HTTP ' + response.status + ': ' + text); return JSON.parse(text); };
-  const agentOf = id => ({ sessionId: id, session: { id, get header() { return live.sessions.find(session => session.id === id)?.header; }, get events() { return live.sessions.find(session => session.id === id)?.events ?? []; }, append: (type, data, options = {}) => { post('/fixture/session/' + encodeURIComponent(id) + '/append', { type, data, ...options }).then(() => live.refresh()).catch(error => console.error('keyless: agent session append failed: ' + String(error))); }, requestHeader: () => live.sessions.find(session => session.id === id)?.events.filter(event => event.type === 'request/header').at(-1)?.data.header }, whenIdle: async () => { const settled = await fetch(server.origin + '/fixture/idle/' + encodeURIComponent(id), { method: 'POST' }); assert(settled.ok, 'idle barrier HTTP ' + settled.status + ': ' + await settled.text()); await live.refresh(); } });
+  // Source listeners observe in-process appends; the listing is polled for the whole Host life.
+  live.poll();
+  // Source `ctx.llm.registerAdapter(providers, adapter)` keeps the test adapter in-process. Here
+  // the adapter object stays in the driver: the Host registers a driver-backed adapter for the
+  // providers and streams each `GenerateOptions` to this server, which runs `adapter.stream`
+  // and answers one JSON chunk per line; closing the response early aborts the turn signal.
+  const adapters = new Map(); let adapterServer; let adapterCount = 0; const pending = [];
+  const settle = () => Promise.all(pending);
+  const serveAdapter = async (request, response) => {
+    let finished = false;
+    try {
+      trace('adapter ' + request.url); const adapter = adapters.get(request.url.split('/').at(-1));
+      if (adapter === undefined || request.method !== 'POST') { response.writeHead(404); response.end(); return; }
+      let body = ''; for await (const chunk of request) body += chunk;
+      const options = JSON.parse(body);
+      const controller = new AbortController(); options.signal = controller.signal;
+      response.on('close', () => { if (!finished) controller.abort(new Error('driver adapter: the turn was aborted')); });
+      response.socket?.setNoDelay(true);
+      response.writeHead(200, { 'content-type': 'application/x-ndjson' });
+      try { for await (const chunk of adapter.stream(options)) { trace('adapter chunk ' + chunk.type); response.write(JSON.stringify(chunk) + '\n'); } }
+      catch (error) { response.write(JSON.stringify({ error: String(error?.message ?? error) }) + '\n'); }
+    } catch (error) {
+      console.error('keyless: adapter request failed: ' + String(error));
+      if (!response.headersSent) response.writeHead(500);
+    } finally { finished = true; response.end(); }
+  };
+  const ensureAdapterServer = async () => {
+    if (adapterServer !== undefined) return adapterServer;
+    const httpServer = createServer((request, response) => { void serveAdapter(request, response); });
+    await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve));
+    httpServer.unref();
+    adapterServer = { origin: 'http://127.0.0.1:' + httpServer.address().port, close: () => new Promise(resolve => httpServer.close(() => resolve())) };
+    const stop = server.stop.bind(server);
+    server.stop = async () => { await adapterServer.close(); return stop(); };
+    return adapterServer;
+  };
+  const trace = process.env.SEEKDEEP_KEYLESS_TRACE_POSTS ? message => console.error('keyless-post: ' + message) : () => {};
+  const post = async (path, body) => { trace(path + ' ' + JSON.stringify(body).slice(0, 160)); const response = await fetch(server.origin + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const text = await response.text(); assert(response.ok, path + ' HTTP ' + response.status + ': ' + text); trace(path + ' -> ' + text.slice(0, 160)); return JSON.parse(text); };
+  const agentOf = id => ({ sessionId: id, id, get status() { return live.sessions.find(session => session.id === id)?.agent?.status; }, get inbox() { return live.sessions.find(session => session.id === id)?.agent?.inbox ?? { nextTurn: [] }; }, cancel: cause => { pending.push(post('/fixture/agent/' + encodeURIComponent(id) + '/cancel', { cause })); }, followup: message => { pending.push(post('/fixture/agent/' + encodeURIComponent(id) + '/followup', { message })); }, session: { id, get header() { return live.sessions.find(session => session.id === id)?.header; }, get events() { return live.sessions.find(session => session.id === id)?.events ?? []; }, append: (type, data, options = {}) => { pending.push(post('/fixture/session/' + encodeURIComponent(id) + '/append', { type, data, ...options }).then(() => live.refresh())); }, requestHeader: () => live.sessions.find(session => session.id === id)?.events.filter(event => event.type === 'request/header').at(-1)?.data.header }, whenIdle: async () => { await settle(); const settled = await fetch(server.origin + '/fixture/idle/' + encodeURIComponent(id), { method: 'POST' }); assert(settled.ok, 'idle barrier HTTP ' + settled.status + ': ' + await settled.text()); await live.refresh(); } });
   return {
-    agents: { get: id => { live.refreshSync(); return live.sessions.some(session => session.id === id) ? agentOf(id) : undefined; }, list: () => live.agents.list().map(entry => agentOf(entry.session.id)) },
-    sessions: { flush: async () => { await live.refresh(); }, list: () => live.sessions.map(session => ({ id: session.id, header: session.header, append: (type, data) => post('/fixture/session/' + encodeURIComponent(session.id) + '/append', { type, data }).catch(error => console.error('keyless: session append failed: ' + String(error))) })) },
+    // Source `agents.get` answers only for live Agents: a Session that only rests in the store
+    // (a cold child, a persisted seed nobody opened) has none.
+    agents: { get: id => { live.refreshSync(); return live.sessions.some(session => session.id === id && session.agent !== undefined) ? agentOf(id) : undefined; }, list: () => live.agents.list().filter(entry => live.sessions.find(session => session.id === entry.session.id)?.agent !== undefined).map(entry => agentOf(entry.session.id)),
+      roots: () => { live.refreshSync(); return JSON.parse(execFileSync('curl', ['-sS', '--fail', server.origin + '/fixture/agents/roots'], { encoding: 'utf8' })).map(agentOf); },
+      create: async ({ sessionId, meta, agentOptions, setup }) => { await settle(); const created = await post('/fixture/agent/create', { sessionId, meta: meta ?? {}, agentOptions: agentOptions ?? {}, ...(setup === undefined ? {} : { setup: 'agentPresets' }) }); live.refreshSync(); const id = created.sessionId; return { agent: agentOf(id), dispose: () => post('/fixture/agent/' + encodeURIComponent(id) + '/dispose', {}).then(() => undefined) }; } },
+    llm: { registerAdapter: (providers, adapter) => { const id = 'adapter-' + (++adapterCount); adapters.set(id, adapter); const registration = (async () => { const endpoint = (await ensureAdapterServer()).origin + '/adapter/' + id; return (await post('/fixture/adapter/register', { providers, endpoint })).id; })(); pending.push(registration); return () => registration.then(hostId => post('/fixture/adapter/unregister', { id: hostId })).then(() => { adapters.delete(id); }); } },
+    subagents: {
+      startContinuable: async ({ provider, label, request }) => { await settle(); return post('/fixture/subagent/start', { provider, label, parentSessionId: request.parent.id, prompt: request.prompt, ...(request.agentOptions === undefined ? {} : { agentOptions: request.agentOptions }), ...(request.maxDepth === undefined ? {} : { maxDepth: request.maxDepth }), ...(request.persona === undefined ? {} : { persona: request.persona }) }); },
+      listChildren: async parentId => { const response = await fetch(server.origin + '/fixture/subagent/children/' + encodeURIComponent(parentId)); const text = await response.text(); assert(response.ok, 'listChildren HTTP ' + response.status + ': ' + text); return JSON.parse(text); },
+      followup: async (parent, childId, content, options = {}) => post('/fixture/subagent/followup', { parentSessionId: parent.id, childSessionId: childId, content, ...(options.source === undefined ? {} : { source: options.source }) }).then(result => result.messageId),
+    },
+    // Source `ctx.effect(register, label)` runs the registration now and keeps its disposer.
+    effect: (register, _label) => register(),
+    workspaceRegistry: { resolveByPath: async path => { await settle(); const found = await post('/fixture/workspace/resolve', { path }); return found === null ? undefined : { id: found.id, attachSession: sessionId => post('/fixture/workspace/attach', { path, sessionId }).then(() => undefined) }; } },
+    sessions: { flush: async session => { if (session === undefined) { await live.refresh(); return true; } const flushed = await post('/fixture/flush/' + encodeURIComponent(session.id), {}); await live.refresh(); return flushed; }, list: () => live.sessions.map(session => ({ id: session.id, header: session.header, append: (type, data) => post('/fixture/session/' + encodeURIComponent(session.id) + '/append', { type, data }).catch(error => console.error('keyless: session append failed: ' + String(error))) })) },
     on: (event, listener) => { assert.equal(event, 'session/event', 'only session/event listeners are shimmed'); live.onEvent(listener); return () => {}; },
-    tools: { execute: ({ callId, name, arguments: args, agent }) => post('/fixture/tool/execute', { sessionId: agent.sessionId, callId, name, arguments: args }) },
+    tools: { execute: async ({ callId, name, arguments: args, agent }) => { await settle(); const result = await post('/fixture/tool/execute', { sessionId: agent.sessionId, callId, name, arguments: args }); if (result.isError) console.error('keyless: tool ' + name + ' failed: ' + JSON.stringify(result).slice(0, 800)); return result; } },
     jobs: { kill: (jobId, agent, reason) => post('/fixture/job/kill', { jobId, sessionId: agent.sessionId, reason }) },
     credentials: { set: (ref, value) => post('/fixture/credential', { ref, value }) },
     // Source: `ctx.sessionPersistence.create(header)` then `append(id, events)`; one complete log
     // reaches the Host persist route on the first append (the seeds here append exactly once).
-    sessionPersistence: { create: async header => { pendingPersist.set(header.id, { header, events: [] }); }, append: async (id, events) => { const entry = pendingPersist.get(id); assert(entry, 'persist append before create: ' + id); entry.events.push(...events); const text = [JSON.stringify({ type: 'session', ...entry.header }), ...entry.events.map(event => JSON.stringify(event)), ''].join('\n'); const response = await fetch(server.origin + '/fixture/persist/' + encodeURIComponent(id), { method: 'POST', body: text }); assert(response.ok, 'persist ' + id + ': ' + await response.text()); } },
-    // The Host projects cold snapshots on demand; the source warms its cache explicitly.
-    sessionProjectionCache: { coldSnapshot: async () => {} },
+    sessionPersistence: { load: async id => { const response = await fetch(server.origin + '/fixture/persist/' + encodeURIComponent(id) + '/load'); const text = await response.text(); assert(response.ok, 'persistence load HTTP ' + response.status + ': ' + text); return JSON.parse(text); }, create: async header => { pendingPersist.set(header.id, { header, events: [] }); }, append: async (id, events) => { const entry = pendingPersist.get(id); assert(entry, 'persist append before create: ' + id); entry.events.push(...events); const text = [JSON.stringify({ type: 'session', ...entry.header }), ...entry.events.map(event => JSON.stringify(event)), ''].join('\n'); const response = await fetch(server.origin + '/fixture/persist/' + encodeURIComponent(id), { method: 'POST', body: text }); assert(response.ok, 'persist ' + id + ': ' + await response.text()); } },
+    sessionProjectionCache: { coldSnapshot: async id => { await post('/fixture/cold-snapshot/' + encodeURIComponent(id), {}); } },
     get: name => { assert.equal(name, 'tokenMeter', 'only the token meter is shimmed through ctx.get'); return { estimateMessage: message => tokenMeterModule.estimateMessage(message) }; },
   };
 }
@@ -502,7 +552,7 @@ function scaffoldShims(name, options = {}) {
   const openHosts = new Set(), openBrowsers = new Set();
   const launchWebScaffold = async (scaffoldOptions = {}) => {
     hosts += 1;
-    const server = await bootHost(name + '-' + hosts, { welcome, replay: scaffoldOptions.replayFixture, replayOverride: scaffoldOptions.replayOverride, replayChildFixtures: scaffoldOptions.replayChildFixtures, overlay: options.overlay, env: { ...scaffoldOptions.paceMs === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(scaffoldOptions.paceMs) }, ...scaffoldOptions.replayContextWindow === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_CONTEXT_WINDOW: String(scaffoldOptions.replayContextWindow) }, ...options.env ?? {} } });
+    const server = await bootHost(name + '-' + hosts, { welcome, welcomePending: scaffoldOptions.welcomeNoticePending === true, replay: scaffoldOptions.replayFixture, replayOverride: scaffoldOptions.replayOverride, replayChildFixtures: scaffoldOptions.replayChildFixtures, overlay: options.overlay, env: { ...scaffoldOptions.paceMs === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(scaffoldOptions.paceMs) }, ...scaffoldOptions.replayContextWindow === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_CONTEXT_WINDOW: String(scaffoldOptions.replayContextWindow) }, ...options.env ?? {} } });
     const live = liveSessions(server.origin);
     const scaffold = { baseUrl: server.origin, workspaceCwd: server.workspace, whenTurnSettled: live.whenTurnSettled, whenTurnsSettled: live.whenTurnsSettled, ctx: hostContext(server, live), live, server, async close() { openHosts.delete(scaffold); await live.refresh().catch(() => {}); live.stop(); await writeFile(join(output, name + '-' + hosts + '-sessions.json'), JSON.stringify(live.sessions, null, 2)); await server.stop(); } };
     openHosts.add(scaffold);
@@ -510,14 +560,14 @@ function scaffoldShims(name, options = {}) {
   };
   const chromium = { launch: async () => {
     const pages = [];
-    const browser = { async newPage(pageOptions = {}) { contexts += 1; const opened = await openPage(name + '-' + contexts, pageOptions.locale ?? 'en-US', pageOptions.viewport); pages.push(opened); return opened.page; }, async close() { openBrowsers.delete(browser); for (const opened of pages.splice(0)) await opened.close(); } };
+    const browser = { async newPage(pageOptions = {}) { contexts += 1; const opened = await openPage(name + '-' + contexts, pageOptions.locale ?? 'en-US', pageOptions.viewport, pageOptions.timezoneId); pages.push(opened); return opened.page; }, async close() { openBrowsers.delete(browser); for (const opened of pages.splice(0)) await opened.close(); } };
     openBrowsers.add(browser);
     return browser;
   } };
   const newEnglishPage = (browser, height = 1000) => browser.newPage({ viewport: { width: 1680, height }, locale: 'en-US' });
   // Whatever a failed case left open is closed after it, like the source `afterEach`.
   const closeAll = async () => { const failures = []; for (const browser of [...openBrowsers]) await browser.close().catch(error => failures.push(error)); for (const scaffold of [...openHosts]) await scaffold.close().catch(error => failures.push(error)); if (failures.length) throw failures.length === 1 ? failures[0] : new AggregateError(failures, name + ' teardown failed'); };
-  return { launchWebScaffold, chromium, newEnglishPage, closeAll };
+  return { hosts: openHosts, launchWebScaffold, chromium, newEnglishPage, closeAll };
 }
 async function perCaseScenario(name, options) {
   const ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, options.cases, 'source case inventory');
@@ -552,7 +602,7 @@ function describeBlocks(ast) {
       const callee = node.expression.getText(ast);
       if (callee === 'describe' || callee.startsWith('describe.')) {
         const body = node.arguments[1].body;
-        const block = { name: node.arguments[0].getText(ast), variables: [], functions: [], beforeAll: undefined, afterAll: undefined, cases: [], skipped: callee.includes("skipIf(MODE === 'record')") };
+        const block = { name: node.arguments[0].getText(ast), variables: [], functions: [], beforeAll: undefined, afterAll: undefined, cases: [], skipped: callee.includes("skipIf(MODE !== 'record')") };
         for (const statement of ts.isBlock(body) ? body.statements : []) {
           if (ts.isVariableStatement(statement)) {
             for (const declaration of statement.declarationList.declarations) block.variables.push({ name: declaration.name.getText(ast), initializer: declaration.initializer ? declaration.initializer.getText(ast) : undefined });
@@ -597,16 +647,25 @@ async function describeScenario(name, options) {
     // Module-level `let` state assigned from hooks (a suite-wide browser) lives in the same scope.
     for (const name of options.moduleLets ?? []) shared[name] = undefined;
     if (initializers.length) Object.assign(shared, compile(prelude + '\nreturn {' + initializers.map(variable => variable.name + ': (' + variable.initializer + ')').join(', ') + '};', values));
+    let caseError;
     const tripwireProxy = new Proxy({}, { get: (_, key) => (shared.tripwire ?? { warnings: [], pageErrors: [] })[key] });
     const pageShim = { __console: () => pageConsoles.get(shared.page) ?? [], isClosed: () => (shared.page ? shared.page.isClosed() : true), evaluate: (...args) => shared.page ? shared.page.evaluate(...args) : Promise.reject(new Error('no page')), locator: (...args) => shared.page.locator(...args), screenshot: (...args) => shared.page ? shared.page.screenshot(...args) : Promise.resolve() };
     try {
       if (block.beforeAll) await compile(prelude + '\nreturn (' + block.beforeAll + ');', values, { shared })();
       await runCases(name, block.cases, pageShim, { prelude, shared, values }, tripwireProxy);
+    } catch (error) {
+      // Diagnostics before afterAll disposes the agents: every open Host's live session listing.
+      let index = 0;
+      for (const open of shims.hosts) { index += 1; await open.live.refresh().catch(() => {}); await writeFile(join(output, name + '-failure-' + index + '-sessions.json'), JSON.stringify(open.live.sessions, null, 2)).catch(() => {}); }
+      caseError = error;
+      throw error;
     } finally {
       const failures = [];
       if (block.afterAll) await compile(prelude + '\nreturn (' + block.afterAll + ');', values, { shared })().catch(error => failures.push(error));
       await shims.closeAll().catch(error => failures.push(error));
-      if (failures.length) throw failures.length === 1 ? failures[0] : new AggregateError(failures, name + ' describe teardown failed');
+      // The case's own failure stays the reported one; teardown failures are logged beside it.
+      if (failures.length && caseError !== undefined) for (const failure of failures) console.error('keyless: ' + name + ' teardown after a failed describe: ' + String(failure).split('\n')[0]);
+      else if (failures.length) throw failures.length === 1 ? failures[0] : new AggregateError(failures, name + ' describe teardown failed');
     }
   }
 }
@@ -887,6 +946,48 @@ const SCENARIOS = {
       constants: ['HISTORY_SESSION_ID', 'TOOL_SESSION_ID', 'RESTORE_SESSION_A_ID', 'RESTORE_SESSION_B_ID', 'REPLAY_CONTEXT_WINDOW', 'STREAM_PACE_MS', 'GEOMETRY_TOLERANCE', 'LIVE_TEXT_PROMPT', 'LIVE_TEXT_FIRST', 'LIVE_TEXT_DONE', 'LIVE_TOOL_PROMPT', 'LIVE_TOOL_CALL_ID', 'LIVE_TOOL_RESULT', 'LIVE_TOOL_FIRST', 'LIVE_TOOL_DONE', 'TOOL_READY_FILE', 'TOOL_RELEASE_FILE', 'INPUTS_SESSION_ID', 'FLING_SESSION_ID', 'LIVE_FLING_PROMPT', 'LIVE_FLING_FIRST', 'LIVE_FLING_DONE', 'HISTORY_FIXTURE', 'TOOL_FIXTURE', 'RESTORE_FIXTURE_A', 'RESTORE_FIXTURE_B', 'INPUTS_FIXTURE', 'textStream', 'toolStream', 'replayEntry', 'launchScrollWorld', 'closeScrollWorld', 'withScrollWorld', 'nextPaint', 'scrollGeometry', 'loadedFlowRows', 'openSeed', 'wheelTranscript', 'flingTranscript', 'wheelToHistoryStart', 'wheelUntilMounted', 'wheelUntilVisible', 'visibleFlowAnchor', 'flowTop', 'expectSameFlowTop', 'expectBottom', 'expectMarkerAboveComposer', 'loadEarlierWithAnchor', 'fileExists', 'eventCarries', 'assertClean'],
       values: { createChatScrollFixture: chatScrollFixtureModule.createChatScrollFixture, CallId: llmModule.CallId, seedSession: seedSessionShim, access } });
   },
+  async 'schedule-after'() {
+    // The source registers three in-process test adapters on the scaffold context; each lives in
+    // the driver behind the Host's driver-adapter fixture route. The Schedule overlay is the port's
+    // own example composition, the source's `examples/web-schedule/cordis.yml`.
+    const overlayPath = join(process.cwd(), 'examples/web-schedule/cordis.yml');
+    const scheduleDomain = await compiledSourceModule('packages/schedule/schedule/src/domain.ts', {}, ['createEveryScheduleRecord', 'foldScheduleEvents', 'resolveEveryOccurrence']);
+    await describeScenario('schedule-after', { describes: 1, cases: 4, overlay: await readFile(overlayPath, 'utf8'), goldens: [['AFTER_EXPECTED', 'conversation'], ['AT_EXPECTED', 'at-conversation'], ['EVERY_EXPECTED', 'every-conversation']],
+      constants: ['AFTER_PROVIDER', 'AT_PROVIDER', 'EVERY_PROVIDER', 'MODEL', 'AFTER_PROMPT', 'AFTER_REPLY', 'AT_BROWSER_ZONE', 'AT_USER_PROMPT', 'AT_PROMPT', 'AT_READY', 'AT_ACK', 'AT_REPLY', 'EVERY_PROMPTS', 'EVERY_REPLY', 'EVERY_INTERVAL_SECONDS', 'EVERY_FIXTURE_AGE_MS', 'textResponse', 'ReminderAdapter', 'EveryReminderAdapter', 'localAt', 'BrowserZoneAtAdapter', 'assistantText', 'requestText', 'expectReminderFraming', 'waitForReply', 'assistantKey'],
+      values: { OVERLAY: overlayPath, LlmAdapter: llmModule.LlmAdapter, CallId: llmModule.CallId, createUserMessage: llmModule.createUserMessage, SessionId: id => id, ScheduleId: id => id, ...scheduleDomain, conversationContextKey: compile(declarations(supportAst, ['conversationContextKey']) + '\nreturn conversationContextKey;', {}) } });
+  },
+  async 'sidebar-subagent-activity'() {
+    // The staged adapter lives in the driver; the Host's held child runs its model call through
+    // the driver-adapter bridge until the case releases it.
+    await describeScenario('sidebar-subagent-activity', { describes: 1, cases: 1, goldens: [['RUNNING_OWNER_EXPECTED', 'owner-running']],
+      constants: ['HOLD_PROVIDER', 'HOLD_MODEL', 'StagedAdapter', 'waitForRunningChild'],
+      values: { LlmAdapter: llmModule.LlmAdapter, createUserMessage: llmModule.createUserMessage, SessionId: id => id, mkdir } });
+  },
+  async 'subagent-interrupt'() {
+    // No browser: the source drives the real HTTP carrier (`/api/...`) of the Host directly.
+    await describeScenario('subagent-interrupt', { describes: 1, cases: 1,
+      constants: ['INITIAL', 'FOLLOWUP', 'WAKING', 'rpc', 'waitFor', 'textCompletion'],
+      values: { sessionId: id => id, SessionId: id => id } });
+  },
+  async 'subagent-interrupt-ui'() {
+    // Its golden lives beside the subagent-interrupt suite's snapshots, not under its own name.
+    await describeScenario('subagent-interrupt-ui', { describes: 1, cases: 3,
+      constants: ['LABEL', 'INITIAL', 'REARM', 'REARM_WAKE', 'FOLLOWUP', 'WAKING', 'REARMED_ANSWER', 'PARKED_ANSWER', 'WAKING_ANSWER', 'waitFor', 'waitForAbortedTurn', 'textCompletion'],
+      values: { BASE_FIXTURE: join(TESTS, 'snapshots/live-interactions/session.jsonl'), SNAPSHOT_DIR: join(TESTS, 'snapshots/subagent-interrupt'), OFFLINE_COMPOSER_EXPECTED: join(TESTS, 'snapshots/subagent-interrupt/offline-composer.expected.md'), SessionId: id => id } });
+  },
+  async 'subagent-conversation'() {
+    const dir = join(TESTS, 'snapshots', 'subagent-conversation');
+    await describeScenario('subagent-conversation', { describes: 1, cases: 9,
+      goldens: [['AVAILABLE_CHILD_EXPECTED', 'ui'], ['TREE_EXPECTED', 'tree'], ['BRANCHLESS_EXPECTED', 'branchless'], ['STALE_CATALOG_EXPECTED', 'stale-catalog'], ['SIDEBAR_EXPECTED', 'sidebar'], ['UNAVAILABLE_GRANDCHILD_EXPECTED', 'nested'], ['FORK_EXPECTED', 'fork']],
+      constants: ['LABEL', 'ONE_SHOT_LABEL', 'NESTED_LABEL', 'PARENT_PROMPT', 'INITIAL_PROMPT', 'NESTED_PROMPT', 'FOLLOWUP', 'POST_FORK_FOLLOWUP', 'childFixture', 'waitForAgentToSettle'],
+      values: { BASE_FIXTURE: join(TESTS, 'snapshots/live-interactions/session.jsonl'), SNAPSHOT_DIR: dir, SESSION_FORMAT_VERSION: sessionModule.SESSION_FORMAT_VERSION, sessionId: id => id, SessionId: id => id, snapshotSubagentDescriptor: subagentDescriptorModule.snapshotSubagentDescriptor } });
+  },
+  async 'goal-bar'() {
+    // The overlay is the port's copy of the source test overlay; the page connects through the
+    // client's fixture transport (`?fixture`).
+    await describeScenario('goal-bar', { describes: 1, cases: 2, overlay: await readFile(join(process.cwd(), 'apps/web/tests/goal-bar.overlay.yml'), 'utf8'), goldens: [['ACTIVE_EXPECTED', 'active']],
+      constants: [], values: { OVERLAY: join(process.cwd(), 'apps/web/tests/goal-bar.overlay.yml') } });
+  },
   async 'seeded-history'() {
     const dir = join(TESTS, 'snapshots', 'seeded-history');
     await describeScenario('seeded-history', { describes: 1, cases: 11, constants: ['SEED_ID', 'PROMPT', 'withCompaction'], goldens: ['ui', 'command-row', 'feedback-row'],
@@ -961,9 +1062,11 @@ const SCENARIOS = {
 // Every selected scenario runs even after an earlier one fails, so one lane run reports the
 // complete picture; the run still fails on any failure.
 const scenarioFailures = [];
+// Scenarios whose Host or client surface is still pending run only when named explicitly.
+const DEFERRED = new Set(['goal-bar']);
 for (const [name, run] of Object.entries(SCENARIOS)) {
-  if (!selected(name)) continue;
-  try { await run(); } catch (error) { scenarioFailures.push({ scenario: name, error: String(error), stack: error?.stack }); console.error('keyless: scenario ' + name + ' failed: ' + String(error).split('\n')[0]); }
+  if (!selected(name) || (DEFERRED.has(name) && !filter)) continue;
+  try { await run(); } catch (error) { scenarioFailures.push({ scenario: name, error: String(error), stack: error?.stack }); console.error('keyless: scenario ' + name + ' failed: ' + String(error).split('\n')[0]); if (error?.matcherResult) console.error('keyless: matcher ' + JSON.stringify({ expected: error.matcherResult.expected, actual: error.matcherResult.actual }).slice(0, 600)); console.error(String(error?.stack ?? '').split('\n').slice(1, 8).join('\n')); }
 }
 let runError;
 try {

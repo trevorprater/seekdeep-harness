@@ -25313,7 +25313,17 @@
     {
       "source": "apps/web/tests/schedule-after.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "crates/schedule/src/tools.rs",
+        "crates/schedule/src/types.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium against a keyless Rust Host composed with the port's web-schedule example overlay; the source's three in-process test adapters run in the driver behind the Host's driver-adapter fixture route (each generate call forwarded as JSON, chunks streamed back per line, aborts dropping the request); verified: the After reminder as an ordinary assistant follow-up with its golden and reminder framing, one latest occurrence per overdue Every record batched into a follow-up with its golden, the browser-zone At reminder created from request-local time context with its golden, and the closed fixture inventory. Port fixes: schedule and time-context plugins registered in the profile catalog, schedule_list accepts the source's empty argument object, LocalAtInput carries the source wire field time_zone and rejects unknown properties"
+      ]
     },
     {
       "source": "apps/web/tests/search-card.snapshot.ts",
@@ -25378,7 +25388,14 @@
     {
       "source": "apps/web/tests/sidebar-subagent-activity.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium; the staged hold adapter lives in the driver behind the Host's driver-adapter bridge, the owner agent is created through the agent fixture route, its delegated continuable child is started through the subagent fixture route and held open in its model call, and the case verifies the running descendant pinned on its idle owner row with the owner-running golden and a clean console; the child is cancelled and settled through the agent cancel and idle routes"
+      ]
     },
     {
       "source": "apps/web/tests/skill-invocation-policy.e2e.ts",
@@ -26891,17 +26908,38 @@
     {
       "source": "apps/web/tests/subagent-conversation.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium against a keyless Rust Host replaying the live-interactions base fixture and a continued child fixture at the source's 25ms pace; the continuable child starts through the subagent fixture route from the root agent, the one-shot and grandchild sessions are authored through the persistence fixture routes and warmed through the cold-snapshot route, and the nine cases verify descendants reachable across a stale empty catalog with its golden, progressive grandchild expansion without activation with the tree golden and the one-shot's 192-day duration, opening the completed child from persistence, FIFO follow-up admission with child mux events, the settled addressed-conversation golden, the unavailable grandchild, the read-only one-shot history, the ordinary fork beside its workspace-owning ancestor, and the cold resume of the original subagent beside its active fork; child listings ride the source wire shape"
+      ]
     },
     {
       "source": "apps/web/tests/subagent-interrupt-ui.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in Chromium against a keyless Rust Host replaying the live-interactions base fixture with a hang override and a child fixture; the continuable child is started through the subagent fixture route from the root agent, and the three cases verify the composer interrupt of a live child from the parent-offline composer with the offline-composer golden, the subagent.interrupt path parking the follow-up and resuming it FIFO with the persisted log's user texts and turn-end kinds, and the closed snapshot inventory"
+      ]
     },
     {
       "source": "apps/web/tests/subagent-interrupt.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged against the keyless Rust Host with a hang override on the child's first model call; the case drives subagent.prompt and subagent.interrupt over the Host's real HTTP carrier, verifies the interrupted child idle with one parked next-turn message and an aborted turn/end read from the live listing, the waking send resuming FIFO until the child retires, and the persisted child log carrying the three user texts and aborted/completed/completed turn ends read through the persistence load route"
+      ]
     },
     {
       "source": "apps/web/tests/support.ts",

@@ -572,6 +572,10 @@ fn schedule_create_definition(
 )
 }
 
+/// Empty argument set for `schedule_list` (source `parameters: {}` accepts an empty object).
+#[derive(Debug, serde::Deserialize)]
+struct NoArgs {}
+
 fn schedule_list_definition(
     root_ctx: &Context,
     agent: Arc<Agent>,
@@ -580,7 +584,7 @@ fn schedule_list_definition(
     let root_ctx = root_ctx.clone();
     let output = DefineToolOutput::new(
         list_output_schema(),
-        Arc::new(render_value::<(), ScheduleListValue>),
+        Arc::new(render_value::<NoArgs, ScheduleListValue>),
     );
     define_tool(
         DefineToolOptions::new(
@@ -588,7 +592,7 @@ fn schedule_list_definition(
             LIST_DESCRIPTION,
             json!({}),
             output,
-            Arc::new(move |_args: (), execution| {
+            Arc::new(move |_args: NoArgs, execution| {
                 let agent = agent.clone();
                 let root_ctx = root_ctx.clone();
                 let on_durable_change = on_durable_change.clone();
@@ -643,7 +647,7 @@ fn schedule_list_definition(
                 })
             }),
         )
-        .present_call(Arc::new(|_args: &()| {
+        .present_call(Arc::new(|_args: &NoArgs| {
             Some(present("List reminders", ToolCallKind::Read, None))
         })),
     )

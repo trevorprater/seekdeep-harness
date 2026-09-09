@@ -4884,7 +4884,9 @@ name = "seekdeep"
 version = "0.1.0-rc.5"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
+ "bytes",
  "futures",
  "http-body-util",
  "indexmap 2.14.0",
@@ -4892,6 +4894,7 @@ dependencies = [
  "parking_lot",
  "path-clean",
  "portable-pty",
+ "reqwest 0.12.28",
  "seekdeep-acp-snapshot",
  "seekdeep-agent",
  "seekdeep-agent-default-model",
@@ -4984,6 +4987,7 @@ dependencies = [
  "seekdeep-sandbox",
  "seekdeep-sandbox-local",
  "seekdeep-sandbox-policy",
+ "seekdeep-schedule",
  "seekdeep-session-checkpoint-policy",
  "seekdeep-session-log-export",
  "seekdeep-session-persistence",
@@ -5012,6 +5016,7 @@ dependencies = [
  "seekdeep-system-prompt",
  "seekdeep-terminal",
  "seekdeep-terminal-bash",
+ "seekdeep-time-context",
  "seekdeep-token-meter",
  "seekdeep-tool-ask-user",
  "seekdeep-tool-bash",
