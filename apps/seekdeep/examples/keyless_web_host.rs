@@ -34,6 +34,7 @@ use seekdeep_llm::{
 use seekdeep_subagent::{
     ContinuableStartRequest, ContinuableStartSpec, SUBAGENTS, SubagentFollowupOptions,
 };
+use seekdeep_system_prompt::{PromptSection, SYSTEM_PROMPT};
 use seekdeep_typert_loader::TypertArtifactRegistry;
 use seekdeep_util::launch_environment::{
     LaunchEnvironmentLayerInput, LaunchEnvironmentSnapshot, LaunchEnvironmentSource,
@@ -1223,11 +1224,16 @@ async fn create_fixture_agent(
 ) -> anyhow::Result<SessionId> {
     let session_id = SessionId::new(required_str(body, "sessionId")?);
     let mut options = CreateAgentOptions::new(session_id.clone());
+    let agent_preset = body
+        .pointer("/meta/agentPreset")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
     options.meta = CreateAgentMeta {
         cwd: body
             .pointer("/meta/cwd")
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned),
+        agent_preset: agent_preset.clone(),
         ..CreateAgentMeta::default()
     };
     options.agent_options = AgentOptions {
@@ -1243,10 +1249,14 @@ async fn create_fixture_agent(
     };
     if body.get("setup").and_then(serde_json::Value::as_str) == Some("agentPresets") {
         let roster = roster.clone();
+        // Source: `ctx.agentPresets.mount(agentCtx, id?)`; the id is the meta's preset.
         options.setup = Some(Arc::new(move |agent_context| {
             let roster = roster.clone();
+            let agent_preset = agent_preset.clone();
             Box::pin(async move {
-                roster.mount(&agent_context, None).await?;
+                roster
+                    .mount(&agent_context, agent_preset.as_deref())
+                    .await?;
                 Ok(None)
             })
         }));
@@ -1574,6 +1584,137 @@ fn cold_snapshot_fixture_route(
     })
 }
 
+/// Source `ctx.systemPrompt.section({ name, order, text })` and its disposer.
+fn prompt_section_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let prompt = context
+        .get(SYSTEM_PROMPT)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no system prompt"))?;
+    let owner = context.clone();
+    let handles: Arc<Mutex<HashMap<String, seekdeep_cordis::fiber::EffectHandle>>> = Arc::default();
+    let counter = Arc::new(AtomicUsize::new(0));
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/prompt/section".to_owned(),
+        handler: Arc::new(move |request| {
+            let prompt = prompt.clone();
+            let owner = owner.clone();
+            let handles = handles.clone();
+            let counter = counter.clone();
+            Box::pin(async move {
+                anyhow::ensure!(
+                    request.method().as_str() == "POST",
+                    "fixture prompt section requires POST"
+                );
+                let path = request.uri().path().to_owned();
+                if let Some(id) = path
+                    .strip_prefix("/fixture/prompt/section/")
+                    .and_then(|rest| rest.strip_suffix("/dispose"))
+                {
+                    let removed = handles.lock().expect("prompt sections").remove(id);
+                    let Some(handle) = removed else {
+                        anyhow::bail!("fixture prompt section {id} is not registered");
+                    };
+                    handle.dispose().await?;
+                    return Ok(response(
+                        200_u16.try_into()?,
+                        serde_json::to_vec(&json!({}))?,
+                    ));
+                }
+                let body = json_body(request).await?;
+                let order = body
+                    .get("order")
+                    .and_then(serde_json::Value::as_f64)
+                    .ok_or_else(|| anyhow::anyhow!("prompt section omitted order"))?;
+                let handle = prompt.section(
+                    &owner,
+                    PromptSection::new(
+                        required_str(&body, "name")?,
+                        order,
+                        required_str(&body, "text")?,
+                    ),
+                )?;
+                let id = format!("section-{}", counter.fetch_add(1, Ordering::SeqCst) + 1);
+                handles
+                    .lock()
+                    .expect("prompt sections")
+                    .insert(id.clone(), handle);
+                Ok(response(
+                    200_u16.try_into()?,
+                    serde_json::to_vec(&json!({"id": id}))?,
+                ))
+            })
+        }),
+    })
+}
+
+/// Source `ctx.agentPresets.serviceFor(agent, name)` for the `fs` and `compaction` services,
+/// and `ctx.tools.schemas(agent)`.
+fn preset_service_fixture_route(
+    context: &Context,
+    server: &WebServer,
+) -> anyhow::Result<WebRegistration> {
+    let agents = context
+        .get(AGENTS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no Agents"))?;
+    let roster = context
+        .get(AGENT_PRESETS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no agent presets"))?;
+    let tools = context
+        .get(seekdeep_tools::TOOLS)
+        .ok_or_else(|| anyhow::anyhow!("fixture has no tools"))?;
+    server.register(WebRoute {
+        kind: WebRouteKind::Prefix,
+        path: "/fixture/preset".to_owned(),
+        handler: Arc::new(move |request| {
+            let agents = agents.clone();
+            let roster = roster.clone();
+            let tools = tools.clone();
+            Box::pin(async move {
+                let path = request.uri().path().to_owned();
+                if path == "/fixture/preset/roots" {
+                    return Ok(response(
+                        200_u16.try_into()?,
+                        serde_json::to_vec(roster.roots())?,
+                    ));
+                }
+                if let Some(id) = path.strip_prefix("/fixture/preset/tool-schemas/") {
+                    let agent = agents
+                        .get(&SessionId::new(id))
+                        .ok_or_else(|| anyhow::anyhow!("fixture agent {id} is not live"))?;
+                    let schemas = tools.schemas(Some(agent.scope_key()));
+                    return Ok(response(200_u16.try_into()?, serde_json::to_vec(&schemas)?));
+                }
+                anyhow::ensure!(
+                    request.method().as_str() == "POST" && path == "/fixture/preset/service",
+                    "unknown fixture preset route {path}"
+                );
+                let body = json_body(request).await?;
+                let id = required_str(&body, "sessionId")?;
+                let agent = agents
+                    .get(&SessionId::new(id))
+                    .ok_or_else(|| anyhow::anyhow!("fixture agent {id} is not live"))?;
+                let value = match required_str(&body, "name")? {
+                    "fs" => roster.service_for(&agent, seekdeep_fs::FS).map(|service| {
+                        // Source: an absent sandbox mode is an absent property, not null.
+                        service
+                            .filesystem()
+                            .sandbox_mode()
+                            .map_or_else(|| json!({}), |mode| json!({"sandboxMode": mode}))
+                    }),
+                    "compaction" => roster
+                        .service_for(&agent, seekdeep_compaction::service::COMPACTION)
+                        .map(|_| json!({})),
+                    other => anyhow::bail!("fixture preset service {other} is not shimmed"),
+                };
+                Ok(response(200_u16.try_into()?, serde_json::to_vec(&value)?))
+            })
+        }),
+    })
+}
+
 /// Source `ctx.sessions.flush(session)`.
 fn session_flush_fixture_route(
     context: &Context,
@@ -1621,6 +1762,8 @@ fn install_scaffold_context_routes(
     routes.push(subagent_fixture_route(context, server)?);
     routes.push(session_flush_fixture_route(context, server)?);
     routes.push(cold_snapshot_fixture_route(context, server)?);
+    routes.push(prompt_section_fixture_route(context, server)?);
+    routes.push(preset_service_fixture_route(context, server)?);
     routes.push(tool_execute_fixture_route(context, server)?);
     routes.push(persist_fixture_route(context, server)?);
     routes.push(job_kill_fixture_route(context, server)?);

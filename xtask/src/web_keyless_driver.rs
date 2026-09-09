@@ -12,7 +12,7 @@ import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { mkdirSync, existsSync } from 'node:fs';
-import { access, mkdir, mkdtemp, rm, readFile, writeFile, readdir } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, realpath, rm, readFile, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 const [source, host, world, output] = process.argv.slice(2), require = createRequire(join(source, 'apps/web/package.json'));
@@ -26,6 +26,24 @@ const expect = new Proxy(playwrightExpect, {
     return (probe, options) => target.poll(probe, options && options.interval !== undefined ? { ...options, intervals: [options.interval] } : options);
   },
 });
+
+// vitest `toMatchInlineSnapshot`: pretty-format's default object rendering (sorted keys,
+// trailing commas, unescaped strings) against the dedented template literal.
+function inlineSnapshot(value, indent = '') {
+  const inner = indent + '  ';
+  if (Array.isArray(value)) return value.length === 0 ? '[]' : '[\n' + value.map(item => inner + inlineSnapshot(item, inner) + ',\n').join('') + indent + ']';
+  if (value !== null && typeof value === 'object') { const keys = Object.keys(value).sort(); return keys.length === 0 ? '{}' : '{\n' + keys.map(key => inner + '"' + key + '": ' + inlineSnapshot(value[key], inner) + ',\n').join('') + indent + '}'; }
+  if (typeof value === 'string') return '"' + value + '"';
+  return String(value);
+}
+function dedentSnapshot(text) {
+  const lines = text.split('\n');
+  if (lines[0].trim() === '') lines.shift();
+  if (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+  const width = Math.min(...lines.filter(line => line.trim() !== '').map(line => line.match(/^\s*/)[0].length));
+  return lines.map(line => line.slice(width)).join('\n');
+}
+playwrightExpect.extend({ toMatchInlineSnapshot(received, expected) { const actual = inlineSnapshot(received), wanted = dedentSnapshot(expected); return { pass: actual === wanted, message: () => 'inline snapshot mismatch\n--- expected\n' + wanted + '\n--- actual\n' + actual }; } });
 const exec = promisify(execFile), MODE = 'replay', TESTS = join(source, 'apps/web/tests'), checks = [], filter = process.env.SEEKDEEP_KEYLESS_SCENARIO;
 const selected = name => !filter || filter.split(',').includes(name);
 // Source assertions pinned to product identity: the Rust product renames the DeepSeek Harness
@@ -270,12 +288,12 @@ async function runCases(scenario, cases, page, bindings, tripwire) {
       }
       probes.dom = await page.evaluate(() => ({ done: document.body.innerText.includes('DONE'), planCard: document.querySelectorAll('[data-plan-review-key]').length, reasoningStates: [...document.querySelectorAll('[data-variant="think"]')].map(node => node.getAttribute('data-state')), textareaEnabled: !document.querySelector('textarea')?.disabled, phase: document.querySelector('div[data-phase]')?.getAttribute('data-phase') })).catch(failure => 'failed: ' + String(failure));
       probes.animationStartsPerSecond = await page.evaluate(() => new Promise(resolve => { let count = 0; const handler = () => { count += 1; }; document.addEventListener('animationstart', handler, true); setTimeout(() => { document.removeEventListener('animationstart', handler, true); resolve(count); }, 1000); })).catch(failure => 'failed: ' + String(failure));
-      probes.aria = await page.locator('body').ariaSnapshot({ timeout: 5000 }).then(() => 'ok', failure => 'failed: ' + String(failure).slice(0, 300));
+      probes.aria = await Promise.resolve().then(() => page.locator('body').ariaSnapshot({ timeout: 5000 })).then(() => 'ok', failure => 'failed: ' + String(failure).slice(0, 300));
       probes.screenshot = await page.screenshot({ path: join(output, scenario + '-probe.png'), timeout: 5000 }).then(() => 'ok', failure => 'failed: ' + String(failure).slice(0, 300));
       if (process.env.SEEKDEEP_KEYLESS_PROBE) probes.custom = await page.evaluate(process.env.SEEKDEEP_KEYLESS_PROBE).then(value => JSON.stringify(value), failure => 'failed: ' + String(failure));
       await writeFile(join(output, scenario + '-hang-probes.json'), JSON.stringify(probes, null, 2));
       await Promise.all(hooks.map(hook => hook().catch(() => {})));
-      await writeFile(join(output, scenario + '-failure-aria.txt'), await page.locator('body').ariaSnapshot().catch(() => 'unavailable'));
+      await writeFile(join(output, scenario + '-failure-aria.txt'), await Promise.resolve().then(() => page.locator('body').ariaSnapshot()).catch(() => 'unavailable'));
       await writeFile(join(output, scenario + '-failure.json'), JSON.stringify({ case: entry.name, error: String(error), closed: page.isClosed(), tripwire: { warnings: tripwire.warnings, pageErrors: tripwire.pageErrors }, console: pageConsoles.get(page) ?? page.__console?.() ?? [] }, null, 2));
       console.error('keyless: ' + scenario + ': ' + entry.name + ' failed: ' + String(error));
       caseFailure = error;
@@ -466,12 +484,14 @@ function hostContext(server, live) {
       listChildren: async parentId => { const response = await fetch(server.origin + '/fixture/subagent/children/' + encodeURIComponent(parentId)); const text = await response.text(); assert(response.ok, 'listChildren HTTP ' + response.status + ': ' + text); return JSON.parse(text); },
       followup: async (parent, childId, content, options = {}) => post('/fixture/subagent/followup', { parentSessionId: parent.id, childSessionId: childId, content, ...(options.source === undefined ? {} : { source: options.source }) }).then(result => result.messageId),
     },
+    systemPrompt: { section: section => { const registration = post('/fixture/prompt/section', section); pending.push(registration); return () => { pending.push(registration.then(({ id }) => post('/fixture/prompt/section/' + id + '/dispose', {}))); }; } },
+    agentPresets: { serviceFor: (agent, name) => { const value = JSON.parse(execFileSync('curl', ['-sS', '--fail', '-X', 'POST', '-H', 'content-type: application/json', '-d', JSON.stringify({ sessionId: agent.sessionId, name }), server.origin + '/fixture/preset/service'], { encoding: 'utf8' })); return value === null ? undefined : value; } },
     // Source `ctx.effect(register, label)` runs the registration now and keeps its disposer.
     effect: (register, _label) => register(),
     workspaceRegistry: { resolveByPath: async path => { await settle(); const found = await post('/fixture/workspace/resolve', { path }); return found === null ? undefined : { id: found.id, attachSession: sessionId => post('/fixture/workspace/attach', { path, sessionId }).then(() => undefined) }; } },
     sessions: { flush: async session => { if (session === undefined) { await live.refresh(); return true; } const flushed = await post('/fixture/flush/' + encodeURIComponent(session.id), {}); await live.refresh(); return flushed; }, list: () => live.sessions.map(session => ({ id: session.id, header: session.header, append: (type, data) => post('/fixture/session/' + encodeURIComponent(session.id) + '/append', { type, data }).catch(error => console.error('keyless: session append failed: ' + String(error))) })) },
     on: (event, listener) => { assert.equal(event, 'session/event', 'only session/event listeners are shimmed'); live.onEvent(listener); return () => {}; },
-    tools: { execute: async ({ callId, name, arguments: args, agent }) => { await settle(); const result = await post('/fixture/tool/execute', { sessionId: agent.sessionId, callId, name, arguments: args }); if (result.isError) console.error('keyless: tool ' + name + ' failed: ' + JSON.stringify(result).slice(0, 800)); return result; } },
+    tools: { schemas: agent => JSON.parse(execFileSync('curl', ['-sS', '--fail', server.origin + '/fixture/preset/tool-schemas/' + encodeURIComponent(agent.sessionId)], { encoding: 'utf8', maxBuffer: 1 << 26 })), execute: async ({ callId, name, arguments: args, agent }) => { await settle(); const result = await post('/fixture/tool/execute', { sessionId: agent.sessionId, callId, name, arguments: args }); if (result.isError) console.error('keyless: tool ' + name + ' failed: ' + JSON.stringify(result).slice(0, 800)); return result; } },
     jobs: { kill: (jobId, agent, reason) => post('/fixture/job/kill', { jobId, sessionId: agent.sessionId, reason }) },
     credentials: { set: (ref, value) => post('/fixture/credential', { ref, value }) },
     // Source: `ctx.sessionPersistence.create(header)` then `append(id, events)`; one complete log
@@ -552,9 +572,15 @@ function scaffoldShims(name, options = {}) {
   const openHosts = new Set(), openBrowsers = new Set();
   const launchWebScaffold = async (scaffoldOptions = {}) => {
     hosts += 1;
-    const server = await bootHost(name + '-' + hosts, { welcome, welcomePending: scaffoldOptions.welcomeNoticePending === true, replay: scaffoldOptions.replayFixture, replayOverride: scaffoldOptions.replayOverride, replayChildFixtures: scaffoldOptions.replayChildFixtures, overlay: options.overlay, env: { ...scaffoldOptions.paceMs === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(scaffoldOptions.paceMs) }, ...scaffoldOptions.replayContextWindow === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_CONTEXT_WINDOW: String(scaffoldOptions.replayContextWindow) }, ...options.env ?? {} } });
+    // Source `agentPresets: { roots, default }` becomes the overlay row the Host composes from.
+    let overlay = options.overlay;
+    if (scaffoldOptions.agentPresets !== undefined) {
+      assert(overlay === undefined || !overlay.trimStart().startsWith('['), 'agentPresets needs a YAML scenario overlay');
+      overlay = (overlay ?? '') + '\n- id: agent-presets\n  config: ' + JSON.stringify({ ...scaffoldOptions.agentPresets, includeUserRoot: false }) + '\n';
+    }
+    const server = await bootHost(name + '-' + hosts, { welcome, welcomePending: scaffoldOptions.welcomeNoticePending === true, replay: scaffoldOptions.replayFixture, replayOverride: scaffoldOptions.replayOverride, replayChildFixtures: scaffoldOptions.replayChildFixtures, overlay, env: { ...scaffoldOptions.paceMs === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_PACE_MS: String(scaffoldOptions.paceMs) }, ...scaffoldOptions.replayContextWindow === undefined ? {} : { SEEKDEEP_KEYLESS_REPLAY_CONTEXT_WINDOW: String(scaffoldOptions.replayContextWindow) }, ...options.env ?? {} } });
     const live = liveSessions(server.origin);
-    const scaffold = { baseUrl: server.origin, workspaceCwd: server.workspace, whenTurnSettled: live.whenTurnSettled, whenTurnsSettled: live.whenTurnsSettled, ctx: hostContext(server, live), live, server, async close() { openHosts.delete(scaffold); await live.refresh().catch(() => {}); live.stop(); await writeFile(join(output, name + '-' + hosts + '-sessions.json'), JSON.stringify(live.sessions, null, 2)); await server.stop(); } };
+    const scaffold = { mode: MODE, baseUrl: server.origin, workspaceCwd: server.workspace, whenTurnSettled: live.whenTurnSettled, whenTurnsSettled: live.whenTurnsSettled, ctx: hostContext(server, live), live, server, async close() { openHosts.delete(scaffold); await live.refresh().catch(() => {}); live.stop(); await writeFile(join(output, name + '-' + hosts + '-sessions.json'), JSON.stringify(live.sessions, null, 2)); await server.stop(); } };
     openHosts.add(scaffold);
     return scaffold;
   };
@@ -627,10 +653,10 @@ function describeBlocks(ast) {
   return blocks;
 }
 async function describeScenario(name, options) {
-  const ast = await sourceFile(name + '.e2e.ts'), blocks = describeBlocks(ast);
+  const ast = await sourceFile(options.file ?? name + '.e2e.ts'), blocks = describeBlocks(ast);
   assert.equal(blocks.length, options.describes, 'source describe inventory');
   assert.equal(blocks.reduce((total, block) => total + block.cases.length, 0), options.cases, 'source case inventory');
-  const constants = declarations(ast, options.constants), support = declarations(supportAst, ['connectFreshWorkspace']);
+  const constants = declarations(ast, options.constants), support = declarations(supportAst, ['connectFreshWorkspace', 'ZH_BROWSER_LOCALE', 'connectFreshWorkspaceZh']);
   const dir = join(TESTS, 'snapshots', name);
   const goldens = Object.fromEntries((options.goldens ?? []).map(golden => Array.isArray(golden) ? [golden[0], join(dir, golden[1] + '.expected.md')] : [golden.toUpperCase().replaceAll('-', '_') + '_EXPECTED', join(dir, golden + '.expected.md')]));
   const shims = scaffoldShims(name, options);
@@ -988,6 +1014,26 @@ const SCENARIOS = {
     await describeScenario('goal-bar', { describes: 1, cases: 2, overlay: await readFile(join(process.cwd(), 'apps/web/tests/goal-bar.overlay.yml'), 'utf8'), goldens: [['ACTIVE_EXPECTED', 'active']],
       constants: [], values: { OVERLAY: join(process.cwd(), 'apps/web/tests/goal-bar.overlay.yml') } });
   },
+  async 'message-feedback-protocol'() {
+    // Host-only: the source drives the Web Host's real HTTP carrier; no browser opens.
+    const dir = join(TESTS, 'snapshots', 'message-feedback-protocol');
+    await describeScenario('message-feedback-protocol', { file: 'message-feedback-protocol.snapshot.ts', describes: 1, cases: 1,
+      constants: ['SESSION_FIXTURE', 'PROTOCOL_EXPECTED', 'SESSION_ID', 'MESSAGE_ID', 'isRecord', 'createdVersion', 'normalizeProtocol'],
+      values: { SNAPSHOT_DIR: dir, seedSession: seedSessionShim } });
+  },
+  async 'minimal-preset'() {
+    // Host-only: the minimal preset's agent runs one recorded model round and the persistent
+    // shell and editor through the tool fixture route; the injected prompt section must not
+    // reach the model.
+    const dir = join(TESTS, 'snapshots', 'minimal-preset');
+    await describeScenario('minimal-preset', { file: 'minimal-preset.snapshot.ts', describes: 1, cases: 1, constants: ['FIXTURE', 'PROMPT'],
+      values: { SNAPSHOT_DIR: dir, CallId: llmModule.CallId, createUserMessage: llmModule.createUserMessage, SessionId: id => id, mkdir } });
+  },
+  async 'agent-preset-authoring'() {
+    const dir = join(TESTS, 'snapshots', 'agent-preset-authoring');
+    await describeScenario('agent-preset-authoring', { describes: 1, cases: 7, overlay: await readFile(join(process.cwd(), 'apps/web/tests/agent-preset-authoring.overlay.yml'), 'utf8'), goldens: ['section', 'copy-dialog', 'created', 'damaged'],
+      constants: [], values: { SNAPSHOT_DIR: dir, SHIPPED_PRESETS: join(process.cwd(), 'apps/cli/config/agent-presets'), OVERLAY: join(process.cwd(), 'apps/web/tests/agent-preset-authoring.overlay.yml'), realpath, mkdir } });
+  },
   async 'seeded-history'() {
     const dir = join(TESTS, 'snapshots', 'seeded-history');
     await describeScenario('seeded-history', { describes: 1, cases: 11, constants: ['SEED_ID', 'PROMPT', 'withCompaction'], goldens: ['ui', 'command-row', 'feedback-row'],
@@ -1063,7 +1109,7 @@ const SCENARIOS = {
 // complete picture; the run still fails on any failure.
 const scenarioFailures = [];
 // Scenarios whose Host or client surface is still pending run only when named explicitly.
-const DEFERRED = new Set(['goal-bar']);
+const DEFERRED = new Set(['goal-bar', 'message-feedback-protocol']);
 for (const [name, run] of Object.entries(SCENARIOS)) {
   if (!selected(name) || (DEFERRED.has(name) && !filter)) continue;
   try { await run(); } catch (error) { scenarioFailures.push({ scenario: name, error: String(error), stack: error?.stack }); console.error('keyless: scenario ' + name + ' failed: ' + String(error).split('\n')[0]); if (error?.matcherResult) console.error('keyless: matcher ' + JSON.stringify({ expected: error.matcherResult.expected, actual: error.matcherResult.actual }).slice(0, 600)); console.error(String(error?.stack ?? '').split('\n').slice(1, 8).join('\n')); }

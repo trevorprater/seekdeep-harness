@@ -125,11 +125,43 @@ async fn composition_problem(path: &Path) -> Option<String> {
             let reason = error.to_string();
             return Some(format!(
                 "the composition is not valid YAML: {}",
-                reason.lines().next().unwrap_or(&reason)
+                js_yaml_reason(reason.lines().next().unwrap_or(&reason), &raw)
             ));
         }
     };
     entry_list_problem(&entries, "")
+}
+
+/// Renders a YAML syntax diagnostic the way the source's js-yaml reports it: `reason (line:col)`
+/// with one-based positions, without the loader's own "profile patch document is invalid"
+/// prefix. libyaml phrases the same faults differently; the faults the roster surfaces are
+/// mapped, and any other reason keeps libyaml's wording behind the js-yaml position.
+fn js_yaml_reason(message: &str, text: &str) -> String {
+    let message = message
+        .strip_prefix("profile patch document is invalid: ")
+        .unwrap_or(message);
+    let Some((reason, position)) = message.split_once(" at line ") else {
+        return message.to_owned();
+    };
+    let mut parts = position.splitn(2, ", while ");
+    let location = parts.next().unwrap_or_default();
+    let mut numbers = location
+        .split_whitespace()
+        .filter_map(|part| part.parse::<usize>().ok());
+    let (Some(line), Some(column)) = (numbers.next(), numbers.next()) else {
+        return message.to_owned();
+    };
+    let at_end = line > text.lines().count();
+    let reason = match reason.trim() {
+        "did not find expected ',' or ']'" | "did not find expected ',' or '}'" if at_end => {
+            "unexpected end of the stream within a flow collection"
+        }
+        "did not find expected ',' or ']'" | "did not find expected ',' or '}'" => {
+            "missed comma between flow collection entries"
+        }
+        other => other,
+    };
+    format!("{reason} ({line}:{column})")
 }
 
 fn entry_list_problem(entries: &[ProfileEntry], at: &str) -> Option<String> {
@@ -172,5 +204,35 @@ fn absolute_root(path: &str) -> anyhow::Result<PathBuf> {
         Ok(expanded.clean())
     } else {
         Ok(std::env::current_dir()?.join(expanded).clean())
+    }
+}
+
+#[cfg(test)]
+mod js_yaml_tests {
+    use super::js_yaml_reason;
+
+    #[test]
+    fn unclosed_flow_sequence_reads_like_js_yaml() {
+        let text = "- id: x\n  name: [unclosed\n";
+        let libyaml = "profile patch document is invalid: did not find expected ',' or ']' at line 3 column 1, while parsing a flow sequence at line 2 column 9";
+        assert_eq!(
+            js_yaml_reason(libyaml, text),
+            "unexpected end of the stream within a flow collection (3:1)"
+        );
+    }
+
+    #[test]
+    fn unknown_reasons_keep_their_wording_behind_the_position() {
+        assert_eq!(
+            js_yaml_reason(
+                "profile patch document is invalid: found character that cannot start any token at line 1 column 2",
+                "@\n"
+            ),
+            "found character that cannot start any token (1:2)"
+        );
+        assert_eq!(
+            js_yaml_reason("something else entirely", ""),
+            "something else entirely"
+        );
     }
 }

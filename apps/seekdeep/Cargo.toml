@@ -180,6 +180,8 @@ seekdeep-sandbox = { path = "../../crates/sandbox" }
 seekdeep-workflow = { path = "../../crates/workflow" }
 async-stream.workspace = true
 bytes.workspace = true
+seekdeep-compaction = { path = "../../crates/compaction" }
+seekdeep-fs = { path = "../../crates/fs" }
 reqwest.workspace = true
 tempfile.workspace = true
 

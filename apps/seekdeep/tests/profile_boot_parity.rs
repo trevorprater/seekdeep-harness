@@ -64,6 +64,60 @@ fn telemetry_switch_is_nonempty_fail_closed_and_row_aware() {
 }
 
 #[test]
+fn launcher_preset_pin_keeps_an_overlay_user_root() -> anyhow::Result<()> {
+    // Source: the scaffold's `agentPresets` option adds a user root beside the shipped root;
+    // the checkout pin only substitutes the shipped root's path.
+    let temporary = tempfile::tempdir()?;
+    let home = temporary.path().join("home");
+    let cwd = temporary.path().join("workspace");
+    let user_root = temporary.path().join("user-presets");
+    std::fs::create_dir_all(&cwd)?;
+    let overlay = cwd.join("presets.patch.yml");
+    std::fs::write(
+        &overlay,
+        format!(
+            "- id: agent-presets\n  config:\n    roots:\n      - path: /elsewhere/shipped\n        trust: system\n      - path: {}\n        trust: user\n    default: standard\n    includeUserRoot: false\n",
+            user_root.display()
+        ),
+    )?;
+    let shipped = temporary.path().join("shipped-presets");
+    let plan = compose_profile_at(
+        "web",
+        &[std::path::PathBuf::from("presets.patch.yml")],
+        &cwd,
+        &home,
+        &install_anchor(&home),
+        &shipped,
+        Some("false"),
+    )?;
+    let effective = compose_entries(&[plan.all_patches()])?;
+    let presets = entry(effective.entries(), "agent-presets");
+    let roots = config_field(presets, "roots").as_sequence().unwrap();
+    let paths = roots
+        .iter()
+        .map(|root| {
+            let root = root.as_mapping().unwrap();
+            (
+                root["path"].as_str().unwrap().to_owned(),
+                root["trust"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        [
+            (shipped.to_string_lossy().into_owned(), "system".to_owned()),
+            (user_root.to_string_lossy().into_owned(), "user".to_owned()),
+        ]
+    );
+    assert_eq!(
+        config_field(presets, "includeUserRoot"),
+        &ProfileNode::Bool(false)
+    );
+    Ok(())
+}
+
+#[test]
 fn web_plan_orders_layers_and_appends_launcher_owned_preset_and_privacy_patches()
 -> anyhow::Result<()> {
     let temporary = tempfile::tempdir()?;

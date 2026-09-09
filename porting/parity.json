@@ -24594,7 +24594,17 @@
     {
       "source": "apps/web/tests/agent-preset-authoring.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs",
+        "apps/seekdeep/src/profile_boot.rs",
+        "crates/agent-presets/src/discovery.rs",
+        "crates/host-apiproxy/src/lib.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged in a zh-CN Chromium page against a keyless Rust Host composed with the source's authoring overlay and a lane-owned user preset root; the seven cases verify the roster with copy as the only creation path (section golden), read-only viewing of a shipped composition, copying the minimal preset under a new id into its files (copy-dialog and created goldens), deleting the copy after confirmation, damaged presets marked broken with the js-yaml diagnostic wording and a ghost cleared through delete (damaged golden), starting a creator-mode session from the section, and a clean console. Port fixes: the profile boot's shipped-root pin keeps every other configured preset root, the api-proxy config tolerates the overlay's routing keys as the source's plain interface does, and composition YAML syntax diagnostics read as js-yaml reports them"
+      ]
     },
     {
       "source": "apps/web/tests/agent-preset-authoring.overlay.yml",
@@ -25052,7 +25062,14 @@
     {
       "source": "apps/web/tests/minimal-preset.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source describe runs unchanged against a keyless Rust Host replaying the recorded minimal-preset round; the agent is created with the minimal preset mounted through the agent fixture route, an injected system-prompt section registered through the prompt fixture route never reaches the model, the preset's fs service reports no sandbox mode and no compaction service, the persistent bash state and the str_replace_editor view match the source inline snapshot (prompt, tool names, outputs) through the driver's vitest-compatible inline snapshot matcher, the request header tools equal the agent's scoped tool schemas, and the fixture inventory stays closed"
+      ]
     },
     {
       "source": "apps/web/tests/models-settings.e2e.ts",

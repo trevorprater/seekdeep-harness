@@ -83,8 +83,10 @@ pub const PLUGIN_INJECT: &[&str] = &[
 ];
 
 /// Host API gateway composition configuration.
+// Source: a plain `Config` interface; keys outside it (a scenario overlay's routing hints)
+// are ignored rather than refused.
 #[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
-#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+#[serde(default, rename_all = "camelCase")]
 pub struct Config {
     /// Explicit native path-opening capability override.
     pub native_open: Option<bool>,

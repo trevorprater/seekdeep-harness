@@ -377,16 +377,32 @@ fn agent_presets_patch(row: &ProfileEntry, shipped_root: &Path) -> ProfilePatch 
         .and_then(ProfileNode::as_mapping)
         .cloned()
         .unwrap_or_default();
-    config.insert(
-        "roots".to_owned(),
-        ProfileNode::Sequence(vec![ProfileNode::Mapping(IndexMap::from([
-            (
-                "path".to_owned(),
-                ProfileNode::String(shipped_root.to_string_lossy().into_owned()),
-            ),
-            ("trust".to_owned(), ProfileNode::String("system".to_owned())),
-        ]))]),
-    );
+    // Source: the bundle's roster row names the shipped root by its package-relative path;
+    // this checkout layout pins that one system root. Every other configured root (a user
+    // root an overlay adds for authoring) rides along in its configured position.
+    let shipped = ProfileNode::Mapping(IndexMap::from([
+        (
+            "path".to_owned(),
+            ProfileNode::String(shipped_root.to_string_lossy().into_owned()),
+        ),
+        ("trust".to_owned(), ProfileNode::String("system".to_owned())),
+    ]));
+    let mut roots = config
+        .get("roots")
+        .and_then(ProfileNode::as_sequence)
+        .map(<[ProfileNode]>::to_vec)
+        .unwrap_or_default();
+    let system = roots.iter().position(|root: &ProfileNode| {
+        root.as_mapping()
+            .and_then(|mapping| mapping.get("trust"))
+            .and_then(ProfileNode::as_str)
+            == Some("system")
+    });
+    match system {
+        Some(index) => roots[index] = shipped,
+        None => roots.insert(0, shipped),
+    }
+    config.insert("roots".to_owned(), ProfileNode::Sequence(roots));
     ProfilePatch::from_fields(IndexMap::from([
         (
             "id".to_owned(),
