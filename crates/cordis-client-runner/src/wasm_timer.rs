@@ -94,7 +94,7 @@ impl PreparedTimer for WasmPreparedTimer {
                 });
             }
         }) as Box<dyn FnMut()>);
-        let window = web_sys::window().expect("WasmTimerDriver requires Window");
+        let window = browser_window().expect("WasmTimerDriver requires Window");
         let handle = if self.repeat {
             window
                 .set_interval_with_callback_and_timeout_and_arguments_0(
@@ -122,7 +122,7 @@ impl PreparedTimer for WasmPreparedTimer {
         }
         let handle = self.browser_handle.swap(0, Ordering::AcqRel);
         if handle != 0
-            && let Some(window) = web_sys::window()
+            && let Some(window) = browser_window()
         {
             if self.repeat {
                 window.clear_interval_with_handle(handle);
@@ -134,4 +134,19 @@ impl PreparedTimer for WasmPreparedTimer {
             closures.borrow_mut().remove(&self.id);
         });
     }
+}
+
+/// The page window: `web_sys::window()` requires the global itself to be a `Window`, which a
+/// jsdom test environment does not satisfy even though it exposes the `window` property the
+/// source reads; the property lookup is the fallback (source: the bare `window` global).
+fn browser_window() -> Option<web_sys::Window> {
+    web_sys::window().or_else(|| {
+        js_sys::Reflect::get(
+            &js_sys::global(),
+            &wasm_bindgen::JsValue::from_str("window"),
+        )
+        .ok()
+        .filter(wasm_bindgen::JsValue::is_object)
+        .map(<wasm_bindgen::JsValue as wasm_bindgen::JsCast>::unchecked_into::<web_sys::Window>)
+    })
 }

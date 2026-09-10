@@ -1,5 +1,7 @@
 //! Real HTTP/WebSocket checks for the Rust Client web carrier.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     sync::{
         Arc,

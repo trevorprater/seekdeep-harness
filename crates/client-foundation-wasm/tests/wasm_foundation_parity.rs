@@ -35,6 +35,7 @@ export function foundationContextWrapper() {
       if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args)
       if (key === 'serial') return (name, ...args) => target.serialArgs(name, args)
       if (key === 'bail') return (name, ...args) => target.bailArgs(name, args)
+      if (key === 'waterfall') return (...args) => target.eventArgs('waterfall', args)
       if (key === 'get') return name => trace(ctx, target.get(name))
       if (Reflect.has(target, key)) {
         const value = Reflect.get(target, key, receiver)
@@ -158,6 +159,25 @@ export function foundationRestore(control) { control.restore() }
 export function foundationStop(handle) { handle.stop() }
 export function foundationResult(response) { return response.result }
 export function foundationFlush() { return new Promise(resolve => setTimeout(resolve, 10)) }
+export function foundationInstallFixtureLocation(search) {
+  const original = globalThis.location
+  globalThis.location = { search, hostname: 'localhost', origin: 'http://localhost:4000', href: 'http://localhost:4000/' + search }
+  return { restore() { if (original === undefined) delete globalThis.location; else globalThis.location = original } }
+}
+export function foundationFixtureRpc(connection) { return connection.rpc.call('/api', 'commands/list', { args: { agentId: 'fx-alpha' } }) }
+export function foundationFixtureFrames() { return { frames: [], calls: [] } }
+export function foundationFixtureStart(connection, capture) {
+  return connection.start({
+    onMuxEnvelope(frame) { capture.frames.push(['mux', frame.payload.type]) },
+    onHostEnvelope(frame) { capture.frames.push(['host', frame.payload.type]) },
+    onStateChange(state) { capture.calls.push(['state', state]) },
+    onConnected(description) { capture.calls.push(['connected', typeof description === 'object' && description !== null]) },
+  })
+}
+export function foundationFixtureSummary(capture, connection) {
+  return JSON.stringify({ calls: capture.calls, muxTypes: [...new Set(capture.frames.filter(f => f[0] === 'mux').map(f => f[1]))], snapshot: connection.hostDescription.getSnapshot() !== undefined, loopback: connection.isLoopback })
+}
+export function foundationWait(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
 
 export async function foundationSchemaContract(root) {
   const check = (value, message) => { if (!value) throw new Error(message) }
@@ -378,6 +398,12 @@ extern "C" {
     fn foundationStop(handle: &JsValue);
     fn foundationResult(response: &JsValue) -> JsValue;
     fn foundationFlush() -> Promise;
+    fn foundationInstallFixtureLocation(search: &str) -> JsValue;
+    fn foundationFixtureRpc(connection: &JsValue) -> Promise;
+    fn foundationFixtureFrames() -> JsValue;
+    fn foundationFixtureStart(connection: &JsValue, capture: &JsValue) -> JsValue;
+    fn foundationFixtureSummary(capture: &JsValue, connection: &JsValue) -> String;
+    fn foundationWait(ms: u32) -> Promise;
     fn foundationSchemaContract(root: &JsValue) -> Promise;
     fn foundationSchemaSourceParity(root: &JsValue, pin: &str) -> Promise;
     fn foundationProviderContract(root: &JsValue) -> Promise;
@@ -443,6 +469,81 @@ async fn reflection_registration_is_atomic_and_owned_by_the_calling_fiber() {
             .as_bool(),
         Some(true)
     );
+}
+
+#[wasm_bindgen_test(async)]
+async fn fixture_page_query_selects_the_in_page_fixture_transport() {
+    configure_context_wrapper(foundationContextWrapper()).unwrap();
+    let location = foundationInstallFixtureLocation("?fixture");
+    let fetch = foundationInstallFetch();
+    let root = create_context().unwrap();
+    JsFuture::from(foundationPlugin(
+        &root,
+        &client_connection_plugin().unwrap(),
+    ))
+    .await
+    .unwrap();
+    let connection = foundationGet(&root, "connection");
+    let api = Reflect::get(&connection, &JsValue::from_str("api")).unwrap();
+    // Unary calls are answered by the seeded fixture, never by the physical carrier.
+    let response = JsFuture::from(foundationCall(&api)).await.unwrap();
+    let result = foundationResult(&response);
+    assert_eq!(
+        Reflect::get(&result, &JsValue::from_str("ok"))
+            .unwrap()
+            .as_bool(),
+        Some(true)
+    );
+    let sessions = Reflect::get(&result, &JsValue::from_str("value")).unwrap();
+    let items = Reflect::get(&sessions, &JsValue::from_str("items")).unwrap();
+    assert!(
+        js_sys::Array::from(&items).length() > 0,
+        "fixture session listing is seeded"
+    );
+    assert_eq!(foundationFetchCalls(&fetch).length(), 0);
+    // The generic Remote channel rides the same fixture state.
+    let commands = JsFuture::from(foundationFixtureRpc(&connection))
+        .await
+        .unwrap();
+    assert_eq!(
+        Reflect::get(&commands, &JsValue::from_str("ok"))
+            .unwrap()
+            .as_bool(),
+        Some(true)
+    );
+    // The generation controller connects through the page event loop and pumps frames.
+    let capture = foundationFixtureFrames();
+    let handle = foundationFixtureStart(&connection, &capture);
+    JsFuture::from(foundationWait(50)).await.unwrap();
+    let summary = foundationFixtureSummary(&capture, &connection);
+    assert!(
+        summary.contains("[\"state\",\"connected\"]")
+            && summary.contains("[\"connected\",true]")
+            && summary.contains("\"snapshot\":true")
+            && summary.contains("\"loopback\":true"),
+        "{summary}"
+    );
+    assert!(summary.contains("session/subscribed"), "{summary}");
+    foundationStop(&handle);
+    assert!(
+        Reflect::get(
+            &Reflect::get(&connection, &JsValue::from_str("hostDescription")).unwrap(),
+            &JsValue::from_str("getSnapshot")
+        )
+        .unwrap()
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&JsValue::UNDEFINED)
+        .unwrap()
+        .is_undefined()
+    );
+    foundationRestore(&fetch);
+    Reflect::get(&location, &JsValue::from_str("restore"))
+        .unwrap()
+        .dyn_into::<Function>()
+        .unwrap()
+        .call0(&location)
+        .unwrap();
 }
 
 #[wasm_bindgen_test(async)]

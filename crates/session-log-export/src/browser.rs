@@ -512,7 +512,7 @@ fn browser_operations(
     fetcher: Option<Function>,
     saver: Option<Function>,
 ) -> Result<Rc<SessionLogDownloadController>, JsValue> {
-    let window = web_sys::window();
+    let window = browser_window();
     let origin = Reflect::get(&js_sys::global(), &JsValue::from_str("location"))
         .ok()
         .and_then(|location| Reflect::get(&location, &JsValue::from_str("origin")).ok())
@@ -831,4 +831,19 @@ pub fn session_log_export_inject() -> Array {
         .iter()
         .map(|value| JsValue::from_str(value))
         .collect()
+}
+
+/// The page window: `web_sys::window()` requires the global itself to be a `Window`, which a
+/// jsdom test environment does not satisfy even though it exposes the `window` property the
+/// source reads; the property lookup is the fallback (source: the bare `window` global).
+fn browser_window() -> Option<web_sys::Window> {
+    web_sys::window().or_else(|| {
+        js_sys::Reflect::get(
+            &js_sys::global(),
+            &wasm_bindgen::JsValue::from_str("window"),
+        )
+        .ok()
+        .filter(wasm_bindgen::JsValue::is_object)
+        .map(<wasm_bindgen::JsValue as wasm_bindgen::JsCast>::unchecked_into::<web_sys::Window>)
+    })
 }

@@ -62,6 +62,8 @@ mod wasm_slots;
 #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
 mod wasm_store;
 #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
+mod wasm_value_bridge;
+#[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
 mod wasm_workspace_service;
 mod workspace;
 mod workspace_manager;
@@ -124,6 +126,8 @@ pub use wasm_session_service::*;
 pub use wasm_slots::*;
 #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
 pub use wasm_store::*;
+#[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
+pub use wasm_value_bridge::*;
 #[cfg(all(target_arch = "wasm32", feature = "wasm-bindings"))]
 pub use wasm_workspace_service::*;
 pub use workspace::*;

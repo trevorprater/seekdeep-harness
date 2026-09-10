@@ -119,17 +119,24 @@ pub fn use_throttled_visual_update(
 #[allow(clippy::too_many_lines)] // Closed source component tree stays auditable in one renderer.
 fn render_reasoning_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue, JsValue> {
     let react = &modules.react;
-    let text = required_string(props, "text", "ReasoningRow props")?;
+    // The streaming text stays a JavaScript string reference: copying it into wasm on every
+    // chunk (and back out for the body) made each render cost the whole accumulated text.
+    let text_value = required_property(props, "text", "ReasoningRow props")?;
+    let text: JsString = text_value
+        .clone()
+        .dyn_into()
+        .map_err(|_| js_sys::Error::new("ReasoningRow props text must be a string"))?;
     let running = required_bool(props, "running", "ReasoningRow props")?;
     let translate = required_function(props, "t", "ReasoningRow props")?;
     let (expanded_value, set_expanded) = use_state(react, &JsValue::FALSE)?;
     let expanded = expanded_value.as_bool().unwrap_or(false);
     let summary_ref = use_ref(react, &JsValue::NULL)?;
-    let summary = if running {
+    let summary: JsValue = if running {
         latest_line(&text)
     } else {
-        first_line(&text).to_owned()
-    };
+        first_line(&text)
+    }
+    .into();
 
     let scroll_ref = summary_ref.clone();
     let scroll = Closure::wrap(Box::new(move || -> Result<(), JsValue> {
@@ -158,11 +165,7 @@ fn render_reasoning_row(modules: &BrowserModules, props: &JsValue) -> Result<JsV
         effect_schedule.call0(&JsValue::UNDEFINED)?;
         Ok(JsValue::UNDEFINED)
     }) as Box<dyn FnMut() -> Result<JsValue, JsValue>>);
-    let effect_dependencies = Array::of3(
-        &JsValue::from_bool(running),
-        schedule.as_ref(),
-        &JsValue::from_str(&summary),
-    );
+    let effect_dependencies = Array::of3(&JsValue::from_bool(running), schedule.as_ref(), &summary);
     required_function(react, "useEffect", "React")?.call2(
         react,
         &effect.into_js_value(),
@@ -214,7 +217,7 @@ fn render_reasoning_row(modules: &BrowserModules, props: &JsValue) -> Result<JsV
                 },
             ),
         ])?),
-        &[JsValue::from_str(&summary)],
+        &[summary],
     )?;
     let collapsed = create_element(
         react,
@@ -226,7 +229,7 @@ fn render_reasoning_row(modules: &BrowserModules, props: &JsValue) -> Result<JsV
         react,
         &JsValue::from_str("div"),
         Some(&class_props("seekdeep-conversation-reasoning-thinkBody")?),
-        &[JsValue::from_str(&text)],
+        &[text_value],
     )?;
     let disclosure = create_element(
         react,
@@ -362,15 +365,29 @@ fn request_animation_frame(callback: &Function) -> Result<JsValue, JsValue> {
         .call1(&js_sys::global(), callback)
 }
 
-fn first_line(text: &str) -> &str {
-    text.split_once('\n').map_or(text, |(head, _)| head)
+/// Source `firstLine`: the text up to its first newline, over the JavaScript string.
+fn first_line(text: &JsString) -> JsString {
+    let newline = text.index_of("\n", 0);
+    if newline < 0 {
+        text.clone()
+    } else {
+        text.slice(0, newline.unsigned_abs())
+    }
 }
 
-fn latest_line(text: &str) -> String {
-    let visible = String::from(JsString::from(text).trim_end());
-    visible
-        .rsplit_once('\n')
-        .map_or(visible.clone(), |(_, tail)| tail.to_owned())
+/// Source `latestLine`: the last non-empty trailing line, over the JavaScript string.
+fn latest_line(text: &JsString) -> JsString {
+    let visible = text.trim_end();
+    let length = visible.length();
+    if length == 0 {
+        return visible;
+    }
+    let newline = visible.last_index_of("\n", i32::try_from(length - 1).unwrap_or(i32::MAX));
+    if newline < 0 {
+        visible
+    } else {
+        visible.slice(newline.unsigned_abs() + 1, length)
+    }
 }
 
 pub(crate) fn inject_style(
@@ -461,12 +478,6 @@ fn required_number(value: &JsValue, key: &str, owner: &str) -> Result<f64, JsVal
     required_property(value, key, owner)?
         .as_f64()
         .ok_or_else(|| js_sys::TypeError::new(&format!("{owner} {key} must be a number")).into())
-}
-
-fn required_string(value: &JsValue, key: &str, owner: &str) -> Result<String, JsValue> {
-    required_property(value, key, owner)?
-        .as_string()
-        .ok_or_else(|| js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into())
 }
 
 fn required_function(value: &JsValue, key: &str, owner: &str) -> Result<Function, JsValue> {

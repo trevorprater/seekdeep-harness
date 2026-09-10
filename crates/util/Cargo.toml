@@ -13,6 +13,7 @@ parking_lot.workspace = true
 path-clean.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+seekdeep-abort = { path = "../abort" }
 seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 tempfile.workspace = true

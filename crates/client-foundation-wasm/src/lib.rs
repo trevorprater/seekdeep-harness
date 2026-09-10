@@ -3,6 +3,8 @@
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 #[cfg(target_arch = "wasm32")]
+mod wasm_fixture;
+#[cfg(target_arch = "wasm32")]
 mod wasm_remote;
 #[cfg(target_arch = "wasm32")]
 mod wasm_typert;

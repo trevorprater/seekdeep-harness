@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "apps/seekdeep",
+  "crates/abort",
   "crates/bash-local",
   "crates/bash-sandbox",
   "crates/attachment",

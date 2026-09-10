@@ -1,5 +1,7 @@
 //! Native graph watches, dirty recovery, SSE, config, and teardown parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use seekdeep_client_hmr::*;

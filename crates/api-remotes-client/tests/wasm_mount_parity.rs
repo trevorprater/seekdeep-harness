@@ -110,6 +110,7 @@ export function remoteContextWrapper() {
         if (key === 'parallel') return (name, ...args) => target.parallelArgs(name, args)
         if (key === 'serial') return (name, ...args) => target.serialArgs(name, args)
         if (key === 'bail') return (name, ...args) => target.bailArgs(name, args)
+        if (key === 'waterfall') return (...args) => target.eventArgs('waterfall', args)
         if (key === 'get') return name => trace(ctx, target.get(name))
         if (Reflect.has(target, key)) {
           const value = Reflect.get(target, key, receiver)

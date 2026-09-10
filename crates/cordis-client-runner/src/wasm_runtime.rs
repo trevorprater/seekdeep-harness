@@ -48,7 +48,7 @@ pub(crate) struct WasmStyleDom;
 
 impl StyleDom for WasmStyleDom {
     fn insert(&self, plugin_id: &CordisDynamicPluginId, css: &str) -> anyhow::Result<StyleTagId> {
-        let document = web_sys::window()
+        let document = browser_window()
             .and_then(|window| window.document())
             .ok_or_else(|| anyhow::anyhow!("styles.insert requires browser Document"))?;
         let tag = document
@@ -135,4 +135,19 @@ impl WasmDynamicCordisStyles {
 
 fn js_error(error: &JsValue) -> anyhow::Error {
     anyhow::anyhow!(format!("{error:?}"))
+}
+
+/// The page window: `web_sys::window()` requires the global itself to be a `Window`, which a
+/// jsdom test environment does not satisfy even though it exposes the `window` property the
+/// source reads; the property lookup is the fallback (source: the bare `window` global).
+fn browser_window() -> Option<web_sys::Window> {
+    web_sys::window().or_else(|| {
+        js_sys::Reflect::get(
+            &js_sys::global(),
+            &wasm_bindgen::JsValue::from_str("window"),
+        )
+        .ok()
+        .filter(wasm_bindgen::JsValue::is_object)
+        .map(<wasm_bindgen::JsValue as wasm_bindgen::JsCast>::unchecked_into::<web_sys::Window>)
+    })
 }

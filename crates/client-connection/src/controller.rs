@@ -11,13 +11,12 @@ use std::{
 
 use futures::{StreamExt, future::BoxFuture, stream::BoxStream};
 use parking_lot::Mutex;
-use seekdeep_llm::AbortSignal;
+use seekdeep_abort::AbortSignal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::mpsc;
-use uuid::Uuid;
 
-use crate::{RpcId, RpcResult};
+use crate::{RpcId, RpcResult, runtime};
 
 /// Successful value returned by the Host handshake.
 pub type HostDescription = Value;
@@ -175,7 +174,7 @@ impl ConnectionController {
             return;
         }
         let controller = self.clone();
-        tokio::spawn(async move { controller.run().await });
+        runtime::spawn(async move { controller.run().await });
     }
 
     /// Stops the loop and aborts the current generation's streams.
@@ -273,7 +272,7 @@ impl ConnectionController {
                 state.attempt
             };
             tracing::warn!(attempt, "[web-runtime] connection lost, retry");
-            tokio::time::sleep(self.backoff_delay(attempt)).await;
+            runtime::sleep(self.backoff_delay(attempt)).await;
         }
     }
 
@@ -289,7 +288,7 @@ impl ConnectionController {
             StreamKind::Mux => self.sinks.on_mux_envelope.clone(),
             StreamKind::Host => self.sinks.on_host_envelope.clone(),
         };
-        tokio::spawn(async move {
+        runtime::spawn(async move {
             loop {
                 let item = tokio::select! {
                     () = signal.cancelled() => break,
@@ -344,9 +343,7 @@ impl ConnectionController {
             .config
             .backoff_max_ms
             .min(self.config.backoff_base_ms * self.config.backoff_factor.powi(exponent));
-        let bytes = *Uuid::new_v4().as_bytes();
-        let random_bits = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        let random = f64::from(random_bits) / f64::from(u32::MAX);
+        let random = runtime::random_unit();
         duration_ms(cap / 2.0 + random * (cap / 2.0))
     }
 }
@@ -369,7 +366,7 @@ async fn wait_for_streams(
 ) -> bool {
     let mut mux = false;
     let mut host = false;
-    let deadline = tokio::time::sleep(timeout);
+    let deadline = runtime::sleep(timeout);
     tokio::pin!(deadline);
     loop {
         if mux && host {

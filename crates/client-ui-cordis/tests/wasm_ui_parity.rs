@@ -45,13 +45,16 @@ fn action_component_executes_in_react_and_preserves_visible_attributes() {
     set(
         &props,
         "block",
-        &serde_wasm_bindgen::to_value(&serde_json::json!({
-            "kind": "tool-result",
-            "seq": 2,
-            "call": {"name": "cordis_stop", "argsRaw": "{\"pluginId\":\"clock-1\"}"},
-            "content": [{"type": "text", "text": "Stopped clock-1."}],
-            "isError": false
-        }))
+        &js_sys::JSON::parse(
+            &serde_json::json!({
+                "kind": "tool-result",
+                "seq": 2,
+                "call": {"name": "cordis_stop", "argsRaw": "{\"pluginId\":\"clock-1\"}"},
+                "content": [{"type": "text", "text": "Stopped clock-1."}],
+                "isError": false
+            })
+            .to_string(),
+        )
         .unwrap(),
     );
     let t = Closure::wrap(
@@ -111,11 +114,14 @@ fn define_run_and_panel_components_execute_against_framework_hook_shapes() {
     set(
         &define_props,
         "block",
-        &serde_wasm_bindgen::to_value(&serde_json::json!({
-            "callId": "call-define",
-            "name": "cordis_define",
-            "argsRaw": "{\"name\":\"Clock\",\"code\":{\"host\":\"HOST\"}}"
-        }))
+        &js_sys::JSON::parse(
+            &serde_json::json!({
+                "callId": "call-define",
+                "name": "cordis_define",
+                "argsRaw": "{\"name\":\"Clock\",\"code\":{\"host\":\"HOST\"}}"
+            })
+            .to_string(),
+        )
         .unwrap(),
     );
     set(
@@ -140,15 +146,14 @@ fn define_run_and_panel_components_execute_against_framework_hook_shapes() {
     set(
         &run_props,
         "block",
-        &serde_wasm_bindgen::to_value(&serde_json::json!({
+        &js_sys::JSON::parse(&serde_json::json!({
             "kind": "tool-result",
             "seq": 9,
             "call": {"name": "cordis_run", "argsRaw": "{\"pluginId\":\"clock-1\",\"packageId\":\"pkg-1\",\"mode\":\"run\"}"},
             "content": [{"type": "text", "text": "running"}],
             "isError": false,
             "meta": {"pluginId": "clock-1", "packageId": "pkg-1", "pluginRunId": "run-1"}
-        }))
-        .unwrap(),
+        }).to_string()).unwrap(),
     );
     set(
         &run_props,

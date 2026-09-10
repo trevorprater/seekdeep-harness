@@ -1,5 +1,7 @@
 //! Carrier body-cap invariants from the Connection plugin load boundary.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use seekdeep_client_connection::{assert_image_body_capacity, required_image_body_bytes};
 
 #[test]

@@ -1,5 +1,7 @@
 //! Pinned-source in-process fixture Host, carrier, stream, and timing parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     sync::{
         Arc,
@@ -739,6 +741,7 @@ async fn goal_lifecycle_uses_one_cas_state_graph_and_durable_event_sequence() {
     }
 }
 
+#[allow(clippy::too_many_lines)] // The source spec drives every timing hook in one scenario.
 #[tokio::test(start_paused = true)]
 async fn timing_hooks_delay_fail_silent_append_break_streams_and_reasoning_storm() {
     let api = fixture();
@@ -782,6 +785,47 @@ async fn timing_hooks_delay_fail_silent_append_break_streams_and_reasoning_storm
     let live = stream.next().await.unwrap().unwrap();
     assert!(live.payload.to_string().contains("正常直播"));
     assert!(!live.payload.to_string().contains("静默丢帧"));
+    // Source: the title revision, a completed retry, and a retry cancelled during backoff
+    // all ride the normal raw-event + control-frame path.
+    api.append_title("fx-alpha", "Fixture 修订标题");
+    api.begin_model_retry("fx-alpha");
+    api.schedule_model_retry("fx-alpha", 1, 450);
+    api.complete_model_retry("fx-alpha");
+    api.begin_model_retry("fx-alpha");
+    api.cancel_model_retry_during_backoff("fx-alpha", 450);
+    let mut seen = Vec::new();
+    while seen.len() < 60 {
+        let Some(frame) = stream.next().await else {
+            break;
+        };
+        seen.push(frame.unwrap().payload);
+        if seen.iter().any(|frame| {
+            frame["type"] == "session/event"
+                && frame["event"]["type"] == "turn/end"
+                && frame["event"]["data"]["reason"]["kind"] == "aborted"
+        }) {
+            break;
+        }
+    }
+    let event_of = |kind: &str| {
+        seen.iter()
+            .position(|frame| frame["type"] == "session/event" && frame["event"]["type"] == kind)
+    };
+    assert!(event_of("llm/retry").is_some());
+    assert!(
+        seen.iter()
+            .any(|frame| frame.to_string().contains("重试后的完整回复"))
+    );
+    let raw_title = event_of("session/title").unwrap();
+    let title_control = seen
+        .iter()
+        .position(|frame| {
+            frame["type"] == "session/projection"
+                && frame["key"] == "title"
+                && frame["value"] == "Fixture 修订标题"
+        })
+        .unwrap();
+    assert_eq!(title_control, raw_title + 1);
     let history = value(
         call(
             &api,
@@ -792,7 +836,11 @@ async fn timing_hooks_delay_fail_silent_append_break_streams_and_reasoning_storm
     );
     assert!(history.to_string().contains("静默丢帧"));
     api.break_streams();
-    assert!(stream.next().await.is_none());
+    // Source: `breakStreams` force-ends the stream; frames already pushed (the
+    // projection frames the user append advanced) drain before the end.
+    while let Some(frame) = stream.next().await {
+        assert!(frame.is_ok());
+    }
     assert!(!signal.is_aborted());
 
     assert!(

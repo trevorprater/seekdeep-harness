@@ -1,30 +1,44 @@
 //! Generic unary RPC contracts and the Host/Client Connection registries.
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Weak};
 use std::{
-    collections::HashMap,
     fmt,
-    future::Future,
-    pin::Pin,
-    sync::{Arc, Weak},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
-use futures::{Stream, future::BoxFuture, stream::BoxStream};
+use futures::future::BoxFuture;
+#[cfg(not(target_arch = "wasm32"))]
+use futures::{Stream, stream::BoxStream};
 use parking_lot::Mutex;
-use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
+use seekdeep_abort::AbortSignal;
+use seekdeep_cordis::ServiceKey;
+#[cfg(not(target_arch = "wasm32"))]
+use seekdeep_cordis::{Context, fiber::EffectHandle};
+#[cfg(not(target_arch = "wasm32"))]
 use seekdeep_host_webserver::{WebHandler, WebHandlerFuture, WebRoute, WebRouteKind, WebServer};
 use seekdeep_identity::RpcId;
-use seekdeep_llm::AbortSignal;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value, json};
+#[cfg(not(target_arch = "wasm32"))]
 use uuid::Uuid;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::{API_PATH, trust::is_trusted_api_request};
 use crate::{
-    API_PATH, ConnectionConfig, ConnectionController, ConnectionSinks, ConnectionState,
-    HostDescription, StreamApi, trust::is_trusted_api_request,
+    ConnectionConfig, ConnectionController, ConnectionSinks, ConnectionState, HostDescription,
+    StreamApi,
 };
+
+/// Monotonic id source for description listeners (never minted from wall-clock time).
+static NEXT_LISTENER_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Typed Cordis slot corresponding to Client `ctx.connection`.
 pub const CLIENT_CONNECTION: ServiceKey<ClientConnectionHandle> = ServiceKey::new("connection");
+#[cfg(not(target_arch = "wasm32"))]
 /// Typed Cordis slot corresponding to Host `ctx.connection`.
 pub const HOST_CONNECTION: ServiceKey<HostConnectionService> = ServiceKey::new("connection");
 
@@ -130,6 +144,7 @@ impl ClientRequest {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn validate(self) -> anyhow::Result<Self> {
         anyhow::ensure!(self.kind == "client-request", "invalid client-request type");
         Ok(self)
@@ -179,6 +194,7 @@ pub fn transport_error<T>(error: &(impl ToString + ?Sized)) -> RpcResult<T> {
 }
 
 impl<T> ServerResponse<T> {
+    #[cfg(not(target_arch = "wasm32"))]
     fn validate(self) -> anyhow::Result<Self> {
         anyhow::ensure!(
             self.kind == "server-response",
@@ -188,6 +204,7 @@ impl<T> ServerResponse<T> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Minimal HTTP method vocabulary used by the transport-independent bridge.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HttpMethod {
@@ -199,6 +216,7 @@ pub enum HttpMethod {
     Other(String),
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Transport-independent request consumed by Connection RPC dispatch.
 #[derive(Clone, Debug)]
 pub struct HttpRequest {
@@ -217,6 +235,7 @@ pub struct HttpRequest {
     pub signal: AbortSignal,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpRequest {
     /// Creates a request with a fresh non-aborted signal.
     #[must_use]
@@ -241,6 +260,7 @@ impl HttpRequest {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Pull-driven transport-independent response body.
 ///
 /// Dropping a body before it completes aborts `consumer_signal`, allowing a
@@ -251,6 +271,7 @@ pub struct HttpResponseStream {
     completed: bool,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl std::fmt::Debug for HttpResponseStream {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -260,6 +281,7 @@ impl std::fmt::Debug for HttpResponseStream {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpResponseStream {
     /// Wraps one byte stream with a consumer-cancellation signal.
     #[must_use]
@@ -286,6 +308,7 @@ impl HttpResponseStream {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Stream for HttpResponseStream {
     type Item = anyhow::Result<Vec<u8>>;
 
@@ -305,6 +328,7 @@ impl Stream for HttpResponseStream {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Drop for HttpResponseStream {
     fn drop(&mut self) {
         if !self.completed && !self.consumer_signal.is_aborted() {
@@ -315,6 +339,7 @@ impl Drop for HttpResponseStream {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Complete transport-independent HTTP response.
 pub struct HttpResponse {
     /// HTTP status.
@@ -327,6 +352,7 @@ pub struct HttpResponse {
     pub body_stream: Option<HttpResponseStream>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl std::fmt::Debug for HttpResponse {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -339,6 +365,7 @@ impl std::fmt::Debug for HttpResponse {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl PartialEq for HttpResponse {
     fn eq(&self, other: &Self) -> bool {
         self.status == other.status
@@ -349,8 +376,10 @@ impl PartialEq for HttpResponse {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Eq for HttpResponse {}
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HttpResponse {
     /// Creates a UTF-8 text response.
     #[must_use]
@@ -376,6 +405,7 @@ impl HttpResponse {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Browser authority accepted by one logical RPC channel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConnectionRpcAuthority {
@@ -385,14 +415,18 @@ pub enum ConnectionRpcAuthority {
     Loopback,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Future returned by one Host RPC handler.
 pub type RpcHandlerFuture = BoxFuture<'static, anyhow::Result<RpcResult<Value>>>;
+#[cfg(not(target_arch = "wasm32"))]
 /// Decoded unary handler after Connection validates the carrier envelope.
 pub type RpcHandler =
     Arc<dyn Fn(String, Value, AbortSignal) -> RpcHandlerFuture + Send + Sync + 'static>;
+#[cfg(not(target_arch = "wasm32"))]
 /// Synchronous ownership test for one endpoint on a shared channel.
 pub type EndpointMatcher = Arc<dyn Fn(&str) -> bool + Send + Sync + 'static>;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone)]
 struct Registration {
     id: Uuid,
@@ -401,12 +435,14 @@ struct Registration {
     matcher: Option<EndpointMatcher>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Default)]
 struct HostState {
     dedicated: HashMap<String, Registration>,
     interceptors: HashMap<String, Registration>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Host registry for dedicated and shared logical RPC channels.
 pub struct HostConnectionService {
     trusted_hosts: Vec<String>,
@@ -415,6 +451,7 @@ pub struct HostConnectionService {
     webserver: Mutex<Option<Arc<WebServer>>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Lifecycle lease for the singleton shared-channel interceptor.
 ///
 /// Withdrawal is synchronous so dependency reconciliation can make the old
@@ -428,6 +465,7 @@ pub struct SharedRpcRegistration {
     id: Uuid,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl fmt::Debug for SharedRpcRegistration {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -438,6 +476,7 @@ impl fmt::Debug for SharedRpcRegistration {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl SharedRpcRegistration {
     /// Immediately withdraws this exact claim without touching a replacement.
     pub fn withdraw(&self) {
@@ -462,6 +501,7 @@ impl SharedRpcRegistration {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl fmt::Debug for HostConnectionService {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let state = self.state.lock();
@@ -477,6 +517,7 @@ impl fmt::Debug for HostConnectionService {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl HostConnectionService {
     /// Creates a Host registry after validating every configured authority.
     ///
@@ -726,6 +767,7 @@ impl HostConnectionService {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn rpc_fetch(channel: &str, handler: RpcHandler, request: HttpRequest) -> HttpResponse {
     let Some(endpoint) = endpoint_from_path(channel, &request.path) else {
         return HttpResponse::text(404, "not found");
@@ -783,6 +825,7 @@ async fn rpc_fetch(channel: &str, handler: RpcHandler, request: HttpRequest) -> 
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn error_response(rpc_id: RpcId, error: RpcError) -> HttpResponse {
     HttpResponse::json(
         200,
@@ -818,6 +861,7 @@ fn valid_channel(channel: &str) -> bool {
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn assert_channel(channel: &str) -> anyhow::Result<()> {
     anyhow::ensure!(
         valid_channel(channel) && channel != API_PATH,
@@ -861,7 +905,7 @@ struct HostDescriptionSnapshot {
 }
 
 struct DescriptionListener {
-    id: Uuid,
+    id: u64,
     callback: Arc<dyn Fn() + Send + Sync>,
 }
 
@@ -977,7 +1021,7 @@ impl ClientConnectionHandle {
         &self,
         callback: Arc<dyn Fn() + Send + Sync>,
     ) -> HostDescriptionSubscription {
-        let id = Uuid::now_v7();
+        let id = NEXT_LISTENER_ID.fetch_add(1, Ordering::AcqRel);
         self.description
             .listeners
             .lock()
@@ -1080,7 +1124,7 @@ impl ConnectionStopHandle {
 /// Idempotent Host-description subscription disposer.
 pub struct HostDescriptionSubscription {
     state: std::sync::Weak<HostDescriptionState>,
-    id: Uuid,
+    id: u64,
 }
 
 impl fmt::Debug for HostDescriptionSubscription {
@@ -1105,20 +1149,24 @@ impl HostDescriptionSubscription {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Future returned by an HTTP transport implementation.
 pub type HttpTransportFuture = Pin<Box<dyn Future<Output = anyhow::Result<HttpResponse>> + Send>>;
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Physical HTTP carrier used by the generic web-style RPC caller.
 pub trait HttpTransport: Send + Sync + 'static {
     /// Sends one complete request.
     fn fetch(&self, request: HttpRequest) -> HttpTransportFuture;
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Correlating Client caller over an injected physical HTTP carrier.
 pub struct WebConnectionRpc {
     transport: Arc<dyn HttpTransport>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl WebConnectionRpc {
     /// Creates a web-style caller.
     #[must_use]
@@ -1127,6 +1175,7 @@ impl WebConnectionRpc {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl ClientConnection for WebConnectionRpc {
     fn call(
         &self,

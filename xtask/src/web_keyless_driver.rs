@@ -55,10 +55,12 @@ function adaptSelectors(code) {
     .replaceAll('DSH file sandbox', 'SeekDeep file sandbox')
     .replaceAll("'@deepseek-ai/dsh-system-prompt'", "'@seekdeep-ai/seekdeep-system-prompt'")
     .replaceAll('"$DSH_WEB_URL"', '"$SEEKDEEP_WEB_URL"')
-    .replaceAll('--dsh-composer-dock-inset', '--seekdeep-composer-dock-inset');
+    .replaceAll('--dsh-composer-dock-inset', '--seekdeep-composer-dock-inset')
+    // The client's persisted selection key carries the product prefix.
+    .replaceAll("'dsh.sessions.current'", "'seekdeep.sessions.current'");
 }
 async function sourceFile(file) {
-  const body = await readFile(join(TESTS, file), 'utf8');
+  const body = await readFile(file.startsWith('apps/') ? join(source, file) : join(TESTS, file), 'utf8');
   return ts.createSourceFile(file, body, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 }
 function declarations(ast, names) {
@@ -576,6 +578,13 @@ function scaffoldShims(name, options = {}) {
     hosts += 1;
     // Source `agentPresets: { roots, default }` becomes the overlay row the Host composes from.
     let overlay = options.overlay;
+    // Source composes `extraOverlayPath` rows after the base and surface patches; the
+    // scenario overlay is that same YAML row list, so the extra rows append to it.
+    if (scaffoldOptions.extraOverlayPath !== undefined) {
+      const extra = (await readFile(scaffoldOptions.extraOverlayPath, 'utf8')).replace(/^(#.*\n)+/, '');
+      assert(overlay === undefined || !overlay.trimStart().startsWith('['), 'extraOverlayPath needs a YAML scenario overlay');
+      overlay = (overlay ?? '') + '\n' + extra + '\n';
+    }
     if (scaffoldOptions.agentPresets !== undefined) {
       assert(overlay === undefined || !overlay.trimStart().startsWith('['), 'agentPresets needs a YAML scenario overlay');
       overlay = (overlay ?? '') + '\n- id: agent-presets\n  config: ' + JSON.stringify({ ...scaffoldOptions.agentPresets, includeUserRoot: false }) + '\n';
@@ -598,7 +607,7 @@ function scaffoldShims(name, options = {}) {
   return { hosts: openHosts, launchWebScaffold, chromium, newEnglishPage, closeAll };
 }
 async function perCaseScenario(name, options) {
-  const ast = await sourceFile(name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, options.cases, 'source case inventory');
+  const ast = await sourceFile(options.file ?? name + '.e2e.ts'), cases = sourceCases(ast); assert.equal(cases.length, options.cases, 'source case inventory');
   const constants = declarations(ast, options.constants), nested = options.nested ? nestedDeclarations(ast, options.nested) : '', support = declarations(supportAst, ['connectFreshWorkspace']);
   const dir = join(TESTS, 'snapshots', name), FIXTURE = options.fixture ? join(TESTS, 'snapshots', options.fixture, 'session.jsonl') : join(dir, 'session.jsonl');
   const goldens = Object.fromEntries((options.goldens ?? []).map(golden => Array.isArray(golden) ? [golden[0], join(dir, golden[1] + '.expected.md')] : [golden.toUpperCase().replaceAll('-', '_') + '_EXPECTED', join(dir, golden + '.expected.md')]));
@@ -978,10 +987,11 @@ const SCENARIOS = {
   async 'schedule-after'() {
     // The source registers three in-process test adapters on the scaffold context; each lives in
     // the driver behind the Host's driver-adapter fixture route. The Schedule overlay is the port's
-    // own example composition, the source's `examples/web-schedule/cordis.yml`.
+    // own example composition, the source's `examples/web-schedule/cordis.yml`; the suite itself
+    // mounts it through `extraOverlayPath`, so the scenario passes only its path.
     const overlayPath = join(process.cwd(), 'examples/web-schedule/cordis.yml');
     const scheduleDomain = await compiledSourceModule('packages/schedule/schedule/src/domain.ts', {}, ['createEveryScheduleRecord', 'foldScheduleEvents', 'resolveEveryOccurrence']);
-    await describeScenario('schedule-after', { describes: 1, cases: 4, overlay: await readFile(overlayPath, 'utf8'), goldens: [['AFTER_EXPECTED', 'conversation'], ['AT_EXPECTED', 'at-conversation'], ['EVERY_EXPECTED', 'every-conversation']],
+    await describeScenario('schedule-after', { describes: 1, cases: 4, goldens: [['AFTER_EXPECTED', 'conversation'], ['AT_EXPECTED', 'at-conversation'], ['EVERY_EXPECTED', 'every-conversation']],
       constants: ['AFTER_PROVIDER', 'AT_PROVIDER', 'EVERY_PROVIDER', 'MODEL', 'AFTER_PROMPT', 'AFTER_REPLY', 'AT_BROWSER_ZONE', 'AT_USER_PROMPT', 'AT_PROMPT', 'AT_READY', 'AT_ACK', 'AT_REPLY', 'EVERY_PROMPTS', 'EVERY_REPLY', 'EVERY_INTERVAL_SECONDS', 'EVERY_FIXTURE_AGE_MS', 'textResponse', 'ReminderAdapter', 'EveryReminderAdapter', 'localAt', 'BrowserZoneAtAdapter', 'assistantText', 'requestText', 'expectReminderFraming', 'waitForReply', 'assistantKey'],
       values: { OVERLAY: overlayPath, LlmAdapter: llmModule.LlmAdapter, CallId: llmModule.CallId, createUserMessage: llmModule.createUserMessage, SessionId: id => id, ScheduleId: id => id, ...scheduleDomain, conversationContextKey: compile(declarations(supportAst, ['conversationContextKey']) + '\nreturn conversationContextKey;', {}) } });
   },
@@ -1011,11 +1021,65 @@ const SCENARIOS = {
       constants: ['LABEL', 'ONE_SHOT_LABEL', 'NESTED_LABEL', 'PARENT_PROMPT', 'INITIAL_PROMPT', 'NESTED_PROMPT', 'FOLLOWUP', 'POST_FORK_FOLLOWUP', 'childFixture', 'waitForAgentToSettle'],
       values: { BASE_FIXTURE: join(TESTS, 'snapshots/live-interactions/session.jsonl'), SNAPSHOT_DIR: dir, SESSION_FORMAT_VERSION: sessionModule.SESSION_FORMAT_VERSION, sessionId: id => id, SessionId: id => id, snapshotSubagentDescriptor: subagentDescriptorModule.snapshotSubagentDescriptor } });
   },
+  async 'reasoning-chunks-stress'() {
+    // Source: the opt-in browser stress lane (no default vitest config includes it). The page
+    // boots on `?fixture`; the storm rides the Rust fixture's timing hooks on `window.__fxTiming`.
+    await perCaseScenario('reasoning-chunks-stress', { file: 'apps/web/stress-tests/reasoning-chunks.stress.ts', cases: 1,
+      constants: ['CHUNK_COUNT', 'CHUNKS_PER_INTERVAL', 'CHUNK_INTERVAL_MS', 'MAIN_THREAD_DELAY_BUDGET_MS'] });
+  },
+  async 'complex-history-perf'() {
+    // Source: the manual performance lane; measurements are reported, cardinality is asserted.
+    await describeScenario('complex-history-perf', { file: 'complex-history.perf.ts', describes: 1, cases: 4,
+      constants: ['SIDEBAR_SESSION_COUNT', 'LONG_SESSION_ID', 'LONG_SESSION_TITLE', 'LONG_HISTORY_TURNS', 'TOOL_TURN_INTERVAL', 'TOOLS_PER_TOOL_TURN', 'EXPECTED_TOOL_CALLS', 'EXPECTED_TRAJECTORY_ROWS', 'DEFAULT_HISTORY_TURNS', 'PERF_REPLAY_CONTEXT_WINDOW', 'STREAM_PACE_MS', 'STREAM_DELTA_COUNT', 'COMPARISON_TURNS', 'COMPARISON_DELTA_COUNT', 'COMPARISON_TOOL_INTERVAL', 'SOAK_TURNS', 'POST_SOAK_RENDER_TURN', 'SOAK_DELTA_COUNT', 'SOAK_TOOL_INTERVAL', 'SOAK_CHECKPOINT_INTERVAL', 'LONG_CONTINUATION_USER_PREFIX', 'LONG_CONTINUATION_FIRST_PREFIX', 'LONG_CONTINUATION_DONE_PREFIX', 'SOAK_USER_PREFIX', 'SOAK_FIRST_PREFIX', 'SOAK_DONE_PREFIX', 'LIVE_PROMPT_MARKER', 'STREAM_FIRST_MARKER', 'STREAM_DONE_MARKER', 'LIVE_PROMPT', 'STREAM_DELTAS', 'text', 'appendTitle', 'appendRequestHeader', 'appendAssistant', 'appendToolStep', 'fencedCode', 'fixtureLog', 'smallSidebarFixture', 'longHistoryFixture', 'textStream', 'comparisonPrompt', 'comparisonDeltas', 'comparisonTurn', 'soakTurn', 'toolStream', 'performanceReplayOverride', 'rounded', 'chromiumMetrics', 'retainedBrowserState', 'requiredMetric', 'metricDelta', 'measure', 'startMutationProbe', 'stopMutationProbe', 'startUserRenderProbe', 'triggerUserRenderProbe', 'stopUserRenderProbe', 'stableCount', 'conversationTurns', 'retainedDelta', 'launchPerformanceWorld', 'closePerformanceWorld', 'openPerformancePage', 'openLongHistory', 'continueConversation', 'measurePostSoakUserRender', 'average', 'p95', 'summarizeTurnWindows'],
+      values: { ...seedModule(), seedSession: seedSessionShim, performance: globalThis.performance, webSnapshotMode: () => MODE } });
+  },
+  async 'reasoning-storm-profile'() {
+    // Port diagnostic (opt-in): CPU-profile a short reasoning storm through the fixture transport
+    // and write the profile plus the emission rate beside the lane outputs.
+    const { launchWebScaffold, chromium, newEnglishPage, closeAll } = scaffoldShims('reasoning-storm-profile', {});
+    try {
+      const scaffold = await launchWebScaffold();
+      const browser = await chromium.launch();
+      const page = await newEnglishPage(browser);
+      await page.addInitScript(() => { localStorage.setItem('seekdeep.sessions.current', JSON.stringify({ sessionId: 'fx-alpha' })); });
+      await page.goto(scaffold.baseUrl + '?fixture', { waitUntil: 'load' });
+      await page.waitForSelector('[class*="frame"]', { timeout: 30000 });
+      await page.addStyleTag({ content: '[class*="onboardingOverlay"] { display: none !important; }' });
+      await page.locator('[data-sample="bash"]').first().waitFor({ timeout: 30000 });
+      const consoleLog = [];
+      page.on('console', message => { if (message.type() === 'error' || message.type() === 'warning') consoleLog.push([Date.now() - started, message.type(), message.text().slice(0, 300)]); });
+      page.on('pageerror', error => consoleLog.push([Date.now() - started, 'pageerror', String(error.stack ?? error).slice(0, 1200)]));
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 500 }); await cdp.send('Profiler.start');
+      const started = Date.now();
+      const chunkCount = Number(process.env.SEEKDEEP_STORM_CHUNKS ?? '3000');
+      await page.evaluate(count => window.__fxTiming.startReasoningChunkStorm('fx-alpha', count, 128, 16), chunkCount);
+      const samples = [];
+      for (let i = 0; i < 2400; i++) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const [emitted, thinkRows] = await page.evaluate(() => [window.__fxTiming.reasoningChunkStormState()?.emitted ?? 0, [...document.querySelectorAll('[data-variant="think"]')].map(row => row.getAttribute('data-state')).join('/')]);
+        samples.push([Date.now() - started, emitted, thinkRows]);
+        if (emitted >= chunkCount) break;
+      }
+      const { profile } = await cdp.send('Profiler.stop');
+      const settleStarted = Date.now();
+      const inspection = await page.evaluate(() => ({ think: [...document.querySelectorAll('[data-variant="think"]')].map(row => [row.getAttribute('data-state'), (row.textContent ?? '').length, (row.textContent ?? '').slice(-70)]), marker: window.__fxTiming.reasoningChunkStormState()?.marker }));
+      inspection.evaluateMs = Date.now() - settleStarted;
+      inspection.console = consoleLog.slice(0, 20);
+      await writeFile(join(output, 'reasoning-storm-inspection.json'), JSON.stringify(inspection));
+      console.log('keyless: reasoning-storm-profile: inspection ' + JSON.stringify(inspection).slice(0, 600));
+      await writeFile(join(output, 'reasoning-storm.cpuprofile'), JSON.stringify(profile));
+      await writeFile(join(output, 'reasoning-storm-rate.json'), JSON.stringify(samples));
+      console.log('keyless: reasoning-storm-profile: emitted ' + samples[samples.length - 1] + ' (ms, chunks)');
+    } finally {
+      await closeAll();
+    }
+  },
   async 'goal-bar'() {
-    // The overlay is the port's copy of the source test overlay; the page connects through the
-    // client's fixture transport (`?fixture`).
-    await describeScenario('goal-bar', { describes: 1, cases: 2, overlay: await readFile(join(process.cwd(), 'apps/web/tests/goal-bar.overlay.yml'), 'utf8'), goldens: [['ACTIVE_EXPECTED', 'active']],
-      constants: [], values: { OVERLAY: join(process.cwd(), 'apps/web/tests/goal-bar.overlay.yml') } });
+    // The page boots on `?fixture`: the Rust fixture client inside the connection bundle is
+    // the fake server, so the goal command and its clear both settle in-page.
+    await describeScenario('goal-bar', { describes: 1, cases: 2, constants: [], goldens: [['ACTIVE_EXPECTED', 'active']],
+      values: { OVERLAY: join(TESTS, 'goal-bar.overlay.yml') } });
   },
   async 'message-feedback-protocol'() {
     // Host-only: the source drives the Web Host's real HTTP carrier; no browser opens.
@@ -1112,7 +1176,8 @@ const SCENARIOS = {
 // complete picture; the run still fails on any failure.
 const scenarioFailures = [];
 // Scenarios whose Host or client surface is still pending run only when named explicitly.
-const DEFERRED = new Set(['goal-bar']);
+// Opt-in lanes in the source (no default vitest config includes them): run only when named.
+const DEFERRED = new Set(['reasoning-chunks-stress', 'complex-history-perf', 'reasoning-storm-profile']);
 for (const [name, run] of Object.entries(SCENARIOS)) {
   if (!selected(name) || (DEFERRED.has(name) && !filter)) continue;
   allConsoles.clear();

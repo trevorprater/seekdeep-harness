@@ -2,11 +2,16 @@
 
 mod controller;
 mod fixture;
+#[cfg(not(target_arch = "wasm32"))]
 mod host;
+#[cfg(not(target_arch = "wasm32"))]
 mod invariant;
 mod rpc;
+mod runtime;
 mod trust;
+#[cfg(not(target_arch = "wasm32"))]
 mod web_api_client;
+#[cfg(not(target_arch = "wasm32"))]
 mod websocket_downlink;
 
 pub use controller::{
@@ -17,25 +22,32 @@ pub use fixture::{
     FixtureApi, FixtureCreateFrameOrder, FixtureEnvelopeSubscription, FixtureOptions,
     FixtureTimingState, fixture_connection, install_fixture_client,
 };
+#[cfg(not(target_arch = "wasm32"))]
 pub use host::{
     ConnectionApiProxy, ConnectionFallback, ConnectionFallbackFuture, ConnectionHostConfig,
     HOST_API_PROXY, install_host,
 };
+#[cfg(not(target_arch = "wasm32"))]
 pub use invariant::{INVARIANT_NAME, install_invariant};
 pub use rpc::{
     CLIENT_CONNECTION, ClientConnection, ClientConnectionFuture, ClientConnectionHandle,
-    ClientRequest, ConnectionRpcAuthority, ConnectionStopHandle, EndpointMatcher, HOST_CONNECTION,
-    HostConnectionService, HostDescriptionSubscription, HttpMethod, HttpRequest, HttpResponse,
-    HttpResponseStream, HttpTransport, HttpTransportFuture, RpcError, RpcHandler, RpcHandlerFuture,
-    RpcResult, ServerResponse, SharedRpcRegistration, WebConnectionRpc, endpoint_from_path,
-    result_of, transport_error, validate_rpc_target,
+    ClientRequest, ConnectionStopHandle, HostDescriptionSubscription, RpcError, RpcResult,
+    ServerResponse, endpoint_from_path, result_of, transport_error, validate_rpc_target,
+};
+#[cfg(not(target_arch = "wasm32"))]
+pub use rpc::{
+    ConnectionRpcAuthority, EndpointMatcher, HOST_CONNECTION, HostConnectionService, HttpMethod,
+    HttpRequest, HttpResponse, HttpResponseStream, HttpTransport, HttpTransportFuture, RpcHandler,
+    RpcHandlerFuture, SharedRpcRegistration, WebConnectionRpc,
 };
 pub use seekdeep_identity::RpcId;
 pub use trust::{assert_trusted_authority, is_loopback_hostname, is_trusted_api_request};
+#[cfg(not(target_arch = "wasm32"))]
 pub use web_api_client::{
     EnvelopeSubscription, UnaryTimeoutPolicy, WebApiClient, WebApiContract, WebApiDownlink,
     default_connection_config, install_client,
 };
+#[cfg(not(target_arch = "wasm32"))]
 pub use websocket_downlink::{
     DownlinkApi, DownlinkClose, DownlinkKind, DownlinkStream, WebSocketDownlinks,
 };
@@ -55,6 +67,7 @@ pub const DEFAULT_MAX_REQUEST_BODY_BYTES: usize = 160 * 1024 * 1024;
 pub const REQUEST_ENVELOPE_HEADROOM_BYTES: usize = 1024 * 1024;
 
 /// Builds the Loader-compatible Host Connection plugin.
+#[cfg(not(target_arch = "wasm32"))]
 #[must_use]
 pub fn host_plugin() -> seekdeep_cordis::Plugin {
     seekdeep_cordis::Plugin::new(NAME, ["webServer"], |context, config| {

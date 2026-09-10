@@ -19,7 +19,11 @@ use crate::{
     ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
     ConversationNodeDefinition, ConversationPreviousContext, ConversationPublication,
     ConversationTimelineSnapshot, ConversationViewNode, ConversationViewRegistry, StepLocation,
-    TurnLocation, wasm_session::js_to_json, wasm_session::json_to_js, wasm_session::render_js,
+    TurnLocation,
+    wasm_session::js_to_json,
+    wasm_session::json_to_js,
+    wasm_session::render_js,
+    wasm_value_bridge::{js_to_value, js_to_value_reusing, value_to_js, value_to_js_reusing},
 };
 
 type BrowserNode = ConversationNodeDefinition<JsValue>;
@@ -37,6 +41,9 @@ struct FaceCache<T> {
     /// Face object back to its entry key, so a native Definition recovers the engine value
     /// instead of re-parsing the face it was handed.
     faces: js_sys::WeakMap,
+    /// Entry count at which the next liveness prune runs; doubles after a prune that kept
+    /// most entries alive, so a long-lived list is not rescanned on every insert.
+    prune_at: usize,
 }
 
 impl<T> FaceCache<T> {
@@ -46,6 +53,7 @@ impl<T> FaceCache<T> {
         Self {
             entries: HashMap::new(),
             faces: js_sys::WeakMap::new(),
+            prune_at: Self::PRUNE_ABOVE,
         }
     }
 
@@ -61,8 +69,9 @@ impl<T> FaceCache<T> {
             return Ok(face.clone());
         }
         let face = build()?;
-        if self.entries.len() >= Self::PRUNE_ABOVE {
+        if self.entries.len() >= self.prune_at {
             self.entries.retain(|_, (weak, _)| weak.strong_count() > 0);
+            self.prune_at = (self.entries.len() * 2).max(Self::PRUNE_ABOVE);
         }
         self.entries
             .insert(key, (Rc::downgrade(value), face.clone()));
@@ -143,6 +152,7 @@ thread_local! {
     static NODE_FACES: RefCell<FaceCache<ConversationViewNode>> = RefCell::new(FaceCache::new());
     static VALUE_FACES: RefCell<FaceCache<serde_json::Value>> = RefCell::new(FaceCache::new());
     static MATCH_LISTS: RefCell<HashMap<usize, MatchListEntry>> = RefCell::new(HashMap::new());
+    static NODE_DATA_FACES: RefCell<RetainedFaces> = RefCell::new(RetainedFaces::new());
 }
 
 /// One shared Match list pinned by `Weak` beside its append-only JavaScript Array face.
@@ -165,7 +175,66 @@ fn match_face(accepted: &Rc<ConversationMatch>) -> Result<JsValue, JsValue> {
 }
 
 fn value_face(value: &Rc<serde_json::Value>) -> Result<JsValue, JsValue> {
-    VALUE_FACES.with(|cache| cache.borrow_mut().get_or_build(value, || json_to_js(value)))
+    VALUE_FACES.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_build(value, || value_to_js(value))
+    })
+}
+
+/// Faces retained by Node key, so the next data of a streaming Node reuses the previous face's
+/// unchanged subtrees and grows its text by the appended suffix instead of re-marshalling.
+struct RetainedFaces {
+    entries: HashMap<String, (Rc<serde_json::Value>, JsValue)>,
+    prune_at: usize,
+}
+
+impl RetainedFaces {
+    fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+            prune_at: FaceCache::<()>::PRUNE_ABOVE,
+        }
+    }
+
+    fn reuse(
+        &mut self,
+        key: &str,
+        value: &Rc<serde_json::Value>,
+        build: impl FnOnce(Option<(&serde_json::Value, &JsValue)>) -> Result<JsValue, JsValue>,
+    ) -> Result<JsValue, JsValue> {
+        let face = build(
+            self.entries
+                .get(key)
+                .map(|(previous, face)| (previous.as_ref(), face)),
+        )?;
+        if self.entries.len() >= self.prune_at {
+            // An entry whose value only this map still holds belongs to a replaced Node.
+            self.entries
+                .retain(|_, (value, _)| Rc::strong_count(value) > 1);
+            self.prune_at = (self.entries.len() * 2).max(FaceCache::<()>::PRUNE_ABOVE);
+        }
+        self.entries
+            .insert(key.to_owned(), (value.clone(), face.clone()));
+        Ok(face)
+    }
+}
+
+fn node_data_face(node: &ConversationViewNode) -> Result<JsValue, JsValue> {
+    VALUE_FACES.with(|cache| {
+        cache.borrow_mut().get_or_build(&node.data, || {
+            NODE_DATA_FACES.with(|faces| {
+                faces
+                    .borrow_mut()
+                    .reuse(&node.key, &node.data, |previous| match previous {
+                        Some((previous, previous_js)) => {
+                            value_to_js_reusing(previous, previous_js, &node.data)
+                        }
+                        None => value_to_js(&node.data),
+                    })
+            })
+        })
+    })
 }
 
 /// The append-only Match list of one Context as one live JavaScript array, extended in place.
@@ -181,6 +250,17 @@ fn match_list_face(matches: &Rc<RefCell<Vec<Rc<ConversationMatch>>>>) -> Result<
                 && array.length() as usize <= list.len())
             .then(|| array.clone())
         });
+        // A merge that inserted an earlier Match (an older history page) breaks the
+        // append-only prefix: the face keeps its identity but is rebuilt from the start.
+        if let Some(array) = &existing {
+            let rendered = array.length() as usize;
+            if rendered > 0
+                && !recover_match(&array.get(u32::try_from(rendered - 1).unwrap_or(u32::MAX)))
+                    .is_some_and(|last| Rc::ptr_eq(&last, &list[rendered - 1]))
+            {
+                array.set_length(0);
+            }
+        }
         existing.unwrap_or_else(|| {
             if lists.len() >= FaceCache::<()>::PRUNE_ABOVE {
                 lists.retain(|_, (weak, _)| weak.strong_count() > 0);
@@ -451,8 +531,13 @@ fn adapt_view_definition(definition: &BrowserView) -> Rc<AssemblerViewDefinition
                 .unwrap_or_else(|error| wasm_bindgen::throw_val(error));
             let empty = required(&builder, "empty", "Conversation view builder")
                 .and_then(|value| native_view_snapshot(&builder, &value))
+                .and_then(|encoded| js_to_value(&encoded))
                 .map_or_else(|error| wasm_bindgen::throw_val(error), Rc::new);
-            Box::new(BrowserViewBuilder { builder, empty })
+            Box::new(BrowserViewBuilder {
+                builder,
+                empty,
+                previous: RefCell::new(None),
+            })
         }),
     })
 }
@@ -460,11 +545,17 @@ fn adapt_view_definition(definition: &BrowserView) -> Rc<AssemblerViewDefinition
 struct BrowserViewBuilder {
     builder: JsValue,
     empty: Rc<serde_json::Value>,
+    /// The last snapshot and its encoded face, so the next crossing in either direction reuses
+    /// unchanged subtrees and grows streamed text by its suffix.
+    previous: RefCell<Option<(Rc<serde_json::Value>, JsValue)>>,
 }
 
 impl AssemblerViewBuilder for BrowserViewBuilder {
     fn snapshot_to_browser(&self, snapshot: &serde_json::Value) -> Result<JsValue, JsValue> {
-        let encoded = json_to_js(snapshot)?;
+        let encoded = match &*self.previous.borrow() {
+            Some((previous, previous_js)) => value_to_js_reusing(previous, previous_js, snapshot)?,
+            None => value_to_js(snapshot)?,
+        };
         let projection = snapshot_codec_method(&self.builder, "toBrowserSnapshot")?;
         if projection.is_undefined() {
             Ok(encoded)
@@ -525,23 +616,28 @@ impl BrowserViewBuilder {
         )
         .map_err(adapter_error)?;
         let result = call_method(&self.builder, method, &[input.into()]).map_err(adapter_error)?;
-        native_view_snapshot(&self.builder, &result)
-            .map(Rc::new)
-            .map_err(adapter_error)
+        self.decode(&result).map_err(adapter_error)
+    }
+
+    fn decode(&self, snapshot: &JsValue) -> Result<Rc<serde_json::Value>, JsValue> {
+        let encoded = native_view_snapshot(&self.builder, snapshot)?;
+        let value = match &*self.previous.borrow() {
+            Some((previous, previous_js)) => js_to_value_reusing(previous, previous_js, &encoded)?,
+            None => js_to_value(&encoded)?,
+        };
+        let value = Rc::new(value);
+        *self.previous.borrow_mut() = Some((value.clone(), encoded));
+        Ok(value)
     }
 }
 
-fn native_view_snapshot(
-    builder: &JsValue,
-    snapshot: &JsValue,
-) -> Result<serde_json::Value, JsValue> {
+fn native_view_snapshot(builder: &JsValue, snapshot: &JsValue) -> Result<JsValue, JsValue> {
     let codec = snapshot_codec_method(builder, "toNativeSnapshot")?;
-    let encoded = if codec.is_undefined() {
-        snapshot.clone()
+    if codec.is_undefined() {
+        Ok(snapshot.clone())
     } else {
-        codec.dyn_into::<Function>()?.call1(builder, snapshot)?
-    };
-    js_to_json(&encoded)
+        codec.dyn_into::<Function>()?.call1(builder, snapshot)
+    }
 }
 
 fn snapshot_codec_method(builder: &JsValue, name: &str) -> Result<JsValue, JsValue> {
@@ -779,7 +875,7 @@ fn view_node_value_to_js(node: &ConversationViewNode) -> Result<JsValue, JsValue
             }),
         )?;
     }
-    set(&value, "data", &value_face(&node.data)?)?;
+    set(&value, "data", &node_data_face(node)?)?;
     Ok(value.into())
 }
 

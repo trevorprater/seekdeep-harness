@@ -5059,6 +5059,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "seekdeep-abort"
+version = "0.1.0-rc.5"
+dependencies = [
+ "futures",
+ "parking_lot",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "seekdeep-acp"
 version = "0.1.0-rc.5"
 dependencies = [
@@ -5648,10 +5658,12 @@ dependencies = [
  "http-body-util",
  "hyper 1.11.0",
  "hyper-util",
+ "js-sys",
  "parking_lot",
  "proptest",
  "regex",
  "reqwest 0.12.28",
+ "seekdeep-abort",
  "seekdeep-cordis",
  "seekdeep-host-webserver",
  "seekdeep-identity",
@@ -5664,6 +5676,8 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]
@@ -5672,7 +5686,10 @@ version = "0.1.0-rc.5"
 dependencies = [
  "js-sys",
  "parking_lot",
+ "seekdeep-abort",
+ "seekdeep-client-connection",
  "seekdeep-cordis",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -10168,6 +10185,7 @@ dependencies = [
  "futures",
  "parking_lot",
  "path-clean",
+ "seekdeep-abort",
  "seekdeep-cordis",
  "seekdeep-invariants",
  "serde",

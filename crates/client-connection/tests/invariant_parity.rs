@@ -1,5 +1,7 @@
 //! Behavioral mirror of the Connection explained-empty invariant companion.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use seekdeep_client_connection::install_invariant;
 use seekdeep_cordis::Context;
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};

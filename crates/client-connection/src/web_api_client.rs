@@ -8,8 +8,8 @@ use std::{
 
 use futures::{SinkExt as _, StreamExt as _, future::BoxFuture, stream::BoxStream};
 use parking_lot::Mutex;
+use seekdeep_abort::AbortSignal;
 use seekdeep_cordis::{Context, fiber::EffectHandle};
-use seekdeep_llm::AbortSignal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio_tungstenite::{connect_async, tungstenite::Message};

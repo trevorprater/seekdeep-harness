@@ -21,6 +21,7 @@ use crate::{
     SessionPromptError, SessionSnapshot, SessionTaskSpawner, SessionTransport,
     SessionTransportRequest, SubagentAddress, SubagentMode, resolved_client_time_zone_js,
     wasm_notifier::browser_notifier_scheduler,
+    wasm_value_bridge::{value_to_js, value_to_js_reusing},
 };
 
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
@@ -830,19 +831,15 @@ pub(crate) fn chat_snapshot_to_js_reusing(
             .get(key)
             .is_some_and(|previous| *previous == encoded)
         {
-            previous_node.clone().unwrap_or(json_to_js(encoded)?)
+            previous_node.clone().unwrap_or(value_to_js(encoded)?)
         } else {
-            let node = json_to_js(encoded)?;
-            if let (Some(previous), Some(previous_node), Some(next_data)) = (
-                previous_encoded.get(key),
-                previous_node.as_ref(),
-                encoded.get("data"),
-            ) && let Some(previous_data) = previous.get("data")
-            {
-                let previous_js = Reflect::get(previous_node, &JsValue::from_str("data"))?;
-                let data = json_to_js_reusing(previous_data, &previous_js, next_data)?;
-                set(node.unchecked_ref::<Object>(), "data", &data)?;
-            }
+            let node = chat_node_to_js_reusing(
+                encoded,
+                previous_encoded
+                    .get(key)
+                    .copied()
+                    .zip(previous_node.as_ref()),
+            )?;
             let location = normalized_chat_location(encoded.get("location"), &turns, &steps)?;
             set(node.unchecked_ref::<Object>(), "location", &location)?;
             node
@@ -915,49 +912,33 @@ pub(crate) fn chat_snapshot_to_js_reusing(
     Ok(value.into())
 }
 
-fn json_to_js_reusing(
-    previous: &Value,
-    previous_js: &JsValue,
-    next: &Value,
+/// One changed Chat node face: every field converts structurally, and `data` reuses the
+/// previous face's unchanged subtrees so a streaming block grows by its appended text.
+fn chat_node_to_js_reusing(
+    encoded: &Value,
+    previous: Option<(&Value, &JsValue)>,
 ) -> Result<JsValue, JsValue> {
-    if previous == next {
-        return Ok(previous_js.clone());
-    }
-    match (previous, next) {
-        (Value::Array(previous), Value::Array(next)) => {
-            let value = Array::new();
-            for (index, entry) in next.iter().enumerate() {
-                let entry = if let Some(previous) = previous.get(index) {
-                    json_to_js_reusing(
-                        previous,
-                        &Array::from(previous_js).get(u32::try_from(index).unwrap_or(u32::MAX)),
+    let Some(fields) = encoded.as_object() else {
+        return value_to_js(encoded);
+    };
+    let node = Object::new();
+    for (field, entry) in fields {
+        let converted = match previous {
+            Some((previous_encoded, previous_node)) if field == "data" => {
+                match previous_encoded.get("data") {
+                    Some(previous_data) => value_to_js_reusing(
+                        previous_data,
+                        &Reflect::get(previous_node, &JsValue::from_str("data"))?,
                         entry,
-                    )?
-                } else {
-                    json_to_js(entry)?
-                };
-                value.push(&entry);
+                    )?,
+                    None => value_to_js(entry)?,
+                }
             }
-            Ok(value.into())
-        }
-        (Value::Object(previous), Value::Object(next)) => {
-            let value = Object::new();
-            for (key, entry) in next {
-                let entry = if let Some(previous) = previous.get(key) {
-                    json_to_js_reusing(
-                        previous,
-                        &Reflect::get(previous_js, &JsValue::from_str(key))?,
-                        entry,
-                    )?
-                } else {
-                    json_to_js(entry)?
-                };
-                set(&value, key, &entry)?;
-            }
-            Ok(value.into())
-        }
-        _ => json_to_js(next),
+            _ => value_to_js(entry)?,
+        };
+        set(&node, field, &converted)?;
     }
+    Ok(node.into())
 }
 
 fn same_chat_node_structure(previous: &Value, next: &Value) -> bool {
@@ -1360,7 +1341,7 @@ fn reused_legacy_member(
     if let Some((previous, rendered)) = previous
         && let Some(previous) = previous.get(key)
     {
-        return json_to_js_reusing(
+        return value_to_js_reusing(
             previous,
             &Reflect::get(rendered, &JsValue::from_str(key))?,
             next,

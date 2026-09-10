@@ -865,9 +865,15 @@ impl ConversationNodeAssembler {
                 additions.push(entry.accepted.clone());
             }
             additions.sort_by_key(|accepted| accepted.event.seq);
-            let existing = context.borrow().matches.borrow().clone();
-            context.borrow_mut().matches =
-                Rc::new(RefCell::new(merge_matches(key, &additions, &existing)?));
+            // Source: `context.matches` is one live array the definitions and faces share;
+            // merging in place keeps that identity (the adapter's array face and the native
+            // definition caches key on it), so a batch never re-derives every earlier match.
+            let merged = {
+                let current = context.borrow();
+                let existing = current.matches.borrow();
+                merge_matches(key, &additions, &existing)?
+            };
+            *context.borrow().matches.borrow_mut() = merged;
             if let Some(start) = discovered_start {
                 let mut current = context.borrow_mut();
                 current.start_seq = Some(start.event.seq);

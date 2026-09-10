@@ -9,12 +9,12 @@ use hyper::{
     Response, StatusCode,
     body::{Frame, Incoming},
 };
+use seekdeep_abort::AbortSignal;
 use seekdeep_cordis::{Context, ServiceKey, fiber::EffectHandle};
 use seekdeep_host_webserver::{
     WEB_SERVER, WebConnectionSignal, WebHandler, WebHandlerFuture, WebRegistration, WebResponse,
     WebRoute, WebRouteKind, WebServer, WebUpgradeRoute,
 };
-use seekdeep_llm::AbortSignal;
 
 use crate::{
     API_PATH, DEFAULT_MAX_REQUEST_BODY_BYTES, DownlinkApi, DownlinkKind, HOST_EVENTS_PATH,

@@ -10,7 +10,7 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 fn reset_globals() {
-    let global = Object::from(js_sys::global());
+    let global = js_sys::global();
     for name in ["__ModuleLoader__", "__SEEKDEEP_MODULES__"] {
         let _ = Reflect::delete_property(&global, &JsValue::from_str(name));
     }
@@ -35,7 +35,7 @@ fn modules_value(rows: &[BootModuleRow]) -> JsValue {
 
 fn scripted_transport() -> JsValue {
     Function::new_no_args(
-        r#"
+        r"
 const bundles = new Map();
 const fetched = [];
 const gates = new Map();
@@ -58,7 +58,7 @@ return {
   },
   release(id) { gates.get(id)?.release(); },
 };
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap()
@@ -131,6 +131,7 @@ fn boot_parser_and_enrollment_use_seekdeep_kernel_slots() {
     assert!(Object::is(&provided.get(1), &marker));
 }
 
+#[allow(clippy::too_many_lines)] // One lazy-table lifecycle in source order.
 #[wasm_bindgen_test]
 async fn lazy_table_executes_factories_requires_statics_invalidation_and_styles() {
     reset_globals();
@@ -149,7 +150,7 @@ async fn lazy_table_executes_factories_requires_statics_invalidation_and_styles(
             &JsValue::from_str("a"),
             &Function::new_with_args(
                 "require",
-                r#"
+                r"
 const dep = require('b/client');
 const react = require('react');
 const shell = require('app-shell');
@@ -160,7 +161,7 @@ tagged.dataset.plugin = 'a';
 tagged.dataset.pluginCss = 'sheet-1';
 document.head.append(tagged);
 return { got: dep.helper, react, shell };
-"#,
+",
             ),
         )
         .unwrap();
@@ -296,11 +297,11 @@ async fn concurrent_arrival_failures_cycles_and_double_boot_are_loud() {
     assert!(Object::is(&first.unwrap(), &second.unwrap()));
     assert_eq!(field::<Array>(&transport, "fetched").length(), 1);
 
-    let double_boot =
-        match WasmClientModuleSystem::new(modules_value(&[]), Object::new().into(), None) {
-            Ok(_) => panic!("double boot unexpectedly succeeded"),
-            Err(error) => error,
-        };
+    let Err(double_boot) =
+        WasmClientModuleSystem::new(modules_value(&[]), Object::new().into(), None)
+    else {
+        panic!("double boot unexpectedly succeeded");
+    };
     assert!(
         Reflect::get(&double_boot, &JsValue::from_str("message"))
             .unwrap()
@@ -332,7 +333,7 @@ async fn concurrent_arrival_failures_cycles_and_double_boot_are_loud() {
 async fn default_dom_transport_removes_success_and_failure_scripts() {
     reset_globals();
     let controls = Function::new_no_args(
-        r#"
+        r"
 const original = document.head.appendChild.bind(document.head);
 let fail = false;
 document.head.appendChild = node => {
@@ -350,7 +351,7 @@ return {
   fail() { fail = true; },
   restore() { document.head.appendChild = original; },
 };
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap();
@@ -381,7 +382,7 @@ return {
 
     reset_globals();
     let controls = Function::new_no_args(
-        r#"
+        r"
 const original = document.head.appendChild.bind(document.head);
 document.head.appendChild = node => {
   const result = original(node);
@@ -389,7 +390,7 @@ document.head.appendChild = node => {
   return result;
 };
 return { restore() { document.head.appendChild = original; } };
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap();

@@ -1,5 +1,7 @@
 //! Frame parsing and serialized reload queue parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     collections::VecDeque,
     sync::{

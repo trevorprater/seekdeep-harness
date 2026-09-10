@@ -1,5 +1,7 @@
 //! Behavioral mirror of loopback classification and the browser trust fence.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::collections::HashMap;
 
 use seekdeep_client_connection::{

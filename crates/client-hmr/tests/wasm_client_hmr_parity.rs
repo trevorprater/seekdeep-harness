@@ -12,7 +12,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 fn bench() -> JsValue {
     Function::new_no_args(
-        r#"
+        r"
 const order = [];
 let failPrefetch = false;
 const oldFiber = { runtime: { callback: {} }, inertia: undefined };
@@ -55,7 +55,7 @@ return {
   order,
   failPrefetch() { failPrefetch = true; },
 };
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap()
@@ -146,26 +146,27 @@ async fn wasm_swap_orders_registry_teardown_styles_refresh_and_failure_window() 
     retained_style.remove();
 }
 
+#[allow(clippy::too_many_lines)] // One HMR lifecycle in source order.
 #[wasm_bindgen_test]
 async fn plugin_owns_event_source_parses_frames_and_closes_on_context_dispose() {
     let state = bench();
     let global = js_sys::global();
     let original = Reflect::get(&global, &JsValue::from_str("EventSource")).unwrap();
     let fake = Function::new_no_args(
-        r#"
+        r"
 return class FakeEventSource {
   constructor(url) { this.url = url; this.closed = false; globalThis.__fakeSource = this; }
   emit(data) { this.onmessage?.({ data }); }
   close() { this.closed = true; }
 };
-"#,
+",
     )
     .call0(&JsValue::UNDEFINED)
     .unwrap();
     Reflect::set(&global, &JsValue::from_str("EventSource"), &fake).unwrap();
     let ctx = Function::new_with_args(
         "loader,modules",
-        r#"
+        r"
 return {
   effects: [],
   get(name) { return name === 'loader' ? loader : name === 'modules' ? modules : undefined; },
@@ -176,7 +177,7 @@ return {
     return dispose;
   },
 };
-"#,
+",
     )
     .call2(
         &JsValue::UNDEFINED,

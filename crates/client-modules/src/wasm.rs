@@ -48,7 +48,7 @@ struct WasmStyleClaimer;
 
 impl ClientStyleClaimer for WasmStyleClaimer {
     fn claim(&self, id: &ClientModuleId) -> Vec<String> {
-        let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+        let Some(document) = browser_window().and_then(|window| window.document()) else {
             return Vec::new();
         };
         if let Ok(unowned) = document.query_selector_all("style:not([data-plugin])") {
@@ -345,7 +345,7 @@ fn object_entries(value: JsValue) -> Result<Vec<(String, JsValue)>, JsValue> {
 }
 
 fn load_script(url: &str) -> BoxFuture<'static, anyhow::Result<()>> {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+    let Some(document) = browser_window().and_then(|window| window.document()) else {
         return futures::future::ready(Err(anyhow::anyhow!(
             "client-modules: bundle loading requires browser Document"
         )))
@@ -480,4 +480,19 @@ fn js_error(error: &JsValue) -> anyhow::Error {
         .and_then(|value| value.as_string())
         .unwrap_or_else(|| js_sys::JsString::from(error.clone()).into());
     anyhow::anyhow!(message)
+}
+
+/// The page window: `web_sys::window()` requires the global itself to be a `Window`, which a
+/// jsdom test environment does not satisfy even though it exposes the `window` property the
+/// source reads; the property lookup is the fallback (source: the bare `window` global).
+fn browser_window() -> Option<web_sys::Window> {
+    web_sys::window().or_else(|| {
+        js_sys::Reflect::get(
+            &js_sys::global(),
+            &wasm_bindgen::JsValue::from_str("window"),
+        )
+        .ok()
+        .filter(wasm_bindgen::JsValue::is_object)
+        .map(<wasm_bindgen::JsValue as wasm_bindgen::JsCast>::unchecked_into::<web_sys::Window>)
+    })
 }

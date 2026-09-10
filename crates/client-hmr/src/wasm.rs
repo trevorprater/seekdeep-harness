@@ -213,7 +213,7 @@ fn find_entry(loader: &JsValue, id: &str) -> anyhow::Result<Option<JsValue>> {
 }
 
 fn remove_owned_styles(id: &str) {
-    let Some(document) = web_sys::window().and_then(|window| window.document()) else {
+    let Some(document) = browser_window().and_then(|window| window.document()) else {
         return;
     };
     let Ok(styles) = document.query_selector_all("style[data-plugin]") else {
@@ -308,4 +308,19 @@ fn js_error(error: &JsValue) -> anyhow::Error {
         .and_then(|value| value.as_string())
         .unwrap_or_else(|| format!("{error:?}"));
     anyhow::anyhow!(message)
+}
+
+/// The page window: `web_sys::window()` requires the global itself to be a `Window`, which a
+/// jsdom test environment does not satisfy even though it exposes the `window` property the
+/// source reads; the property lookup is the fallback (source: the bare `window` global).
+fn browser_window() -> Option<web_sys::Window> {
+    web_sys::window().or_else(|| {
+        js_sys::Reflect::get(
+            &js_sys::global(),
+            &wasm_bindgen::JsValue::from_str("window"),
+        )
+        .ok()
+        .filter(wasm_bindgen::JsValue::is_object)
+        .map(<wasm_bindgen::JsValue as wasm_bindgen::JsCast>::unchecked_into::<web_sys::Window>)
+    })
 }

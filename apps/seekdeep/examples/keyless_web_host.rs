@@ -304,15 +304,20 @@ struct LedgerEntry {
 }
 
 impl SessionLedger {
-    fn record(&mut self, session: &Session, events: impl IntoIterator<Item = SessionEvent>) {
-        let entry = self
-            .entries
-            .entry(session.id().to_string())
-            .or_insert_with(|| LedgerEntry {
-                header: json!(session.header()),
-                events: BTreeMap::new(),
-            });
-        entry.header = json!(session.header());
+    /// Records one Session's header and events. Callers read the Session before taking the
+    /// ledger lock: the `session/event` listener runs inside the appending Session, so a
+    /// listing that held the ledger while reading a Session could deadlock against it.
+    fn record(
+        &mut self,
+        id: String,
+        header: serde_json::Value,
+        events: impl IntoIterator<Item = SessionEvent>,
+    ) {
+        let entry = self.entries.entry(id).or_insert_with(|| LedgerEntry {
+            header: header.clone(),
+            events: BTreeMap::new(),
+        });
+        entry.header = header;
         for event in events {
             entry.events.insert(event.seq, event);
         }
@@ -340,10 +345,13 @@ fn sessions_fixture_route(
             else {
                 return Ok(EventReply::Undefined);
             };
-            recorder
-                .lock()
-                .expect("session ledger poisoned")
-                .record(&session, [event.as_ref().clone()]);
+            let id = session.id().to_string();
+            let header = json!(session.header());
+            recorder.lock().expect("session ledger poisoned").record(
+                id,
+                header,
+                [event.as_ref().clone()],
+            );
             Ok(EventReply::Undefined)
         },
         EventOptions::default(),
@@ -364,27 +372,41 @@ fn sessions_fixture_route(
                 );
                 // Source `ctx.agents.get(id)` answers only for live Agents; the listing carries
                 // each Session's live Agent status so the driver can tell the two apart.
-                let live = sessions.list();
+                // Read every live Session before touching the ledger (see `record`).
+                let live = sessions
+                    .list()
+                    .iter()
+                    .map(|session| {
+                        (
+                            session.id().to_string(),
+                            json!(session.header()),
+                            session.events(),
+                            agents.get(session.id()).map(|agent| {
+                                json!({
+                                    "status": agent.status(),
+                                    "inbox": {"nextTurn": agent.inbox().next_turn()},
+                                })
+                            }),
+                        )
+                    })
+                    .collect::<Vec<_>>();
                 let mut ledger = ledger.lock().expect("session ledger poisoned");
-                for session in &live {
-                    ledger.record(session, session.events());
+                for (id, header, events, _) in &live {
+                    ledger.record(id.clone(), header.clone(), events.iter().cloned());
                 }
                 let mut listed = live
                     .iter()
-                    .map(|session| {
+                    .map(|(_, header, events, agent)| {
                         json!({
-                            "header": session.header(),
-                            "events": session.events(),
-                            "agent": agents.get(session.id()).map(|agent| json!({
-                                "status": agent.status(),
-                                "inbox": {"nextTurn": agent.inbox().next_turn()},
-                            })),
+                            "header": header,
+                            "events": events,
+                            "agent": agent,
                         })
                     })
                     .collect::<Vec<_>>();
                 let live_ids = live
                     .iter()
-                    .map(|session| session.id().to_string())
+                    .map(|(id, ..)| id.clone())
                     .collect::<HashSet<_>>();
                 listed.extend(
                     ledger
@@ -495,11 +517,19 @@ fn persist_fixture_route(context: &Context, server: &WebServer) -> anyhow::Resul
                         request.method().as_str() == "GET",
                         "fixture persist load requires GET"
                     );
-                    let loaded = persistence.load(&SessionId::new(id)).await?;
-                    return Ok(response(
-                        200_u16.try_into()?,
-                        serde_json::to_vec(&json!({"meta": loaded.meta, "events": loaded.events}))?,
-                    ));
+                    // The source rejects the load Promise with the persistence error; the
+                    // driver's shim asserts on the status and quotes the text.
+                    return Ok(match persistence.load(&SessionId::new(id)).await {
+                        Ok(loaded) => response(
+                            200_u16.try_into()?,
+                            serde_json::to_vec(
+                                &json!({"meta": loaded.meta, "events": loaded.events}),
+                            )?,
+                        ),
+                        Err(error) => {
+                            response(400_u16.try_into()?, format!("{error:#}").into_bytes())
+                        }
+                    });
                 }
                 anyhow::ensure!(
                     request.method().as_str() == "POST",

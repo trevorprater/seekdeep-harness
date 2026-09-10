@@ -99,6 +99,7 @@ fn configure() -> JsValue {
     bench
 }
 
+#[allow(clippy::too_many_lines)] // One end-to-end controller flight, kept in source order.
 #[wasm_bindgen_test(async)]
 async fn controller_face_publishes_one_flight_success_failure_and_dismissal() {
     let _bench = configure();

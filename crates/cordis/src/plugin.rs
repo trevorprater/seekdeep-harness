@@ -888,7 +888,8 @@ fn spawn_background(future: impl Future<Output = ()> + 'static) {
     wasm_bindgen_futures::spawn_local(future);
 }
 
-#[cfg(test)]
+// Native-only: these lifecycle tests drive tokio timers, which the wasm32 face never links.
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 

@@ -208,6 +208,24 @@ impl Default for WasmBrowserApiClient {
 #[allow(clippy::too_many_lines)] // The exported service face is assembled atomically at this boundary.
 pub fn client_connection_plugin() -> Result<JsValue, JsValue> {
     plugin("client-connection", &[], |context| {
+        let page_hostname = || {
+            Reflect::get(&js_sys::global(), &JsValue::from_str("location"))
+                .ok()
+                .and_then(|location| Reflect::get(&location, &JsValue::from_str("hostname")).ok())
+                .and_then(|hostname| hostname.as_string())
+                .unwrap_or_default()
+        };
+        // Source: the page URL decides the transport at boot; `?fixture` selects the
+        // in-page fixture client over the physical carrier.
+        if let Some(query) = crate::wasm_fixture::fixture_page_query() {
+            let connection = crate::wasm_fixture::connection_object(&query, &page_hostname())?;
+            call_method(
+                &context,
+                "provide",
+                &[JsValue::from_str("connection"), connection],
+            )?;
+            return Ok(());
+        }
         let client_core = WasmBrowserApiClient::new();
         let envelope_listeners = client_core.listeners.clone();
         let client: JsValue = client_core.into();
@@ -471,6 +489,11 @@ pub fn client_api_gateway_plugin() -> Result<JsValue, JsValue> {
     })
 }
 
+/// Wraps one client face in the namespaced API proxy the runtime consumes.
+pub(crate) fn api_proxy(client: &JsValue) -> Result<JsValue, JsValue> {
+    API_PROXY_FACTORY.with(|factory| factory.call1(&JsValue::UNDEFINED, client))
+}
+
 fn plugin(
     name: &str,
     inject: &[&str],
@@ -520,14 +543,14 @@ async fn post_json(path: &str, body: JsValue, signal: JsValue) -> Result<JsValue
     JsFuture::from(response.json()?).await
 }
 
-fn random_uuid() -> Result<String, JsValue> {
+pub(crate) fn random_uuid() -> Result<String, JsValue> {
     let crypto = Reflect::get(&js_sys::global(), &JsValue::from_str("crypto"))?;
     call_method(&crypto, "randomUUID", &[])?
         .as_string()
         .ok_or_else(|| js_sys::Error::new("crypto.randomUUID returned a non-string").into())
 }
 
-fn is_loopback_hostname(hostname: &str) -> bool {
+pub(crate) fn is_loopback_hostname(hostname: &str) -> bool {
     if hostname.eq_ignore_ascii_case("localhost") || hostname == "[::1]" || hostname == "::1" {
         return true;
     }
@@ -766,13 +789,17 @@ fn call_optional(value: &JsValue, name: &str, arguments: &[JsValue]) {
     }
 }
 
-fn call_method(value: &JsValue, name: &str, arguments: &[JsValue]) -> Result<JsValue, JsValue> {
+pub(crate) fn call_method(
+    value: &JsValue,
+    name: &str,
+    arguments: &[JsValue],
+) -> Result<JsValue, JsValue> {
     let method = Reflect::get(value, &JsValue::from_str(name))?.dyn_into::<Function>()?;
     let arguments: Array = arguments.iter().cloned().collect();
     method.apply(value, &arguments)
 }
 
-fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
+pub(crate) fn object(entries: &[(&str, JsValue)]) -> Result<Object, JsValue> {
     let object = Object::new();
     for (name, value) in entries {
         set(&object, name, value)?;

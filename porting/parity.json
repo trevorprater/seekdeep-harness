@@ -24543,7 +24543,22 @@
     {
       "source": "apps/web/stress-tests/reasoning-chunks.stress.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-runtime/src/wasm_value_bridge.rs",
+        "crates/client-runtime/src/wasm_conversation_adapter.rs",
+        "crates/client-runtime/src/wasm_native_definition.rs",
+        "crates/client-runtime/src/wasm_session.rs",
+        "crates/client-runtime/tests/wasm_value_bridge_parity.rs",
+        "crates/client-foundation-wasm/src/wasm_fixture.rs",
+        "xtask/src/web_keyless_driver.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless --scenario reasoning-chunks-stress: the pinned source stress file runs unchanged in Chromium on the ?fixture boot and passes (keeps the browser responsive while rendering 100,000 reasoning chunks: all chunks emitted inside the source's 540 s poll with the main-thread delay budget respected); the 20,000-chunk storm probe went from 29.3 s to 9.3 s with a flat per-chunk cost",
+        "the streamed text no longer re-marshals through JSON text on every chunk: the native view builder wrapper, the adapter builder, the per-key Node data faces, and the Session chat snapshot cross the module boundary structurally, reuse unchanged subtrees, and grow the retained JavaScript string by its appended suffix (crates/client-runtime/src/wasm_value_bridge.rs, four browser tests)",
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p seekdeep-client-runtime --target wasm32-unknown-unknown --all-features"
+      ],
+      "note": "opt-in lane like the source (no default inventory includes *.stress.ts): run by name, `cargo xtask web-keyless --scenario reasoning-chunks-stress`"
     },
     {
       "source": "apps/web/tests/README.i18n.yaml",
@@ -24646,7 +24661,13 @@
     {
       "source": "apps/web/tests/assembled-boot.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_assembled_snapshots.rs"
+      ],
+      "evidence": [
+        "test support replaced by the lane harness: the same jsdom setup/teardown, boot globals (`__SEEKDEEP_BOOT__`, `__ModuleLoader__`), bundle map over the port packages, mount call, class matcher and golden mode; every assembled snapshot suite imports it through the lane alias"
+      ]
     },
     {
       "source": "apps/web/tests/background-job-list.e2e.ts",
@@ -24676,7 +24697,16 @@
     {
       "source": "apps/web/tests/built-boot.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_assembled_snapshots.rs",
+        "xtask/src/main.rs",
+        "crates/session-log-export/src/browser.rs",
+        "crates/client-modules/src/wasm.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-assembled-snapshots: the pinned source suite runs unchanged under the source vitest+jsdom against the port's built Rust/WASM plugin bundles booted through the port `AppWebEntry` on the in-page Rust fixture transport (`?fixture`), with the product-identity rewrite applied to the test text; verified: staged activation across the immediately tier and inject layers, per-plugin CSS injection under the renamed identities, the resident fixture session with its question-first waiting state, the approval resolution, the ContextMeter composition panel, the diff cards' terminator footer, and the web render intents. Port fixes surfaced: the primitives wrapper configured WebBlock before MarkdownText existed (answer cards crashed), and browser window lookups required the global itself to be a Window"
+      ]
     },
     {
       "source": "apps/web/tests/chat-continuous-conversation.e2e.ts",
@@ -24754,7 +24784,16 @@
     {
       "source": "apps/web/tests/complex-history.perf.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "crates/client-foundation-wasm/src/wasm_fixture.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless --scenario complex-history-perf: the pinned manual performance describe runs unchanged in Chromium against the keyless Rust Host (per-case worlds seeded through the seed fixture route, override-only replay at the source pace and context window); its first case fails at the same assertion as the pinned source lane run fresh in replay mode (`expected 'Ungrouped' to contain '1001 sessions'`: sessions seeded after the registry bootstrapped are not workspace members in either implementation), so the port reproduces the oracle's outcome exactly"
+      ],
+      "note": "opt-in lane (no default vitest config includes *.perf.ts); the source lane is stale against its own Host and the port matches it rather than diverging"
     },
     {
       "source": "apps/web/tests/composer-draft-scroll.e2e.ts",
@@ -24895,7 +24934,16 @@
     {
       "source": "apps/web/tests/goal-bar.e2e.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "crates/client-foundation-wasm/src/wasm_fixture.rs",
+        "crates/client-connection/src/fixture.rs",
+        "crates/client-connection/src/runtime.rs",
+        "xtask/src/web_keyless_driver.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless: the pinned source suite runs unchanged in Chromium against the shipped Rust/WASM bundles; the page boots on `?fixture` so the Rust fixture client compiled into the connection bundle is the fake server: the `/goal` command appends the durable goal/change, the projection frame reaches the goal bar, the active strip matches the golden byte for byte, and the double clear leaves neither stale chrome nor a duplicate-mutation error; the fixture inventory stays closed"
+      ]
     },
     {
       "source": "apps/web/tests/goal-bar.overlay.yml",
@@ -24942,7 +24990,14 @@
     {
       "source": "apps/web/tests/image-display.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_assembled_snapshots.rs",
+        "crates/client-foundation-wasm/src/wasm_fixture.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-assembled-snapshots: the pinned source suite runs unchanged under the source vitest+jsdom against the port's built Rust/WASM plugin bundles booted through the port `AppWebEntry` on the in-page Rust fixture transport (`?fixture`), with the product-identity rewrite applied to the test text; the history image pair loads through the authorized attachment route as blob URLs and the lightbox opens"
+      ]
     },
     {
       "source": "apps/web/tests/lifecycle-chrome.e2e.ts",
@@ -25025,7 +25080,13 @@
     {
       "source": "apps/web/tests/max-tokens-notice.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_assembled_snapshots.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-assembled-snapshots: the pinned source suite runs unchanged under the source vitest+jsdom against the port's built Rust/WASM plugin bundles booted through the port `AppWebEntry` on the in-page Rust fixture transport (`?fixture`), with the product-identity rewrite applied to the test text; the notice row shape matches the committed golden"
+      ]
     },
     {
       "source": "apps/web/tests/message-actions.e2e.ts",
@@ -25336,7 +25397,14 @@
     {
       "source": "apps/web/tests/scaffold.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "test support executed through the driver: launchWebScaffold (replay fixture/override/pace/context window, extra overlay rows, agent presets, welcome-notice pending), the turn-settled barriers, recorded-prompt inventory, aria capture, golden comparison with the identity rewrite, console tripwire, and fixture inventory drive every keyless suite against the Rust Host"
+      ]
     },
     {
       "source": "apps/web/tests/schedule-after.e2e.ts",
@@ -25356,7 +25424,13 @@
     {
       "source": "apps/web/tests/search-card.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_assembled_snapshots.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-assembled-snapshots: the pinned source suite runs unchanged under the source vitest+jsdom against the port's built Rust/WASM plugin bundles booted through the port `AppWebEntry` on the in-page Rust fixture transport (`?fixture`), with the product-identity rewrite applied to the test text; the grep card shape (kind, summary, file headers, capped lines, expand label, recovery footer) matches the committed golden"
+      ]
     },
     {
       "source": "apps/web/tests/seeded-history.e2e.ts",
@@ -26972,17 +27046,37 @@
     {
       "source": "apps/web/tests/support.ts",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs"
+      ],
+      "evidence": [
+        "test support executed through the driver: newEnglishPage/newZhPage, connectFreshWorkspace, saveFailureShot and the conversation context key are compiled from the pinned source and back every keyless suite"
+      ]
     },
     {
       "source": "apps/web/tests/support/listen-probe.mjs",
       "kind": "test",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "apps/seekdeep/examples/keyless_web_host.rs"
+      ],
+      "evidence": [
+        "the source probe finds a free loopback port for the scaffold Host; the Rust keyless Host binds port 0 and publishes its bound origin on stdout, which the driver reads for readiness"
+      ],
+      "note": "port probing is owned by the Host binary; no subprocess probe is needed"
     },
     {
       "source": "apps/web/tests/todo-row.snapshot.ts",
       "kind": "snapshot",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_assembled_snapshots.rs",
+        "crates/client-connection/src/fixture.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-assembled-snapshots: the pinned source suite runs unchanged under the source vitest+jsdom against the port's built Rust/WASM plugin bundles booted through the port `AppWebEntry` on the in-page Rust fixture transport (`?fixture`), with the product-identity rewrite applied to the test text; the todo row and panel shapes match the committed golden over the fixture's folded todos projection"
+      ]
     },
     {
       "source": "apps/web/tests/trajectory-virtualization.e2e.ts",
@@ -88376,7 +88470,18 @@
     {
       "source": "tsdown.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "Cargo.toml",
+        "xtask/src/main.rs",
+        "crates/typert-host-artifact/src/lib.rs",
+        "apps/seekdeep/src/profile_boot.rs"
+      ],
+      "evidence": [
+        "cargo build --workspace --all-features builds the Host face natively and cargo xtask wasm-package builds each Client face for wasm32; the DSH_BUILD_FACE host/client split is the native/wasm32 target split",
+        "cargo xtask typert-host-artifacts --check replaces the workspace Typert tsdown plugin: the Host Typert artifacts are generated, checked in, and registered at profile boot"
+      ],
+      "note": "no JavaScript bundler: Cargo targets are the build faces"
     },
     {
       "source": "vendor/AGENTS.md",
@@ -89362,17 +89467,44 @@
     {
       "source": "vitest.web-stress.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "the stress inventory (apps/web/stress-tests/**/*.stress.ts) is a deferred scenario set in the keyless driver: excluded from the default lane exactly as no default vitest config includes it, selected only by name through --scenario, and driven through the pinned source stress file with its own 600 s-class budget"
+      ],
+      "note": "vitest is not shipped; the Rust lane owns the opt-in stress inventory"
     },
     {
       "source": "vitest.web.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "xtask/src/web_assembled_snapshots.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "cargo xtask web-keyless drives the pinned apps/web/tests/**/*.e2e.ts inventory scenario by scenario, each in its own Chromium against the keyless Rust Host, serially, with replay-mode goldens compared to the committed snapshots",
+        "cargo xtask web-assembled-snapshots runs the pinned apps/web/tests/**/*.snapshot.ts inventory under the source vitest + jsdom against the port bundles",
+        "real-model cases stay keyless (the source self-skips without DEEPSEEK_API_KEY); the credentialed smoke-real row is tracked separately"
+      ],
+      "note": "vitest is not shipped; the two Rust lanes own the web browser inventory"
     },
     {
       "source": "vitest.web.perf.config.ts",
       "kind": "production-code",
-      "status": "pending"
+      "status": "verified",
+      "targets": [
+        "xtask/src/web_keyless_driver.rs",
+        "xtask/src/main.rs"
+      ],
+      "evidence": [
+        "the manual performance inventory (apps/web/tests/**/*.perf.ts) is a deferred, opt-in scenario (`cargo xtask web-keyless --scenario complex-history-perf`) outside the default web gate, with the pinned describe run unchanged and its console output forwarded rather than intercepted"
+      ],
+      "note": "vitest is not shipped; the Rust lane owns the manual high-cardinality diagnostics"
     },
     {
       "source": "website/.gitignore",

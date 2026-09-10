@@ -8,29 +8,41 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
-bytes.workspace = true
 futures.workspace = true
+parking_lot.workspace = true
+seekdeep-abort = { path = "../abort" }
+seekdeep-cordis = { path = "../cordis" }
+seekdeep-identity = { path = "../identity" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+# The physical HTTP/WebSocket carriers and the Host side are native; the fixture
+# transport, the generation controller, and the shared RPC contracts also build
+# for the browser (`?fixture` selects the fixture client inside the WASM plugin).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bytes.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
-parking_lot.workspace = true
 regex.workspace = true
 reqwest.workspace = true
-seekdeep-cordis = { path = "../cordis" }
 seekdeep-invariants = { path = "../invariants" }
 seekdeep-host-webserver = { path = "../host-webserver" }
-seekdeep-identity = { path = "../identity" }
-seekdeep-llm = { path = "../llm" }
-serde.workspace = true
-serde_json.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
-tracing.workspace = true
-url.workspace = true
 uuid.workspace = true
 
-[dev-dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys.workspace = true
+tokio = { version = "1.53.1", default-features = false, features = ["rt", "sync", "macros"] }
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 proptest.workspace = true
+seekdeep-llm = { path = "../llm" }
 
 [lints]
 workspace = true

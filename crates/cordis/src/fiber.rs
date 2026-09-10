@@ -504,7 +504,8 @@ fn effect_outcome(outcome: EffectOutcome) -> anyhow::Result<()> {
     }
 }
 
-#[cfg(test)]
+// Native-only: these lifecycle tests drive tokio timers, which the wasm32 face never links.
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use std::{
         sync::atomic::{AtomicUsize, Ordering},

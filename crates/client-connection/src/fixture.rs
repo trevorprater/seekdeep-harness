@@ -11,15 +11,15 @@ use std::{
 
 use futures::{FutureExt, future::BoxFuture, stream::BoxStream};
 use parking_lot::Mutex;
+use seekdeep_abort::AbortSignal;
 use seekdeep_cordis::{Context, fiber::EffectHandle};
 use seekdeep_identity::RpcId;
-use seekdeep_llm::AbortSignal;
 use serde_json::{Map, Value, json};
 use tokio::sync::mpsc;
 
 use crate::{
     CLIENT_CONNECTION, ClientConnection, ClientConnectionFuture, ClientConnectionHandle,
-    EventFrame, HostDescription, RpcError, RpcResult, ServerResponse, StreamApi,
+    EventFrame, HostDescription, RpcError, RpcResult, ServerResponse, StreamApi, runtime,
 };
 
 const FIXTURE_SEED: &str = include_str!("../data/fixture-seed.json");
@@ -143,6 +143,8 @@ struct FixtureState {
     next_session: u64,
     next_workspace: u64,
     next_turn: HashMap<String, u64>,
+    /// Open timing-hook retry scenarios: `(turn, step_started)` per Session.
+    retry_scenarios: HashMap<String, (u64, bool)>,
     next_goal: u64,
     next_attachment: u64,
     replays: HashMap<String, Replay>,
@@ -298,6 +300,7 @@ impl FixtureApi {
                 next_session: 1,
                 next_workspace: 1,
                 next_turn: HashMap::from([("fx-alpha".to_owned(), 75)]),
+                retry_scenarios: HashMap::new(),
                 next_goal: 1,
                 next_attachment: 1,
                 replays: HashMap::new(),
@@ -501,6 +504,97 @@ impl FixtureApi {
         }));
     }
 
+    /// Opens a retry scenario: a running turn whose first attempt streams a partial reply.
+    pub fn begin_model_retry(&self, session_id: &str) {
+        let turn = {
+            let mut state = self.state.lock();
+            let next = state.next_turn.entry(session_id.to_owned()).or_default();
+            let turn = *next;
+            *next += 1;
+            state
+                .retry_scenarios
+                .insert(session_id.to_owned(), (turn, true));
+            turn
+        };
+        self.set_running(session_id, true);
+        self.append_event(
+            session_id,
+            json!({"type":"turn/start","data":{"turn":turn}}),
+        );
+        self.append_event(session_id, json!({"type":"user/message","surfaceOp":"append","data":{"content":[{"type":"text","text":"请重试这个请求"}],"source":{"kind":"user"}}}));
+        self.append_event(
+            session_id,
+            json!({"type":"step/start","data":{"turn":turn,"step":1}}),
+        );
+        self.append_event(session_id, json!({"type":"assistant/chunk","data":{"turn":turn,"step":1,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}));
+        self.append_event(session_id, json!({"type":"assistant/chunk","data":{"turn":turn,"step":1,"chunk":{"type":"text-delta","index":0,"text":"应撤回的半截回复"}}}));
+    }
+
+    /// Records one retry decision; the next attempt remains in the same step.
+    ///
+    /// # Panics
+    ///
+    /// Panics when no retry scenario is open for the Session (source: throws).
+    pub fn schedule_model_retry(&self, session_id: &str, retry: u64, delay_ms: u64) {
+        let (turn, step_started) = self.retry_scenario(session_id);
+        if !step_started {
+            self.append_event(session_id, json!({"type":"assistant/chunk","data":{"turn":turn,"step":1,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}));
+            self.append_event(session_id, json!({"type":"assistant/chunk","data":{"turn":turn,"step":1,"chunk":{"type":"text-delta","index":0,"text":format!("第 {retry} 次应撤回的回复")}}}));
+        }
+        self.append_event(session_id, json!({"type":"llm/retry","data":{"turn":turn,"step":1,"provider":"fixture","mode":"normal","policyKey":"fixture-normal","retry":retry,"maxRetries":2,"delayMs":delay_ms,"failure":{"code":"TRANSPORT","message":"连接被重置"}}}));
+        self.state
+            .lock()
+            .retry_scenarios
+            .insert(session_id.to_owned(), (turn, false));
+    }
+
+    /// Records one retry decision, then cancels its source turn before the retry starts.
+    ///
+    /// # Panics
+    ///
+    /// Panics when no retry scenario is open for the Session (source: throws).
+    pub fn cancel_model_retry_during_backoff(&self, session_id: &str, delay_ms: u64) {
+        let (turn, _) = self.retry_scenario(session_id);
+        self.append_event(session_id, json!({"type":"llm/retry","data":{"turn":turn,"step":1,"provider":"fixture","mode":"normal","policyKey":"fixture-normal","retry":1,"maxRetries":2,"delayMs":delay_ms,"failure":{"code":"TRANSPORT","message":"连接被重置"}}}));
+        self.append_event(
+            session_id,
+            json!({"type":"step/end","data":{"turn":turn,"step":1}}),
+        );
+        self.append_event(session_id, json!({"type":"turn/end","data":{"turn":turn,"reason":{"kind":"aborted","reason":{"kind":"user"}}}}));
+        self.state.lock().retry_scenarios.remove(session_id);
+        self.set_running(session_id, false);
+    }
+
+    /// Finishes the retry scenario with a finalized response in the open step.
+    ///
+    /// # Panics
+    ///
+    /// Panics when no retry scenario is open for the Session (source: throws).
+    pub fn complete_model_retry(&self, session_id: &str) {
+        let (turn, _) = self.retry_scenario(session_id);
+        self.state.lock().retry_scenarios.remove(session_id);
+        self.append_event(session_id, json!({"type":"assistant/chunk","data":{"turn":turn,"step":1,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}));
+        self.append_event(session_id, json!({"type":"assistant/message","surfaceOp":"append","data":{"turn":turn,"step":1,"message":{"role":"assistant","content":[{"type":"text","text":"重试后的完整回复"}],"source":{"provider":"fixture","model":"fx-1"}}}}));
+        self.append_event(
+            session_id,
+            json!({"type":"step/end","data":{"turn":turn,"step":1}}),
+        );
+        self.append_event(
+            session_id,
+            json!({"type":"turn/end","data":{"turn":turn,"reason":{"kind":"completed"}}}),
+        );
+        self.set_running(session_id, false);
+    }
+
+    fn retry_scenario(&self, session_id: &str) -> (u64, bool) {
+        self.state
+            .lock()
+            .retry_scenarios
+            .get(session_id)
+            .copied()
+            .unwrap_or_else(|| panic!("fixture: no model retry scenario for {session_id}"))
+    }
+
     /// Ends every currently open stream without aborting its consumer signal.
     pub fn break_streams(&self) {
         self.mux_senders.lock().clear();
@@ -575,7 +669,7 @@ impl FixtureApi {
         let fixture = self.clone();
         let session = session_id.to_owned();
         let marker_copy = marker.clone();
-        tokio::spawn(async move {
+        runtime::spawn(async move {
             let mut emitted = 0;
             while emitted < chunk_count {
                 let end = (emitted + chunks_per_interval).min(chunk_count);
@@ -598,7 +692,7 @@ impl FixtureApi {
                     state.emitting = emitted < chunk_count;
                 }
                 if emitted < chunk_count {
-                    tokio::time::sleep(Duration::from_millis(interval_ms)).await;
+                    runtime::sleep(Duration::from_millis(interval_ms)).await;
                 }
             }
         });
@@ -789,7 +883,7 @@ impl FixtureApi {
                 Some(if log.is_empty() {
                     empty_projection_values()
                 } else {
-                    state.history_projections.clone()
+                    projection_values(&log)
                 })
             } else {
                 None
@@ -801,7 +895,7 @@ impl FixtureApi {
         };
         let page = page_of(&log, before, max_messages);
         if delay > 0 {
-            tokio::time::sleep(Duration::from_millis(delay)).await;
+            runtime::sleep(Duration::from_millis(delay)).await;
         }
         if doomed {
             anyhow::bail!("fixture: simulated history transport failure");
@@ -1177,7 +1271,7 @@ impl FixtureApi {
             json!({"type":"step/start","data":{"turn":turn,"step":0}}),
         );
         self.append_event(&id, json!({"type":"assistant/chunk","data":{"turn":turn,"step":0,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}));
-        tokio::spawn(async move {
+        runtime::spawn(async move {
             let pieces = reply
                 .chars()
                 .collect::<Vec<_>>()
@@ -1189,7 +1283,7 @@ impl FixtureApi {
             for piece in pieces {
                 tokio::select! {
                     () = signal.cancelled() => { aborted=true; break; }
-                    () = tokio::time::sleep(Duration::from_millis(80)) => {}
+                    () = runtime::sleep(Duration::from_millis(80)) => {}
                 }
                 complete.push_str(&piece);
                 fixture.append_event(&id, json!({"type":"assistant/chunk","data":{"turn":turn,"step":0,"chunk":{"type":"text-delta","index":0,"text":piece}}}));
@@ -1622,11 +1716,43 @@ impl FixtureApi {
         let text = match name {
             "compact" => Some("fixture：已压缩（假动作）".to_owned()),
             "echo" => Some(raw.trim().to_owned()),
-            "goal" => Some(if raw.trim().is_empty() {
-                "No goal is set. Usage: /goal <objective>".to_owned()
-            } else {
-                format!("Goal created: {}", raw.trim())
-            }),
+            "goal" => {
+                let command_id = format!("fx-cmd-{}", self.log_len(&id));
+                self.append_event(&id,json!({"type":"command/run","data":{"commandId":command_id,"name":name,"args":raw,"source":{"kind":"user"}}}));
+                let objective = raw.trim();
+                let current = {
+                    let state = self.state.lock();
+                    backscan_goal(state.logs.get(&id).map_or(&[][..], Vec::as_slice))
+                };
+                let current_objective = current
+                    .pointer("/goal/objective")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                let text = if objective.is_empty() {
+                    current_objective.map_or_else(
+                        || "No goal is set. Usage: /goal <objective>".to_owned(),
+                        |objective| format!("Current goal: {objective}"),
+                    )
+                } else if current
+                    .pointer("/goal/phase")
+                    .and_then(Value::as_str)
+                    .is_some_and(|phase| phase != "complete")
+                {
+                    format!(
+                        "A goal already exists ({}). Clear it first.",
+                        current_objective.unwrap_or_default()
+                    )
+                } else {
+                    let goal_id = format!("fx-goal-{}", self.log_len(&id));
+                    let now = self.next_timestamp();
+                    let goal = json!({"id":goal_id,"revision":1,"objective":objective,"phase":"active","maxGoalRounds":256});
+                    self.append_event(&id,json!({"type":"goal/change","data":{"kind":"goal/change","version":1,"operation":"create","goal":goal,"roundsStarted":0,"createdAt":now,"updatedAt":now}}));
+                    format!("Goal created: {objective}")
+                };
+                let result = json!({"kind":"success","text":text});
+                self.append_event(&id,json!({"type":"command/done","data":{"commandId":command_id,"kind":"success","text":text}}));
+                return success(json!({"commandId":command_id,"result":result}));
+            }
             "permission" => Some(format!("preset {}", raw.trim())),
             "plan" => Some(if raw.trim() == "off" {
                 "Plan mode off.".to_owned()
@@ -1753,6 +1879,15 @@ impl FixtureApi {
         self.emit_mux(
             json!({"type":"session/event","sessionId":session_id,"event":entry.get("event")}),
         );
+        // Host eager-drive parallel: a unit-advancing event pushes its finished value.
+        let frames = {
+            let state = self.state.lock();
+            let log = state.logs.get(session_id).map_or(&[][..], Vec::as_slice);
+            projection_frames(session_id, log, entry.get("event").unwrap_or(&Value::Null))
+        };
+        for frame in frames {
+            self.emit_mux(frame);
+        }
         entry
     }
     fn set_running(&self, id: &str, running: bool) {
@@ -1885,8 +2020,7 @@ impl StreamApi for FixtureApi {
         fixture.host_senders.lock().push(tx);
         Box::pin(async_stream::stream! {
             on_open();
-            let mut interval = tokio::time::interval(Duration::from_secs(5));
-            interval.tick().await;
+            let mut tick = Box::pin(runtime::sleep(Duration::from_secs(5)));
             loop {
                 tokio::select! {
                     () = signal.cancelled() => break,
@@ -1898,7 +2032,8 @@ impl StreamApi for FixtureApi {
                         Some(Err(error)) => yield Err(error),
                         None => break,
                     },
-                    _ = interval.tick() => {
+                    () = &mut tick => {
+                        tick = Box::pin(runtime::sleep(Duration::from_secs(5)));
                         let running = {
                             let mut state = fixture.state.lock();
                             let Some(index) = find_by(&state.sessions, "sessionId", "fx-gamma") else {
@@ -1936,13 +2071,18 @@ impl FixtureApi {
                 .get("sessionId")
                 .and_then(Value::as_str)
                 .unwrap_or_default();
-            let log = state.logs.get(id).map_or(0, Vec::len);
-            let seq = sequence_from_len(log);
+            let log = state.logs.get(id).map_or(&[][..], Vec::as_slice);
+            let seq = sequence_from_len(log.len());
             frames.push(EventFrame {
                 rpc_id: self.mint_rpc(),
                 payload: json!({"type":"session/subscribed","sessionId":id,"lastSeq":seq}),
             });
-            for (key, value) in state.history_projections.as_object().into_iter().flatten() {
+            let values = if log.is_empty() {
+                state.history_projections.clone()
+            } else {
+                projection_values(log)
+            };
+            for (key, value) in values.as_object().into_iter().flatten() {
                 frames.push(EventFrame {
                     rpc_id: self.mint_rpc(),
                     payload: json!({"type":"session/projection","sessionId":id,"key":key,"value":value,"seq":seq}),
@@ -2003,6 +2143,576 @@ fn pending_frame(envelope: &Value) -> Option<(RpcId, Value)> {
         envelope.get("payload")?.clone(),
     ))
 }
+// ---------------------------------------------------------------------------
+// Fixture-local projection folds (source `projectionValuesOf` / `projectionFramesOf`):
+// whole current values per key over the full log, mirroring the Host's units
+// without importing them (the client-side fixture is self-contained).
+// ---------------------------------------------------------------------------
+
+/// Fixture preset table (the host `PermissionPresetService` defaults).
+const PERMISSION_PRESETS: [(&str, &str, &str, &str); 2] = [
+    (
+        "workspace-write",
+        "workspace-write",
+        "ask",
+        "Write inside the workspace and permitted temporary directories; wider retries require approval.",
+    ),
+    (
+        "danger-full-access",
+        "danger-full-access",
+        "never",
+        "Full file access without approval prompts.",
+    ),
+];
+
+/// Fixed token-meter heuristic constants mirrored by this client-only fixture.
+const CHARS_PER_TOKEN: u64 = 4;
+const BLOCK_OVERHEAD: u64 = 4;
+const ROLE_OVERHEAD: u64 = 4;
+
+fn event_of(entry: &Value) -> &Value {
+    entry.get("event").unwrap_or(entry)
+}
+
+fn event_type(event: &Value) -> &str {
+    event
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+}
+
+fn event_time(event: &Value) -> i64 {
+    event
+        .get("time")
+        .and_then(Value::as_i64)
+        .unwrap_or_default()
+}
+
+/// Host permissions-unit parallel: fold the three knob events, derive the select.
+fn permission_select_of(log: &[Value]) -> Value {
+    let mut preset: Option<String> = None;
+    let mut sandbox = "workspace-write".to_owned();
+    let mut approval = "ask".to_owned();
+    for entry in log {
+        let event = event_of(entry);
+        let data = event.get("data").cloned().unwrap_or(Value::Null);
+        match event_type(event) {
+            "permission/preset" => {
+                preset = data
+                    .get("preset")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+            }
+            "sandbox/mode" => {
+                if let Some(mode) = data.get("mode").and_then(Value::as_str) {
+                    mode.clone_into(&mut sandbox);
+                }
+            }
+            "approval/policy" => {
+                if let Some(policy) = data.get("policy").and_then(Value::as_str) {
+                    policy.clone_into(&mut approval);
+                }
+            }
+            _ => {}
+        }
+    }
+    let matches = |spec: &(&str, &str, &str, &str)| spec.1 == sandbox && spec.2 == approval;
+    let mut current = "custom".to_owned();
+    let folded = preset
+        .as_deref()
+        .and_then(|name| PERMISSION_PRESETS.iter().find(|spec| spec.0 == name));
+    if let Some(spec) = folded.filter(|spec| matches(spec)) {
+        spec.0.clone_into(&mut current);
+    } else if let Some(spec) = PERMISSION_PRESETS.iter().find(|spec| matches(spec)) {
+        spec.0.clone_into(&mut current);
+    }
+    let mut options = PERMISSION_PRESETS
+        .iter()
+        .map(|spec| json!({"value":spec.0,"name":spec.0,"description":spec.3}))
+        .collect::<Vec<_>>();
+    if current == "custom" {
+        options.push(json!({"value":"custom","name":"Custom","description":"Current sandbox and approval settings do not match a preset."}));
+    }
+    json!({"options":options,"currentValue":current})
+}
+
+/// Plan unit parallel: `command/run` named `plan` sets the wanted target, `plan/mode` commits.
+fn plan_view_of(log: &[Value]) -> Value {
+    let mut active = false;
+    let mut wanted: Option<bool> = None;
+    for entry in log {
+        let event = event_of(entry);
+        let data = event.get("data").cloned().unwrap_or(Value::Null);
+        match event_type(event) {
+            "command/run" if data.get("name").and_then(Value::as_str) == Some("plan") => {
+                if let Some(args) = data.get("args").and_then(Value::as_str) {
+                    wanted = Some(args.trim() != "off");
+                }
+            }
+            "plan/mode" => {
+                active = data.get("active").and_then(Value::as_bool) == Some(true);
+                wanted = None;
+            }
+            _ => {}
+        }
+    }
+    json!({"active":active,"pending":wanted.is_some_and(|wanted| wanted != active)})
+}
+
+/// Standing-plan fold: writes replace the list; `turn/start` clears it.
+fn backscan_todos(log: &[Value]) -> Value {
+    for entry in log.iter().rev() {
+        let event = event_of(entry);
+        match event_type(event) {
+            "turn/start" => return Value::Null,
+            "todo/write" => {
+                return event.pointer("/data/todos").cloned().unwrap_or(Value::Null);
+            }
+            _ => {}
+        }
+    }
+    Value::Null
+}
+
+/// Goal unit parallel: last-wins fold of `goal/change` whole values; clear yields null.
+fn backscan_goal(log: &[Value]) -> Value {
+    for entry in log.iter().rev() {
+        let event = event_of(entry);
+        if event_type(event) != "goal/change" {
+            continue;
+        }
+        let Some(change) = event.get("data") else {
+            continue;
+        };
+        if change.get("operation").and_then(Value::as_str) == Some("clear") {
+            return Value::Null;
+        }
+        return json!({
+            "goal": change.get("goal").cloned().unwrap_or(Value::Null),
+            "roundsStarted": change.get("roundsStarted").cloned().unwrap_or(Value::Null),
+            "createdAt": change.get("createdAt").cloned().unwrap_or(Value::Null),
+            "updatedAt": change.get("updatedAt").cloned().unwrap_or(Value::Null),
+        });
+    }
+    Value::Null
+}
+
+/// One provider usage sample from either durable carrier: `(turn, step, usage)`.
+fn usage_sample_of(event: &Value) -> Option<(i64, i64, Value)> {
+    let data = event.get("data")?;
+    let usage = match event_type(event) {
+        "assistant/chunk"
+            if data.pointer("/chunk/type").and_then(Value::as_str) == Some("usage") =>
+        {
+            data.pointer("/chunk/usage")?
+        }
+        "assistant/message" => data.get("usage")?,
+        _ => return None,
+    };
+    if usage.is_null() {
+        return None;
+    }
+    Some((
+        data.get("turn")?.as_i64()?,
+        data.get("step")?.as_i64()?,
+        usage.clone(),
+    ))
+}
+
+fn usage_number(usage: &Value, key: &str) -> i64 {
+    usage.get(key).and_then(Value::as_i64).unwrap_or(0)
+}
+
+/// Token-meter parallel: last-sample-replacing usage totals.
+fn token_usage_of(log: &[Value]) -> Value {
+    let mut totals = [0_i64; 4];
+    let mut last: Option<(i64, i64, [i64; 4])> = None;
+    for entry in log {
+        let Some((turn, step, usage)) = usage_sample_of(event_of(entry)) else {
+            continue;
+        };
+        let buckets = [
+            usage_number(&usage, "inputTokens"),
+            usage_number(&usage, "outputTokens"),
+            usage_number(&usage, "cacheReadTokens"),
+            usage_number(&usage, "cacheWriteTokens"),
+        ];
+        let previous = last
+            .filter(|(last_turn, last_step, _)| *last_turn == turn && *last_step == step)
+            .map_or([0; 4], |(_, _, buckets)| buckets);
+        for index in 0..4 {
+            totals[index] += buckets[index] - previous[index];
+        }
+        last = Some((turn, step, buckets));
+    }
+    json!({
+        "uncachedInputTokens": totals[0],
+        "outputTokens": totals[1],
+        "cacheReadTokens": totals[2],
+        "cacheWriteTokens": totals[3],
+    })
+}
+
+/// Token-meter parallel: last provider-reported prompt size and last recorded capacity.
+fn context_pressure_of(log: &[Value]) -> Value {
+    let mut pressure: Option<i64> = None;
+    let mut window: Option<Value> = None;
+    for entry in log {
+        let event = event_of(entry);
+        if let Some((_, _, usage)) = usage_sample_of(event) {
+            pressure = Some(
+                usage_number(&usage, "inputTokens")
+                    + usage_number(&usage, "cacheReadTokens")
+                    + usage_number(&usage, "cacheWriteTokens"),
+            );
+        }
+        if event_type(event) == "request/context" {
+            window = event.pointer("/data/contextWindow").cloned();
+        }
+    }
+    let mut value = Map::new();
+    if let Some(pressure) = pressure {
+        value.insert("pressureTokens".to_owned(), json!(pressure));
+    }
+    if let Some(window) = window.filter(|window| !window.is_null()) {
+        value.insert("contextWindow".to_owned(), window);
+    }
+    Value::Object(value)
+}
+
+/// JavaScript string length: UTF-16 code units.
+fn js_length(text: &str) -> u64 {
+    text.encode_utf16().count() as u64
+}
+
+fn density_price(text: &str) -> u64 {
+    js_length(text).div_ceil(CHARS_PER_TOKEN)
+}
+
+/// Price fixture content with token-meter's fixed-density heuristic.
+fn estimate_content(blocks: &Value) -> u64 {
+    blocks
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|block| {
+            let text = |key: &str| block.get(key).and_then(Value::as_str).unwrap_or_default();
+            match block.get("type").and_then(Value::as_str) {
+                Some("text" | "reasoning") => density_price(text("text")) + BLOCK_OVERHEAD,
+                Some("tool-call") => {
+                    density_price(text("name")) + density_price(text("arguments")) + BLOCK_OVERHEAD
+                }
+                Some("tool-result") => {
+                    estimate_content(block.get("content").unwrap_or(&Value::Null)) + BLOCK_OVERHEAD
+                }
+                _ => density_price(&block.to_string()) + BLOCK_OVERHEAD,
+            }
+        })
+        .sum()
+}
+
+/// Session surface parallel: the message-bearing event seqs after append/replace folding.
+fn surface_nodes(log: &[Value]) -> Vec<usize> {
+    let mut nodes: Vec<usize> = Vec::new();
+    for entry in log {
+        let event = event_of(entry);
+        if !matches!(
+            event_type(event),
+            "user/message" | "assistant/message" | "tool/result"
+        ) {
+            continue;
+        }
+        let Some(seq) = event.get("seq").and_then(Value::as_u64) else {
+            continue;
+        };
+        let seq = usize::try_from(seq).unwrap_or(usize::MAX);
+        match event.get("surfaceOp") {
+            Some(Value::String(marker)) if marker == "append" => nodes.push(seq),
+            Some(Value::Object(op)) if op.get("op").and_then(Value::as_str) == Some("replace") => {
+                let position = |key: &str| {
+                    op.get(key)
+                        .and_then(Value::as_u64)
+                        .and_then(|target| nodes.iter().position(|node| *node as u64 == target))
+                };
+                if let (Some(start), Some(end)) = (position("start"), position("end"))
+                    && start <= end
+                {
+                    nodes.splice(start..=end, [seq]);
+                }
+            }
+            _ => {}
+        }
+    }
+    nodes
+}
+
+/// Session parallel of `deriveEventMessage`: the message an event projects, if any.
+fn derive_event_message(event: &Value) -> Option<Value> {
+    let data = event.get("data")?;
+    match event_type(event) {
+        "user/message" => Some(data.clone()),
+        "assistant/message" => {
+            let message = data.get("message")?;
+            let empty = message
+                .get("content")
+                .and_then(Value::as_array)
+                .is_none_or(Vec::is_empty);
+            (!empty).then(|| message.clone())
+        }
+        "tool/result" => data.get("message").cloned(),
+        _ => None,
+    }
+}
+
+/// Token-meter parallel: heuristic request composition.
+fn context_breakdown_of(log: &[Value]) -> Value {
+    let header = log
+        .iter()
+        .rev()
+        .map(event_of)
+        .find(|event| event_type(event) == "request/header")
+        .and_then(|event| event.pointer("/data/header").cloned());
+    let mut message_tokens = 0_u64;
+    for seq in surface_nodes(log) {
+        let Some(event) = log.get(seq).map(event_of) else {
+            continue;
+        };
+        if let Some(message) = derive_event_message(event) {
+            message_tokens +=
+                estimate_content(message.get("content").unwrap_or(&Value::Null)) + ROLE_OVERHEAD;
+        }
+    }
+    let system_tokens = header
+        .as_ref()
+        .and_then(|header| header.get("system"))
+        .and_then(Value::as_str)
+        .map_or(0, |system| density_price(system) + ROLE_OVERHEAD);
+    let tools_tokens = header
+        .as_ref()
+        .and_then(|header| header.get("tools"))
+        .and_then(Value::as_array)
+        .filter(|tools| !tools.is_empty())
+        .map_or(0, |tools| {
+            density_price(&Value::Array(tools.clone()).to_string()) + BLOCK_OVERHEAD
+        });
+    json!({"systemTokens":system_tokens,"toolsTokens":tools_tokens,"messageTokens":message_tokens})
+}
+
+fn is_token_delta(chunk: &Value) -> bool {
+    match chunk.get("type").and_then(Value::as_str) {
+        Some("text-delta" | "reasoning-delta") => chunk
+            .get("text")
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.is_empty()),
+        Some("tool-call-delta") => {
+            chunk
+                .get("argumentsDelta")
+                .and_then(Value::as_str)
+                .is_some_and(|delta| !delta.is_empty())
+                || chunk.get("name").is_some_and(|name| !name.is_null())
+        }
+        _ => false,
+    }
+}
+
+/// Session-stats parallel: whole-log counting and wall-time fold.
+#[allow(clippy::too_many_lines)] // One fold mirrors the source switch statement arm for arm.
+fn session_stats_of(log: &[Value]) -> Value {
+    let (mut turns, mut steps) = (0_i64, 0_i64);
+    let (mut llm_ms, mut tool_ms, mut ttft_ms, mut ttft_steps, mut decode_ms, mut decode_tokens) =
+        (0_i64, 0_i64, 0_i64, 0_i64, 0_i64, 0_i64);
+    let mut last_turn: Option<i64> = None;
+    let mut open_step: Option<(i64, i64, i64, Option<i64>)> = None;
+    let mut pending_calls: HashMap<String, i64> = HashMap::new();
+    for entry in log {
+        let event = event_of(entry);
+        let data = event.get("data").cloned().unwrap_or(Value::Null);
+        let time = event_time(event);
+        let turn = data.get("turn").and_then(Value::as_i64);
+        let step = data.get("step").and_then(Value::as_i64);
+        match event_type(event) {
+            "step/start" => {
+                if let (Some(turn), Some(step)) = (turn, step) {
+                    open_step = Some((turn, step, time, None));
+                }
+            }
+            "assistant/chunk" => {
+                if let Some(open) = open_step.as_mut()
+                    && Some(open.0) == turn
+                    && Some(open.1) == step
+                    && open.3.is_none()
+                    && data.get("chunk").is_some_and(is_token_delta)
+                {
+                    open.3 = Some(time);
+                }
+            }
+            "assistant/message" => {
+                let Some(open) = open_step else {
+                    continue;
+                };
+                if Some(open.0) != turn || Some(open.1) != step {
+                    continue;
+                }
+                llm_ms += (time - open.2).max(0);
+                if let Some(first_token) = open.3 {
+                    ttft_ms += (first_token - open.2).max(0);
+                    ttft_steps += 1;
+                    if let Some(output) =
+                        data.pointer("/usage/outputTokens").and_then(Value::as_i64)
+                        && output >= 0
+                    {
+                        decode_ms += (time - first_token).max(0);
+                        decode_tokens += output;
+                    }
+                }
+                open_step = None;
+            }
+            "tool/call" => {
+                if let Some(call_id) = data.get("callId").and_then(Value::as_str) {
+                    pending_calls.insert(call_id.to_owned(), time);
+                }
+            }
+            "tool/result" => {
+                let Some(call_id) = data
+                    .pointer("/message/source/callId")
+                    .and_then(Value::as_str)
+                else {
+                    continue;
+                };
+                if let Some(dispatched) = pending_calls.remove(call_id) {
+                    tool_ms += (time - dispatched).max(0);
+                }
+            }
+            "step/end" => {
+                if turn != last_turn {
+                    turns += 1;
+                    last_turn = turn;
+                }
+                steps += 1;
+                open_step = None;
+            }
+            "turn/end" => pending_calls.clear(),
+            _ => {}
+        }
+    }
+    json!({
+        "turns":turns,"steps":steps,"llmMs":llm_ms,"toolMs":tool_ms,
+        "ttftMs":ttft_ms,"ttftSteps":ttft_steps,"decodeMs":decode_ms,"decodeTokens":decode_tokens,
+    })
+}
+
+/// Whole current values per key over the full log.
+fn projection_values(log: &[Value]) -> Value {
+    let mut values = Map::new();
+    if let Some(title) = log
+        .iter()
+        .rev()
+        .map(event_of)
+        .find(|event| event_type(event) == "session/title")
+        .and_then(|event| event.pointer("/data/title").cloned())
+    {
+        values.insert("title".to_owned(), title);
+    }
+    values.insert("todos".to_owned(), backscan_todos(log));
+    values.insert("permissions".to_owned(), permission_select_of(log));
+    values.insert("plan".to_owned(), plan_view_of(log));
+    values.insert("goal".to_owned(), backscan_goal(log));
+    values.insert("tokenUsage".to_owned(), token_usage_of(log));
+    values.insert("contextPressure".to_owned(), context_pressure_of(log));
+    values.insert("contextBreakdown".to_owned(), context_breakdown_of(log));
+    values.insert("sessionStats".to_owned(), session_stats_of(log));
+    values.insert("imageLimits".to_owned(), image_limits());
+    Value::Object(values)
+}
+
+fn image_limits() -> Value {
+    empty_projection_values()
+        .get("imageLimits")
+        .cloned()
+        .unwrap_or(Value::Null)
+}
+
+fn projection_frame(id: &str, key: &str, value: &Value, seq: &Value) -> Value {
+    json!({"type":"session/projection","sessionId":id,"key":key,"value":value,"seq":seq})
+}
+
+/// Host push-frame parallel: one `session/projection` frame per key the event advanced.
+fn projection_frames(id: &str, log: &[Value], event: &Value) -> Vec<Value> {
+    let kind = event_type(event);
+    let seq = event.get("seq").cloned().unwrap_or(Value::Null);
+    let mut frames = Vec::new();
+    if usage_sample_of(event).is_some() {
+        frames.push(projection_frame(
+            id,
+            "tokenUsage",
+            &token_usage_of(log),
+            &seq,
+        ));
+        frames.push(projection_frame(
+            id,
+            "contextPressure",
+            &context_pressure_of(log),
+            &seq,
+        ));
+    }
+    if kind == "request/context" {
+        frames.push(projection_frame(
+            id,
+            "contextPressure",
+            &context_pressure_of(log),
+            &seq,
+        ));
+    }
+    if matches!(
+        kind,
+        "request/header" | "user/message" | "assistant/message" | "tool/result"
+    ) {
+        frames.push(projection_frame(
+            id,
+            "contextBreakdown",
+            &context_breakdown_of(log),
+            &seq,
+        ));
+    }
+    if matches!(kind, "assistant/message" | "tool/result" | "step/end") {
+        frames.push(projection_frame(
+            id,
+            "sessionStats",
+            &session_stats_of(log),
+            &seq,
+        ));
+    }
+    if !frames.is_empty() {
+        return frames;
+    }
+    match kind {
+        "session/title" => projection_values(log)
+            .get("title")
+            .map(|title| vec![projection_frame(id, "title", title, &seq)])
+            .unwrap_or_default(),
+        "goal/change" => vec![projection_frame(id, "goal", &backscan_goal(log), &seq)],
+        "todo/write" | "turn/start" => {
+            vec![projection_frame(id, "todos", &backscan_todos(log), &seq)]
+        }
+        "permission/preset" | "sandbox/mode" | "approval/policy" => {
+            vec![projection_frame(
+                id,
+                "permissions",
+                &permission_select_of(log),
+                &seq,
+            )]
+        }
+        "plan/mode" => vec![projection_frame(id, "plan", &plan_view_of(log), &seq)],
+        "command/run"
+            if event.pointer("/data/name").and_then(Value::as_str) == Some("plan")
+                && event.pointer("/data/args").is_some_and(Value::is_string) =>
+        {
+            vec![projection_frame(id, "plan", &plan_view_of(log), &seq)]
+        }
+        _ => Vec::new(),
+    }
+}
+
 fn success(value: Value) -> RpcResult<Value> {
     RpcResult::Success { value: Some(value) }
 }

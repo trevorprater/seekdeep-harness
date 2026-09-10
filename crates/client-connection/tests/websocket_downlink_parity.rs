@@ -1,5 +1,7 @@
 //! Real WebSocket executable specification for the two Host downlinks.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     sync::{
         Arc,

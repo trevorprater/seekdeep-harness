@@ -19,6 +19,7 @@ mod typert_corpus;
 mod typert_host_artifacts;
 mod web_assembled;
 mod web_assembled_driver;
+mod web_assembled_snapshots;
 mod web_composer_driver;
 mod web_details_driver;
 mod web_keyless_driver;
@@ -106,6 +107,14 @@ enum Command {
         /// Optional comma-separated source scenario filter (for example `plan-review,question-composer`).
         #[arg(long)]
         scenario: Option<String>,
+    },
+    /// Run the pinned assembled-jsdom snapshot suites against the port's built bundles.
+    WebAssembledSnapshots {
+        #[arg(long, default_value = "/Users/trevor/ws/deepseek-harness")]
+        source: PathBuf,
+        /// Optional comma-separated suite filter (for example `search-card,todo-row`).
+        #[arg(long)]
+        suite: Option<String>,
     },
     /// Regenerate (or `--check`) each crate's embedded Host Typert artifact from the pinned
     /// Host face model.
@@ -389,6 +398,9 @@ fn main() -> anyhow::Result<()> {
         Command::WebDetails { source } => web_settings::run_details(&source),
         Command::WebKeyless { source, scenario } => {
             web_settings::run_keyless(&source, scenario.as_deref())
+        }
+        Command::WebAssembledSnapshots { source, suite } => {
+            web_assembled_snapshots::run(&source, suite.as_deref())
         }
         Command::TypertHostArtifacts { check } => typert_host_artifacts::run(check),
         Command::TypertCorpus { source, filter } => typert_corpus::run(&source, filter.as_deref()),
@@ -2457,7 +2469,6 @@ wasm.configureClientUiPrimitiveDialogs(React, ReactDOM);
 wasm.configureClientUiPrimitiveIcons(React);
 wasm.configureClientUiPrimitiveTooltip(React);
 wasm.configureClientUiPrimitiveBlocks(React);
-wasm.configureClientUiPrimitiveWeb(React);
 wasm.configureClientUiPrimitiveHoverCard(React, ReactDOM);
 wasm.configureClientUiPrimitiveMenu(React, ReactDOM);
 wasm.configureClientUiPrimitiveJsonTree(React, ReactDOM);
@@ -2481,6 +2492,11 @@ export const Tooltip = wasm.tooltipComponent();
 export const DiffBlock = wasm.diffBlockComponent();
 export const SearchBlock = wasm.searchBlockComponent();
 export const TerminalBlock = wasm.terminalBlockComponent();
+export const MarkdownText = wasm.markdownTextComponent();
+// Source WebBlock renders its answer through MarkdownText from the same package; the
+// compiled web module takes that component at configure time, so it configures after
+// the markdown component exists.
+wasm.configureClientUiPrimitiveWeb(React, MarkdownText);
 export const WebBlock = wasm.webBlockComponent();
 export const HoverCard = wasm.hoverCardComponent();
 export const Menu = wasm.menuComponent();
@@ -2488,7 +2504,6 @@ export const JsonTree = wasm.jsonTreeComponent();
 export const JsonBlock = wasm.jsonBlockComponent();
 export const MessageText = wasm.messageTextComponent();
 export const CodeBlock = wasm.codeBlockComponent();
-export const MarkdownText = wasm.markdownTextComponent();
 export const ReadBlock = wasm.readBlockComponent();
 export const DEFAULT_DIFF_MAX_LINES = wasm.defaultDiffMaxLines();
 export const DEFAULT_SEARCH_MAX_LINES = wasm.defaultSearchMaxLines();

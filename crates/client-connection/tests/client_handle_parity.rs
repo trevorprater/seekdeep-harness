@@ -1,5 +1,7 @@
 //! Behavioral mirror of the Client plugin's complete `ctx.connection` handle.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     collections::VecDeque,
     sync::{Arc, Weak},

@@ -1,5 +1,7 @@
 //! Real-socket parity for Connection's Host `/api` route and bounded bridge.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::Arc;
 
 use parking_lot::Mutex;

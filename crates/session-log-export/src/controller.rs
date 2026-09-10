@@ -431,8 +431,7 @@ mod browser {
         ///
         /// Returns when browser globals or the abort controller are unavailable.
         pub fn browser_default() -> Result<Rc<Self>, JsValue> {
-            let window =
-                web_sys::window().ok_or_else(|| JsValue::from_str("window unavailable"))?;
+            let window = browser_window().ok_or_else(|| JsValue::from_str("window unavailable"))?;
             let origin = window.location().origin()?;
             let fetch_window = window.clone();
             let fetcher: DownloadFetcher = Rc::new(move |request| {
@@ -509,6 +508,21 @@ mod browser {
             Ok(value) => value.as_string().unwrap_or_default(),
             Err(value) => format!("{value:?}"),
         }
+    }
+
+    /// The page window: `web_sys::window()` requires the global itself to be a `Window`, which a
+    /// jsdom test environment does not satisfy even though it exposes the `window` property the
+    /// source reads; the property lookup is the fallback (source: the bare `window` global).
+    fn browser_window() -> Option<web_sys::Window> {
+        web_sys::window().or_else(|| {
+            js_sys::Reflect::get(
+                &js_sys::global(),
+                &wasm_bindgen::JsValue::from_str("window"),
+            )
+            .ok()
+            .filter(wasm_bindgen::JsValue::is_object)
+            .map(<wasm_bindgen::JsValue as wasm_bindgen::JsCast>::unchecked_into::<web_sys::Window>)
+        })
     }
 }
 

@@ -1,5 +1,7 @@
 //! Behavioral mirror of Connection's dedicated/shared Host channels and browser caller.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{collections::HashMap, sync::Arc};
 
 use futures::future::BoxFuture;
