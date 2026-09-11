@@ -1,5 +1,7 @@
 //! Semantic conformance scenarios pinned from the source Cordis runtime.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

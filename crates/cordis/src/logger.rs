@@ -389,7 +389,7 @@ impl LoggerService {
         let name = name
             .map(str::to_owned)
             .or_else(|| config.and_then(|config| config.get("name")?.as_str().map(str::to_owned)))
-            .unwrap_or_else(|| hyphenate(context.fiber().name()));
+            .unwrap_or_else(|| seekdeep_cosmokit::string::param_case(context.fiber().name()));
         let level = config
             .and_then(|config| config.get("level"))
             .and_then(Value::as_i64)
@@ -444,21 +444,6 @@ fn trim_buffer(buffer: &mut Vec<LogMessage>, size: usize) {
     if buffer.len() > size {
         buffer.drain(..buffer.len() - size);
     }
-}
-
-fn hyphenate(value: &str) -> String {
-    let mut output = String::new();
-    for (index, character) in value.chars().enumerate() {
-        if character.is_uppercase() {
-            if index > 0 {
-                output.push('-');
-            }
-            output.extend(character.to_lowercase());
-        } else {
-            output.push(character);
-        }
-    }
-    output
 }
 
 fn default_format(

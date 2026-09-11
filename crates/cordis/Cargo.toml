@@ -16,6 +16,7 @@ indexmap.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+seekdeep-cosmokit = { path = "../cosmokit" }
 seekdeep-schemastery = { path = "../schemastery" }
 thiserror.workspace = true
 tracing.workspace = true

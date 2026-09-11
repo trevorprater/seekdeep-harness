@@ -927,7 +927,9 @@ impl TypertInvocableService for GoalService {
 
     fn parameter_names(&self, implementation: &str) -> Option<Vec<String>> {
         match implementation {
-            "create_remote" => Some(vec!["agent".to_owned(), "request".to_owned()]),
+            "create_remote" | "remoteExportCreate" => {
+                Some(vec!["agent".to_owned(), "request".to_owned()])
+            }
             "edit" => Some(vec![
                 "agent".to_owned(),
                 "ref".to_owned(),
@@ -943,7 +945,13 @@ impl TypertInvocableService for GoalService {
     fn has_method(&self, implementation: &str) -> bool {
         matches!(
             implementation,
-            "create_remote" | "edit" | "pause" | "resume" | "complete" | "clear"
+            "create_remote"
+                | "remoteExportCreate"
+                | "edit"
+                | "pause"
+                | "resume"
+                | "complete"
+                | "clear"
         )
     }
 
@@ -955,7 +963,7 @@ impl TypertInvocableService for GoalService {
         let implementation = implementation.to_owned();
         Box::pin(async move {
             match implementation.as_str() {
-                "create_remote" => {
+                "create_remote" | "remoteExportCreate" => {
                     anyhow::ensure!(arguments.len() == 2, "goals/create expects two arguments");
                     let agent = agent_argument(&arguments[0])?;
                     let request = json_argument::<CreateGoalRequest>(&arguments[1])?;
@@ -1306,6 +1314,66 @@ mod service_tests {
                 ("complete", None),
                 ("clear", None),
             ]
+        );
+    }
+
+    #[tokio::test]
+    async fn generated_goal_create_alias_invokes_the_live_service() {
+        let (_context, subject, service) = setup("generated-goal-alias");
+        let contribution = seekdeep_typert_host_artifact::contribution(TYPERT_HOST_ARTIFACT)
+            .expect("compiled Goal artifact");
+        for descriptor in &contribution.invocations {
+            let implementation = descriptor
+                .implementation
+                .as_deref()
+                .unwrap_or(&descriptor.method);
+            assert!(
+                TypertInvocableService::has_method(service.as_ref(), implementation),
+                "missing generated implementation {implementation}"
+            );
+            assert_eq!(
+                service.parameter_names(implementation).unwrap(),
+                descriptor
+                    .parameters
+                    .iter()
+                    .map(|parameter| parameter.name.clone())
+                    .collect::<Vec<_>>(),
+            );
+        }
+        let create = contribution
+            .invocations
+            .iter()
+            .find(|descriptor| descriptor.method == "create")
+            .unwrap();
+        let result = service
+            .clone()
+            .invoke(
+                create.implementation.as_deref().unwrap(),
+                vec![
+                    TypertHostArgument::Lookup(subject.clone()),
+                    TypertHostArgument::Boundary(TypertBoundaryValue::Json(
+                        json!({ "objective": "  generated Remote goal  ", "maxGoalRounds": 3 }),
+                    )),
+                ],
+            )
+            .await
+            .expect("generated Goal creation");
+        let TypertBoundaryValue::Json(result) = result else {
+            panic!("Goal creation omitted its identity")
+        };
+        let created: CreateGoalResult = serde_json::from_value(result).unwrap();
+        let current = service.get(&subject).unwrap().unwrap();
+        assert_eq!(created.goal_ref.id, current.id);
+        assert_eq!(created.goal_ref.revision, current.revision);
+        assert_eq!(current.objective, "generated Remote goal");
+        assert_eq!(current.max_goal_rounds, 3);
+        let events = subject.session().events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "goal/change");
+        assert_eq!(events[0].data["operation"], "create");
+        assert_eq!(
+            events[0].data["goal"]["id"],
+            serde_json::to_value(&current.id).unwrap()
         );
     }
 

@@ -21,9 +21,9 @@ pub mod binary {
     pub fn from_base64(source: &str) -> Result<Vec<u8>, base64::DecodeError> {
         #[cfg(target_arch = "wasm32")]
         {
-            return general_purpose::STANDARD
+            general_purpose::STANDARD
                 .decode(source)
-                .or_else(|_| general_purpose::STANDARD_NO_PAD.decode(source));
+                .or_else(|_| general_purpose::STANDARD_NO_PAD.decode(source))
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -66,10 +66,10 @@ pub mod binary {
         let complete_length = source.len() - source.len() % 2;
         #[cfg(target_arch = "wasm32")]
         {
-            return Ok((0..complete_length)
+            Ok((0..complete_length)
                 .step_by(2)
                 .map(|index| u8::from_str_radix(&source[index..index + 2], 16).unwrap_or(0))
-                .collect());
+                .collect())
         }
         #[cfg(not(target_arch = "wasm32"))]
         {

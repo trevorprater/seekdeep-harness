@@ -6655,6 +6655,7 @@ dependencies = [
  "indexmap 2.14.0",
  "js-sys",
  "parking_lot",
+ "seekdeep-cosmokit",
  "seekdeep-schemastery",
  "serde",
  "serde-wasm-bindgen",

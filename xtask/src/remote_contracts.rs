@@ -299,6 +299,11 @@ fn corpus(source: &Path, gateway: bool, source_regressions: bool) -> anyhow::Res
         "tests/typert.spec.ts"
     }))?)
     .replace(
+        "{ Context, Service }",
+        "{ Context, Service, EventsService, RegistryService, Fiber, DisposableList, isBailed, isConstructor, Inject, CordisError, createCallable, joinPrototype, withProps, getTraceable, getPropertyDescriptor, isObject, resolveConfig, ValidationError, symbols, buildOuterStack, composeError, Logger, LoggerService, c16, c256, defaultFormatters }",
+    )
+    .replace("import type { Fiber } from '@seekdeep-ai/cordis'\n", "")
+    .replace(
         "'@seekdeep-ai/cordis'",
         &serde_json::to_string(&adapter.to_string_lossy())?,
     )
@@ -314,7 +319,10 @@ fn corpus(source: &Path, gateway: bool, source_regressions: bool) -> anyhow::Res
     )
     .replace("'zod'", &serde_json::to_string(&zod.to_string_lossy())?);
     let tests = if gateway {
-        format!("{tests}\n{}", registry_driver::GATEWAY_ADDITIONAL)
+        format!(
+            "{tests}\nconst loadCordisCopy = () => import('./cordis-copy.mjs');\n{}",
+            registry_driver::GATEWAY_ADDITIONAL
+        )
     } else {
         tests
     };
@@ -343,7 +351,7 @@ fn corpus(source: &Path, gateway: bool, source_regressions: bool) -> anyhow::Res
     if source_regressions {
         command.args([
             "-t",
-            "preserves immediate-remount|owns pending|clears retained|preserves metadata|preserves strict|keeps explicit|preserves browser event|preserves Context branding|preserves callback service tracing|preserves per-Fiber update|preserves symbol event|preserves concurrent Fiber teardown",
+            "preserves immediate-remount|owns pending|clears retained|preserves metadata|preserves strict|keeps explicit|preserves browser event|preserves Context branding|preserves callback service tracing|preserves per-Fiber update|preserves symbol event|preserves concurrent Fiber teardown|preserves independent EventsService|preserves EventService|preserves browser Fiber|preserves browser Registry|preserves browser Service|preserves browser Inject|preserves browser symbols|preserves browser stacks|preserves browser logger|preserves browser reflection",
         ]);
     }
     let status = command.status()?;
@@ -380,6 +388,15 @@ fn write_corpus_adapters(root: &Path, directory: &Path) -> anyhow::Result<(PathB
         directory.join("cordis.mjs"),
         format!("import {{ readFile }} from 'node:fs/promises';\n{wrapper}"),
     )?;
+    let binding = root.join("vendor/cordis/lib/client.js");
+    let copy = wrapper.replace(
+        &serde_json::to_string(&binding.to_string_lossy())?,
+        &serde_json::to_string(&format!("{}?cordis-copy", binding.display()))?,
+    );
+    std::fs::write(
+        directory.join("cordis-copy.mjs"),
+        format!("import {{ readFile }} from 'node:fs/promises';\n{copy}"),
+    )?;
     std::fs::write(
         &adapter,
         registry_driver::ADAPTER
@@ -402,6 +419,11 @@ fn write_corpus_adapters(root: &Path, directory: &Path) -> anyhow::Result<(PathB
 
 fn source_gateway_regressions(source: &Path, source_package: &Path) -> anyhow::Result<String> {
     let source_test = std::fs::read_to_string(source_package.join("tests/gateway.client.spec.ts"))?
+        .replace(
+            "{ Context, Service }",
+            "{ Context, Service, EventsService, RegistryService, Fiber, DisposableList, isBailed, isConstructor, Inject, CordisError, createCallable, joinPrototype, withProps, getTraceable, getPropertyDescriptor, isObject, resolveConfig, ValidationError, symbols, buildOuterStack, composeError, Logger, LoggerService, c16, c256, defaultFormatters }",
+        )
+        .replace("import type { Fiber } from '@deepseek-ai/cordis'\n", "")
         .replace(
             "'@deepseek-ai/cordis'",
             &serde_json::to_string(&source.join("vendor/cordis/lib/index.js").to_string_lossy())?,
@@ -427,7 +449,11 @@ fn source_gateway_regressions(source: &Path, source_package: &Path) -> anyhow::R
             )?,
         );
     Ok(format!(
-        "{source_test}\n{}",
+        "{source_test}\nconst loadCordisCopy = () => import({});\n{}",
+        serde_json::to_string(&format!(
+            "{}?cordis-copy",
+            source.join("vendor/cordis/lib/index.js").display()
+        ))?,
         registry_driver::GATEWAY_ADDITIONAL
     ))
 }

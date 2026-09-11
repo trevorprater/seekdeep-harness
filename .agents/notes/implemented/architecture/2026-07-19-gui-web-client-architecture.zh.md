@@ -36,7 +36,7 @@ Status: implemented
 
 Client Runtime factory 以相同名称公开 source barrel 的完整 value roster 与 generated declaration。薄 compatibility binding 提供 alias、reference-stable empty constant 与原生 `Error` subclass，而 helper、service、`PendingWait`、Conversation assembler 和 Location-index 行为全部委托给编译后的 Rust；内部 wasm-bindgen export 不会取代或削弱已记录的 public face。
 
-浏览器事件分发使用 Cordis core 的 hook／effect 账本，同时保留 JavaScript 接收者与返回值语义。可选的显式接收者提供 `Context.filter` 和监听器的 `this`；隐式分发绑定 `null`。`bail` 保留同步值及返回的 Promise 标识，`events.dispatch` 消费接收者与事件名，并返回已捕获的回调列表。`once` 在重入前移除注册，并遵守拦截器提供的 disposer。Waterfall 监听器共享可变参数列表，并可否决 continuation。Serial 与 parallel 分发同步进入监听器，同时将异步失败公开为 rejection。源实现／已构建 WASM 的差分用例与 Chromium 插件释放验证这些行为；组合后的 `/export` 路径覆盖 token 消费和本地执行确认。
+浏览器事件分发读取可变的 `ctx.events._hooks` 表；注册仍是由 Fiber 拥有的 effect。可选的显式接收者提供 `Context.filter` 和监听器的 `this`；隐式分发绑定 `null`。`bail` 保留同步值及返回的 Promise 标识，`events.dispatch` 消费接收者与事件名，并返回已捕获的回调列表。`once` 在重入前移除注册，并遵守拦截器提供的 disposer。Waterfall 监听器共享可变参数列表，并可否决 continuation。Serial 与 parallel 分发同步进入监听器，同时将异步失败公开为 rejection。源实现／已构建 WASM 的差分用例与 Chromium 插件释放验证这些行为；组合后的 `/export` 路径覆盖 token 消费和本地执行确认。
 
 `Context.is` 通过编译后的 Rust 谓词读取源实现的共享 symbol 标识，包括继承的标记、可变的标识键函数、原始值 getter 接收者，以及未改写的 getter 失败。原型属性描述符与源实现一致；Chromium 验证独立 Cordis 副本和外部 realm 对象。该标识用于识别对象，不授予能力。
 
@@ -48,7 +48,49 @@ Symbol 事件名称在 Rust 事件注册表中保留 identity，并共用原生 
 
 浏览器根上下文显式选择并发 Fiber dispose；关联的子级继承注入的调度策略。每次 teardown 只截取一次 effect 列表，按注册逆序启动 disposer，并等待所有操作完成后才允许 restart 激活下一份配置。因此，有依赖关系的异步 disposer 能够相互释放，不会因串行执行而死锁。源实现对照与 Chromium 固定该推进和结算行为；含 64 个 disposer 的原生测试固定策略继承、调用方共同等待和稳定的失败顺序。原生根上下文默认仍串行 dispose。
 
-浏览器绑定仍缺少源实现公开的 `ctx.events._hooks` 表。完整的逐句柄生命周期状态遮蔽也仍待完成：重启挂载句柄不会改变源实现底层 Fiber 的状态，而 Rust 基础实现共享该状态转换。这些缺口不削弱原生事务更新约定。Cordis 的 WASM `--all-targets` 检查仍为红色，因为原生 Tokio 单元测试缺少目标条件限制；WASM 库与浏览器集成测试目标分别执行 strict Clippy 检查。
+事件服务公开钩子记录、`register` 和 `unregister`。即使调用方替换表项，清理仍使用原始列表与回调。原生 emit、bail、serial 和 parallel 分发会观察表中的修改，同时保留具有 Rust 类型的回调；原生 bail 也保留即时 JavaScript 值与 Promise 标识。源实现比较、原生／WASM 桥接测试和 Chromium 验证记录修改、回调绑定及按所有权清理。仅适用于原生环境的测试已按目标条件限制，Cordis 的 WASM `--all-targets` strict Clippy 检查通过。
+
+公开的 `EventsService` 构造函数创建独立表，并保留子类原型、方法参数个数及虚方法覆盖行为。注册使用服务当前的 Context 与 Fiber，也支持按结构提供接口的 Context 所有者。当回调返回 bail 值或失败时，bail 与 serial 会关闭回调迭代器；若迭代器清理也失败，原始回调错误仍优先。`isBailed` 仅对 `null`、`false` 和 `undefined` 返回 false。源实现比较和 Chromium 将这些公开导出与生成的 Remote 一起验证。
+
+浏览器 Fiber 转换由 Rust 实现，每个接收者各有一个所有者，并共享依赖 epoch 与浏览器 disposable 列表。原生注册也进入同一列表。因此，句柄与其底层 Fiber 可以重叠执行更新，同时保留各自的状态、inertia、配置和错误字段。底层 Fiber 的状态控制服务可见性。每次 unload 同步截取其 effect；之后注册的 effect 留给后续转换处理。源实现／已构建 WASM 的执行记录验证重启、失败恢复、重叠更新，以及底层 Fiber dispose 后句柄保留自身状态的行为。原生 Fiber 保留独立的事务更新路径。
+
+反射存储与 Fiber 的 `store`／`_store` 快照共享实现记录。可用性检查刷新依赖快照，但不隐藏显式查找；teardown 会保留自身访问，直到依赖方清理完成。浏览器发布在观察者扩展依赖前提供 PENDING 状态的 Fiber 对象；发布失败保留原始 JavaScript 异常，并在返回前启动回滚。失败发布的视图仍是根生命周期拥有的元数据，不会成为无所有者的原生提供方。
+
+浏览器 Context 的 accessor 与 mixin 使用 Rust effect 账本完成注册、回滚和清理。计算属性的 getter 与 setter 接收调用方 Context、关联 receiver，以及原始调用方错误。Get/set waterfall 通过 continuation 保留该错误；只有抛出同一个错误传递对象时才执行 stack enhancement。可修改的定义、映射后的 mixin 方法与 setter、只读写入拒绝、特殊属性，以及根上下文元数据写入均遵循源实现规则。源实现比较与 Chromium 将这些行为和带类型的 Remote 调用一起验证。
+
+反射通知遍历公开的 registry 记录，将当前作用域过滤器应用于依赖方和服务事件监听器，并调用各 Fiber 当前的 `_checkImpl` 与 `_refresh` 方法。提供方注册调用当前的 `fiber.effect` 和反射通知方法；原生服务记录继续支持 Rust 使用方。源实现／已构建 WASM 用例验证自定义作用域选择、跳过 setup、effect 诊断、通知只发送一次，以及携带原始错误对象的异步撤回拒绝。Chromium 将通知过滤器、提供方钩子和清理拒绝与 Remote 调用一起验证。
+
+浏览器根上下文保留源实现的 Context 自有字段、子类原型，以及共享的反射构造函数、原型和 handler。插件上下文拥有自己的 Fiber 字段；普通元数据子对象以常规对象形式直接继承父对象。私有 weak map 将这些对象连接到 Rust，保留自有元数据的直接读取，以及继承值的上下文 tracing。Shadow extension 保留源实现额外的原型层和调用方标记。源实现比较与 Chromium 验证对象结构和 tracing 规则。
+
+Context 元数据操作接受结构型 receiver。隔离和拦截调用 receiver 当前的 `extend` 方法，保留自定义返回值，并在使用配置值之前保留 getter 的惰性。源结构的 extension 记录将普通和覆盖方法产生的隔离连接到原生 realm，同时保持返回的 JavaScript 对象不变。独立的反射服务发布到各自的表，并保留根上下文共享的作用域标签。源实现比较与 Chromium 将这些路径和 Remote 服务使用一起验证。
+
+Rust 浏览器 effect 解释器按源实现的顺序收集函数、promise、同步及异步可迭代对象。effect 在 setup 执行前进入所有者的 disposable 列表；setup 部分执行后失败时，会回滚已收集的 disposer。嵌套 effect 转移所有权，并通过 `getEffects()` 保留诊断树。每个 effect 按逆序串行清理其子项，而 Fiber teardown 并发启动已截取的 effect。公开 disposer 仍只执行一次，结构所有者会共同等待已开始的清理。插件启动使用同一结果解释器，同时保留其不同的列表收集语义。源实现／已构建 WASM 用例覆盖 setup 中重入 dispose、自定义 thenable、原始类型迭代记录、取消的流，以及尚未完成的子级清理。`CordisError` 保留公开原型、稳定错误码、可修改的默认消息表，以及原有的非活动操作行为。
+
+根上下文初始化时会从 disposable 列表中清除构造期间的注册，但不执行其清理，因此内置事件钩子在根上下文重启后仍保留，也不会出现在用户 effect 诊断中。源实现比较验证重启后的持久性。真实 Host／Chromium Remote 路径还会先验证嵌套可迭代 effect、可等待的 setup、共同等待清理和非活动 Fiber 错误码，再验证 descriptor 撤销。
+
+公开 `Fiber` 构造函数支持独立的根类型所有者和直接 runtime 挂载，也保留子类原型。直接挂载会加入所提供 runtime 的 fiber 列表，但不会插入 registry 记录，因此在该 runtime 参与 registry 遍历之前，服务通知仍保留其初始依赖快照。浏览器 `RegistryService` 在同一回调的各次挂载间共享首个描述符的名称与 schema，并向检查和调用暴露同一 runtime 记录。类入口按源实现的顺序执行构造、初始化钩子和返回的启动 effect。源实现比较与真实 Host／Chromium 路径验证构造和清理。
+
+浏览器 Fiber facade 保留源实现的自有字段和方法原型，同时将原始 WASM 句柄保持为私有。可修改的 `_runner` 在激活、重启、失败和 teardown 之间持有 epoch、执行、收集和调用方 stack 状态。Effect 调用当前的 `_execute` 方法；生命周期转换按源实现顺序调用当前的配置、epoch、加载／卸载和状态方法。状态观察器运行前会同步原生状态。源实现比较与 Chromium 验证字段 descriptor、异步方法原型、runner 身份、回调替换和生命周期分派。
+
+Fiber 构造在新 Fiber 的上下文字段仍为 undefined 时调用父 Context 当前的 `extend` 方法。返回新上下文或复用父上下文时，均保留源实现对应的服务所有权。Extension 记录在自定义 Context 包装器中仍被保留，其原始句柄采用构造出的 Fiber 原生所有者。原始 WASM 测试与真实 Host／Chromium 路径验证子级清理，以及父级拥有的服务继续保留。
+
+结构型 Fiber receiver 通过同一个 Rust 生命周期实现执行激活、重启和 teardown，无需原生 controller。其自身的 disposable 列表会被清空，清理迭代开始前的失败保留 Promise 拒绝与错误身份。Registry 删除在 dispose 抛出时关闭自定义 fiber 迭代器。依赖规范化逐项写入，拒绝只读结果槽位，并在写入失败时关闭迭代器。源实现比较与 Chromium 验证这些边界。
+
+父 Context 来自另一份 Cordis 时，Registry 构造仍保留发起方 Cordis 的 Fiber 原型。跨副本的依赖撤回、重新发布、重启和清理使用同一组源可见对象。浏览器插件先创建上下文和 runner，再注册父级 effect；runtime 成员在该 effect 的 setup 内加入。父级 effect 拒绝时保留原始异常，并阻止启动。缺失 runner stack 回调时采用源实现的默认捕获。源实现比较与 Chromium 验证这些构造和诊断边界。
+
+`DisposableList` 公开可修改的序号、map 和弱身份存储。移除闭包读取当前 map；重复注册保留不同的移除句柄。构造函数 inject map 与 Context intercept 保留 JavaScript 值和祖先原型，也支持含函数的配置。Symbol 隔离标签保留身份，并成为对应的反射存储 key；描述相同但身份不同的 symbol 使用不同的原生隔离 realm。源实现／已构建 WASM 用例验证这些行为。
+
+Rust/WASM `Service` 绑定处理静态提供方名称、可用性谓词、可调用对象构造、扩展、隔离过滤、配置合并，以及沿构造函数链进行的实例检查。类和方法的 `Inject` 装饰器保留继承的元数据，并注册由依赖关系管理的子插件。方法调用保留有 tracker 或无 tracker 时各自的接收者行为；依赖撤销和父级 teardown 会释放其 effect。源实现比较覆盖重复装饰器、原始构造对象作为 check 接收者，以及可修改的 tracker getter。Chromium 将可调用服务、symbol 隔离和装饰方法与真实 Remote 调用一起验证。
+
+公开的 `createCallable`、`joinPrototype`、`withProps`、`getTraceable`、`getPropertyDescriptor`、`isObject` 和 `resolveConfig` 工具函数在 Rust/WASM 中执行。Tracing 读取当前 JavaScript tracker 与反射元数据，也支持按结构提供接口的 Context。Standard-schema 解析保留 config 和 issue getter 的调用时机、validator 接收者、同步失败的身份，以及拒绝异步验证的行为。
+
+完整且可修改的 `symbols` 表与 Rust 使用方共享。Effect、tracing、装饰器和类初始化读取其当前 key；事件过滤和服务扩展则保留源实现对公开类元数据的独立读取。反射查找观察当前 Context 隔离 key，并传播 symbol getter 失败。公开的 `buildOuterStack` 和 `composeError` 工具函数在 JavaScript 边界捕获调用方 frame，并在 Rust 中执行惰性切片、thenable 处理、非标准错误包装和 stack 改写。源实现用例与 Chromium 验证这些公开工具函数。
+
+Fiber 启动、即时 effect setup、迭代器执行，以及由所有者发起的 teardown 使用 Rust stack composer。Registry 调用惰性捕获调用方 frame，直接 Fiber 构造则保留所提供的 frame 回调。抛出的非 Error 值被包装成 Error，回调内部创建的错误保留所提供的调用方 frame，无效结果或不可调用的初始化钩子仍产生 TypeError。Setup 回滚与清理所有权仍由 effect 账本管理。源实现比较覆盖同步和 rejected setup、直接构造、迭代器、类初始化与 teardown；Chromium 验证启动和清理 frame 到达 logger。
+
+默认浏览器 logger 是由 Rust 实现的可调用服务，提供可修改的调色板和 formatter、可注入的时钟边界、作用域名称与级别、可识别 shadow 的 Fiber 引用，以及源实现的消息身份语义。其 buffer 与 exporter 清理保留源实现的计数器和零上限行为。启动、清理和可用性检查失败会携带原始 JavaScript 错误对象到达对应 Context 的 logger。原生 logger 名称使用共享的 `param_case` 工具函数处理缩写、分隔符和非 ASCII 文本。Gateway 夹具通过真实 logger 上的 exporter 记录 warning；Chromium 将安装、格式化、作用域及启动错误身份与 Remote 调用一起验证。
+
+浏览器统一导出入口已暴露固定源实现的全部 runtime 导出，但浏览器 Cordis 仍未完成。其余构造边界和公开 API 审计仍需源实现比较。原生与浏览器 logger 的证据仍分开记录。即使公开导出和集成 Remote 调用通过，parity manifest 仍保留未完成的实现条目。
 
 活动轮次证据使用正常的 Rust Web profile、现有 Rust session-log replay 适配器，以及固定源实现的 provider catalog 和 workspace-picker 交互。浏览器调用公开的 `connectWorkspace` 导出，创建 Session、提交提示词，观察中间文本与运行态 Stop 控件，并重新加载已结算的响应。夹具在 Host 关闭后审计完整 replay 消费及冷读 JSONL 工件。Projection frame 保留 null 值，同时仍拒绝缺失的 `value`；Host 运行／空闲 frame 来自 Agent status 事件，stream 所有的监听器会在取消或 drop 时释放。此无密钥 replay 不是真实模型运行。
 

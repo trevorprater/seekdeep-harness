@@ -1,5 +1,7 @@
 //! Service lifecycle observation used by dependency-reconciled native adapters.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

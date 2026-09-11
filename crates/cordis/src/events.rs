@@ -260,12 +260,10 @@ pub struct EventOptions {
 
 #[derive(Clone)]
 pub(crate) struct Hook {
-    id: Uuid,
+    pub(crate) id: Uuid,
     pub(crate) owner: Context,
     pub(crate) options: EventOptions,
     pub(crate) listener: Listener,
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) browser: Option<crate::wasm::browser_events::BrowserHook>,
 }
 
 #[derive(Clone)]
@@ -282,7 +280,7 @@ pub struct EventBus {
     hooks: Arc<RwLock<HashMap<String, Vec<Hook>>>>,
     waterfall_hooks: Arc<RwLock<HashMap<String, Vec<WaterfallHook>>>>,
     #[cfg(target_arch = "wasm32")]
-    pub(crate) symbols: crate::wasm::symbol_events::SymbolEvents,
+    pub(crate) browser_table: parking_lot::Mutex<Option<crate::wasm::browser_events::HookTable>>,
 }
 
 /// Immutable listener snapshot prepared at a transactional dispatch boundary.
@@ -363,15 +361,7 @@ impl EventBus {
         listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
         options: EventOptions,
     ) -> Result<EffectHandle, CordisError> {
-        self.register_hook(
-            context,
-            name.into(),
-            Arc::new(listener),
-            options,
-            false,
-            #[cfg(target_arch = "wasm32")]
-            None,
-        )
+        self.register_hook(context, name.into(), Arc::new(listener), options, false)
     }
 
     /// Registers an asynchronous listener removed immediately before its first invocation.
@@ -386,39 +376,16 @@ impl EventBus {
         listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
         options: EventOptions,
     ) -> Result<EffectHandle, CordisError> {
-        self.register_hook(
-            context,
-            name.into(),
-            Arc::new(listener),
-            options,
-            true,
-            #[cfg(target_arch = "wasm32")]
-            None,
-        )
+        self.register_hook(context, name.into(), Arc::new(listener), options, true)
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(crate) fn on_browser(
-        &self,
-        context: &Context,
-        name: String,
-        listener: impl Fn(Context, EventArgs) -> ListenerFuture + Send + Sync + 'static,
-        options: EventOptions,
-        browser: crate::wasm::browser_events::BrowserHook,
-    ) -> Result<EffectHandle, CordisError> {
-        self.register_hook(
-            context,
-            name,
-            Arc::new(listener),
-            options,
-            false,
-            Some(browser),
-        )
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    pub(crate) fn browser_hooks(&self, name: &str) -> Vec<Hook> {
-        self.hooks.read().get(name).cloned().unwrap_or_default()
+    pub(crate) fn browser_initial_hooks(&self) -> Vec<(String, Hook)> {
+        self.hooks
+            .read()
+            .iter()
+            .flat_map(|(name, hooks)| hooks.iter().map(|hook| (name.clone(), hook.clone())))
+            .collect()
     }
 
     fn register_hook(
@@ -428,15 +395,24 @@ impl EventBus {
         listener: Listener,
         options: EventOptions,
         once: bool,
-        #[cfg(target_arch = "wasm32")] browser: Option<crate::wasm::browser_events::BrowserHook>,
     ) -> Result<EffectHandle, CordisError> {
         let id = Uuid::now_v7();
+        #[cfg(target_arch = "wasm32")]
+        let browser_table = self.browser_table.lock().clone();
         let listener = if once {
             let registry = self.hooks.clone();
             let event_name = name.clone();
             let listener = listener.clone();
-            Arc::new(move |context, args| {
+            #[cfg(target_arch = "wasm32")]
+            let browser_table = browser_table.clone();
+            Arc::new(move |context, args| -> ListenerFuture {
                 remove_hook(&registry, &event_name, id);
+                #[cfg(target_arch = "wasm32")]
+                if let Some(table) = &browser_table
+                    && let Err(error) = table.remove_native(id)
+                {
+                    return Box::pin(async move { Err(crate::wasm::js_anyhow(&error)) });
+                }
                 listener(context, args)
             }) as Listener
         } else {
@@ -447,9 +423,13 @@ impl EventBus {
             owner: context.clone(),
             options,
             listener,
-            #[cfg(target_arch = "wasm32")]
-            browser,
         };
+        #[cfg(target_arch = "wasm32")]
+        if let Some(table) = &browser_table {
+            table.insert_native(&name, hook.clone()).map_err(|error| {
+                CordisError::EventPublication(crate::wasm::js_anyhow(&error).to_string())
+            })?;
+        }
         let mut hooks = self.hooks.write();
         let entries = hooks.entry(name.clone()).or_default();
         if options.prepend {
@@ -462,6 +442,12 @@ impl EventBus {
         let registry = self.hooks.clone();
         let effect = EffectHandle::synchronous(format!("ctx.on({name:?})"), move || {
             remove_hook(&registry, &name, id);
+            #[cfg(target_arch = "wasm32")]
+            if let Some(table) = &browser_table {
+                table
+                    .remove_native(id)
+                    .map_err(|error| crate::wasm::js_anyhow(&error))?;
+            }
             Ok(())
         });
         match context.own(effect.clone()) {
@@ -597,7 +583,7 @@ impl EventBus {
         Ok(PreparedEmission {
             context: dispatch_context.clone(),
             args: args.clone(),
-            hooks: self.selected(dispatch_context, name),
+            hooks: self.selected_for_dispatch(dispatch_context, name, DispatchMode::Emit)?,
         })
     }
 
@@ -614,7 +600,7 @@ impl EventBus {
     ) -> anyhow::Result<()> {
         self.notify_internal_dispatch(dispatch_context, DispatchMode::Parallel, name, args)?;
         let futures = self
-            .selected(dispatch_context, name)
+            .selected_for_dispatch(dispatch_context, name, DispatchMode::Parallel)?
             .into_iter()
             .map(|hook| {
                 let future = catch_unwind(AssertUnwindSafe(|| {
@@ -653,7 +639,7 @@ impl EventBus {
         args: &EventArgs,
     ) -> anyhow::Result<EventReply> {
         self.notify_internal_dispatch(dispatch_context, DispatchMode::Serial, name, args)?;
-        for hook in self.selected(dispatch_context, name) {
+        for hook in self.selected_for_dispatch(dispatch_context, name, DispatchMode::Serial)? {
             let reply = (hook.listener)(dispatch_context.clone(), args.clone()).await?;
             if reply.is_bailed() {
                 return Ok(reply);
@@ -677,7 +663,7 @@ impl EventBus {
         args: &EventArgs,
     ) -> anyhow::Result<BailReply> {
         self.notify_internal_dispatch(dispatch_context, DispatchMode::Bail, name, args)?;
-        for hook in self.selected(dispatch_context, name) {
+        for hook in self.selected_for_dispatch(dispatch_context, name, DispatchMode::Bail)? {
             let mut future = catch_unwind(AssertUnwindSafe(|| {
                 (hook.listener)(dispatch_context.clone(), args.clone())
             }))
@@ -764,10 +750,30 @@ impl EventBus {
             Arc::new(args.clone()),
             Arc::new(dispatch_context.clone()),
         ]);
-        for hook in self.selected(dispatch_context, "internal/dispatch") {
+        for hook in
+            self.selected_for_dispatch(dispatch_context, "internal/dispatch", DispatchMode::Emit)?
+        {
             invoke_emitted_hook(&hook, dispatch_context, &diagnostic_args)?;
         }
         Ok(())
+    }
+
+    #[allow(clippy::unnecessary_wraps)] // Browser hook getters and filters can throw.
+    fn selected_for_dispatch(
+        &self,
+        dispatch_context: &Context,
+        name: &str,
+        mode: DispatchMode,
+    ) -> anyhow::Result<Vec<Hook>> {
+        #[cfg(target_arch = "wasm32")]
+        let browser_table = self.browser_table.lock().clone();
+        #[cfg(target_arch = "wasm32")]
+        if let Some(table) = browser_table {
+            return table.selected_native(dispatch_context, name, mode);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = mode;
+        Ok(self.selected(dispatch_context, name))
     }
 
     fn selected(&self, dispatch_context: &Context, name: &str) -> Vec<Hook> {
@@ -933,7 +939,7 @@ fn remove_waterfall_hook(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use std::sync::{Arc, Mutex};
 

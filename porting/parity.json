@@ -37925,7 +37925,7 @@
     {
       "source": "package.json",
       "kind": "configuration",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "package.json"
       ],
@@ -37946,7 +37946,7 @@
         "demo:acp, demo:code-mode, and demo:cordis delegate only to compiled Rust entrypoints",
         "test:issue-management delegates to the verified seekdeep-issue-policy crate"
       ],
-      "note": "root package metadata preserves source command names while compiled Rust owns the repository demos, Issue policy, change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior"
+      "note": "Root package metadata preserves source command names while compiled Rust owns the repository demos, Issue policy, change-scope, configuration ownership, package licensing, documentation and public-repository references, active and archived Agent Note, persistence-catalog, and tool-catalog behavior. Remaining build, lint, catalog, and documentation scripts still invoke the removed TypeScript source layout or unavailable tsx/Vite tooling. The 2026-09-10 doc-sync run passed 14 gates and failed 14; lint failed in build:lib:host. Complete the Rust command wiring and documentation projection before claiming these aggregate commands pass."
     },
     {
       "source": "packages/AGENTS.md",
@@ -63042,9 +63042,11 @@
         "crates/goal/src/index.rs"
       ],
       "evidence": [
-        "cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings"
+        "cargo test -p seekdeep-goal --all-features && cargo clippy -p seekdeep-goal --all-targets --all-features -- -D warnings",
+        "cargo test -p seekdeep-goal --lib generated_goal_create_alias_invokes_the_live_service: generated method names and parameters, live creation, returned identity, and one appended goal/change event pass",
+        "target/debug/xtask remote-consumer --browser: compiled public consumer and generated Remote calls pass through real Chromium and Rust Host; root and scoped Goal mutations are present in session history"
       ],
-      "note": "applyGoalProjection, resolveMaxGoalRounds, resolveObjective, resolveCreateGoal, resolveBlockReason, and Config/ResolvedConfig are ported; the GoalService class (Typert remote + agent registry + session append) remains projection registration reacts to the service-change bus only, which does not fire when a registry whose owning plugin was still loading at provide time becomes active; session-title, tool-todo, and permission-presets moved to seekdeep_session_projection::register_when_mounted (an inject-gated child mirroring ctx.inject) after the details lifecycle gate exposed the miss; this crate still uses the bus binding and should migrate the same way"
+      "note": "The generated remoteExportCreate implementation name delegates to the native Goal creation method. Projection lifecycle remains open: registration uses the service-change bus, which misses a registry becoming active after its loading plugin has provided it. The session-title, tool-todo, and permission-presets packages use seekdeep_session_projection::register_when_mounted for this lifecycle; Goal still needs the same mounted-registry behavior."
     },
     {
       "source": "packages/goal/goal/src/invariant.ts",
@@ -76540,10 +76542,10 @@
       ],
       "evidence": [
         "pnpm exec vitest run packages/skill/skill-filesystem/tests/skill-filesystem.spec.ts packages/skill/skill-filesystem/tests/skill-filesystem-watcher.spec.ts --reporter=dot (31 passed)",
-        "cargo test -p seekdeep-skill-filesystem --all-features (4 consolidated provider cases passed)",
+        "cargo test -p seekdeep-skill-filesystem (6 cases passed, including watcher disposal, eviction, duplicate admission, and late registration)",
         "cargo clippy -p seekdeep-skill-filesystem -p seekdeep-skill --all-targets --all-features -- -D warnings"
       ],
-      "note": "Rust owns default/custom/bundled root resolution, git project discovery, seekdeep-fs versus trusted-host reads, flat and directory Skills, symlink following, YAML frontmatter and invocation policy, ranks and locators, progressive body loads, first-party fs/observed invalidation, native/poll watching, missing-root recreation, stability coalescing, bounded projects, cache invalidation, and teardown."
+      "note": "Rust owns default/custom/bundled root resolution, git project discovery, seekdeep-fs versus trusted-host reads, flat and directory Skills, symlink following, YAML frontmatter and invocation policy, ranks and locators, progressive body loads, first-party fs/observed invalidation, native/poll watching, missing-root recreation, stability coalescing, bounded projects, cache invalidation, and teardown. Native watchers stop after releasing the provider-state mutex so in-flight callbacks can finish; closing providers reject late admission. The rebuilt Host/Chromium Remote consumer exits with the source SIGINT code 130 without a forced kill."
     },
     {
       "source": "packages/skill/skill-filesystem/src/invariant.ts",
@@ -76572,7 +76574,7 @@
         "cargo test -p seekdeep-skill-filesystem --all-features",
         "cargo clippy -p seekdeep-skill-filesystem --all-targets --all-features -- -D warnings"
       ],
-      "note": "Consolidated Rust cases exercise a missing root watched through a canonical ancestor, polling and stability controls, cache refresh after creation, bounded lifecycle ownership, repeated disposal, and contained late changes; production filtering additionally distinguishes direct Markdown/SKILL.md changes from nested resources."
+      "note": "Consolidated Rust cases exercise a missing root watched through a canonical ancestor, polling and stability controls, cache refresh after creation, bounded lifecycle ownership, repeated disposal, and contained late changes; production filtering additionally distinguishes direct Markdown/SKILL.md changes from nested resources. Two additional watcher lifecycle regressions verify that disposal, eviction, duplicate admission, and late registration release the provider-state mutex before destroying a watcher."
     },
     {
       "source": "packages/skill/skill-filesystem/tests/skill-filesystem.spec.ts",
@@ -88568,27 +88570,35 @@
     {
       "source": "vendor/cordis/src/context.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/cordis/src/context.rs",
+        "crates/cordis/src/wasm.rs",
+        "crates/cordis/src/wasm/browser_context.rs",
+        "crates/cordis/src/wasm/context_proxy.rs",
+        "crates/cordis/src/wasm/tracing.rs",
+        "xtask/src/remote_contracts/registry_driver.rs",
+        "xtask/src/remote_contracts/browser_driver.rs",
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
         "pinned-source direct Node/tsx semantic oracle: exact context extension, isolation, shallow intercept, and root lifecycle outcomes",
+        "fresh cargo xtask remote-milestone: source generator corpus 157 passed/28 skipped, registry 21 passed, gateway 134 passed, selected source regressions 108 passed/26 skipped, 2606 codec comparisons, 82 declarations, typed Chromium consumers, and rebuilt Rust Host shutdown code 130",
         "cargo test -p seekdeep-cordis --all-features (23 passed)",
         "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
         "cargo check --workspace --all-targets --all-features"
-      ]
+      ],
+      "note": "Native Context semantics remain covered. Source/built-WASM cases and real Host/Chromium verify root and plugin Context fields, subclass identity, method prototypes, plain metadata inheritance, shadow extension, shared reflection handlers, structural method receivers, overridden extension methods, symbol isolation, lazy intercept config, and the default LoggerService. Complete declaration and remaining public-boundary behavior still require verification."
     },
     {
       "source": "vendor/cordis/src/events.ts",
       "kind": "production-code",
-      "status": "pending",
+      "status": "verified",
       "targets": [
         "crates/cordis/src/events.rs",
         "crates/cordis/tests/source_semantic_oracle.rs",
         "crates/cordis/src/wasm/browser_events.rs",
-        "crates/cordis/src/wasm/symbol_events.rs",
+        "crates/cordis/src/wasm/browser_events/service_api.rs",
         "crates/cordis/tests/wasm_browser_face_parity.rs"
       ],
       "evidence": [
@@ -88597,9 +88607,14 @@
         "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
         "cargo xtask remote-gateway-oracle --source-regressions",
         "cargo xtask remote-gateway-oracle",
-        "cargo xtask web-assembled --export"
+        "cargo xtask web-assembled --export",
+        "cargo clippy -p seekdeep-cordis --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings: passed",
+        "cargo test -p seekdeep-cordis --target wasm32-unknown-unknown --lib --test wasm_browser_face_parity: native/WASM table bridge and three browser-face tests pass, including native bail Promise identity",
+        "target/debug/xtask remote-gateway-oracle: 51 passed; nine current EventService scenarios pass as source-extracted fixtures against both pinned Cordis and built WASM",
+        "target/debug/xtask remote-codec-oracle: 24 descriptors, 77 boundaries, and 2606 comparisons match the pinned emitter",
+        "target/debug/xtask remote-consumer --browser: 82 declarations across 26 packages typecheck, 13 invalid consumers reject, and the compiled consumer runs against Chromium and the real Rust Host"
       ],
-      "note": "Native event semantics, browser lifecycle/interception, callback tracing, per-Fiber update routing and veto, symbol registration/dispatch failure/identity/teardown, and the assembled export path pass. The source's exposed browser event-hook table remains open in the existing GUI Web client architecture record."
+      "note": "The public EventsService and isBailed exports, independent tables, subclass construction, overridden and borrowed methods, method prototypes and arities, iterator closure, callback binding, per-Fiber update dispatch, mutable hook records, and native bail value/Promise identity are implemented in Rust/WASM. Source differential, built-module tests, and real Rust Host/Chromium checks verify the integrated behavior."
     },
     {
       "source": "vendor/cordis/src/fiber.ts",
@@ -88610,69 +88625,116 @@
         "crates/cordis/src/plugin.rs",
         "crates/cordis/src/wasm.rs",
         "crates/cordis/src/wasm/browser_config.rs",
+        "crates/cordis/src/wasm/browser_fiber.rs",
+        "crates/cordis/src/wasm/browser_fiber_api.rs",
+        "crates/cordis/src/wasm/browser_runner.rs",
+        "crates/cordis/src/wasm/browser_registry.rs",
+        "crates/cordis/src/wasm/browser_plugins.rs",
+        "crates/cordis/src/wasm/browser_effects.rs",
+        "crates/cordis/src/wasm/browser_errors.rs",
+        "crates/cordis/src/wasm/browser_stack.rs",
+        "crates/cordis/src/wasm/browser_services.rs",
+        "crates/cordis/src/service.rs",
+        "xtask/src/remote_contracts/registry_driver.rs",
         "crates/cordis/tests/plugin_lifecycle_events.rs",
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
         "pinned-source direct Node/tsx semantic oracle: pending, active, withdrawn, and disposed dependency epochs matched exactly",
-        "cargo test -p seekdeep-cordis --all-features (23 passed)",
+        "cargo test -p seekdeep-cordis --all-features (37 passed)",
+        "WASM unit and browser-face integration tests (4 passed); native and WASM all-targets strict Clippy pass",
         "Rust additive guarantees: joined deterministic disposal errors and transactional update rollback remain covered",
         "cargo xtask remote-gateway-oracle --source-regressions",
         "cargo xtask remote-gateway-oracle",
-        "cargo xtask remote-loader"
+        "cargo xtask remote-loader",
+        "source-extracted Fiber receiver scenarios: 13 state/inertia/visibility/status observations match the pinned source; effects admitted through the underlying Context survive a handle's captured teardown snapshot",
+        "built WASM: 105 source-derived reflection, Context, Fiber runner/lifecycle, logger, symbol, stack, Service, decorator, utility, config, constructor, registry, list, isolation, effect, and event-service cases pass within the 148-case gateway corpus; all 122 selected source regressions pass",
+        "source/built-WASM and Chromium cross-copy tests retain the registry copy's Fiber prototype and verify dependency withdrawal, republishing, restart, and cleanup; parent effect overrides run after context construction and before runtime membership or publication; missing runner stack callbacks preserve source Error wrapping",
+        "structural Fiber activation, restart, teardown, and pre-iteration cleanup failures match source without a native controller; real Host/Chromium verifies structural lifecycle, registry iterator closure, and readonly dependency normalization",
+        "eight source/built-WASM Fiber cases pin runner collectors and epochs, state notifications, effect dispatch, shared runner identity, own fields and async prototypes, exact lifecycle method order, parent Context extension ownership, and structural dependency refresh",
+        "real Host/Chromium verifies source-shaped Fiber fields, mutable runner callbacks, exact lifecycle method dispatch, async prototypes, disposal, and parent Context extension alongside typed Remote calls; Host exits with code 130 without a forced kill",
+        "fresh raw WASM package tests: 4 passed, including custom Context-wrapper child ownership and cleanup; native and WASM strict Clippy pass; wrapper boot-contract test passes",
+        "source/built-WASM stack cases preserve malformed setup wrapping, caller-supplied direct-Fiber frames, callback-created errors, iterator failures, invalid initialization TypeErrors, and owner teardown composition",
+        "real Rust Host/Chromium 149: public Fiber class identity, class initialization hooks, startup effects, direct root construction, and runtime removal pass alongside typed Remote calls",
+        "real Rust Host/Chromium 149: awaitable iterable effects, nested cleanup order, owner joining, root constructor cleanup, inactive error codes, typed Remote calls, and zero remaining descriptors pass",
+        "source/built-WASM probes: 13 restart observations, 17 failure/recovery observations, and 9 overlapping-update observations match; the overlapping update hang is eliminated"
       ],
-      "note": "Browser update validation, config identity, underlying-Fiber admission, original restart errors, recovery, and awaitable-handle prototypes pass source differential and Chromium checks. Complete per-handle lifecycle-state shadows remain open in the GUI Web client architecture record; native-only evidence does not verify this browser behavior."
+      "note": "Receiver-owned lifecycle transitions, implementation records, startup admission, exception identity, overlapping updates, iterable effects, reentrant rollback, single-shot disposal, parent cleanup joining, public constructors, class initialization, shared runtimes, and CordisError codes have source/built-WASM evidence. The facade exposes source fields and prototypes over private native bindings; the mutable runner is authoritative for epochs and startup. Current lifecycle methods, parent Context extension, and parent effect overrides retain source order and ownership. Structural and cross-copy lifecycle cases pass. Stack composition preserves caller frames and default capture. Fiber remains pending for the final full API audit."
     },
     {
       "source": "vendor/cordis/src/index.ts",
       "kind": "production-code",
       "status": "verified",
       "targets": [
-        "crates/cordis/src/lib.rs"
+        "crates/cordis/src/lib.rs",
+        "xtask/src/main.rs"
       ],
       "evidence": [
         "cargo test -p seekdeep-cordis --all-features (23 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
-      ]
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
+        "source/browser ESM namespace audit: 26 source runtime exports, zero missing exports, zero runtime-type differences, and 17 matching symbol keys",
+        "cargo xtask remote-consumer --browser: public bindings and typed Remotes execute in Chromium against the Rust Host"
+      ],
+      "note": "The source/browser ESM audit confirms all 26 source runtime exports exist with matching runtime types, all 17 symbol keys match, and both palettes are exposed. Public source-derived API cases and the real Host/Chromium Remote consumer pass. Implementation gaps remain recorded under their owning source files; this entry verifies the barrel exports."
     },
     {
       "source": "vendor/cordis/src/logger.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/cordis/src/logger.rs",
         "crates/cordis/src/context.rs",
+        "crates/cordis/src/wasm/browser_logger.rs",
+        "crates/cordis/src/wasm/browser_logger/format.rs",
+        "xtask/src/remote_contracts/registry_driver.rs",
+        "xtask/src/remote_contracts/browser_driver.rs",
         "crates/cordis/tests/logger_oracle.rs"
       ],
       "evidence": [
         "pinned-source direct Node/tsx logger oracle: injected timestamp, sequence numbers, names, intercept levels, exporter thresholds, buffering, formatting, colors, and disposal matched",
         "cargo test -p seekdeep-cordis --all-features (29 passed)",
         "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "The default browser Context now installs the Rust/WASM callable LoggerService and exports Logger, palettes, and formatters. Source cases cover naming, shadow contexts, levels, message identity, metadata overrides, causes/aggregates, buffering, exporter-counter cleanup, formatting, UTF-16 colors, and Fiber failure logging. Chromium verifies the real logger with Remote calls. Native naming now uses the shared source-faithful param_case utility. Complete constructor, formatter, and native/browser boundary coverage remains pending."
     },
     {
       "source": "vendor/cordis/src/reflect.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/cordis/src/context.rs",
         "crates/cordis/src/service.rs",
+        "crates/cordis/src/wasm/browser_reflect.rs",
+        "crates/cordis/src/wasm/browser_reflect/provider.rs",
+        "crates/cordis/src/wasm/context_proxy.rs",
+        "crates/cordis/src/wasm/browser_services.rs",
+        "xtask/src/remote_contracts/registry_driver.rs",
+        "xtask/src/remote_contracts/browser_driver.rs",
         "crates/cordis/tests/reflect_oracle.rs",
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
         "pinned-source direct Node/tsx reflection oracle: provide/get/set, computed accessors, read-only refusal, declaration conflicts, bound mixins, and disposal matched",
         "cargo test -p seekdeep-cordis --all-features (27 passed)",
-        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
-      ]
+        "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
+        "seventeen source/built-WASM reflection and Context cases cover caller-error identity and enhancement, accessors and mixins, get/set waterfalls, mutable definitions, special properties, metadata and prototypes, shared handlers, notification filters, mutable Fiber methods, provider hooks, independent stores, structural receivers, extension overrides, lazy config, and withdrawal Promise/error identity",
+        "fresh cargo xtask remote-milestone passed the generated-contract, registry, gateway, public-consumer, and real Host/Chromium path with the current reflection implementation",
+        "built-WASM gateway: 134 passed; selected pinned-source regressions: 108 passed, 26 skipped; Cordis package tests: 37 native passed and 4 WASM passed; wrapper boot-contract test passed",
+        "real Rust Host/Chromium 149: accessor and mixin receivers, mapped writes, internal/get, exact setter error identity and stack, custom notification filters, provider effect/notification overrides, asynchronous withdrawal rejection identity, owner cleanup, typed Remote calls, and clean SIGINT exit 130",
+        "cargo clippy -p seekdeep-cordis --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings"
+      ],
+      "note": "Native reflection evidence is retained. Browser accessors, mixins, get/set interception, caller-error enhancement, custom notification filters, mutable Fiber notification methods, provider hooks, asynchronous withdrawal rejection, shared constructors/prototypes/handlers, independent stores, and structural receivers have source and integrated-browser evidence. This row remains pending for the remaining declaration and public-boundary audit."
     },
     {
       "source": "vendor/cordis/src/registry.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/cordis/src/plugin.rs",
         "crates/cordis/src/context.rs",
+        "crates/cordis/src/wasm/browser_registry.rs",
+        "crates/cordis/src/wasm/browser_plugins.rs",
+        "crates/cordis/src/wasm/browser_inject.rs",
         "crates/cordis/tests/registry_oracle.rs",
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
@@ -88680,32 +88742,43 @@
         "pinned-source direct Node/tsx registry oracle: runtime size, shared sibling fibers, monotonic uids, map iteration, single-fiber disposal, delete, and missing delete matched",
         "cargo test -p seekdeep-cordis --all-features (24 passed)",
         "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "Rust/WASM implements shared callback runtime records, map inspection, disposal, counters, Inject.resolve, class construction, and class/method Inject decorators. Source comparisons cover inherited metadata, repeated decorators, shared symbols, traced receivers, dependency changes, cleanup, caller stacks, exact prototypes, iterator closure, and refused dependency writes. Registries retain their own Fiber constructor across independent Cordis copies. Parent effect refusal preserves source construction order and failure identity. Chromium verifies the integrated paths. The final full API audit remains pending."
     },
     {
       "source": "vendor/cordis/src/service.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/cordis/src/service.rs",
         "crates/cordis/src/context.rs",
         "crates/cordis/src/plugin.rs",
+        "crates/cordis/src/wasm/browser_service.rs",
+        "crates/cordis/src/wasm/tracing.rs",
         "crates/cordis/tests/source_semantic_oracle.rs"
       ],
       "evidence": [
         "pinned-source direct Node/tsx semantic oracle: duplicate ownership, provider-owned set, isolation filtering, shallow config resolution, and inject intercepts",
         "cargo test -p seekdeep-cordis --all-features (23 passed)",
         "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings"
-      ]
+      ],
+      "note": "Native service behavior remains covered. Rust/WASM implements static-provide fallback, callable construction, original check receivers, availability predicates, extension, isolation filtering, config merge order, and constructor-chain hasInstance behavior. Source cases preserve the separate mutable symbols and Service/Context static-field reads; real Host/Chromium exercises Service and decorated-method lifecycles. Complete constructor and remaining public-boundary cases still require verification."
     },
     {
       "source": "vendor/cordis/src/utils.ts",
       "kind": "production-code",
-      "status": "verified",
+      "status": "pending",
       "targets": [
         "crates/cordis/src/utils.rs",
         "crates/cordis/src/context.rs",
         "crates/cordis/src/fiber.rs",
+        "crates/cordis/src/wasm/update_hooks.rs",
+        "crates/cordis/src/wasm/browser_plugins.rs",
+        "crates/cordis/src/wasm/browser_values.rs",
+        "crates/cordis/src/wasm/browser_service.rs",
+        "crates/cordis/src/wasm/tracing.rs",
+        "crates/cordis/src/wasm/browser_symbols.rs",
+        "crates/cordis/src/wasm/browser_stack.rs",
         "crates/cordis/tests/utils_oracle.rs"
       ],
       "evidence": [
@@ -88713,7 +88786,8 @@
         "cargo test -p seekdeep-cordis --all-features (31 passed)",
         "cargo clippy -p seekdeep-cordis --all-targets --all-features -- -D warnings",
         "Rust error chains preserve outer operation context without JavaScript stack-splicing"
-      ]
+      ],
+      "note": "Browser DisposableList, constructor classification, callable creation, prototype joining, property overlays, descriptor lookup, object classification, and tracing helpers have source comparisons. The mutable symbol table and buildOuterStack/composeError APIs are source/Chromium checked. Fiber startup, setup, iterator execution, and owner teardown use composition. Reflection caller-error identity and enhancement have source/Chromium evidence; remaining tracing boundary behavior is pending."
     },
     {
       "source": "vendor/cordis/tsconfig.json",

@@ -1,5 +1,7 @@
 //! Disposable-list and error-composition utility source oracle.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::Arc;
 
 use seekdeep_cordis::{DisposableList, compose_error, is_json_object_like};

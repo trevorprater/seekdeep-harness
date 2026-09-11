@@ -1,10 +1,12 @@
 //! Logger naming, thresholds, buffering, formatting, colors, and clock oracle.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use parking_lot::Mutex;
 use seekdeep_cordis::{
-    Context, CordisClock, LogExporter, LogMessage, Logger, LoggerLevel, LoggerType,
+    Context, CordisClock, Fiber, LogExporter, LogMessage, Logger, LoggerLevel, LoggerType,
 };
 use serde_json::json;
 
@@ -14,6 +16,22 @@ struct FixedClock;
 impl CordisClock for FixedClock {
     fn now_ms(&self) -> i64 {
         1_234
+    }
+}
+
+#[test]
+fn logger_names_preserve_source_acronyms_delimiters_and_non_ascii_text() {
+    let root = Context::new_with_clock(Arc::new(FixedClock));
+    for (name, expected) in [
+        ("HTTPServer_Test", "http-server-test"),
+        ("XMLHttpRequest", "xml-http-request"),
+        ("alpha--BETA", "alpha-beta"),
+        ("ÉCLAIR_服务", "Éclair-服务"),
+        ("_LeadingName", "leading-name"),
+        ("alreadyLower", "already-lower"),
+    ] {
+        let context = root.with_fiber(Fiber::active_child(name));
+        assert_eq!(context.logger(None).name(), expected);
     }
 }
 

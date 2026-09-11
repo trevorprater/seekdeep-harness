@@ -14,7 +14,7 @@ export function cordisContextWrapper() {
     get(target, key, receiver) {
       if (['emit','parallel','serial','bail','waterfall'].includes(key)) return (...args) => target.eventArgs(key, args)
       if (key === 'on' || key === 'once') return (name, listener, options) => target[key](name, listener, options, receiver)
-      if (key === 'events') return receiver
+      if (key === 'events') return target.eventsFace(receiver)
       if (Reflect.has(target, key)) {
         const value = Reflect.get(target, key, receiver)
         return typeof value === 'function' ? value.bind(target) : value

@@ -1,5 +1,7 @@
 //! `internal/plugin` creation, mutation, rollback, and contained disposal parity.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

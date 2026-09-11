@@ -77,16 +77,303 @@ try {
     const module = blob(assets['vendor/cordis/lib/index.js'].replace("'./client.js'", JSON.stringify(binding)).replace("new URL('./client_bg.wasm', import.meta.url)", `Uint8Array.from(atob(${JSON.stringify(bytes)}), c => c.charCodeAt(0))`));
     const cordis = await import(module);
     const handoffs = new Map();
-    const client = new cordis.Context();
+    class BrowserContext extends cordis.Context {}
+    const client = new BrowserContext();
+    const rootFields = Object.keys(client);
+    if (!(client instanceof BrowserContext) || rootFields.join(',') !== 'root,baseUrl,fiber,reflect,registry,events,logger') throw new Error('Context subclass or own fields changed');
+    const structurePeer = new cordis.Context();
+    if (client.reflect.constructor.name !== 'ReflectService' || Object.getPrototypeOf(client.reflect[cordis.symbols.original]) !== Object.getPrototypeOf(structurePeer.reflect[cordis.symbols.original])) throw new Error('reflection roots do not share their public prototype');
+    await structurePeer.fiber.dispose();
+    const shadowOwner = client.extend({ tag: 'caller' });
+    const shadowChild = client.extend({ [cordis.symbols.shadow]: shadowOwner }).extend({ tag: 'child' });
+    if (!Object.hasOwn(shadowChild, cordis.symbols.shadow) || Object.keys(shadowChild).length || cordis.getTraceable(shadowChild, shadowChild) !== Object.getPrototypeOf(shadowChild)) throw new Error('Context extension lost its source shadow layers');
+    window.remotePathContextResults = { rootFields, subclass: true, reflectionPrototype: true, shadow: true };
+    const extensionOwner = client.extend(), originalExtend = extensionOwner.extend;
+    let extensionCalls = 0, lazyConfigReads = 0;
+    Object.defineProperty(extensionOwner, 'extend', { value(metadata) { extensionCalls++; return originalExtend.call(this, { ...metadata, extensionMarker: true }); } });
+    const extendedScope = extensionOwner.isolate('browser-extended-service'), extendedValue = {};
+    const removeExtended = extendedScope.provide('browser-extended-service', extendedValue);
+    if (extensionCalls !== 1 || !extendedScope.extensionMarker || extendedScope.get('browser-extended-service') !== extendedValue || client.get('browser-extended-service') !== undefined) throw new Error('Context isolation bypassed its extension method or native scope');
+    await removeExtended();
+    const lazyLogger = extensionOwner.intercept('logger', { get name() { lazyConfigReads++; return 'lazy-browser'; } });
+    if (lazyConfigReads !== 0 || lazyLogger.logger().name !== 'lazy-browser' || lazyConfigReads !== 1 || extensionCalls !== 2) throw new Error('Context intercept config was evaluated before use');
+    window.remotePathContextResults.extensionOverride = true;
+    window.remotePathContextResults.lazyConfig = true;
+    const independentReflection = new client.reflect.constructor(client);
+    const removeIndependent = independentReflection.provide('browser-independent-record', 17);
+    if (independentReflection.get('browser-independent-record') !== 17 || client.get('browser-independent-record') !== undefined) throw new Error('independent reflection published into the root store');
+    await removeIndependent();
+    const removeRootRecord = client.provide('browser-independent-record', 18);
+    if (client.get('browser-independent-record') !== 18) throw new Error('independent reflection lost the shared scope label');
+    await removeRootRecord();
+    window.remotePathContextResults.independentReflection = true;
+    const fiberFields = ['parent', 'inject', 'runtime', 'uid', 'ctx', 'config', '_config', 'state', 'dispose', 'store', 'inertia', '_hooks', '_disposables', 'context', '_error', '_runner', '_store'];
+    const runnerMount = client.plugin(() => {}), runnerFiber = await runnerMount, runner = runnerFiber._runner, lifecycleTrace = [];
+    if (Object.keys(client.fiber).join(',') !== fiberFields.join(',') || Object.keys(runnerFiber).join(',') !== fiberFields.join(',')) throw new Error('Fiber facade exposes the wrong fields');
+    for (const name of ['_setEpoch', '_refresh', '_updateState', '_getState', '_resolveConfig', '_reload', '_unload', '_execute']) {
+      const original = runnerFiber[name];
+      runnerFiber[name] = function (...args) { lifecycleTrace.push(name); return original.apply(this, args); };
+    }
+    await runnerMount.update({ next: true });
+    const expectedLifecycle = ['_resolveConfig', '_setEpoch', '_updateState', '_unload', '_refresh', '_setEpoch', '_updateState', '_reload', '_resolveConfig', '_execute', '_updateState', '_getState'];
+    if (lifecycleTrace.join(',') !== expectedLifecycle.join(',')) throw new Error('Fiber lifecycle bypassed its source methods');
+    let replacementRuns = 0;
+    runner.execute = () => { replacementRuns++; };
+    await runnerMount.restart();
+    if (runnerFiber._runner !== runner || runner.epoch !== '' || replacementRuns !== 1) throw new Error('Fiber lifecycle did not retain its current runner');
+    for (const name of ['_reload', '_unload', 'await', 'restart']) {
+      if (Object.getPrototypeOf(cordis.Fiber.prototype[name]) !== Object.getPrototypeOf(async () => {})) throw new Error('Fiber async method prototype changed');
+    }
+    await runnerMount.dispose();
+    if (runnerFiber.uid !== null || runner.epoch !== '__INACTIVE__') throw new Error('Fiber disposal left an active runner');
+    window.remotePathFiberResults = { sourceFields: true, sharedRunner: true, lifecycleDispatch: lifecycleTrace.slice(0, expectedLifecycle.length), asyncMethods: true, disposed: true };
+    const delegatedParent = client.extend(), extendParent = delegatedParent.extend;
+    let constructorContext, delegatedValue, delegatedConstructors = 0;
+    Object.defineProperty(delegatedParent, 'extend', { value(metadata) { if (metadata.fiber) { delegatedConstructors++; constructorContext = metadata.fiber.ctx; } return extendParent.call(this, { ...metadata, delegated: true }); } });
+    const delegatedMount = delegatedParent.plugin(ctx => { delegatedValue = ctx.delegated; ctx.provide('browser-parent-owned-service', 7); });
+    await delegatedMount;
+    if (delegatedConstructors !== 1 || constructorContext !== undefined || delegatedValue !== true || client.get('browser-parent-owned-service') !== 7) throw new Error('Fiber construction bypassed the parent extension or changed its ordering');
+    await delegatedMount.dispose();
+    if (client.get('browser-parent-owned-service') !== undefined) throw new Error('delegated Fiber did not own its service');
+    window.remotePathFiberResults.parentExtension = true;
+    const structuralTrace = [], structuralFiber = Object.assign(Object.create(cordis.Fiber.prototype), {
+      uid: 1, state: 0, ctx: client, context: client, inject: {}, runtime: null, _config: {},
+      _error: undefined, inertia: undefined, _store: {}, store: undefined, _disposables: new cordis.DisposableList(),
+      _runner: { epoch: '__INACTIVE__', getOuterStack: () => [], execute() { structuralTrace.push('execute'); return () => structuralTrace.push('cleanup'); }, collect(dispose) { structuralFiber._disposables.push(dispose); } },
+    });
+    structuralFiber._setEpoch(''); await structuralFiber.await();
+    structuralFiber._setEpoch('__INACTIVE__'); await structuralFiber.await();
+    if (structuralFiber.state !== 0 || structuralFiber.store !== undefined || structuralTrace.join(',') !== 'execute,cleanup') throw new Error('structural Fiber lifecycle did not settle and clean up');
+    window.remotePathFiberResults.structuralLifecycle = true;
+    const boundaryRegistry = new cordis.RegistryService(client), registryCallback = () => {}, registryFailure = new Error('registry disposal failure'), registryTrace = [];
+    boundaryRegistry._internal.set(registryCallback, { callback: registryCallback, fibers: { [Symbol.iterator]() { return { next() { return { done: false, value: { dispose() { throw registryFailure; } } }; }, return() { registryTrace.push('closed'); return {}; } }; } } });
+    let registryCaught;
+    try { boundaryRegistry.delete(registryCallback); } catch (error) { registryCaught = error; }
+    if (registryCaught !== registryFailure || registryTrace.join(',') !== 'closed' || boundaryRegistry.has(registryCallback)) throw new Error('registry deletion lost iterator closure or error identity');
+    window.remotePathFiberResults.registryIterator = true;
+    const dependencyTrace = [], dependencyNames = [];
+    dependencyNames[Symbol.iterator] = function* () { try { dependencyTrace.push('first'); yield 'first'; dependencyTrace.push('second'); yield 'second'; } finally { dependencyTrace.push('closed'); } };
+    let dependencyFailure;
+    try { cordis.Inject.resolve(dependencyNames, Object.freeze({})); } catch (error) { dependencyFailure = error; }
+    if (!(dependencyFailure instanceof TypeError) || dependencyTrace.join(',') !== 'first,closed') throw new Error('dependency normalization ignored a refused write or failed to close its iterator');
+    window.remotePathFiberResults.injectWriteFailure = true;
+    if (typeof client.logger !== 'function' || client.logger.exporters.size !== 1) throw new Error('default browser logger was not installed');
+    const loggerPayload = { marker: true };
+    client.logger('BrowserProbe').info('browser ready', loggerPayload);
+    const logged = client.logger.buffer.at(-1);
+    if (logged.args[1] !== loggerPayload || logged.fiber.deref() !== client.fiber || logged.name !== 'BrowserProbe' || logged.type !== 'info' || !Number.isFinite(logged.ts)) throw new Error('browser log message identity or metadata changed');
+    const formattedLog = cordis.Logger.format({}, logged);
+    if (formattedLog !== 'browser ready {"marker":true}') throw new Error('browser logger formatter changed');
+    client.intercept('logger', { name: 'browser-scope', level: 3 }).logger.debug('scoped debug');
+    if (client.logger.buffer.at(-1).name !== 'browser-scope' || client.logger.buffer.at(-1).level !== 3) throw new Error('browser logger lost scoped config');
+    const loggerFailure = new Error('browser startup log');
+    const failedLoggingPlugin = client.plugin({ name: 'BrowserLogFailure', apply() { throw loggerFailure; } });
+    let startupFailure;
+    try { await failedLoggingPlugin.await(); } catch (error) { startupFailure = error; }
+    if (startupFailure !== loggerFailure || client.logger.buffer.at(-1).args[0] !== loggerFailure || client.logger.buffer.at(-1).name !== 'browser-log-failure') throw new Error('Fiber failure did not reach the browser logger intact');
+    await failedLoggingPlugin.dispose();
+    window.remotePathLoggerResults = { installed: true, scoped: true, originalFailure: true, formatted: formattedLog };
+    const originalEffectKey = cordis.symbols.effect, changedEffectKey = Symbol('browser effect key'), symbolTrace = [];
+    try {
+      cordis.symbols.effect = changedEffectKey;
+      const dispose = client.effect(() => () => symbolTrace.push('cleanup'), 'symbol-key');
+      if (cordis.Context.effect !== originalEffectKey || dispose[changedEffectKey]?.label !== 'symbol-key' || dispose[originalEffectKey] !== undefined) throw new Error('shared symbol mutation changed class metadata or lost effect tagging');
+      await dispose();
+    } finally { cordis.symbols.effect = originalEffectKey; }
+    const composedReason = new Error('browser composed failure');
+    composedReason.stack = 'Error: browser composed failure\n    at retained()\n    at marker()\n    at removed()';
+    let composedFailure;
+    try {
+      cordis.composeError(info => { info.error = { stack: 'Error\nunused\n    at marker()' }; info.offset = 0; throw composedReason; }, () => ['    at browserOuter()']);
+    } catch (error) { composedFailure = error; }
+    function stackCapture() { return cordis.buildOuterStack(); }
+    function stackOwner() { return stackCapture()(); }
+    if (composedFailure !== composedReason || composedReason.stack !== 'Error: browser composed failure\n    at retained()\n    at browserOuter()' || !stackOwner()[0].includes('stackOwner') || symbolTrace.join(',') !== 'cleanup') throw new Error('browser stack composition or symbol-owned cleanup changed');
+    window.remotePathSymbolStackResults = { mutableSymbol: true, errorIdentity: true, callerFrames: true };
+    const fiberStackFrames = ['    at browserFiberOwner()'];
+    const stackRuntime = { name: 'BrowserStackOwner', fibers: new cordis.DisposableList(), callback() { throw 'browser Fiber startup'; } };
+    const stackFiber = new cordis.Fiber(client, undefined, {}, stackRuntime, () => fiberStackFrames);
+    let fiberStackFailure;
+    try { await stackFiber.await(); } catch (error) { fiberStackFailure = error; }
+    if (!(fiberStackFailure instanceof Error) || fiberStackFailure.stack !== 'Error: browser Fiber startup\n    at browserFiberOwner()' || client.logger.buffer.at(-1).args[0] !== fiberStackFailure) throw new Error('Fiber startup lost composed caller frames');
+    await stackFiber.dispose();
+    const teardownRuntime = { name: 'BrowserTeardownStack', fibers: new cordis.DisposableList(), callback() { return () => { throw 'browser Fiber cleanup'; }; } };
+    const stackTeardownFiber = new cordis.Fiber(client, undefined, {}, teardownRuntime, () => fiberStackFrames);
+    await stackTeardownFiber.await(); await stackTeardownFiber.dispose();
+    const teardownFailure = client.logger.buffer.at(-1).args[0];
+    if (!(teardownFailure instanceof Error) || teardownFailure.stack !== 'Error: browser Fiber cleanup\n    at browserFiberOwner()') throw new Error('Fiber teardown lost composed caller frames');
+    window.remotePathSymbolStackResults.fiberStartup = true;
+    window.remotePathSymbolStackResults.fiberCleanup = true;
     if (!cordis.Context.is(client) || !cordis.Context.is(cordis.Context.prototype) || !(Symbol.for('cordis.is') in client)) throw new Error('Context brand is absent from its public prototype');
     const secondBinding = blob(assets['vendor/cordis/lib/client.js']);
     const secondUrl = blob(assets['vendor/cordis/lib/index.js'].replace("'./client.js'", JSON.stringify(secondBinding)).replace("new URL('./client_bg.wasm', import.meta.url)", `Uint8Array.from(atob(${JSON.stringify(bytes)}), c => c.charCodeAt(0))`));
     const secondCordis = await import(secondUrl);
     const secondContext = new secondCordis.Context();
     if (secondContext instanceof cordis.Context || !cordis.Context.is(secondContext) || !secondCordis.Context.is(client)) throw new Error('Context branding depends on one constructor copy');
+    const foreignRegistry = new cordis.RegistryService(secondContext), foreignScope = secondContext.extend({ registry: foreignRegistry });
+    foreignRegistry.ctx = foreignScope;
+    const removeForeignDependency = foreignScope.provide('copy-dependency', { value: 7 });
+    const foreignMount = foreignRegistry.plugin({ inject: ['copy-dependency'], apply(ctx) { ctx.provide('copy-service', ctx['copy-dependency']); } });
+    const foreignFiber = await foreignMount;
+    if (!(foreignFiber instanceof cordis.Fiber) || foreignFiber instanceof secondCordis.Fiber || foreignScope.get('copy-service').value !== 7) throw new Error('cross-copy registry used the wrong Fiber constructor or service context');
+    await foreignMount.restart();
+    await removeForeignDependency(); await foreignMount.await();
+    if (foreignFiber.state !== 0 || foreignScope.get('copy-service') !== undefined) throw new Error('cross-copy dependency withdrawal failed');
+    await foreignMount.dispose();
+    window.remotePathFiberResults.crossCopy = true;
     await secondContext.fiber.dispose();
     URL.revokeObjectURL(secondUrl);
     URL.revokeObjectURL(secondBinding);
+    const effectBoundaryRoot = new cordis.Context(), deniedEffect = new Error('parent effect refused'), boundaryPlugin = () => {};
+    const parentEffect = effectBoundaryRoot.fiber.effect;
+    effectBoundaryRoot.fiber.effect = () => { throw deniedEffect; };
+    let deniedMount;
+    try { effectBoundaryRoot.plugin(boundaryPlugin); } catch (error) { deniedMount = error; }
+    if (deniedMount !== deniedEffect || effectBoundaryRoot.registry.get(boundaryPlugin).fibers.length !== 0) throw new Error('Fiber constructor bypassed a parent effect refusal');
+    effectBoundaryRoot.fiber.effect = parentEffect;
+    const acceptedMount = effectBoundaryRoot.plugin(boundaryPlugin);
+    await acceptedMount; await acceptedMount.dispose(); await effectBoundaryRoot.fiber.dispose();
+    window.remotePathFiberResults.parentEffect = true;
+    let defaultRunnerFailure;
+    try { cordis.Fiber.prototype._execute.call({}, { epoch: true, execute() { throw 'default stack failure'; }, collect() {} }); } catch (error) { defaultRunnerFailure = error; }
+    if (defaultRunnerFailure?.constructor !== Error || defaultRunnerFailure.message !== 'default stack failure') throw new Error('runner omitted its default stack capture');
+    window.remotePathFiberResults.defaultStack = true;
+    const constructorTrace = [];
+    class ClassPlugin {
+      constructor(ctx, config) {
+        this.ctx = ctx;
+        constructorTrace.push(['construct', config]);
+        this[Symbol.for('cordis.initHooks')] = [() => constructorTrace.push(['hook'])];
+      }
+      *[cordis.Service.init]() {
+        constructorTrace.push(['init']);
+        yield () => constructorTrace.push(['cleanup']);
+      }
+    }
+    const constructedPlugin = client.plugin(ClassPlugin, 17);
+    const constructedCore = await constructedPlugin;
+    if (!(constructedCore instanceof cordis.Fiber) || constructedCore.runtime !== client.registry.get(ClassPlugin) || !(constructedCore.runtime.fibers instanceof cordis.DisposableList)) throw new Error('public Fiber or runtime construction changed');
+    const fiberField = Object.getOwnPropertyDescriptor(constructedCore.ctx, 'fiber');
+    if (Object.keys(constructedCore.ctx).join(',') !== 'fiber' || fiberField?.value !== constructedCore || !fiberField.writable || !fiberField.enumerable || !fiberField.configurable) throw new Error('plugin Context omitted its source Fiber field');
+    window.remotePathContextResults.fiberField = true;
+    await constructedPlugin.dispose();
+    if (client.registry.has(ClassPlugin) || JSON.stringify(constructorTrace) !== JSON.stringify([['construct',17],['hook'],['init'],['cleanup']])) throw new Error('class initialization or owned cleanup changed');
+    const directFiber = new cordis.Fiber(client, { direct: true }, {}, null, () => []);
+    if (!(directFiber instanceof cordis.Fiber) || directFiber.ctx !== client || directFiber.then !== undefined) throw new Error('direct root Fiber construction changed');
+    directFiber.effect(() => () => constructorTrace.push(['direct cleanup']));
+    await directFiber.dispose();
+    if (directFiber.config.direct !== true || constructorTrace.at(-1)[0] !== 'direct cleanup') throw new Error('direct Fiber restart or cleanup changed');
+    window.remotePathConstructorResults = { classTrace: constructorTrace, directRoot: directFiber.state === 2, runtimeRemoved: !client.registry.has(ClassPlugin) };
+    const serviceTrace = [], serviceInitializers = [], serviceLabel = Symbol('service-scope');
+    const serviceScope = client.isolate('browser-decorated-service', serviceLabel);
+    class DecoratedService extends cordis.Service {
+      static provide = 'browser-decorated-service';
+      constructor(ctx) { super(ctx); this.base = 3; for (const initialize of serviceInitializers) initialize.call(this); }
+      [cordis.Service.invoke](value) { return this.base + value; }
+      [cordis.Service.init]() { serviceTrace.push('init'); }
+      connected() {
+        const version = this.ctx['browser-decorated-dependency'].version;
+        serviceTrace.push('run:' + version);
+        return () => serviceTrace.push('cleanup:' + version);
+      }
+    }
+    cordis.Inject('browser-decorated-dependency')(DecoratedService.prototype.connected, { kind: 'method', addInitializer(value) { serviceInitializers.push(value); } });
+    const serviceOwner = serviceScope.plugin(DecoratedService);
+    await serviceOwner;
+    const callableService = client.isolate('browser-decorated-service', serviceLabel).get('browser-decorated-service');
+    if (typeof callableService !== 'function' || !(callableService instanceof DecoratedService) || callableService(4) !== 7 || client.get('browser-decorated-service') !== undefined) throw new Error('callable Service construction or symbol isolation changed');
+    const methodFiber = [...client.registry.values()].flatMap(runtime => [...runtime.fibers]).find(fiber => fiber.parent === serviceOwner.ctx);
+    if (!methodFiber || methodFiber.state !== 0 || serviceTrace.join(',') !== 'init') throw new Error('method decorator ran without its dependency');
+    const removeServiceDependency = client.provide('browser-decorated-dependency', { version: 1 });
+    await methodFiber.await();
+    await removeServiceDependency();
+    await methodFiber.await();
+    await serviceOwner.dispose();
+    if (serviceTrace.join(',') !== 'init,run:1,cleanup:1' || client.registry.has(DecoratedService) || serviceScope.get('browser-decorated-service') !== undefined) throw new Error('decorated method or Service survived teardown');
+    window.remotePathServiceResults = { callable: true, symbolScope: true, dependencyTrace: serviceTrace, removed: true };
+    const reflectionService = { value: 3, add(value) { return this.value + value; } };
+    const removeReflectionService = client.provide('browser-reflection-service', reflectionService);
+    let reflectionContext, accessorReceiver, reflectionCarrier;
+    const reflectionOwner = client.plugin(ctx => {
+      reflectionContext = ctx.extend({ marker: 'reflection-owner' });
+      ctx.accessor('browserComputed', {
+        get(receiver, error) { accessorReceiver = this; return this.marker; },
+        set(value, receiver, error) { error.stack = 'Error\n    at trap()\n    at browserSetter()'; reflectionCarrier = error; throw error; },
+      });
+      ctx.mixin('browser-reflection-service', { value: 'browserValue', add: 'browserAdd' });
+    });
+    await reflectionOwner;
+    if (reflectionContext.browserComputed !== 'reflection-owner' || accessorReceiver !== reflectionContext || reflectionContext.browserAdd(2) !== 5) throw new Error('browser reflection accessor or mixin lost its receiver');
+    reflectionContext.browserValue = 8;
+    if (reflectionService.value !== 8 || client.browserAdd(2) !== 10) throw new Error('browser reflection mixin setter lost its service');
+    let reflectedFailure;
+    try { reflectionContext.browserComputed = 1; } catch (error) { reflectedFailure = error; }
+    if (reflectedFailure !== reflectionCarrier || reflectedFailure.stack !== 'Error: cannot set property "browserComputed" without provide\n    at browserSetter()') throw new Error('browser reflection lost its caller error or stack enhancement');
+    const removeReflectionHook = client.on('internal/get', (ctx, name, error, next) => name === 'browserVirtual' ? ctx.marker : next());
+    if (reflectionContext.browserVirtual !== 'reflection-owner') throw new Error('browser reflection bypassed internal/get');
+    await removeReflectionHook(); await reflectionOwner.dispose(); await removeReflectionService();
+    if ('browserComputed' in client || 'browserValue' in client || 'browserAdd' in client) throw new Error('browser reflection definitions survived their owner');
+    const filteredReflection = client.isolate('browser-filtered-reflection');
+    let reflectionEnabled = false, reflectionRuns = 0;
+    const removeFilteredReflection = filteredReflection.reflect.provide('browser-filtered-reflection', {}, () => reflectionEnabled);
+    const filteredReflectionFiber = filteredReflection.inject(['browser-filtered-reflection'], () => { reflectionRuns++; });
+    await filteredReflectionFiber.await();
+    reflectionEnabled = true;
+    const reflectionScope = filteredReflection[cordis.symbols.isolate]['browser-filtered-reflection'];
+    const notifiedReflection = client.reflect.notify(['browser-filtered-reflection'], ctx => ctx[cordis.symbols.isolate]['browser-filtered-reflection'] === reflectionScope);
+    await Promise.all(notifiedReflection.map(fiber => fiber.await()));
+    if (notifiedReflection.length !== 1 || reflectionRuns !== 1 || filteredReflectionFiber.state !== 2) throw new Error('browser reflection ignored custom notification scope');
+    await filteredReflectionFiber.dispose(); await removeFilteredReflection();
+    const providerHookCalls = [], originalProviderEffect = client.fiber.effect;
+    const rawReflection = client.reflect[cordis.symbols.original], originalProviderNotify = rawReflection.notify;
+    client.fiber.effect = function (...args) { if (args[1] === 'ctx.provide("browser-provider-hook")') providerHookCalls.push('effect'); return originalProviderEffect.apply(this, args); };
+    rawReflection.notify = function (...args) { if (args[0][0] === 'browser-provider-hook') providerHookCalls.push('notify'); return originalProviderNotify.apply(this, args); };
+    const removeHookedProvider = client.provide('browser-provider-hook', {});
+    await removeHookedProvider();
+    client.fiber.effect = originalProviderEffect;
+    rawReflection.notify = originalProviderNotify;
+    if (providerHookCalls.join(',') !== 'effect,notify,notify') throw new Error('browser provider bypassed public effect or notification methods');
+    const removeFailingProvider = client.provide('browser-withdrawal-failure', {}), withdrawalError = new Error('browser withdrawal failure');
+    rawReflection.notify = function (...args) { if (args[0][0] === 'browser-withdrawal-failure') throw withdrawalError; return originalProviderNotify.apply(this, args); };
+    const withdrawal = removeFailingProvider();
+    if (!(withdrawal instanceof Promise)) throw new Error('browser provider cleanup lost Promise timing');
+    let withdrawalFailure;
+    try { await withdrawal; } catch (error) { withdrawalFailure = error; }
+    rawReflection.notify = originalProviderNotify;
+    if (withdrawalFailure !== withdrawalError || client.get('browser-withdrawal-failure') !== undefined) throw new Error('browser provider cleanup lost rejection identity or removal');
+    window.remotePathReflectionResults = { accessor: true, mixin: true, interceptor: true, errorIdentity: true, notification: true, providerHooks: true, cleanupRejection: true, removed: true };
+    const effectRoot = new cordis.Context(), effectTrace = [];
+    let finishEffectSetup, finishEffectCleanup;
+    const effectSetup = new Promise(resolve => { finishEffectSetup = resolve; });
+    const effectCleanup = new Promise(resolve => { finishEffectCleanup = resolve; });
+    if (effectRoot.fiber.getEffects().length) throw new Error('constructor effects leaked into root diagnostics');
+    const outerEffect = effectRoot.effect(() => ({ [Symbol.asyncIterator]() {
+      let step = 0;
+      return { next() {
+        if (step++ === 0) return { value: effectRoot.effect(() => () => effectTrace.push('nested'), 'nested'), done: false };
+        return effectSetup.then(() => ({ value: () => { effectTrace.push('late'); return effectCleanup; }, done: true }));
+      } };
+    } }), 'outer');
+    for (let i = 0; i < 8; ++i) await Promise.resolve();
+    if (JSON.stringify(effectRoot.fiber.getEffects()) !== JSON.stringify([{ label: 'outer', children: [{ label: 'nested', children: [] }] }])) throw new Error('effect diagnostics do not reflect nested ownership');
+    const effectTask = outerEffect();
+    if (!(effectTask instanceof Promise) || outerEffect() !== undefined) throw new Error('pending effect disposal lost its single-shot result');
+    finishEffectSetup();
+    const readyEffectDispose = await outerEffect;
+    if (typeof readyEffectDispose !== 'function' || readyEffectDispose() !== undefined || effectTrace.join(',') !== 'late') throw new Error('awaitable effect setup or serial cleanup changed');
+    let effectOwnerSettled = false;
+    const effectOwnerTask = effectRoot.fiber.dispose().then(() => { effectOwnerSettled = true; });
+    for (let i = 0; i < 8; ++i) await Promise.resolve();
+    if (effectOwnerSettled) throw new Error('structural owner did not join pending effect cleanup');
+    finishEffectCleanup();
+    await effectTask; await effectOwnerTask;
+    if (effectTrace.join(',') !== 'late,nested' || effectRoot.fiber.getEffects().length) throw new Error('effect cleanup or metadata escaped its owner');
+    const effectChild = client.plugin({ *apply() { yield () => {}; return () => {}; } });
+    await effectChild; await effectChild.dispose();
+    let inactiveEffect;
+    try { effectChild.effect(() => {}); } catch (error) { inactiveEffect = error; }
+    if (!(inactiveEffect instanceof cordis.CordisError) || inactiveEffect.code !== 'INACTIVE_EFFECT' || inactiveEffect.message !== cordis.CordisError.Code.INACTIVE_EFFECT) throw new Error('inactive Fiber lost its public CordisError');
+    window.remotePathEffectResults = { iterable: true, awaitable: true, nestedCleanup: effectTrace, ownerJoined: effectOwnerSettled, inactiveCode: inactiveEffect.code };
     const realm = document.createElement('iframe'); document.body.append(realm);
     const foreign = new realm.contentWindow.Object(); foreign[realm.contentWindow.Symbol.for('cordis.is')] = true;
     if (foreign instanceof Object || !cordis.Context.is(foreign)) throw new Error('Context brand does not cross browser realms');
@@ -153,6 +440,38 @@ try {
       if (teardownStarted.join(',') !== 'second,first' || teardownCompleted.join(',') !== 'second' || teardownSettled) throw new Error('dependent async disposers did not start together or were not joined');
     } finally { releaseDependency(); finishTeardown(); await teardown; }
     if (teardownCompleted.join(',') !== 'second,first' || !teardownSettled) throw new Error('async teardown did not settle completely');
+    const tableValues = [], table = client.events._hooks;
+    if (!(client.events instanceof cordis.EventsService) || cordis.isBailed(false) || !cordis.isBailed(0)) throw new Error('public event exports changed');
+    const independent = new cordis.EventsService(client), independentValues = [];
+    const independentRemove = independent.on('probe/independent-service', value => independentValues.push(value));
+    client.emit('probe/independent-service', 'root');
+    independent.emit('probe/independent-service', 'independent');
+    independentRemove();
+    if (independentValues.join(',') !== 'independent' || independent._hooks === table) throw new Error('independent event service leaked into its Context');
+    if (client.events === client || client.events.ctx !== client || Object.getPrototypeOf(table) !== Object.prototype) throw new Error('event service face changed');
+    let tableOwner, removeTableHook;
+    const tableFiber = client.plugin({ name: 'hook-table-owner', apply(ctx) {
+      tableOwner = ctx;
+      removeTableHook = ctx.on('probe/hook-table', value => tableValues.push(value), { marker: 17 });
+    } });
+    await tableFiber;
+    const tableList = table['probe/hook-table'], tableHook = tableList[0], tableCallback = tableHook.callback;
+    if (tableHook.ctx !== tableOwner || tableHook.marker !== 17) throw new Error('event record lost owner or options');
+    tableHook.callback = value => tableValues.push('changed:' + value);
+    client.emit('probe/hook-table', 'first');
+    tableHook.callback = tableCallback;
+    const replacementList = [];
+    table['probe/hook-table'] = replacementList;
+    removeTableHook();
+    if (tableList.length || table['probe/hook-table'] !== replacementList) throw new Error('event disposal changed a replacement list');
+    const extra = value => tableValues.push(value);
+    tableOwner.events.register('explicit browser hook', replacementList, extra, {});
+    client.emit('probe/hook-table', 'second');
+    if (client.events.unregister(replacementList, extra) !== true || client.events.unregister(replacementList, extra) !== undefined) throw new Error('callback removal changed');
+    tableOwner.events.register('owned browser hook', replacementList, extra, {});
+    await tableFiber.dispose();
+    client.emit('probe/hook-table', 'withdrawn');
+    if (replacementList.length || tableValues.join(',') !== 'changed:first,second') throw new Error('mutable event records escaped Fiber ownership');
     const symbolEvent = Symbol('owned-event'), symbolValues = [];
     const symbolFiber = client.plugin({ name: 'symbol-event-owner', apply(ctx) { ctx.on(symbolEvent, value => symbolValues.push(value)); } });
     await symbolFiber;
@@ -446,10 +765,19 @@ try {
   if (requests.filter(path => path === '/api/commands/execute').length !== 1) throw new Error('pre-aborted command reached the Host');
   await page.evaluate(result => { const pre = document.createElement('pre'); pre.textContent = JSON.stringify(result, null, 2); document.body.replaceChildren(pre); }, result);
   await page.screenshot({ path: join(output, 'remote-path.png'), fullPage: true });
-  console.log(JSON.stringify({ ...result, browserEventLifecycle: true, browser: await browser.version(), requests }));
+  console.log(JSON.stringify({ ...result, browserContext: await page.evaluate(() => window.remotePathContextResults), browserFiber: await page.evaluate(() => window.remotePathFiberResults), browserLogger: await page.evaluate(() => window.remotePathLoggerResults), browserSymbolStacks: await page.evaluate(() => window.remotePathSymbolStackResults), browserReflection: await page.evaluate(() => window.remotePathReflectionResults), browserServices: await page.evaluate(() => window.remotePathServiceResults), browserConstructors: await page.evaluate(() => window.remotePathConstructorResults), browserEffects: await page.evaluate(() => window.remotePathEffectResults), browserEventLifecycle: true, browser: await browser.version(), requests }));
 } finally {
   if (browser) await browser.close();
-  if (server && server.exitCode === null) { server.kill('SIGINT'); await once(server, 'exit'); }
+  if (server && server.exitCode === null && server.signalCode === null) {
+    const exited = once(server, 'exit');
+    let forced = false;
+    server.kill('SIGINT');
+    const shutdownDeadline = setTimeout(() => { forced = true; server.kill('SIGKILL'); }, 30000);
+    const [code, signal] = await exited;
+    clearTimeout(shutdownDeadline);
+    if (forced || code !== 130) throw new Error(`Rust Host shutdown failed: code=${code}, signal=${signal}, forced=${forced}`);
+    console.log(JSON.stringify({ hostShutdown: { code, signal, forced } }));
+  }
   await rm(home, { recursive: true, force: true });
 }
 "#;

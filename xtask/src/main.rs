@@ -1784,10 +1784,22 @@ export default plugin;
 }
 
 fn cordis_context_binding() -> &'static str {
-    r"const FILTER = Symbol.for('cordis.filter');
-const EFFECT = Symbol.for('cordis.effect');
-const ISOLATE = Symbol.for('cordis.isolate');
-const INTERCEPT = Symbol.for('cordis.intercept');
+    r"const SYMBOLS = wasm.cordisSymbols();
+const FILTER = SYMBOLS.filter;
+const EFFECT = SYMBOLS.effect;
+const ISOLATE = SYMBOLS.isolate;
+const INTERCEPT = SYMBOLS.intercept;
+
+function buildOuterStack(offset = 0) {
+  const error = new Error();
+  return () => wasm.outerStackFrames(error, offset);
+}
+function composeError(callback, getOuterStack = buildOuterStack()) {
+  const info = wasm.stackInfo(new Error());
+  try { return wasm.composeStackResult(callback(info), info, getOuterStack); }
+  catch (reason) { return wasm.handleStackError(info, reason, getOuterStack); }
+}
+wasm.configureStackBuilder(buildOuterStack);
 
 class ValidationError extends TypeError {
   constructor(issues) { super(wasm.validationErrorMessage(issues)); this.name = 'ValidationError'; }
@@ -1795,44 +1807,70 @@ class ValidationError extends TypeError {
 Object.defineProperty(ValidationError.prototype, Symbol.for('ValidationError'), { value: true });
 wasm.configureValidationErrorPrototype(ValidationError.prototype);
 
+class CordisError extends Error {
+  static Code = wasm.cordisErrorCodes();
+  constructor(code, message) { super(wasm.cordisErrorMessage(CordisError.Code, code, message)); this.code = code; }
+}
+wasm.configureCordisErrorConstructor(CordisError);
+
+class DisposableList {
+  constructor() { return wasm.createDisposableList(Object.getPrototypeOf(this)); }
+}
+Object.defineProperties(DisposableList.prototype, Object.getOwnPropertyDescriptors(wasm.disposableListPrototype()));
+wasm.configureDisposableListPrototype(DisposableList.prototype);
+
+class Fiber {
+  constructor(parent, config, inject, runtime, getOuterStack) { return wasm.createFiber(parent, config, inject, runtime, getOuterStack, Object.getPrototypeOf(this)); }
+  get name() { return wasm.fiberName(this); }
+  assertActive() { return wasm.fiberAssertActive(this); }
+  _execute(runner) { return wasm.fiberExecute(this, runner); }
+  effect(execute, label = undefined) { return wasm.fiberEffect(this, execute, label, buildOuterStack()); }
+  getEffects() { return wasm.fiberGetEffects(this); }
+  _getState() { return wasm.fiberGetState(this); }
+  _updateState(callback) { return wasm.fiberUpdateState(this, callback); }
+  _checkImpl(name) { return wasm.fiberCheckImpl(this,name); }
+  _refresh() { return wasm.fiberRefresh(this); }
+  _setEpoch(epoch) { return wasm.fiberInvoke(this, '_setEpoch', [epoch]); }
+  _resolveConfig(config) { return wasm.fiberResolveConfig(this, config); }
+  _reload() { return wasm.fiberInvoke(this, '_reload', []); }
+  _unload() { return wasm.fiberInvoke(this, '_unload', []); }
+  await() { return wasm.fiberInvoke(this, 'await', []); }
+  restart() { return wasm.fiberInvoke(this, 'restart', []); }
+  update(config, noSave = false) { return wasm.fiberInvoke(this, 'update', [config, noSave]); }
+}
+for (const name of ['_reload', '_unload', 'await', 'restart']) {
+  const implementation = Fiber.prototype[name];
+  const target = ({ async [name]() {} })[name];
+  Fiber.prototype[name] = new Proxy(target, { apply(_target, receiver, args) { return Reflect.apply(implementation, receiver, args); } });
+}
+wasm.configureFiberPrototype(Fiber.prototype);
+
 function wrapContext(core) {
-  let context;
   const data = core.contextData;
+  if (core.root !== undefined) return data;
   if (Object.getPrototypeOf(data) === Object.prototype) Object.setPrototypeOf(data, Context.prototype);
-  context = new Proxy(data, {
+  return new Proxy(data, ReflectService.handler);
+}
+
+const contextHandler = {
     get(target, key, receiver) {
-      if (core.metaHas(key, Context.prototype)) return core.metaGet(key, receiver);
-      if (key === 'extend') return metadata => core.extend(metadata, receiver);
-      if (key === 'isolate') return (name, label) => core.isolate(name, label, receiver);
-      if (key === 'intercept') return (name, config) => core.intercept(name, config, receiver);
-      if (key === 'plugin') return (plugin, config) => core.plugin(plugin, config, receiver);
-      if (key === 'inject') return (dependencies, callback) => core.inject(dependencies, callback, receiver);
-      if (key === 'on') return (name, listener, options) => core.on(name, listener, options, receiver);
-      if (key === 'once') return (name, listener, options) => core.once(name, listener, options, receiver);
-      if (key === 'events') return receiver;
-      if (key === 'emit' || key === 'parallel' || key === 'serial' || key === 'bail' || key === 'waterfall') return (...args) => core.eventArgs(key, args);
-      if (key === 'get') return (name, strict) => core.traceService(core.serviceGet(name, strict), receiver);
-      if (key === 'reflect') return core.reflectionFace(receiver);
-      if (key === 'constructor') return Context;
-      if (Reflect.has(Context.prototype, key)) return Reflect.get(Context.prototype, key, receiver);
-      if (Reflect.has(core, key)) {
-        const value = Reflect.get(core, key, core);
-        return typeof value === 'function' ? value.bind(core) : value;
+      if (key === '__seekdeepContext') return wasm.contextCore(receiver, undefined);
+      if (wasm.contextSpecialProperty(key)) return Reflect.get(target, key, receiver);
+      if (Reflect.has(target, key)) {
+        const value = Reflect.get(target, key, receiver);
+        const core = wasm.contextCore(receiver, wasm.contextCore(target, undefined));
+        return core ? core.traceService(value, receiver) : wasm.getTraceable(receiver, value);
       }
-      return typeof key === 'string' ? core.traceService(core.get(key), receiver) : undefined;
+      return wasm.contextReflectedGet(target, key, receiver, new Error());
     },
     set(target, key, value, receiver) {
-      if (core.metaHas(key, Context.prototype) || typeof key !== 'string') return core.metaSet(key, value, receiver);
-      if (Reflect.has(core, key)) return Reflect.set(core, key, value, core);
-      return core.setProperty(key, value);
+      if (wasm.contextSpecialProperty(key)) return Reflect.set(target, key, value, receiver);
+      return wasm.contextReflectedSet(target, key, value, receiver, new Error());
     },
     has(target, key) {
-      if (core.metaHas(key, Context.prototype) || Reflect.has(core, key) || Reflect.has(Context.prototype, key)) return true;
-      return typeof key === 'string' && core.propertyDefined(key);
+      return wasm.contextHas(target, key);
     },
-  });
-  return context;
-}
+};
 
 Object.defineProperties(wasm.WasmContext, {
   filter: { value: FILTER },
@@ -1843,8 +1881,8 @@ Object.defineProperties(wasm.WasmContext, {
 wasm.configureContextWrapper(wrapContext);
 
 class Context {
-  static filter = FILTER;
   static effect = EFFECT;
+  static filter = FILTER;
   static isolate = ISOLATE;
   static intercept = INTERCEPT;
   static is(value) { return wasm.contextIs(value, Context.is); }
@@ -1852,8 +1890,57 @@ class Context {
     Context.is[Symbol.toPrimitive] = () => Symbol.for('cordis.is');
     Context.prototype[Context.is] = true;
   }
-  constructor() { return wasm.createContext(); }
+  constructor() { return wasm.createContextWithPrototype(Object.getPrototypeOf(this)); }
+  [Symbol.for('nodejs.util.inspect.custom')]() { return wasm.contextInspect(this); }
+  extend(metadata = {}) { return wasm.contextExtend(this, metadata); }
+  isolate(name, label) { return wasm.contextIsolate(this, name, label); }
+  intercept(name, config) { return wasm.contextIntercept(this, name, config); }
 }
+wasm.configureContextConstructor(Context);
+
+class ReflectService {
+  static handler = contextHandler;
+  constructor(ctx) { wasm.initializeReflectService(this, ctx); }
+}
+Object.defineProperties(ReflectService.prototype, Object.getOwnPropertyDescriptors(wasm.reflectServicePrototype()));
+wasm.configureReflectServicePrototype(ReflectService.prototype);
+
+class EventsService {
+  constructor(ctx) { return wasm.createEventsService(ctx, Object.getPrototypeOf(this)); }
+}
+Object.defineProperties(EventsService.prototype, Object.getOwnPropertyDescriptors(wasm.eventsServicePrototype()));
+wasm.configureEventsServicePrototype(EventsService.prototype);
+
+class RegistryService {
+  constructor(ctx) { return wasm.createRegistryService(ctx, Object.getPrototypeOf(this)); }
+}
+Object.defineProperties(RegistryService.prototype, Object.getOwnPropertyDescriptors(wasm.registryServicePrototype()));
+wasm.configureRegistryServicePrototype(RegistryService.prototype);
+
+class Logger {
+  service;
+  constructor(options, service) { this.service = service; wasm.initializeLogger(this, options); }
+  _method(type, level) { return wasm.loggerMethod(this, type, level); }
+  static color(exporter, code, value, decoration = '') { return wasm.loggerColor(exporter, code, value, decoration); }
+  static code(name, level) { return wasm.loggerCode(name, level); }
+  static format(exporter, message) { return wasm.loggerFormat(exporter, message); }
+}
+class LoggerService {
+  bufferSize = 1000;
+  buffer = [];
+  ctx;
+  _snMessage = 0;
+  _snExporter = 0;
+  exporters = new Map();
+  constructor(ctx) { return wasm.initializeLoggerService(this, ctx); }
+  exporter(exporter) { return wasm.loggerExporter(this, exporter); }
+  _resolveConfig() { return wasm.loggerConfig(this); }
+  [SYMBOLS.invoke](name) { return wasm.loggerInvoke(this, name); }
+}
+for (const type of ['error', 'info', 'warn', 'debug']) {
+  LoggerService.prototype[type] = function(...args) { return wasm.loggerForward(this, type, args); };
+}
+wasm.configureLoggerBoundary(Logger, LoggerService, () => Date.now());
 "
 }
 
@@ -1864,26 +1951,43 @@ await init({ module_or_path: new URL('./client_bg.wasm', import.meta.url) });
 
 __SEEKDEEP_CONTEXT_BINDING__
 
-export { Context, ValidationError };
-export const Fiber = wasm.WasmFiber;
+export { Context, ValidationError, EventsService, RegistryService, CordisError, Fiber, DisposableList, Logger, LoggerService, buildOuterStack, composeError };
+export const c16 = wasm.loggerColors16();
+export const c256 = wasm.loggerColors256();
+export const defaultFormatters = wasm.loggerFormatters();
+export const isBailed = wasm.isBailed;
+export const isConstructor = wasm.isConstructor;
+export const isObject = wasm.isObject;
+export const joinPrototype = wasm.joinPrototype;
+export const getPropertyDescriptor = wasm.getPropertyDescriptor;
+export const getTraceable = wasm.getTraceable;
+export const withProps = wasm.withProps;
+export const createCallable = wasm.createCallable;
+export const resolveConfig = wasm.resolveConfig;
 export const FiberState = Object.freeze({ PENDING: 0, LOADING: 1, ACTIVE: 2, FAILED: 3, DISPOSED: 4, UNLOADING: 5 });
-export const symbols = Object.freeze({ filter: FILTER, effect: EFFECT, isolate: ISOLATE, intercept: INTERCEPT });
+export const symbols = SYMBOLS;
 export class Service {
-  static config = Symbol.for('cordis.service.config');
-  static tracker = Symbol.for('cordis.tracker');
-  static check = Symbol.for('cordis.service.check');
-  static init = Symbol.for('cordis.service.init');
+  static init = SYMBOLS.init;
+  static check = SYMBOLS.check;
+  static config = SYMBOLS.config;
+  static invoke = SYMBOLS.invoke;
+  static extend = SYMBOLS.extend;
+  static tracker = SYMBOLS.tracker;
+  static resolveConfig = SYMBOLS.resolveConfig;
+  ctx;
+  name;
   constructor(ctx, name) {
     this.ctx = ctx;
-    this.name = name;
-    Object.defineProperty(this, Service.tracker, { value: { property: 'ctx', associate: name }, writable: true });
-    ctx.provide(name, this);
+    return wasm.initializeService(this, ctx, name);
   }
+  [SYMBOLS.filter](ctx) { return wasm.serviceFilter(this, ctx); }
+  [SYMBOLS.extend](props) { return wasm.extendService(this, props); }
+  [SYMBOLS.resolveConfig](base, head) { return wasm.resolveServiceConfig(this, base, head); }
+  static [Symbol.hasInstance](instance) { return wasm.serviceHasInstance(this, instance); }
 }
-export class CordisError extends Error {
-  constructor(code, message) { super(message ?? code); this.code = code; }
-}
-export function Inject() { return value => value; }
+wasm.configureServiceConstructor(Service);
+export function Inject(name, config) { return wasm.injectDecorator(name, config); }
+Inject.resolve = wasm.resolveInject;
 ".replace("__SEEKDEEP_CONTEXT_BINDING__", cordis_context_binding())
 }
 
@@ -1895,6 +1999,23 @@ export type Inject = readonly string[] | Readonly<Record<string, unknown>>;
 export interface PluginObject<T = unknown> { name?: string; inject?: Inject; Config?: StandardSchemaV1<unknown, T>; apply(ctx: Context, config: T): unknown }
 export type Plugin<T = unknown> = PluginObject<T> | ((ctx: Context, config: T) => unknown);
 export interface EventOptions { prepend?: boolean; global?: boolean }
+export interface Hook extends EventOptions { ctx: Context; callback: (...args: any[]) => any }
+export declare function isBailed(value: unknown): boolean;
+export declare class EventsService {
+  private ctx;
+  _hooks: Record<PropertyKey, Hook[]>;
+  constructor(ctx: Context);
+  dispatch(type: string, args: any[]): Function[];
+  parallel(...args: any[]): Promise<void>;
+  emit(...args: any[]): void;
+  serial(...args: any[]): Promise<any>;
+  bail(...args: any[]): any;
+  waterfall(...args: any[]): any;
+  register(label: string, hooks: Hook[], callback: any, options: EventOptions): Disposable;
+  unregister(hooks: Hook[], callback: any): true | undefined;
+  on(name: string | symbol, listener: Function, options?: boolean | EventOptions): Disposable;
+  once(name: string, listener: Function, options?: boolean | EventOptions): Disposable;
+}
 export declare class ValidationError extends TypeError {
   constructor(issues: readonly StandardSchemaV1.Issue[]);
 }
@@ -1921,7 +2042,7 @@ export declare class Context {
   readonly fiber: Fiber;
   readonly reflect: { provide(name: string, value: unknown, check?: unknown): Disposable; trace<T>(value: T): T; bind<T extends Function>(callback: T): T };
   readonly registry: { plugin(plugin: Plugin, config?: unknown): Fiber & PromiseLike<Fiber> };
-  readonly events: Context;
+  readonly events: EventsService;
   constructor();
   get(name: string): unknown;
   provide(name: string, value: unknown): Disposable;
@@ -6207,16 +6328,16 @@ mod tests {
         for expected in [
             "await init({ module_or_path:",
             "wasm.configureContextWrapper(wrapContext)",
-            "core.traceService(core.get(key), receiver)",
-            "if (key === 'get') return (name, strict) => core.traceService(core.serviceGet(name, strict), receiver)",
+            "wasm.contextReflectedGet(target, key, receiver, new Error())",
+            "wasm.contextReflectedSet(target, key, value, receiver, new Error())",
             "new Proxy(data,",
-            "core.metaHas(key, Context.prototype)",
-            "core.metaGet(key, receiver)",
-            "core.metaSet(key, value, receiver)",
-            "core.extend(metadata, receiver)",
-            "constructor() { return wasm.createContext(); }",
-            "Object.defineProperty(this, Service.tracker",
-            "ctx.provide(name, this)",
+            "Reflect.has(target, key)",
+            "core.traceService(value, receiver)",
+            "Reflect.set(target, key, value, receiver)",
+            "wasm.contextExtend(this, metadata)",
+            "constructor() { return wasm.createContextWithPrototype(Object.getPrototypeOf(this)); }",
+            "wasm.initializeService(this, ctx, name)",
+            "wasm.configureServiceConstructor(Service)",
         ] {
             assert!(cordis.contains(expected), "missing Cordis {expected:?}");
         }

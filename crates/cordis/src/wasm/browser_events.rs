@@ -6,51 +6,338 @@ use std::{
 };
 
 use futures::task::noop_waker_ref;
-use js_sys::{Array, Function, Object, Promise, Reflect, Symbol};
+use js_sys::{Array, Function, Object, Promise, Reflect};
+use parking_lot::Mutex;
+use uuid::Uuid;
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 use super::{
-    Context, EventArgs, EventOptions, FiberState, WasmContext, effect_disposer, event_args_from_js,
+    Context, EventOptions, FiberState, WasmContext, effect_disposer, event_args_from_js,
     event_args_to_js, event_reply_from_js, event_reply_to_js, js_anyhow, js_error, object,
     wrap_context, wrap_detached_context,
 };
 
+mod service_api;
+
+pub(super) fn service_prototype() -> Result<Object, JsValue> {
+    service_api::prototype()
+}
+pub(super) fn configure_service_prototype(prototype: Object) {
+    service_api::configure(prototype);
+}
+pub(super) fn create_service(
+    owner: &JsValue,
+    prototype: Option<Object>,
+) -> Result<Object, JsValue> {
+    service_api::create(owner, prototype)
+}
+pub(super) fn remember_context(face: &JsValue, context: WasmContext) {
+    service_api::remember_context(face, context);
+}
+pub(super) fn remember_service(service: &JsValue, owner: &JsValue) {
+    service_api::remember_service(service, owner);
+}
+pub(super) fn is_bailed(value: &JsValue) -> bool {
+    bailed(value)
+}
+
 type BrowserCallback = Arc<dyn Fn(&JsValue, &Array) -> Result<JsValue, JsValue> + Send + Sync>;
 
+type ContextFace = Arc<dyn Fn(Context) -> Result<JsValue, JsValue> + Send + Sync>;
+
+struct NativeRegistration {
+    id: Uuid,
+    list: JsValue,
+    callback: JsValue,
+    hook: crate::events::Hook,
+}
+
 #[derive(Clone)]
-pub(crate) struct BrowserHook {
-    pub owner: JsValue,
-    pub callback: BrowserCallback,
+pub(crate) struct HookTable {
+    pub service: Object,
+    context_face: ContextFace,
+    native: Arc<Mutex<Vec<NativeRegistration>>>,
+}
+
+impl HookTable {
+    fn value(&self) -> Result<JsValue, JsValue> {
+        Reflect::get(&self.service, &"_hooks".into())
+    }
+
+    pub(crate) fn insert_native(
+        &self,
+        name: &str,
+        hook: crate::events::Hook,
+    ) -> Result<(), JsValue> {
+        let owner = (self.context_face)(hook.owner.clone())?;
+        let listener = native_callback(hook.clone(), hook.owner.clone());
+        let callback = receiver_function(move |receiver, args| listener(&receiver, &args))?;
+        let options = object(&[
+            ("global", hook.options.global.into()),
+            ("prepend", hook.options.prepend.into()),
+        ])?;
+        let list = self.list(&name.into())?;
+        insert_record(&list, &owner, &callback, &options)?;
+        self.native.lock().push(NativeRegistration {
+            id: hook.id,
+            list,
+            callback: callback.into(),
+            hook,
+        });
+        Ok(())
+    }
+
+    pub(crate) fn remove_native(&self, id: Uuid) -> Result<(), JsValue> {
+        let entry = {
+            let mut native = self.native.lock();
+            native
+                .iter()
+                .position(|entry| entry.id == id)
+                .map(|index| native.remove(index))
+        };
+        if let Some(entry) = entry {
+            unregister(&entry.list, &entry.callback)?;
+        }
+        Ok(())
+    }
+
+    fn list(&self, name: &JsValue) -> Result<JsValue, JsValue> {
+        let table = self.value()?;
+        let list = Reflect::get(&table, name)?;
+        if list.is_truthy() {
+            return Ok(list);
+        }
+        let list = Array::new();
+        if !Reflect::set(&table, name, &list)? {
+            return Err(js_sys::TypeError::new("Cannot assign event hook list").into());
+        }
+        Ok(list.into())
+    }
+
+    pub(crate) fn selected_native(
+        &self,
+        context: &Context,
+        name: &str,
+        mode: crate::events::DispatchMode,
+    ) -> anyhow::Result<Vec<crate::events::Hook>> {
+        let receiver = if matches!(name, "internal/plugin" | "internal/status") {
+            JsValue::NULL
+        } else {
+            (self.context_face)(context.clone()).map_err(|error| js_anyhow(&error))?
+        };
+        let records = self
+            .records(&name.into(), &receiver)
+            .map_err(|error| js_anyhow(&error))?;
+        let mut selected = Vec::new();
+        for record in records.iter() {
+            let callback =
+                Reflect::get(&record, &"callback".into()).map_err(|error| js_anyhow(&error))?;
+            let native = self
+                .native
+                .lock()
+                .iter()
+                .find(|entry| entry.callback == callback)
+                .map(|entry| entry.hook.clone());
+            if let Some(hook) = native {
+                selected.push(hook);
+                continue;
+            }
+            let callback =
+                bind_callback(&callback, &receiver).map_err(|error| js_anyhow(&error))?;
+            selected.push(crate::events::Hook {
+                id: Uuid::nil(),
+                owner: context.clone(),
+                options: EventOptions {
+                    global: true,
+                    prepend: false,
+                },
+                listener: Arc::new(move |_, args| {
+                    let result = call(&callback, &event_args_to_js(&args));
+                    Box::pin(async move {
+                        let value = result.map_err(|error| js_anyhow(&error))?;
+                        if mode == crate::events::DispatchMode::Bail {
+                            return Ok(event_reply_from_js(value));
+                        }
+                        let settled = JsFuture::from(Promise::resolve(&value))
+                            .await
+                            .map_err(|error| js_anyhow(&error))?;
+                        Ok(event_reply_from_js(settled))
+                    })
+                }),
+            });
+        }
+        Ok(selected)
+    }
+
+    fn records(&self, name: &JsValue, receiver: &JsValue) -> Result<Array, JsValue> {
+        filtered_records(&self.value()?, name, receiver)?.dyn_into()
+    }
+}
+
+fn filtered_records(
+    table: &JsValue,
+    name: &JsValue,
+    receiver: &JsValue,
+) -> Result<JsValue, JsValue> {
+    let filter = if receiver.is_null() || receiver.is_undefined() {
+        JsValue::UNDEFINED
+    } else {
+        Reflect::get(receiver, &super::browser_symbols::context_key("filter")?)?
+    };
+    let list = Reflect::get(table, name)?;
+    let list = if list.is_truthy() {
+        list
+    } else {
+        Array::new().into()
+    };
+    let receiver = receiver.clone();
+    let predicate = Closure::wrap(Box::new(move |hook: JsValue| -> Result<bool, JsValue> {
+        if Reflect::get(&hook, &"global".into())?.is_truthy() || !filter.is_truthy() {
+            return Ok(true);
+        }
+        let owner = Reflect::get(&hook, &"ctx".into())?;
+        filter
+            .clone()
+            .dyn_into::<Function>()
+            .map_err(|_| js_sys::TypeError::new("event receiver filter must be callable"))?
+            .call1(&receiver, &owner)
+            .map(|value| value.is_truthy())
+    }) as Box<dyn Fn(JsValue) -> Result<bool, JsValue>>)
+    .into_js_value();
+    service_api::method(&list, "filter", &Array::of1(&predicate))
+}
+
+fn native_callback(hook: crate::events::Hook, context: Context) -> BrowserCallback {
+    Arc::new(move |_, args| {
+        let mut future = (hook.listener)(context.clone(), event_args_from_js(args));
+        let mut task = TaskContext::from_waker(noop_waker_ref());
+        match future.as_mut().poll(&mut task) {
+            Poll::Ready(result) => result.map(event_reply_to_js).map_err(js_error),
+            Poll::Pending => Ok(future_to_promise(async move {
+                future.await.map(event_reply_to_js).map_err(js_error)
+            })
+            .into()),
+        }
+    })
+}
+
+fn insert_record(
+    list: &JsValue,
+    owner: &JsValue,
+    callback: &JsValue,
+    options: &JsValue,
+) -> Result<(), JsValue> {
+    let method = if Reflect::get(options, &"prepend".into())?.is_truthy() {
+        "unshift"
+    } else {
+        "push"
+    };
+    push_record(list, owner, callback, options, method)
+}
+
+fn push_record(
+    list: &JsValue,
+    owner: &JsValue,
+    callback: &JsValue,
+    options: &JsValue,
+    method: &str,
+) -> Result<(), JsValue> {
+    let record = object(&[("ctx", owner.clone()), ("callback", callback.clone())])?;
+    if !options.is_null() && !options.is_undefined() {
+        let options = super::boxed_object(options);
+        for key in Reflect::own_keys(&options)?.iter() {
+            let descriptor = Reflect::get_own_property_descriptor(&options, &key)?;
+            if Reflect::get(&descriptor, &"enumerable".into())?.is_truthy() {
+                Reflect::define_property(
+                    &record,
+                    &key,
+                    &object(&[
+                        ("value", Reflect::get(&options, &key)?),
+                        ("writable", JsValue::TRUE),
+                        ("enumerable", JsValue::TRUE),
+                        ("configurable", JsValue::TRUE),
+                    ])?,
+                )?;
+            }
+        }
+    }
+    Reflect::get(list, &method.into())?
+        .dyn_into::<Function>()
+        .map_err(|_| js_sys::TypeError::new("hooks[method] is not a function"))?
+        .call1(list, &record)?;
+    Ok(())
+}
+
+pub(super) fn unregister(list: &JsValue, callback: &JsValue) -> Result<JsValue, JsValue> {
+    let callback = callback.clone();
+    let predicate = Closure::wrap(Box::new(move |hook: JsValue| -> Result<bool, JsValue> {
+        Ok(Reflect::get(&hook, &"callback".into())? == callback)
+    }) as Box<dyn Fn(JsValue) -> Result<bool, JsValue>>)
+    .into_js_value();
+    let index = Reflect::get(list, &"findIndex".into())?
+        .dyn_into::<Function>()?
+        .call1(list, &predicate)?;
+    if index.as_f64().is_some_and(|index| index >= 0.0) {
+        Reflect::get(list, &"splice".into())?
+            .dyn_into::<Function>()?
+            .call2(list, &index, &1.into())?;
+        Ok(JsValue::TRUE)
+    } else {
+        Ok(JsValue::UNDEFINED)
+    }
+}
+
+pub(super) fn register_explicit(
+    context: &WasmContext,
+    label: String,
+    list: JsValue,
+    callback: JsValue,
+    options: &JsValue,
+    owner: &JsValue,
+) -> Result<JsValue, JsValue> {
+    if context.inner.fiber().state() == FiberState::Disposed {
+        return Err(super::browser_errors::inactive());
+    }
+    insert_record(&list, owner, &callback, options)?;
+    let rollback_list = list.clone();
+    let rollback_callback = callback.clone();
+    let effect = crate::fiber::EffectHandle::synchronous(label, move || {
+        unregister(&list, &callback).map_err(|error| js_anyhow(&error))?;
+        Ok(())
+    });
+    if let Err(error) = context.inner.own(effect.clone()) {
+        unregister(&rollback_list, &rollback_callback)?;
+        return Err(js_sys::Error::new(&error.to_string()).into());
+    }
+    Ok(effect_disposer(effect).into())
+}
+
+pub(super) fn table(context: &WasmContext) -> HookTable {
+    context
+        .inner
+        .events()
+        .browser_table
+        .lock()
+        .clone()
+        .expect("browser event table installed")
 }
 
 pub(super) fn install(context: &WasmContext, owner: &JsValue) -> Result<(), JsValue> {
-    let listener = receiver_function(move |receiver, args| {
-        if args.get(0).as_string().as_deref() != Some("internal/update")
-            || Reflect::get(&args.get(2), &"global".into())?.is_truthy()
-        {
-            return Ok(JsValue::UNDEFINED);
-        }
-        register_update(&receiver, &args.get(1), &args.get(2))
-    })?;
-    register_hook(
-        context,
-        "internal/listener".into(),
-        listener,
-        EventOptions::default(),
-        owner.clone(),
-    )?;
-    let update = receiver_function(move |receiver, args| dispatch_update(&receiver, &args))?;
-    register_hook(
-        context,
-        "internal/update".into(),
-        update,
-        EventOptions {
-            global: true,
-            prepend: true,
-        },
-        owner.clone(),
-    )?;
+    let metadata = context.metadata.clone();
+    let root_face = context.root_face.clone();
+    let service = create_service(owner, None)?;
+    let table = HookTable {
+        service,
+        context_face: Arc::new(move |context| {
+            wrap_detached_context(context, metadata.clone(), root_face.clone()).map_err(js_error)
+        }),
+        native: Arc::default(),
+    };
+    for (name, hook) in context.inner.events().browser_initial_hooks() {
+        table.insert_native(&name, hook)?;
+    }
+    *context.inner.events().browser_table.lock() = Some(table);
     Ok(())
 }
 
@@ -87,10 +374,10 @@ fn register_update(
     } else {
         "push"
     };
-    Reflect::get(&list, &method.into())?
+    let method = Reflect::get(&list, &method.into())?
         .dyn_into::<Function>()
-        .map_err(|_| js_sys::TypeError::new("hooks[method] is not a function"))?
-        .call1(&list, listener)
+        .map_err(|_| js_sys::TypeError::new("hooks[method] is not a function"))?;
+    Reflect::apply(&method, &list, &Array::of1(listener))
 }
 
 fn dispatch_update(receiver: &JsValue, args: &Array) -> Result<JsValue, JsValue> {
@@ -98,175 +385,89 @@ fn dispatch_update(receiver: &JsValue, args: &Array) -> Result<JsValue, JsValue>
     let list = Reflect::get(&hooks, &"internal/update".into())?;
     let callbacks = Array::new();
     if list.is_truthy() {
-        for callback in Array::from(&list).iter() {
-            callbacks.push(&callback.dyn_into::<Function>()?.bind0(receiver));
+        let iterator = js_sys::try_iter(&list)?
+            .ok_or_else(|| js_sys::TypeError::new("update hooks are not iterable"))?;
+        for callback in iterator {
+            callbacks.push(&callback?);
         }
     }
     let args = args.slice(0, args.length());
-    let inner = args.pop().dyn_into::<Function>()?.bind0(receiver);
-    args.push(&inner);
-    waterfall(&callbacks, &args)
+    let inner = args.pop();
+    let invoke = Closure::wrap(Box::new(
+        move |callbacks: Array, receiver: JsValue, args: Array, inner: JsValue| {
+            let callback = callbacks.shift();
+            let callback = if callback.is_null() || callback.is_undefined() {
+                inner
+            } else {
+                callback
+            };
+            let forwarded = Array::of1(&receiver);
+            for arg in args.iter() {
+                forwarded.push(&arg);
+            }
+            service_api::method(&callback, "call", &forwarded)
+        },
+    )
+        as Box<dyn Fn(Array, JsValue, Array, JsValue) -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    let make_next = Function::new_with_args(
+        "invoke,callbacks,receiver,args,inner",
+        "return function next() { return invoke(callbacks,receiver,args,inner); };",
+    );
+    let values = Array::of4(&invoke, &callbacks, receiver, &args);
+    values.push(&inner);
+    let next = Reflect::apply(&make_next, &JsValue::UNDEFINED, &values)?;
+    args.push(&next);
+    call(&next, &Array::new())
 }
 
 pub(super) fn register(
     context: &WasmContext,
     name: &JsValue,
-    listener: JsValue,
-    options: JsValue,
+    listener: &JsValue,
+    options: &JsValue,
     owner: Option<JsValue>,
 ) -> Result<JsValue, JsValue> {
-    if context.inner.fiber().state() == FiberState::Disposed {
-        return Err(js_sys::Error::new(&crate::CordisError::InactiveEffect.to_string()).into());
-    }
-    let listener = listener
-        .dyn_into::<Function>()
-        .map_err(|_| js_sys::TypeError::new("ctx.on listener must be a function"))?;
-    let options = if options.is_object() || options.is_null() {
-        options
-    } else {
-        object(&[("prepend", options)])?.into()
-    };
     let owner = match owner {
         Some(owner) => owner,
         None => wrap_context(context.clone_for_binding())?,
     };
-    let listener = super::tracing::Tracer::new(context.inner.clone(), owner.clone())
-        .bind(&listener)?
-        .dyn_into::<Function>()?;
-    let interception = Array::of4(
-        &owner,
-        &JsValue::from_str("internal/listener"),
-        name,
-        &listener,
-    );
-    interception.push(&options);
-    let intercepted = invoke(context, "bail", &interception)?;
-    if intercepted.is_truthy() {
-        return Ok(intercepted);
-    }
-    let registration = EventOptions {
-        prepend: Reflect::get(&options, &JsValue::from_str("prepend"))?.is_truthy(),
-        global: Reflect::get(&options, &JsValue::from_str("global"))?.is_truthy(),
-    };
-    let key = property_key(name)?;
-    if key.is_symbol() {
-        let label = format!(
-            "ctx.on({})",
-            String::from(key.clone().unchecked_into::<Symbol>().to_string())
-        );
-        let effect = context
-            .inner
-            .events()
-            .symbols
-            .register(
-                &context.inner,
-                &key,
-                label,
-                registration,
-                BrowserHook {
-                    owner,
-                    callback: Arc::new(move |receiver, args| listener.apply(receiver, args)),
-                },
-            )
-            .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-        Ok(effect_disposer(effect).into())
-    } else {
-        register_hook(
-            context,
-            key.as_string().expect("property key is a string or symbol"),
-            listener,
-            registration,
-            owner,
-        )
-    }
-}
-
-fn property_key(value: &JsValue) -> Result<JsValue, JsValue> {
-    let holder = Object::new();
-    Reflect::define_property(&holder, value, &object(&[("value", JsValue::UNDEFINED)])?)?;
-    Ok(Reflect::own_keys(&holder)?.get(0))
-}
-
-fn register_hook(
-    context: &WasmContext,
-    name: String,
-    listener: Function,
-    registration: EventOptions,
-    owner: JsValue,
-) -> Result<JsValue, JsValue> {
-    let browser_listener = listener.clone();
-    let browser = BrowserHook {
-        owner,
-        callback: Arc::new(move |receiver, args| browser_listener.apply(receiver, args)),
-    };
-    let root_face = context.root_face.clone();
-    let metadata = context.metadata.clone();
-    let callback = move |context: Context, args: EventArgs| {
-        let listener = listener.clone();
-        let root_face = root_face.clone();
-        let metadata = metadata.clone();
-        Box::pin(async move {
-            let this = wrap_detached_context(context, metadata, root_face)?;
-            let returned = listener
-                .apply(&this, &event_args_to_js(&args))
-                .map_err(|error| js_anyhow(&error))?;
-            let settled = JsFuture::from(Promise::resolve(&returned))
-                .await
-                .map_err(|error| js_anyhow(&error))?;
-            Ok(event_reply_from_js(settled))
-        }) as crate::events::ListenerFuture
-    };
-    let effect = context
-        .inner
-        .events()
-        .on_browser(&context.inner, name, callback, registration, browser)
-        .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-    Ok(effect_disposer(effect).into())
+    service_api::method(
+        &context.events_face(&owner)?,
+        "on",
+        &Array::of3(name, listener, options),
+    )
 }
 
 pub(super) fn once(
     context: &WasmContext,
     name: &JsValue,
     listener: &JsValue,
-    options: JsValue,
+    options: &JsValue,
     owner: Option<JsValue>,
 ) -> Result<JsValue, JsValue> {
-    let disposer = Array::new();
-    let invoke = Closure::wrap(Box::new(
-        move |receiver: JsValue, args: Array, listener: JsValue, slot: Array| {
-            if slot.length() == 0 {
-                return Err(js_sys::ReferenceError::new(
-                    "Cannot access 'dispose' before initialization",
-                )
-                .into());
-            }
-            call(&slot.get(0), &Array::new())?;
-            listener
-                .dyn_into::<Function>()
-                .map_err(|_| js_sys::TypeError::new("event listener must be callable"))?
-                .apply(&receiver, &args)
-        },
+    let owner = match owner {
+        Some(owner) => owner,
+        None => wrap_context(context.clone_for_binding())?,
+    };
+    service_api::method(
+        &context.events_face(&owner)?,
+        "once",
+        &Array::of3(name, listener, options),
     )
-        as Box<dyn Fn(JsValue, Array, JsValue, Array) -> Result<JsValue, JsValue>>)
-    .into_js_value();
-    let wrapper = Function::new_with_args(
-        "invoke,listener,slot",
-        "'use strict'; return function (...args) { return invoke(this, args, listener, slot); }",
-    )
-    .apply(
-        &JsValue::UNDEFINED,
-        &Array::of3(&invoke, listener, &disposer),
-    )?;
-    let registered = register(context, name, wrapper, options, owner)?;
-    disposer.push(&registered);
-    Ok(registered)
 }
 
 pub(super) fn dispatch(context: &WasmContext, mode: &str, args: &Array) -> Result<Array, JsValue> {
-    enum Candidate {
-        Core(crate::events::Hook),
-        Symbol(EventOptions, BrowserHook),
-    }
+    let service = context.events_face(&wrap_context(context.clone_for_binding())?)?;
+    dispatch_service(Some(context), &service, &mode.into(), args)?.dyn_into()
+}
+
+fn dispatch_service(
+    context: Option<&WasmContext>,
+    service: &JsValue,
+    mode: &JsValue,
+    args: &Array,
+) -> Result<JsValue, JsValue> {
     let first = args.get(0);
     let receiver = if first.is_object() || first.is_function() || first.is_null() {
         args.shift()
@@ -275,86 +476,37 @@ pub(super) fn dispatch(context: &WasmContext, mode: &str, args: &Array) -> Resul
     };
     let name = args.shift();
     if !is_internal(&name)? {
-        let diagnostic = Array::of4(
-            &JsValue::from_str("internal/dispatch"),
-            &JsValue::from_str(mode),
-            &name,
-            args,
-        );
+        let diagnostic = Array::of4(&JsValue::from_str("internal/dispatch"), mode, &name, args);
         diagnostic.push(&receiver);
-        invoke(context, "emit", &diagnostic)?;
+        service_api::method(service, "emit", &diagnostic)?;
     }
-    let filter = if receiver.is_null() || receiver.is_undefined() {
-        JsValue::UNDEFINED
-    } else {
-        Reflect::get(&receiver, &Symbol::for_("cordis.filter"))?
-    };
-    let key = property_key(&name)?;
-    let hooks = if key.is_symbol() {
-        context
-            .inner
-            .events()
-            .symbols
-            .snapshot(&key)
-            .into_iter()
-            .map(|(options, hook)| Candidate::Symbol(options, hook))
-            .collect::<Vec<_>>()
-    } else {
-        context
-            .inner
-            .events()
-            .browser_hooks(&key.as_string().expect("property key is a string or symbol"))
-            .into_iter()
-            .map(Candidate::Core)
-            .collect()
-    };
-    let callbacks = Array::new();
-    for hook in hooks {
-        let (options, owner, callback): (EventOptions, JsValue, BrowserCallback) = match hook {
-            Candidate::Symbol(options, browser) => (options, browser.owner, browser.callback),
-            Candidate::Core(hook) => {
-                if let Some(browser) = hook.browser {
-                    (hook.options, browser.owner, browser.callback)
-                } else {
-                    let owner = wrap_detached_context(
-                        hook.owner,
-                        context.metadata.clone(),
-                        context.root_face.clone(),
-                    )
-                    .map_err(js_error)?;
-                    let dispatch_context = context.inner.clone();
-                    let callback: BrowserCallback = Arc::new(move |_, args| {
-                        let mut future =
-                            (hook.listener)(dispatch_context.clone(), event_args_from_js(args));
-                        let mut task = TaskContext::from_waker(noop_waker_ref());
-                        match future.as_mut().poll(&mut task) {
-                            Poll::Ready(result) => result.map(event_reply_to_js).map_err(js_error),
-                            Poll::Pending => Ok(future_to_promise(async move {
-                                future.await.map(event_reply_to_js).map_err(js_error)
-                            })
-                            .into()),
-                        }
-                    });
-                    (hook.options, owner, callback)
-                }
-            }
-        };
-        if !options.global && filter.is_truthy() {
-            let filter = filter
-                .clone()
-                .dyn_into::<Function>()
-                .map_err(|_| js_sys::TypeError::new("event receiver filter must be callable"))?;
-            if !filter.call1(&receiver, &owner)?.is_truthy() {
-                continue;
-            }
+    let hooks = filtered_records(&Reflect::get(service, &"_hooks".into())?, &name, &receiver)?;
+    let context = context.map(WasmContext::clone_for_binding);
+    let mapper = Closure::wrap(Box::new(move |hook: JsValue| -> Result<JsValue, JsValue> {
+        let callback = Reflect::get(&hook, &"callback".into())?;
+        let native = context
+            .as_ref()
+            .and_then(|context| context.inner.events().browser_table.lock().clone())
+            .and_then(|table| {
+                table
+                    .native
+                    .lock()
+                    .iter()
+                    .find(|entry| entry.callback == callback)
+                    .map(|entry| entry.hook.clone())
+            });
+        if let Some(hook) = native {
+            let listener = native_callback(
+                hook,
+                context.as_ref().expect("native Context").inner.clone(),
+            );
+            let callback = receiver_function(move |receiver, args| listener(&receiver, &args))?;
+            return Ok(callback.bind0(&receiver).into());
         }
-        let receiver = receiver.clone();
-        let bound = Closure::wrap(Box::new(move |args: Array| callback(&receiver, &args))
-            as Box<dyn Fn(Array) -> Result<JsValue, JsValue>>)
-        .into_js_value();
-        callbacks.push(&variadic(&bound)?);
-    }
-    Ok(callbacks)
+        bind_callback(&callback, &receiver)
+    }) as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    service_api::method(&hooks, "map", &Array::of1(&mapper))
 }
 
 fn is_internal(name: &JsValue) -> Result<bool, JsValue> {
@@ -370,27 +522,25 @@ fn is_internal(name: &JsValue) -> Result<bool, JsValue> {
         &"startsWith".into(),
         name,
     )?;
-    method
+    let method = method
         .dyn_into::<Function>()
-        .map_err(|_| js_sys::TypeError::new("name.startsWith is not a function"))?
-        .call1(name, &"internal/".into())
-        .map(|value| value.is_truthy())
+        .map_err(|_| js_sys::TypeError::new("name.startsWith is not a function"))?;
+    Reflect::apply(&method, name, &Array::of1(&"internal/".into())).map(|value| value.is_truthy())
 }
 
-fn variadic(callback: &JsValue) -> Result<JsValue, JsValue> {
-    // Only JavaScript can expose a variadic function; dispatch policy stays in Rust.
-    Function::new_with_args(
-        "callback",
-        "return function (...args) { return callback(args); }",
-    )
-    .call1(&JsValue::UNDEFINED, callback)
+fn bind_callback(callback: &JsValue, receiver: &JsValue) -> Result<JsValue, JsValue> {
+    let bind = Reflect::get(callback, &"bind".into())?
+        .dyn_into::<Function>()
+        .map_err(|_| js_sys::TypeError::new("hook.callback.bind is not a function"))?;
+    Reflect::apply(&bind, callback, &Array::of1(receiver))
 }
 
 fn call(callback: &JsValue, args: &Array) -> Result<JsValue, JsValue> {
-    callback
+    let function = callback
         .clone()
-        .unchecked_into::<Function>()
-        .apply(&JsValue::UNDEFINED, args)
+        .dyn_into::<Function>()
+        .map_err(|_| js_sys::TypeError::new("cb is not a function"))?;
+    Reflect::apply(&function, &JsValue::UNDEFINED, args)
 }
 
 fn bailed(value: &JsValue) -> bool {
@@ -398,69 +548,33 @@ fn bailed(value: &JsValue) -> bool {
 }
 
 pub(super) fn invoke(context: &WasmContext, mode: &str, args: &Array) -> Result<JsValue, JsValue> {
-    // Source parallel dispatch reports "emit" to internal/dispatch observers.
-    let callbacks = dispatch(
-        context,
-        if mode == "parallel" { "emit" } else { mode },
-        args,
-    );
-    let callbacks = match callbacks {
-        Ok(callbacks) => callbacks,
-        Err(error) if matches!(mode, "serial" | "parallel") => {
-            return Ok(Promise::reject(&error).into());
-        }
-        Err(error) => return Err(error),
-    };
-    match mode {
-        "emit" => {
-            for callback in callbacks.iter() {
-                call(&callback, args)?;
+    let service = context.events_face(&wrap_context(context.clone_for_binding())?)?;
+    service_api::method(&service, mode, args)
+}
+
+fn parallel_results(pending: &JsValue) -> Result<Promise, JsValue> {
+    let settled = Closure::wrap(Box::new(move |results: Array| -> Result<JsValue, JsValue> {
+        let errors = Array::new();
+        for result in results.iter() {
+            if Reflect::get(&result, &JsValue::from_str("status"))?
+                .as_string()
+                .as_deref()
+                == Some("rejected")
+            {
+                errors.push(&Reflect::get(&result, &JsValue::from_str("reason"))?);
             }
+        }
+        if errors.length() == 0 {
             Ok(JsValue::UNDEFINED)
+        } else {
+            Err(js_sys::AggregateError::new(&errors.to_vec()).into())
         }
-        "bail" => {
-            for callback in callbacks.iter() {
-                let result = call(&callback, args)?;
-                if bailed(&result) {
-                    return Ok(result);
-                }
-            }
-            Ok(JsValue::UNDEFINED)
-        }
-        "serial" => Ok(serial(callbacks, args.clone())?.into()),
-        "parallel" => {
-            let pending = Array::new();
-            for callback in callbacks.iter() {
-                pending.push(&match call(&callback, args) {
-                    Ok(value) => Promise::resolve(&value).into(),
-                    Err(error) => Promise::reject(&error).into(),
-                });
-            }
-            let settled =
-                Closure::wrap(Box::new(move |results: Array| -> Result<JsValue, JsValue> {
-                    let errors = Array::new();
-                    for result in results.iter() {
-                        if Reflect::get(&result, &JsValue::from_str("status"))?
-                            .as_string()
-                            .as_deref()
-                            == Some("rejected")
-                        {
-                            errors.push(&Reflect::get(&result, &JsValue::from_str("reason"))?);
-                        }
-                    }
-                    if errors.length() == 0 {
-                        Ok(JsValue::UNDEFINED)
-                    } else {
-                        Err(js_sys::AggregateError::new(&errors.to_vec()).into())
-                    }
-                })
-                    as Box<dyn Fn(Array) -> Result<JsValue, JsValue>>)
-                .into_js_value();
-            then(&Promise::all_settled(&pending), &settled).map(Into::into)
-        }
-        "waterfall" => waterfall(&callbacks, args),
-        _ => Err(js_sys::TypeError::new("unsupported browser event dispatch mode").into()),
-    }
+    }) as Box<dyn Fn(Array) -> Result<JsValue, JsValue>>)
+    .into_js_value();
+    then(
+        &Promise::all_settled(pending.unchecked_ref::<Array>()),
+        &settled,
+    )
 }
 
 fn then(promise: &Promise, continuation: &JsValue) -> Result<Promise, JsValue> {
@@ -470,40 +584,20 @@ fn then(promise: &Promise, continuation: &JsValue) -> Result<Promise, JsValue> {
         .map(wasm_bindgen::JsCast::unchecked_into)
 }
 
-fn serial(callbacks: Array, args: Array) -> Result<Promise, JsValue> {
-    let callback = callbacks.shift();
-    if callback.is_undefined() {
-        return Ok(Promise::resolve(&JsValue::UNDEFINED));
-    }
-    let result = match call(&callback, &args) {
-        Ok(result) => result,
-        Err(error) => return Ok(Promise::reject(&error)),
-    };
-    let settled = Closure::wrap(Box::new(move |value: JsValue| -> Result<JsValue, JsValue> {
-        if bailed(&value) {
-            Ok(value)
-        } else {
-            serial(callbacks.clone(), args.clone()).map(Into::into)
-        }
-    }) as Box<dyn Fn(JsValue) -> Result<JsValue, JsValue>>)
-    .into_js_value();
-    then(&Promise::resolve(&result), &settled)
-}
-
-fn waterfall(callbacks: &Array, args: &Array) -> Result<JsValue, JsValue> {
+fn waterfall_value(callbacks: &JsValue, args: &Array) -> Result<JsValue, JsValue> {
     let inner = args.pop();
     let invoke = Closure::wrap(
-        Box::new(move |callbacks: Array, args: Array, inner: JsValue| {
-            let callback = callbacks.shift();
+        Box::new(move |callbacks: JsValue, args: Array, inner: JsValue| {
+            let callback = service_api::method(&callbacks, "shift", &Array::new())?;
             call(
-                if callback.is_undefined() {
+                if callback.is_undefined() || callback.is_null() {
                     &inner
                 } else {
                     &callback
                 },
                 &args,
             )
-        }) as Box<dyn Fn(Array, Array, JsValue) -> Result<JsValue, JsValue>>,
+        }) as Box<dyn Fn(JsValue, Array, JsValue) -> Result<JsValue, JsValue>>,
     )
     .into_js_value();
     // The continuation's self-reference is a JavaScript-only cycle, collectible by the browser.
@@ -517,4 +611,111 @@ fn waterfall(callbacks: &Array, args: &Array) -> Result<JsValue, JsValue> {
     )?;
     args.push(&next);
     call(&next, &Array::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    fn browser_context() -> (Context, WasmContext, JsValue) {
+        let inner = Context::new();
+        let root_face = super::super::empty_face_slot();
+        let binding = WasmContext::new(
+            inner.clone(),
+            Object::new().into(),
+            root_face.clone(),
+            super::super::empty_face_slot(),
+        );
+        let face = wrap_context(binding.clone_for_binding()).unwrap();
+        *root_face.lock() = Some(face.clone());
+        *binding.fiber_face.lock() =
+            Some(super::super::root_fiber_face(&face, inner.fiber()).unwrap());
+        install(&binding, &face).unwrap();
+        (inner, binding, face)
+    }
+
+    #[wasm_bindgen_test]
+    fn native_payloads_and_browser_table_mutations_share_one_dispatch() {
+        struct Payload(u32);
+
+        let (inner, binding, face) = browser_context();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let native_calls = calls.clone();
+        let effect = inner
+            .events()
+            .on_sync(
+                &inner,
+                "test/native-table",
+                move |_, args| {
+                    native_calls.lock().push(args.get::<Payload>(0).unwrap().0);
+                    Ok(crate::EventReply::Undefined)
+                },
+                EventOptions::default(),
+            )
+            .unwrap();
+        let args = crate::EventArgs::one(Payload(41));
+        inner
+            .events()
+            .emit(&inner, "test/native-table", &args)
+            .unwrap();
+        assert_eq!(*calls.lock(), [41]);
+        let table = table(&binding);
+        let list = table.list(&"test/native-table".into()).unwrap();
+        let hook = Array::from(&list).get(0);
+        let native_callback = Reflect::get(&hook, &"callback".into()).unwrap();
+        let changed_calls = calls.clone();
+        let replacement = Closure::wrap(Box::new(move || {
+            changed_calls.lock().push(99);
+        }) as Box<dyn Fn()>)
+        .into_js_value();
+        Reflect::set(&hook, &"callback".into(), &replacement).unwrap();
+        inner
+            .events()
+            .emit(&inner, "test/native-table", &crate::EventArgs::new())
+            .unwrap();
+        invoke(&binding, "emit", &Array::of1(&"test/native-table".into())).unwrap();
+        assert_eq!(*calls.lock(), [41, 99, 99]);
+        Reflect::set(&hook, &"callback".into(), &native_callback).unwrap();
+        futures::executor::block_on(effect.dispose()).unwrap();
+        assert_eq!(Array::from(&list).length(), 0);
+        inner
+            .events()
+            .emit(&inner, "test/native-table", &args)
+            .unwrap();
+        assert_eq!(*calls.lock(), [41, 99, 99]);
+        let custom =
+            Function::new_no_args("return { bind(receiver) { if (!receiver) throw new Error('missing receiver'); return () => 17; } };")
+                .call0(&JsValue::UNDEFINED)
+                .unwrap();
+        let custom_list = table.list(&"test/custom-native-bind".into()).unwrap();
+        insert_record(&custom_list, &face, &custom, &Object::new()).unwrap();
+        let reply = inner
+            .events()
+            .bail(&inner, "test/custom-native-bind", &crate::EventArgs::new())
+            .unwrap();
+        let crate::BailReply::Settled(crate::EventReply::Value(reply)) = reply else {
+            panic!("custom bind did not return its native bail value");
+        };
+        assert_eq!(
+            reply.downcast_ref::<JsValue>().unwrap().as_f64(),
+            Some(17.0)
+        );
+        let promise = Promise::resolve(&JsValue::from_f64(29.0));
+        let returned = promise.clone();
+        let callback = receiver_function(move |_, _| Ok(returned.clone().into())).unwrap();
+        let promises = table.list(&"test/native-bail-promise".into()).unwrap();
+        insert_record(&promises, &face, &callback, &Object::new()).unwrap();
+        let reply = inner
+            .events()
+            .bail(&inner, "test/native-bail-promise", &crate::EventArgs::new())
+            .unwrap();
+        let crate::BailReply::Settled(crate::EventReply::Value(reply)) = reply else {
+            panic!("native bail wrapped the returned Promise");
+        };
+        assert_eq!(
+            reply.downcast_ref::<JsValue>().unwrap(),
+            &JsValue::from(promise)
+        );
+    }
 }

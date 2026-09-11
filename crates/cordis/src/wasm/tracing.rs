@@ -1,26 +1,25 @@
 //! Source service tracing and callback binding over JavaScript object identities.
 
 use js_sys::{Array, Function, Object, Proxy, Reflect, Symbol};
-use wasm_bindgen::{JsCast as _, JsValue, closure::Closure};
+use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
-use super::{Context, get_with_receiver, object};
+use super::{browser_values, get_with_receiver, object};
 
 #[derive(Clone)]
 pub(super) struct Tracer {
-    context: Context,
     face: JsValue,
 }
 
 impl Tracer {
-    pub(super) const fn new(context: Context, face: JsValue) -> Self {
-        Self { context, face }
+    pub(super) const fn new(face: JsValue) -> Self {
+        Self { face }
     }
 
     pub(super) fn trace(&self, value: &JsValue) -> Result<JsValue, JsValue> {
         if !is_object(value) {
             return Ok(value.clone());
         }
-        if !own_descriptor(value, &symbol("shadow"))?.is_undefined() {
+        if !own_descriptor(value, &symbol("shadow")?)?.is_undefined() {
             return Reflect::get_prototype_of(value).map(Into::into);
         }
         let tracker = tracker(value)?;
@@ -35,7 +34,11 @@ impl Tracer {
         let tracer = self.clone();
         let apply = Closure::wrap(Box::new(
             move |target: Function, receiver: JsValue, args: Array| {
-                target.apply(&tracer.trace(&receiver)?, &tracer.arguments(&args)?)
+                Reflect::apply(
+                    &target,
+                    &tracer.trace(&receiver)?,
+                    &tracer.arguments(&args)?,
+                )
             },
         )
             as Box<dyn Fn(Function, JsValue, Array) -> Result<JsValue, JsValue>>)
@@ -50,7 +53,8 @@ impl Tracer {
         .into_js_value();
         Reflect::set(&handler, &"apply".into(), &apply)?;
         Reflect::set(&handler, &"construct".into(), &construct)?;
-        Ok(Proxy::new(callback, &handler).into())
+        let proxy = Reflect::get(&js_sys::global(), &"Proxy".into())?.dyn_into::<Function>()?;
+        Reflect::construct(&proxy, &Array::of2(callback, &handler))
     }
 
     fn arguments(&self, args: &Array) -> Result<Array, JsValue> {
@@ -58,34 +62,37 @@ impl Tracer {
     }
 
     #[allow(clippy::too_many_lines)] // One Proxy keeps the source get/set/apply rules together.
-    fn tracked(&self, value: &JsValue, descriptor: &JsValue) -> Result<JsValue, JsValue> {
-        let no_shadow = Reflect::get(descriptor, &"noShadow".into())?.is_truthy();
+    pub(super) fn tracked(
+        &self,
+        value: &JsValue,
+        descriptor: &JsValue,
+    ) -> Result<JsValue, JsValue> {
         let mut tracer = self.clone();
-        if Reflect::get(&tracer.face, &symbol("shadow"))?.is_truthy() && !no_shadow {
+        if browser_values::get(&tracer.face, &symbol("shadow")?)?.is_truthy()
+            && !browser_values::get(descriptor, &"noShadow".into())?.is_truthy()
+        {
             tracer.face = Reflect::get_prototype_of(&tracer.face)?.into();
         }
-        let property = Reflect::get(descriptor, &"property".into())?;
-        let associate = Reflect::get(descriptor, &"associate".into())?;
         let handler = Object::new();
         let reader = tracer.clone();
-        let read_property = property.clone();
-        let read_associate = associate.clone();
+        let read_tracker = descriptor.clone();
         let get = Closure::wrap(
             Box::new(move |target: JsValue, key: JsValue, receiver: JsValue| {
-                if Object::is(&key, &symbol("original")) {
+                if Object::is(&key, &symbol("original")?) {
                     return Ok(target);
                 }
-                if Object::is(&key, &read_property) {
+                let property = browser_values::get(&read_tracker, &"property".into())?;
+                if Object::is(&key, &property) {
                     return Ok(reader.face.clone());
                 }
                 if key.is_symbol() {
                     return get_with_receiver(&target, &key, &receiver);
                 }
-                if let Some(associated) = reader.associated(&read_associate, &key) {
+                if let Some(associated) = reader.associated(&read_tracker, &key)? {
                     return get_with_receiver(
                         &reader.face,
-                        &associated.into(),
-                        &with_property(&reader.face, &symbol("receiver"), &receiver)?,
+                        &associated,
+                        &with_property(&reader.face, &symbol("receiver")?, &receiver)?,
                     );
                 }
                 let descriptor = property_descriptor(&target, &key)?;
@@ -94,18 +101,29 @@ impl Tracer {
                     if !descriptor.is_undefined() && Reflect::has(&descriptor, &"value".into())? {
                         Reflect::get(&descriptor, &"value".into())?
                     } else {
-                        let context_receiver = reader.shadow(&target, &read_property, &receiver)?;
+                        let property = browser_values::get(&read_tracker, &"property".into())?;
+                        let context_receiver = reader.shadow(&target, &property, &receiver)?;
                         let value = get_with_receiver(&target, &key, &context_receiver)?;
                         shadow = Some(context_receiver);
                         value
                     };
-                let inner_tracker = tracker(&value)?;
+                let inner_tracker = if value.is_null() || value.is_undefined() {
+                    JsValue::UNDEFINED
+                } else {
+                    browser_values::get(&value, &symbol("tracker")?)?
+                };
                 if inner_tracker.is_truthy() {
                     reader.tracked(&value, &inner_tracker)
-                } else if !no_shadow && value.is_function() {
+                } else if !browser_values::get(&read_tracker, &"noShadow".into())?.is_truthy()
+                    && value.is_function()
+                {
                     let shadow = match shadow {
                         Some(shadow) => shadow,
-                        None => reader.shadow(&target, &read_property, &receiver)?,
+                        None => reader.shadow(
+                            &target,
+                            &browser_values::get(&read_tracker, &"property".into())?,
+                            &receiver,
+                        )?,
                     };
                     reader.method(&value, receiver, shadow)
                 } else {
@@ -115,27 +133,36 @@ impl Tracer {
         )
         .into_js_value();
         let writer = tracer;
+        let write_tracker = descriptor.clone();
         let set = Closure::wrap(Box::new(
             move |target: JsValue, key: JsValue, value: JsValue, receiver: JsValue| {
-                if Object::is(&key, &symbol("original")) || Object::is(&key, &property) {
+                if Object::is(&key, &symbol("original")?) {
+                    return Ok(false);
+                }
+                let property = browser_values::get(&write_tracker, &"property".into())?;
+                if Object::is(&key, &property) {
                     return Ok(false);
                 }
                 if key.is_symbol() {
                     return Reflect::set_with_receiver(&target, &key, &value, &receiver);
                 }
-                if let Some(associated) = writer.associated(&associate, &key) {
+                if let Some(associated) = writer.associated(&write_tracker, &key)? {
                     return Reflect::set_with_receiver(
                         &writer.face,
-                        &associated.into(),
+                        &associated,
                         &value,
-                        &with_property(&writer.face, &symbol("receiver"), &receiver)?,
+                        &with_property(&writer.face, &symbol("receiver")?, &receiver)?,
                     );
                 }
                 Reflect::set_with_receiver(
                     &target,
                     &key,
                     &value,
-                    &writer.shadow(&target, &property, &receiver)?,
+                    &writer.shadow(
+                        &target,
+                        &browser_values::get(&write_tracker, &"property".into())?,
+                        &receiver,
+                    )?,
                 )
             },
         )
@@ -145,7 +172,7 @@ impl Tracer {
         Reflect::set(&handler, &"set".into(), &set)?;
         let invoke = Closure::wrap(Box::new(
             move |proxy: JsValue, target: JsValue, receiver: JsValue, args: Array| {
-                let invoke = Reflect::get(&target, &symbol("invoke"))?;
+                let invoke = Reflect::get(&target, &symbol("invoke")?)?;
                 if invoke.is_truthy() {
                     invoke.dyn_into::<Function>()?.apply(&proxy, &args)
                 } else {
@@ -158,15 +185,34 @@ impl Tracer {
         let apply = Function::new_with_args("invoke", "return function(target, receiver, args) { return invoke(this.proxy, target, receiver, args); }")
             .call1(&JsValue::UNDEFINED, &invoke)?;
         Reflect::set(&handler, &"apply".into(), &apply)?;
-        let proxy: JsValue = Proxy::new(value, &handler).into();
+        let proxy = browser_values::proxy(value, &handler)?;
         // The apply trap's self-reference remains a JavaScript-owned cycle.
         Reflect::set(&handler, &"proxy".into(), &proxy)?;
         Ok(proxy)
     }
 
-    fn associated(&self, associate: &JsValue, key: &JsValue) -> Option<String> {
-        let name = format!("{}.{}", associate.as_string()?, key.as_string()?);
-        self.context.has_property(&name).then_some(name)
+    fn associated(&self, descriptor: &JsValue, key: &JsValue) -> Result<Option<JsValue>, JsValue> {
+        if !browser_values::get(descriptor, &"associate".into())?.is_truthy() {
+            return Ok(None);
+        }
+        let reflect = browser_values::get(&self.face, &"reflect".into())?;
+        let props = browser_values::get(&reflect, &"props".into())?;
+        let property = Function::new_with_args("associate,key", "return `${associate}.${key}`;");
+        let name = property.call2(
+            &JsValue::UNDEFINED,
+            &browser_values::get(descriptor, &"associate".into())?,
+            key,
+        )?;
+        if !browser_values::get(&props, &name)?.is_truthy() {
+            return Ok(None);
+        }
+        property
+            .call2(
+                &JsValue::UNDEFINED,
+                &browser_values::get(descriptor, &"associate".into())?,
+                key,
+            )
+            .map(Some)
     }
 
     fn shadow(
@@ -187,7 +233,7 @@ impl Tracer {
             return Ok(receiver.clone());
         }
         let metadata = Object::new();
-        Reflect::set(&metadata, &symbol("shadow"), &origin)?;
+        Reflect::set(&metadata, &symbol("shadow")?, &origin)?;
         let extended = Reflect::get(&self.face, &"extend".into())?
             .dyn_into::<Function>()?
             .call1(&self.face, &metadata)?;
@@ -208,7 +254,7 @@ impl Tracer {
                 } else {
                     &receiver
                 };
-                tracer.trace(&target.apply(receiver, &args)?)
+                tracer.trace(&Reflect::apply(&target, receiver, &args)?)
             },
         )
             as Box<dyn Fn(Function, JsValue, Array) -> Result<JsValue, JsValue>>)
@@ -217,9 +263,7 @@ impl Tracer {
     }
 }
 
-fn symbol(name: &str) -> JsValue {
-    Symbol::for_(&format!("cordis.{name}")).into()
-}
+use super::browser_symbols::get as symbol;
 
 fn is_object(value: &JsValue) -> bool {
     !value.is_null() && (value.is_object() || value.is_function())
@@ -229,7 +273,7 @@ fn tracker(value: &JsValue) -> Result<JsValue, JsValue> {
     if !is_object(value) {
         return Ok(JsValue::UNDEFINED);
     }
-    let canonical = Reflect::get(value, &symbol("tracker"))?;
+    let canonical = Reflect::get(value, &symbol("tracker")?)?;
     if canonical.is_truthy() {
         return Ok(canonical);
     }
@@ -243,40 +287,56 @@ fn own_descriptor(value: &JsValue, key: &JsValue) -> Result<JsValue, JsValue> {
     Reflect::get_own_property_descriptor(value.unchecked_ref::<Object>(), key)
 }
 
-fn property_descriptor(value: &JsValue, key: &JsValue) -> Result<JsValue, JsValue> {
-    let mut current = value.clone();
-    while !current.is_null() {
-        let descriptor = own_descriptor(&current, key)?;
-        if !descriptor.is_undefined() {
-            return Ok(descriptor);
-        }
-        current = Reflect::get_prototype_of(&current)?.into();
-    }
-    Ok(JsValue::UNDEFINED)
-}
+use browser_values::property_descriptor;
 
 fn with_property(
     target: &JsValue,
     property: &JsValue,
     value: &JsValue,
 ) -> Result<JsValue, JsValue> {
-    let read_key = property.clone();
-    let read_value = value.clone();
+    let props = Object::create(&Object::from(JsValue::NULL));
+    Reflect::define_property(
+        &props,
+        property,
+        &object(&[("value", value.clone()), ("writable", false.into())])?,
+    )?;
+    with_props(target, &props)
+}
+
+/// Traces a value using the caller's current Context and tracker metadata.
+///
+/// # Errors
+/// Propagates property, prototype, and proxy construction failures.
+#[wasm_bindgen(js_name = getTraceable)]
+pub fn get_traceable(context: JsValue, value: &JsValue) -> Result<JsValue, JsValue> {
+    Tracer::new(context).trace(value)
+}
+
+/// Overlays properties while preserving the target's constructor and descriptors.
+///
+/// # Errors
+/// Propagates proxy construction and property access failures.
+#[wasm_bindgen(js_name = withProps)]
+pub fn with_props(target: &JsValue, props: &JsValue) -> Result<JsValue, JsValue> {
+    if !props.is_truthy() {
+        return Ok(target.clone());
+    }
+    let reader = props.clone();
     let get = Closure::wrap(
         Box::new(move |target: JsValue, key: JsValue, receiver: JsValue| {
-            if Object::is(&key, &read_key) {
-                Ok(read_value.clone())
+            if Reflect::has(&reader, &key)? && key.as_string().as_deref() != Some("constructor") {
+                get_with_receiver(&reader, &key, &receiver)
             } else {
                 get_with_receiver(&target, &key, &receiver)
             }
         }) as Box<dyn Fn(JsValue, JsValue, JsValue) -> Result<JsValue, JsValue>>,
     )
     .into_js_value();
-    let property = property.clone();
+    let writer = props.clone();
     let set = Closure::wrap(Box::new(
         move |target: JsValue, key: JsValue, value: JsValue, receiver: JsValue| {
-            if Object::is(&key, &property) {
-                Ok(false)
+            if Reflect::has(&writer, &key)? && key.as_string().as_deref() != Some("constructor") {
+                Reflect::set_with_receiver(&writer, &key, &value, &receiver)
             } else {
                 Reflect::set_with_receiver(&target, &key, &value, &receiver)
             }
@@ -284,5 +344,7 @@ fn with_property(
     )
         as Box<dyn Fn(JsValue, JsValue, JsValue, JsValue) -> Result<bool, JsValue>>)
     .into_js_value();
-    Ok(Proxy::new(target, &object(&[("get", get), ("set", set)])?).into())
+    let proxy = browser_values::proxy(target, &object(&[("get", get), ("set", set)])?)?;
+    super::remember_context_alias(target, &proxy);
+    Ok(proxy)
 }

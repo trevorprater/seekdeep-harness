@@ -227,11 +227,15 @@ impl FileSystemSkillProvider {
 
     /// Closes every native watcher. Repeated calls are harmless.
     pub fn dispose(&self) {
-        let mut state = self.watch.lock();
-        state.closing = true;
-        state.watchers.clear();
-        state.project_order.clear();
-        state.project_paths.clear();
+        let watchers = {
+            let mut state = self.watch.lock();
+            state.closing = true;
+            state.project_order.clear();
+            state.project_paths.clear();
+            std::mem::take(&mut state.watchers)
+        };
+        // Native watcher destruction can wait for callbacks that acquire this mutex.
+        drop(watchers);
     }
 
     async fn roots(&self, cwd: Option<&str>) -> anyhow::Result<Vec<SkillRoot>> {
@@ -321,6 +325,9 @@ impl FileSystemSkillProvider {
     }
 
     fn open_watcher(self: &Arc<Self>, root: &Path) -> anyhow::Result<()> {
+        if self.watch.lock().closing {
+            return Ok(());
+        }
         let anchor = watch_anchor(root, self.config.watch_follow_symlinks)?;
         let watch_root = canonical_watch_path(root)?;
         let weak = Arc::downgrade(self);
@@ -341,15 +348,27 @@ impl FileSystemSkillProvider {
             )?)
         };
         watcher.watch(&anchor, RecursiveMode::Recursive)?;
-        self.watch
-            .lock()
-            .watchers
-            .insert(root.to_path_buf(), watcher);
+        self.retain_watcher(root.to_path_buf(), watcher);
         Ok(())
+    }
+
+    fn retain_watcher(&self, root: PathBuf, watcher: Box<dyn notify::Watcher + Send>) {
+        let retired = {
+            let mut state = self.watch.lock();
+            if state.closing || state.watchers.contains_key(&root) {
+                Some(watcher)
+            } else {
+                state.watchers.insert(root, watcher)
+            }
+        };
+        drop(retired);
     }
 
     fn retain_project(&self, project: &Path, root: &Path) {
         let mut state = self.watch.lock();
+        if state.closing {
+            return;
+        }
         let project = project.to_path_buf();
         if !state.project_paths.contains_key(&project) {
             state.project_order.push(project.clone());
@@ -365,12 +384,16 @@ impl FileSystemSkillProvider {
         let mut state = self.watch.lock();
         while state.project_order.len() > self.config.watch_max_projects {
             let project = state.project_order.remove(0);
+            let mut retired = Vec::new();
             if let Some(paths) = state.project_paths.remove(&project) {
                 for path in paths {
-                    state.watchers.remove(&path);
+                    if let Some(watcher) = state.watchers.remove(&path) {
+                        retired.push(watcher);
+                    }
                 }
             }
             drop(state);
+            drop(retired);
             self.invalidate();
             state = self.watch.lock();
         }
@@ -932,4 +955,107 @@ fn absolute(path: &Path) -> anyhow::Result<PathBuf> {
 
 fn display_path(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+#[cfg(test)]
+mod watcher_lifecycle_tests {
+    use super::*;
+    use std::sync::atomic::AtomicBool;
+
+    struct ReentrantWatcher {
+        owner: Weak<FileSystemSkillProvider>,
+        unlocked: Arc<AtomicBool>,
+    }
+
+    impl Drop for ReentrantWatcher {
+        fn drop(&mut self) {
+            let owner = self.owner.upgrade().expect("test owner remains alive");
+            self.unlocked
+                .store(owner.watch.try_lock().is_some(), Ordering::Release);
+        }
+    }
+
+    impl notify::Watcher for ReentrantWatcher {
+        fn new<F: notify::EventHandler>(_: F, _: notify::Config) -> notify::Result<Self> {
+            Err(notify::Error::generic(
+                "test watchers require an explicit owner",
+            ))
+        }
+
+        fn watch(&mut self, _: &Path, _: RecursiveMode) -> notify::Result<()> {
+            Ok(())
+        }
+        fn unwatch(&mut self, _: &Path) -> notify::Result<()> {
+            Ok(())
+        }
+        fn kind() -> notify::WatcherKind {
+            notify::WatcherKind::PollWatcher
+        }
+    }
+
+    fn provider() -> Arc<FileSystemSkillProvider> {
+        let context = Context::new();
+        let registry =
+            SkillRegistry::install(&context, &seekdeep_skill::Config::default()).unwrap();
+        FileSystemSkillProvider::new(
+            &context,
+            &registry,
+            Config {
+                include_default_roots: false,
+                seekdeep_home: Some(std::env::temp_dir().join("watcher-test-home")),
+                agents_home: Some(std::env::temp_dir().join("watcher-test-agents")),
+                watch_max_projects: 1,
+                ..Config::default()
+            },
+        )
+        .unwrap()
+    }
+
+    fn watcher(
+        owner: &Arc<FileSystemSkillProvider>,
+    ) -> (Box<dyn notify::Watcher + Send>, Arc<AtomicBool>) {
+        let unlocked = Arc::new(AtomicBool::new(false));
+        (
+            Box::new(ReentrantWatcher {
+                owner: Arc::downgrade(owner),
+                unlocked: unlocked.clone(),
+            }),
+            unlocked,
+        )
+    }
+
+    #[test]
+    fn disposal_releases_the_state_lock_before_stopping_watchers() {
+        let owner = provider();
+        let (watcher, unlocked) = watcher(&owner);
+        owner.retain_watcher(PathBuf::from("watched"), watcher);
+        owner.dispose();
+        assert!(unlocked.load(Ordering::Acquire));
+        assert!(owner.watch.lock().watchers.is_empty());
+        owner.dispose();
+    }
+
+    #[test]
+    fn eviction_and_rejected_registration_release_the_state_lock() {
+        let owner = provider();
+        let (first, first_unlocked) = watcher(&owner);
+        owner.retain_watcher(PathBuf::from("first"), first);
+        owner.retain_project(Path::new("project-a"), Path::new("first"));
+        owner.retain_project(Path::new("project-b"), Path::new("second"));
+        owner.evict_projects();
+        assert!(first_unlocked.load(Ordering::Acquire));
+        let (kept, _) = watcher(&owner);
+        owner.retain_watcher(PathBuf::from("same"), kept);
+        let (duplicate, duplicate_unlocked) = watcher(&owner);
+        owner.retain_watcher(PathBuf::from("same"), duplicate);
+        assert!(duplicate_unlocked.load(Ordering::Acquire));
+        owner.dispose();
+        let (late, late_unlocked) = watcher(&owner);
+        owner.retain_watcher(PathBuf::from("late"), late);
+        owner.retain_project(Path::new("late-project"), Path::new("late"));
+        assert!(late_unlocked.load(Ordering::Acquire));
+        let state = owner.watch.lock();
+        assert!(state.watchers.is_empty());
+        assert!(state.project_order.is_empty());
+    }
 }

@@ -13,7 +13,7 @@ use std::{
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::{Fiber, FiberState};
+use crate::Fiber;
 
 /// A thread-safe dynamically registered service.
 pub trait Service: Any + Send + Sync {}
@@ -63,6 +63,8 @@ struct Provider {
     owner: Weak<Fiber>,
     value: Arc<dyn Any + Send + Sync>,
     expression_projection: Option<serde_json::Value>,
+    #[cfg(target_arch = "wasm32")]
+    browser: Option<wasm_bindgen::JsValue>,
 }
 
 /// One currently registered service implementation and its lifecycle owner.
@@ -115,6 +117,8 @@ impl ServiceStore {
             owner: Arc::downgrade(owner),
             value,
             expression_projection,
+            #[cfg(target_arch = "wasm32")]
+            browser: None,
         });
         Some(id)
     }
@@ -134,6 +138,27 @@ impl ServiceStore {
         true
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn attach_browser(
+        &self,
+        slot: &ServiceSlot,
+        owner: &Arc<Fiber>,
+        implementation: wasm_bindgen::JsValue,
+    ) {
+        if let Some(provider) = self
+            .providers
+            .write()
+            .get_mut(slot)
+            .and_then(|providers| providers.last_mut())
+            && provider
+                .owner
+                .upgrade()
+                .is_some_and(|current| Arc::ptr_eq(&current, owner))
+        {
+            provider.browser = Some(implementation);
+        }
+    }
+
     pub(crate) fn replace<T: Service>(
         &self,
         slot: &ServiceSlot,
@@ -151,6 +176,26 @@ impl ServiceStore {
         if !Arc::ptr_eq(&provider_owner, owner) {
             return Err(crate::CordisError::ServiceOwner(slot.name.clone()));
         }
+        #[cfg(target_arch = "wasm32")]
+        if let Some(record) = provider.browser.clone()
+            && let Some(value) =
+                (value.as_ref() as &dyn Any).downcast_ref::<wasm_bindgen::JsValue>()
+        {
+            let value = value.clone();
+            drop(providers);
+            let changed =
+                js_sys::Reflect::set(&record, &"value".into(), &value).map_err(|error| {
+                    crate::CordisError::ServicePublication(
+                        crate::wasm::js_anyhow(&error).to_string(),
+                    )
+                })?;
+            if !changed {
+                return Err(crate::CordisError::ServicePublication(
+                    "implementation value is read-only".to_owned(),
+                ));
+            }
+            return Ok(());
+        }
         provider.value = value;
         Ok(())
     }
@@ -162,9 +207,18 @@ impl ServiceStore {
                 || provider
                     .owner
                     .upgrade()
-                    .is_some_and(|fiber| fiber.state() == FiberState::Active)
+                    .is_some_and(|fiber| fiber.active_for_lookup())
         })?;
         let value = provider.value.clone();
+        #[cfg(target_arch = "wasm32")]
+        let browser = provider.browser.clone();
+        drop(providers);
+        #[cfg(target_arch = "wasm32")]
+        let value = match browser {
+            Some(record) => Arc::new(js_sys::Reflect::get(&record, &"value".into()).ok()?)
+                as Arc<dyn Any + Send + Sync>,
+            None => value,
+        };
         Arc::downcast::<T>(value).ok()
     }
 
@@ -179,7 +233,7 @@ impl ServiceStore {
                     || provider
                         .owner
                         .upgrade()
-                        .is_some_and(|fiber| fiber.state() == FiberState::Active)
+                        .is_some_and(|fiber| fiber.active_for_lookup())
             })
             .map(|provider| provider.id)
     }
@@ -205,7 +259,7 @@ impl ServiceStore {
                 || provider
                     .owner
                     .upgrade()
-                    .is_some_and(|fiber| fiber.state() == FiberState::Active)
+                    .is_some_and(|fiber| fiber.active_for_lookup())
         })?;
         provider
             .expression_projection

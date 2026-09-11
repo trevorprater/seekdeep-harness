@@ -1,5 +1,7 @@
 //! Plugin-registry map and runtime-group semantics pinned from source Cordis.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

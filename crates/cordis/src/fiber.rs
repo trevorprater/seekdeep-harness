@@ -49,9 +49,20 @@ pub enum CordisError {
     /// A synchronous `internal/plugin` creation observer rejected publication.
     #[error("plugin publication failed: {0}")]
     PluginPublication(String),
+    /// Original JavaScript exception from browser plugin publication.
+    #[cfg(target_arch = "wasm32")]
+    #[error("plugin publication failed: {}", crate::wasm::js_anyhow(.0))]
+    BrowserPublication(wasm_bindgen::JsValue),
     /// A synchronous service-publication guard rejected the new provider.
     #[error("service publication failed: {0}")]
     ServicePublication(String),
+    /// A browser event-hook table rejected a native listener registration.
+    #[error("event publication failed: {0}")]
+    EventPublication(String),
+    /// A browser disposable list rejected registration.
+    #[cfg(target_arch = "wasm32")]
+    #[error("effect registration failed: {}", crate::wasm::js_anyhow(.0))]
+    BrowserEffect(wasm_bindgen::JsValue),
 }
 
 /// Lifecycle state for one mounted plugin.
@@ -69,6 +80,22 @@ pub enum FiberState {
     Unloading,
     /// Fiber was removed and cannot restart.
     Disposed,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone)]
+pub(crate) struct BrowserFiberObserver {
+    pub changed: Arc<dyn Fn(FiberState) + Send + Sync>,
+    pub prepare: Arc<dyn Fn(bool) + Send + Sync>,
+    pub dispose: Arc<dyn Fn() -> DisposeFuture + Send + Sync>,
+    pub settled: Arc<dyn Fn() -> DisposeFuture + Send + Sync>,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl std::fmt::Debug for BrowserFiberObserver {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("BrowserFiberObserver")
+    }
 }
 
 /// Scheduling policy for one captured Fiber teardown batch.
@@ -99,6 +126,10 @@ struct EffectInner {
     state: Mutex<EffectState>,
     notify: Notify,
     label: String,
+    #[cfg(target_arch = "wasm32")]
+    browser_disposer: Mutex<Option<js_sys::WeakRef<js_sys::Function>>>,
+    #[cfg(target_arch = "wasm32")]
+    browser_error: Mutex<Option<wasm_bindgen::JsValue>>,
 }
 
 /// Single-shot disposer shared by its caller and structural owner.
@@ -127,6 +158,10 @@ impl EffectHandle {
                 state: Mutex::new(EffectState::Pending(Some(Box::new(disposer)))),
                 notify: Notify::new(),
                 label: label.into(),
+                #[cfg(target_arch = "wasm32")]
+                browser_disposer: Mutex::new(None),
+                #[cfg(target_arch = "wasm32")]
+                browser_error: Mutex::new(None),
             }),
         }
     }
@@ -143,6 +178,29 @@ impl EffectHandle {
     #[must_use]
     pub fn label(&self) -> &str {
         &self.inner.label
+    }
+
+    #[cfg_attr(not(target_arch = "wasm32"), allow(clippy::unused_self))]
+    fn disposal_error(&self, message: &str) -> anyhow::Error {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(error) = self.inner.browser_error.lock().as_ref() {
+            return crate::wasm::js_anyhow(error);
+        }
+        anyhow::anyhow!(message.to_owned())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn browser_disposer(&self) -> Option<js_sys::Function> {
+        self.inner
+            .browser_disposer
+            .lock()
+            .as_ref()
+            .and_then(js_sys::WeakRef::deref)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn set_browser_disposer(&self, disposer: &js_sys::Function) {
+        *self.inner.browser_disposer.lock() = Some(js_sys::WeakRef::new(disposer));
     }
 
     /// Runs cleanup once and joins a cleanup already started by another owner.
@@ -167,19 +225,25 @@ impl EffectHandle {
                     EffectState::Running => None,
                     EffectState::Done(EffectOutcome::Ok) => return Ok(()),
                     EffectState::Done(EffectOutcome::Error(message)) => {
-                        return Err(anyhow::anyhow!(message.clone()));
+                        return Err(self.disposal_error(message));
                     }
                 }
             };
 
             if let Some(disposer) = disposer {
                 let outcome = disposer().await.map_or_else(
-                    |error| EffectOutcome::Error(format!("{error:#}")),
+                    |error| {
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            *self.inner.browser_error.lock() = crate::wasm::js_cause(&error);
+                        }
+                        EffectOutcome::Error(format!("{error:#}"))
+                    },
                     |()| EffectOutcome::Ok,
                 );
                 let result = match &outcome {
                     EffectOutcome::Ok => Ok(()),
-                    EffectOutcome::Error(message) => Err(anyhow::anyhow!(message.clone())),
+                    EffectOutcome::Error(message) => Err(self.disposal_error(message)),
                 };
                 *self.inner.state.lock() = EffectState::Done(outcome);
                 self.inner.notify.notify_waiters();
@@ -233,6 +297,14 @@ pub struct Fiber {
     inner: Mutex<FiberInner>,
     disposal_requested: AtomicBool,
     disposal_notify: Notify,
+    #[cfg(target_arch = "wasm32")]
+    browser_observer: Mutex<Option<BrowserFiberObserver>>,
+    #[cfg(target_arch = "wasm32")]
+    browser_lookup: std::sync::atomic::AtomicU8,
+    #[cfg(target_arch = "wasm32")]
+    browser_context: Mutex<wasm_bindgen::JsValue>,
+    #[cfg(target_arch = "wasm32")]
+    browser_effect_owner: Mutex<wasm_bindgen::JsValue>,
 }
 
 impl Fiber {
@@ -259,6 +331,14 @@ impl Fiber {
             }),
             disposal_requested: AtomicBool::new(false),
             disposal_notify: Notify::new(),
+            #[cfg(target_arch = "wasm32")]
+            browser_observer: Mutex::new(None),
+            #[cfg(target_arch = "wasm32")]
+            browser_lookup: std::sync::atomic::AtomicU8::new(2),
+            #[cfg(target_arch = "wasm32")]
+            browser_context: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
+            #[cfg(target_arch = "wasm32")]
+            browser_effect_owner: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
         })
     }
 
@@ -279,6 +359,14 @@ impl Fiber {
             }),
             disposal_requested: AtomicBool::new(false),
             disposal_notify: Notify::new(),
+            #[cfg(target_arch = "wasm32")]
+            browser_observer: Mutex::new(None),
+            #[cfg(target_arch = "wasm32")]
+            browser_lookup: std::sync::atomic::AtomicU8::new(2),
+            #[cfg(target_arch = "wasm32")]
+            browser_context: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
+            #[cfg(target_arch = "wasm32")]
+            browser_effect_owner: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
         })
     }
 
@@ -299,6 +387,14 @@ impl Fiber {
             }),
             disposal_requested: AtomicBool::new(false),
             disposal_notify: Notify::new(),
+            #[cfg(target_arch = "wasm32")]
+            browser_observer: Mutex::new(None),
+            #[cfg(target_arch = "wasm32")]
+            browser_lookup: std::sync::atomic::AtomicU8::new(2),
+            #[cfg(target_arch = "wasm32")]
+            browser_context: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
+            #[cfg(target_arch = "wasm32")]
+            browser_effect_owner: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
         })
     }
 
@@ -319,6 +415,14 @@ impl Fiber {
             }),
             disposal_requested: AtomicBool::new(false),
             disposal_notify: Notify::new(),
+            #[cfg(target_arch = "wasm32")]
+            browser_observer: Mutex::new(None),
+            #[cfg(target_arch = "wasm32")]
+            browser_lookup: std::sync::atomic::AtomicU8::new(2),
+            #[cfg(target_arch = "wasm32")]
+            browser_context: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
+            #[cfg(target_arch = "wasm32")]
+            browser_effect_owner: Mutex::new(wasm_bindgen::JsValue::UNDEFINED),
         })
     }
 
@@ -378,6 +482,129 @@ impl Fiber {
 
     pub(crate) fn set_state(&self, state: FiberState) {
         self.inner.lock().state = state;
+        #[cfg(target_arch = "wasm32")]
+        self.notify_browser_state(state);
+    }
+
+    pub(crate) fn active_for_lookup(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        match self.browser_lookup.load(Ordering::Acquire) {
+            0 => return false,
+            1 => return true,
+            _ => {}
+        }
+        self.state() == FiberState::Active
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn set_browser_lookup(&self, active: bool) {
+        self.browser_lookup
+            .store(u8::from(active), Ordering::Release);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn set_browser_context(&self, context: wasm_bindgen::JsValue) {
+        *self.browser_context.lock() = context;
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn set_browser_state(&self, state: FiberState) {
+        self.inner.lock().state = state;
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn take_browser_effects(&self) -> Vec<EffectHandle> {
+        let owner = self.browser_effect_owner.lock().clone();
+        self.take_browser_effects_for(&owner)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn take_browser_effects_for(
+        &self,
+        owner: &wasm_bindgen::JsValue,
+    ) -> Vec<EffectHandle> {
+        let mut effects = std::mem::take(&mut self.inner.lock().effects);
+        if !owner.is_undefined() {
+            match crate::wasm::browser_effects::snapshot(owner) {
+                Ok(browser) => effects.extend(browser),
+                Err(error) => effects.push(EffectHandle::synchronous(
+                    "browser effect snapshot",
+                    move || Err(crate::wasm::js_anyhow(&error)),
+                )),
+            }
+        }
+        effects
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn install_browser_effects(
+        &self,
+        owner: &wasm_bindgen::JsValue,
+    ) -> Result<(), wasm_bindgen::JsValue> {
+        crate::wasm::browser_effects::install(owner)?;
+        *self.browser_effect_owner.lock() = owner.clone();
+        let effects = std::mem::take(&mut self.inner.lock().effects);
+        for effect in effects {
+            crate::wasm::browser_effects::register_native(owner, &effect)?;
+        }
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn browser_disposal(&self) -> Option<DisposeFuture> {
+        let observer = self.browser_observer.lock().clone();
+        observer.map(|observer| (observer.dispose)())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn browser_settled(&self) -> Option<DisposeFuture> {
+        let observer = self.browser_observer.lock().clone();
+        observer.map(|observer| (observer.settled)())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn browser_context(&self) -> wasm_bindgen::JsValue {
+        self.browser_context.lock().clone()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn can_register_effect(&self) -> bool {
+        self.can_register_in_state(self.state())
+    }
+
+    fn can_register_in_state(&self, state: FiberState) -> bool {
+        if state == FiberState::Disposed || self.is_disposal_requested() {
+            return false;
+        }
+        if state != FiberState::Unloading {
+            return true;
+        }
+        #[cfg(target_arch = "wasm32")]
+        if self.browser_lookup.load(Ordering::Acquire) == 1 {
+            return true;
+        }
+        false
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn observe_browser(&self, observer: BrowserFiberObserver) {
+        *self.browser_observer.lock() = Some(observer);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn prepare_browser_transition(&self, explicit: bool) {
+        let observer = self.browser_observer.lock().clone();
+        if let Some(observer) = observer {
+            (observer.prepare)(explicit);
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn notify_browser_state(&self, state: FiberState) {
+        let observer = self.browser_observer.lock().clone();
+        if let Some(observer) = observer {
+            (observer.changed)(state);
+        }
     }
 
     /// Registers an effect for reverse-order teardown.
@@ -387,8 +614,18 @@ impl Fiber {
     /// Returns [`CordisError::InactiveEffect`] after this fiber begins disposal.
     pub fn own(&self, effect: EffectHandle) -> Result<EffectHandle, CordisError> {
         let mut inner = self.inner.lock();
-        if matches!(inner.state, FiberState::Unloading | FiberState::Disposed) {
+        if !self.can_register_in_state(inner.state) {
             return Err(CordisError::InactiveEffect);
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let owner = self.browser_effect_owner.lock().clone();
+            if !owner.is_undefined() {
+                drop(inner);
+                crate::wasm::browser_effects::register_native(&owner, &effect)
+                    .map_err(CordisError::BrowserEffect)?;
+                return Ok(effect);
+            }
         }
         inner.effects.push(effect.clone());
         Ok(effect)
@@ -412,6 +649,12 @@ impl Fiber {
     ///
     /// Returns an aggregate of cleanup failures after attempting every disposer.
     pub async fn restart(&self) -> anyhow::Result<()> {
+        #[cfg(target_arch = "wasm32")]
+        if self.root
+            && let Some(disposal) = self.browser_disposal()
+        {
+            return disposal.await;
+        }
         self.clear_effects(FiberState::Active).await
     }
 
@@ -443,8 +686,9 @@ impl Fiber {
                 let transition = Arc::new(FiberTransition::default());
                 inner.state = FiberState::Unloading;
                 inner.transition = Some(transition.clone());
+                let effects = std::mem::take(&mut inner.effects);
                 Clear::Run {
-                    effects: std::mem::take(&mut inner.effects),
+                    effects,
                     transition,
                 }
             }
@@ -457,6 +701,14 @@ impl Fiber {
             Clear::Join(transition) => return effect_outcome(transition.wait().await),
             Clear::Done(outcome) => return effect_outcome(outcome),
         };
+        #[cfg(target_arch = "wasm32")]
+        let effects = {
+            let mut effects = effects;
+            effects.extend(self.take_browser_effects());
+            effects
+        };
+        #[cfg(target_arch = "wasm32")]
+        self.notify_browser_state(FiberState::Unloading);
         let errors = match self.disposal_scheduling {
             DisposalScheduling::Serial => {
                 let mut errors = Vec::new();
@@ -492,6 +744,8 @@ impl Fiber {
             inner.transition = None;
             inner.disposed_outcome = (final_state == FiberState::Disposed).then(|| outcome.clone());
         }
+        #[cfg(target_arch = "wasm32")]
+        self.notify_browser_state(final_state);
         transition.complete(outcome.clone());
         effect_outcome(outcome)
     }
@@ -516,6 +770,18 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
+
+    #[test]
+    fn disposal_request_rejects_effects_before_cleanup_changes_state() {
+        let fiber = Fiber::active_child("admitted disposal");
+        fiber.request_disposal();
+        assert_eq!(fiber.state(), FiberState::Active);
+        let effect = EffectHandle::synchronous("late effect", || Ok(()));
+        assert!(matches!(
+            fiber.own(effect),
+            Err(CordisError::InactiveEffect)
+        ));
+    }
 
     #[test]
     fn concurrent_disposal_inherits_policy_starts_every_effect_and_joins_errors() {

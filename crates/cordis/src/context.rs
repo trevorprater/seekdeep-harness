@@ -129,10 +129,12 @@ struct Root {
     logger: Arc<LoggerService>,
     next_isolation: AtomicU64,
     named_isolations: Mutex<HashMap<(String, String), Weak<IsolationRealm>>>,
+    #[cfg(target_arch = "wasm32")]
+    browser_services: Arc<crate::wasm::browser_services::BrowserServices>,
 }
 
 #[derive(Debug)]
-struct IsolationRealm {
+pub(crate) struct IsolationRealm {
     id: Uuid,
 }
 
@@ -194,6 +196,8 @@ impl Context {
             logger: LoggerService::new(clock),
             next_isolation: AtomicU64::new(1),
             named_isolations: Mutex::new(HashMap::new()),
+            #[cfg(target_arch = "wasm32")]
+            browser_services: Arc::default(),
         });
         Self {
             root,
@@ -300,7 +304,7 @@ impl Context {
         self.with_isolation(name, realm)
     }
 
-    fn new_isolation(&self) -> Arc<IsolationRealm> {
+    pub(crate) fn new_isolation(&self) -> Arc<IsolationRealm> {
         Arc::new(IsolationRealm {
             id: Uuid::from_u128(u128::from(
                 self.root.next_isolation.fetch_add(1, Ordering::Relaxed),
@@ -308,7 +312,7 @@ impl Context {
         })
     }
 
-    fn with_isolation(&self, name: &str, realm: Arc<IsolationRealm>) -> Self {
+    pub(crate) fn with_isolation(&self, name: &str, realm: Arc<IsolationRealm>) -> Self {
         let mut isolation = (*self.isolation).clone();
         isolation.insert(name.to_owned(), realm);
         Self {
@@ -580,6 +584,11 @@ impl Context {
         self.root.services.is_declared(name) || self.root.accessors.read().contains_key(name)
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn is_accessor(&self, name: &str) -> bool {
+        self.root.accessors.read().contains_key(name)
+    }
+
     /// Exposes typed service members as fiber-owned reflected accessors.
     ///
     /// # Errors
@@ -760,6 +769,25 @@ impl Context {
         value: Arc<T>,
         expression_projection: Option<Value>,
     ) -> Result<EffectHandle, CordisError> {
+        self.provide_named_with_notification(name, value, expression_projection, false)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn provide_browser_named<T: Service>(
+        &self,
+        name: &str,
+        value: Arc<T>,
+    ) -> Result<EffectHandle, CordisError> {
+        self.provide_named_with_notification(name, value, None, true)
+    }
+
+    fn provide_named_with_notification<T: Service>(
+        &self,
+        name: &str,
+        value: Arc<T>,
+        expression_projection: Option<Value>,
+        browser_notifies: bool,
+    ) -> Result<EffectHandle, CordisError> {
         if self.root.accessors.read().contains_key(name) {
             return Err(CordisError::PropertyDeclared {
                 name: name.to_owned(),
@@ -779,7 +807,7 @@ impl Context {
             return Err(CordisError::ServicePublication(format!("{error:#}")));
         }
         self.root.services.mark_changed(&slot);
-        self.root.plugins.notify_service_change();
+        notify_provider(&self.root.plugins, &slot, browser_notifies);
         self.root.service_changes.notify();
         let services = self.root.services.clone();
         let plugins = self.root.plugins.clone();
@@ -788,7 +816,7 @@ impl Context {
         let effect = EffectHandle::synchronous(format!("ctx.provide({name:?})"), move || {
             if services.remove(&disposal_slot, id) {
                 services.mark_changed(&disposal_slot);
-                plugins.notify_service_change();
+                notify_provider(&plugins, &disposal_slot, browser_notifies);
                 service_changes.notify();
                 service_changes.check(&disposal_slot.name)?;
             }
@@ -800,7 +828,7 @@ impl Context {
                 if self.root.services.remove(&slot, id) {
                     self.root.services.mark_changed(&slot);
                 }
-                self.root.plugins.notify_service_change();
+                notify_provider(&self.root.plugins, &slot, browser_notifies);
                 self.root.service_changes.notify();
                 let _ = self.root.service_changes.check(name);
                 Err(error)
@@ -916,7 +944,23 @@ impl Context {
     }
 
     pub(crate) fn provider_id(&self, name: &str) -> Option<Uuid> {
+        #[cfg(target_arch = "wasm32")]
+        if self.root.browser_services.dependency(self, name) == Some(false) {
+            return None;
+        }
         self.root.services.provider_id(&self.slot(name), true)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn browser_services(&self) -> Arc<crate::wasm::browser_services::BrowserServices> {
+        self.root.browser_services.clone()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn attach_browser_service(&self, name: &str, implementation: wasm_bindgen::JsValue) {
+        self.root
+            .services
+            .attach_browser(&self.slot(name), &self.fiber, implementation);
     }
 
     /// Mounts a plugin whose lifecycle is owned by this context.
@@ -928,12 +972,23 @@ impl Context {
         self.root.plugins.mount(self, plugin, config)
     }
 
-    fn slot(&self, name: &str) -> ServiceSlot {
+    pub(crate) fn slot(&self, name: &str) -> ServiceSlot {
         ServiceSlot {
             name: name.to_owned(),
             isolation: self.isolation.get(name).map(|realm| realm.id),
         }
     }
+}
+
+fn notify_provider(registry: &PluginRegistry, slot: &ServiceSlot, browser_notifies: bool) {
+    #[cfg(target_arch = "wasm32")]
+    if browser_notifies {
+        registry.notify_native_provider_change(slot);
+        return;
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = browser_notifies;
+    registry.notify_provider_change(slot);
 }
 
 fn shallow_merge<'a>(values: impl IntoIterator<Item = &'a Value>) -> Value {

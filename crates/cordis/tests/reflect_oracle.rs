@@ -1,5 +1,7 @@
 //! Reflected provider, accessor, mixin, conflict, and reversal source oracle.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::Arc;
 
 use parking_lot::Mutex;
