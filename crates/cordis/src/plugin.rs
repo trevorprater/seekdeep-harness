@@ -1198,6 +1198,17 @@ impl PluginFiber {
             Err(error) => Err(error),
         };
         if self.is_disposed() {
+            // Disposal that lands during startup aborts it, and the startup's failure is
+            // still its outcome: the source's load promise rejects with it, and
+            // `await_settled` reports it after the disposal converges. The fiber's state
+            // stays with the disposal.
+            if let Err(error) = result {
+                let message = format!("{error:#}");
+                *self.error.lock() = Some(PluginFailure {
+                    message,
+                    cause: Arc::new(error),
+                });
+            }
             return;
         }
         match result {

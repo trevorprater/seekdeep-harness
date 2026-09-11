@@ -931,7 +931,10 @@ fn unused_entry_id(
     unreachable!("the integer suffix space is unbounded for practical profiles")
 }
 
-async fn ensure_config_hmr(context: &seekdeep_cordis::Context) -> anyhow::Result<()> {
+async fn ensure_config_hmr(
+    context: &seekdeep_cordis::Context,
+    shutdown_started: &ShutdownProbe,
+) -> anyhow::Result<()> {
     if context.get(HMR).is_some() {
         return Ok(());
     }
@@ -957,10 +960,20 @@ async fn ensure_config_hmr(context: &seekdeep_cordis::Context) -> anyhow::Result
     hmr.config = serde_json::json!({"root": []});
     loader.create_entry(hmr, EntryParent::Root, None).await?;
     loader.wait().await?;
-    anyhow::ensure!(
-        context.get(HMR).is_some(),
-        "seekdeep: watch-only HMR did not activate"
-    );
+    // A Node-realm plugin's `provide` reaches the Host context on its own message after
+    // the activation settles, so give the service a moment to land before deciding that
+    // the entry did not activate.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    while context.get(HMR).is_none() {
+        if shutdown_started() {
+            return Ok(());
+        }
+        anyhow::ensure!(
+            tokio::time::Instant::now() < deadline,
+            "seekdeep: watch-only HMR did not activate"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
     Ok(())
 }
 
@@ -1014,6 +1027,10 @@ pub async fn boot_profile(
     boot_profile_with_failure_handler(plan, catalog, prepare, failure).await
 }
 
+/// Reports whether the process began shutting down while the boot was still installing
+/// its live watchers (the source's shutdown signal).
+pub type ShutdownProbe = Arc<dyn Fn() -> bool + Send + Sync>;
+
 /// Boots a profile with an explicit last-good refresh failure observer.
 ///
 /// # Errors
@@ -1024,6 +1041,26 @@ pub async fn boot_profile_with_failure_handler(
     catalog: &PluginCatalog,
     prepare: Option<BootPrepare>,
     failure: ConfigRefreshFailure,
+) -> anyhow::Result<ProfileBootApplication> {
+    boot_profile_with_shutdown(plan, catalog, prepare, failure, Arc::new(|| false)).await
+}
+
+/// Boots a profile whose process may begin shutting down during the boot itself (a one-shot
+/// runner the composition mounts can request exit before the live watchers install).
+///
+/// Source: the watch-only HMR mount and the user-patch watchers are skipped once the
+/// shutdown signal is aborted, and a failure in that phase is suppressed when shutdown has
+/// begun or the root fiber is no longer active with a Loader.
+///
+/// # Errors
+///
+/// Returns the same failures as [`boot_profile`].
+pub async fn boot_profile_with_shutdown(
+    plan: ProfileBootPlan,
+    catalog: &PluginCatalog,
+    prepare: Option<BootPrepare>,
+    failure: ConfigRefreshFailure,
+    shutdown_started: ShutdownProbe,
 ) -> anyhow::Result<ProfileBootApplication> {
     let warning = Arc::new(|message: String| eprintln!("{message}"));
     let application = boot(
@@ -1041,7 +1078,8 @@ pub async fn boot_profile_with_failure_handler(
     )
     .await?;
     let context = application.context().clone();
-    if application.composition().is_none()
+    if shutdown_started()
+        || application.composition().is_none()
         || context.fiber().state() != FiberState::Active
         || context.get(LOADER).is_none()
     {
@@ -1050,7 +1088,18 @@ pub async fn boot_profile_with_failure_handler(
             watchers: Vec::new(),
         });
     }
-    if let Err(error) = ensure_config_hmr(&context).await {
+    let suppressed = |context: &seekdeep_cordis::Context| {
+        shutdown_started()
+            || context.fiber().state() != FiberState::Active
+            || context.get(LOADER).is_none()
+    };
+    if let Err(error) = ensure_config_hmr(&context, &shutdown_started).await {
+        if suppressed(&context) {
+            return Ok(ProfileBootApplication {
+                application,
+                watchers: Vec::new(),
+            });
+        }
         return Err(dispose_after_setup_failure(application, Vec::new(), error).await);
     }
     let plan = Arc::new(plan);
@@ -1073,6 +1122,12 @@ pub async fn boot_profile_with_failure_handler(
         match result {
             Ok(watcher) => watchers.push(watcher),
             Err(error) => {
+                if suppressed(&context) {
+                    return Ok(ProfileBootApplication {
+                        application,
+                        watchers,
+                    });
+                }
                 return Err(dispose_after_setup_failure(application, watchers, error).await);
             }
         }
@@ -1178,7 +1233,25 @@ pub async fn run_profile_process(
             Ok(())
         })
     });
-    let application = match boot_profile(plan, catalog, Some(prepare)).await {
+    let refresh_failure: ConfigRefreshFailure = Arc::new(|path, error| {
+        eprintln!(
+            "seekdeep: failed to refresh profile patches {}: {error:#}",
+            path.display()
+        );
+    });
+    let shutdown_probe: ShutdownProbe = {
+        let slot = application_slot.clone();
+        Arc::new(move || slot.is_shutdown_started())
+    };
+    let application = match boot_profile_with_shutdown(
+        plan,
+        catalog,
+        Some(prepare),
+        refresh_failure,
+        shutdown_probe,
+    )
+    .await
+    {
         Ok(application) => application,
         Err(error) => {
             application_slot.finish_without_application();
