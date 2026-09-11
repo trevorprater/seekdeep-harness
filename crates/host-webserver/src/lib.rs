@@ -596,24 +596,35 @@ async fn watch_disconnect(
         }
         () = disconnected.monitored() => {}
     }
+    // The socket is shared with the connection that consumes it, so a peek observes either
+    // unread request bytes or the close. Wait for readiness instead of polling: an idle
+    // long-lived stream costs no wakeups, and pending bytes the connection has not drained
+    // yet are re-checked at a bounded pace rather than every millisecond.
     let mut probe = [0_u8; 1];
     loop {
-        let peeked = tokio::select! {
+        let ready = tokio::select! {
             () = shutdown.cancelled() => {
                 disconnected.0.signal.abort();
                 return;
             }
-            peeked = stream.peek(&mut probe) => peeked,
+            ready = stream.readable() => ready,
         };
-        match peeked {
+        if ready.is_err() {
+            disconnected.0.signal.abort();
+            return;
+        }
+        match stream.peek(&mut probe).await {
             Ok(0) | Err(_) => {
                 disconnected.0.signal.abort();
                 return;
             }
-            Ok(_) => tokio::time::sleep(std::time::Duration::from_millis(1)).await,
+            Ok(_) => tokio::time::sleep(DISCONNECT_RECHECK).await,
         }
     }
 }
+
+/// Pause between disconnect re-checks while unread bytes sit on a monitored connection.
+const DISCONNECT_RECHECK: std::time::Duration = std::time::Duration::from_millis(50);
 
 fn match_route(registry: &Registry, path: &str) -> Option<WebRoute> {
     if let Some(exact) = registry.exact.get(path) {
