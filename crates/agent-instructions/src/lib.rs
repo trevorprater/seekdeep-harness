@@ -11,8 +11,8 @@ pub mod state;
 pub use config::{
     Config, DEFAULT_INSTRUCTION_FILE_CANDIDATES, DEFAULT_LOCAL_INSTRUCTION_FILE_CANDIDATES,
     DEFAULT_MAX_SOURCE_BYTES, DEFAULT_PROJECT_ROOT_MARKERS, ResolvedConfig,
-    ResolvedDiscoveryConfig, config_schema, resolve_config, resolve_discovery_config,
-    workspace_baseline_identity,
+    ResolvedDiscoveryConfig, config_schema, resolve_config, resolve_config_in,
+    resolve_discovery_config, resolve_discovery_config_in, workspace_baseline_identity,
 };
 pub use digest::{instruction_content_sha1, trimmed_instruction_digest};
 pub use files::{

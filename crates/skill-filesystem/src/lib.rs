@@ -168,20 +168,24 @@ impl FileSystemSkillProvider {
             config.watch_poll_interval_ms >= 1,
             "skill-filesystem: watchPollIntervalMs must be a positive integer"
         );
+        // Host-level roots are model-visible input: resolve them from the launcher's
+        // environment snapshot (the process environment as launched) so an in-process
+        // boot with an explicit home stays confined to it.
+        let environment = seekdeep_util::launch_environment::launch_environment_of(context);
         let seekdeep_home = match &config.seekdeep_home {
             Some(path) => absolute(path)?,
-            None => seekdeep_util::home_paths::resolve_process_seekdeep_home(None)?,
+            None => seekdeep_util::home_paths::resolve_context_seekdeep_home(None, context)?,
         };
         let agents_home = match &config.agents_home {
             Some(path) => absolute(path)?,
-            None => std::env::var_os("SEEKDEEP_AGENTS_HOME").map_or_else(
+            None => environment.get("SEEKDEEP_AGENTS_HOME").map_or_else(
                 || {
                     Ok(seekdeep_util::home_paths::default_seekdeep_home()?
                         .parent()
                         .unwrap_or(Path::new("."))
                         .join(".agents"))
                 },
-                |path| absolute(Path::new(&path)),
+                |entry| absolute(Path::new(&entry.value)),
             )?,
         };
         let bundled_skill_dir = config
@@ -192,9 +196,9 @@ impl FileSystemSkillProvider {
             .or_else(|| {
                 config
                     .include_default_roots
-                    .then(|| std::env::var_os("SEEKDEEP_BUNDLED_SKILL_DIR"))
+                    .then(|| environment.get("SEEKDEEP_BUNDLED_SKILL_DIR"))
                     .flatten()
-                    .and_then(|path| absolute(Path::new(&path)).ok())
+                    .and_then(|entry| absolute(Path::new(&entry.value)).ok())
             });
         Ok(Arc::new_cyclic(|weak| Self {
             self_weak: weak.clone(),

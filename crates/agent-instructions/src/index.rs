@@ -13,7 +13,7 @@ use seekdeep_llm::{AbortSignal, ContentBlock, Message, MessageSource, UserMessag
 use seekdeep_tools::{ToolExecution, ToolExecutionResult, ToolExecutionToken};
 use serde_json::{Map, Value, json};
 
-use crate::config::{Config, ResolvedConfig, resolve_config, workspace_baseline_identity};
+use crate::config::{Config, ResolvedConfig, resolve_config_in, workspace_baseline_identity};
 use crate::files::{DiscoverOptions, find_project_root, load_baseline_instruction_set};
 use crate::render::{AgentInstructionAction, AgentInstructionChange};
 use crate::state::{
@@ -185,7 +185,7 @@ impl InstructionRuntime {
     fn new(context: &Context, config: &Config) -> anyhow::Result<Arc<Self>> {
         Ok(Arc::new(Self {
             context: context.clone(),
-            resolved: resolve_config(config)?,
+            resolved: resolve_config_in(config, context)?,
             instruction_versions: InstructionVersionCache::default(),
             baseline_preparations: Mutex::new(HashMap::new()),
             projection_lifecycle: AbortSignal::default(),

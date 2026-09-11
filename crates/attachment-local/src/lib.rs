@@ -13,7 +13,10 @@ use seekdeep_attachment::{
 };
 use seekdeep_cordis::{Context, Plugin};
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
-use seekdeep_util::{abort::AbortSignal, home_paths::resolve_process_seekdeep_home};
+use seekdeep_util::{
+    abort::AbortSignal,
+    home_paths::{HomePathError, resolve_context_seekdeep_home, resolve_process_seekdeep_home},
+};
 use serde::{Deserialize, Serialize};
 
 pub mod image;
@@ -86,8 +89,31 @@ impl LocalAttachmentStore {
     ///
     /// Returns for an unavailable process home/current directory or any zero limit.
     pub fn new(config: &LocalAttachmentConfig) -> anyhow::Result<Self> {
-        let configured = config.seekdeep_home.as_deref().map(Path::as_os_str);
-        let home = resolve_process_seekdeep_home(configured)?;
+        Self::with_home(config, || {
+            resolve_process_seekdeep_home(config.seekdeep_home.as_deref().map(Path::as_os_str))
+        })
+    }
+
+    /// Resolves like [`Self::new`], taking the home from the launcher's environment
+    /// snapshot when `context` carries one.
+    ///
+    /// # Errors
+    ///
+    /// Returns for an unavailable home/current directory or any zero limit.
+    pub fn new_in(config: &LocalAttachmentConfig, context: &Context) -> anyhow::Result<Self> {
+        Self::with_home(config, || {
+            resolve_context_seekdeep_home(
+                config.seekdeep_home.as_deref().map(Path::as_os_str),
+                context,
+            )
+        })
+    }
+
+    fn with_home(
+        config: &LocalAttachmentConfig,
+        home: impl FnOnce() -> Result<PathBuf, HomePathError>,
+    ) -> anyhow::Result<Self> {
+        let home = home()?;
         let root = home.join("attachments").join("v1");
         Ok(Self {
             root,
@@ -160,7 +186,7 @@ pub fn install(
     context: &Context,
     config: &LocalAttachmentConfig,
 ) -> anyhow::Result<Arc<LocalAttachmentStore>> {
-    let backend = Arc::new(LocalAttachmentStore::new(config)?);
+    let backend = Arc::new(LocalAttachmentStore::new_in(config, context)?);
     let service = Arc::new(AttachmentStore::new(backend.clone()));
     service.provide(context)?;
     Ok(backend)

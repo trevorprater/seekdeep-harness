@@ -126,6 +126,12 @@ fn scaffold_environment(home: &Path, ambient: &[(&str, &Path)]) -> LaunchEnviron
         "SEEKDEEP_AGENTS_HOME".to_owned(),
         home.join("agents").to_string_lossy().into_owned(),
     );
+    // The source scaffold's `skillRootEnvironment` pins every host-level skill root inside
+    // the owned world, the bundled root included.
+    values.insert(
+        "SEEKDEEP_BUNDLED_SKILL_DIR".to_owned(),
+        home.join("bundled-skills").to_string_lossy().into_owned(),
+    );
     values.insert("SEEKDEEP_TELEMETRY_DISABLED".to_owned(), "1".to_owned());
     create_launch_environment_snapshot(&[LaunchEnvironmentLayerInput {
         source: LaunchEnvironmentSource::Process,

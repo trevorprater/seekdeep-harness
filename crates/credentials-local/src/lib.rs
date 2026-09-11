@@ -23,7 +23,10 @@ use seekdeep_credentials::{
 };
 use seekdeep_util::{
     atomic_write::{WriteFileAtomicOptions, with_file_lock, write_file_atomic},
-    home_paths::{canonicalize_watch_path, resolve_process_seekdeep_home},
+    home_paths::{
+        HomePathError, canonicalize_watch_path, resolve_context_seekdeep_home,
+        resolve_process_seekdeep_home,
+    },
     launch_environment::{LaunchEnvironmentSource, launch_environment_of},
 };
 use serde::{
@@ -88,6 +91,33 @@ pub struct ResolvedSpec {
 ///
 /// Returns an invalid debounce or home/current-directory resolution failure.
 pub fn resolve_spec(config: &LocalCredentialConfig) -> anyhow::Result<ResolvedSpec> {
+    resolve_spec_with_home(config, || {
+        resolve_process_seekdeep_home(config.seekdeep_home.as_deref().map(Path::as_os_str))
+    })
+}
+
+/// Resolves like [`resolve_spec`], taking the home from the launcher's environment
+/// snapshot when `context` carries one.
+///
+/// # Errors
+///
+/// Returns an invalid debounce or home/current-directory resolution failure.
+pub fn resolve_spec_in(
+    config: &LocalCredentialConfig,
+    context: &seekdeep_cordis::Context,
+) -> anyhow::Result<ResolvedSpec> {
+    resolve_spec_with_home(config, || {
+        resolve_context_seekdeep_home(
+            config.seekdeep_home.as_deref().map(Path::as_os_str),
+            context,
+        )
+    })
+}
+
+fn resolve_spec_with_home(
+    config: &LocalCredentialConfig,
+    home: impl FnOnce() -> Result<PathBuf, HomePathError>,
+) -> anyhow::Result<ResolvedSpec> {
     anyhow::ensure!(
         config.debounce_ms.is_finite() && config.debounce_ms >= 0.0,
         "debounceMs must be a finite number greater than or equal to 0"
@@ -95,9 +125,7 @@ pub fn resolve_spec(config: &LocalCredentialConfig) -> anyhow::Result<ResolvedSp
     let filename = if let Some(path) = &config.path {
         absolute_clean(path)?
     } else {
-        resolve_process_seekdeep_home(config.seekdeep_home.as_deref().map(Path::as_os_str))?
-            .join(CREDENTIALS_FILENAME)
-            .clean()
+        home()?.join(CREDENTIALS_FILENAME).clean()
     };
     Ok(ResolvedSpec {
         filename,
@@ -952,7 +980,7 @@ pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), move |context, config| {
         Box::pin(async move {
             let config: LocalCredentialConfig = serde_json::from_value(config)?;
-            let spec = resolve_spec(&config)?;
+            let spec = resolve_spec_in(&config, &context)?;
             let provider = LocalCredentialProvider::open(&context, spec).await?;
             let service = CredentialService::new(provider.clone());
             service.provide(&context)?;

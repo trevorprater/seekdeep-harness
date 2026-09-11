@@ -26,6 +26,8 @@ fn empty_custom_profile_boots_and_sigterm_disposes_with_zero() -> anyhow::Result
     let mut child = Command::new(env!("CARGO_BIN_EXE_seekdeep"))
         .args(["--profile", "minimal"])
         .env_clear()
+        // The Node plugin realm resolves `node` through the child's PATH.
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("SEEKDEEP_HOME", &home)
         .current_dir(&workspace)
         .stdin(Stdio::null())

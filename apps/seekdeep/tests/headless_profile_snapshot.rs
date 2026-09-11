@@ -319,6 +319,7 @@ fn prepare_profile(
 
 // This integration-test executable has one test: its process cwd belongs to the fixture.
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn complete_profile_matches_source_stdout_and_cold_session_log() -> anyhow::Result<()> {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -384,7 +385,12 @@ async fn complete_profile_matches_source_stdout_and_cold_session_log() -> anyhow
     let cleanup = tokio::time::timeout(Duration::from_secs(10), application.dispose()).await;
     completion?;
     cleanup??;
-    assert_eq!(&*output.stdout.lock(), ANSWER);
+    assert_eq!(
+        &*output.stdout.lock(),
+        ANSWER,
+        "profile stderr: {}",
+        output.stderr.lock()
+    );
     assert_eq!(&*output.stderr.lock(), "");
     assert_eq!(exit_code.load(Ordering::Acquire), 0);
     let headers = headers.lock().clone();

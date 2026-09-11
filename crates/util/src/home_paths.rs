@@ -110,6 +110,41 @@ pub fn resolve_process_seekdeep_home(configured: Option<&OsStr>) -> Result<PathB
     resolve_seekdeep_home(configured, &environment)
 }
 
+/// Resolves the home against a launch environment snapshot: the process environment as
+/// launched, which is what the source's `process.env` lookup observes. Explicit >
+/// snapshot > default.
+///
+/// # Errors
+///
+/// Returns when a required OS home or current directory is unavailable.
+pub fn resolve_launch_seekdeep_home(
+    configured: Option<&OsStr>,
+    environment: &crate::launch_environment::LaunchEnvironmentSnapshot,
+) -> Result<PathBuf, HomePathError> {
+    let mut values = HashMap::<OsString, OsString>::new();
+    if let Some(entry) = environment.get(SEEKDEEP_HOME_ENV) {
+        values.insert(SEEKDEEP_HOME_ENV.into(), entry.value.into());
+    }
+    resolve_seekdeep_home(configured, &values)
+}
+
+/// Resolves the home a plugin should use: the launcher's environment snapshot when the
+/// context carries one, otherwise the process environment. A profile booted in-process
+/// with an explicit home (the headless snapshot tests) is thereby confined to it.
+///
+/// # Errors
+///
+/// Returns when a required OS home or current directory is unavailable.
+pub fn resolve_context_seekdeep_home(
+    configured: Option<&OsStr>,
+    context: &seekdeep_cordis::Context,
+) -> Result<PathBuf, HomePathError> {
+    resolve_launch_seekdeep_home(
+        configured,
+        &crate::launch_environment::launch_environment_of(context),
+    )
+}
+
 /// Joins segments onto the process-resolved `SeekDeep` home.
 ///
 /// # Errors

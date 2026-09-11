@@ -30,7 +30,10 @@ use seekdeep_settings::{
 };
 use seekdeep_util::{
     atomic_write::{WriteFileAtomicOptions, with_file_lock, write_file_atomic},
-    home_paths::{canonicalize_watch_path, resolve_process_seekdeep_home},
+    home_paths::{
+        HomePathError, canonicalize_watch_path, resolve_context_seekdeep_home,
+        resolve_process_seekdeep_home,
+    },
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -102,12 +105,37 @@ pub struct ResolvedSpec {
 ///
 /// Returns home/current-directory resolution or unsupported-extension failures.
 pub fn resolve_spec(config: &FileSettingsConfig) -> anyhow::Result<ResolvedSpec> {
+    resolve_spec_with_home(config, || {
+        resolve_process_seekdeep_home(config.seekdeep_home.as_deref().map(Path::as_os_str))
+    })
+}
+
+/// Resolves like [`resolve_spec`], taking the home from the launcher's environment
+/// snapshot when `context` carries one.
+///
+/// # Errors
+///
+/// Returns home/current-directory resolution or unsupported-extension failures.
+pub fn resolve_spec_in(
+    config: &FileSettingsConfig,
+    context: &seekdeep_cordis::Context,
+) -> anyhow::Result<ResolvedSpec> {
+    resolve_spec_with_home(config, || {
+        resolve_context_seekdeep_home(
+            config.seekdeep_home.as_deref().map(Path::as_os_str),
+            context,
+        )
+    })
+}
+
+fn resolve_spec_with_home(
+    config: &FileSettingsConfig,
+    home: impl FnOnce() -> Result<PathBuf, HomePathError>,
+) -> anyhow::Result<ResolvedSpec> {
     let filename = if let Some(path) = &config.path {
         absolute_clean(path)?
     } else {
-        resolve_process_seekdeep_home(config.seekdeep_home.as_deref().map(Path::as_os_str))?
-            .join(SETTINGS_FILENAME)
-            .clean()
+        home()?.join(SETTINGS_FILENAME).clean()
     };
     let extension = filename.extension().and_then(OsStr::to_str).unwrap_or("");
     let format = match extension {
@@ -799,7 +827,7 @@ pub fn plugin() -> Plugin {
     Plugin::new(NAME, INJECT.iter().copied(), move |context, config| {
         Box::pin(async move {
             let config: FileSettingsConfig = serde_json::from_value(config)?;
-            let spec = resolve_spec(&config)?;
+            let spec = resolve_spec_in(&config, &context)?;
             let storage = FileSettingsStorage::new(spec);
             let service = SettingsService::install(&context, storage.clone()).await?;
             storage.set_publisher(service.publisher());

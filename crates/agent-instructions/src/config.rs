@@ -128,15 +128,37 @@ pub fn workspace_baseline_identity(
 ///
 /// Returns when the operating-system or harness home cannot be resolved.
 pub fn resolve_config(config: &Config) -> anyhow::Result<ResolvedConfig> {
-    let discovery = resolve_discovery_config(config)?;
-    Ok(ResolvedConfig {
+    Ok(resolve_config_from(
+        config,
+        resolve_discovery_config(config)?,
+    ))
+}
+
+/// Resolves like [`resolve_config`], taking the harness home from the launcher's
+/// environment snapshot when `context` carries one.
+///
+/// # Errors
+///
+/// Returns when the operating-system or harness home cannot be resolved.
+pub fn resolve_config_in(
+    config: &Config,
+    context: &seekdeep_cordis::Context,
+) -> anyhow::Result<ResolvedConfig> {
+    Ok(resolve_config_from(
+        config,
+        resolve_discovery_config_in(config, context)?,
+    ))
+}
+
+fn resolve_config_from(config: &Config, discovery: ResolvedDiscoveryConfig) -> ResolvedConfig {
+    ResolvedConfig {
         dsh_home: discovery.dsh_home,
         project_root_markers: discovery.project_root_markers,
         instruction_file_candidates: discovery.instruction_file_candidates,
         local_instruction_file_candidates: discovery.local_instruction_file_candidates,
         max_bytes: config.max_bytes,
         max_source_bytes: config.max_source_bytes.unwrap_or(DEFAULT_MAX_SOURCE_BYTES),
-    })
+    }
 }
 
 /// Resolves the subset of configuration used before instruction content is rendered.
@@ -146,7 +168,28 @@ pub fn resolve_config(config: &Config) -> anyhow::Result<ResolvedConfig> {
 /// Returns when the operating-system or harness home cannot be resolved.
 pub fn resolve_discovery_config(config: &Config) -> anyhow::Result<ResolvedDiscoveryConfig> {
     let home = resolve_process_seekdeep_home(config.seekdeep_home.as_deref().map(OsStr::new))?;
-    Ok(ResolvedDiscoveryConfig {
+    Ok(resolve_discovery_config_at(config, &home))
+}
+
+/// Resolves like [`resolve_discovery_config`], taking the harness home from the
+/// launcher's environment snapshot when `context` carries one.
+///
+/// # Errors
+///
+/// Returns when the operating-system or harness home cannot be resolved.
+pub fn resolve_discovery_config_in(
+    config: &Config,
+    context: &seekdeep_cordis::Context,
+) -> anyhow::Result<ResolvedDiscoveryConfig> {
+    let home = seekdeep_util::home_paths::resolve_context_seekdeep_home(
+        config.seekdeep_home.as_deref().map(OsStr::new),
+        context,
+    )?;
+    Ok(resolve_discovery_config_at(config, &home))
+}
+
+fn resolve_discovery_config_at(config: &Config, home: &std::path::Path) -> ResolvedDiscoveryConfig {
+    ResolvedDiscoveryConfig {
         dsh_home: home.to_string_lossy().into_owned(),
         project_root_markers: config.project_root_markers.clone().unwrap_or_else(|| {
             DEFAULT_PROJECT_ROOT_MARKERS
@@ -162,7 +205,7 @@ pub fn resolve_discovery_config(config: &Config) -> anyhow::Result<ResolvedDisco
             config.local_instruction_file_candidates.as_deref(),
             DEFAULT_LOCAL_INSTRUCTION_FILE_CANDIDATES,
         ),
-    })
+    }
 }
 
 fn resolve_instruction_file_candidates(

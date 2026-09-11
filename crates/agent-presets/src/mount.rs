@@ -111,7 +111,8 @@ impl AgentPresetRegistry {
         if config.roster.include_user_root {
             let user_root = match config.user_root {
                 Some(path) => path,
-                None => seekdeep_util::home_paths::seekdeep_home_path([USER_PRESET_DIR])?,
+                None => seekdeep_util::home_paths::resolve_context_seekdeep_home(None, context)?
+                    .join(USER_PRESET_DIR),
             };
             roots.push(PresetRoot {
                 path: user_root.to_string_lossy().into_owned(),

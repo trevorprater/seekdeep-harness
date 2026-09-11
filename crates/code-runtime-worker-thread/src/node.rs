@@ -424,14 +424,20 @@ impl NodeSupervisor {
         #[allow(unused_mut)]
         let mut endpoint = Endpoint::new()?;
         let executable = executable(directory)?;
-        let mut child = tokio::process::Command::new(executable)
+        let mut child = tokio::process::Command::new(&executable)
             .arg(directory.join("loader.mjs"))
             .arg(&endpoint.address)
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .kill_on_drop(true)
-            .spawn()?;
+            .spawn()
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "cannot start the Node runtime executable {}: {error}; a runtime without a bundled Node resolves it through PATH, or set SEEKDEEP_NODE_BINARY",
+                    executable.display()
+                )
+            })?;
         let mut cancellation_poll = tokio::time::interval(Duration::from_millis(5));
         let stop = async {
             loop {
