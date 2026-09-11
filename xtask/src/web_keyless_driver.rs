@@ -108,9 +108,13 @@ function compile(code, bindings, { adapt = true, shared } = {}) {
 function verbatimConstant(ast, name) {
   return compile(declarations(ast, [name]) + '\nreturn ' + name + ';', {}, { adapt: false });
 }
+// A Host that never announces its origin is killed before the failure is reported: a leaked
+// fixture keeps running (and loading the machine) for every later scenario otherwise.
+const READINESS_MS = 60000;
 async function readiness(server, stderr) {
   return new Promise((resolve, reject) => {
-    let stdout = ''; const timer = setTimeout(() => reject(new Error('Host readiness: ' + stderr())), 30000);
+    let stdout = '';
+    const timer = setTimeout(() => { server.kill('SIGKILL'); reject(new Error('Host readiness: no origin within ' + READINESS_MS + 'ms; stderr: ' + stderr())); }, READINESS_MS);
     server.stdout.on('data', value => { stdout += value; const match = /seekdeep web: (http:\/\/\S+)/.exec(stdout); if (match) { clearTimeout(timer); resolve(match[1]); } });
     server.once('exit', code => { clearTimeout(timer); reject(new Error('Host exit ' + code + ': ' + stderr())); });
   });
