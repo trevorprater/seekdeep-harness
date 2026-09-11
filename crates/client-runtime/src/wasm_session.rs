@@ -186,10 +186,21 @@ fn parse_history_result(value: &JsValue) -> Result<ClientRpcResult<SessionHistor
             if !Array::is_array(&events) {
                 return Err(js_sys::Error::new("history result events must be an array").into());
             }
-            let entries = Array::from(&events)
-                .iter()
-                .map(|entry| parse_history_entry(&entry))
-                .collect::<Result<Vec<_>, _>>()?;
+            // The whole page crosses once as JSON text; each entry's own event object then
+            // serves as that event's face, so nothing is re-serialized for the Definitions.
+            let faces = Array::from(&events);
+            let rows = js_to_lossless_value(&events)?;
+            let rows = rows
+                .as_array()
+                .ok_or_else(|| js_sys::Error::new("history result events must be an array"))?;
+            let mut entries = Vec::with_capacity(rows.len());
+            for (index, row) in rows.iter().cloned().enumerate() {
+                let face = faces.get(
+                    u32::try_from(index)
+                        .map_err(|_| js_sys::Error::new("history result has too many events"))?,
+                );
+                entries.push(history_entry_from_value(row, &face)?);
+            }
             let has_more = required(&value, "hasMore", "history result")?
                 .as_bool()
                 .ok_or_else(|| js_sys::Error::new("history result hasMore must be boolean"))?;
@@ -208,40 +219,78 @@ fn parse_history_result(value: &JsValue) -> Result<ClientRpcResult<SessionHistor
     }
 }
 
-fn parse_history_entry(value: &JsValue) -> Result<SessionHistoryEntry, JsValue> {
-    let event = required(value, "event", "history entry")?;
-    let view = Reflect::get(value, &JsValue::from_str("view"))?;
-    Ok(SessionHistoryEntry {
-        event: parse_event(&event)?,
-        view: if view.is_undefined() {
-            None
-        } else {
-            Some(Rc::new(js_to_lossless_value(&view)?))
-        },
-    })
+/// One history entry from its parsed JSON, with the entry's own event object retained as the
+/// event's face.
+fn history_entry_from_value(
+    mut row: ConversationValue,
+    face: &JsValue,
+) -> Result<SessionHistoryEntry, JsValue> {
+    if !row.is_object() {
+        return Err(js_sys::Error::new("history entry must be an object").into());
+    }
+    let wire = row
+        .remove("event")
+        .map_err(|error| js_sys::Error::new(&error.to_string()))?
+        .filter(|wire| !wire.is_null())
+        .ok_or_else(|| js_sys::Error::new("history entry requires \"event\""))?;
+    let view = row
+        .remove("view")
+        .map_err(|error| js_sys::Error::new(&error.to_string()))?
+        .filter(|view| !view.is_null())
+        .map(Rc::new);
+    let event = event_from_wire(wire)?;
+    crate::wasm_conversation_adapter::remember_event_face(
+        &event,
+        required(face, "event", "history entry")?,
+    )?;
+    Ok(SessionHistoryEntry { event, view })
+}
+
+/// Builds one event from its parsed wire object with the same checks the face parser makes.
+pub(crate) fn event_from_wire(
+    wire: ConversationValue,
+) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
+    let member = |key: &str| -> Result<&ConversationValue, JsValue> {
+        wire.get_value(key)
+            .filter(|member| !member.is_null())
+            .ok_or_else(|| js_sys::Error::new(&format!("Session event requires {key:?}")).into())
+    };
+    let seq = member("seq")?
+        .as_f64()
+        .filter(|number| {
+            number.is_finite() && number.fract() == 0.0 && (0.0..=MAX_SAFE_INTEGER).contains(number)
+        })
+        .ok_or_else(|| {
+            js_sys::Error::new("Session event seq must be a non-negative safe integer")
+        })?;
+    let time = member("time")?
+        .as_f64()
+        .filter(|number| {
+            number.is_finite()
+                && number.fract() == 0.0
+                && (-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(number)
+        })
+        .ok_or_else(|| js_sys::Error::new("Session event time must be a safe integer"))?;
+    let event_type = member("type")?
+        .as_str()
+        .ok_or_else(|| js_sys::Error::new("Session event type must be a string"))?
+        .to_owned();
+    let data = member("data")?.clone();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Ok(crate::ConversationLocationEvent::with_wire(
+        seq as u64,
+        time as i64,
+        event_type,
+        data,
+        wire,
+    ))
 }
 
 pub(crate) fn parse_event(
     value: &JsValue,
 ) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
-    // One JSON crossing for the whole event; `data` is the parsed wire's own subtree.
-    let wire = js_to_lossless_value(value)?;
-    let seq = safe_u64(
-        &required(value, "seq", "Session event")?,
-        "Session event seq",
-    )?;
-    let time = safe_i64(
-        &required(value, "time", "Session event")?,
-        "Session event time",
-    )?;
-    let event_type = required_string(value, "type", "Session event")?;
-    let data = match wire.get_value("data") {
-        Some(data) => data.clone(),
-        None => return Err(js_sys::Error::new("Session event lacks data").into()),
-    };
-    Ok(crate::ConversationLocationEvent::with_wire(
-        seq, time, event_type, data, wire,
-    ))
+    // One JSON crossing for the whole event; every field reads from the parsed wire.
+    event_from_wire(js_to_lossless_value(value)?)
 }
 
 fn parse_projection_baseline(value: &JsValue) -> Result<ProjectionsBaseline<Value>, JsValue> {
@@ -388,6 +437,11 @@ impl WasmClientSession {
                 }),
                 on_engaged,
                 report: Rc::new(|message| console_error(&message)),
+                defer: Rc::new(|| {
+                    let timer: Rc<dyn crate::SessionManagerTimer> =
+                        Rc::new(crate::wasm_session_manager::BrowserManagerTimer);
+                    crate::defer_through_timer(&timer)
+                }),
             },
         );
         let views_face = views_face(&session)?;

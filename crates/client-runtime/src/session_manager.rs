@@ -212,6 +212,22 @@ pub struct SessionManagerOptions {
     pub report: Rc<dyn Fn(String)>,
 }
 
+/// One macrotask yield through the manager's timer: a zero-delay schedule that resolves when
+/// the timer fires (or is dropped).
+pub fn defer_through_timer(timer: &Rc<dyn SessionManagerTimer>) -> LocalBoxFuture<'static, ()> {
+    let (sender, receiver) = futures::channel::oneshot::channel::<()>();
+    let disposer = timer.schedule(
+        0,
+        Box::new(move || {
+            let _ = sender.send(());
+        }),
+    );
+    Box::pin(async move {
+        let _keep = disposer;
+        let _ = receiver.await;
+    })
+}
+
 /// Injected catalog debounce timer.
 pub trait SessionManagerTimer {
     /// Schedules one callback and returns its cancellation handle.
@@ -517,6 +533,10 @@ impl SessionManager {
                     }
                 })),
                 report: self.options.report.clone(),
+                defer: {
+                    let timer = self.options.timer.clone();
+                    Rc::new(move || defer_through_timer(&timer))
+                },
             },
         );
         let (buffered, summary) = {

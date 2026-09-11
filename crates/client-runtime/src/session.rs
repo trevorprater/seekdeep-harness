@@ -307,7 +307,14 @@ pub struct SessionOptions {
     pub on_engaged: Option<Rc<dyn Fn(SessionId)>>,
     /// Contained diagnostic sink.
     pub report: Rc<dyn Fn(String)>,
+    /// Yields to the event loop once (a macrotask), so a long window fold leaves room for
+    /// input between its slices.
+    pub defer: Rc<dyn Fn() -> LocalBoxFuture<'static, ()>>,
 }
+
+/// Events folded per slice while opening a window; a slice runs a few hundred milliseconds
+/// on a long session, and the page handles input between slices.
+const REPLACE_SLICE_EVENTS: usize = 2048;
 
 #[allow(clippy::struct_excessive_bools)] // One owner keeps the lifecycle transitions atomic.
 struct SessionState {
@@ -1100,34 +1107,41 @@ impl ClientSession {
                 state.open_error = Some(internal_error("history response omitted value"));
             }
             Ok(ClientRpcResult::Success(Some(page))) => {
-                if let Err(error) = self.install_window(&page) {
-                    let mut state = self.state.borrow_mut();
-                    state.open_state = SessionOpenState::Error;
-                    state.open_error = Some(internal_error(error));
-                } else {
-                    let (tail, subscribed) = {
-                        let state = self.state.borrow();
-                        (
-                            state.events.last().map(|event| event.seq),
-                            state.subscribed_last_seq,
-                        )
-                    };
-                    if subscribed
-                        .zip(tail)
-                        .is_some_and(|(baseline, tail)| baseline > tail)
-                    {
-                        response = self
-                            .transport
-                            .history(self.history_request(None, Some(PAGE_MESSAGES)))
-                            .await;
-                        if generation != self.state.borrow().open_generation {
-                            return;
-                        }
-                        if let Ok(ClientRpcResult::Success(Some(page))) = response {
-                            let _ = self.install_window(&page);
-                        }
+                match self.install_window_sliced(&page, generation).await {
+                    Err(error) => {
+                        let mut state = self.state.borrow_mut();
+                        state.open_state = SessionOpenState::Error;
+                        state.open_error = Some(internal_error(error));
                     }
-                    self.state.borrow_mut().open_state = SessionOpenState::Open;
+                    Ok(false) => return,
+                    Ok(true) => {
+                        let (tail, subscribed) = {
+                            let state = self.state.borrow();
+                            (
+                                state.events.last().map(|event| event.seq),
+                                state.subscribed_last_seq,
+                            )
+                        };
+                        if subscribed
+                            .zip(tail)
+                            .is_some_and(|(baseline, tail)| baseline > tail)
+                        {
+                            response = self
+                                .transport
+                                .history(self.history_request(None, Some(PAGE_MESSAGES)))
+                                .await;
+                            if generation != self.state.borrow().open_generation {
+                                return;
+                            }
+                            if let Ok(ClientRpcResult::Success(Some(page))) = response
+                                && let Ok(false) =
+                                    self.install_window_sliced(&page, generation).await
+                            {
+                                return;
+                            }
+                        }
+                        self.state.borrow_mut().open_state = SessionOpenState::Open;
+                    }
                 }
             }
         }
@@ -1146,6 +1160,45 @@ impl ClientSession {
             .borrow_mut()
             .replace_window(&inputs, page.has_more)
             .map_err(|error| error.to_string())?;
+        self.adopt_window(page)
+    }
+
+    /// Installs a window while opening: the fold yields to the event loop between slices,
+    /// and stops (`Ok(false)`) when a newer open superseded this one meanwhile.
+    async fn install_window_sliced(
+        self: &Rc<Self>,
+        page: &SessionHistoryPage,
+        generation: u64,
+    ) -> Result<bool, String> {
+        let inputs = page
+            .entries
+            .iter()
+            .map(SessionHistoryEntry::conversation_input)
+            .collect::<Vec<_>>();
+        self.conversation
+            .borrow_mut()
+            .begin_replace_window(&inputs, page.has_more)
+            .map_err(|error| error.to_string())?;
+        loop {
+            let done = self
+                .conversation
+                .borrow_mut()
+                .continue_replace_window(REPLACE_SLICE_EVENTS)
+                .map_err(|error| error.to_string())?;
+            if done {
+                break;
+            }
+            (self.options.defer)().await;
+            if generation != self.state.borrow().open_generation {
+                return Ok(false);
+            }
+        }
+        self.adopt_window(page)?;
+        Ok(true)
+    }
+
+    /// Adopts an installed window's rows, views, projections, and buffered live events.
+    fn adopt_window(self: &Rc<Self>, page: &SessionHistoryPage) -> Result<(), String> {
         if let Some(projections) = &page.projections {
             self.projections.seed(projections);
         }

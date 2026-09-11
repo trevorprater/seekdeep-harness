@@ -71,6 +71,12 @@ impl<T> FaceCache<T> {
             return Ok(face.clone());
         }
         let face = build()?;
+        self.retain(value, face)
+    }
+
+    /// Adopts an existing JavaScript object as the face of `value`.
+    fn retain(&mut self, value: &Rc<T>, face: JsValue) -> Result<JsValue, JsValue> {
+        let key = Rc::as_ptr(value) as usize;
         if self.entries.len() >= self.prune_at {
             self.entries.retain(|_, (weak, _)| weak.strong_count() > 0);
             self.prune_at = (self.entries.len() * 2).max(Self::PRUNE_ABOVE);
@@ -126,6 +132,15 @@ pub(crate) fn recover_store(face: &JsValue) -> Option<Rc<ConversationLocationDat
 }
 
 /// Recovers the engine Location event behind one face the adapter handed out.
+/// Keeps `face` (the transport's own event object) as the face of `event`, so the Definitions
+/// receive it instead of a re-serialized copy.
+pub(crate) fn remember_event_face(
+    event: &Rc<ConversationLocationEvent>,
+    face: JsValue,
+) -> Result<(), JsValue> {
+    EVENT_FACES.with(|cache| cache.borrow_mut().retain(event, face).map(|_| ()))
+}
+
 pub(crate) fn recover_event(face: &JsValue) -> Option<Rc<ConversationLocationEvent>> {
     EVENT_FACES.with(|cache| cache.borrow().recover(face))
 }
@@ -395,6 +410,16 @@ impl AssemblerEventDefinitions for BrowserEventDefinitions {
         for event in events {
             faces.push(&event_face(event).map_err(adapter_error)?);
         }
+        // The window also crosses as one JSON text, so a module parses it once instead of
+        // re-reading every face.
+        let text = serde_json::to_string(
+            &events
+                .iter()
+                .map(|event| event.wire_value())
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
+        let text = JsValue::from_str(&text);
         let mut table = PrematchTable::default();
         let mut covered = false;
         for node in self
@@ -409,7 +434,9 @@ impl AssemblerEventDefinitions for BrowserEventDefinitions {
             let Some(batch) = batch.dyn_ref::<Function>() else {
                 continue;
             };
-            let rows = batch.call1(&node.payload, &faces).map_err(adapter_error)?;
+            let rows = batch
+                .call2(&node.payload, &faces, &text)
+                .map_err(adapter_error)?;
             let rows = rows.as_string().ok_or_else(|| {
                 ConversationAssemblerError::new(format!(
                     "Conversation Definition {} matchMany must return JSON text",
@@ -795,29 +822,31 @@ fn event_to_js(event: &ConversationLocationEvent) -> Result<JsValue, JsValue> {
     json_to_js(&event.wire_value())
 }
 
+thread_local! {
+    /// Builds a Match face in one call instead of an object and four property sets: a window
+    /// carries tens of thousands of Matches.
+    static MATCH_FACE_BUILDER: Function = Function::new_with_args(
+        "event, view, role, location",
+        "return { event, view, role, location };",
+    );
+}
+
 fn match_to_js(accepted: &ConversationMatch) -> Result<JsValue, JsValue> {
-    let value = Object::new();
-    set(&value, "event", &event_face(&accepted.event)?)?;
-    set(
-        &value,
-        "view",
+    let arguments = Array::of4(
+        &event_face(&accepted.event)?,
         &accepted
             .view
             .as_ref()
             .map(value_face)
             .transpose()?
             .unwrap_or(JsValue::UNDEFINED),
-    )?;
-    set(
-        &value,
-        "role",
         &JsValue::from_str(match accepted.role {
             ConversationMatchRole::Start => "start",
             ConversationMatchRole::Update => "update",
         }),
-    )?;
-    set(&value, "location", &location_to_js(&accepted.location)?)?;
-    Ok(value.into())
+        &location_to_js(&accepted.location)?,
+    );
+    MATCH_FACE_BUILDER.with(|builder| Reflect::apply(builder, &JsValue::UNDEFINED, &arguments))
 }
 
 fn context_to_js(context: &ConversationNodeContext) -> Result<JsValue, JsValue> {

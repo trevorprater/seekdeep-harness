@@ -80,6 +80,18 @@ impl<T> ParsedFaces<T> {
             return Ok(value.clone());
         }
         let value = parse()?;
+        self.remember(key, &value);
+        Ok(value)
+    }
+
+    /// Records `value` as the parse of `face` (an object) without parsing it.
+    fn seed(&mut self, face: &JsValue, value: &Rc<T>) {
+        if face.is_object() {
+            self.remember(face.unchecked_ref(), value);
+        }
+    }
+
+    fn remember(&mut self, key: &Object, value: &Rc<T>) {
         while self.values.len() >= self.capacity {
             self.values.pop_first();
         }
@@ -87,7 +99,6 @@ impl<T> ParsedFaces<T> {
         self.next = self.next.wrapping_add(1);
         self.values.insert(id, value.clone());
         self.ids.set(key, &JsValue::from_f64(f64::from(id)));
-        Ok(value)
     }
 }
 
@@ -145,6 +156,40 @@ fn events_from_js(
     })
 }
 
+/// The events behind one window array from the window's JSON text: one parse per module,
+/// with each event recorded as the parse of its face so the update phase finds it.
+fn events_from_text(
+    array: &JsValue,
+    text: &str,
+) -> Result<Rc<Vec<Rc<crate::ConversationLocationEvent>>>, JsValue> {
+    PARSED_EVENT_ARRAYS.with(|cache| {
+        cache.borrow_mut().get_or_parse(array, || {
+            let faces = array.dyn_ref::<Array>().ok_or_else(|| {
+                js_sys::Error::new("Conversation Definition matchMany takes an array of events")
+            })?;
+            let rows = crate::ConversationValue::parse(text.to_owned())
+                .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+            let rows = rows.as_array().ok_or_else(|| {
+                js_sys::Error::new("Conversation Definition matchMany text must be an array")
+            })?;
+            if rows.len() != faces.length() as usize {
+                return Err(js_sys::Error::new(
+                    "Conversation Definition matchMany text does not match its events",
+                )
+                .into());
+            }
+            let mut events = Vec::with_capacity(rows.len());
+            for (index, wire) in rows.iter().cloned().enumerate() {
+                let event = crate::wasm_session::event_from_wire(wire)?;
+                let face = faces.get(u32::try_from(index).unwrap_or(u32::MAX));
+                PARSED_EVENTS.with(|parsed| parsed.borrow_mut().seed(&face, &event));
+                events.push(event);
+            }
+            Ok(Rc::new(events))
+        })
+    })
+}
+
 fn event_from_js(value: &JsValue) -> Result<Rc<crate::ConversationLocationEvent>, JsValue> {
     if let Some(recovered) = recover_event(value) {
         return Ok(recovered);
@@ -196,9 +241,14 @@ pub fn native_conversation_node_definition_to_js(
     // The whole-window matcher: one crossing in (an array of event faces, parsed once per
     // module and shared by every Definition asked about it) and one crossing out (JSON rows).
     let batch_matcher = definition.clone();
-    let match_many = Closure::wrap(
-        Box::new(move |events: JsValue| -> Result<JsValue, JsValue> {
-            let events = events_from_js(&events)?;
+    let match_many = Closure::wrap(Box::new(
+        move |events: JsValue, text: JsValue| -> Result<JsValue, JsValue> {
+            // With the window's JSON text the module parses it once; a caller without it
+            // (a test face) still gets the events read from the faces.
+            let events = match text.as_string() {
+                Some(text) => events_from_text(&events, &text)?,
+                None => events_from_js(&events)?,
+            };
             let mut rows = Vec::with_capacity(events.len());
             for event in events.iter() {
                 rows.push(
@@ -216,8 +266,9 @@ pub fn native_conversation_node_definition_to_js(
             let text = serde_json::to_string(&rows)
                 .map_err(|error| js_sys::Error::new(&error.to_string()))?;
             Ok(JsValue::from_str(&text))
-        }) as Box<dyn FnMut(JsValue) -> Result<JsValue, JsValue>>,
-    );
+        },
+    )
+        as Box<dyn FnMut(JsValue, JsValue) -> Result<JsValue, JsValue>>);
     set(&value, "matchMany", &match_many.into_js_value())?;
 
     let starter = definition.clone();

@@ -317,3 +317,67 @@ fn update_runs_fold_in_one_call_and_flush_before_a_start_that_reads_them() {
     );
     assert_eq!(seen.borrow().last(), Some(&7));
 }
+
+#[test]
+fn a_sliced_replacement_publishes_nothing_until_its_last_slice() {
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let observed = Rc::new(RefCell::new(Vec::new()));
+    let batches = Rc::new(RefCell::new(Vec::new()));
+    let mut assembler = ConversationNodeAssembler::new(
+        Rc::new(BatchingRegistry {
+            tool: Rc::new(counting_tool(seen.clone())),
+            note: Rc::new(reading_note(observed.clone())),
+            batches: batches.clone(),
+        }),
+        Rc::new(NoViews),
+    );
+    assembler
+        .begin_replace_window(
+            &[
+                at(1, "tool/call", conversation_json!({})),
+                at(2, "tool/chunk", conversation_json!({})),
+                at(3, "tool/chunk", conversation_json!({})),
+                at(4, "note", conversation_json!({})),
+                at(5, "tool/chunk", conversation_json!({})),
+            ],
+            false,
+        )
+        .unwrap();
+    assert!(!assembler.continue_replace_window(2).unwrap());
+    assert!(
+        !assembler.flush().unwrap(),
+        "a replacement in progress publishes nothing"
+    );
+    assert!(!assembler.continue_replace_window(2).unwrap());
+    assert_eq!(
+        *observed.borrow(),
+        vec![conversation_json!({"count": 2})],
+        "the run before the start folded before it, across the slice boundary"
+    );
+    assert!(assembler.continue_replace_window(2).unwrap());
+    assert!(
+        assembler.continue_replace_window(2).unwrap(),
+        "complete stays complete"
+    );
+    assert_eq!(*batches.borrow(), vec![2, 1]);
+    assert_eq!(*seen.borrow(), vec![2, 3, 5]);
+    assert!(assembler.flush().unwrap(), "the finished window publishes");
+
+    // A mutation while a replacement is in progress completes it first.
+    assembler
+        .begin_replace_window(
+            &[
+                at(1, "tool/call", conversation_json!({})),
+                at(2, "tool/chunk", conversation_json!({})),
+                at(3, "tool/chunk", conversation_json!({})),
+            ],
+            false,
+        )
+        .unwrap();
+    assert!(!assembler.continue_replace_window(1).unwrap());
+    assembler
+        .append(&at(4, "tool/chunk", conversation_json!({})))
+        .unwrap();
+    assert_eq!(*batches.borrow(), vec![2, 1, 2]);
+    assert_eq!(seen.borrow().last(), Some(&4));
+}

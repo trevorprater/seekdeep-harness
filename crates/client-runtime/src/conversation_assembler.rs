@@ -281,6 +281,17 @@ pub trait AssemblerEventDefinitions {
     }
 }
 
+/// One admitted Match: its Context key, the Context, and the Match as recorded.
+type AdmittedMatch = (String, Rc<RefCell<InternalContext>>, Rc<ConversationMatch>);
+
+/// A window replacement in progress: the fold runs in slices so the page can yield between
+/// them, and nothing publishes until the last slice.
+struct WindowReplay {
+    sorted: Vec<ConversationEventInput>,
+    next: usize,
+    batches: IndexMap<String, UpdateBatch>,
+}
+
 /// A run of update Matches of one started Context, folded in one Definition call.
 struct UpdateBatch {
     definition: Rc<AssemblerNodeDefinition>,
@@ -407,8 +418,6 @@ struct ViewState {
     snapshot: Rc<Value>,
 }
 
-type AdmittedMatch = (String, Rc<RefCell<InternalContext>>, Rc<ConversationMatch>);
-
 /// Fail-loud Definition, lifecycle, dependency, Location, or builder error.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
@@ -446,6 +455,8 @@ pub struct ConversationNodeAssembler {
     timeline_dirty: bool,
     /// Whole-window match answers while a replacement runs.
     prematched: Option<PrematchTable>,
+    /// The replacement in progress, between `begin_replace_window` and its last slice.
+    replay: Option<WindowReplay>,
 }
 
 impl ConversationNodeAssembler {
@@ -471,6 +482,7 @@ impl ConversationNodeAssembler {
             replace_pending: true,
             timeline_dirty: true,
             prematched: None,
+            replay: None,
         };
         assembler.reset_view_builders();
         assembler
@@ -486,6 +498,25 @@ impl ConversationNodeAssembler {
         entries: &[ConversationEventInput],
         has_more: bool,
     ) -> Result<ConversationPublication, ConversationAssemblerError> {
+        self.begin_replace_window(entries, has_more)?;
+        self.complete_replace_window()?;
+        Ok(ConversationPublication::Immediate)
+    }
+
+    /// Starts a window replacement: the log is reset and the window matched once per
+    /// Definition; the fold itself runs through `continue_replace_window`, so a caller may
+    /// yield between slices while nothing publishes.
+    ///
+    /// # Errors
+    ///
+    /// Returns Location or matcher failures.
+    pub fn begin_replace_window(
+        &mut self,
+        entries: &[ConversationEventInput],
+        has_more: bool,
+    ) -> Result<(), ConversationAssemblerError> {
+        self.replay = None;
+        self.prematched = None;
         self.contexts.clear();
         self.contexts_by_kind.clear();
         self.contexts_by_seq.clear();
@@ -506,14 +537,57 @@ impl ConversationNodeAssembler {
             .map(|entry| entry.event.clone())
             .collect::<Vec<_>>();
         self.prematched = self.event_definitions.prematch(&events)?;
-        let matched = self.match_window(&sorted);
+        self.replay = Some(WindowReplay {
+            sorted,
+            next: 0,
+            batches: IndexMap::new(),
+        });
+        Ok(())
+    }
+
+    /// Folds up to `budget` more events of the replacement in progress; `true` once the
+    /// window is complete and its views may publish. Without a replacement in progress it
+    /// is complete already.
+    ///
+    /// # Errors
+    ///
+    /// Returns Definition, lifecycle, or dependency failures; the replacement is abandoned.
+    pub fn continue_replace_window(
+        &mut self,
+        budget: usize,
+    ) -> Result<bool, ConversationAssemblerError> {
+        let Some(mut replay) = self.replay.take() else {
+            return Ok(true);
+        };
+        let end = replay.next.saturating_add(budget).min(replay.sorted.len());
+        let slice = self.match_slice(&replay.sorted[replay.next..end], &mut replay.batches);
+        replay.next = end;
+        if let Err(error) = slice {
+            self.prematched = None;
+            return Err(error);
+        }
+        if replay.next < replay.sorted.len() {
+            self.replay = Some(replay);
+            return Ok(false);
+        }
+        let folded = self.fold_update_batches(&mut replay.batches);
         self.prematched = None;
-        matched?;
+        folded?;
         self.replay_dependencies()?;
         self.revised.clear();
         self.dirty.extend(self.contexts.keys().cloned());
         self.replace_pending = true;
-        Ok(ConversationPublication::Immediate)
+        Ok(true)
+    }
+
+    /// Finishes the replacement in progress, if any, in one go.
+    ///
+    /// # Errors
+    ///
+    /// Returns the failure of a remaining slice.
+    pub fn complete_replace_window(&mut self) -> Result<(), ConversationAssemblerError> {
+        while !self.continue_replace_window(usize::MAX)? {}
+        Ok(())
     }
 
     /// Adds one contiguous live tail event without scanning existing Contexts.
@@ -525,6 +599,7 @@ impl ConversationNodeAssembler {
         &mut self,
         input: &ConversationEventInput,
     ) -> Result<ConversationPublication, ConversationAssemblerError> {
+        self.complete_replace_window()?;
         if self.inputs.contains_key(&input.event.seq) {
             return Ok(ConversationPublication::None);
         }
@@ -564,6 +639,7 @@ impl ConversationNodeAssembler {
         entries: &[ConversationEventInput],
         has_more: bool,
     ) -> Result<ConversationPublication, ConversationAssemblerError> {
+        self.complete_replace_window()?;
         self.revised.clear();
         let mut publication = ConversationPublication::None;
         let previous_has_more = self.has_more;
@@ -609,6 +685,7 @@ impl ConversationNodeAssembler {
     pub fn rebuild_registry(
         &mut self,
     ) -> Result<ConversationPublication, ConversationAssemblerError> {
+        self.complete_replace_window()?;
         self.reset_view_builders();
         self.replace_window(&self.sorted_inputs(), self.has_more)
     }
@@ -619,6 +696,10 @@ impl ConversationNodeAssembler {
     ///
     /// Returns Location-data, Node-contract, withdrawal, or builder failures.
     pub fn flush(&mut self) -> Result<bool, ConversationAssemblerError> {
+        if self.replay.is_some() {
+            // A replacement in progress publishes nothing until its last slice.
+            return Ok(false);
+        }
         if !self.replace_pending && self.dirty.is_empty() && !self.timeline_dirty {
             return Ok(false);
         }
@@ -830,19 +911,19 @@ impl ConversationNodeAssembler {
         Ok(publication)
     }
 
-    /// Matches a whole window in order, folding runs of update Matches per Context in one
-    /// Definition call where the registry can. A start Match may read other Contexts'
-    /// states, so every pending run folds before it; the publication cadence is not
-    /// observed during a replacement, so it is not asked for.
-    fn match_window(
+    /// Matches one slice of a window in order, folding runs of update Matches per Context in
+    /// one Definition call where the registry can; a run may carry over to the next slice. A
+    /// start Match may read other Contexts' states, so every pending run folds before it; the
+    /// publication cadence is not observed during a replacement, so it is not asked for.
+    fn match_slice(
         &mut self,
-        sorted: &[ConversationEventInput],
+        inputs: &[ConversationEventInput],
+        batches: &mut IndexMap<String, UpdateBatch>,
     ) -> Result<(), ConversationAssemblerError> {
-        let mut batches = IndexMap::<String, UpdateBatch>::new();
-        for input in sorted {
+        for input in inputs {
             for (definition, result) in self.matching_definitions(input)? {
                 if result.role == ConversationMatchRole::Start {
-                    self.fold_update_batches(&mut batches)?;
+                    self.fold_update_batches(batches)?;
                     self.accept_match(&definition, result.id, result.role, input)?;
                     continue;
                 }
@@ -866,7 +947,7 @@ impl ConversationNodeAssembler {
                 self.dirty.insert(key);
             }
         }
-        self.fold_update_batches(&mut batches)
+        Ok(())
     }
 
     fn fold_update_batches(

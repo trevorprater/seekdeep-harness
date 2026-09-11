@@ -273,6 +273,7 @@ fn options(scheduler: Rc<ManualScheduler>, spawner: Rc<dyn SessionTaskSpawner>) 
         resolve_time_zone: Rc::new(|| Ok("UTC".to_owned())),
         on_engaged: None,
         report: Rc::new(|_| {}),
+        defer: Rc::new(|| Box::pin(async {})),
     }
 }
 
