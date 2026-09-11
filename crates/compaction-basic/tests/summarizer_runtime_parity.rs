@@ -128,9 +128,7 @@ fn prompt_input(text: &str) -> SummarizationInput {
         system: None,
         tools: None,
         messages: vec![Message::user(
-            vec![ContentBlock::Text {
-                text: text.into(),
-            }],
+            vec![ContentBlock::Text { text: text.into() }],
             MessageSource::plugin("test"),
         )],
     }

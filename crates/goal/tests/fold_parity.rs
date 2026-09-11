@@ -1,17 +1,17 @@
 //! Strict replay matrix mirrored from `packages/goal/goal/tests/goal.spec.ts`.
 
-use seekdeep_core::session::SessionEvent;
+use seekdeep_core::session::{JsonValue, SessionEvent};
 use seekdeep_goal::fold::{decode_goal_change, fold_goal};
 use serde_json::{Value, json};
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
-fn event(event_type: &str, seq: u64, data: Value) -> SessionEvent {
+fn event(event_type: &str, seq: u64, data: impl Into<JsonValue>) -> SessionEvent {
     SessionEvent {
         event_type: event_type.to_owned(),
         seq,
         time: i64::try_from(seq).unwrap_or(i64::MAX),
-        data,
+        data: data.into(),
         source_event_seqs: None,
         surface_op: None,
         ignorable: None,
@@ -157,6 +157,63 @@ fn decoder_is_strict_but_ignores_values_that_do_not_claim_goal_change() {
             "pointer {pointer} was accepted"
         );
     }
+}
+
+#[test]
+fn unrelated_surrogate_metadata_does_not_suppress_valid_goal_rounds() {
+    let raw = |data: &str| JsonValue::parse(data.to_owned()).unwrap();
+    let events = [
+        create("goal-raw-rounds", 0, 2),
+        event("opaque/event", 1, raw(r#"{"\ud800":{"nested":"\udfff"}}"#)),
+        event(
+            "user/message",
+            2,
+            raw(
+                r#"{"content":[{"type":"text","text":"\ud800"}],"source":{"kind":"plugin","plugin":"\udfff","opaque":{"\ud800":"\udfff"}}}"#,
+            ),
+        ),
+        event(
+            "user/message",
+            3,
+            raw(r#"{"source":{"kind":"\ud800","goalId":"\udfff","opaque":["\ud800"]}}"#),
+        ),
+        event(
+            "user/message",
+            4,
+            raw(
+                r#"{"content":[{"type":"text","text":"\ud800"}],"source":{"kind":"goal","goalId":"goal-raw-rounds","revision":1,"round":1,"opaque":{"\udfff":"\ud800"}},"other":"\udfff"}"#,
+            ),
+        ),
+        event(
+            "user/message",
+            5,
+            raw(
+                r#"{"source":{"kind":"goal","goalId":"goal-raw-rounds","revision":1,"round":2,"opaque":["\ud800"]},"\udfff":"\ud800"}"#,
+            ),
+        ),
+    ];
+    let folded = fold_goal(&events).expect("opaque fields cannot block round admission");
+    assert_eq!(folded.rounds_started, 2);
+    assert_eq!(folded.goal.unwrap().id.as_str(), "goal-raw-rounds");
+}
+
+#[test]
+fn raw_goal_change_decoder_keeps_exact_field_validation() {
+    for raw in [
+        r#"{"kind":"\ud800","opaque":"\udfff"}"#,
+        r#"{"kind":"other","\ud800":{"nested":"\udfff"}}"#,
+    ] {
+        assert!(
+            decode_goal_change(&JsonValue::parse(raw.to_owned()).unwrap())
+                .unwrap()
+                .is_none()
+        );
+    }
+    let invalid = JsonValue::parse(r#"{"kind":"goal/change","version":1,"operation":"clear","cleared":{"id":"goal-raw","revision":2},"clearedAt":11,"\ud800":"\udfff"}"#.to_owned()).unwrap();
+    assert_eq!(
+        decode_goal_change(&invalid).unwrap_err().to_string(),
+        "goal clear change must have exactly cleared,clearedAt,kind,operation,version fields"
+    );
 }
 
 #[test]

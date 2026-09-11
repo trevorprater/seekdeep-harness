@@ -26,7 +26,10 @@ use seekdeep_storage::{
     FormMount, KvSnapshot, KvUnit, KvUnitDescriptor, STORAGE, Storage, StorageError, UNIT_NAME_RE,
     storage_backend_service_key,
 };
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{DeserializeOwned, Error as _},
+};
 use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc, oneshot};
@@ -274,7 +277,7 @@ pub fn descriptor_of(spec: &DomainSpec) -> KvUnitDescriptor {
 }
 
 /// One post-durability domain change.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "operation")]
 pub enum DomainChanged {
     /// A record or global singleton was inserted/replaced.
@@ -299,6 +302,58 @@ pub enum DomainChanged {
         /// Deleted key.
         key: String,
     },
+}
+
+impl<'de> Deserialize<'de> for DomainChanged {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct PutFields {
+            domain: String,
+            table: String,
+            key: String,
+            value: JsonValue,
+        }
+
+        #[derive(Deserialize)]
+        struct DeletedFields {
+            domain: String,
+            table: String,
+            key: String,
+        }
+
+        let raw = <JsonValue as Deserialize>::deserialize(deserializer)?;
+        let mut operation = None;
+        for (key, value) in raw.object_entries().unwrap_or_default() {
+            if key == "operation" {
+                if operation.is_some() {
+                    return Err(D::Error::duplicate_field("operation"));
+                }
+                operation = Some(value);
+            }
+        }
+        let operation = operation.ok_or_else(|| D::Error::missing_field("operation"))?;
+        let operation: String = operation.deserialize().map_err(D::Error::custom)?;
+        match operation.as_str() {
+            "put" => {
+                let fields: PutFields = raw.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::Put {
+                    domain: fields.domain,
+                    table: fields.table,
+                    key: fields.key,
+                    value: fields.value,
+                })
+            }
+            "deleted" => {
+                let fields: DeletedFields = raw.deserialize().map_err(D::Error::custom)?;
+                Ok(Self::Deleted {
+                    domain: fields.domain,
+                    table: fields.table,
+                    key: fields.key,
+                })
+            }
+            _ => Err(D::Error::unknown_variant(&operation, &["put", "deleted"])),
+        }
+    }
 }
 
 impl DomainChanged {

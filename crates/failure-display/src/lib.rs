@@ -1,6 +1,7 @@
 //! Display-safe projection of durable failure values.
 
-use serde_json::{Map, Value};
+use seekdeep_lossless_json::{JsonRef, JsonString, JsonValue};
+use serde_json::Value;
 
 /// Converts a durable failure into copy safe to expose in a GUI.
 #[must_use]
@@ -10,84 +11,51 @@ pub fn display_failure_message(failure: &Value) -> String {
         Value::Bool(value) => value.to_string(),
         Value::Number(value) => javascript_number(value),
         Value::String(value) => value.clone(),
-        Value::Array(_) => javascript_json_stringify(failure),
+        Value::Array(_) => JsonValue::from(failure.clone()).stringify(),
         Value::Object(record) => {
             if record.get("code").and_then(Value::as_str) == Some("AUTH") {
                 return "API key is invalid".to_owned();
             }
-            record
-                .get("message")
-                .and_then(Value::as_str)
-                .map_or_else(|| javascript_json_stringify(failure), str::to_owned)
+            record.get("message").and_then(Value::as_str).map_or_else(
+                || JsonValue::from(failure.clone()).stringify(),
+                str::to_owned,
+            )
         }
     }
 }
 
-fn javascript_json_stringify(value: &Value) -> String {
-    let mut output = String::new();
-    write_javascript_json(value, &mut output);
-    output
-}
-
-fn write_javascript_json(value: &Value, output: &mut String) {
-    match value {
-        Value::Null => output.push_str("null"),
-        Value::Bool(value) => output.push_str(if *value { "true" } else { "false" }),
-        Value::Number(value) => output.push_str(&javascript_number(value)),
-        Value::String(value) => {
-            output.push_str(&serde_json::to_string(value).expect("strings always serialize"));
-        }
-        Value::Array(values) => {
-            output.push('[');
-            for (index, value) in values.iter().enumerate() {
-                if index > 0 {
-                    output.push(',');
-                }
-                write_javascript_json(value, output);
-            }
-            output.push(']');
-        }
-        Value::Object(values) => write_javascript_object(values, output),
+/// Formats durable failure text without replacing UTF-16 code units.
+///
+/// AUTH failures conceal their diagnostic message. Other string messages are
+/// returned directly; remaining objects and arrays use ECMAScript JSON formatting.
+#[must_use]
+pub fn display_failure_message_json(failure: &JsonValue) -> JsonString {
+    if let Some(units) = failure.to_utf16() {
+        return JsonString::from_utf16(&units);
     }
-}
-
-fn write_javascript_object(values: &Map<String, Value>, output: &mut String) {
-    let mut indexed = values
-        .iter()
-        .filter_map(|(key, value)| javascript_array_index(key).map(|index| (index, key, value)))
-        .collect::<Vec<_>>();
-    indexed.sort_unstable_by_key(|(index, _, _)| *index);
-    let ordinary = values
-        .iter()
-        .filter(|(key, _)| javascript_array_index(key).is_none());
-    output.push('{');
-    for (position, (key, value)) in indexed
-        .into_iter()
-        .map(|(_, key, value)| (key, value))
-        .chain(ordinary)
-        .enumerate()
-    {
-        if position > 0 {
-            output.push(',');
-        }
-        output.push_str(&serde_json::to_string(key).expect("object keys always serialize"));
-        output.push(':');
-        write_javascript_json(value, output);
+    if let Some(number) = failure.as_f64() {
+        return ryu_js::Buffer::new().format(number).into();
     }
-    output.push('}');
-}
-
-fn javascript_array_index(key: &str) -> Option<u32> {
-    let index = key.parse::<u32>().ok()?;
-    (index != u32::MAX && index.to_string() == key).then_some(index)
+    if failure.get("code").is_some_and(|code| code == "AUTH") {
+        return "API key is invalid".into();
+    }
+    failure
+        .get("message")
+        .and_then(JsonRef::to_utf16)
+        .map_or_else(
+            || failure.stringify().into(),
+            |units| JsonString::from_utf16(&units),
+        )
 }
 
 fn javascript_number(value: &serde_json::Number) -> String {
-    let number = value
-        .as_f64()
-        .expect("every serde_json number converts to a JavaScript number");
-    let mut buffer = ryu_js::Buffer::new();
-    buffer.format(number).to_owned()
+    let number = value.as_f64().unwrap_or_else(|| {
+        value
+            .to_string()
+            .parse::<f64>()
+            .expect("valid JSON numbers convert to ECMAScript numbers")
+    });
+    ryu_js::Buffer::new().format(number).to_owned()
 }
 
 #[cfg(test)]

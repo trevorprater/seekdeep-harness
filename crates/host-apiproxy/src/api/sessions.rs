@@ -726,7 +726,7 @@ pub struct ToolEventView {
     #[serde(rename = "for")]
     pub target: ToolEventViewTarget,
     /// Loose, host-owned view object whose `card` tag is mandatory.
-    pub view: Map<String, Value>,
+    pub view: JsonValue,
 }
 
 /// Closed tool-event view target.
@@ -756,7 +756,7 @@ impl ToolEventView {
         require_string(view, "card", "$.view.card", false)?;
         Ok(Self {
             target,
-            view: view.clone(),
+            view: Value::Object(view.clone()).into(),
         })
     }
 }

@@ -2,10 +2,10 @@
 
 use std::rc::Rc;
 
-use indexmap::{IndexMap, IndexSet};
-use indexmap::IndexMap as Map;
-use seekdeep_lossless_json::JsonValue as Value;
 use crate::json_value::{json, null};
+use indexmap::{IndexMap, IndexSet};
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
+use crate::text_value::member as text;
 use url::Url;
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
 struct LaidCell {
     cell: TrajectoryCell,
     abs_time: Option<f64>,
-    tool_name: Option<String>,
+    tool_name: Option<JsonString>,
     call_id: Option<String>,
     sub_calls: Vec<Value>,
 }
@@ -133,9 +133,10 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
                 request: request.clone(),
             }),
             Some("assistant") => {
-                if let (Some(change), Some(_)) =
-                    (request.get_value("promptChange"), request.get_value("prompt"))
-                {
+                if let (Some(change), Some(_)) = (
+                    request.get_value("promptChange"),
+                    request.get_value("prompt"),
+                ) {
                     entries.push(LayoutEntry::System {
                         request: request.clone(),
                         change: change.clone(),
@@ -211,17 +212,18 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
             }
             LayoutEntry::Compaction { request } => {
                 cell_index += 1;
-                let raw_output = request.get_value("rawOutput").or_else(|| request.get_value("summary"));
-                let thinking_detail = raw_output.map_or_else(String::new, detail_reasoning);
+                let raw_output = request
+                    .get_value("rawOutput")
+                    .or_else(|| request.get_value("summary"));
+                let thinking_detail = raw_output.map_or_else(JsonString::default, detail_reasoning);
                 let status = string(&request, "status").unwrap_or_default();
                 let summary = request.get_value("summary");
                 let text = match status {
-                    "running" => "Compacting context…".to_owned(),
-                    "error" => string(&request, "error")
-                        .unwrap_or("Compaction failed")
-                        .to_owned(),
-                    _ if summary.is_none() => "Context compacted".to_owned(),
-                    _ => String::new(),
+                    "running" => JsonString::from("Compacting context…"),
+                    "error" => text(&request, "error")
+                        .unwrap_or_else(|| "Compaction failed".into()),
+                    _ if summary.is_none() => JsonString::from("Context compacted"),
+                    _ => JsonString::default(),
                 };
                 let mut cell = TrajectoryCell::new(cell_index, TrajectoryCellKind::Compacted, text);
                 cell.source_seq = safe_seq(&request, "startSeq");
@@ -326,9 +328,9 @@ pub fn derive_trajectory_layout(input: &TrajectorySnapshot) -> Vec<TrajectoryTur
             continue;
         }
         cell_index += 1;
-        let name = string(call, "name").unwrap_or_default();
-        let args = string(call, "argsRaw").unwrap_or_default();
-        let mut cell = TrajectoryCell::new(cell_index, TrajectoryCellKind::Tool, name);
+        let name = text(call, "name").unwrap_or_default();
+        let args = text(call, "argsRaw").unwrap_or_default();
+        let mut cell = TrajectoryCell::new(cell_index, TrajectoryCellKind::Tool, name.clone());
         cell.preview_markdown = (!args.is_empty()).then(|| args.to_owned());
         cell.input_detail = Some(args.to_owned());
         cell.call_id = Some(call_id.to_owned());
@@ -556,7 +558,7 @@ fn fold_node(
                 let tool_name = node
                     .get_value("call")
                     .filter(|call| !call.is_null())
-                    .and_then(|call| string(call, "name"));
+                    .and_then(|call| text(call, "name"));
                 let result_preview = summarize_result(node);
                 *cell_index += 1;
                 let mut cell =
@@ -565,10 +567,10 @@ fn fold_node(
                 if let Some(call) = node.get_value("call").filter(|call| !call.is_null()) {
                     summarize_call_into(
                         &mut cell,
-                        string(call, "name").unwrap_or_default(),
-                        string(call, "argsRaw").unwrap_or_default(),
+                        text(call, "name").unwrap_or_default(),
+                        text(call, "argsRaw").unwrap_or_default(),
                     );
-                    cell.input_detail = string(call, "argsRaw").map(ToOwned::to_owned);
+                    cell.input_detail = text(call, "argsRaw");
                 } else {
                     result_as_text(&mut cell, Some(&result_preview));
                 }
@@ -587,7 +589,7 @@ fn fold_node(
                 let mut laid = vec![LaidCell {
                     abs_time: finite_member(node, "callTime")
                         .or_else(|| finite_member(node, "time")),
-                    tool_name: tool_name.map(ToOwned::to_owned),
+                    tool_name,
                     call_id: Some(call_id.to_owned()),
                     sub_calls: subs.clone(),
                     cell,
@@ -654,7 +656,7 @@ fn expand_assistant(
     message.text = if message_text.is_empty() && thinking_text.is_empty() {
         summarize_assistant_activity(node_blocks)
     } else {
-        String::new()
+        JsonString::default()
     };
     message.preview_markdown = if !message_text.is_empty() {
         Some(message_text.clone())
@@ -699,9 +701,9 @@ fn expand_assistant(
         let call_block = calls.get(call_id);
         let result_preview = result.map(summarize_result);
         index += 1;
-        let name = string(block, "name").unwrap_or_default();
-        let args = string(block, "argsRaw").unwrap_or_default();
-        let mut cell = TrajectoryCell::new(index, TrajectoryCellKind::Tool, name);
+        let name = text(block, "name").unwrap_or_default();
+        let args = text(block, "argsRaw").unwrap_or_default();
+        let mut cell = TrajectoryCell::new(index, TrajectoryCellKind::Tool, name.clone());
         cell.preview_markdown = (!args.is_empty()).then(|| args.to_owned());
         cell.input_detail = Some(args.to_owned());
         cell.call_id = Some(call_id.to_owned());
@@ -765,21 +767,21 @@ fn expand_sub_calls(subs: &[Value], start_index: usize) -> Vec<LaidCell> {
         let name = if settled {
             sub.get_value("call")
                 .filter(|call| !call.is_null())
-                .and_then(|call| string(call, "name"))
-                .unwrap_or(call_id)
+                .and_then(|call| text(call, "name"))
+                .unwrap_or_else(|| call_id.into())
         } else {
-            string(sub, "name").unwrap_or_default()
+            text(sub, "name").unwrap_or_default()
         };
         let args = if settled {
             sub.get_value("call")
                 .filter(|call| !call.is_null())
-                .and_then(|call| string(call, "argsRaw"))
+                .and_then(|call| text(call, "argsRaw"))
         } else {
-            string(sub, "argsRaw")
+            text(sub, "argsRaw")
         };
         let result_preview = settled.then(|| summarize_result(sub));
         index += 1;
-        let mut cell = TrajectoryCell::new(index, TrajectoryCellKind::Subtool, name);
+        let mut cell = TrajectoryCell::new(index, TrajectoryCellKind::Subtool, name.clone());
         if let Some(args) = args {
             cell.preview_markdown = (!args.is_empty()).then(|| args.to_owned());
             cell.input_detail = Some(args.to_owned());
@@ -917,8 +919,8 @@ fn first_cell_index(turn: &TrajectoryTurnModel) -> usize {
         .unwrap_or(usize::MAX)
 }
 
-fn group_description(laid: &[LaidCell]) -> Option<String> {
-    let mut parts = Vec::new();
+fn group_description(laid: &[LaidCell]) -> Option<JsonString> {
+    let mut parts = Vec::<JsonString>::new();
     let mut times = Vec::new();
     for cell in laid {
         let Some(abs_time) = cell.abs_time.filter(|time| time.is_finite()) else {
@@ -937,7 +939,7 @@ fn group_description(laid: &[LaidCell]) -> Option<String> {
     if times.len() >= 2 {
         let minimum = times.iter().copied().fold(f64::INFINITY, f64::min);
         let maximum = times.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        parts.push(format_elapsed_seconds(Some((maximum - minimum) / 1_000.0)));
+        parts.push(format_elapsed_seconds(Some((maximum - minimum) / 1_000.0)).into());
     } else if let Some(time) = times.first()
         && let Some(duration) = laid
             .iter()
@@ -945,9 +947,9 @@ fn group_description(laid: &[LaidCell]) -> Option<String> {
             .and_then(|cell| cell.cell.time_seconds)
             .filter(|duration| duration.is_finite())
     {
-        parts.push(format_elapsed_seconds(Some(duration)));
+        parts.push(format_elapsed_seconds(Some(duration)).into());
     }
-    let mut tools = IndexMap::<String, usize>::new();
+    let mut tools = IndexMap::<JsonString, usize>::new();
     for cell in laid {
         if matches!(cell.cell.kind, TrajectoryCellKind::Tool)
             && let Some(name) = &cell.tool_name
@@ -955,14 +957,11 @@ fn group_description(laid: &[LaidCell]) -> Option<String> {
             *tools.entry(name.clone()).or_default() += 1;
         }
     }
-    parts.extend(tools.into_iter().map(|(name, count)| {
-        if count > 1 {
-            format!("{name}×{count}")
-        } else {
-            name
-        }
+    parts.extend(tools.into_iter().map(|(mut name, count)| {
+        if count > 1 { name.push_str(&format!("×{count}")); }
+        name
     }));
-    (!parts.is_empty()).then(|| parts.join(" "))
+    (!parts.is_empty()).then(|| JsonString::join(&parts, " "))
 }
 
 fn attach_tool_schema(laid: &mut LaidCell, schemas: &IndexMap<String, Value>) {
@@ -973,7 +972,7 @@ fn attach_tool_schema(laid: &mut LaidCell, schemas: &IndexMap<String, Value>) {
     else {
         return;
     };
-    laid.cell.schema_detail = serde_json::to_string_pretty(schema).ok();
+    laid.cell.schema_detail = Some(schema.stringify_pretty().into());
 }
 
 fn attach_usage(cell: &mut TrajectoryCell, usage: Option<&Value>) {
@@ -987,14 +986,14 @@ fn attach_usage(cell: &mut TrajectoryCell, usage: Option<&Value>) {
     cell.think = usage.get_value("reasoningTokens").and_then(Value::as_u64);
 }
 
-fn summarize_assistant_activity(blocks: &[Value]) -> String {
+fn summarize_assistant_activity(blocks: &[Value]) -> JsonString {
     if blocks
         .iter()
         .any(|block| string(block, "kind") == Some("tool-call"))
     {
-        "Tool call only".to_owned()
+        "Tool call only".into()
     } else {
-        String::new()
+        JsonString::default()
     }
 }
 
@@ -1009,15 +1008,15 @@ fn prompt_change_label(change: &Value) -> &'static str {
 
 fn assistant_source_block(block: &Value) -> TrajectorySourceBlock {
     match string(block, "kind") {
-        Some("text") => source_text("text", string(block, "text").unwrap_or_default()),
-        Some("reasoning") => source_text("thinking", string(block, "text").unwrap_or_default()),
+        Some("text") => source_text("text", text(block, "text").unwrap_or_default()),
+        Some("reasoning") => source_text("thinking", text(block, "text").unwrap_or_default()),
         Some("tool-call") => TrajectorySourceBlock {
             kind: "tool-call".to_owned(),
-            content: string(block, "argsRaw").unwrap_or_default().to_owned(),
+            content: text(block, "argsRaw").unwrap_or_default(),
             image_src: None,
             image_alt: None,
             call_id: string(block, "callId").map(ToOwned::to_owned),
-            tool_name: string(block, "name").map(ToOwned::to_owned),
+            tool_name: text(block, "name"),
         },
         Some("image") => TrajectorySourceBlock {
             kind: "image".to_owned(),
@@ -1033,43 +1032,28 @@ fn assistant_source_block(block: &Value) -> TrajectorySourceBlock {
 }
 
 fn source_block(value: &Value) -> TrajectorySourceBlock {
-    let Some(block) = value.as_object() else {
-        return source_text("unknown", &stringify_source_value(value));
-    };
-    let kind = block
-        .get_value("type")
-        .and_then(Value::as_str)
-        .unwrap_or("unknown");
-    if let Some(text) = block.get_value("text").and_then(Value::as_str) {
-        return source_text(
-            if kind == "reasoning" {
-                "thinking"
-            } else {
-                kind
-            },
-            text,
-        );
+    if !value.is_object() {
+        return source_text("unknown", stringify_source_value(value));
     }
-    let image_src = source_image(block);
+    let kind = string(value, "type").unwrap_or("unknown");
+    if let Some(content) = text(value, "text") {
+        return source_text(if kind == "reasoning" { "thinking" } else { kind }, content);
+    }
+    let image_src = source_image(value);
     TrajectorySourceBlock {
         kind: kind.to_owned(),
-        content: image_src
-            .as_ref()
-            .map_or_else(|| stringify_source_value(value), |_| String::new()),
+        content: image_src.as_ref().map_or_else(|| stringify_source_value(value), |_| JsonString::default()),
         image_src,
-        image_alt: block
-            .get_value("alt")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned),
+        image_alt: text(value, "alt"),
         call_id: None,
         tool_name: None,
     }
 }
 
-fn source_text(kind: &str, content: &str) -> TrajectorySourceBlock {
+fn source_text(kind: &str, content: JsonString) -> TrajectorySourceBlock {
     TrajectorySourceBlock {
         kind: kind.to_owned(),
-        content: content.to_owned(),
+        content,
         image_src: None,
         image_alt: None,
         call_id: None,
@@ -1077,20 +1061,20 @@ fn source_text(kind: &str, content: &str) -> TrajectorySourceBlock {
     }
 }
 
-fn source_image(block: &Map<String, Value>) -> Option<String> {
+fn source_image(block: &Value) -> Option<String> {
     let kind = block.get_value("type")?.as_str()?;
     if !kind.to_lowercase().contains("image") {
         return None;
     }
     for key in ["url", "image_url"] {
-        if let Some(value) = block.get(key).and_then(Value::as_str) {
+        if let Some(value) = block.get_value(key).and_then(Value::as_str) {
             return safe_image_source(value);
         }
     }
     if let Some(data) = block.get_value("data").and_then(Value::as_str) {
         let media = ["mimeType", "mediaType", "media_type"]
             .iter()
-            .find_map(|key| block.get(*key).and_then(Value::as_str))
+            .find_map(|key| block.get_value(key).and_then(Value::as_str))
             .unwrap_or("image/png");
         return safe_image_source(
             if data.starts_with("data:") {
@@ -1101,7 +1085,9 @@ fn source_image(block: &Map<String, Value>) -> Option<String> {
             .as_str(),
         );
     }
-    let source = block.get_value("source")?.as_object()?;
+    let source = block
+        .get_value("source")
+        .filter(|value| value.is_object())?;
     if let Some(url) = source.get_value("url").and_then(Value::as_str) {
         return safe_image_source(url);
     }
@@ -1123,8 +1109,8 @@ fn safe_image_source(value: &str) -> Option<String> {
         .map(|_| value.to_owned())
 }
 
-fn stringify_source_value(value: &Value) -> String {
-    serde_json::to_string_pretty(value).unwrap_or_else(|_| js_string(value))
+fn stringify_source_value(value: &Value) -> JsonString {
+    value.stringify_pretty().into()
 }
 
 fn enclosing_user_turn(
@@ -1241,128 +1227,92 @@ fn collect_call_ids(turns: &IndexMap<i64, TurnBucket>) -> IndexSet<String> {
         .collect()
 }
 
-fn assistant_text(blocks: &[Value], kind: &str, streaming: bool) -> String {
-    blocks
-        .iter()
+fn assistant_text(blocks: &[Value], kind: &str, streaming: bool) -> JsonString {
+    JsonString::join(&blocks.iter()
         .filter(|block| string(block, "kind") == Some(kind))
-        .filter_map(|block| string(block, "text"))
+        .filter_map(|block| text(block, "text"))
         .filter(|text| !streaming || !text.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n\n")
+        .collect::<Vec<_>>(), "\n\n")
 }
 
 #[derive(Clone)]
 struct ResultPreview {
-    result: Option<String>,
-    markdown: Option<String>,
+    result: Option<JsonString>,
+    markdown: Option<JsonString>,
 }
 
 fn summarize_result(node: &Value) -> ResultPreview {
     if bool_member(node, "isError") {
         return ResultPreview {
-            result: Some(
-                node.get_value("error")
-                    .and_then(|error| string(error, "code"))
-                    .unwrap_or("error")
-                    .to_owned(),
-            ),
+            result: Some(node.get_value("error").and_then(|error| text(error, "code"))
+                .unwrap_or_else(|| "error".into())),
             markdown: None,
         };
     }
     for block in blocks_member(node, "content") {
         if string(block, "type") == Some("text")
-            && let Some(text) = string(block, "text").filter(|text| !text.is_empty())
+            && let Some(text) = text(block, "text").filter(|text| !text.is_empty())
         {
-            return ResultPreview {
-                result: Some(String::new()),
-                markdown: Some(text.to_owned()),
-            };
+            return ResultPreview { result: Some(JsonString::default()), markdown: Some(text) };
         }
     }
-    ResultPreview {
-        result: Some("No output".to_owned()),
-        markdown: None,
-    }
+    ResultPreview { result: Some("No output".into()), markdown: None }
 }
 
 fn apply_result_preview(cell: &mut TrajectoryCell, preview: Option<&ResultPreview>) {
-    let Some(preview) = preview else {
-        return;
-    };
+    let Some(preview) = preview else { return };
     cell.result.clone_from(&preview.result);
     cell.result_preview_markdown.clone_from(&preview.markdown);
 }
 
 fn result_as_text(cell: &mut TrajectoryCell, preview: Option<&ResultPreview>) {
-    cell.text = preview
-        .and_then(|preview| preview.result.clone())
-        .unwrap_or_default();
+    cell.text = preview.and_then(|preview| preview.result.clone()).unwrap_or_default();
     cell.preview_markdown = preview.and_then(|preview| preview.markdown.clone());
 }
 
-fn summarize_call_into(cell: &mut TrajectoryCell, name: &str, args: &str) {
-    name.clone_into(&mut cell.text);
-    cell.preview_markdown = (!args.is_empty()).then(|| args.to_owned());
+fn summarize_call_into(cell: &mut TrajectoryCell, name: JsonString, args: JsonString) {
+    cell.text = name;
+    cell.preview_markdown = (!args.is_empty()).then_some(args);
 }
 
-fn detail_result(node: &Value) -> String {
+fn detail_result(node: &Value) -> JsonString {
     if bool_member(node, "isError") {
-        return node.get_value("error").map_or_else(
-            || "error".to_owned(),
-            |error| {
-                format!(
-                    "{}: {}",
-                    string(error, "name").unwrap_or_default(),
-                    string(error, "code").unwrap_or_default()
-                )
-            },
-        );
+        return node.get_value("error").map_or_else(|| "error".into(), |error| {
+            JsonString::join(&[text(error, "name").unwrap_or_default(), text(error, "code").unwrap_or_default()], ": ")
+        });
     }
     let content = blocks_member(node, "content");
-    let text = content
-        .iter()
+    let result = JsonString::join(&content.iter()
         .filter(|block| string(block, "type") == Some("text"))
-        .filter_map(|block| string(block, "text"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    if !text.is_empty() {
-        return text;
-    }
-    if content.is_empty()
-        || content.iter().all(|block| {
-            string(block, "type") == Some("text") && string(block, "text").is_none_or(str::is_empty)
-        })
-    {
-        "No output".to_owned()
+        .filter_map(|block| text(block, "text"))
+        .collect::<Vec<_>>(), "\n");
+    if !result.is_empty() { return result }
+    if content.is_empty() || content.iter().all(|block| {
+        string(block, "type") == Some("text") && text(block, "text").is_none_or(|text| text.is_empty())
+    }) {
+        "No output".into()
     } else {
-        serde_json::to_string_pretty(content).unwrap_or_default()
+        Value::array(content).stringify_pretty().into()
     }
 }
 
-fn detail_content(content: &Value) -> String {
-    blocks(content)
-        .iter()
+fn detail_content(content: &Value) -> JsonString {
+    JsonString::join(&blocks(content).iter()
         .filter(|block| string(block, "type") == Some("text"))
-        .filter_map(|block| string(block, "text"))
-        .collect::<Vec<_>>()
-        .join("\n")
+        .filter_map(|block| text(block, "text"))
+        .collect::<Vec<_>>(), "\n")
 }
 
-fn detail_reasoning(content: &Value) -> String {
-    blocks(content)
-        .iter()
+fn detail_reasoning(content: &Value) -> JsonString {
+    JsonString::join(&blocks(content).iter()
         .filter(|block| string(block, "type") == Some("reasoning"))
-        .filter_map(|block| string(block, "text"))
-        .collect::<Vec<_>>()
-        .join("\n")
+        .filter_map(|block| text(block, "text"))
+        .collect::<Vec<_>>(), "\n")
 }
 
-fn preview_content(content: &Value) -> Option<String> {
-    blocks(content)
-        .iter()
-        .find(|block| string(block, "type") == Some("text"))
-        .and_then(|block| string(block, "text"))
-        .map(ToOwned::to_owned)
+fn preview_content(content: &Value) -> Option<JsonString> {
+    blocks(content).iter().find(|block| string(block, "type") == Some("text"))
+        .and_then(|block| text(block, "text"))
 }
 
 fn duration_seconds(later: f64, earlier: Option<f64>) -> Option<f64> {
@@ -1382,46 +1332,47 @@ fn blocks(value: &Value) -> &[Value] {
 
 fn blocks_member<'a>(value: &'a Value, key: &str) -> &'a [Value] {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_default()
 }
 
 fn number(value: &Value, key: &str) -> Option<f64> {
-    value.get(key).and_then(Value::as_f64)
+    value.get_value(key).and_then(Value::as_f64)
 }
 
 fn integer(value: &Value, key: &str) -> Option<i64> {
-    value.get(key).and_then(Value::as_i64)
+    value.get_value(key).and_then(Value::as_i64)
 }
 
 fn safe_seq(value: &Value, key: &str) -> Option<u64> {
-    value.get(key).and_then(Value::as_u64)
+    value.get_value(key).and_then(Value::as_u64)
 }
 
 fn string<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
-    value.get(key).and_then(Value::as_str)
+    value.get_value(key).and_then(Value::as_str)
 }
 
 fn bool_member(value: &Value, key: &str) -> bool {
-    value.get(key).and_then(Value::as_bool) == Some(true)
+    value.get_value(key).and_then(Value::as_bool) == Some(true)
 }
 
 fn display_number(value: &Value, key: &str) -> String {
     value
-        .get(key)
+        .get_value(key)
         .map_or_else(|| "undefined".to_owned(), js_string)
 }
 
 fn js_string(value: &Value) -> String {
-    match value {
-        null().clone() => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::String(value) => value.clone(),
-        Value::array(&values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
-        Value::object(_) => "[object Object]".to_owned(),
+    if let Some(text) = value.as_str() {
+        text.to_owned()
+    } else if let Some(values) = value.as_array() {
+        values.iter().map(js_string).collect::<Vec<_>>().join(",")
+    } else if value.is_object() {
+        "[object Object]".to_owned()
+    } else {
+        value.stringify()
     }
 }
 

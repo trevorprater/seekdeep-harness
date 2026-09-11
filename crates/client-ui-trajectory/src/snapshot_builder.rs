@@ -5,13 +5,13 @@ use std::{
     rc::Rc,
 };
 
+use crate::json_value::{json, null};
 use indexmap::{IndexMap, IndexSet};
 use seekdeep_client_runtime::{
     AssemblerViewBuilder, AssemblerViewDefinition, ConversationAssemblerError,
     ConversationPromptSnapshot, ConversationTimelineSnapshot, ConversationViewNode,
 };
-use seekdeep_lossless_json::JsonValue as Value;
-use crate::json_value::{json, null};
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 
 use crate::{TrajectoryLocation, TrajectoryRequestHeaderState};
 
@@ -119,13 +119,15 @@ impl TrajectorySnapshotBuilder {
     fn snapshot(&self) -> TrajectorySnapshot {
         let mut headers_by_step = IndexMap::<String, TrajectoryRequestHeaderState>::new();
         for contribution in &self.contributions {
-            if contribution.data.get_value("kind").and_then(Value::as_str) != Some("request-header") {
+            if contribution.data.get_value("kind").and_then(Value::as_str) != Some("request-header")
+            {
                 continue;
             }
             let Some(header) = contribution.data.get_value("header").cloned() else {
                 continue;
             };
-            let Ok(header) = crate::json_value::decode::<TrajectoryRequestHeaderState>(header) else {
+            let Ok(header) = crate::json_value::decode::<TrajectoryRequestHeaderState>(header)
+            else {
                 continue;
             };
             if let Some(key) = header_step_key(&header) {
@@ -137,7 +139,7 @@ impl TrajectorySnapshotBuilder {
         let mut event_locations = IndexMap::new();
         let mut requests = Vec::<Value>::new();
         let mut boundaries = Vec::<(f64, i64)>::new();
-        let mut turn_endings = Vec::<(i64, i64, Option<String>)>::new();
+        let mut turn_endings = Vec::<(i64, i64, Option<JsonString>)>::new();
         let mut call_schemas = IndexMap::<String, Value>::new();
         let mut consumed_prompt_changes = IndexSet::<u64>::new();
         let mut previous_header = None::<TrajectoryRequestHeaderState>;
@@ -180,7 +182,8 @@ impl TrajectorySnapshotBuilder {
                             header.map(|header| &header.prompt),
                         ));
                     }
-                    if let Some(value) = data.get_value("partial").filter(|value| !value.is_null()) {
+                    if let Some(value) = data.get_value("partial").filter(|value| !value.is_null())
+                    {
                         partial = Some(value.clone());
                     }
                     if let Some(request) = request {
@@ -229,9 +232,7 @@ impl TrajectorySnapshotBuilder {
                         turn_endings.push((
                             turn,
                             time,
-                            data.get_value("error")
-                                .and_then(Value::as_str)
-                                .map(ToOwned::to_owned),
+                            crate::text_value::member(data, "error"),
                         ));
                     }
                 }
@@ -338,32 +339,39 @@ fn apply_header(
     header: Option<&TrajectoryRequestHeaderState>,
     include_change: bool,
 ) -> Value {
-    let (Some(header), Some(request)) = (header, request.as_object_mut()) else {
+    let Some(header) = header.filter(|_| request.is_object()) else {
         return request;
     };
-    request.insert(
-        "prompt".to_owned(),
-        Value::from_serialize(&header.prompt).unwrap_or(null().clone()),
-    );
-    request.insert(
-        "requestConfig".to_owned(),
-        Value::from_serialize(&header.prompt.config).unwrap_or(null().clone()),
-    );
+    request
+        .insert(
+            "prompt".to_owned(),
+            Value::from_serialize(&header.prompt).unwrap_or(null().clone()),
+        )
+        .expect("request is an object");
+    request
+        .insert(
+            "requestConfig".to_owned(),
+            Value::from_serialize(&header.prompt.config).unwrap_or(null().clone()),
+        )
+        .expect("request is an object");
     if include_change && let Some(change) = &header.change {
-        request.insert(
-            "promptChange".to_owned(),
-            Value::from_serialize(change).unwrap_or(null().clone()),
-        );
+        request
+            .insert(
+                "promptChange".to_owned(),
+                Value::from_serialize(change).unwrap_or(null().clone()),
+            )
+            .expect("request is an object");
     }
-    Value::object(request.clone())
+    request
 }
 
 fn with_request_config(mut node: Value, prompt: Option<&ConversationPromptSnapshot>) -> Value {
-    if let (Some(prompt), Some(node)) = (prompt, node.as_object_mut()) {
+    if let Some(prompt) = prompt.filter(|_| node.is_object()) {
         node.insert(
             "requestConfig".to_owned(),
             Value::from_serialize(&prompt.config).unwrap_or(null().clone()),
-        );
+        )
+        .expect("node is an object");
     }
     node
 }
@@ -435,19 +443,26 @@ fn interrupt_compactions(requests: &mut [Value], boundaries: &[(f64, i64)]) {
         let Some(index) = index else {
             continue;
         };
-        let Some(request) = requests[index].as_object_mut() else {
+        let request = &mut requests[index];
+        if !request.is_object() {
             continue;
-        };
-        request.insert("completedAt".to_owned(), json!(time));
-        request.insert("status".to_owned(), json!("error"));
-        request.insert(
-            "error".to_owned(),
-            json!("Compaction was interrupted before completion."),
-        );
+        }
+        request
+            .insert("completedAt", json!(time))
+            .expect("request is an object");
+        request
+            .insert("status", json!("error"))
+            .expect("request is an object");
+        request
+            .insert(
+                "error".to_owned(),
+                json!("Compaction was interrupted before completion."),
+            )
+            .expect("request is an object");
     }
 }
 
-fn apply_turn_errors(requests: &mut [Value], endings: &[(i64, i64, Option<String>)]) {
+fn apply_turn_errors(requests: &mut [Value], endings: &[(i64, i64, Option<JsonString>)]) {
     let mut last_assistant = IndexMap::<i64, usize>::new();
     for (index, request) in requests.iter().enumerate() {
         if request.get_value("purpose").and_then(Value::as_str) == Some("assistant")
@@ -460,14 +475,21 @@ fn apply_turn_errors(requests: &mut [Value], endings: &[(i64, i64, Option<String
         let (Some(error), Some(index)) = (error, last_assistant.get(turn).copied()) else {
             continue;
         };
-        let Some(request) = requests[index].as_object_mut() else {
+        let request = &mut requests[index];
+        if !request.is_object() {
             continue;
-        };
-        if request.get_value("completedAt").is_none_or(Value::is_null) {
-            request.insert("completedAt".to_owned(), json!(time));
         }
-        request.insert("status".to_owned(), json!("error"));
-        request.insert("error".to_owned(), json!(error));
+        if request.get_value("completedAt").is_none_or(Value::is_null) {
+            request
+                .insert("completedAt", json!(time))
+                .expect("request is an object");
+        }
+        request
+            .insert("status", json!("error"))
+            .expect("request is an object");
+        request
+            .insert("error", json!(error))
+            .expect("request is an object");
     }
 }
 
@@ -501,7 +523,9 @@ fn request_start_seq(request: &Value) -> f64 {
 }
 
 fn node_seq(node: &Value) -> f64 {
-    node.get_value("seq").and_then(Value::as_f64).unwrap_or_default()
+    node.get_value("seq")
+        .and_then(Value::as_f64)
+        .unwrap_or_default()
 }
 
 fn u64_as_f64(value: u64) -> f64 {

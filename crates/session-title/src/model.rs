@@ -161,7 +161,8 @@ mod tests {
             event_type: "session/title".to_owned(),
             seq,
             time: i64::try_from(seq).expect("seq"),
-            data: json!({"title": text, "messageSeqs": [seq], "source": {"kind": "fallback"}}),
+            data: json!({"title": text, "messageSeqs": [seq], "source": {"kind": "fallback"}})
+                .into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

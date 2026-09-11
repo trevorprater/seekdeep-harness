@@ -17,7 +17,9 @@ use seekdeep_attachment::{
 use seekdeep_client_connection::{HttpResponse, RpcResult};
 use seekdeep_cordis::{Context, Plugin};
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionEvent, SessionHeader, SessionId, SurfaceOp},
+    session::{
+        AppendOptions, JsonValue, Session, SessionEvent, SessionHeader, SessionId, SurfaceOp,
+    },
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_host_apiproxy::{
@@ -28,7 +30,9 @@ use seekdeep_host_apiproxy::{
         events::{HostFrame, MuxFrame},
     },
 };
-use seekdeep_llm::{AbortSignal, CallId, ContentBlock, Message, MessageSource, UserMessage};
+use seekdeep_llm::{
+    AbortSignal, CallId, ContentBlock, JsonString, Message, MessageSource, UserMessage,
+};
 use seekdeep_loader::PluginCatalog;
 use seekdeep_scope::ScopeKey;
 use seekdeep_session_persistence::{
@@ -39,9 +43,9 @@ use seekdeep_session_projection::{
     ProjectionDefinition, ProjectionTransition, SessionProjectionRegistry,
 };
 use seekdeep_tools::{
-    ContentToolFixtureOptions, TerminalCallView, TerminalResultView, ToolCallView,
-    ToolPresentationMode, ToolResultView, ToolRuntime, ToolRuntimeConfig,
-    define_content_tool_fixture,
+    ContentToolFixtureOptions, GenericCallView, GenericResultView, TerminalCallView,
+    TerminalResultView, ToolCallView, ToolPresentationMode, ToolResultView, ToolRuntime,
+    ToolRuntimeConfig, define_content_tool_fixture,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -293,9 +297,7 @@ fn append_user(session: &Session, text: &str) -> SessionEvent {
         .append(
             "user/message",
             serde_json::to_value(UserMessage::new(
-                vec![ContentBlock::Text {
-                    text: text.into(),
-                }],
+                vec![ContentBlock::Text { text: text.into() }],
                 MessageSource::user(),
             ))
             .unwrap(),
@@ -395,6 +397,118 @@ async fn tail_history_carries_the_exact_projection_cut_and_older_pages_do_not() 
 #[derive(Deserialize)]
 struct CommandArgs {
     cmd: String,
+}
+
+#[derive(Deserialize)]
+struct RawPresentationArgs {
+    label: JsonString,
+    payload: JsonValue,
+}
+
+#[tokio::test]
+async fn history_and_mux_preserve_raw_presenter_input_output_and_metadata() {
+    let harness = Harness::new();
+    let seen_meta = Arc::new(Mutex::new(None));
+    let observed_meta = seen_meta.clone();
+    let definition = ContentToolFixtureOptions::new(
+        "raw-presenter",
+        "raw presentation fixture",
+        json!({
+            "label": { "type": "string", "required": true },
+            "payload": { "type": "object", "required": true }
+        }),
+        Arc::new(|_: RawPresentationArgs, _| Box::pin(async { Ok(Vec::<ContentBlock>::new()) })),
+    )
+    .present_call(Arc::new(|args| {
+        Some(ToolCallView::Generic(GenericCallView {
+            title: args.label.clone(),
+            kind: None,
+            raw_input: Some(args.payload.clone()),
+            content: None,
+            locations: None,
+        }))
+    }))
+    .present_result(Arc::new(move |_, result| {
+        *observed_meta.lock() = result.meta.clone();
+        Some(ToolResultView::Generic(GenericResultView {
+            title: None,
+            content: Some(result.content.clone()),
+        }))
+    }));
+    harness
+        .tools
+        .register(
+            &harness.context,
+            define_content_tool_fixture(definition).unwrap(),
+        )
+        .unwrap();
+    let runtime = harness.runtime();
+    let session = harness.session("raw-history-views");
+    let signal = AbortSignal::default();
+    let mut mux = runtime.mux(
+        RpcRequest::new(RpcId::new("raw-view-mux"), json!({})),
+        signal.clone(),
+    );
+    let _baseline = mux.next().await.unwrap().unwrap();
+    let call = JsonValue::parse(r#"{"turn":1,"step":1,"callId":"raw-call","name":"raw-presenter","arguments":"{\"label\":\"\\udfff\",\"payload\":{\"\\ud800\":\"\\udfff\",\"number\":1e3}}"}"#.to_owned()).unwrap();
+    session
+        .append_json("tool/call", call, AppendOptions::default())
+        .unwrap();
+    let MuxFrame::SessionEvent {
+        view: Some(call_view),
+        ..
+    } = mux.next().await.unwrap().unwrap().payload
+    else {
+        panic!("raw call view must be published");
+    };
+    assert_eq!(
+        call_view.view["title"]
+            .deserialize::<JsonString>()
+            .unwrap()
+            .utf16_units(),
+        [0xdfff]
+    );
+    assert_eq!(
+        call_view.view["rawInput"].as_raw(),
+        r#"{"\ud800":"\udfff","number":1e3}"#
+    );
+    let result = JsonValue::parse(r#"{"turn":1,"step":1,"message":{"id":"raw-result","role":"user","source":{"kind":"tool","callId":"raw-call"},"content":[{"type":"tool-result","toolCallId":"raw-call","content":[{"type":"text","text":"\ud800"}]}]},"meta":{"\ud800":"\udfff","number":1e3}}"#.to_owned()).unwrap();
+    session
+        .append_json("tool/result", result, AppendOptions::default())
+        .unwrap();
+    let MuxFrame::SessionEvent {
+        view: Some(result_view),
+        ..
+    } = mux.next().await.unwrap().unwrap().payload
+    else {
+        panic!("raw result view must be published");
+    };
+    assert_eq!(
+        result_view.view["content"][0]["text"]
+            .deserialize::<JsonString>()
+            .unwrap()
+            .utf16_units(),
+        [0xd800]
+    );
+    assert_eq!(
+        seen_meta.lock().as_ref().unwrap().as_raw(),
+        r#"{"\ud800":"\udfff","number":1e3}"#
+    );
+    let response = runtime
+        .unary_json(
+            RpcMethod::SessionHistory,
+            RpcRequest::new(RpcId::new("raw-history"), json!({"sessionId":session.id()})),
+            AbortSignal::default(),
+        )
+        .await
+        .unwrap();
+    let RpcResult::Success { value: Some(value) } = response.result else {
+        panic!("raw history must succeed");
+    };
+    assert_eq!(value["events"][0]["view"]["view"], call_view.view);
+    assert_eq!(value["events"][1]["view"]["view"], result_view.view);
+    assert!(JsonValue::from_serialize(&response.rpc_id).is_ok());
+    signal.abort();
 }
 
 #[tokio::test]

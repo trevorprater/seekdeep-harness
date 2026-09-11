@@ -65,7 +65,11 @@ impl CodeRuntimeBackend for ExitCodeBackend {
             .bindings
             .iter()
             .find(|namespace| namespace.global == "tools")
-            .and_then(|namespace| namespace.functions.get(&seekdeep_code_runtime::CodeJsonString::from(EXIT_PLAN_MODE)))
+            .and_then(|namespace| {
+                namespace
+                    .functions
+                    .get(&seekdeep_code_runtime::CodeJsonString::from(EXIT_PLAN_MODE))
+            })
             .ok_or_else(|| anyhow::anyhow!("missing exit_plan_mode binding"))?;
         let value = function(json!({"plan": self.plan}).into()).await?;
         Ok(CodeRunResult {
@@ -264,7 +268,9 @@ fn notices(events: &[SessionEvent]) -> Vec<String> {
                 .content()
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text").to_owned()),
+                    ContentBlock::Text { text } => {
+                        Some(text.as_str().expect("fixture uses scalar text").to_owned())
+                    }
                     _ => None,
                 })
                 .collect::<Vec<_>>()
@@ -643,18 +649,14 @@ fn replay_safe_call_and_result_presenters_match_generic_review_cards() {
             definition.present_result.as_ref().unwrap()(
                 &json!({"plan": "# P"}).into(),
                 &ToolResult {
-                    content: vec![ContentBlock::Text {
-                        text: "ok".into(),
-                    }],
+                    content: vec![ContentBlock::Text { text: "ok".into() }],
                     is_error: false,
                     meta: None,
                 },
             ),
             Some(ToolResultView::Generic(GenericResultView {
                 title: Some("Plan review".to_owned()),
-                content: Some(vec![ContentBlock::Text {
-                    text: "ok".into(),
-                }]),
+                content: Some(vec![ContentBlock::Text { text: "ok".into() }]),
             }))
         );
         harness.dispose().await;

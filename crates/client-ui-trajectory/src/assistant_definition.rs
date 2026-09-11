@@ -2,17 +2,17 @@
 
 use std::rc::Rc;
 
+use crate::json_value::{json, null};
+use indexmap::IndexMap as Map;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, AssistantBlock, ConversationAssemblerError,
     ConversationBoundaryStatus, ConversationLocation, ConversationLocationEvent, ConversationMatch,
     ConversationMatchResult, ConversationMatchRole, ConversationNodeContext,
     ConversationPublication, empty_assistant_block, to_assistant_block,
 };
-use seekdeep_failure_display::display_failure_message;
+use seekdeep_failure_display::display_failure_message_json as display_failure_message;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 use serde::{Deserialize, Serialize};
-use indexmap::IndexMap as Map;
-use seekdeep_lossless_json::JsonValue as Value;
-use crate::json_value::{json, null};
 
 use crate::{TRAJECTORY_TARGET, trajectory_node_at};
 
@@ -38,7 +38,7 @@ struct UsageValue {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RetryValue {
-    message: String,
+    message: JsonString,
     retry: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     max_retries: Option<u64>,
@@ -168,7 +168,7 @@ fn trajectory_turn_end_definition() -> AssemblerNodeDefinition {
                 ));
             }
             let reason = accepted.event.data.get_value("reason").unwrap_or(null());
-            let mut state = Map::from_iter([
+            let mut state = Map::<String, Value>::from_iter([
                 (
                     "turn".to_owned(),
                     accepted
@@ -199,7 +199,7 @@ fn trajectory_turn_end_definition() -> AssemblerNodeDefinition {
                 return Ok(None);
             };
             let seq = required_u64(state, "seq")?;
-            let mut data = Map::from_iter([
+            let mut data = Map::<String, Value>::from_iter([
                 ("kind".to_owned(), json!("turn-end")),
                 (
                     "turn".to_owned(),
@@ -323,51 +323,20 @@ fn update_chunk(
                 )),
             );
         }
-        "text-delta" => {
-            let index =
-                index.ok_or_else(|| ConversationAssemblerError::new("text-delta omitted index"))?;
-            let prefix = state
-                .blocks
-                .get(index)
-                .and_then(Option::as_ref)
-                .and_then(|block| {
-                    (block.get_value("kind").and_then(Value::as_str) == Some("text")).then(|| {
-                        block
-                            .get_value("text")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default()
-                    })
-                })
-                .unwrap_or_default()
-                .to_owned();
-            set_block(
-                &mut state.blocks,
-                index,
-                json!({"kind": "text", "text": format!("{prefix}{}", chunk.get_value("text").and_then(Value::as_str).unwrap_or_default())}),
-            );
-        }
-        "reasoning-delta" => {
-            let index = index
-                .ok_or_else(|| ConversationAssemblerError::new("reasoning-delta omitted index"))?;
-            let prefix = state
-                .blocks
-                .get(index)
-                .and_then(Option::as_ref)
-                .and_then(|block| {
-                    (block.get_value("kind").and_then(Value::as_str) == Some("reasoning")).then(|| {
-                        block
-                            .get_value("text")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default()
-                    })
-                })
-                .unwrap_or_default()
-                .to_owned();
-            set_block(
-                &mut state.blocks,
-                index,
-                json!({"kind": "reasoning", "text": format!("{prefix}{}", chunk.get_value("text").and_then(Value::as_str).unwrap_or_default())}),
-            );
+        "text-delta" | "reasoning-delta" => {
+            let index = index.ok_or_else(|| {
+                ConversationAssemblerError::new(format!("{chunk_type} omitted index"))
+            })?;
+            let kind = if chunk_type == "text-delta" { "text" } else { "reasoning" };
+            let prefix = state.blocks.get(index).and_then(Option::as_ref)
+                .filter(|block| block.get_value("kind").and_then(Value::as_str) == Some(kind))
+                .and_then(|block| crate::text_value::member(block, "text"))
+                .unwrap_or_default();
+            let delta = crate::text_value::member(chunk, "text").unwrap_or_default();
+            set_block(&mut state.blocks, index, json!({
+                "kind": kind,
+                "text": JsonString::concat(&[&prefix, &delta]),
+            }));
         }
         "tool-call-delta" => update_tool_delta(state, chunk, index)?,
         "block-end" => {
@@ -410,37 +379,19 @@ fn update_tool_delta(
         .and_then(Value::as_str)
         == Some("tool-call");
     let prior = is_tool.then_some(previous).flatten();
-    let prior_id = prior
-        .and_then(|block| block.get_value("callId"))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
+    let prior_id = prior.and_then(|block| crate::text_value::member(block, "callId"))
+        .unwrap_or_default();
     let call_id = if prior_id.is_empty() {
-        chunk
-            .get_value("id")
-            .map_or_else(|| "undefined".to_owned(), js_string)
+        chunk.get_value("id").map_or_else(|| JsonString::from("undefined"), crate::json_value::js_text)
     } else {
         prior_id
     };
-    let name = chunk
-        .get_value("name")
-        .and_then(Value::as_str)
-        .or_else(|| {
-            prior
-                .and_then(|block| block.get_value("name"))
-                .and_then(Value::as_str)
-        })
-        .unwrap_or_default()
-        .to_owned();
-    let args = prior
-        .and_then(|block| block.get_value("argsRaw"))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    let delta = chunk
-        .get_value("argumentsDelta")
-        .and_then(Value::as_str)
+    let name = crate::text_value::member(chunk, "name")
+        .or_else(|| prior.and_then(|block| crate::text_value::member(block, "name")))
         .unwrap_or_default();
+    let args = prior.and_then(|block| crate::text_value::member(block, "argsRaw"))
+        .unwrap_or_default();
+    let delta = crate::text_value::member(chunk, "argumentsDelta").unwrap_or_default();
     set_block(
         &mut state.blocks,
         index,
@@ -448,7 +399,7 @@ fn update_tool_delta(
             "kind": "tool-call",
             "callId": call_id,
             "name": name,
-            "argsRaw": format!("{args}{delta}"),
+            "argsRaw": JsonString::concat(&[&args, &delta]),
         }),
     );
     Ok(())
@@ -523,7 +474,7 @@ fn build_assistant_view_node(
     if node.is_none() && partial.is_none() && request.is_none() {
         return Ok(None);
     }
-    let mut data = Map::from_iter([
+    let mut data = Map::<String, Value>::from_iter([
         ("kind".to_owned(), json!("assistant")),
         ("partial".to_owned(), partial.unwrap_or(null().clone())),
     ]);
@@ -602,7 +553,7 @@ fn final_node(
     {
         let message = final_event.data.get_value("message").unwrap_or(null());
         let source = message.get_value("source").unwrap_or(null());
-        let mut node = Map::from_iter([
+        let mut node = Map::<String, Value>::from_iter([
             ("kind".to_owned(), json!("assistant")),
             ("seq".to_owned(), json!(final_event.seq)),
             (
@@ -675,7 +626,7 @@ fn assistant_request(
         .cloned()
         .or_else(|| boundary.map(|(_, time)| json!(time)))
         .unwrap_or(null().clone());
-    let mut request = Map::from_iter([
+    let mut request = Map::<String, Value>::from_iter([
         ("purpose".to_owned(), json!("assistant")),
         ("startSeq".to_owned(), json!(state.start_seq)),
         ("turn".to_owned(), json!(state.turn)),
@@ -775,41 +726,41 @@ fn compact_blocks(blocks: &[Option<Value>]) -> Vec<Value> {
 }
 
 fn has_visible_content(blocks: &[Value]) -> bool {
-    blocks
-        .iter()
-        .any(|block| match block.get_value("kind").and_then(Value::as_str) {
+    blocks.iter().any(
+        |block| match block.get_value("kind").and_then(Value::as_str) {
             Some("tool-call") => false,
             Some("text" | "reasoning") => block
                 .get_value("text")
-                .and_then(Value::as_str)
+                .and_then(|value| value.deserialize::<JsonString>().ok())
                 .is_some_and(|text| !text.trim().is_empty()),
             _ => true,
-        })
+        },
+    )
 }
 
 fn has_interruption_evidence(blocks: &[Value]) -> bool {
-    blocks
-        .iter()
-        .any(|block| match block.get_value("kind").and_then(Value::as_str) {
+    blocks.iter().any(
+        |block| match block.get_value("kind").and_then(Value::as_str) {
             Some("text" | "reasoning") => block
                 .get_value("text")
-                .and_then(Value::as_str)
+                .and_then(|value| value.deserialize::<JsonString>().ok())
                 .is_some_and(|text| !text.trim().is_empty()),
             _ => true,
-        })
+        },
+    )
 }
 
 fn is_token_delta(chunk: &Value) -> bool {
     match chunk.get_value("type").and_then(Value::as_str) {
         Some("text-delta" | "reasoning-delta") => chunk
             .get_value("text")
-            .and_then(Value::as_str)
+            .and_then(|value| value.deserialize::<JsonString>().ok())
             .is_some_and(|text| !text.is_empty()),
         Some("tool-call-delta") => {
             chunk.get_value("name").is_some_and(|name| !name.is_null())
                 || chunk
                     .get_value("argumentsDelta")
-                    .and_then(Value::as_str)
+                    .and_then(|value| value.deserialize::<JsonString>().ok())
                     .is_some_and(|delta| !delta.is_empty())
         }
         _ => false,
@@ -847,46 +798,47 @@ fn set_block(blocks: &mut Vec<Option<Value>>, index: usize, block: Value) {
 }
 
 fn copy_present(output: &mut Map<String, Value>, input: &Value, key: &str) {
-    if let Some(value) = input.get(key) {
+    if let Some(value) = input.get_value(key) {
         output.insert(key.to_owned(), value.clone());
     }
 }
 
 fn required_i64(value: &Value, key: &str) -> Result<i64, ConversationAssemblerError> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_i64)
         .ok_or_else(|| ConversationAssemblerError::new(format!("assistant event omitted {key}")))
 }
 
 fn required_number(value: &Value, key: &str) -> Result<f64, ConversationAssemblerError> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_f64)
         .ok_or_else(|| ConversationAssemblerError::new(format!("assistant event omitted {key}")))
 }
 
 fn required_u64(value: &Value, key: &str) -> Result<u64, ConversationAssemblerError> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_u64)
         .ok_or_else(|| ConversationAssemblerError::new(format!("assistant event omitted {key}")))
 }
 
 fn js_member_string(value: &Value, key: &str) -> String {
     value
-        .get(key)
+        .get_value(key)
         .map_or_else(|| "undefined".to_owned(), js_string)
 }
 
 fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        null().clone() => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::array(&values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
-        Value::object(_) => "[object Object]".to_owned(),
+    if let Some(text) = value.as_str() {
+        text.to_owned()
+    } else if let Some(values) = value.as_array() {
+        values.iter().map(js_string).collect::<Vec<_>>().join(",")
+    } else if value.is_object() {
+        "[object Object]".to_owned()
+    } else {
+        value.stringify()
     }
 }
 
@@ -897,7 +849,8 @@ fn encode(state: &AssistantState) -> Result<Rc<Value>, ConversationAssemblerErro
 }
 
 fn decode(value: &Value) -> Result<AssistantState, ConversationAssemblerError> {
-    value.deserialize()
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 

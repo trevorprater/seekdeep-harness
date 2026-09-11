@@ -6,12 +6,12 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use seekdeep_commands::COMMANDS;
+use seekdeep_core::session::JsonValue;
 use seekdeep_llm::AbortSignal;
 use seekdeep_permission_presets::{CUSTOM_PRESET, PermissionSelect};
 use seekdeep_sandbox::SandboxMode;
 use seekdeep_sandbox_policy::set_sandbox_mode;
 use seekdeep_session_projection::SESSION_PROJECTIONS;
-use seekdeep_core::session::JsonValue;
 use serde_json::json;
 
 use support::{MountOptions, agent, base, create_session, default_config, mount, mount_permission};
@@ -22,13 +22,13 @@ fn permission_value(
 ) -> PermissionSelect {
     let projections = harness.context.get(SESSION_PROJECTIONS).unwrap();
     projections
-            .snapshot(session)
-            .unwrap()
-            .values
-            .get("permissions")
-            .expect("permissions projection")
-            .deserialize()
-            .unwrap()
+        .snapshot(session)
+        .unwrap()
+        .values
+        .get("permissions")
+        .expect("permissions projection")
+        .deserialize()
+        .unwrap()
 }
 
 #[tokio::test]

@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
+use seekdeep_lossless_json::JsonString;
 
 use crate::{TrajectoryCell, TrajectoryCellKind, format_duration_millis};
 
@@ -13,7 +14,7 @@ pub struct TrajectoryGroupModel {
     /// Display title.
     pub title: String,
     /// Optional wall-span and Tool histogram.
-    pub description: Option<String>,
+    pub description: Option<JsonString>,
     /// Records in projection order.
     pub cells: Vec<TrajectoryCell>,
 }
@@ -67,7 +68,7 @@ pub struct TrajectoryTimelineSpan {
     /// Semantic kind.
     pub kind: TrajectoryCellKind,
     /// Display label.
-    pub label: String,
+    pub label: JsonString,
     /// Stable three-lane assignment.
     pub lane: u8,
 }

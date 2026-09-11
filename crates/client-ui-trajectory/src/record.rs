@@ -1,8 +1,7 @@
 //! Shared trajectory record data and formatting contracts.
 
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 use serde::{Deserialize, Serialize};
-use seekdeep_lossless_json::JsonValue as Value;
-use crate::json_value::{json, null};
 
 /// Closed set of trajectory record kinds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,15 +65,15 @@ pub struct TrajectorySourceBlock {
     #[serde(rename = "type")]
     pub kind: String,
     /// Complete text or serialized content.
-    pub content: String,
+    pub content: JsonString,
     /// Safe image source, when present.
     pub image_src: Option<String>,
     /// Accessible image alternative.
-    pub image_alt: Option<String>,
+    pub image_alt: Option<JsonString>,
     /// Tool-call correlation identity.
     pub call_id: Option<String>,
     /// Tool name.
-    pub tool_name: Option<String>,
+    pub tool_name: Option<JsonString>,
 }
 
 /// Data contract for one trajectory record.
@@ -88,9 +87,9 @@ pub struct TrajectoryCell {
     /// Closed semantic kind.
     pub kind: TrajectoryCellKind,
     /// Non-Markdown summary.
-    pub text: String,
+    pub text: JsonString,
     /// Raw Markdown summary source.
-    pub preview_markdown: Option<String>,
+    pub preview_markdown: Option<JsonString>,
     /// Whether this user record opens a turn.
     pub opens_turn: Option<bool>,
     /// Source event sequence.
@@ -100,15 +99,15 @@ pub struct TrajectoryCell {
     /// Separator-only request boundary.
     pub request_only: Option<bool>,
     /// Complete input detail.
-    pub input_detail: Option<String>,
+    pub input_detail: Option<JsonString>,
     /// Complete prompt state.
     pub prompt_detail: Option<Value>,
     /// Replaced prompt state.
     pub previous_prompt_detail: Option<Value>,
     /// Complete output detail.
-    pub output_detail: Option<String>,
+    pub output_detail: Option<JsonString>,
     /// Complete reasoning detail.
-    pub thinking_detail: Option<String>,
+    pub thinking_detail: Option<JsonString>,
     /// Original input blocks.
     #[serde(default)]
     pub source_blocks: Vec<TrajectorySourceBlock>,
@@ -116,13 +115,13 @@ pub struct TrajectoryCell {
     #[serde(default)]
     pub output_blocks: Vec<TrajectorySourceBlock>,
     /// Call-time model-visible schema.
-    pub schema_detail: Option<String>,
+    pub schema_detail: Option<JsonString>,
     /// Assistant timing and usage facts.
     pub assistant_metrics: Option<AssistantMetricDetail>,
     /// Tool result summary.
-    pub result: Option<String>,
+    pub result: Option<JsonString>,
     /// Raw Markdown result preview.
-    pub result_preview_markdown: Option<String>,
+    pub result_preview_markdown: Option<JsonString>,
     /// Tool-call correlation identity.
     pub call_id: Option<String>,
     /// Tool failure state.
@@ -148,7 +147,7 @@ pub struct TrajectoryCell {
 impl TrajectoryCell {
     /// Creates the minimal ordinary record shape used by projections.
     #[must_use]
-    pub fn new(index: usize, kind: TrajectoryCellKind, text: impl Into<String>) -> Self {
+    pub fn new(index: usize, kind: TrajectoryCellKind, text: impl Into<JsonString>) -> Self {
         Self {
             index,
             record_id: None,

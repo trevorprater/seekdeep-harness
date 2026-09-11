@@ -1,6 +1,7 @@
 //! Durable message-source projection for non-user transcript context.
 
-use serde_json::{Map, Value};
+use seekdeep_lossless_json::{JsonString, JsonValue};
+use serde_json::Value;
 
 /// Model-facing role of one logged context message.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,6 +19,15 @@ pub struct ContextProvenanceView {
     pub role: ContextRole,
     /// Human-facing producer name.
     pub label: Option<String>,
+}
+
+/// Role and exact UTF-16 producer label shown for one durable source.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ContextProvenanceJsonView {
+    /// Model-facing role.
+    pub role: ContextRole,
+    /// Human-facing producer name, preserving all source code units.
+    pub label: Option<JsonString>,
 }
 
 /// Context forms with dedicated presentation in this Client version.
@@ -40,37 +50,41 @@ pub enum KnownContextForm {
 /// Projects one merge-extensible durable source into role and producer label.
 #[must_use]
 pub fn context_provenance(source: &Value) -> ContextProvenanceView {
-    let Some(record) = source.as_object() else {
+    let view = context_provenance_json(&source.clone().into());
+    ContextProvenanceView {
+        role: view.role,
+        label: view
+            .label
+            .and_then(|label| label.as_str().map(str::to_owned)),
+    }
+}
+
+/// Projects a durable source without narrowing its labels or unrelated JSON fields.
+#[must_use]
+pub fn context_provenance_json(source: &JsonValue) -> ContextProvenanceJsonView {
+    let Some(kind) = read_string(source, "kind") else {
         return unnamed();
     };
-    let Some(kind) = read_string(record, "kind") else {
-        return unnamed();
-    };
-    match kind {
-        "session-reference" => ContextProvenanceView {
+    match kind.as_str() {
+        Some("session-reference") => ContextProvenanceJsonView {
             role: ContextRole::Recall,
-            label: joined(&collect(record, "references", "label"))
-                .or_else(|| Some(kind.to_owned())),
+            label: joined(&collect(source, "references", "label")).or(Some(kind)),
         },
-        "agent-instructions" => ContextProvenanceView {
+        Some("agent-instructions") => ContextProvenanceJsonView {
             role: ContextRole::Inject,
-            label: joined(&collect(record, "changes", "path")).or_else(|| Some(kind.to_owned())),
+            label: joined(&collect(source, "changes", "path")).or(Some(kind)),
         },
-        "plugin" => ContextProvenanceView {
+        Some("plugin") => ContextProvenanceJsonView {
             role: ContextRole::Inject,
-            label: read_string(record, "plugin")
-                .map(str::to_owned)
-                .or_else(|| Some(kind.to_owned())),
+            label: read_string(source, "plugin").or(Some(kind)),
         },
-        "skill-invocation" => ContextProvenanceView {
+        Some("skill-invocation") => ContextProvenanceJsonView {
             role: ContextRole::Inject,
-            label: read_string(record, "name")
-                .map(str::to_owned)
-                .or_else(|| Some(kind.to_owned())),
+            label: read_string(source, "name").or(Some(kind)),
         },
-        _ => ContextProvenanceView {
+        _ => ContextProvenanceJsonView {
             role: ContextRole::Inject,
-            label: Some(kind.to_owned()),
+            label: Some(kind),
         },
     }
 }
@@ -78,10 +92,13 @@ pub fn context_provenance(source: &Value) -> ContextProvenanceView {
 /// Reads a known presentation form, returning `None` for absent or future values.
 #[must_use]
 pub fn context_form(source: &Value) -> Option<KnownContextForm> {
-    match source
-        .as_object()
-        .and_then(|record| read_string(record, "form"))
-    {
+    context_form_json(&source.clone().into())
+}
+
+/// Reads a known form while retaining opaque source fields outside the projection.
+#[must_use]
+pub fn context_form_json(source: &JsonValue) -> Option<KnownContextForm> {
+    match source.get_value("form").and_then(JsonValue::as_str) {
         Some("instructions") => Some(KnownContextForm::Instructions),
         Some("catalog") => Some(KnownContextForm::Catalog),
         Some("snapshot") => Some(KnownContextForm::Snapshot),
@@ -92,33 +109,35 @@ pub fn context_form(source: &Value) -> Option<KnownContextForm> {
     }
 }
 
-fn unnamed() -> ContextProvenanceView {
-    ContextProvenanceView {
+fn unnamed() -> ContextProvenanceJsonView {
+    ContextProvenanceJsonView {
         role: ContextRole::Inject,
         label: None,
     }
 }
 
-fn read_string<'a>(record: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
-    record.get(key)?.as_str().filter(|value| !value.is_empty())
+fn read_string(record: &JsonValue, key: &str) -> Option<JsonString> {
+    record
+        .get_value(key)?
+        .deserialize::<JsonString>()
+        .ok()
+        .filter(|value| !value.is_empty())
 }
 
-fn collect(record: &Map<String, Value>, member: &str, field: &str) -> Vec<String> {
-    let Some(entries) = record.get(member).and_then(Value::as_array) else {
+fn collect(record: &JsonValue, member: &str, field: &str) -> Vec<JsonString> {
+    let Some(entries) = record.get_value(member).and_then(JsonValue::as_array) else {
         return Vec::new();
     };
     let mut seen = Vec::new();
     for entry in entries {
-        let value = entry
-            .as_object()
-            .and_then(|entry| read_string(entry, field));
+        let value = read_string(entry, field);
         if let Some(value) = value.filter(|value| !seen.iter().any(|seen| seen == value)) {
-            seen.push(value.to_owned());
+            seen.push(value);
         }
     }
     seen
 }
 
-fn joined(names: &[String]) -> Option<String> {
-    (!names.is_empty()).then(|| names.join(", "))
+fn joined(names: &[JsonString]) -> Option<JsonString> {
+    (!names.is_empty()).then(|| JsonString::join(names, ", "))
 }

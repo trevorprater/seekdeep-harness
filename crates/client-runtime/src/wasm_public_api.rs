@@ -2,14 +2,13 @@
 
 use std::collections::BTreeMap;
 
-use js_sys::{Array, Function, Map, Object, Reflect};
+use js_sys::{Array, Function, JsString, Map, Object, Reflect};
 use seekdeep_identity::SessionId;
 use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 
 use crate::{
     SubagentSessionSummary, conversation_context_key, index_subagent_descendants,
-    wasm_session::{empty_chat_snapshot, js_to_json},
-    workspace_title_of,
+    wasm_session::empty_chat_snapshot, workspace_title_of,
 };
 
 const PUBLIC_WASM_GLOBAL: &str = "__seekdeep_client_runtime_wasm";
@@ -183,10 +182,10 @@ pub fn index_subagent_descendants_js(summaries: JsValue) -> Result<Map, JsValue>
 /// Returns values that cannot cross the JSON-compatible browser boundary.
 #[wasm_bindgen(js_name = displayFailureMessage)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn display_failure_message_js(failure: JsValue) -> Result<String, JsValue> {
-    Ok(seekdeep_failure_display::display_failure_message(
-        &js_to_json(&failure)?,
-    ))
+pub fn display_failure_message_js(failure: JsValue) -> Result<JsString, JsValue> {
+    let failure = crate::wasm_value_bridge::js_to_lossless_value(&failure)?;
+    let message = seekdeep_failure_display::display_failure_message_json(&failure);
+    js_sys::JSON::parse(message.as_raw())?.dyn_into()
 }
 
 /// Creates the reference shape used for `EMPTY_CHAT_SNAPSHOT` compatibility.

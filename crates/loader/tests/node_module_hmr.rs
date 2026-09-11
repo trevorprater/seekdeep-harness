@@ -485,3 +485,44 @@ async fn programmatic_file_fibers_join_reload_batches_and_retain_their_owners() 
     composition.dispose().await?;
     Ok(())
 }
+
+#[tokio::test]
+async fn equal_entry_ids_in_separate_includes_reload_their_exact_fibers() -> anyhow::Result<()> {
+    let temporary = tempfile::tempdir()?;
+    let root = temporary.path();
+    write_fixture(root)?;
+    for service in ["first", "second"] {
+        std::fs::write(
+            root.join(format!("{service}.yml")),
+            format!("- id: shared\n  name: ./first.mjs\n  config: {{ service: {service} }}\n"),
+        )?;
+    }
+    let context = Context::new();
+    let composition = PluginCatalog::new()
+        .load_yaml_at(
+            &context,
+            "- id: first-include\n  name: cordis:include\n  config: { path: ./first.yml }\n- id: second-include\n  name: cordis:include\n  config: { path: ./second.yml }\n",
+            root.join("cordis.yml"),
+        )
+        .await?;
+    assert_eq!(context.get(FIRST).unwrap()["value"], "old");
+    assert_eq!(context.get(SECOND).unwrap()["value"], "old");
+    std::fs::write(root.join("dep.mjs"), dependency("new", false))?;
+    assert_eq!(
+        composition.reload_module(root.join("dep.mjs")).await?,
+        HostHmrOutcome::Reloaded(vec![EntryId::new("shared")?, EntryId::new("shared")?])
+    );
+    context.get(LOADER).unwrap().wait().await?;
+    assert_eq!(context.get(FIRST).unwrap()["value"], "new");
+    assert_eq!(context.get(SECOND).unwrap()["value"], "new");
+    assert_eq!(context.get(FIRST).unwrap()["activations"], 3);
+    assert_eq!(context.get(SECOND).unwrap()["activations"], 4);
+    assert_eq!(
+        std::fs::read_to_string(root.join("disposals.txt"))?,
+        "first,second,"
+    );
+    composition.dispose().await?;
+    assert!(context.get(FIRST).is_none());
+    assert!(context.get(SECOND).is_none());
+    Ok(())
+}

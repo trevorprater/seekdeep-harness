@@ -145,6 +145,26 @@ fn context_form_accepts_six_known_values_and_degrades_future_or_malformed_values
     }
 }
 
+#[test]
+fn raw_context_projection_preserves_labels_and_ignores_opaque_metadata() {
+    use seekdeep_lossless_json::{JsonString, JsonValue};
+
+    let source = JsonValue::parse(r#"{"kind":"session-reference","form":"recall","references":[{"label":"\ud800"},{"label":"\udfff"},{"label":"\ud800"}],"opaque":{"\ud800":"\udfff"}}"#.to_owned()).unwrap();
+    let view = context_provenance_json(&source);
+    assert_eq!(view.role, ContextRole::Recall);
+    assert_eq!(
+        view.label.unwrap().utf16_units(),
+        &[0xd800, 0x2c, 0x20, 0xdfff]
+    );
+    assert_eq!(context_form_json(&source), Some(KnownContextForm::Recall));
+    let source = JsonValue::parse(r#"{"kind":"\ud800","form":"\udfff"}"#.to_owned()).unwrap();
+    assert_eq!(
+        context_provenance_json(&source).label,
+        Some(JsonString::from_utf16(&[0xd800]))
+    );
+    assert_eq!(context_form_json(&source), None);
+}
+
 fn summary(id: &str, updated_at: i64, parent: Option<&str>) -> TitledSessionSummary {
     TitledSessionSummary {
         session_id: SessionId::new(id),

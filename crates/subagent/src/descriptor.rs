@@ -1,7 +1,7 @@
 //! The durable subagent-child descriptor: the versioned, model-hidden
 //! subagent/descriptor event.
 
-use seekdeep_core::session::SessionEvent;
+use seekdeep_core::session::{JsonRef, SessionEvent};
 use seekdeep_tools::ToolRestriction;
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeMap as _};
 
@@ -190,10 +190,7 @@ pub fn fold_subagent_descriptor(
     else {
         return Ok(None);
     };
-    let version = event
-        .data
-        .get("version")
-        .and_then(|version| version.as_u64());
+    let version = event.data.get("version").and_then(JsonRef::as_u64);
     if version != Some(u64::from(SUBAGENT_DESCRIPTOR_VERSION)) {
         return Ok(None);
     }

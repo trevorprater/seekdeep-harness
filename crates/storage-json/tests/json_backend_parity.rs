@@ -4,6 +4,7 @@ use std::{path::Path, sync::Arc};
 
 use seekdeep_cordis::Context;
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_storage::{
     KvFacet, KvUnit, KvUnitDescriptor, STORAGE, Storage, StorageBackend, StorageError,
     StorageErrorCode, storage_backend_service_key,
@@ -11,6 +12,69 @@ use seekdeep_storage::{
 use seekdeep_storage_json::{JsonStorageBackend, mount, plugin, register_invariant};
 use serde_json::json;
 use tempfile::TempDir;
+
+#[tokio::test]
+async fn lossless_values_survive_real_json_reopen_with_source_stringify_bytes() {
+    let mut value = JsonValue::parse(
+        include_str!("../../storage/tests/fixtures/lossless-payload.json").to_owned(),
+    )
+    .unwrap();
+    value
+        .insert(
+            "deep",
+            JsonValue::parse(format!("{}\"\\ud800\"{}", "[".repeat(512), "]".repeat(512))).unwrap(),
+        )
+        .unwrap();
+    let expected = std::process::Command::new("node")
+        .args([
+            "-e",
+            "const value=JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify({unit:{name:'shape',version:1},global:value,tables:{t:{row:value}}},null,2)+'\\n');",
+        ])
+        .arg(value.as_raw())
+        .output()
+        .unwrap();
+    assert!(expected.status.success(), "{:?}", expected.stderr);
+
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("shape.json");
+    let backend = JsonStorageBackend::new(root.path());
+    let unit = kv(&backend).open(shape()).await.unwrap();
+    unit.put_record("t".to_owned(), "row".to_owned(), value.clone())
+        .await
+        .unwrap();
+    unit.set_global(value.clone()).await.unwrap();
+    let memory = unit.load_all().await.unwrap();
+    assert_eq!(memory.tables["t"]["row"].as_raw(), value.as_raw());
+    backend.close().await.unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), expected.stdout);
+
+    let reopened = JsonStorageBackend::new(root.path());
+    let unit = kv(&reopened).open(shape()).await.unwrap();
+    let snapshot = unit.load_all().await.unwrap();
+    let stored = &snapshot.tables["t"]["row"];
+    assert_eq!(stored, &snapshot.global);
+    assert_eq!(stored["high"].to_utf16(), Some(vec![0xd800]));
+    assert_eq!(stored["low"].to_utf16(), Some(vec![0xdfff]));
+    assert_eq!(stored["pair"].to_utf16(), Some(vec![0xd83d, 0xde00]));
+    assert_eq!(stored["literal"].as_str(), Some("\\ud800"));
+    assert_eq!(stored["duplicate"], "last");
+    assert_eq!(stored["numbers"][4].as_raw(), "9007199254740992");
+    assert!(stored["numbers"][5].is_null());
+    assert_eq!(stored["deep"].tokens().count(), 1_025);
+    let surrogate_property = stored
+        .object_entries()
+        .unwrap()
+        .into_iter()
+        .find(|(key, _)| key.to_utf16() == Some(vec![0xd800]))
+        .unwrap()
+        .1;
+    assert_eq!(
+        surrogate_property.object_entries().unwrap()[0].0.to_utf16(),
+        Some(vec![0xdfff])
+    );
+    assert!(stored.as_serde_json().is_none());
+    reopened.close().await.unwrap();
+}
 
 fn descriptor() -> KvUnitDescriptor {
     KvUnitDescriptor {

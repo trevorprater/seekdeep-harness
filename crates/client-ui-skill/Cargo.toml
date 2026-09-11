@@ -13,6 +13,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 seekdeep-client-ui-tool = { path = "../client-ui-tool" }
 seekdeep-identity = { path = "../identity" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 serde.workspace = true
 serde_json.workspace = true
 

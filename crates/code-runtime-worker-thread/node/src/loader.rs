@@ -579,6 +579,12 @@ pub(crate) fn error_wire(error: &JsValue) -> Value {
 }
 
 fn receive(realm: &Rc<RefCell<Realm>>, message: Value) {
+    if let Some(messages) = message.get("batch").and_then(Value::as_array) {
+        for message in messages {
+            receive(realm, message.clone());
+        }
+        return;
+    }
     if let Some(call) = message["call"].as_u64() {
         let pending = realm.borrow_mut().pending.remove(&call);
         if let Some((resolve, reject)) = pending {

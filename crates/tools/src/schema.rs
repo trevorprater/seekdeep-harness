@@ -450,11 +450,6 @@ where
     Ok(definition)
 }
 
-fn decode_typed<T: DeserializeOwned>(value: &Value, boundary: &str) -> anyhow::Result<T> {
-    serde_json::from_value(value.clone())
-        .map_err(|error| anyhow::anyhow!("{boundary} does not match its Rust type: {error}"))
-}
-
 fn decode_typed_json<T: DeserializeOwned>(
     value: &CodeJsonValue,
     boundary: &str,
@@ -1189,10 +1184,12 @@ mod tests {
             }))
         }));
         let definition = define_tool(options).expect("definition");
-        assert!(definition.present_call.as_ref().expect("present call")(&json!({})).is_none());
+        assert!(
+            definition.present_call.as_ref().expect("present call")(&json!({}).into()).is_none()
+        );
         assert!(
             definition.present_result.as_ref().expect("present result")(
-                &json!({"wrong": 1}),
+                &json!({"wrong": 1}).into(),
                 &ToolResult {
                     content: Vec::new(),
                     is_error: false,

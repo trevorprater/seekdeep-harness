@@ -1,8 +1,8 @@
 //! Model-request inspection contracts reconstructed from durable Session events.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use seekdeep_lossless_json::{JsonString, JsonValue as Value};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Provider request configuration recorded on an Assistant lifecycle.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -128,7 +128,7 @@ impl<'de> Deserialize<'de> for OptionalJson {
     where
         D: Deserializer<'de>,
     {
-        Value::deserialize(deserializer).map(Self::Present)
+        <Value as Deserialize>::deserialize(deserializer).map(Self::Present)
     }
 }
 
@@ -254,14 +254,14 @@ impl<'de> Deserialize<'de> for RequestView {
             raw_output: Option<Vec<Value>>,
         }
 
-        let value = Value::deserialize(deserializer)?;
+        let value = <Value as Deserialize>::deserialize(deserializer)?;
         let purpose = value
             .get_value("purpose")
             .and_then(Value::as_str)
             .ok_or_else(|| serde::de::Error::missing_field("purpose"))?;
-        let base = Box::new(value.deserialize().map_err(serde::de::Error::custom)?);
         match purpose {
             "assistant" => {
+                let base = Box::new(value.deserialize().map_err(serde::de::Error::custom)?);
                 let fields: AssistantFields =
                     value.deserialize().map_err(serde::de::Error::custom)?;
                 Ok(Self::Assistant {
@@ -276,6 +276,7 @@ impl<'de> Deserialize<'de> for RequestView {
                 })
             }
             "compaction" => {
+                let base = Box::new(value.deserialize().map_err(serde::de::Error::custom)?);
                 let fields: CompactionFields =
                     value.deserialize().map_err(serde::de::Error::custom)?;
                 Ok(Self::Compaction {

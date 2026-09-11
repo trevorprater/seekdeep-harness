@@ -231,6 +231,43 @@ fn search_meta(result: &WebSearchResult) -> SearchMeta {
     }
 }
 
+fn search_meta_from_result(result: &ToolResult) -> Option<SearchMeta> {
+    let meta = result.meta.as_ref()?;
+    let sources = meta["sources"]
+        .as_array()?
+        .iter()
+        .map(|source| {
+            Some(WebSource {
+                url: source["url"].deserialize().ok()?,
+                title: source
+                    .get("title")
+                    .map(|value| value.deserialize::<String>())
+                    .transpose()
+                    .ok()?,
+                snippet: source
+                    .get("snippet")
+                    .map(|value| value.deserialize::<String>())
+                    .transpose()
+                    .ok()?,
+                published_at: source
+                    .get("publishedAt")
+                    .map(|value| value.deserialize::<String>())
+                    .transpose()
+                    .ok()?,
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(SearchMeta {
+        sources,
+        answer: meta
+            .get("answer")
+            .map(|value| value.deserialize::<String>())
+            .transpose()
+            .ok()?,
+        truncated: meta.get("truncated")?.as_bool()?,
+    })
+}
+
 fn utf16_prefix(text: &str, max_units: usize) -> (String, bool) {
     let units = text.encode_utf16().collect::<Vec<_>>();
     if units.len() <= max_units {
@@ -529,21 +566,13 @@ fn search_definition(
             if result.is_error {
                 return None;
             }
-            let meta = result.meta.as_ref()?;
-            let sources = meta.get("sources")?.deserialize().ok()?;
-            let answer = meta
-                .get("answer")
-                .map(|value| value.deserialize::<Option<String>>())
-                .transpose()
-                .ok()?
-                .flatten();
-            let truncated = meta.get("truncated")?.as_bool()?;
+            let meta = search_meta_from_result(result)?;
             Some(ToolResultView::Web(WebResultView::Search(
                 WebSearchResultView {
                     title: Some(args.query.clone()),
-                    sources,
-                    answer,
-                    truncated,
+                    sources: meta.sources,
+                    answer: meta.answer,
+                    truncated: meta.truncated,
                 },
             )))
         })),
@@ -625,10 +654,16 @@ fn fetch_definition(
                 return None;
             }
             let meta = result.meta.as_ref()?;
+            let status_code = meta.get("statusCode")?.as_f64()?;
+            if status_code.fract() != 0.0 || !(0.0..=f64::from(u16::MAX)).contains(&status_code) {
+                return None;
+            }
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let status_code = status_code as u16;
             Some(ToolResultView::Web(WebResultView::Fetch(WebFetchResultView {
                 title: Some(args.url.clone()),
                 url: meta.get("url")?.deserialize().ok()?,
-                status_code: meta.get("statusCode")?.deserialize().ok()?,
+                status_code,
                 truncated: meta.get("truncated")?.as_bool()?,
             })))
         })),

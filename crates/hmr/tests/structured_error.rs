@@ -147,7 +147,6 @@ fn start_watcher(context: &Context, root: &Path) -> anyhow::Result<Arc<HostHmrSe
                 ("usePolling".to_owned(), json!(true)),
                 ("interval".to_owned(), json!(80)),
             ]),
-            ..Config::default()
         },
         Arc::new(|| Box::pin(async { Ok(()) })),
     )

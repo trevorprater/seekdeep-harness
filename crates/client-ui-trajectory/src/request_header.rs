@@ -2,15 +2,15 @@
 
 use std::rc::Rc;
 
+use crate::json_value::{json, null};
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationLocation,
     ConversationLocationEvent, ConversationMatchResult, ConversationMatchRole,
     ConversationNodeContext, ConversationPromptSnapshot, ConversationViewNode,
     ConversationViewPlacement, RequestPromptChange, RequestPromptChangeKind,
 };
-use serde::{Deserialize, Serialize};
 use seekdeep_lossless_json::JsonValue as Value;
-use crate::json_value::{json, null};
+use serde::{Deserialize, Serialize};
 
 /// Stable Definition kind.
 pub const TRAJECTORY_REQUEST_HEADER_KIND: &str = "trajectory-request-header";
@@ -186,7 +186,7 @@ fn request_prompt(
     let header = event
         .data
         .get_value("header")
-        .and_then(Value::as_object)
+        .filter(|value| value.is_object())
         .ok_or_else(|| ConversationAssemblerError::new("request/header omitted header"))?;
     let config = crate::json_value::decode(
         header
@@ -196,8 +196,11 @@ fn request_prompt(
     )
     .map_err(|error| ConversationAssemblerError::new(error.to_string()))?;
     let system = match header.get_value("system") {
-        None | Some(null().clone()) => String::new(),
-        Some(Value::String(system)) => system.clone(),
+        None => seekdeep_lossless_json::JsonString::default(),
+        Some(system) if system.is_null() => seekdeep_lossless_json::JsonString::default(),
+        Some(system) if system.is_string() => {
+            system.deserialize().expect("system is a JSON string")
+        }
         Some(_) => {
             return Err(ConversationAssemblerError::new(
                 "request/header system must be a string or null",
@@ -224,7 +227,9 @@ fn prompt_change(
     if event.event_type != "request/header" {
         return None;
     }
-    if previous.is_none() && event.data.get_value("reason").and_then(Value::as_str) != Some("initial") {
+    if previous.is_none()
+        && event.data.get_value("reason").and_then(Value::as_str) != Some("initial")
+    {
         return None;
     }
     let system_changed = previous.is_some_and(|previous| previous.system != prompt.system);
@@ -256,7 +261,8 @@ fn encode_state(
 }
 
 fn decode_state(value: &Value) -> Result<TrajectoryRequestHeaderState, ConversationAssemblerError> {
-    value.deserialize()
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 

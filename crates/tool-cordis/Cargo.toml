@@ -16,6 +16,7 @@ seekdeep-cordis = { path = "../cordis" }
 seekdeep-cordis-api-catalog = { path = "../cordis-api-catalog" }
 seekdeep-cordis-host-runner = { path = "../cordis-host-runner" }
 seekdeep-llm = { path = "../llm" }
+seekdeep-lossless-json = { path = "../lossless-json" }
 seekdeep-system-prompt = { path = "../system-prompt" }
 seekdeep-tools = { path = "../tools" }
 serde.workspace = true

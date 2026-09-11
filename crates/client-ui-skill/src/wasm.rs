@@ -6,6 +6,7 @@ use std::cell::RefCell;
 
 use js_sys::{Array, Function, Object, Reflect};
 use seekdeep_client_ui_tool::{ToolCallBlock, ToolCallHead, ToolErrorInfo};
+use seekdeep_lossless_json::{JsonString, JsonValue};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use crate::{SKILL_ROW_STYLES, SkillRowModel, SkillRowState, skill_row_model};
@@ -105,7 +106,7 @@ fn render_skill_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue
     let status = state_status(model.state, &translate)?;
     let summary = model
         .error_summary
-        .as_deref()
+        .as_ref()
         .unwrap_or(&model.name)
         .to_owned();
     let leading = render_disclosure_leading(modules, model.state, open, expandable)?;
@@ -167,7 +168,7 @@ fn render_skill_row(modules: &BrowserModules, props: &JsValue) -> Result<JsValue
         } else {
             "seekdeep-skill-summary"
         })?),
-        &[JsValue::from_str(&summary)],
+        &[json_text(&summary)],
     )?);
     let row = tag(
         &modules.react,
@@ -340,9 +341,10 @@ fn render_body(
                         },
                     ),
                 ])?),
-                &[JsValue::from_str(
-                    model.output.as_deref().unwrap_or_default(),
-                )],
+                &[model
+                    .output
+                    .as_ref()
+                    .map_or_else(|| JsValue::from_str(""), json_text)],
             )?,
         ],
     )?;
@@ -383,7 +385,7 @@ fn parse_block(value: &JsValue) -> Result<ToolCallBlock, JsValue> {
     if !Reflect::has(value, &JsValue::from_str("kind"))? {
         return Ok(ToolCallBlock::Running {
             call_id,
-            args_raw: required_string(value, "argsRaw", "running Skill call")?,
+            args_raw: required_json_string(value, "argsRaw", "running Skill call")?,
             call_view: None,
         });
     }
@@ -392,15 +394,12 @@ fn parse_block(value: &JsValue) -> Result<ToolCallBlock, JsValue> {
         None
     } else {
         Some(ToolCallHead {
-            args_raw: required_string(&call, "argsRaw", "settled Skill call")?,
+            args_raw: required_json_string(&call, "argsRaw", "settled Skill call")?,
         })
     };
-    let content = serde_wasm_bindgen::from_value::<Vec<serde_json::Value>>(required(
-        value,
-        "content",
-        "settled Skill result",
-    )?)
-    .map_err(js_error_from_display)?;
+    let content = json_value(&required(value, "content", "settled Skill result")?)?
+        .deserialize::<Vec<JsonValue>>()
+        .map_err(js_error_from_display)?;
     let error = Reflect::get(value, &JsValue::from_str("error"))?;
     let error = if error.is_null() || error.is_undefined() {
         None
@@ -419,6 +418,27 @@ fn parse_block(value: &JsValue) -> Result<ToolCallBlock, JsValue> {
         is_error: required_bool(value, "isError", "settled Skill result")?,
         error,
     })
+}
+
+fn json_value(value: &JsValue) -> Result<JsonValue, JsValue> {
+    let raw = js_sys::JSON::stringify(value)?
+        .as_string()
+        .ok_or_else(|| js_sys::TypeError::new("Skill value must be JSON-compatible"))?;
+    JsonValue::parse(raw).map_err(js_error_from_display)
+}
+
+fn required_json_string(value: &JsValue, key: &str, owner: &str) -> Result<JsonString, JsValue> {
+    let value = required(value, key, owner)?;
+    if !value.is_string() {
+        return Err(js_sys::TypeError::new(&format!("{owner} {key} must be a string")).into());
+    }
+    json_value(&value)?
+        .deserialize()
+        .map_err(js_error_from_display)
+}
+
+fn json_text(value: &JsonString) -> JsValue {
+    js_sys::JSON::parse(value.as_raw()).expect("lossless string contains valid JSON")
 }
 
 fn state_status(state: SkillRowState, translate: &Function) -> Result<Option<String>, JsValue> {

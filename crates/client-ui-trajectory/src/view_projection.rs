@@ -5,10 +5,10 @@ use std::{
     rc::Rc,
 };
 
-use indexmap::IndexSet;
-use indexmap::IndexMap as Map;
-use seekdeep_lossless_json::JsonValue as Value;
 use crate::json_value::{json, null};
+use indexmap::IndexMap as Map;
+use indexmap::IndexSet;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 
 use crate::{
     TrajectoryRecordState, TrajectoryRequestNumber, TrajectoryRequestPurpose,
@@ -127,7 +127,7 @@ pub fn trajectory_timeline_partial(partial: Option<&Value>) -> Result<Option<Val
         .iter()
         .map(timeline_block)
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Some(Value::object(Map::from_iter([
+    Ok(Some(Value::object(Map::<String, Value>::from_iter([
         (
             "turn".to_owned(),
             partial
@@ -179,7 +179,7 @@ pub fn trajectory_partial_structure_signature(partial: Option<&Value>) -> Result
 /// Converts source request/node usage buckets to the table contract.
 #[must_use]
 pub fn trajectory_request_usage(value: Option<&Value>) -> Option<TrajectoryUsage> {
-    let value = value?.as_object()?;
+    let value = value.filter(|value| value.is_object())?;
     Some(TrajectoryUsage {
         input: optional_u64(value, "inputTokens"),
         cache_read: optional_u64(value, "cacheReadTokens"),
@@ -326,9 +326,7 @@ pub fn derive_trajectory_request_numbers(
                     .and_then(|value| finite_member(value, "completedAt")),
                 error: entry
                     .request
-                    .and_then(|value| value.get_value("error"))
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
+                    .and_then(|value| crate::text_value::member(value, "error")),
                 retry: entry
                     .request
                     .and_then(|value| value.get_value("retry"))
@@ -365,10 +363,7 @@ pub fn derive_trajectory_request_numbers(
             status: request_status(request).transpose()?,
             started_at: finite_member(request, "startedAt"),
             completed_at: finite_member(request, "completedAt"),
-            error: request
-                .get_value("error")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned),
+            error: crate::text_value::member(request, "error"),
             retry: None,
             max_retries: None,
             retry_delay_ms: None,
@@ -481,24 +476,18 @@ fn request_status(request: &Value) -> Option<Result<TrajectoryRecordState, Strin
         })
 }
 
-fn provenance_member(request: Option<&Value>, node: Option<&Value>, key: &str) -> Option<String> {
-    request
-        .and_then(|value| value.get_value("provenance"))
-        .and_then(|value| value.get(key))
-        .and_then(Value::as_str)
-        .or_else(|| {
-            node.and_then(|value| value.get_value("provenance"))
-                .and_then(|value| value.get(key))
-                .and_then(Value::as_str)
-        })
-        .map(ToOwned::to_owned)
+fn provenance_member(request: Option<&Value>, node: Option<&Value>, key: &str) -> Option<JsonString> {
+    request.and_then(|value| value.get_value("provenance"))
+        .and_then(|value| crate::text_value::member(value, key))
+        .or_else(|| node.and_then(|value| value.get_value("provenance"))
+            .and_then(|value| crate::text_value::member(value, key)))
 }
 
 fn first_present(request: Option<&Value>, node: Option<&Value>, key: &str) -> Option<Value> {
     request
-        .and_then(|value| value.get(key))
+        .and_then(|value| value.get_value(key))
         .filter(|value| !value.is_null())
-        .or_else(|| node.and_then(|value| value.get(key)))
+        .or_else(|| node.and_then(|value| value.get_value(key)))
         .cloned()
 }
 
@@ -508,25 +497,25 @@ fn optional_sum(left: Option<u64>, right: Option<u64>) -> Option<u64> {
 
 fn finite_member(value: &Value, key: &str) -> Option<f64> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_f64)
         .filter(|value| value.is_finite())
 }
 
-fn optional_u64(value: &Map<String, Value>, key: &str) -> Option<u64> {
-    value.get(key).and_then(Value::as_u64)
+fn optional_u64(value: &Value, key: &str) -> Option<u64> {
+    value.get_value(key).and_then(Value::as_u64)
 }
 
 fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_str)
         .ok_or_else(|| format!("trajectory value omitted string {key}"))
 }
 
 fn required_u64(value: &Value, key: &str) -> Result<u64, String> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_u64)
         .ok_or_else(|| format!("trajectory value omitted u64 {key}"))
 }

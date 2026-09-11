@@ -27,7 +27,7 @@ use crate::domain::{
     GoalClearOperation, GoalErrorCode, GoalOperation, GoalSnapshotChangeMeta,
 };
 use crate::fold::{
-    GoalFoldState, apply_goal_event, decode_goal_change, empty_goal_fold_state, goal_change_ref,
+    GoalFoldState, apply_goal_event, decode_goal_change_raw, empty_goal_fold_state, goal_change_ref,
 };
 use crate::runtime::{GOAL_CHANGE_VERSION, GoalError};
 use crate::types::{
@@ -195,7 +195,7 @@ pub fn apply_goal_projection(
     if event.event_type != "goal/change" {
         return state;
     }
-    let Some(change) = decode_goal_change(&event.data).ok().flatten() else {
+    let Some(change) = decode_goal_change_raw(event.data.as_ref()).ok().flatten() else {
         return state;
     };
     match change {
@@ -1080,11 +1080,11 @@ fn goal_projection_definition() -> ProjectionDefinition {
             if event.event_type != "goal/change" {
                 return Ok(ProjectionTransition::Unchanged);
             }
-            let Some(change) = decode_goal_change(&event.data).ok().flatten() else {
+            let Some(change) = decode_goal_change_raw(event.data.as_ref()).ok().flatten() else {
                 return Ok(ProjectionTransition::Unchanged);
             };
             match change {
-                GoalChangeMeta::Clear(_) => Ok(ProjectionTransition::Changed(Value::Null)),
+                GoalChangeMeta::Clear(_) => Ok(ProjectionTransition::changed(Value::Null)?),
                 GoalChangeMeta::Snapshot(snapshot) => {
                     Ok(ProjectionTransition::changed(GoalProjection {
                         goal: snapshot.goal,
@@ -1161,7 +1161,7 @@ mod tests {
                 "kind": "goal/change", "version": 1, "operation": "create",
                 "goal": {"id": "g1", "revision": 1, "objective": "port it", "phase": "active", "maxGoalRounds": 10},
                 "roundsStarted": 0, "createdAt": 100, "updatedAt": 100,
-            }),
+            }).into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -1177,7 +1177,8 @@ mod tests {
             data: json!({
                 "kind": "goal/change", "version": 1, "operation": "clear",
                 "cleared": {"id": "g1", "revision": 2}, "clearedAt": 200,
-            }),
+            })
+            .into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

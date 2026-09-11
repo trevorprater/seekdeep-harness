@@ -195,7 +195,9 @@ fn agent(session: Arc<Session>) -> Agent {
 }
 
 fn text(value: impl Into<String>) -> ContentBlock {
-    ContentBlock::Text { text: value.into().into() }
+    ContentBlock::Text {
+        text: value.into().into(),
+    }
 }
 
 fn append_user(session: &Session, value: &str, source: MessageSource) -> SessionEvent {
@@ -544,7 +546,14 @@ async fn nested_reference_context_is_excluded_and_hostile_tags_remain_data() -> 
     let ContentBlock::Text { text: prompt } = &context.content()[0] else {
         panic!("text context")
     };
-    assert_eq!(prompt.as_str().expect("fixture uses scalar text").matches("</referenced-sessions>").count(), 1);
+    assert_eq!(
+        prompt
+            .as_str()
+            .expect("fixture uses scalar text")
+            .matches("</referenced-sessions>")
+            .count(),
+        1
+    );
     assert!(prompt.contains("\\u003c/referenced-sessions>"));
     assert!(!prompt.contains("nested referenced snapshot must not propagate"));
     assert_eq!(prompt_data(context)[0]["conversation"][0]["text"], hostile);

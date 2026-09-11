@@ -3,7 +3,7 @@
 use js_sys::{Array, Function, Map, Object, Reflect, Set};
 use wasm_bindgen::{JsCast, JsValue, prelude::wasm_bindgen};
 
-use crate::{ContextRole, KnownContextForm, context_form, context_provenance};
+use crate::{ContextRole, KnownContextForm, context_form_json, context_provenance_json};
 
 /// Classifies one provider-neutral content block into the Client render shape.
 ///
@@ -102,9 +102,8 @@ pub fn resolved_client_time_zone_js() -> Result<String, JsValue> {
 #[wasm_bindgen(js_name = contextProvenance)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn context_provenance_js(source: JsValue) -> Result<JsValue, JsValue> {
-    let source = serde_wasm_bindgen::from_value(source)
-        .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-    let view = context_provenance(&source);
+    let source = crate::wasm_value_bridge::js_to_lossless_value(&source)?;
+    let view = context_provenance_json(&source);
     let output = Object::new();
     set(
         &output,
@@ -117,9 +116,9 @@ pub fn context_provenance_js(source: JsValue) -> Result<JsValue, JsValue> {
     set(
         &output,
         "label",
-        &view
-            .label
-            .map_or(JsValue::NULL, |label| JsValue::from_str(&label)),
+        &view.label.map_or(Ok(JsValue::NULL), |label| {
+            crate::wasm_session::json_to_js(&label)
+        })?,
     )?;
     Ok(output.into())
 }
@@ -132,9 +131,8 @@ pub fn context_provenance_js(source: JsValue) -> Result<JsValue, JsValue> {
 #[wasm_bindgen(js_name = contextForm)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn context_form_js(source: JsValue) -> Result<JsValue, JsValue> {
-    let source = serde_wasm_bindgen::from_value(source)
-        .map_err(|error| js_sys::Error::new(&error.to_string()))?;
-    Ok(context_form(&source).map_or(JsValue::NULL, |form| {
+    let source = crate::wasm_value_bridge::js_to_lossless_value(&source)?;
+    Ok(context_form_json(&source).map_or(JsValue::NULL, |form| {
         JsValue::from_str(match form {
             KnownContextForm::Instructions => "instructions",
             KnownContextForm::Catalog => "catalog",

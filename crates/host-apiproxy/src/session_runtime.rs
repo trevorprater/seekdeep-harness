@@ -33,7 +33,7 @@ use seekdeep_core::{
     session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_jobs::{JOBS, JobRegistryService};
-use seekdeep_llm::{AbortSignal, ContentBlock, Message, ModelId, ProviderId};
+use seekdeep_llm::{AbortSignal, JsonString, ModelId, ProviderId};
 use seekdeep_session_persistence::{
     SESSION_PERSISTENCE, SessionPersistence, ensure_persistence_not_aborted,
 };
@@ -1131,10 +1131,10 @@ impl SessionApiProxyRuntime {
         let tools = self.tools.as_ref()?;
         match event.event_type.as_str() {
             "tool/call" => {
-                let name = event.data.get("name")?.as_str()?;
-                let arguments: Value =
-                    serde_json::from_str(event.data.get("arguments")?.as_str()?).ok()?;
-                let definition = tools.get(name, scope)?;
+                let name: String = event.data.get("name")?.deserialize().ok()?;
+                let argument_text: JsonString = event.data.get("arguments")?.deserialize().ok()?;
+                let arguments = JsonValue::parse_text(&argument_text).ok()?;
+                let definition = tools.get(&name, scope)?;
                 let presenter = definition.present_call.as_ref()?;
                 let view = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     presenter(&arguments)
@@ -1142,26 +1142,30 @@ impl SessionApiProxyRuntime {
                 .ok()??;
                 Some(ToolEventView {
                     target: ToolEventViewTarget::Call,
-                    view: serde_json::to_value(view).ok()?.as_object()?.clone(),
+                    view: JsonValue::from_serialize(&view).ok()?,
                 })
             }
             "tool/result" => {
-                let message: Message =
-                    serde_json::from_value(event.data.get("message")?.clone()).ok()?;
-                let call_id = message.source().fields.get("callId")?.as_str()?;
-                let (name, arguments) = backscan_call(page, call_id)?;
-                let ContentBlock::ToolResult {
-                    content, is_error, ..
-                } = message.content().first()?
-                else {
+                let message = event.data.get("message")?;
+                let call_id: JsonString =
+                    message.get("source")?.get("callId")?.deserialize().ok()?;
+                let (name, arguments) = backscan_call(page, &call_id)?;
+                let blocks = message.get("content")?.array_items()?;
+                let block = *blocks.first()?;
+                if block.get("type")?.deserialize::<String>().ok()? != "tool-result" {
                     return None;
-                };
+                }
                 let definition = tools.get(&name, scope)?;
                 let presenter = definition.present_result.as_ref()?;
                 let result = ToolResult {
-                    content: content.clone(),
-                    is_error: is_error.unwrap_or(false),
-                    meta: event.data.get("meta").cloned(),
+                    content: block.get("content")?.deserialize().ok()?,
+                    is_error: block
+                        .get("isError")
+                        .map(|value| value.deserialize::<bool>())
+                        .transpose()
+                        .ok()?
+                        .unwrap_or(false),
+                    meta: event.data.get("meta").map(|value| value.to_owned()),
                 };
                 let view = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     presenter(&arguments, &result)
@@ -1169,7 +1173,7 @@ impl SessionApiProxyRuntime {
                 .ok()??;
                 Some(ToolEventView {
                     target: ToolEventViewTarget::Result,
-                    view: serde_json::to_value(view).ok()?.as_object()?.clone(),
+                    view: JsonValue::from_serialize(&view).ok()?,
                 })
             }
             _ => None,
@@ -2149,15 +2153,21 @@ fn paginate_history(
     )
 }
 
-fn backscan_call(page: &[SessionEvent], call_id: &str) -> Option<(String, Value)> {
+fn backscan_call(page: &[SessionEvent], call_id: &JsonString) -> Option<(String, JsonValue)> {
     page.iter().rev().find_map(|event| {
         if event.event_type != "tool/call"
-            || event.data.get("callId").and_then(Value::as_str) != Some(call_id)
+            || event
+                .data
+                .get("callId")?
+                .deserialize::<JsonString>()
+                .ok()?
+                .ne(call_id)
         {
             return None;
         }
-        let name = event.data.get("name")?.as_str()?.to_owned();
-        let arguments = serde_json::from_str(event.data.get("arguments")?.as_str()?).ok()?;
+        let name = event.data.get("name")?.deserialize().ok()?;
+        let argument_text: JsonString = event.data.get("arguments")?.deserialize().ok()?;
+        let arguments = JsonValue::parse_text(&argument_text).ok()?;
         Some((name, arguments))
     })
 }

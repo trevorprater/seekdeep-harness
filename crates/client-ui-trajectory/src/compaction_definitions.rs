@@ -2,14 +2,14 @@
 
 use std::rc::Rc;
 
+use crate::json_value::{json, null};
+use indexmap::IndexMap as Map;
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationLocationEvent,
     ConversationMatchResult, ConversationMatchRole,
 };
-use serde::{Deserialize, Serialize};
-use indexmap::IndexMap as Map;
 use seekdeep_lossless_json::JsonValue as Value;
-use crate::json_value::{json, null};
+use serde::{Deserialize, Serialize};
 
 use crate::{TRAJECTORY_TARGET, trajectory_node};
 
@@ -155,12 +155,18 @@ fn trajectory_session_end_definition() -> AssemblerNodeDefinition {
             let Some(state) = context.state.as_deref() else {
                 return Ok(None);
             };
-            let seq = state.get_value("seq").and_then(Value::as_u64).ok_or_else(|| {
-                ConversationAssemblerError::new("trajectory Session-end state omitted seq")
-            })?;
-            let time = state.get_value("time").and_then(Value::as_i64).ok_or_else(|| {
-                ConversationAssemblerError::new("trajectory Session-end state omitted time")
-            })?;
+            let seq = state
+                .get_value("seq")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| {
+                    ConversationAssemblerError::new("trajectory Session-end state omitted seq")
+                })?;
+            let time = state
+                .get_value("time")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| {
+                    ConversationAssemblerError::new("trajectory Session-end state omitted time")
+                })?;
             Ok(Some(trajectory_node(
                 context,
                 seq,
@@ -174,7 +180,10 @@ fn checkpoint_id(event: &ConversationLocationEvent) -> Option<String> {
     if event.event_type != "user/message" {
         return None;
     }
-    let source = event.data.get_value("source")?.as_object()?;
+    let source = event
+        .data
+        .get_value("source")
+        .filter(|source| source.is_object())?;
     (source.get_value("kind").and_then(Value::as_str) == Some("plugin")
         && source.get_value("plugin").and_then(Value::as_str) == Some("compact"))
     .then(|| {
@@ -207,12 +216,17 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
     if state.start.event_type != "compaction/start" {
         return None;
     }
-    let mut request = Map::from_iter([
+    let mut request = Map::<String, Value>::from_iter([
         ("purpose".to_owned(), json!("compaction")),
         ("startSeq".to_owned(), json!(state.start.seq)),
         (
             "turn".to_owned(),
-            state.start.data.get_value("turn").cloned().unwrap_or(null().clone()),
+            state
+                .start
+                .data
+                .get_value("turn")
+                .cloned()
+                .unwrap_or(null().clone()),
         ),
         ("step".to_owned(), json!(0)),
         ("startedAt".to_owned(), json!(state.start.time)),
@@ -250,16 +264,28 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
         request.insert("resultSeq".to_owned(), json!(summary.seq));
         request.insert(
             "summary".to_owned(),
-            summary.data.get_value("summary").cloned().unwrap_or(null().clone()),
+            summary
+                .data
+                .get_value("summary")
+                .cloned()
+                .unwrap_or(null().clone()),
         );
         copy_present(&mut request, &summary.data, "rawOutput");
-        let provider = summary.data.get_value("provider").cloned().unwrap_or(null().clone());
-        let model = summary.data.get_value("model").cloned().unwrap_or(null().clone());
+        let provider = summary
+            .data
+            .get_value("provider")
+            .cloned()
+            .unwrap_or(null().clone());
+        let model = summary
+            .data
+            .get_value("model")
+            .cloned()
+            .unwrap_or(null().clone());
         request.insert(
             "provenance".to_owned(),
             json!({"provider": provider, "model": model}),
         );
-        let mut config = Map::from_iter([
+        let mut config = Map::<String, Value>::from_iter([
             ("provider".to_owned(), provider),
             ("model".to_owned(), model),
             ("purpose".to_owned(), json!("compaction")),
@@ -279,7 +305,7 @@ fn request_from_state(state: &CompactionState) -> Option<Value> {
 }
 
 fn copy_present(output: &mut Map<String, Value>, input: &Value, key: &str) {
-    if let Some(value) = input.get(key) {
+    if let Some(value) = input.get_value(key) {
         output.insert(key.to_owned(), value.clone());
     }
 }
@@ -291,6 +317,7 @@ fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerErr
 }
 
 fn decode<T: serde::de::DeserializeOwned>(value: &Value) -> Result<T, ConversationAssemblerError> {
-    value.deserialize()
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

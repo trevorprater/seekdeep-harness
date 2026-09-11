@@ -1,6 +1,6 @@
 //! Compiled readers over the internal keyed Tool chat-node store.
 
-use js_sys::{Array, Function, Reflect};
+use js_sys::{Array, Function, JsString, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
 
 /// Reads one root Tool lifecycle through its collision-free Context key.
@@ -10,10 +10,13 @@ use wasm_bindgen::{JsCast as _, JsValue, prelude::wasm_bindgen};
 /// Returns when the snapshot's keyed chat-node surface is malformed.
 #[wasm_bindgen(js_name = rootToolCall)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn root_tool_call_browser(snapshot: JsValue, root_call_id: String) -> Result<JsValue, JsValue> {
+pub fn root_tool_call_browser(
+    snapshot: JsValue,
+    root_call_id: JsString,
+) -> Result<JsValue, JsValue> {
     let nodes = chat_nodes(&snapshot)?;
     let key = conversation_context_key("tool-call", &root_call_id);
-    let node = call_method(&nodes, "get", &[JsValue::from_str(&key)])?;
+    let node = call_method(&nodes, "get", &[key.into()])?;
     let Some(node) = tool_node(node)? else {
         return Ok(JsValue::UNDEFINED);
     };
@@ -28,7 +31,7 @@ pub fn root_tool_call_browser(snapshot: JsValue, root_call_id: String) -> Result
 /// Returns when the snapshot or a materialized Tool tree is malformed.
 #[wasm_bindgen(js_name = findToolCall)]
 #[allow(clippy::needless_pass_by_value)]
-pub fn find_tool_call_browser(snapshot: JsValue, call_id: String) -> Result<JsValue, JsValue> {
+pub fn find_tool_call_browser(snapshot: JsValue, call_id: JsString) -> Result<JsValue, JsValue> {
     let nodes = chat_nodes(&snapshot)?;
     let iterator = call_method(&nodes, "values", &[])?;
     loop {
@@ -67,12 +70,8 @@ fn tool_node(node: JsValue) -> Result<Option<JsValue>, JsValue> {
     Ok((kind.as_string().as_deref() == Some("tool-call")).then_some(node))
 }
 
-fn visit_tool_call(block: &JsValue, call_id: &str) -> Result<Option<JsValue>, JsValue> {
-    if Reflect::get(block, &JsValue::from_str("callId"))?
-        .as_string()
-        .as_deref()
-        == Some(call_id)
-    {
+fn visit_tool_call(block: &JsValue, call_id: &JsString) -> Result<Option<JsValue>, JsValue> {
+    if Reflect::get(block, &JsValue::from_str("callId"))? == *call_id.as_ref() {
         return Ok(Some(block.clone()));
     }
     let children = required_property(block, "subCalls", "Tool call block")?.dyn_into::<Array>()?;
@@ -84,8 +83,8 @@ fn visit_tool_call(block: &JsValue, call_id: &str) -> Result<Option<JsValue>, Js
     Ok(None)
 }
 
-fn conversation_context_key(kind: &str, id: &str) -> String {
-    format!("{}:{kind}{id}", kind.encode_utf16().count())
+fn conversation_context_key(kind: &str, id: &JsString) -> JsString {
+    JsString::from(format!("{}:{kind}", kind.encode_utf16().count())).concat(id)
 }
 
 fn required_property(value: &JsValue, key: &str, owner: &str) -> Result<JsValue, JsValue> {

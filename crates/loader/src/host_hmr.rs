@@ -217,6 +217,8 @@ impl CompositionRuntime {
                     completion.finish(Err(Arc::from(error.to_string())));
                     return Err(error);
                 }
+                let realm = self.catalog.node_realm()?;
+                let turn = realm.defer_turn()?;
                 let _ = self.context.events().emit(
                     &self.context,
                     "hmr/reload",
@@ -226,6 +228,7 @@ impl CompositionRuntime {
                     }),
                 );
                 drop(deferred);
+                turn.finish()?;
                 self.finish_hmr_settlement(completion)?;
                 Ok(HostHmrOutcome::Reloaded(reloaded))
             }
@@ -251,7 +254,10 @@ impl CompositionRuntime {
                     }
                 }
                 self.restore_entries(entries);
+                let realm = self.catalog.node_realm()?;
+                let turn = realm.defer_turn()?;
                 drop(deferred);
+                turn.finish()?;
                 self.finish_hmr_settlement(completion)?;
                 if failures.is_empty() {
                     Err(error)
@@ -309,6 +315,7 @@ struct RuntimeReload {
 
 struct ReloadMount {
     id: crate::EntryId,
+    path: Vec<crate::EntryId>,
     owner: seekdeep_cordis::Context,
     config: serde_json::Value,
     inject: Vec<String>,
@@ -333,13 +340,25 @@ fn collect_mounts(
     plugin: &seekdeep_cordis::Plugin,
     programmatic: bool,
 ) -> Vec<ReloadMount> {
+    collect_mounts_at(entries, plugin, programmatic, &[])
+}
+
+fn collect_mounts_at(
+    entries: &[crate::MountedEntry],
+    plugin: &seekdeep_cordis::Plugin,
+    programmatic: bool,
+    parent: &[crate::EntryId],
+) -> Vec<ReloadMount> {
     let mut mounts = Vec::new();
     for entry in entries {
+        let mut path = parent.to_vec();
+        path.push(entry.options.id.clone());
         if let Some(fiber) = &entry.fiber
             && fiber.plugin_id() == plugin.id()
         {
             mounts.push(ReloadMount {
                 id: entry.options.id.clone(),
+                path: path.clone(),
                 owner: entry.entry_context.clone(),
                 config: fiber.config(),
                 inject: entry.options.inject.clone(),
@@ -348,26 +367,27 @@ fn collect_mounts(
                 order: fiber.uid(),
             });
         }
-        mounts.extend(collect_mounts(&entry.children, plugin, programmatic));
+        mounts.extend(collect_mounts_at(
+            &entry.children,
+            plugin,
+            programmatic,
+            &path,
+        ));
     }
     mounts
 }
 
 fn mounted_entry<'a>(
     entries: &'a mut [crate::MountedEntry],
-    mount: &ReloadMount,
+    path: &[crate::EntryId],
 ) -> Option<&'a mut crate::MountedEntry> {
-    for entry in entries {
-        if entry.options.id == mount.id
-            && Arc::ptr_eq(entry.entry_context.fiber(), mount.owner.fiber())
-        {
-            return Some(entry);
-        }
-        if let Some(entry) = mounted_entry(&mut entry.children, mount) {
-            return Some(entry);
-        }
+    let (id, children) = path.split_first()?;
+    let entry = entries.iter_mut().find(|entry| entry.options.id == *id)?;
+    if children.is_empty() {
+        Some(entry)
+    } else {
+        mounted_entry(&mut entry.children, children)
     }
-    None
 }
 
 fn rebind(
@@ -406,7 +426,7 @@ fn record_replacement(
     plugin: seekdeep_cordis::Plugin,
     result: Result<Arc<seekdeep_cordis::PluginFiber>, seekdeep_cordis::CordisError>,
 ) -> Result<(), LoaderError> {
-    let entry = mounted_entry(entries, mount).ok_or(LoaderError::Unavailable)?;
+    let entry = mounted_entry(entries, &mount.path).ok_or(LoaderError::Unavailable)?;
     match result {
         Ok(fiber) => {
             entry.fiber = Some(fiber);

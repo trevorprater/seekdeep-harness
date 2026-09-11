@@ -85,7 +85,7 @@ impl MemoryPool {
             .and_then(|value| value.deserialize().ok())
     }
 
-    fn seed(&self, id: &str, record: CheckpointRecord) {
+    fn seed(&self, id: &str, record: &CheckpointRecord) {
         let mut state = self.state.lock();
         let medium = state
             .media
@@ -101,7 +101,7 @@ impl MemoryPool {
             .expect("sessions table")
             .insert(
                 id.to_owned(),
-                JsonValue::from_serialize(&record).expect("record"),
+                JsonValue::from_serialize(record).expect("record"),
             );
     }
 }
@@ -580,7 +580,7 @@ fn seed_record(
 ) {
     pool.seed(
         id,
-        CheckpointRecord {
+        &CheckpointRecord {
             identity,
             rows: IndexMap::from([(
                 "cache-test/marks".to_owned(),
@@ -696,7 +696,7 @@ async fn raw_projection_cache_survives_schema_validation_and_backend_reopen() ->
         write_every_events: 100,
         write_interval_ms: 60_000,
     };
-    let harness = Harness::new(pool.clone(), persistence.clone(), config.clone(), Some(1)).await?;
+    let harness = Harness::new(pool.clone(), persistence.clone(), config, Some(1)).await?;
     let live = session(&harness, "raw-cache");
     let raw = r#"{"marks":["\ud800","\udfff"],"opaque":{"\ud800":[1.2500,9007199254740993]}}"#;
     live.append_json(
@@ -712,7 +712,7 @@ async fn raw_projection_cache_survives_schema_validation_and_backend_reopen() ->
         live.id().as_str().to_owned(),
         SessionInspection {
             meta: header.clone(),
-            events: live.events().to_vec(),
+            events: live.events(),
         },
     );
     harness.cache.write(&live).await?;

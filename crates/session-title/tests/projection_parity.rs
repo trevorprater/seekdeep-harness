@@ -5,12 +5,12 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use seekdeep_cordis::Context;
 use seekdeep_core::{
-    session::{AppendOptions, Session, SessionEvent},
+    session::{AppendOptions, JsonValue, Session, SessionEvent},
     session_store::{CreateSessionOptions, SessionStore},
 };
 use seekdeep_session_projection::SessionProjectionRegistry;
 use seekdeep_session_title::{SessionTitleConfig, SessionTitleService, plugin};
-use serde_json::{Value, json};
+use serde_json::json;
 
 const CONFIG: SessionTitleConfig = SessionTitleConfig {
     fallback_max_words: 8,
@@ -49,7 +49,7 @@ fn append_title(session: &Arc<Session>, title: &str) -> SessionEvent {
         .expect("append title")
 }
 
-fn title_value(value: &Value) -> &str {
+fn title_value(value: &JsonValue) -> &str {
     value.as_str().expect("title string")
 }
 
@@ -84,8 +84,16 @@ async fn serves_the_latest_title_last_wins_and_notifies_the_change_feed() {
     assert_eq!(
         *changes.lock(),
         vec![
-            ("title".to_owned(), json!("First title"), first_seq.seq),
-            ("title".to_owned(), json!("Second title"), second_seq.seq),
+            (
+                "title".to_owned(),
+                json!("First title").into(),
+                first_seq.seq
+            ),
+            (
+                "title".to_owned(),
+                json!("Second title").into(),
+                second_seq.seq
+            ),
         ]
     );
     let snapshot = projections.snapshot(&session).expect("snapshot");

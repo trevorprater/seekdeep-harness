@@ -3,7 +3,10 @@
 use std::sync::Arc;
 
 use seekdeep_cordis::{Context, DispatchMode, EventArgs, EventOptions, EventReply};
-use seekdeep_core::{session::SessionEvent, session_store::SESSIONS};
+use seekdeep_core::{
+    session::{JsonRef, JsonValue, SessionEvent},
+    session_store::SESSIONS,
+};
 use seekdeep_invariants::{
     InvariantFailure, InvariantInstaller, InvariantRegistration, InvariantRegistry,
 };
@@ -31,12 +34,13 @@ fn validate_event(
     if event.event_type != "permission/preset" {
         return Ok(());
     }
-    let preset = event
-        .data
-        .get("preset")
-        .filter(|preset| preset.is_string())
-        .map(|preset| preset.to_owned())
-        .unwrap_or_else(|| serde_json::json!("").into());
+    let preset = JsonValue::from_utf16(
+        &event
+            .data
+            .get("preset")
+            .and_then(JsonRef::to_utf16)
+            .unwrap_or_default(),
+    );
     let known = context
         .get(PERMISSION_PRESETS)
         .is_some_and(|service| service.names().iter().any(|name| preset == name.as_str()));

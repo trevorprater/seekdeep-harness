@@ -1,0 +1,15 @@
+{
+  "10": "ten",
+  "2": "two",
+  "01": "not an array index",
+  "high": "\ud800",
+  "low": "\udfff",
+  "pair": "\ud83d\ude00",
+  "literal": "\\ud800",
+  "\ud800": {"\udfff": [null, true, false, "\ud800", "\\udfff"]},
+  "__proto__": {"own": true},
+  "constructor": "own",
+  "numbers": [1.0, -0, 1e-7, 1e21, 9007199254740993, 1e400],
+  "duplicate": "first",
+  "duplicate": "last"
+}

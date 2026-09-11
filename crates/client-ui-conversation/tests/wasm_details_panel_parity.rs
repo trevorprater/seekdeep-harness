@@ -356,3 +356,115 @@ fn running_and_headless_error_fallbacks_preserve_verbatim_and_failure_copy() {
         Some(true)
     );
 }
+
+#[wasm_bindgen_test]
+fn details_input_preserves_raw_utf16_before_json_parsing_and_in_streaming_fragments() {
+    for (encoded, expected) in [
+        (
+            r#""{\"\ud800\":\"\udfff\"}""#,
+            Some("{\n  \"\\ud800\": \"\\udfff\"\n}"),
+        ),
+        (r#""streaming \ud800 {""#, None),
+    ] {
+        let component = setup();
+        let args = js_sys::JSON::parse(encoded).unwrap();
+        let running = object(&[
+            ("callId", JsValue::from_str("raw")),
+            ("name", JsValue::from_str("echo")),
+            ("argsRaw", args.clone()),
+            ("subCalls", Array::new().into()),
+        ]);
+        details_set_selection(object(&[("callId", JsValue::from_str("raw"))]).as_ref());
+        let tool = tool_node(running.into());
+        details_set_snapshot(&map_entries(&[("9:tool-callraw", tool.as_ref())]));
+        let tree = details_render(&component, props().as_ref());
+        let code = property(
+            &property(&details_find_kind(&tree, "CodeBlock"), "props"),
+            "code",
+        );
+        assert_eq!(code, expected.map_or(args, JsValue::from_str));
+    }
+}
+
+#[wasm_bindgen_test]
+fn details_output_fallback_preserves_raw_utf16_when_the_tool_slot_is_registered() {
+    for (content, error, expected) in [
+        (
+            r#"[{"type":"text","text":"\ud800"},{"type":"text","text":"\udfff"}]"#,
+            None,
+            r#""\ud800\n\udfff""#,
+        ),
+        (
+            "[]",
+            Some(r#"{"name":"\ud800","code":"\udfff"}"#),
+            r#""\ud800: \udfff""#,
+        ),
+    ] {
+        let component = setup();
+        let settled = object(&[
+            ("kind", JsValue::from_str("tool-result")),
+            ("callId", JsValue::from_str("raw")),
+            ("call", JsValue::NULL),
+            ("content", js_sys::JSON::parse(content).unwrap()),
+            (
+                "error",
+                error.map_or(JsValue::UNDEFINED, |error| {
+                    js_sys::JSON::parse(error).unwrap()
+                }),
+            ),
+            ("isError", JsValue::FALSE),
+            ("subCalls", Array::new().into()),
+        ]);
+        details_set_selection(object(&[("callId", JsValue::from_str("raw"))]).as_ref());
+        let tool = tool_node(settled.clone().into());
+        details_set_snapshot(&map_entries(&[("9:tool-callraw", tool.as_ref())]));
+        let tree = details_render(&component, props().as_ref());
+        assert!(!details_find_kind(&tree, "slot-result").is_undefined());
+        let slot = details_slot_calls().get(0);
+        assert!(Object::is(
+            &property(&property(&slot, "owner"), "block"),
+            settled.as_ref()
+        ));
+        let fallback = property(&property(&slot, "options"), "fallback");
+        let text = Array::from(&property(&fallback, "children")).get(0);
+        assert_eq!(
+            js_sys::JSON::stringify(&text)
+                .unwrap()
+                .as_string()
+                .as_deref(),
+            Some(expected)
+        );
+    }
+}
+
+#[wasm_bindgen_test]
+fn selected_surrogate_call_id_does_not_select_a_replacement_character_call() {
+    let component = setup();
+    let raw_id = js_sys::JSON::parse(r#""\ud800""#).unwrap();
+    let exact = object(&[
+        ("callId", raw_id.clone()),
+        ("name", JsValue::from_str("exact")),
+        ("argsRaw", JsValue::from_str("{}")),
+        ("subCalls", Array::new().into()),
+    ]);
+    let replacement = object(&[
+        ("callId", JsValue::from_str("�")),
+        ("name", JsValue::from_str("wrong")),
+        ("argsRaw", JsValue::from_str("{}")),
+        ("subCalls", Array::new().into()),
+    ]);
+    let replacement_node = tool_node(replacement.into());
+    let exact_node = tool_node(exact.clone().into());
+    details_set_snapshot(&map_entries(&[
+        ("replacement", replacement_node.as_ref()),
+        ("exact", exact_node.as_ref()),
+    ]));
+    details_set_selection(object(&[("callId", raw_id)]).as_ref());
+    let tree = details_render(&component, props().as_ref());
+    assert!(details_text(&tree).starts_with("exact"));
+    let slot = details_slot_calls().get(0);
+    assert!(Object::is(
+        &property(&property(&slot, "owner"), "block"),
+        exact.as_ref()
+    ));
+}

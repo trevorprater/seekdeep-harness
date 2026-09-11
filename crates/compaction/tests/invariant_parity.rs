@@ -212,12 +212,14 @@ async fn raw_summary_and_checkpoint_metadata_do_not_hide_transaction_validation(
         surface_op: Some(SurfaceOp::replace(original.seq, original.seq)),
         ..AppendOptions::default()
     };
+    let rejected = session
+        .append_json("user/message", checkpoint.clone(), options.clone())
+        .unwrap_err();
     assert!(
-        session
-            .append_json("user/message", checkpoint.clone(), options.clone())
-            .unwrap_err()
+        rejected
             .to_string()
-            .contains("has no matching compaction/start")
+            .contains("has no matching compaction/start"),
+        "{rejected}"
     );
     start(&session, ID, None, None).unwrap();
     let mut summary = JsonValue::from(summary([]));

@@ -174,13 +174,13 @@ fn text(result: &ToolExecutionResult) -> Option<&str> {
             let ContentBlock::Text { text } = content else {
                 return None;
             };
-            Some(text.as_str())
+            text.as_str()
         }),
         ToolExecutionResult::Failure(failure) => failure.content.first().and_then(|content| {
             let ContentBlock::Text { text } = content else {
                 return None;
             };
-            Some(text.as_str())
+            text.as_str()
         }),
     }
 }

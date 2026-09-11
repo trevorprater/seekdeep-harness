@@ -69,7 +69,8 @@ impl LlmAdapter for ToolThenAnswerAdapter {
                                 "status": "completed",
                             }],
                         })
-                        .to_string(),
+                        .to_string()
+                        .into(),
                     },
                 }),
                 Ok(StreamChunk::Finish {
@@ -81,7 +82,7 @@ impl LlmAdapter for ToolThenAnswerAdapter {
         AdapterStream::new(stream::iter([
             Ok(StreamChunk::TextDelta {
                 index: 0,
-                text: "CLI tool round trip complete: persisted goal domain".to_owned(),
+                text: "CLI tool round trip complete: persisted goal domain".into(),
             }),
             Ok(StreamChunk::Finish {
                 reason: FinishReason::Stop,
@@ -345,11 +346,14 @@ async fn real_yaml_headless_tool_round_trip_persists_one_round_zero_goal_snapsho
             .iter()
             .filter(|event| {
                 event.event_type == "user/message"
-                    && event.data.pointer("/source/kind").and_then(Value::as_str) == Some("goal")
+                    && event
+                        .data
+                        .pointer("/source/kind")
+                        .is_some_and(|kind| kind == "goal")
                     && event
                         .data
                         .pointer("/source/round")
-                        .and_then(Value::as_u64)
+                        .and_then(|value| value.as_u64())
                         .is_some_and(|round| round > 0)
             })
             .count(),

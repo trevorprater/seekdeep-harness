@@ -236,17 +236,18 @@ fn replayed_raw_metadata_uses_final_fields_and_ignores_opaque_extensions() {
     let harness = Harness::new(Config::default());
     let search = harness.dependencies.tools.get("web_search", None).unwrap();
     let result: seekdeep_tools::ToolResult = serde_json::from_str(
-        r#"{"content":[],"isError":false,"meta":{"sources":[],"truncated":false,"answer":"before","answer":"after","\ud800":{"value":"\udfff"}}}"#,
+        r#"{"content":[],"isError":false,"meta":{"sources":[{"url":"https://source.test","title":"before","title":"after","\ud800":"\udfff"}],"truncated":false,"answer":"before","answer":"after","\ud800":{"value":"\udfff"}}}"#,
     ).unwrap();
     let view = search.present_result.as_ref().unwrap()(&json!({"query":"query"}).into(), &result);
     let Some(ToolResultView::Web(WebResultView::Search(view))) = view else {
         panic!("search view");
     };
     assert_eq!(view.answer.as_deref(), Some("after"));
-    assert!(view.sources.is_empty());
+    assert_eq!(view.sources.len(), 1);
+    assert_eq!(view.sources[0].title.as_deref(), Some("after"));
     let fetch = harness.dependencies.tools.get("web_fetch", None).unwrap();
     let result: seekdeep_tools::ToolResult = serde_json::from_str(
-        r#"{"content":[],"isError":false,"meta":{"url":"https://old.test","url":"https://new.test","statusCode":200,"truncated":false,"\ud800":{"value":"\udfff"}}}"#,
+        r#"{"content":[],"isError":false,"meta":{"url":"https://old.test","url":"https://new.test","statusCode":2e2,"truncated":false,"\ud800":{"value":"\udfff"}}}"#,
     ).unwrap();
     let view =
         fetch.present_result.as_ref().unwrap()(&json!({"url":"https://new.test"}).into(), &result);
@@ -255,6 +256,21 @@ fn replayed_raw_metadata_uses_final_fields_and_ignores_opaque_extensions() {
     };
     assert_eq!(view.url, "https://new.test");
     assert_eq!(view.status_code, 200);
+
+    for meta in [
+        json!({"sources": [], "truncated": false, "answer": null}),
+        json!({"sources": [{"url": "https://source.test", "title": null}], "truncated": false}),
+    ] {
+        let result = seekdeep_tools::ToolResult {
+            content: Vec::new(),
+            is_error: false,
+            meta: Some(meta.into()),
+        };
+        assert!(
+            search.present_result.as_ref().unwrap()(&json!({"query":"query"}).into(), &result)
+                .is_none()
+        );
+    }
 }
 
 #[tokio::test]

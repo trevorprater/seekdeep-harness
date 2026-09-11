@@ -2,7 +2,7 @@
 
 use std::sync::LazyLock;
 
-use seekdeep_lossless_json::JsonValue;
+use seekdeep_lossless_json::{JsonString, JsonValue};
 
 static NULL: LazyLock<JsonValue> = LazyLock::new(|| serde_json::Value::Null.into());
 
@@ -12,6 +12,23 @@ pub(crate) fn null() -> &'static JsonValue {
 
 pub(crate) fn decode<T: serde::de::DeserializeOwned>(value: JsonValue) -> serde_json::Result<T> {
     value.deserialize()
+}
+
+pub(crate) fn js_text(value: &JsonValue) -> JsonString {
+    if value.is_string() {
+        value.deserialize().expect("value is a JSON string")
+    } else if let Some(values) = value.as_array() {
+        JsonString::join(
+            &values.iter().map(|value| if value.is_null() { JsonString::default() } else { js_text(value) }).collect::<Vec<_>>(),
+            ",",
+        )
+    } else if value.is_object() {
+        "[object Object]".into()
+    } else if let Some(number) = value.as_f64().filter(|number| !number.is_finite()) {
+        if number.is_sign_negative() { "-Infinity".into() } else { "Infinity".into() }
+    } else {
+        value.stringify().into()
+    }
 }
 
 macro_rules! json {

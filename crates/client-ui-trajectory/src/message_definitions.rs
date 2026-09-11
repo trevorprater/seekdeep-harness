@@ -2,16 +2,16 @@
 
 use std::rc::Rc;
 
+use crate::json_value::{json, null};
+use indexmap::IndexMap as Map;
 use indexmap::IndexSet;
 use seekdeep_client_runtime::{
-    AssemblerNodeDefinition, ContextProvenanceView, ContextRole, ConversationAssemblerError,
+    AssemblerNodeDefinition, ContextProvenanceJsonView as ContextProvenanceView, ContextRole, ConversationAssemblerError,
     ConversationMatchResult, ConversationMatchRole, ConversationPublication, KnownContextForm,
-    context_form, context_provenance,
+    context_form_json as context_form, context_provenance_json as context_provenance,
 };
-use serde::{Deserialize, Serialize};
-use indexmap::IndexMap as Map;
 use seekdeep_lossless_json::JsonValue as Value;
-use crate::json_value::{json, null};
+use serde::{Deserialize, Serialize};
 
 use crate::{TRAJECTORY_TARGET, trajectory_node};
 
@@ -96,10 +96,17 @@ fn trajectory_message_definition() -> AssemblerNodeDefinition {
                 event.data.get_value("source").cloned().ok_or_else(|| {
                     ConversationAssemblerError::new("user/message omitted source")
                 })?;
-            let source_kind = source.get_value("kind").and_then(Value::as_str).ok_or_else(|| {
-                ConversationAssemblerError::new("user/message source omitted kind")
-            })?;
-            let content = event.data.get_value("content").cloned().unwrap_or(null().clone());
+            let source_kind = source
+                .get_value("kind")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    ConversationAssemblerError::new("user/message source omitted kind")
+                })?;
+            let content = event
+                .data
+                .get_value("content")
+                .cloned()
+                .unwrap_or(null().clone());
             let state = if source_kind == "user" {
                 let id = event
                     .data
@@ -130,7 +137,7 @@ fn trajectory_message_definition() -> AssemblerNodeDefinition {
                 }
             } else {
                 let provenance = context_provenance(&source);
-                let mut state = Map::from_iter([
+                let mut state = Map::<String, Value>::from_iter([
                     ("kind".to_owned(), json!("context")),
                     ("seq".to_owned(), json!(event.seq)),
                     ("time".to_owned(), json!(event.time)),
@@ -152,9 +159,12 @@ fn trajectory_message_definition() -> AssemblerNodeDefinition {
             let Some(state) = context.state.as_deref() else {
                 return Ok(None);
             };
-            let seq = state.get_value("seq").and_then(Value::as_u64).ok_or_else(|| {
-                ConversationAssemblerError::new("trajectory input state omitted seq")
-            })?;
+            let seq = state
+                .get_value("seq")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| {
+                    ConversationAssemblerError::new("trajectory input state omitted seq")
+                })?;
             Ok(Some(trajectory_node(
                 context,
                 seq,
@@ -219,7 +229,7 @@ fn apply_splice(
 }
 
 fn provenance_value(provenance: &ContextProvenanceView) -> Value {
-    let mut value = Map::from_iter([(
+    let mut value = Map::<String, Value>::from_iter([(
         "role".to_owned(),
         json!(match provenance.role {
             ContextRole::Inject => "inject",
@@ -244,16 +254,14 @@ const fn form_name(form: KnownContextForm) -> &'static str {
 }
 
 fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        null().clone() => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::array(&_) => value
-            .as_array()
-            .map(|values| values.iter().map(js_string).collect::<Vec<_>>().join(","))
-            .unwrap_or_default(),
-        Value::object(_) => "[object Object]".to_owned(),
+    if let Some(text) = value.as_str() {
+        text.to_owned()
+    } else if let Some(values) = value.as_array() {
+        values.iter().map(js_string).collect::<Vec<_>>().join(",")
+    } else if value.is_object() {
+        "[object Object]".to_owned()
+    } else {
+        value.stringify()
     }
 }
 
@@ -264,6 +272,7 @@ fn encode<T: Serialize>(value: &T) -> Result<Rc<Value>, ConversationAssemblerErr
 }
 
 fn decode_inbox(value: &Value) -> Result<InboxState, ConversationAssemblerError> {
-    value.deserialize()
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }

@@ -6412,6 +6412,7 @@ dependencies = [
  "seekdeep-client-ui-tool",
  "seekdeep-cordis",
  "seekdeep-identity",
+ "seekdeep-lossless-json",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -7042,6 +7043,7 @@ name = "seekdeep-failure-display"
 version = "0.1.0-rc.5"
 dependencies = [
  "ryu-js",
+ "seekdeep-lossless-json",
  "serde_json",
 ]
 
@@ -9802,6 +9804,7 @@ dependencies = [
  "seekdeep-cordis-host-runner",
  "seekdeep-core",
  "seekdeep-llm",
+ "seekdeep-lossless-json",
  "seekdeep-scope",
  "seekdeep-system-prompt",
  "seekdeep-tools",

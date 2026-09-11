@@ -5,6 +5,7 @@ use std::{path::Path, sync::Arc};
 use rusqlite::{Connection, OptionalExtension as _};
 use seekdeep_cordis::Context;
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
+use seekdeep_lossless_json::JsonValue;
 use seekdeep_storage::{
     KvFacet, KvUnit, KvUnitDescriptor, STORAGE, Storage, StorageBackend, StorageError,
     StorageErrorCode, storage_backend_service_key,
@@ -15,6 +16,85 @@ use seekdeep_storage_sqlite::{
 };
 use serde_json::json;
 use tempfile::TempDir;
+
+#[tokio::test]
+async fn lossless_values_survive_real_sqlite_reopen_with_source_stringify_bytes() {
+    let mut value = JsonValue::parse(
+        include_str!("../../storage/tests/fixtures/lossless-payload.json").to_owned(),
+    )
+    .unwrap();
+    value
+        .insert(
+            "deep",
+            JsonValue::parse(format!("{}\"\\ud800\"{}", "[".repeat(512), "]".repeat(512))).unwrap(),
+        )
+        .unwrap();
+    let expected = std::process::Command::new("node")
+        .args([
+            "-e",
+            "process.stdout.write(JSON.stringify(JSON.parse(process.argv[1])));",
+        ])
+        .arg(value.as_raw())
+        .output()
+        .unwrap();
+    assert!(expected.status.success(), "{:?}", expected.stderr);
+
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("raw.db");
+    let backend = SqliteStorageBackend::new(config(&path));
+    let unit = kv(&backend).open(descriptor()).await.unwrap();
+    unit.put_record("records".to_owned(), "row".to_owned(), value.clone())
+        .await
+        .unwrap();
+    unit.set_global(value).await.unwrap();
+    backend.close().await.unwrap();
+
+    let database = Connection::open(&path).unwrap();
+    let record: String = database
+        .query_row(
+            "SELECT value FROM u_specimen_records WHERE key = 'row'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let global: String = database
+        .query_row(
+            "SELECT value FROM unit_globals WHERE unit = 'specimen'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(record.as_bytes(), expected.stdout);
+    assert_eq!(record, global);
+    drop(database);
+
+    let reopened = SqliteStorageBackend::new(config(&path));
+    let unit = kv(&reopened).open(descriptor()).await.unwrap();
+    let snapshot = unit.load_all().await.unwrap();
+    let stored = &snapshot.tables["records"]["row"];
+    assert_eq!(stored.as_raw(), record);
+    assert_eq!(stored, &snapshot.global);
+    assert_eq!(stored["high"].to_utf16(), Some(vec![0xd800]));
+    assert_eq!(stored["low"].to_utf16(), Some(vec![0xdfff]));
+    assert_eq!(stored["literal"].as_str(), Some("\\ud800"));
+    assert_eq!(stored["duplicate"], "last");
+    assert_eq!(stored["numbers"][4].as_raw(), "9007199254740992");
+    assert!(stored["numbers"][5].is_null());
+    assert_eq!(stored["deep"].tokens().count(), 1_025);
+    let surrogate_property = stored
+        .object_entries()
+        .unwrap()
+        .into_iter()
+        .find(|(key, _)| key.to_utf16() == Some(vec![0xd800]))
+        .unwrap()
+        .1;
+    assert_eq!(
+        surrogate_property.object_entries().unwrap()[0].0.to_utf16(),
+        Some(vec![0xdfff])
+    );
+    assert!(stored.as_serde_json().is_none());
+    reopened.close().await.unwrap();
+}
 
 fn config(path: impl AsRef<Path>) -> SqliteStorageConfig {
     SqliteStorageConfig {

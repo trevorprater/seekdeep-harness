@@ -1,7 +1,7 @@
 //! Target-portable trajectory contribution contract.
 
-use seekdeep_lossless_json::JsonValue as Value;
 use crate::json_value::{json, null};
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 
 use crate::TrajectoryRequestHeaderState;
 
@@ -51,7 +51,7 @@ pub enum TrajectoryContribution {
         /// Boundary Unix milliseconds.
         time: i64,
         /// Display-safe failure.
-        error: Option<String>,
+        error: Option<JsonString>,
     },
 }
 
@@ -102,10 +102,8 @@ impl TrajectoryContribution {
                 error: value
                     .get_value("error")
                     .map(|error| {
-                        error
-                            .as_str()
-                            .map(ToOwned::to_owned)
-                            .ok_or_else(|| "trajectory turn-end error must be a string".to_owned())
+                        error.deserialize::<JsonString>()
+                            .map_err(|_| "trajectory turn-end error must be a string".to_owned())
                     })
                     .transpose()?,
             }),
@@ -124,9 +122,12 @@ impl TrajectoryContribution {
                 partial,
                 request,
             } => {
-                let mut value = indexmap::IndexMap::from_iter([
+                let mut value = indexmap::IndexMap::<String, Value>::from_iter([
                     ("kind".to_owned(), json!("assistant")),
-                    ("partial".to_owned(), partial.clone().unwrap_or(null().clone())),
+                    (
+                        "partial".to_owned(),
+                        partial.clone().unwrap_or(null().clone()),
+                    ),
                 ]);
                 if let Some(node) = node {
                     value.insert("node".to_owned(), node.clone());
@@ -147,7 +148,7 @@ impl TrajectoryContribution {
                 json!({"kind": "session-end", "seq": seq, "time": time})
             }
             Self::TurnEnd { turn, time, error } => {
-                let mut value = indexmap::IndexMap::from_iter([
+                let mut value = indexmap::IndexMap::<String, Value>::from_iter([
                     ("kind".to_owned(), json!("turn-end")),
                     ("turn".to_owned(), json!(turn)),
                     ("time".to_owned(), json!(time)),
@@ -163,6 +164,6 @@ impl TrajectoryContribution {
 
 fn required<'a>(value: &'a Value, key: &str) -> Result<&'a Value, String> {
     value
-        .get(key)
+        .get_value(key)
         .ok_or_else(|| format!("trajectory contribution omitted {key}"))
 }

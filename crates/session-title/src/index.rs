@@ -551,7 +551,7 @@ impl SessionTitleService {
                     let title = event
                         .data
                         .get("title")
-                        .map(|title| title.deserialize::<Value>())
+                        .map(seekdeep_core::session::JsonRef::deserialize::<Value>)
                         .transpose()?
                         .unwrap_or(Value::Null);
                     if title == *state {
@@ -1226,7 +1226,8 @@ mod tests {
             data: json!({
                 "source": {"kind": "user"},
                 "content": [{"type": "text", "text": text}],
-            }),
+            })
+            .into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

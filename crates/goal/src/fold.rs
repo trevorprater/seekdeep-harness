@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 
-use seekdeep_core::session::SessionEvent;
-use seekdeep_llm::MessageSource;
-use serde_json::{Map, Value};
+use seekdeep_core::session::{JsonRef, JsonValue, SessionEvent};
+#[cfg(test)]
+use serde_json::Value;
 
 use crate::domain::{
     FoldedGoal, GoalChangeMeta, GoalClearChangeMeta, GoalMessageSource, GoalOperation,
@@ -38,16 +38,23 @@ pub fn empty_goal_fold_state() -> GoalFoldState {
     GoalFoldState::default()
 }
 
-fn check_exact_keys(
-    value: &Map<String, Value>,
-    expected: &[&str],
-    subject: &str,
-) -> anyhow::Result<()> {
-    let mut keys: Vec<&str> = value.keys().map(String::as_str).collect();
+fn check_exact_keys(value: JsonRef<'_>, expected: &[&str], subject: &str) -> anyhow::Result<()> {
+    let mut keys = value
+        .object_entries()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(key, _)| key.to_utf16().expect("JSON object keys are strings"))
+        .collect::<Vec<_>>();
     keys.sort_unstable();
+    keys.dedup();
     let mut expected_sorted: Vec<&str> = expected.to_vec();
     expected_sorted.sort_unstable();
-    if keys != expected_sorted {
+    if keys
+        != expected_sorted
+            .iter()
+            .map(|key| key.encode_utf16().collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    {
         anyhow::bail!(
             "{subject} must have exactly {} fields",
             expected_sorted.join(",")
@@ -56,8 +63,8 @@ fn check_exact_keys(
     Ok(())
 }
 
-fn positive_integer(value: &Value, field: &str) -> anyhow::Result<u64> {
-    let Some(number) = value.as_u64() else {
+fn positive_integer(value: Option<JsonRef<'_>>, field: &str) -> anyhow::Result<u64> {
+    let Some(number) = value.and_then(JsonRef::as_u64) else {
         anyhow::bail!("goal change {field} must be a positive safe integer");
     };
     if !(1..=MAX_SAFE_INTEGER).contains(&number) {
@@ -66,8 +73,8 @@ fn positive_integer(value: &Value, field: &str) -> anyhow::Result<u64> {
     Ok(number)
 }
 
-fn non_negative_integer(value: &Value, field: &str) -> anyhow::Result<u64> {
-    let Some(number) = value.as_u64() else {
+fn non_negative_integer(value: Option<JsonRef<'_>>, field: &str) -> anyhow::Result<u64> {
+    let Some(number) = value.and_then(JsonRef::as_u64) else {
         anyhow::bail!("goal change {field} must be a non-negative safe integer");
     };
     if number > MAX_SAFE_INTEGER {
@@ -87,8 +94,8 @@ fn is_lower_kebab(value: &str) -> bool {
         })
 }
 
-fn decode_block_reason(value: &Value) -> anyhow::Result<GoalBlockReason> {
-    let Some(object) = value.as_object() else {
+fn decode_block_reason(value: Option<JsonRef<'_>>) -> anyhow::Result<GoalBlockReason> {
+    let Some(object) = value.filter(|value| value.is_object()) else {
         anyhow::bail!("goal change goal.blockedReason must have exactly code and message fields");
     };
     check_exact_keys(
@@ -96,12 +103,12 @@ fn decode_block_reason(value: &Value) -> anyhow::Result<GoalBlockReason> {
         &["code", "message"],
         "goal change goal.blockedReason",
     )?;
-    let code = object.get("code").and_then(Value::as_str);
-    let message = object.get("message").and_then(Value::as_str);
+    let code = string_field(object, "code");
+    let message = string_field(object, "message");
     let Some(code) = code else {
         anyhow::bail!("goal change goal.blockedReason.code must be lower-kebab-case");
     };
-    if !is_lower_kebab(code) {
+    if !is_lower_kebab(&code) {
         anyhow::bail!("goal change goal.blockedReason.code must be lower-kebab-case");
     }
     let Some(message) = message else {
@@ -110,32 +117,29 @@ fn decode_block_reason(value: &Value) -> anyhow::Result<GoalBlockReason> {
     if message.trim().is_empty() || message != message.trim() {
         anyhow::bail!("goal change goal.blockedReason.message must be non-empty and normalized");
     }
-    Ok(GoalBlockReason {
-        code: code.to_owned(),
-        message: message.to_owned(),
-    })
+    Ok(GoalBlockReason { code, message })
 }
 
-fn decode_snapshot(value: &Value) -> anyhow::Result<GoalSnapshot> {
-    let Some(object) = value.as_object() else {
+fn decode_snapshot(value: Option<JsonRef<'_>>) -> anyhow::Result<GoalSnapshot> {
+    let Some(object) = value.filter(|value| value.is_object()) else {
         anyhow::bail!("goal change goal must be a record");
     };
-    let id = object.get("id").and_then(Value::as_str);
+    let id = string_field(object, "id");
     let Some(id) = id else {
         anyhow::bail!("goal change goal.id must be a non-empty string");
     };
     if id.is_empty() {
         anyhow::bail!("goal change goal.id must be a non-empty string");
     }
-    let objective = object.get("objective").and_then(Value::as_str);
+    let objective = string_field(object, "objective");
     let Some(objective) = objective else {
         anyhow::bail!("goal change goal.objective must be non-empty and normalized");
     };
     if objective.trim().is_empty() || objective != objective.trim() {
         anyhow::bail!("goal change goal.objective must be non-empty and normalized");
     }
-    let phase = object.get("phase").and_then(Value::as_str);
-    let phase = match phase {
+    let phase = string_field(object, "phase");
+    let phase = match phase.as_deref() {
         Some("active") => GoalPhase::Active,
         Some("paused") => GoalPhase::Paused,
         Some("blocked") => GoalPhase::Blocked,
@@ -159,37 +163,29 @@ fn decode_snapshot(value: &Value) -> anyhow::Result<GoalSnapshot> {
         expected,
         &format!("goal change goal for phase {phase:?}"),
     )?;
-    let revision = positive_integer(
-        object.get("revision").unwrap_or(&Value::Null),
-        "goal.revision",
-    )?;
-    let max_goal_rounds = positive_integer(
-        object.get("maxGoalRounds").unwrap_or(&Value::Null),
-        "goal.maxGoalRounds",
-    )?;
+    let revision = positive_integer(object.get("revision"), "goal.revision")?;
+    let max_goal_rounds = positive_integer(object.get("maxGoalRounds"), "goal.maxGoalRounds")?;
     let blocked_reason = if phase == GoalPhase::Blocked {
-        Some(decode_block_reason(
-            object.get("blockedReason").unwrap_or(&Value::Null),
-        )?)
+        Some(decode_block_reason(object.get("blockedReason"))?)
     } else {
         None
     };
     Ok(GoalSnapshot {
         id: GoalId::new(id),
         revision,
-        objective: objective.to_owned(),
+        objective,
         phase,
         blocked_reason,
         max_goal_rounds,
     })
 }
 
-fn decode_ref(value: &Value) -> anyhow::Result<GoalRef> {
-    let Some(object) = value.as_object() else {
+fn decode_ref(value: Option<JsonRef<'_>>) -> anyhow::Result<GoalRef> {
+    let Some(object) = value.filter(|value| value.is_object()) else {
         anyhow::bail!("goal clear tombstone must have exactly id and revision fields");
     };
     check_exact_keys(object, &["id", "revision"], "goal clear tombstone")?;
-    let id = object.get("id").and_then(Value::as_str);
+    let id = string_field(object, "id");
     let Some(id) = id else {
         anyhow::bail!("goal clear tombstone id must be a non-empty string");
     };
@@ -198,10 +194,7 @@ fn decode_ref(value: &Value) -> anyhow::Result<GoalRef> {
     }
     Ok(GoalRef {
         id: GoalId::new(id),
-        revision: positive_integer(
-            object.get("revision").unwrap_or(&Value::Null),
-            "cleared.revision",
-        )?,
+        revision: positive_integer(object.get("revision"), "cleared.revision")?,
     })
 }
 
@@ -210,23 +203,29 @@ fn decode_ref(value: &Value) -> anyhow::Result<GoalRef> {
 /// # Errors
 ///
 /// Returns a malformed-goal-change failure; unrelated values return none.
-pub fn decode_goal_change(value: &Value) -> anyhow::Result<Option<GoalChangeMeta>> {
-    let Some(object) = value.as_object() else {
-        return Ok(None);
-    };
-    if object.get("kind").and_then(Value::as_str) != Some("goal/change") {
+pub fn decode_goal_change<T: serde::Serialize + ?Sized>(
+    value: &T,
+) -> anyhow::Result<Option<GoalChangeMeta>> {
+    let value = JsonValue::from_serialize(value)?;
+    decode_goal_change_raw(value.as_ref())
+}
+
+pub(crate) fn decode_goal_change_raw(
+    object: JsonRef<'_>,
+) -> anyhow::Result<Option<GoalChangeMeta>> {
+    if !object.is_object() || !object.get("kind").is_some_and(|kind| kind == "goal/change") {
         return Ok(None);
     }
-    if object.get("version").and_then(Value::as_u64) != Some(u64::from(GOAL_CHANGE_VERSION)) {
+    if object.get("version").and_then(JsonRef::as_u64) != Some(u64::from(GOAL_CHANGE_VERSION)) {
         anyhow::bail!(
             "unsupported goal change version {}",
             object
                 .get("version")
-                .map_or_else(|| "undefined".to_owned(), std::string::ToString::to_string)
+                .map_or_else(|| "undefined".to_owned(), |value| value.as_raw().to_owned())
         );
     }
-    let operation = object.get("operation").and_then(Value::as_str);
-    if operation == Some("clear") {
+    let operation = string_field(object, "operation");
+    if operation.as_deref() == Some("clear") {
         check_exact_keys(
             object,
             &["cleared", "clearedAt", "kind", "operation", "version"],
@@ -236,17 +235,14 @@ pub fn decode_goal_change(value: &Value) -> anyhow::Result<Option<GoalChangeMeta
             kind: crate::domain::GoalChangeKind::GoalChange,
             version: GOAL_CHANGE_VERSION,
             operation: crate::domain::GoalClearOperation::Clear,
-            cleared: decode_ref(object.get("cleared").unwrap_or(&Value::Null))?,
-            cleared_at: non_negative_integer(
-                object.get("clearedAt").unwrap_or(&Value::Null),
-                "clearedAt",
-            )?,
+            cleared: decode_ref(object.get("cleared"))?,
+            cleared_at: non_negative_integer(object.get("clearedAt"), "clearedAt")?,
         })));
     }
     let Some(operation) = operation else {
         anyhow::bail!("goal change operation is invalid");
     };
-    let operation = match operation {
+    let operation = match operation.as_str() {
         "create" => GoalOperation::Create,
         "edit" => GoalOperation::Edit,
         "pause" => GoalOperation::Pause,
@@ -268,10 +264,8 @@ pub fn decode_goal_change(value: &Value) -> anyhow::Result<Option<GoalChangeMeta
         ],
         "goal snapshot change",
     )?;
-    let created_at =
-        non_negative_integer(object.get("createdAt").unwrap_or(&Value::Null), "createdAt")?;
-    let updated_at =
-        non_negative_integer(object.get("updatedAt").unwrap_or(&Value::Null), "updatedAt")?;
+    let created_at = non_negative_integer(object.get("createdAt"), "createdAt")?;
+    let updated_at = non_negative_integer(object.get("updatedAt"), "updatedAt")?;
     if updated_at < created_at {
         anyhow::bail!("goal change updatedAt cannot precede createdAt");
     }
@@ -279,24 +273,31 @@ pub fn decode_goal_change(value: &Value) -> anyhow::Result<Option<GoalChangeMeta
         kind: crate::domain::GoalChangeKind::GoalChange,
         version: GOAL_CHANGE_VERSION,
         operation,
-        goal: decode_snapshot(object.get("goal").unwrap_or(&Value::Null))?,
-        rounds_started: non_negative_integer(
-            object.get("roundsStarted").unwrap_or(&Value::Null),
-            "roundsStarted",
-        )?,
+        goal: decode_snapshot(object.get("goal"))?,
+        rounds_started: non_negative_integer(object.get("roundsStarted"), "roundsStarted")?,
         created_at,
         updated_at,
     })))
 }
 
-fn goal_source(source: &MessageSource) -> anyhow::Result<Option<GoalMessageSource>> {
-    if source.kind != "goal" {
+fn string_field(value: JsonRef<'_>, key: &str) -> Option<String> {
+    value.get(key)?.deserialize().ok()
+}
+
+fn goal_source(source: Option<JsonRef<'_>>) -> anyhow::Result<Option<GoalMessageSource>> {
+    let Some(source) = source.filter(|value| value.is_object()) else {
+        anyhow::bail!("goal message source is invalid");
+    };
+    let Some(kind) = source.get("kind").filter(|kind| kind.is_string()) else {
+        anyhow::bail!("goal message source is invalid");
+    };
+    if kind != "goal" {
         return Ok(None);
     }
-    let goal_id = source.fields.get("goalId").and_then(Value::as_str);
-    let revision = source.fields.get("revision").and_then(Value::as_u64);
-    let round = source.fields.get("round").and_then(Value::as_u64);
-    if goal_id.is_none_or(str::is_empty)
+    let goal_id = string_field(source, "goalId");
+    let revision = source.get("revision").and_then(JsonRef::as_u64);
+    let round = source.get("round").and_then(JsonRef::as_u64);
+    if goal_id.as_ref().is_none_or(String::is_empty)
         || revision.is_none_or(|value| value < 1)
         || round.is_none_or(|value| value < 1)
     {
@@ -480,7 +481,7 @@ pub fn apply_goal_change(state: &mut GoalFoldState, change: &GoalChangeMeta) -> 
 /// Returns a malformed-change or round-admission failure.
 pub fn apply_goal_event(state: &mut GoalFoldState, event: &SessionEvent) -> anyhow::Result<()> {
     if event.event_type == "goal/change" {
-        let change = decode_goal_change(&event.data)?;
+        let change = decode_goal_change_raw(event.data.as_ref())?;
         let Some(change) = change else {
             anyhow::bail!(
                 "goal change at session event {} has an invalid kind",
@@ -491,10 +492,7 @@ pub fn apply_goal_event(state: &mut GoalFoldState, event: &SessionEvent) -> anyh
         return Ok(());
     }
     if event.event_type == "user/message" {
-        let source: MessageSource =
-            serde_json::from_value(event.data.get("source").cloned().unwrap_or(Value::Null))
-                .map_err(|_| anyhow::anyhow!("goal message source is invalid"))?;
-        let Some(source) = goal_source(&source)? else {
+        let Some(source) = goal_source(event.data.get("source"))? else {
             return Ok(());
         };
         let current = &state.goal;
@@ -546,7 +544,7 @@ mod tests {
             event_type: event_type.to_owned(),
             seq,
             time: 0,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,

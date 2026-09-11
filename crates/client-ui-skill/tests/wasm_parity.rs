@@ -90,6 +90,7 @@ export function makeSkillRowBench(block) {
 }
 export function skillRowRender(bench, component) { bench.hooks.reset(); return component(bench.props) }
 export function skillRowText(tree) { return textOf(tree) }
+export function skillRowTextJson(tree) { return JSON.stringify(textOf(tree)) }
 export function skillRowDisclosure(tree) { return find(tree, node => node.props?.role === 'button' && node.kind === 'div') }
 export function skillRowButton(tree, text) { return find(tree, node => node.kind === 'button' && textOf(node) === text) }
 export function skillRowPre(tree) { return find(tree, node => node.kind === 'pre') }
@@ -176,6 +177,7 @@ extern "C" {
     fn makeSkillRowBench(block: &JsValue) -> JsValue;
     fn skillRowRender(bench: &JsValue, component: &Function) -> JsValue;
     fn skillRowText(tree: &JsValue) -> String;
+    fn skillRowTextJson(tree: &JsValue) -> String;
     fn skillRowDisclosure(tree: &JsValue) -> JsValue;
     fn skillRowButton(tree: &JsValue, text: &str) -> JsValue;
     fn skillRowPre(tree: &JsValue) -> JsValue;
@@ -334,6 +336,28 @@ fn running_stopped_structured_and_name_fallbacks_are_live() {
     let compact = skillRowRender(&bench, &component);
     skillRowClick(&skillRowDisclosure(&compact));
     assert!(skillRowText(&skillRowRender(&bench, &component)).contains("\"type\": \"reasoning\""));
+}
+
+#[wasm_bindgen_test]
+fn skill_row_preserves_literal_utf16_arguments_and_result_text() {
+    let pending = json(r#"{"callId":"call-skill","argsRaw":"{\"name\":\"\ud800\"}"}"#);
+    let bench = makeSkillRowBench(&pending);
+    let component = row_component(&bench);
+    assert!(skillRowTextJson(&skillRowRender(&bench, &component)).contains(r"\ud800"));
+
+    let settled = json(
+        r#"{"kind":"tool-result","callId":"call-skill","call":null,"content":[{"type":"text","text":"\udfff\nnext"}],"isError":true}"#,
+    );
+    let bench = makeSkillRowBench(&settled);
+    let component = row_component(&bench);
+    let compact = skillRowRender(&bench, &component);
+    assert!(skillRowTextJson(&compact).contains(r"\udfff"));
+    skillRowClick(&skillRowDisclosure(&compact));
+    let expanded = skillRowRender(&bench, &component);
+    assert_eq!(
+        skillRowTextJson(&skillRowPre(&expanded)),
+        r#""\udfff\nnext""#
+    );
 }
 
 #[wasm_bindgen_test(async)]

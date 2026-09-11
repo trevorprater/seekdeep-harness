@@ -1185,7 +1185,7 @@ async fn invariant_enforces_cache_ownership_and_ignores_foreign_domain_events() 
                 domain: "foreign".to_owned(),
                 table: "workspaces".to_owned(),
                 key: "missing".to_owned(),
-                value: value.clone(),
+                value: value.clone().into(),
             }),
         )
         .unwrap();
@@ -1199,7 +1199,7 @@ async fn invariant_enforces_cache_ownership_and_ignores_foreign_domain_events() 
                 domain: "workspace".to_owned(),
                 table: "workspaces".to_owned(),
                 key: workspace.id().to_string(),
-                value: value.clone(),
+                value: value.clone().into(),
             }),
         )
         .unwrap();
@@ -1226,7 +1226,7 @@ async fn invariant_enforces_cache_ownership_and_ignores_foreign_domain_events() 
             domain: "workspace".to_owned(),
             table: "workspaces".to_owned(),
             key: "unknown".to_owned(),
-            value,
+            value: value.into(),
         }),
     );
     assert!(

@@ -309,3 +309,29 @@ fn public_chat_assembly_retains_lossless_event_views_and_reuses_unchanged_data()
     ));
     assert!(Object::is(&next, &assembler.get("chat").unwrap()));
 }
+
+#[wasm_bindgen_test]
+fn failure_display_preserves_raw_messages_and_redacts_auth_before_rendering() {
+    for (input, expected) in [
+        (r#""\ud800""#, r#""\ud800""#),
+        (
+            r#"{"message":"\udfff","extra":{"\ud800":"\udfff"}}"#,
+            r#""\udfff""#,
+        ),
+        (
+            r#"{"code":"AUTH","message":"\ud800"}"#,
+            r#""API key is invalid""#,
+        ),
+        (r#"{"\ud800":"\udfff"}"#, r#""{\"\\ud800\":\"\\udfff\"}""#),
+    ] {
+        let failure = js_sys::JSON::parse(input).unwrap();
+        let message = display_failure_message_js(failure).unwrap();
+        assert_eq!(
+            js_sys::JSON::stringify(&message)
+                .unwrap()
+                .as_string()
+                .as_deref(),
+            Some(expected)
+        );
+    }
+}

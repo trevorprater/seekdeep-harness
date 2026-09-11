@@ -1,7 +1,7 @@
 //! Immutable model-context generations reconstructed from surface replacements.
 
-use serde::{Deserialize, Serialize};
 use seekdeep_lossless_json::JsonValue as Value;
+use serde::{Deserialize, Serialize};
 
 use crate::ConversationPromptSnapshot;
 

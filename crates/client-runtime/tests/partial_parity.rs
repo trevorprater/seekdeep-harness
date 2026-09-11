@@ -156,9 +156,7 @@ fn each_delta_replaces_only_its_block_reference() {
         1,
         0,
         vec![
-            Rc::new(AssistantBlock::Text {
-                text: "a".into(),
-            }),
+            Rc::new(AssistantBlock::Text { text: "a".into() }),
             Rc::new(AssistantBlock::Text {
                 text: "stable".into(),
             }),
@@ -194,13 +192,9 @@ fn visible_chunk_discriminants_match_source() {
 fn streamed_surrogates_join_without_replacing_unchanged_blocks_or_raw_payloads() {
     let high = JsonString::from_utf16(&[0xd800]);
     let low = JsonString::from_utf16(&[0xdc00]);
-    let raw = Value::parse(r#"{"type":"future","payload":{"\udfff":"\ud800"}}"#.to_owned())
-        .unwrap();
-    let mut accumulator = PartialAccumulator::new(
-        1,
-        0,
-        vec![Rc::new(to_assistant_block(&raw))],
-    );
+    let raw =
+        Value::parse(r#"{"type":"future","payload":{"\udfff":"\ud800"}}"#.to_owned()).unwrap();
+    let mut accumulator = PartialAccumulator::new(1, 0, vec![Rc::new(to_assistant_block(&raw))]);
     let before = accumulator.partial();
     accumulator.push(&PartialChunk::TextDelta {
         index: 1,
@@ -209,12 +203,20 @@ fn streamed_surrogates_join_without_replacing_unchanged_blocks_or_raw_payloads()
     let mid = accumulator.partial();
     assert!(Rc::ptr_eq(&before.blocks[0], &mid.blocks[0]));
     assert_eq!(mid.blocks[1].as_ref(), &AssistantBlock::Text { text: high });
-    accumulator.push(&PartialChunk::TextDelta { index: 1, text: low });
+    accumulator.push(&PartialChunk::TextDelta {
+        index: 1,
+        text: low,
+    });
     let after = accumulator.partial();
     assert!(Rc::ptr_eq(&mid.blocks[0], &after.blocks[0]));
     assert_eq!(
         after.blocks[1].as_ref(),
-        &AssistantBlock::Text { text: JsonString::from_utf16(&[0xd800, 0xdc00]) }
+        &AssistantBlock::Text {
+            text: JsonString::from_utf16(&[0xd800, 0xdc00])
+        }
     );
-    assert_eq!(after.blocks[0].as_ref(), &AssistantBlock::Other { block: raw });
+    assert_eq!(
+        after.blocks[0].as_ref(),
+        &AssistantBlock::Other { block: raw }
+    );
 }

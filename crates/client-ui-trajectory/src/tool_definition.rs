@@ -2,16 +2,16 @@
 
 use std::rc::Rc;
 
+use crate::json_value::{json, null};
+use indexmap::IndexMap as Map;
 use indexmap::{IndexMap, IndexSet};
 use seekdeep_client_runtime::{
     AssemblerNodeDefinition, ConversationAssemblerError, ConversationBoundaryStatus,
     ConversationLocation, ConversationMatch, ConversationMatchResult, ConversationMatchRole,
     ConversationNodeContext,
 };
-use serde::{Deserialize, Serialize};
-use indexmap::IndexMap as Map;
 use seekdeep_lossless_json::JsonValue as Value;
-use crate::json_value::{json, null};
+use serde::{Deserialize, Serialize};
 
 use crate::{TRAJECTORY_TARGET, trajectory_node_at};
 
@@ -68,7 +68,7 @@ pub fn trajectory_tool_definition() -> AssemblerNodeDefinition {
             let root_id = block_call_id(&root)?.to_owned();
             encode(&ToolState {
                 root_id: root_id.clone(),
-                calls: IndexMap::from_iter([(root_id, root)]),
+                calls: IndexMap::<String, Value>::from_iter([(root_id, root)]),
                 children: IndexMap::new(),
                 parents: IndexMap::new(),
             })
@@ -175,7 +175,7 @@ fn root_result(
         .get_value("message")
         .and_then(|message| message.get_value("source"))
         .unwrap_or(null());
-    let mut block = Map::from_iter([
+    let mut block = Map::<String, Value>::from_iter([
         ("kind".to_owned(), json!("tool-result")),
         ("seq".to_owned(), json!(accepted.event.seq)),
         ("time".to_owned(), json!(accepted.event.time)),
@@ -201,7 +201,10 @@ fn root_result(
         ),
         (
             "content".to_owned(),
-            result.get_value("content").cloned().unwrap_or(null().clone()),
+            result
+                .get_value("content")
+                .cloned()
+                .unwrap_or(null().clone()),
         ),
         (
             "isError".to_owned(),
@@ -412,7 +415,7 @@ fn fallback_state(
     let root_id = block_call_id(&root)?.to_owned();
     let mut state = ToolState {
         root_id: root_id.clone(),
-        calls: IndexMap::from_iter([(root_id, root)]),
+        calls: IndexMap::<String, Value>::from_iter([(root_id, root)]),
         children: IndexMap::new(),
         parents: IndexMap::new(),
     };
@@ -445,9 +448,8 @@ fn with_sub_calls(
     sub_calls: Vec<Value>,
 ) -> Result<Value, ConversationAssemblerError> {
     block
-        .as_object_mut()
-        .ok_or_else(|| ConversationAssemblerError::new("trajectory Tool block must be an object"))?
-        .insert("subCalls".to_owned(), Value::array(&sub_calls));
+        .insert("subCalls", Value::array(&sub_calls))
+        .map_err(|_| ConversationAssemblerError::new("trajectory Tool block must be an object"))?;
     Ok(block)
 }
 
@@ -487,38 +489,35 @@ fn is_settled(block: &Value) -> bool {
 
 fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, ConversationAssemblerError> {
     value
-        .get(key)
+        .get_value(key)
         .and_then(Value::as_str)
         .ok_or_else(|| ConversationAssemblerError::new(format!("dispatch omitted {key}")))
 }
 
 fn json_stringify(value: Option<&Value>) -> Result<Value, ConversationAssemblerError> {
-    value.map_or(Ok(null().clone()), |value| {
-        serde_json::to_string(value)
-            .map(Value::String)
-            .map_err(|error| ConversationAssemblerError::new(error.to_string()))
-    })
+    value.map_or(Ok(null().clone()), |value| Ok(json!(value.stringify())))
 }
 
 fn js_member_string(value: &Value, key: &str) -> String {
     value
-        .get(key)
+        .get_value(key)
         .map_or_else(|| "undefined".to_owned(), js_string)
 }
 
 fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        null().clone() => "null".to_owned(),
-        Value::Bool(value) => value.to_string(),
-        Value::Number(value) => value.to_string(),
-        Value::array(&values) => values.iter().map(js_string).collect::<Vec<_>>().join(","),
-        Value::object(_) => "[object Object]".to_owned(),
+    if let Some(text) = value.as_str() {
+        text.to_owned()
+    } else if let Some(values) = value.as_array() {
+        values.iter().map(js_string).collect::<Vec<_>>().join(",")
+    } else if value.is_object() {
+        "[object Object]".to_owned()
+    } else {
+        value.stringify()
     }
 }
 
 fn copy_present(output: &mut Map<String, Value>, input: &Value, key: &str) {
-    if let Some(value) = input.get(key) {
+    if let Some(value) = input.get_value(key) {
         output.insert(key.to_owned(), value.clone());
     }
 }
@@ -530,7 +529,8 @@ fn encode(state: &ToolState) -> Result<Rc<Value>, ConversationAssemblerError> {
 }
 
 fn decode(value: &Value) -> Result<ToolState, ConversationAssemblerError> {
-    value.deserialize()
+    value
+        .deserialize()
         .map_err(|error| ConversationAssemblerError::new(error.to_string()))
 }
 

@@ -12,7 +12,7 @@ pub use wasm::*;
 pub const SKILL_ROW_STYLES: &str = include_str!("../data/skill-row.css");
 
 use seekdeep_client_ui_tool::{ToolCallBlock, result_text};
-use serde_json::Value;
+use seekdeep_lossless_json::{JsonString, JsonValue};
 
 /// Stable Host plugin identity.
 pub const NAME: &str = "client-ui-skill";
@@ -44,32 +44,37 @@ pub enum SkillRowState {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SkillRowModel {
     /// Skill name or durable fallback.
-    pub name: String,
+    pub name: JsonString,
     /// Flattened durable output.
-    pub output: Option<String>,
+    pub output: Option<JsonString>,
     /// First output line on execution failure.
-    pub error_summary: Option<String>,
+    pub error_summary: Option<JsonString>,
     /// Current lifecycle.
     pub state: SkillRowState,
 }
 
-fn first_line(text: &str) -> &str {
-    text.split_once('\n').map_or(text, |(first, _)| first)
+fn first_line(text: &JsonString) -> JsonString {
+    let units = text.utf16_units();
+    let end = units
+        .iter()
+        .position(|unit| *unit == u16::from(b'\n'))
+        .unwrap_or(units.len());
+    JsonString::from_utf16(&units[..end])
 }
 
-fn skill_name(args_raw: &str, call_id: &str) -> String {
-    if let Ok(Value::Object(arguments)) = serde_json::from_str(args_raw)
+fn skill_name(args_raw: &JsonString, call_id: &str) -> JsonString {
+    if let Ok(arguments) = JsonValue::parse_text(args_raw)
         && let Some(name) = arguments
-            .get("name")
-            .and_then(Value::as_str)
+            .get_value("name")
+            .and_then(|value| value.deserialize::<JsonString>().ok())
             .filter(|name| !name.is_empty())
     {
-        return first_line(name).to_owned();
+        return first_line(&name);
     }
     if args_raw.is_empty() {
-        call_id.to_owned()
+        call_id.into()
     } else {
-        first_line(args_raw).to_owned()
+        first_line(args_raw)
     }
 }
 
@@ -77,13 +82,15 @@ fn skill_name(args_raw: &str, call_id: &str) -> String {
 #[must_use]
 pub fn skill_row_model(block: &ToolCallBlock) -> SkillRowModel {
     let (args_raw, state) = match block {
-        ToolCallBlock::Running { args_raw, .. } => (args_raw.as_str(), SkillRowState::Running),
+        ToolCallBlock::Running { args_raw, .. } => (args_raw.clone(), SkillRowState::Running),
         ToolCallBlock::Settled {
             call,
             error: Some(error),
             ..
         } if error.code == "interrupted" => (
-            call.as_ref().map_or("", |call| call.args_raw.as_str()),
+            call.as_ref()
+                .map(|call| call.args_raw.clone())
+                .unwrap_or_default(),
             SkillRowState::Stopped,
         ),
         ToolCallBlock::Settled {
@@ -91,11 +98,15 @@ pub fn skill_row_model(block: &ToolCallBlock) -> SkillRowModel {
             is_error: true,
             ..
         } => (
-            call.as_ref().map_or("", |call| call.args_raw.as_str()),
+            call.as_ref()
+                .map(|call| call.args_raw.clone())
+                .unwrap_or_default(),
             SkillRowState::Error,
         ),
         ToolCallBlock::Settled { call, .. } => (
-            call.as_ref().map_or("", |call| call.args_raw.as_str()),
+            call.as_ref()
+                .map(|call| call.args_raw.clone())
+                .unwrap_or_default(),
             SkillRowState::Ok,
         ),
     };
@@ -104,9 +115,9 @@ pub fn skill_row_model(block: &ToolCallBlock) -> SkillRowModel {
         .then(|| result_text(block))
         .filter(|output| !output.is_empty());
     SkillRowModel {
-        name: skill_name(args_raw, block.call_id()),
+        name: skill_name(&args_raw, block.call_id()),
         error_summary: (state == SkillRowState::Error)
-            .then(|| output.as_deref().map(first_line).map(ToOwned::to_owned))
+            .then(|| output.as_ref().map(first_line))
             .flatten(),
         output,
         state,

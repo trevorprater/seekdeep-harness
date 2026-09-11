@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize, Serializer, ser::SerializeMap as _};
 
 use crate::brand::{RetryId, RetryPolicyKey};
 
+mod deserialize;
+
 /// Exhaustive retry mode recorded at the durable boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -17,13 +19,11 @@ pub enum LlmRetryMode {
 }
 
 /// Durable payload written before one provider-routed backoff.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(tag = "mode", rename_all = "lowercase", deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LlmRetryEventData {
     /// One bounded retry attempt.
     Normal {
         /// Retry-chain identity.
-        #[serde(rename = "retryId")]
         retry_id: RetryId,
         /// Owning turn.
         turn: u64,
@@ -32,15 +32,12 @@ pub enum LlmRetryEventData {
         /// Provider route that served the failed request.
         provider: ProviderId,
         /// Canonical resolved-policy identity.
-        #[serde(rename = "policyKey")]
         policy_key: RetryPolicyKey,
         /// One-based attempt number inside the provider-policy chain.
         retry: u64,
         /// Finite maximum number of retries.
-        #[serde(rename = "maxRetries")]
         max_retries: u64,
         /// Scheduled wait in milliseconds.
-        #[serde(rename = "delayMs")]
         delay_ms: f64,
         /// Complete provider-neutral failure.
         failure: LlmFailure,
@@ -48,7 +45,6 @@ pub enum LlmRetryEventData {
     /// One unbounded retry attempt.
     Always {
         /// Retry-chain identity.
-        #[serde(rename = "retryId")]
         retry_id: RetryId,
         /// Owning turn.
         turn: u64,
@@ -57,12 +53,10 @@ pub enum LlmRetryEventData {
         /// Provider route that served the failed request.
         provider: ProviderId,
         /// Canonical resolved-policy identity.
-        #[serde(rename = "policyKey")]
         policy_key: RetryPolicyKey,
         /// One-based attempt number inside the provider-policy chain.
         retry: u64,
         /// Scheduled wait in milliseconds.
-        #[serde(rename = "delayMs")]
         delay_ms: f64,
         /// Complete provider-neutral failure.
         failure: LlmFailure,
@@ -222,6 +216,17 @@ pub struct LlmRetryStartedEventData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fractional_delays_round_trip_through_raw_json_in_both_modes() {
+        for (mode, maximum) in [("normal", ",\"maxRetries\":2"), ("always", "")] {
+            let raw = format!(
+                r#"{{"retryId":"chain","turn":1,"step":1,"provider":"mock","mode":"{mode}","policyKey":"policy","retry":1{maximum},"delayMs":1.1,"failure":{{"message":"busy","code":"RATE_LIMIT","providerRetryAfterMs":0.25}}}}"#
+            );
+            let decoded: LlmRetryEventData = serde_json::from_str(&raw).unwrap();
+            assert_eq!(serde_json::to_string(&decoded).unwrap(), raw);
+        }
+    }
 
     #[test]
     fn retry_event_uses_source_json_field_order_and_number_rendering() {

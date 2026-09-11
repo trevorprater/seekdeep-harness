@@ -514,7 +514,9 @@ fn summarized_text(input: &SummarizationInput) -> String {
     fn blocks(input: &[ContentBlock], output: &mut Vec<String>) {
         for block in input {
             match block {
-                ContentBlock::Text { text } => output.push(text.as_str().expect("fixture uses scalar text").to_owned()),
+                ContentBlock::Text { text } => {
+                    output.push(text.as_str().expect("fixture uses scalar text").to_owned());
+                }
                 ContentBlock::ToolResult { content, .. } => blocks(content, output),
                 _ => {}
             }

@@ -98,6 +98,27 @@ pub(crate) struct NodeRealm {
     executor: CommandExecutor,
     value_identities: Mutex<ValueIdentities>,
     closed: Arc<AtomicBool>,
+    turn: Mutex<Option<Vec<Value>>>,
+}
+
+pub(crate) struct NodeTurn<'a> {
+    realm: &'a NodeRealm,
+    finished: bool,
+}
+
+impl NodeTurn<'_> {
+    pub(crate) fn finish(mut self) -> Result<(), LoaderError> {
+        self.finished = true;
+        self.realm.flush_turn()
+    }
+}
+
+impl Drop for NodeTurn<'_> {
+    fn drop(&mut self) {
+        if !self.finished {
+            let _ = self.realm.flush_turn();
+        }
+    }
 }
 
 impl std::fmt::Debug for NodeRealm {
@@ -279,6 +300,7 @@ impl NodeRealm {
             executor: CommandExecutor::new()?,
             value_identities: Mutex::default(),
             closed,
+            turn: Mutex::new(None),
         }))
     }
 
@@ -299,6 +321,11 @@ impl NodeRealm {
         }
         let id = self.next_request.fetch_add(1, Ordering::Relaxed);
         message["id"] = json!(id);
+        let defer = matches!(&response, Response::Async(_))
+            && matches!(
+                message["action"].as_str(),
+                Some("activate" | "deactivate" | "invoke")
+            );
         self.pending.lock().insert(id, response);
         if self.closed.load(Ordering::Acquire) {
             self.pending.lock().remove(&id);
@@ -306,8 +333,46 @@ impl NodeRealm {
                 "Node plugin realm closed".to_owned(),
             ));
         }
+        let mut turn = self.turn.lock();
+        if defer && let Some(messages) = turn.as_mut() {
+            messages.push(message);
+            return Ok(());
+        }
         if let Err(error) = self.write(&message) {
             self.pending.lock().remove(&id);
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn defer_turn(&self) -> Result<NodeTurn<'_>, LoaderError> {
+        let mut turn = self.turn.lock();
+        if turn.is_some() {
+            return Err(LoaderError::UpdateInProgress);
+        }
+        *turn = Some(Vec::new());
+        Ok(NodeTurn {
+            realm: self,
+            finished: false,
+        })
+    }
+
+    fn flush_turn(&self) -> Result<(), LoaderError> {
+        let mut turn = self.turn.lock();
+        let Some(messages) = turn.take() else {
+            return Ok(());
+        };
+        if messages.is_empty() {
+            return Ok(());
+        }
+        if let Err(error) = self.write(&json!({"batch":messages})) {
+            for message in messages {
+                if let Some(id) = message["id"].as_u64()
+                    && let Some(reply) = self.pending.lock().remove(&id)
+                {
+                    reply.send(Err(json!({"message":error.to_string()})));
+                }
+            }
             return Err(error);
         }
         Ok(())

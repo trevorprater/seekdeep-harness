@@ -25,6 +25,7 @@ mod search_index;
 mod snapshot_builder;
 mod table_controller;
 mod table_projection;
+mod text_value;
 mod timeline;
 mod timeline_controller;
 mod tool_definition;

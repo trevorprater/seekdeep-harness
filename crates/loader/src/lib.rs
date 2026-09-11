@@ -1107,7 +1107,16 @@ impl PluginCatalog {
         ));
         settlement.attach(&runtime);
         let mut mounted = Vec::new();
-        if let Err(error) = mount_entries(self, context, entries, &mut mounted).await {
+        let realm = self.node_realm.lock().clone();
+        let turn = realm.as_ref().map(|realm| realm.defer_turn()).transpose()?;
+        let deferred = context.registry().defer_lifecycle();
+        let admission = register_entries(self, context, entries, &mut mounted);
+        drop(deferred);
+        let flushed = turn
+            .map(node_plugin::NodeTurn::finish)
+            .transpose()
+            .map(|_| ());
+        if let Err(error) = admission.and(flushed) {
             let mut failures = vec![error.to_string()];
             if let Err(cleanup) = runtime.dispose_programmatic().await {
                 failures.push(cleanup.to_string());
@@ -1222,6 +1231,70 @@ fn validate_unique_tree(entries: &[Entry]) -> Result<(), LoaderError> {
 
 type MountFuture<'a> = Pin<Box<dyn Future<Output = Result<(), LoaderError>> + Send + 'a>>;
 
+fn register_entries(
+    catalog: &PluginCatalog,
+    context: &Context,
+    entries: &[Entry],
+    mounted: &mut Vec<MountedEntry>,
+) -> Result<(), LoaderError> {
+    for entry in entries {
+        mounted.push(register_entry(catalog, context, entry, None)?);
+        let mounted = mounted.last_mut().expect("entry was just inserted");
+        if !mounted.effective_disabled {
+            let context = mounted.fiber.as_ref().map_or_else(
+                || mounted.entry_context.clone(),
+                |fiber| fiber.context().clone(),
+            );
+            register_entries(catalog, &context, &entry.children, &mut mounted.children)?;
+        }
+    }
+    Ok(())
+}
+
+fn register_entry(
+    catalog: &PluginCatalog,
+    parent_context: &Context,
+    entry: &Entry,
+    resolved: Option<ResolvedPlugin>,
+) -> Result<MountedEntry, LoaderError> {
+    let disabled = effective_disabled(catalog, parent_context, entry)?;
+    let entry_context = child_context(parent_context, entry);
+    let mut mounted = MountedEntry {
+        options: entry.clone(),
+        effective_disabled: disabled,
+        parent_context: parent_context.clone(),
+        entry_context,
+        fiber: None,
+        plugin: None,
+        module_path: None,
+        children: Vec::new(),
+    };
+    if disabled || entry.group || entry.include.is_some() {
+        return Ok(mounted);
+    }
+    let environment = catalog.expressions.clone();
+    let resolved = resolved
+        .map_or_else(
+            || catalog.resolve_entry(&mounted.entry_context, &entry.plugin),
+            Ok,
+        )
+        .map_err(|error| entry_import_failure(entry, error))?;
+    let plugin = resolved
+        .plugin
+        .with_additional_inject(entry.inject.clone())
+        .with_config_resolver(move |context, raw| {
+            expression::interpolate_config(&environment, context, raw)
+        });
+    let fiber = mounted
+        .entry_context
+        .plugin(plugin.clone(), entry.config.clone())
+        .map_err(|error| entry_failure(entry, error))?;
+    mounted.fiber = Some(fiber);
+    mounted.plugin = Some(plugin);
+    mounted.module_path = resolved.module_path;
+    Ok(mounted)
+}
+
 fn mount_entries<'a>(
     catalog: &'a PluginCatalog,
     context: &'a Context,
@@ -1254,57 +1327,28 @@ fn mount_entry_with_plugin<'a>(
     resolved: Option<ResolvedPlugin>,
 ) -> Pin<Box<dyn Future<Output = Result<MountedEntry, LoaderError>> + Send + 'a>> {
     Box::pin(async move {
-        let disabled = effective_disabled(catalog, parent_context, entry)?;
-        let entry_context = child_context(parent_context, entry);
+        let mut mounted = register_entry(catalog, parent_context, entry, resolved)?;
         if entry.group || entry.include.is_some() {
-            let mut children = Vec::new();
-            if !disabled
-                && let Err(error) =
-                    mount_entries(catalog, &entry_context, &entry.children, &mut children).await
+            if !mounted.effective_disabled
+                && let Err(error) = mount_entries(
+                    catalog,
+                    &mounted.entry_context,
+                    &entry.children,
+                    &mut mounted.children,
+                )
+                .await
             {
-                let error = match dispose_entries(&mut children).await {
+                let error = match dispose_entries(&mut mounted.children).await {
                     Ok(()) => error,
                     Err(cleanup) => LoaderError::Disposal(format!("{error}; {cleanup}")),
                 };
                 return Err(error);
             }
-            return Ok(MountedEntry {
-                options: entry.clone(),
-                effective_disabled: disabled,
-                parent_context: parent_context.clone(),
-                entry_context,
-                fiber: None,
-                plugin: None,
-                module_path: None,
-                children,
-            });
+            return Ok(mounted);
         }
-        if disabled {
-            return Ok(MountedEntry {
-                options: entry.clone(),
-                effective_disabled: true,
-                parent_context: parent_context.clone(),
-                entry_context,
-                fiber: None,
-                plugin: None,
-                module_path: None,
-                children: Vec::new(),
-            });
-        }
-        let environment = catalog.expressions.clone();
-        let resolved = resolved
-            .map_or_else(|| catalog.resolve_entry(&entry_context, &entry.plugin), Ok)
-            .map_err(|error| entry_import_failure(entry, error))?;
-        let module_path = resolved.module_path;
-        let plugin = resolved
-            .plugin
-            .with_additional_inject(entry.inject.clone())
-            .with_config_resolver(move |context, raw| {
-                expression::interpolate_config(&environment, context, raw)
-            });
-        let fiber = entry_context
-            .plugin(plugin.clone(), entry.config.clone())
-            .map_err(|error| entry_failure(entry, error))?;
+        let Some(fiber) = mounted.fiber.clone() else {
+            return Ok(mounted);
+        };
         if let Err(error) = fiber.await_settled().await {
             let startup = entry_failure(entry, error);
             let cleanup = fiber.dispose().await;
@@ -1313,12 +1357,16 @@ fn mount_entry_with_plugin<'a>(
                 Err(cleanup) => LoaderError::Disposal(format!("{startup}; {cleanup:#}")),
             });
         }
-        let mut children = Vec::new();
-        if let Err(error) =
-            mount_entries(catalog, fiber.context(), &entry.children, &mut children).await
+        if let Err(error) = mount_entries(
+            catalog,
+            fiber.context(),
+            &entry.children,
+            &mut mounted.children,
+        )
+        .await
         {
             let mut errors = vec![error.to_string()];
-            if let Err(error) = dispose_entries(&mut children).await {
+            if let Err(error) = dispose_entries(&mut mounted.children).await {
                 errors.push(error.to_string());
             }
             if let Err(error) = fiber.dispose().await {
@@ -1326,16 +1374,7 @@ fn mount_entry_with_plugin<'a>(
             }
             return Err(LoaderError::Disposal(errors.join("; ")));
         }
-        Ok(MountedEntry {
-            options: entry.clone(),
-            effective_disabled: false,
-            parent_context: parent_context.clone(),
-            entry_context,
-            fiber: Some(fiber),
-            plugin: Some(plugin),
-            module_path,
-            children,
-        })
+        Ok(mounted)
     })
 }
 

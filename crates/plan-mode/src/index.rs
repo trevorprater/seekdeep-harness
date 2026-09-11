@@ -14,7 +14,7 @@ use seekdeep_agent::{Agent, AgentEvent, PreStepDecision};
 use seekdeep_agent_loop::AgentPreStepEvent;
 use seekdeep_commands::{COMMANDS, CommandDefinition, CommandInvocation, CommandResult};
 use seekdeep_cordis::{Context, EventOptions, EventReply, Plugin, ServiceKey, fiber::EffectHandle};
-use seekdeep_core::session::{AppendOptions, Session, SessionEvent};
+use seekdeep_core::session::{AppendOptions, JsonRef, Session, SessionEvent};
 use seekdeep_llm::{ContentBlock, JsonString, MessageSource, UserMessage};
 use seekdeep_session_projection::{
     ProjectionDefinition, ProjectionTransition, SESSION_PROJECTIONS,
@@ -118,7 +118,7 @@ pub fn fold_plan_mode(events: &[SessionEvent], end: usize) -> bool {
             active = event
                 .data
                 .get("active")
-                .and_then(|active| active.as_bool())
+                .and_then(JsonRef::as_bool)
                 .unwrap_or(false);
         }
     }
@@ -507,7 +507,7 @@ impl PlanModeController {
                     current.active = event
                         .data
                         .get("active")
-                        .and_then(|active| active.as_bool())
+                        .and_then(JsonRef::as_bool)
                         .unwrap_or(false);
                     current.wanted = None;
                     return ProjectionTransition::changed(current);

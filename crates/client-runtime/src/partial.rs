@@ -175,7 +175,11 @@ impl PartialAccumulator {
                         name,
                         args_raw,
                     }) => (call_id.clone(), name.clone(), args_raw.clone()),
-                    _ => (JsonString::default(), JsonString::default(), JsonString::default()),
+                    _ => (
+                        JsonString::default(),
+                        JsonString::default(),
+                        JsonString::default(),
+                    ),
                 };
                 self.set(
                     *index,
@@ -230,17 +234,19 @@ impl PartialAccumulator {
 pub fn empty_assistant_block(block_type: &str) -> AssistantBlock {
     match block_type {
         "text" => AssistantBlock::Text {
-            text: JsonString::new(),
+            text: JsonString::default(),
         },
         "reasoning" => AssistantBlock::Reasoning {
-            text: JsonString::new(),
+            text: JsonString::default(),
         },
         "tool-call" => AssistantBlock::ToolCall {
-            call_id: JsonString::new(),
-            name: JsonString::new(),
-            args_raw: JsonString::new(),
+            call_id: JsonString::default(),
+            name: JsonString::default(),
+            args_raw: JsonString::default(),
         },
-        _ => AssistantBlock::Other { block: serde_json::Value::Null.into() },
+        _ => AssistantBlock::Other {
+            block: serde_json::Value::Null.into(),
+        },
     }
 }
 
@@ -261,7 +267,10 @@ pub fn to_assistant_block(block: &Value) -> AssistantBlock {
                 .unwrap_or_default(),
         },
         Some("image") => AssistantBlock::Image {
-            attachment: block.get_value("attachment").cloned().unwrap_or_else(|| serde_json::Value::Null.into()),
+            attachment: block
+                .get_value("attachment")
+                .cloned()
+                .unwrap_or_else(|| serde_json::Value::Null.into()),
         },
         Some("tool-call") => AssistantBlock::ToolCall {
             call_id: block

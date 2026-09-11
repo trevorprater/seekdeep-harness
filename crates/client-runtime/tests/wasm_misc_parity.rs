@@ -60,6 +60,32 @@ fn durable_context_projection_and_known_forms_keep_js_shapes() {
 }
 
 #[wasm_bindgen_test]
+fn context_projection_retains_utf16_labels_and_ignores_unrelated_raw_metadata() {
+    let source = js_sys::JSON::parse(
+        r#"{"kind":"session-reference","form":"recall","references":[{"label":"\ud800"},{"label":"\udfff"},{"label":"\ud800"}],"metadata":{"\ud800":"\udfff"}}"#,
+    ).unwrap();
+    let view = context_provenance_js(source.clone()).unwrap();
+    assert_eq!(get(&view, "role"), JsValue::from_str("recall"));
+    assert_eq!(
+        js_sys::JSON::stringify(&get(&view, "label"))
+            .unwrap()
+            .as_string()
+            .as_deref(),
+        Some(r#""\ud800, \udfff""#)
+    );
+    assert_eq!(
+        context_form_js(source).unwrap(),
+        JsValue::from_str("recall")
+    );
+    let unknown = js_sys::JSON::parse(r#"{"kind":"\ud800","form":"\udfff"}"#).unwrap();
+    assert_eq!(
+        get(&context_provenance_js(unknown.clone()).unwrap(), "label"),
+        get(&unknown, "kind")
+    );
+    assert!(context_form_js(unknown).unwrap().is_null());
+}
+
+#[wasm_bindgen_test]
 fn ordered_baseline_uses_js_key_identity_and_returns_baseline_values() {
     let current = Array::new();
     current.push(&row("b", 1.0));

@@ -3,9 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use indexmap::IndexSet;
+use seekdeep_lossless_json::{JsonString, JsonValue as Value};
 use serde::{Deserialize, Serialize};
-use seekdeep_lossless_json::JsonValue as Value;
-use crate::json_value::{json, null};
 
 use crate::{
     AssistantMetricDetail, CollapsedSummaryKind, TrajectoryCell, TrajectoryCellKind,
@@ -30,7 +29,7 @@ pub struct TrajectoryTableRecord {
     /// Whether this is the final row in its source section.
     pub turn_end: bool,
     /// Synthetic folded-row description.
-    pub collapsed_summary: Option<String>,
+    pub collapsed_summary: Option<JsonString>,
     /// Synthetic folded-row class.
     pub collapsed_summary_kind: Option<CollapsedSummaryKind>,
 }
@@ -91,7 +90,7 @@ pub struct TrajectoryRequestNumber {
     /// Recorded completion time in Unix milliseconds.
     pub completed_at: Option<f64>,
     /// Display-safe failure.
-    pub error: Option<String>,
+    pub error: Option<JsonString>,
     /// Scheduled retry ordinal.
     pub retry: Option<u64>,
     /// Maximum retry count.
@@ -101,9 +100,9 @@ pub struct TrajectoryRequestNumber {
     /// Result event sequence.
     pub result_seq: Option<u64>,
     /// Provider name.
-    pub provider: Option<String>,
+    pub provider: Option<JsonString>,
     /// Model name.
-    pub model: Option<String>,
+    pub model: Option<JsonString>,
     /// Exact provider request configuration.
     pub request_config: Option<Value>,
     /// Per-request usage.
@@ -186,9 +185,9 @@ pub struct TrajectoryDetailTabItem {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TrajectoryToolCallTextParts {
     /// Tool name.
-    pub name: String,
+    pub name: JsonString,
     /// Serialized arguments, when separated from the name.
-    pub arguments: Option<String>,
+    pub arguments: Option<JsonString>,
 }
 
 /// Parent record indexes for a Tool or Subtool record.
@@ -204,9 +203,9 @@ pub struct TrajectoryParentRecords {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParsedTrajectoryToolSchema {
     /// Tool name.
-    pub name: String,
+    pub name: JsonString,
     /// Tool description.
-    pub description: String,
+    pub description: JsonString,
     /// Object-valued parameters schema.
     pub parameters: Value,
 }
@@ -725,7 +724,7 @@ pub fn trajectory_assistant_throughput(metrics: &AssistantMetricDetail) -> Strin
 /// Builds the source label for a model-visible message producer.
 #[must_use]
 pub fn trajectory_message_source_label(source: &Value) -> String {
-    let Some(properties) = source.as_object() else {
+    let Some(properties) = source.is_object().then_some(source) else {
         return "Unknown".to_owned();
     };
     match properties.get_value("kind").and_then(Value::as_str) {
@@ -945,14 +944,14 @@ pub fn trajectory_parent_records(
 pub fn parse_trajectory_json_container(value: &str) -> Option<Value> {
     serde_json::from_str(value)
         .ok()
-        .filter(|value| matches!(value, Value::object(_) | Value::array(&_)))
+        .filter(|value: &Value| value.is_object() || value.is_array())
 }
 
 /// Parses the exact object-shaped Tool schema accepted by the inspector.
 #[must_use]
 pub fn parse_trajectory_tool_schema(value: &str) -> Option<ParsedTrajectoryToolSchema> {
     let parsed: Value = serde_json::from_str(value).ok()?;
-    let schema = parsed.as_object()?;
+    let schema = parsed.is_object().then_some(&parsed)?;
     let name = schema.get_value("name")?.as_str()?.to_owned();
     let description = schema.get_value("description")?.as_str()?.to_owned();
     let parameters = schema.get_value("parameters")?.clone();

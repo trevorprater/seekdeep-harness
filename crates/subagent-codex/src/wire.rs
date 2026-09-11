@@ -500,27 +500,7 @@ fn handle_notification_inner(
                 .unwrap_or_else(|| Value::Null.into()),
             "item/completed item",
         )?;
-        if item.get_value("type").and_then(JsonValue::as_str) != Some("agentMessage") {
-            return Ok(());
-        }
-        let text = item
-            .get("text")
-            .and_then(|text| text.deserialize::<JsonString>().ok())
-            .ok_or_else(|| {
-                anyhow::anyhow!("subagent-codex: app-server returned an invalid agent message")
-            })?;
-        match item.get_value("phase") {
-            Some(phase) if phase == "final_answer" => {
-                state.last_final_answer = Some(text);
-            }
-            Some(phase) if phase.is_null() => state.last_unphased_answer = Some(text),
-            Some(phase) if phase == "commentary" => {}
-            phase => anyhow::bail!(
-                "subagent-codex: app-server returned an unknown agent message phase {}",
-                phase.map_or_else(|| "undefined".to_owned(), JsonValue::stringify)
-            ),
-        }
-        return Ok(());
+        return record_agent_message(state, &item);
     }
     if method != "turn/completed" {
         return Ok(());
@@ -560,6 +540,30 @@ fn handle_notification_inner(
     );
     if let Some(sender) = state.turn_completed.take() {
         let _ = sender.send(params);
+    }
+    Ok(())
+}
+
+fn record_agent_message(state: &mut WireState, item: &JsonValue) -> anyhow::Result<()> {
+    if item.get_value("type").and_then(JsonValue::as_str) != Some("agentMessage") {
+        return Ok(());
+    }
+    let text = item
+        .get("text")
+        .and_then(|text| text.deserialize::<JsonString>().ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!("subagent-codex: app-server returned an invalid agent message")
+        })?;
+    match item.get_value("phase") {
+        Some(phase) if phase == "final_answer" => {
+            state.last_final_answer = Some(text);
+        }
+        Some(phase) if phase.is_null() => state.last_unphased_answer = Some(text),
+        Some(phase) if phase == "commentary" => {}
+        phase => anyhow::bail!(
+            "subagent-codex: app-server returned an unknown agent message phase {}",
+            phase.map_or_else(|| "undefined".to_owned(), JsonValue::stringify)
+        ),
     }
     Ok(())
 }

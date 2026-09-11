@@ -3,7 +3,7 @@
 //! surface order rather than step markers.
 
 use anyhow::anyhow;
-use seekdeep_core::session::{Session, SessionEvent};
+use seekdeep_core::session::{JsonRef, Session, SessionEvent};
 
 /// Balance of the cut at a sequence's surface position plus an offset.
 fn cut_balance(session: &Session, seq: u64, offset: usize) -> anyhow::Result<bool> {
@@ -57,7 +57,7 @@ fn event_delta(event: &SessionEvent) -> i64 {
                 .data
                 .get("message")
                 .and_then(|message| message.get("content"))
-                .and_then(|content| content.array_items())
+                .and_then(JsonRef::array_items)
                 .map_or(0, |blocks| {
                     blocks
                         .iter()

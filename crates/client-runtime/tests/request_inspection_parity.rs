@@ -78,10 +78,7 @@ fn assistant_request_uses_exact_discriminant_casing_nullability_and_prompt_chang
     assert_eq!(value["promptChange"]["kind"], "system-and-tools");
     assert_eq!(value["retryDelayMs"], 500);
     assert!(value.get_value("error").is_none());
-    assert_eq!(
-        value.deserialize::<RequestView>().unwrap(),
-        request
-    );
+    assert_eq!(value.deserialize::<RequestView>().unwrap(), request);
 }
 
 #[test]
@@ -108,10 +105,7 @@ fn compaction_request_keeps_required_null_turn_zero_step_and_complete_outputs() 
     assert_eq!(value["summary"][0]["text"], "safe");
     assert_eq!(value["rawOutput"][0]["text"], "raw");
     assert!(value.get_value("usage").is_some_and(Value::is_null));
-    assert_eq!(
-        value.deserialize::<RequestView>().unwrap(),
-        request
-    );
+    assert_eq!(value.deserialize::<RequestView>().unwrap(), request);
 }
 
 #[test]
@@ -164,10 +158,7 @@ fn conversation_context_uses_zero_based_parented_generations_and_closed_origins(
     assert_eq!(value["origin"], "rewrite");
     assert_eq!(value["originSeq"], 30);
     assert_eq!(value["createdAt"], 3_000);
-    assert_eq!(
-        value.deserialize::<ConversationContext>().unwrap(),
-        context
-    );
+    assert_eq!(value.deserialize::<ConversationContext>().unwrap(), context);
 }
 
 #[test]
@@ -176,17 +167,52 @@ fn request_and_context_snapshots_preserve_raw_text_values_and_keys() {
     let snapshot: RequestInspectionSnapshot = raw.deserialize().unwrap();
     let encoded = Value::from_serialize(&snapshot).unwrap();
     assert_eq!(encoded, raw);
-    let RequestView::Assistant { prompt: Some(prompt), base, .. } = &snapshot.requests[0] else {
+    let RequestView::Assistant {
+        prompt: Some(prompt),
+        base,
+        ..
+    } = &snapshot.requests[0]
+    else {
         panic!("assistant prompt missing");
     };
     assert_eq!(prompt.system.utf16_units(), &[0xdfff]);
-    assert_eq!(prompt.config.stop.as_ref().unwrap()[0].utf16_units(), &[0xd800]);
+    assert_eq!(
+        prompt.config.stop.as_ref().unwrap()[0].utf16_units(),
+        &[0xd800]
+    );
     assert_eq!(
         base.usage,
         OptionalJson::Present(Value::parse(r#"{"\udfff":"\ud800"}"#.to_owned()).unwrap())
     );
-    let context_raw = Value::parse(r#"{"id":0,"nodes":[{"kind":"assistant","text":"\ud800"}]}"#.to_owned()).unwrap();
+    let context_raw =
+        Value::parse(r#"{"id":0,"nodes":[{"kind":"assistant","text":"\ud800"}]}"#.to_owned())
+            .unwrap();
     let context: ConversationContext = context_raw.deserialize().unwrap();
     assert_eq!(Value::from_serialize(&context).unwrap(), context_raw);
     assert_eq!(JsonString::from_utf16(&[0xdfff]), prompt.system);
+}
+
+#[test]
+fn compaction_request_roundtrip_preserves_summary_raw_output_and_present_null_usage() {
+    let raw = Value::parse(r#"{"purpose":"compaction","startSeq":4,"startedAt":5,"completedAt":6,"status":"error","error":"\udfff","usage":null,"turn":null,"step":0,"summary":[{"type":"text","text":"\ud800"}],"rawOutput":[{"type":"future","\ud800":{"text":"\udfff"}}]}"#.to_owned()).unwrap();
+    let request: RequestView = raw.deserialize().unwrap();
+    let encoded = Value::from_serialize(&request).unwrap();
+    assert_eq!(encoded, raw);
+    let RequestView::Compaction {
+        base,
+        summary: Some(summary),
+        raw_output: Some(raw_output),
+        ..
+    } = request
+    else {
+        panic!("compaction output missing");
+    };
+    assert_eq!(
+        base.usage,
+        OptionalJson::Present(Value::from(serde_json::Value::Null))
+    );
+    assert_eq!(base.error.unwrap().utf16_units(), &[0xdfff]);
+    assert_eq!(summary[0]["text"].to_utf16().unwrap(), vec![0xd800]);
+    assert_eq!(raw_output[0]["type"], "future");
+    assert!(raw_output[0].clone().try_into_serde_json().is_err());
 }

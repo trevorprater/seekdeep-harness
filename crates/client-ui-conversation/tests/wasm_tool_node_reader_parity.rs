@@ -69,16 +69,16 @@ fn root_reader_uses_the_utf16_length_prefixed_tool_context_key() {
         ("9:tool-callwrong", other.as_ref()),
     ]);
     assert!(Object::is(
-        &root_tool_call_browser(snapshot.clone(), "root:1".to_owned()).unwrap(),
+        &root_tool_call_browser(snapshot.clone(), "root:1".into()).unwrap(),
         root.as_ref()
     ));
     assert!(
-        root_tool_call_browser(snapshot.clone(), "wrong".to_owned())
+        root_tool_call_browser(snapshot.clone(), "wrong".into())
             .unwrap()
             .is_undefined()
     );
     assert!(
-        root_tool_call_browser(snapshot, "missing".to_owned())
+        root_tool_call_browser(snapshot, "missing".into())
             .unwrap()
             .is_undefined()
     );
@@ -93,15 +93,15 @@ fn nested_reader_returns_the_original_depth_first_block_identity() {
     let tool = node("tool-call", root.clone().into());
     let snapshot = snapshot(&[("9:tool-callroot", tool.as_ref())]);
     assert!(Object::is(
-        &find_tool_call_browser(snapshot.clone(), "root".to_owned()).unwrap(),
+        &find_tool_call_browser(snapshot.clone(), "root".into()).unwrap(),
         root.as_ref()
     ));
     assert!(Object::is(
-        &find_tool_call_browser(snapshot.clone(), "root:code".to_owned()).unwrap(),
+        &find_tool_call_browser(snapshot.clone(), "root:code".into()).unwrap(),
         child.as_ref()
     ));
     assert!(Object::is(
-        &find_tool_call_browser(snapshot, "root:code:read".to_owned()).unwrap(),
+        &find_tool_call_browser(snapshot, "root:code:read".into()).unwrap(),
         leaf.as_ref()
     ));
 }
@@ -122,11 +122,11 @@ fn node_insertion_order_wins_for_duplicate_nested_ids_and_non_tools_are_skipped(
         ("second", second_tool.as_ref()),
     ]);
     assert!(Object::is(
-        &find_tool_call_browser(snapshot.clone(), "duplicate".to_owned()).unwrap(),
+        &find_tool_call_browser(snapshot.clone(), "duplicate".into()).unwrap(),
         first.as_ref()
     ));
     assert!(
-        find_tool_call_browser(snapshot, "ghost".to_owned())
+        find_tool_call_browser(snapshot, "ghost".into())
             .unwrap()
             .is_undefined()
     );
@@ -140,9 +140,41 @@ fn root_reader_returns_undefined_when_a_tool_node_has_no_root_property() {
     ]);
     let snapshot = snapshot(&[("9:tool-callrootless", rootless.as_ref())]);
     assert!(
-        root_tool_call_browser(snapshot, "rootless".to_owned())
+        root_tool_call_browser(snapshot, "rootless".into())
             .unwrap()
             .is_undefined()
     );
     assert!(property(rootless.as_ref(), "data").is_object());
+}
+
+#[wasm_bindgen_test]
+fn readers_distinguish_surrogate_call_ids_from_replacement_characters() {
+    let raw_id = js_sys::JSON::parse(r#""\ud800""#).unwrap();
+    let replacement = block("�", &[]);
+    let exact = object(&[
+        ("callId", raw_id.clone()),
+        ("subCalls", Array::new().into()),
+    ]);
+    let entries = Array::new();
+    entries.push(&Array::of2(
+        &JsValue::from_str("9:tool-call�"),
+        &node("tool-call", replacement.clone().into()),
+    ));
+    entries.push(&Array::of2(
+        &js_sys::JsString::from("9:tool-call").concat(&raw_id),
+        &node("tool-call", exact.clone().into()),
+    ));
+    let snapshot = reader_snapshot(&entries);
+    assert!(Object::is(
+        &find_tool_call_browser(snapshot.clone(), raw_id.clone().unchecked_into()).unwrap(),
+        exact.as_ref()
+    ));
+    assert!(Object::is(
+        &find_tool_call_browser(snapshot.clone(), "�".into()).unwrap(),
+        replacement.as_ref()
+    ));
+    assert!(Object::is(
+        &root_tool_call_browser(snapshot, raw_id.unchecked_into()).unwrap(),
+        exact.as_ref()
+    ));
 }

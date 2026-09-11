@@ -3,7 +3,7 @@
 mod support;
 
 use seekdeep_cordis::EventArgs;
-use seekdeep_core::session::AppendOptions;
+use seekdeep_core::session::{AppendOptions, JsonValue};
 use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
 use seekdeep_permission_presets::invariant::register_invariant;
 use serde_json::json;
@@ -65,6 +65,24 @@ async fn rejects_unknown_live_preset_before_commit() {
         .unwrap_err();
     assert!(error.to_string().contains("unknown preset \"missing\""));
     assert_eq!(session.events(), before);
+
+    for (raw, expected) in [
+        (
+            r#"{"preset":"m\u0069ssing"}"#,
+            r#"unknown preset "missing""#,
+        ),
+        (r#"{"preset":"\uD800"}"#, r#"unknown preset "\ud800""#),
+    ] {
+        let error = session
+            .append_json(
+                "permission/preset",
+                JsonValue::parse(raw.to_owned()).unwrap(),
+                AppendOptions::default(),
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains(expected));
+        assert_eq!(session.events(), before);
+    }
 }
 
 #[tokio::test]

@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use js_sys::{Array, Function, Object, Reflect};
+use js_sys::{Array, Function, JsString, Object, Reflect};
 use wasm_bindgen::{JsCast as _, JsValue, closure::Closure, prelude::wasm_bindgen};
 
 use crate::{browser_reasoning::inject_style, find_tool_call_browser};
@@ -108,7 +108,7 @@ fn render_details_panel(modules: &BrowserModules, props: &JsValue) -> Result<JsV
     } else {
         Reflect::get(&selection, &JsValue::from_str("callId"))?
     };
-    let material_call_id = call_id.as_string();
+    let material_call_id = call_id.clone().dyn_into::<JsString>().ok();
     let material_selector = Closure::wrap(Box::new(
         move |snapshot: JsValue| -> Result<JsValue, JsValue> {
             let Some(call_id) = material_call_id.as_ref() else {
@@ -204,21 +204,21 @@ fn render_details_panel(modules: &BrowserModules, props: &JsValue) -> Result<JsV
     )
 }
 
-fn material_for(snapshot: JsValue, call_id: &str) -> Result<JsValue, JsValue> {
-    let found = find_tool_call_browser(snapshot, call_id.to_owned())?;
+fn material_for(snapshot: JsValue, call_id: &JsString) -> Result<JsValue, JsValue> {
+    let found = find_tool_call_browser(snapshot, call_id.clone())?;
     if found.is_undefined() {
         return Ok(JsValue::NULL);
     }
     if Reflect::has(&found, &JsValue::from_str("kind"))? {
         let call = Reflect::get(&found, &JsValue::from_str("call"))?;
         let (name, args_raw) = if is_nullish(&call) {
-            (JsValue::from_str(call_id), JsValue::NULL)
+            (call_id.clone().into(), JsValue::NULL)
         } else {
             let name = Reflect::get(&call, &JsValue::from_str("name"))?;
             let args = Reflect::get(&call, &JsValue::from_str("argsRaw"))?;
             (
                 if is_nullish(&name) {
-                    JsValue::from_str(call_id)
+                    call_id.clone().into()
                 } else {
                     name
                 },
@@ -255,9 +255,12 @@ fn render_material(
     let input = if args_raw.is_null() {
         JsValue::FALSE
     } else {
-        let raw = args_raw.as_string().ok_or_else(|| {
-            js_sys::TypeError::new("details material argsRaw must be a string or null")
-        })?;
+        if !args_raw.is_string() {
+            return Err(js_sys::TypeError::new(
+                "details material argsRaw must be a string or null",
+            )
+            .into());
+        }
         section(
             modules,
             translate_value(translate, "details.input")?,
@@ -265,7 +268,7 @@ fn render_material(
                 &modules.react,
                 &modules.code_block,
                 Some(&object(&[
-                    ("code", JsValue::from_str(&pretty(&raw))),
+                    ("code", pretty(&args_raw)),
                     ("lang", JsValue::from_str("json")),
                     ("copyLabel", translate_value(translate, "copy")?),
                     ("copiedLabel", translate_value(translate, "copied")?),
@@ -298,7 +301,7 @@ fn render_material(
                     },
                 ),
             ])?),
-            &[JsValue::from_str(&raw_result_text(&block)?)],
+            &[raw_result_text(&block)?],
         )?
     } else {
         empty(modules, translate_value(translate, "details.running")?)?
@@ -321,69 +324,52 @@ fn render_material(
     create_element(&modules.react, &modules.fragment, None, &[input, output])
 }
 
-fn pretty(raw: &str) -> String {
-    let Ok(parsed) = js_sys::JSON::parse(raw) else {
-        return raw.to_owned();
-    };
-    js_sys::JSON::stringify_with_replacer_and_space(
-        &parsed,
-        &JsValue::NULL,
-        &JsValue::from_f64(2.0),
-    )
-    .ok()
-    .and_then(|value| value.as_string())
-    .unwrap_or_else(|| raw.to_owned())
+fn pretty(raw: &JsValue) -> JsValue {
+    required_property(&js_sys::global(), "JSON", "global")
+        .and_then(|json| required_function(&json, "parse", "JSON")?.call1(&json, raw))
+        .and_then(|parsed| json_pretty(&parsed))
+        .unwrap_or_else(|_| raw.clone())
 }
 
-fn raw_result_text(block: &JsValue) -> Result<String, JsValue> {
+fn raw_result_text(block: &JsValue) -> Result<JsValue, JsValue> {
     if !Reflect::has(block, &JsValue::from_str("kind"))? {
-        return Ok(String::new());
+        return Ok(JsValue::from_str(""));
     }
     let content =
         required_property(block, "content", "settled Tool result")?.dyn_into::<Array>()?;
-    let mut parts = Vec::new();
+    let parts = Array::new();
     for index in 0..content.length() {
         let item = content.get(index);
-        if Reflect::get(&item, &JsValue::from_str("type"))?
-            .as_string()
-            .as_deref()
-            == Some("text")
-        {
-            parts.push(
-                required_property(&item, "text", "Tool text result")?
-                    .as_string()
-                    .ok_or_else(|| js_sys::TypeError::new("Tool result text must be a string"))?,
-            );
+        if Reflect::get(&item, &JsValue::from_str("type"))? == JsValue::from_str("text") {
+            parts.push(&Reflect::get(&item, &JsValue::from_str("text"))?);
         } else {
-            parts.push(json_pretty(&item)?);
+            parts.push(&json_pretty(&item)?);
         }
     }
     let error = Reflect::get(block, &JsValue::from_str("error"))?;
-    if parts.is_empty() && !error.is_undefined() {
-        parts.push(format!(
-            "{}: {}",
-            javascript_string(&Reflect::get(&error, &JsValue::from_str("name"))?)?,
-            javascript_string(&Reflect::get(&error, &JsValue::from_str("code"))?)?
-        ));
+    if parts.length() == 0 && !error.is_undefined() {
+        parts.push(
+            &Array::of2(
+                &javascript_string(&Reflect::get(&error, &JsValue::from_str("name"))?)?,
+                &javascript_string(&Reflect::get(&error, &JsValue::from_str("code"))?)?,
+            )
+            .join(": "),
+        );
     }
-    Ok(parts.join("\n"))
+    Ok(parts.join("\n").into())
 }
 
-fn json_pretty(value: &JsValue) -> Result<String, JsValue> {
+fn json_pretty(value: &JsValue) -> Result<JsValue, JsValue> {
     Ok(js_sys::JSON::stringify_with_replacer_and_space(
         value,
         &JsValue::NULL,
         &JsValue::from_f64(2.0),
     )?
-    .as_string()
-    .unwrap_or_default())
+    .into())
 }
 
-fn javascript_string(value: &JsValue) -> Result<String, JsValue> {
-    required_function(&js_sys::global(), "String", "global")?
-        .call1(&JsValue::UNDEFINED, value)?
-        .as_string()
-        .ok_or_else(|| js_sys::TypeError::new("String() returned a non-string").into())
+fn javascript_string(value: &JsValue) -> Result<JsValue, JsValue> {
+    required_function(&js_sys::global(), "String", "global")?.call1(&JsValue::UNDEFINED, value)
 }
 
 fn close_icon(modules: &BrowserModules) -> Result<JsValue, JsValue> {

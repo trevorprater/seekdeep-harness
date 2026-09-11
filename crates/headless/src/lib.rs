@@ -19,16 +19,15 @@ use seekdeep_cordis::{
     fiber::{DisposeFuture, EffectHandle},
 };
 use seekdeep_core::{
-    session::{SessionEvent, SessionId},
+    session::{JsonValue, SessionEvent, SessionId},
     session_store::{SESSIONS, SessionStore},
 };
 use seekdeep_invariants::{InvariantInstaller, InvariantRegistration, InvariantRegistry};
-use seekdeep_llm::{AbortSignal, ContentBlock, MessageSource, UserMessage};
+use seekdeep_llm::{AbortSignal, ContentBlock, JsonString, MessageSource, UserMessage};
 use seekdeep_loader::LOADER;
 use seekdeep_schemastery::Schema;
 use seekdeep_system_prompt::{SYSTEM_PROMPT, SystemPrompt};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
 pub mod startup;
@@ -106,9 +105,9 @@ pub struct HeadlessRunResult {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HeadlessOutcome {
     /// Last non-empty assistant text after the first owned turn starts.
-    pub text: String,
+    pub text: JsonString,
     /// Last turn reason observed in the interval.
-    pub reason: Option<Value>,
+    pub reason: Option<JsonValue>,
 }
 
 /// Concrete dependencies shared by one or more direct one-shot runs.
@@ -398,7 +397,7 @@ pub fn plugin_with_output(output: Arc<dyn HeadlessOutput>) -> Plugin {
 #[must_use]
 pub fn summarize(events: &[SessionEvent], first_seq: u64) -> HeadlessOutcome {
     let mut started = false;
-    let mut text = String::new();
+    let mut text = JsonString::default();
     let mut reason = None;
     for event in events {
         if event.seq < first_seq {
@@ -412,22 +411,23 @@ pub fn summarize(events: &[SessionEvent], first_seq: u64) -> HeadlessOutcome {
             continue;
         }
         if event.event_type == "assistant/message" {
-            let joined = event
+            let parts = event
                 .data
-                .get("message")
-                .and_then(|message| message.get("content"))
-                .and_then(Value::as_array)
+                .get_value("message")
+                .and_then(|message| message.get_value("content"))
+                .and_then(JsonValue::as_array)
                 .into_iter()
                 .flatten()
-                .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-                .filter_map(|block| block.get("text").and_then(Value::as_str))
-                .collect::<String>();
+                .filter(|block| block.get_value("type").and_then(JsonValue::as_str) == Some("text"))
+                .filter_map(|block| block.get_value("text").and_then(|value| value.deserialize::<JsonString>().ok()))
+                .collect::<Vec<_>>();
+            let joined = JsonString::join(&parts, "");
             if !joined.is_empty() {
                 text = joined;
             }
         }
         if event.event_type == "turn/end" {
-            reason = event.data.get("reason").cloned();
+            reason = event.data.get_value("reason").cloned();
         }
     }
     HeadlessOutcome { text, reason }
@@ -442,29 +442,39 @@ pub fn render_outcome(
     let kind = outcome
         .reason
         .as_ref()
-        .and_then(|reason| reason.get("kind"))
-        .and_then(Value::as_str);
+        .and_then(|reason| reason.get_value("kind"))
+        .and_then(JsonValue::as_str);
     let stderr = if kind == Some("error") {
         outcome.reason.as_ref().map_or_else(String::new, |reason| {
             let code = reason
                 .pointer("/error/code")
-                .and_then(Value::as_str)
-                .unwrap_or("undefined");
+                .and_then(|value| value.deserialize::<JsonString>().ok())
+                .unwrap_or_else(|| "undefined".into());
             let message = reason
                 .pointer("/error/message")
-                .and_then(Value::as_str)
-                .unwrap_or("undefined");
-            format!("seekdeep: {code}: {message}\n")
+                .and_then(|value| value.deserialize::<JsonString>().ok())
+                .unwrap_or_else(|| "undefined".into());
+            let mut text = JsonString::from("seekdeep: ");
+            text.push_utf16(code.utf16_units());
+            text.push_str(": ");
+            text.push_utf16(message.utf16_units());
+            text.push_str("\n");
+            process_text(&text)
         })
     } else {
         String::new()
     };
     HeadlessRunResult {
         session_id,
-        stdout: format!("{}\n", outcome.text),
+        stdout: format!("{}\n", process_text(&outcome.text)),
         stderr,
         exit_code: i32::from(kind != Some("completed")),
     }
+}
+
+fn process_text(text: &JsonString) -> String {
+    // Node's UTF-8 stream encoder replaces lone surrogates at the process boundary.
+    String::from_utf16_lossy(text.utf16_units())
 }
 
 /// Registers the package's intentionally empty in-tree invariant companion.
@@ -483,7 +493,7 @@ mod tests {
     use futures::FutureExt as _;
     use seekdeep_cordis::Context;
     use seekdeep_invariants::{InvariantConfig, InvariantRegistry};
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::*;
 
@@ -499,12 +509,12 @@ mod tests {
         drop(start);
     }
 
-    fn event(event_type: &str, seq: u64, data: Value) -> SessionEvent {
+    fn event(event_type: &str, seq: u64, data: impl Into<JsonValue>) -> SessionEvent {
         SessionEvent {
             event_type: event_type.to_owned(),
             seq,
             time: 0,
-            data,
+            data: data.into(),
             source_event_seqs: None,
             surface_op: None,
             ignorable: None,
@@ -555,8 +565,8 @@ mod tests {
         assert_eq!(
             summarize(&events, 3),
             HeadlessOutcome {
-                text: "final answer".to_owned(),
-                reason: Some(json!({"kind": "completed"})),
+                text: "final answer".into(),
+                reason: Some(json!({"kind": "completed"}).into()),
             }
         );
         assert_eq!(
@@ -572,11 +582,11 @@ mod tests {
 
     #[test]
     fn maps_absent_aborted_and_error_reasons_exactly() {
-        for reason in [None, Some(json!({"kind": "aborted"}))] {
+        for reason in [None, Some(json!({"kind": "aborted"}).into())] {
             let result = render_outcome(
                 None,
                 &HeadlessOutcome {
-                    text: String::new(),
+                    text: JsonString::default(),
                     reason,
                 },
             );
@@ -587,16 +597,53 @@ mod tests {
         let result = render_outcome(
             None,
             &HeadlessOutcome {
-                text: String::new(),
+                text: JsonString::default(),
                 reason: Some(json!({
                     "kind": "error",
                     "error": {"code": "SERVER", "message": "provider unavailable"}
-                })),
+                }).into()),
             },
         );
         assert_eq!(result.exit_code, 1);
         assert_eq!(result.stdout, "\n");
         assert_eq!(result.stderr, "seekdeep: SERVER: provider unavailable\n");
+    }
+
+    #[test]
+    fn summarizes_utf16_text_and_opaque_reason_without_narrowing() {
+        let message = JsonValue::parse(r#"{"message":{"content":[{"type":"text","text":"\ud800"},{"type":"future","\udfff":"ignored"},{"type":"text","text":"\udc00\udfff"}],"opaque":{"\ud800":"\udfff"}}}"#.to_owned()).unwrap();
+        let end = JsonValue::parse(r#"{"reason":{"kind":"error","error":{"code":"E\ud800","message":"failed \udfff"},"opaque":{"\ud800":"\udfff"}}}"#.to_owned()).unwrap();
+        let events = [
+            event("turn/start", 1, json!({})),
+            event("assistant/message", 2, message),
+            assistant(3, &json!([{"type":"text","text":""}])),
+            event("turn/end", 4, end.clone()),
+        ];
+        let outcome = summarize(&events, 1);
+        assert_eq!(outcome.text.to_utf16(), [0xd800, 0xdc00, 0xdfff]);
+        assert_eq!(outcome.reason.as_ref(), end.get_value("reason"));
+        assert_eq!(outcome.reason.as_ref().unwrap().get_value("opaque").unwrap().as_raw(), r#"{"\ud800":"\udfff"}"#);
+        let process = render_outcome(None, &outcome);
+        assert_eq!(process.stdout, "𐀀�\n");
+        assert_eq!(process.stderr, "seekdeep: E�: failed �\n");
+        assert_eq!(process.exit_code, 1);
+    }
+
+    #[test]
+    fn process_output_bytes_match_node_utf8_stream_encoding() {
+        let output = std::process::Command::new("node")
+            .args(["-e", r"process.stdout.write('\ud800\udc00\udfff\n'); process.stderr.write('seekdeep: E\ud800: failed \udfff\n')"])
+            .output()
+            .expect("Node UTF-8 stream oracle");
+        assert!(output.status.success());
+        let outcome = HeadlessOutcome {
+            text: JsonString::from_utf16(&[0xd800, 0xdc00, 0xdfff]),
+            reason: Some(JsonValue::parse(r#"{"kind":"error","error":{"code":"E\ud800","message":"failed \udfff"}}"#.to_owned()).unwrap()),
+        };
+        let actual = render_outcome(None, &outcome);
+        assert_eq!(actual.stdout.as_bytes(), output.stdout);
+        assert_eq!(actual.stderr.as_bytes(), output.stderr);
+        assert_eq!(outcome.text.to_utf16(), [0xd800, 0xdc00, 0xdfff]);
     }
 
     #[tokio::test]

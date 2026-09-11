@@ -500,16 +500,17 @@ impl AgentPresetRegistry {
                 if event.event_type != "agent-preset/selected" {
                     return Ok(EventReply::Undefined);
                 }
-                let Some(preset) = event.data.get("agentPreset").and_then(Value::as_str) else {
+                let Some(preset) = event
+                    .data
+                    .get("agentPreset")
+                    .and_then(|value| value.deserialize::<String>().ok())
+                else {
                     return Ok(EventReply::Undefined);
                 };
                 let emission = emit_context.events().prepare_emit(
                     &emit_context,
                     "agent-preset/selected",
-                    &EventArgs::from_values(vec![
-                        Arc::new(session.id().clone()),
-                        Arc::new(preset.to_owned()),
-                    ]),
+                    &EventArgs::from_values(vec![Arc::new(session.id().clone()), Arc::new(preset)]),
                 )?;
                 emission.emit_contained(|error| {
                     tracing::warn!(%error, "agent-preset/selected observer failed");

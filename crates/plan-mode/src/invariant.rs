@@ -100,7 +100,7 @@ fn validate_event(event: &SessionEvent, failure: &InvariantFailure) -> anyhow::R
         return Ok(());
     }
     let active = event.data.get("active");
-    if !active.is_some_and(|active| active.as_bool().is_some()) {
+    if active.is_none_or(|active| active.as_bool().is_none()) {
         return Err(failure
             .fail(format!(
                 "plan/mode carries invalid active state {}; expected a boolean",

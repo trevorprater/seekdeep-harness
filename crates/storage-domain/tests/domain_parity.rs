@@ -24,6 +24,143 @@ use seekdeep_storage_domain::{
 };
 use serde_json::{Value, json};
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct RawRecord {
+    version: u64,
+    payload: JsonValue,
+}
+
+#[test]
+fn raw_schemas_and_change_serialization_preserve_nested_json() {
+    let value = JsonValue::parse(
+        r#"{"version":1,"payload":{"\ud800":["\udfff","\\ud800",1e-7]},"extra":true}"#.to_owned(),
+    )
+    .unwrap();
+    let parsed = ValueSchema::serde::<RawRecord>().parse(&value).unwrap();
+    assert!(parsed.get("extra").is_none());
+    assert_eq!(parsed["payload"].as_raw(), value["payload"].as_raw());
+    assert_eq!(
+        ValueSchema::new_json(|raw| Ok(raw.clone()))
+            .parse(&value)
+            .unwrap(),
+        value
+    );
+    assert!(
+        ValueSchema::new(|scalar| Ok(scalar.clone()))
+            .parse(&value)
+            .is_err()
+    );
+    let change = DomainChanged::Put {
+        domain: "raw".to_owned(),
+        table: "records".to_owned(),
+        key: "row".to_owned(),
+        value: parsed,
+    };
+    let serialized = JsonValue::from_serialize(&change).unwrap();
+    assert_eq!(serialized.deserialize::<DomainChanged>().unwrap(), change);
+    assert_eq!(
+        serde_json::from_str::<DomainChanged>(serialized.as_raw()).unwrap(),
+        change
+    );
+    let null = serde_json::from_value::<DomainChanged>(json!({
+        "operation": "put", "domain": "raw", "table": "records", "key": "row", "value": null,
+    }))
+    .unwrap();
+    assert!(matches!(null, DomainChanged::Put { value, .. } if value.is_null()));
+    let deleted: DomainChanged = serde_json::from_str(
+        r#"{"operation":"deleted","domain":"raw","table":"records","key":"row","ignored":"\ud800"}"#,
+    )
+    .unwrap();
+    assert!(matches!(deleted, DomainChanged::Deleted { .. }));
+    for (json, error) in [
+        (
+            r#"{"operation":"put","domain":"raw","table":"records","key":"row"}"#,
+            "missing field `value`",
+        ),
+        (
+            r#"{"operation":"put","operation":"deleted","domain":"raw","table":"records","key":"row","value":null}"#,
+            "duplicate field `operation`",
+        ),
+        (r#"{"operation":"unknown"}"#, "unknown variant `unknown`"),
+    ] {
+        assert!(
+            serde_json::from_str::<DomainChanged>(json)
+                .unwrap_err()
+                .to_string()
+                .contains(error)
+        );
+    }
+}
+
+#[tokio::test]
+async fn raw_domain_values_reopen_and_invariant_events_keep_their_json_type() {
+    let first = harness(None, None);
+    let registry = InvariantRegistry::install(&first.context, &InvariantConfig::default()).unwrap();
+    let registration = register_invariant(&registry).unwrap();
+    registration.await_ready().await.unwrap();
+    let spec = define_domain(DomainSpec {
+        name: "raw".to_owned(),
+        version: 1,
+        global: None,
+        tables: IndexMap::from([(
+            "records".to_owned(),
+            domain_table(ValueSchema::serde::<RawRecord>()),
+        )]),
+    })
+    .unwrap();
+    let value = JsonValue::parse(
+        r#"{"version":1,"payload":{"\ud800":["\udfff","\\ud800",1e-7]}}"#.to_owned(),
+    )
+    .unwrap();
+    let domain = first.facility.open(spec.clone()).await.unwrap();
+    let table = domain.table("records").unwrap();
+    let mut events = first.facility.subscribe();
+    table.put("row".to_owned(), value.clone()).await.unwrap();
+    let change = events.next().await.unwrap().unwrap();
+    let raw_change = JsonValue::from_serialize(&change).unwrap();
+    first
+        .context
+        .events()
+        .emit(
+            &first.context,
+            "domain/changed",
+            &EventArgs::one(raw_change.clone()),
+        )
+        .unwrap();
+    let mut stale = raw_change;
+    stale.insert("value", Value::Null.into()).unwrap();
+    let error = first
+        .context
+        .events()
+        .emit(&first.context, "domain/changed", &EventArgs::one(stale))
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("differs from the in-memory record")
+    );
+    let unknown = JsonValue::parse(r#"{"operation":"\ud800"}"#.to_owned()).unwrap();
+    first
+        .context
+        .events()
+        .emit(&first.context, "domain/changed", &EventArgs::one(unknown))
+        .unwrap();
+    domain.close().await.unwrap();
+
+    let reopened = harness(None, Some(first.pool.clone()));
+    let domain = reopened.facility.open(spec).await.unwrap();
+    let persisted = domain
+        .table("records")
+        .unwrap()
+        .get("row")
+        .unwrap()
+        .unwrap();
+    assert_eq!(persisted, value);
+    assert_eq!(persisted["payload"].as_raw(), value["payload"].as_raw());
+    assert!(persisted.as_serde_json().is_none());
+    domain.close().await.unwrap();
+}
+
 #[derive(Clone, Debug)]
 struct Medium {
     version: u64,

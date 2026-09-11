@@ -272,9 +272,7 @@ impl Harness {
 
 fn user(text: &str) -> UserMessage {
     UserMessage::new(
-        vec![ContentBlock::Text {
-            text: text.into(),
-        }],
+        vec![ContentBlock::Text { text: text.into() }],
         MessageSource::user(),
     )
 }
@@ -335,7 +333,9 @@ fn plugin_notices(events: &[SessionEvent]) -> Vec<String> {
                 .content()
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text } => Some(text.as_str().expect("fixture uses scalar text").to_owned()),
+                    ContentBlock::Text { text } => {
+                        Some(text.as_str().expect("fixture uses scalar text").to_owned())
+                    }
                     _ => None,
                 })
                 .collect::<Vec<_>>()
