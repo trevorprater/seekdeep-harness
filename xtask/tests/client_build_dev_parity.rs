@@ -134,7 +134,7 @@ fn fixture(root: &Path) {
 }
 
 fn consume(root: &Path) -> String {
-    let script = r#"const fs=require('node:fs'),vm=require('node:vm'); let plugin; const context={TextDecoder,TextEncoder,Uint8Array,WebAssembly,atob,console,window:{__ModuleLoader__:{load({factory}){plugin=factory(()=>{throw new Error('unexpected external')})}}}}; vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),context); process.stdout.write(plugin.version());"#;
+    let script = r"const fs=require('node:fs'),vm=require('node:vm'); let plugin; const context={TextDecoder,TextEncoder,Uint8Array,WebAssembly,atob,console,window:{__ModuleLoader__:{load({factory}){plugin=factory(()=>{throw new Error('unexpected external')})}}}}; vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),context); process.stdout.write(plugin.version());";
     let output = Command::new("node")
         .arg("-e")
         .arg(script)

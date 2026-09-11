@@ -347,6 +347,7 @@ enum Scope {
     Runtime,
 }
 
+#[allow(clippy::too_many_lines)] // One clap dispatch arm per subcommand, kept in one place.
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
@@ -1912,6 +1913,7 @@ export default plugin;
 "
 }
 
+#[allow(clippy::too_many_lines)] // One JavaScript binding kept as a single readable text.
 fn cordis_context_binding() -> &'static str {
     r"const SYMBOLS = wasm.cordisSymbols();
 const FILTER = SYMBOLS.filter;

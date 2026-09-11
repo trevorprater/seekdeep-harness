@@ -735,7 +735,7 @@ async fn watch(
     roots: Vec<BTreeSet<PathBuf>>,
     mode: WatchMode,
 ) -> anyhow::Result<i32> {
-    let (changes, mut changed) = tokio::sync::mpsc::unbounded_channel();
+    let (changes, mut pending_changes) = tokio::sync::mpsc::unbounded_channel();
     let mut native = if mode == WatchMode::Native {
         Some(notify::recommended_watcher(
             move |event: notify::Result<notify::Event>| {
@@ -808,13 +808,13 @@ async fn watch(
             },
             WatchMode::Native => tokio::select! {
                 signal = shutdown.as_mut() => return Ok(signal),
-                event = changed.recv() => {
+                event = pending_changes.recv() => {
                     match event {
                         Some(Ok(_)) => {},
                         Some(Err(error)) => return Err(error.into()),
                         None => anyhow::bail!("dev-web: native watcher stopped unexpectedly"),
                     }
-                    while let Ok(event) = changed.try_recv() { event?; }
+                    while let Ok(event) = pending_changes.try_recv() { event?; }
                 },
             },
         }
