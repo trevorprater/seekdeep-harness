@@ -330,6 +330,56 @@ async fn concurrent_arrival_failures_cycles_and_double_boot_are_loud() {
 }
 
 #[wasm_bindgen_test]
+async fn factory_handoff_readiness_gates_materialization_and_surfaces_failures() {
+    reset_globals();
+    let transport = Function::new_no_args(
+        r"
+const state = { ready: false };
+const loadBundle = async url => {
+  const id = /\/plugins\/(.+)\/client\.js/.exec(url)[1];
+  if (id === 'slow') {
+    const ready = new Promise(resolve => setTimeout(() => { state.ready = true; resolve(); }, 20));
+    globalThis.__ModuleLoader__.load({ id, factory: () => ({ sawReady: state.ready }), ready });
+  } else {
+    const ready = Promise.reject(new Error('sidecar exploded'));
+    globalThis.__ModuleLoader__.load({ id, factory: () => ({}), ready });
+  }
+};
+return { loadBundle };
+",
+    )
+    .call0(&JsValue::UNDEFINED)
+    .unwrap();
+    let system = WasmClientModuleSystem::new(
+        modules_value(&[row("slow"), row("broken")]),
+        Object::new().into(),
+        Some(field(&transport, "loadBundle")),
+    )
+    .unwrap();
+    let slow = system
+        .import_module("slow".to_owned(), String::new(), Object::new().into())
+        .await
+        .unwrap();
+    assert_eq!(
+        Reflect::get(&slow, &JsValue::from_str("sawReady")).unwrap(),
+        JsValue::TRUE,
+        "the factory runs only once the bundle's WebAssembly is ready"
+    );
+    let failure = system
+        .import_module("broken".to_owned(), String::new(), Object::new().into())
+        .await
+        .unwrap_err();
+    let message = Reflect::get(&failure, &JsValue::from_str("message"))
+        .unwrap()
+        .as_string()
+        .unwrap();
+    assert!(
+        message.contains("/plugins/broken/client.js?rev=0 failed to initialize: sidecar exploded"),
+        "{message}"
+    );
+}
+
+#[wasm_bindgen_test]
 async fn default_dom_transport_removes_success_and_failure_scripts() {
     reset_globals();
     let controls = Function::new_no_args(

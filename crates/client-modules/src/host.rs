@@ -5,7 +5,7 @@ use std::{
     convert::Infallible,
     fs, io,
     panic::{AssertUnwindSafe, catch_unwind},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -382,7 +382,7 @@ impl ClientModuleHost {
             let Some(record) = state.table.get_mut(id) else {
                 return Ok(None);
             };
-            let rev = short_hash(&fs::read(&record.client_path)?);
+            let rev = bundle_rev(&record.client_path)?;
             if rev == record.entry.rev {
                 return Ok(Some(rev));
             }
@@ -422,37 +422,47 @@ impl ClientModuleHost {
         self.subscribe(ListenerKind::Graph(listener))
     }
 
-    /// Serves one bundle or source-map resource.
-    pub fn serve(&self, method: &Method, pathname: &str) -> BundleResponse {
+    /// Serves one bundle, WebAssembly sidecar, or source-map resource.
+    ///
+    /// `target` is the request path with its optional query. A bundle built with a browser
+    /// pair (`client.web.js` beside `client_bg.wasm`) is served as that lean script plus the
+    /// sidecar; otherwise the self-contained `client.js` is served. Sidecar responses to a
+    /// revision-addressed URL (`?rev=`) are immutable so the browser keeps both the bytes and
+    /// its compiled module across loads.
+    pub fn serve(&self, method: &Method, target: &str) -> BundleResponse {
         if method != Method::GET && method != Method::HEAD {
             return BundleResponse::empty(StatusCode::METHOD_NOT_ALLOWED);
         }
+        let (pathname, query) = target
+            .split_once('?')
+            .map_or((target, None), |(path, query)| (path, Some(query)));
         let decoded = percent_decode_str(pathname).decode_utf8_lossy();
-        let prefix = "/plugins/";
-        let map_suffix = "/client.js.map";
-        let bundle_suffix = "/client.js";
-        let is_map = decoded.starts_with(prefix) && decoded.ends_with(map_suffix);
-        let suffix = if is_map { map_suffix } else { bundle_suffix };
-        let Some(id) = decoded
-            .strip_prefix(prefix)
-            .and_then(|path| path.strip_suffix(suffix))
-        else {
+        let Some(rest) = decoded.strip_prefix("/plugins/") else {
             return BundleResponse::empty(StatusCode::NOT_FOUND);
         };
-        let Some(mut path) = self.client_path(&ClientModuleId::new(id)) else {
+        let Some((id, resource)) = BundleResource::split(rest) else {
             return BundleResponse::empty(StatusCode::NOT_FOUND);
         };
-        if is_map {
-            path = PathBuf::from(format!("{}.map", path.display()));
-        }
+        let Some(client_path) = self.client_path(&ClientModuleId::new(id)) else {
+            return BundleResponse::empty(StatusCode::NOT_FOUND);
+        };
+        let pair = web_bundle_pair(&client_path);
+        let path = match (resource, pair) {
+            (BundleResource::SourceMap, _) => {
+                PathBuf::from(format!("{}.map", client_path.display()))
+            }
+            (BundleResource::Bundle, Some((web, _))) => web,
+            (BundleResource::Bundle, None) => client_path,
+            (BundleResource::Sidecar, Some((_, wasm))) => wasm,
+            (BundleResource::Sidecar, None) => return BundleResponse::empty(StatusCode::NOT_FOUND),
+        };
         match fs::read(path) {
             Ok(body) => BundleResponse {
                 status: StatusCode::OK,
-                content_type: Some(if is_map {
-                    "application/json; charset=utf-8"
-                } else {
-                    "text/javascript; charset=utf-8"
-                }),
+                content_type: Some(resource.content_type()),
+                immutable: resource == BundleResource::Sidecar
+                    && query
+                        .is_some_and(|query| query.split('&').any(|pair| pair.starts_with("rev="))),
                 body,
             },
             Err(_) => BundleResponse::empty(StatusCode::NOT_FOUND),
@@ -534,7 +544,7 @@ impl ClientModuleHost {
         let Some(metadata) = metadata else {
             return Ok(false);
         };
-        let bytes = fs::read(&metadata.client_path).map_err(|error| {
+        let rev = bundle_rev(&metadata.client_path).map_err(|error| {
             if error.kind() == io::ErrorKind::NotFound {
                 CompositionFailure::missing(name.clone(), metadata.client_path.clone())
             } else {
@@ -542,7 +552,6 @@ impl ClientModuleHost {
                 CompositionFailure::other(&failure)
             }
         })?;
-        let rev = short_hash(&bytes);
         self.state.write().table.insert(
             name.clone(),
             WebPluginRecord {
@@ -583,6 +592,8 @@ pub struct BundleResponse {
     pub status: StatusCode,
     /// Content type for successful resources.
     pub content_type: Option<&'static str>,
+    /// Whether the resource is revision-addressed and may be cached indefinitely.
+    pub immutable: bool,
     /// Complete body bytes.
     pub body: Vec<u8>,
 }
@@ -592,9 +603,63 @@ impl BundleResponse {
         Self {
             status,
             content_type: None,
+            immutable: false,
             body: Vec::new(),
         }
     }
+}
+
+/// One resource under `/plugins/<id>/`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BundleResource {
+    Bundle,
+    Sidecar,
+    SourceMap,
+}
+
+impl BundleResource {
+    /// Splits `<id>/<resource>` into the module id and the resource kind.
+    fn split(rest: &str) -> Option<(&str, Self)> {
+        for (suffix, resource) in [
+            ("/client.js.map", Self::SourceMap),
+            ("/client_bg.wasm", Self::Sidecar),
+            ("/client.js", Self::Bundle),
+        ] {
+            if let Some(id) = rest.strip_suffix(suffix) {
+                return Some((id, resource));
+            }
+        }
+        None
+    }
+
+    fn content_type(self) -> &'static str {
+        match self {
+            Self::Bundle => "text/javascript; charset=utf-8",
+            Self::Sidecar => "application/wasm",
+            Self::SourceMap => "application/json; charset=utf-8",
+        }
+    }
+}
+
+/// The lean browser script and its WebAssembly sidecar beside a self-contained bundle, when
+/// both were built.
+fn web_bundle_pair(client_path: &Path) -> Option<(PathBuf, PathBuf)> {
+    let directory = client_path.parent()?;
+    let web = directory.join("client.web.js");
+    let wasm = directory.join("client_bg.wasm");
+    (web.is_file() && wasm.is_file()).then_some((web, wasm))
+}
+
+/// Hashes the bytes a browser receives for one bundle: the self-contained script, plus the
+/// browser pair when it exists, so a rebuilt sidecar always changes the revision.
+fn bundle_rev(client_path: &Path) -> io::Result<String> {
+    let mut hasher = Sha1::new();
+    hasher.update(fs::read(client_path)?);
+    if let Some((web, wasm)) = web_bundle_pair(client_path) {
+        hasher.update(fs::read(web)?);
+        hasher.update(fs::read(wasm)?);
+    }
+    Ok(hex::encode(hasher.finalize())[..12].to_owned())
 }
 
 /// Injects the boot graph before the shell reads it.
@@ -724,7 +789,11 @@ fn register_web_faces(
 ) -> anyhow::Result<()> {
     let route_host = host.clone();
     let route: WebHandler = Arc::new(move |request| {
-        let response = route_host.serve(request.method(), request.uri().path());
+        let target = request.uri().path_and_query().map_or_else(
+            || request.uri().path(),
+            hyper::http::uri::PathAndQuery::as_str,
+        );
+        let response = route_host.serve(request.method(), target);
         Box::pin(async move { Ok(web_response(response)) })
     });
     let route = web_server.register(WebRoute {
@@ -751,9 +820,14 @@ fn register_web_faces(
 fn web_response(response: BundleResponse) -> seekdeep_host_webserver::WebResponse {
     let mut builder = Response::builder().status(response.status);
     if let Some(content_type) = response.content_type {
-        builder = builder
-            .header(header::CONTENT_TYPE, content_type)
-            .header(header::CACHE_CONTROL, "no-cache");
+        builder = builder.header(header::CONTENT_TYPE, content_type).header(
+            header::CACHE_CONTROL,
+            if response.immutable {
+                "public, max-age=31536000, immutable"
+            } else {
+                "no-cache"
+            },
+        );
     }
     builder
         .body(full(response.body))

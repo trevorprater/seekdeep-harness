@@ -1,6 +1,6 @@
 //! Browser bindings for the Rust-owned Client module table.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{cell::RefCell, collections::BTreeMap, sync::Arc};
 
 use futures::{FutureExt, channel::oneshot, future::BoxFuture};
 use js_sys::{Array, Function, Map, Object, Promise, Reflect, Set};
@@ -13,6 +13,13 @@ use crate::{
 };
 
 const MODULE_LOADER_SLOT: &str = "__ModuleLoader__";
+
+thread_local! {
+    /// Readiness promises handed over with factories: a bundle whose WebAssembly compiles
+    /// asynchronously (streamed from its sidecar) registers its factory synchronously and the
+    /// loader awaits this before the factory may run.
+    static READINESS: RefCell<BTreeMap<String, Promise>> = const { RefCell::new(BTreeMap::new()) };
+}
 const MODULE_SYSTEM_SLOT: &str = "__SEEKDEEP_MODULES__";
 
 struct WasmBundleLoader {
@@ -25,22 +32,39 @@ impl ClientBundleLoader<JsValue> for WasmBundleLoader {
         row: BootModuleRow,
         _registrar: ClientFactoryRegistrar<JsValue>,
     ) -> BoxFuture<'static, anyhow::Result<()>> {
-        if let Some(callback) = &self.callback {
-            let returned = match callback.call1(&JsValue::UNDEFINED, &JsValue::from_str(&row.url)) {
-                Ok(returned) => returned,
-                Err(error) => return futures::future::ready(Err(js_error(&error))).boxed(),
+        let executed: BoxFuture<'static, anyhow::Result<()>> =
+            if let Some(callback) = &self.callback {
+                match callback.call1(&JsValue::UNDEFINED, &JsValue::from_str(&row.url)) {
+                    Ok(returned) => {
+                        let settled = promise_result(&Promise::resolve(&returned));
+                        async move { settled.await.map(|_| ()).map_err(|error| js_error(&error)) }
+                            .boxed()
+                    }
+                    Err(error) => return futures::future::ready(Err(js_error(&error))).boxed(),
+                }
+            } else {
+                load_script(&row.url)
             };
-            let promise = Promise::resolve(&returned);
-            return async move {
-                promise_result(&promise)
-                    .await
-                    .map(|_| ())
-                    .map_err(|error| js_error(&error))
+        async move {
+            executed.await?;
+            let readiness = take_readiness(row.id.as_str()).map(|ready| promise_result(&ready));
+            if let Some(readiness) = readiness {
+                readiness.await.map_err(|error| {
+                    anyhow::anyhow!(
+                        "client-modules: bundle {} failed to initialize: {:#}",
+                        row.url,
+                        js_error(&error)
+                    )
+                })?;
             }
-            .boxed();
+            Ok(())
         }
-        load_script(&row.url)
+        .boxed()
     }
+}
+
+fn take_readiness(id: &str) -> Option<Promise> {
+    READINESS.with(|readiness| readiness.borrow_mut().remove(id))
 }
 
 #[derive(Debug, Default)]
@@ -285,11 +309,18 @@ fn install_registration_sink(registrar: ClientFactoryRegistrar<JsValue>) -> Resu
             })?;
         let factory =
             Reflect::get(&handoff, &JsValue::from_str("factory"))?.dyn_into::<Function>()?;
+        let ready = Reflect::get(&handoff, &JsValue::from_str("ready"))?;
         let registered: ClientModuleFactory<JsValue> =
             Arc::new(move |require| materialize_js_factory(&factory, require));
         registrar
-            .register(ClientModuleId::new(id), registered)
-            .map_err(|error| js_sys::Error::new(&error.to_string()).into())
+            .register(ClientModuleId::new(&id), registered)
+            .map_err(|error| js_sys::Error::new(&error.to_string()))?;
+        if !ready.is_undefined() {
+            READINESS.with(|readiness| {
+                readiness.borrow_mut().insert(id, Promise::resolve(&ready));
+            });
+        }
+        Ok(())
     }) as Box<dyn FnMut(JsValue) -> Result<(), JsValue>>);
     let sink = Object::new();
     set(&sink, "load", &load.into_js_value())?;

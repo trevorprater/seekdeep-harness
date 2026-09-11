@@ -243,6 +243,78 @@ fn bundle_route_serves_source_maps_and_rejects_other_methods_or_paths() {
 }
 
 #[test]
+fn bundle_route_serves_the_browser_pair_and_revisions_cover_the_sidecar() {
+    let fixture = Fixture::new();
+    let name = "@fixture/streamed";
+    let path = fixture.write_package(name, &serde_json::json!({"client": {"platform": "web"}}));
+    let directory = path.parent().unwrap().to_path_buf();
+    fs::create_dir_all(&directory).unwrap();
+    fs::write(&path, "embedded bundle").unwrap();
+    let (_, logger) = logger();
+    let host = ClientModuleHost::new(fixture.resolver(), &[entry(name)], logger).unwrap();
+    let id = ClientModuleId::new(name);
+    let embedded_rev = host.graph().entries[0].rev.clone();
+
+    // Without a pair the self-contained bundle is served and there is no sidecar.
+    let bundle = host.serve(
+        &hyper::Method::GET,
+        &format!("/plugins/{name}/client.js?rev=1"),
+    );
+    assert_eq!(bundle.body, b"embedded bundle");
+    assert!(!bundle.immutable);
+    assert_eq!(
+        host.serve(
+            &hyper::Method::GET,
+            &format!("/plugins/{name}/client_bg.wasm?rev=1")
+        )
+        .status,
+        hyper::StatusCode::NOT_FOUND
+    );
+
+    fs::write(directory.join("client.web.js"), "lean bundle").unwrap();
+    fs::write(directory.join("client_bg.wasm"), b"\0asm").unwrap();
+    let paired_rev = host.rebuilt(&id).unwrap().unwrap();
+    assert_ne!(paired_rev, embedded_rev, "the pair joins the revision");
+
+    let bundle = host.serve(
+        &hyper::Method::GET,
+        &format!("/plugins/{name}/client.js?rev=2"),
+    );
+    assert_eq!(bundle.status, hyper::StatusCode::OK);
+    assert_eq!(bundle.content_type, Some("text/javascript; charset=utf-8"));
+    assert_eq!(bundle.body, b"lean bundle");
+    assert!(!bundle.immutable);
+    let sidecar = host.serve(
+        &hyper::Method::GET,
+        &format!("/plugins/{name}/client_bg.wasm?rev={paired_rev}"),
+    );
+    assert_eq!(sidecar.status, hyper::StatusCode::OK);
+    assert_eq!(sidecar.content_type, Some("application/wasm"));
+    assert_eq!(sidecar.body, b"\0asm");
+    assert!(
+        sidecar.immutable,
+        "a revision-addressed sidecar is immutable"
+    );
+    assert!(
+        !host
+            .serve(
+                &hyper::Method::GET,
+                &format!("/plugins/{name}/client_bg.wasm")
+            )
+            .immutable,
+        "an unaddressed sidecar is revalidated"
+    );
+
+    fs::write(directory.join("client_bg.wasm"), b"\0asm2").unwrap();
+    let sidecar_rev = host.rebuilt(&id).unwrap().unwrap();
+    assert_ne!(
+        sidecar_rev, paired_rev,
+        "a rebuilt sidecar changes the revision"
+    );
+    assert_eq!(host.rebuilt(&id).unwrap().unwrap(), sidecar_rev);
+}
+
+#[test]
 fn rebuild_reconcile_subscriptions_and_manifest_injection_are_stable_and_contained() {
     let fixture = Fixture::new();
     let name = "@fixture/rebuild";

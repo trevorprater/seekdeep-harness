@@ -482,7 +482,7 @@ impl JsonlSessionPersistence {
             "session {} preparation no longer matches its persistence state",
             session.id()
         );
-        let suffix = session.events()[cursor..].to_vec();
+        let suffix = session.events_shared()[cursor..].to_vec();
         self.preparations.attach(reservation)?;
         state.owner = Some(session_key(session));
         self.state.lock().insert(session.id().clone(), state);
@@ -774,19 +774,35 @@ impl JsonlSessionPersistence {
             return Ok(());
         }
         self.preparations.assert_writable(id)?;
-        let mut current = self.state.lock().get(id).cloned();
-        if current.is_none() && self.find_log(id).await?.is_some() {
+        // The tracked log grows by one batch per streamed chunk, so the append path reads only
+        // the header and length under the lock and extends the event vector in place afterwards;
+        // a cold log is loaded once and inserted with the batch when the write succeeds.
+        let tracked = self.state.lock().get(id).map(|current| {
+            (
+                current.header.clone(),
+                current.events.len(),
+                current.materialized,
+            )
+        });
+        let mut cold = None;
+        let (header, length, materialized) = if let Some(tracked) = tracked {
+            tracked
+        } else {
+            anyhow::ensure!(
+                self.find_log(id).await?.is_some(),
+                "session {id} has not been created in persistence"
+            );
             let loaded = self.cold_inspection(id, true).await?;
-            current = Some(BackendSession {
+            let tracked = (loaded.meta.clone(), loaded.events.len(), true);
+            cold = Some(BackendSession {
                 header: loaded.meta,
                 events: loaded.events,
                 materialized: true,
                 owner: None,
             });
-        }
-        let mut current = current
-            .ok_or_else(|| anyhow::anyhow!("session {id} has not been created in persistence"))?;
-        let expected = u64::try_from(current.events.len())?;
+            tracked
+        };
+        let expected = u64::try_from(length)?;
         for (offset, event) in events.iter().enumerate() {
             anyhow::ensure!(
                 event.seq == expected + u64::try_from(offset)?,
@@ -795,26 +811,28 @@ impl JsonlSessionPersistence {
                 event.seq
             );
         }
-        let combined = current
-            .events
-            .iter()
-            .cloned()
-            .chain(events.iter().cloned())
-            .collect::<Vec<_>>();
-        let path = log_path(
-            &self.root,
-            current.header.cwd.as_deref(),
-            id,
-            self.compression,
-        )?;
-        if current.materialized {
+        let path = log_path(&self.root, header.cwd.as_deref(), id, self.compression)?;
+        if materialized {
             self.append_lines(&path, events).await?;
         } else {
-            self.materialize(&current.header, events).await?;
+            self.materialize(&header, events).await?;
+        }
+        {
+            let mut state = self.state.lock();
+            let current = match cold {
+                Some(loaded) => state.entry(id.clone()).or_insert(loaded),
+                // Appends and retirement serialize on the per-session lock, so the tracked
+                // entry read above is still present here.
+                None => state.entry(id.clone()).or_insert_with(|| BackendSession {
+                    header,
+                    events: Vec::new(),
+                    materialized: true,
+                    owner: None,
+                }),
+            };
+            current.events.extend(events.iter().cloned());
             current.materialized = true;
         }
-        current.events = combined;
-        self.state.lock().insert(id.clone(), current);
         self.preparations.invalidate(id);
         Ok(())
     }
@@ -855,7 +873,7 @@ impl JsonlSessionPersistence {
                 agent_preset: meta.agent_preset.clone(),
             },
         )?;
-        let session_length = session.events().len();
+        let session_length = session.events_len();
         Ok(JsonlPreparedSource {
             inspection: SessionInspection {
                 meta: session.header().clone(),
@@ -1589,7 +1607,7 @@ impl SessionPersistence for JsonlSessionPersistence {
         let source = reservation.source.clone();
         let pool = self.preparations.clone();
         Ok(SessionPreparation::new(session, move || {
-            let reusable = source.session.events().len() == source.session_length;
+            let reusable = source.session.events_len() == source.session_length;
             pool.release(&reservation, reusable);
         }))
     }

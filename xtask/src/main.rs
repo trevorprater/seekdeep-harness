@@ -952,10 +952,14 @@ fn wasm_classic_package(
     let bindings = std::fs::read_to_string(staging.join("client.js"))?;
     let bytes = std::fs::read(staging.join("client_bg.wasm"))?;
     let bundle = classic_module_bundle(&bindings, &bytes, &global, module_id)?;
-    let bundle = if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
-        remote_contracts::bundle_zod(&metadata.workspace_root, &bundle)?
+    let web_bundle = classic_web_bundle(&bindings, &global, module_id)?;
+    let (bundle, web_bundle) = if module_id == "@seekdeep-ai/seekdeep-api-remotes" {
+        (
+            remote_contracts::bundle_zod(&metadata.workspace_root, &bundle)?,
+            remote_contracts::bundle_zod(&metadata.workspace_root, &web_bundle)?,
+        )
     } else {
-        bundle
+        (bundle, web_bundle)
     };
     let out_dir = if out_dir.is_absolute() {
         out_dir.to_owned()
@@ -963,6 +967,10 @@ fn wasm_classic_package(
         metadata.workspace_root.join(out_dir)
     };
     std::fs::create_dir_all(&out_dir)?;
+    // The browser pair lands before the self-contained bundle so a Host that notices the
+    // bundle change already finds the sidecar its new revision covers.
+    std::fs::write(out_dir.join("client_bg.wasm"), &bytes)?;
+    std::fs::write(out_dir.join("client.web.js"), web_bundle)?;
     std::fs::write(out_dir.join("client.js"), bundle)?;
     let type_dir = out_dir.join("types/client");
     std::fs::create_dir_all(&type_dir)?;
@@ -2848,6 +2856,25 @@ fn classic_module_bundle(
     let encoded = base64::engine::general_purpose::STANDARD.encode(wasm);
     Ok(format!(
         "{bindings}\n(() => {{\n  const binary = atob({encoded:?});\n  const bytes = Uint8Array.from(binary, value => value.charCodeAt(0));\n  {global}.initSync({{ module: bytes }});\n{compatibility}  window.__ModuleLoader__.load({{ id: {module_id}, factory: {factory} }});\n}})();\n"
+    ))
+}
+
+/// The lean browser form of a classic bundle: the same bindings and factory, with the module
+/// streamed and compiled from the `client_bg.wasm` sidecar beside the script instead of being
+/// decoded from an embedded literal on the main thread.
+///
+/// The sidecar URL derives from the executing script's own URL (or the `__seekdeepBundleSource`
+/// global a harness sets before evaluating the text), keeping its `?rev=` query so the Host may
+/// serve the sidecar as an immutable, revision-addressed resource. Compatibility exports that
+/// call into the module run once it is ready; the factory handoff carries that readiness so the
+/// module table awaits it before materializing the factory.
+fn classic_web_bundle(bindings: &str, global: &str, module_id: &str) -> anyhow::Result<String> {
+    let bindings = named_wasm_bindings(bindings, global)?;
+    let compatibility = compatibility_prelude(global, module_id);
+    let factory = module_factory(global, module_id);
+    let module_id = serde_json::to_string(module_id)?;
+    Ok(format!(
+        "{bindings}\n(() => {{\n  const script = typeof document === 'undefined' ? null : document.currentScript;\n  const source = (script !== null && script.src) || window.__seekdeepBundleSource;\n  if (!source) throw new Error(`seekdeep: bundle ${{{module_id}}} cannot locate its WebAssembly sidecar`);\n  const sidecar = new URL(source, window.location.href);\n  sidecar.pathname = sidecar.pathname.replace(/client(\\.web)?\\.js$/, 'client_bg.wasm');\n  const ready = {global}({{ module_or_path: sidecar.href }}).then(() => {{\n{compatibility}  }});\n  window.__ModuleLoader__.load({{ id: {module_id}, factory: {factory}, ready }});\n}})();\n"
     ))
 }
 
@@ -4999,10 +5026,10 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        classic_module_bundle, client_loader_esm_wrapper, client_modules_esm_wrapper,
-        client_test_runtime_esm_declarations, client_test_runtime_esm_wrapper,
-        client_web_esm_declarations, client_web_esm_wrapper, compatibility_declarations,
-        compatibility_prelude, copy_ui_attachment_type_declarations,
+        classic_module_bundle, classic_web_bundle, client_loader_esm_wrapper,
+        client_modules_esm_wrapper, client_test_runtime_esm_declarations,
+        client_test_runtime_esm_wrapper, client_web_esm_declarations, client_web_esm_wrapper,
+        compatibility_declarations, compatibility_prelude, copy_ui_attachment_type_declarations,
         copy_ui_primitives_katex_assets, copy_ui_primitives_type_declarations,
         copy_wasm_package_assets, cordis_esm_wrapper, default_macos_platform_tag,
         is_generated_output, is_localization, module_factory, ui_attachment_esm_wrapper,
@@ -5039,6 +5066,31 @@ mod tests {
         assert!(bundle.contains("__seekdeep_probe_wasm.initSync({ module: bytes })"));
         assert!(bundle.contains("id: \"@seekdeep-ai/probe\""));
         assert!(bundle.contains("factory: () => __seekdeep_probe_wasm"));
+    }
+
+    #[test]
+    fn classic_web_bundle_streams_the_sidecar_and_hands_over_readiness() {
+        let bundle = classic_web_bundle(
+            "let wasm_bindgen = {};",
+            "__seekdeep_probe_wasm",
+            "@seekdeep-ai/seekdeep-client-runtime",
+        )
+        .unwrap();
+        assert!(bundle.starts_with("var __seekdeep_probe_wasm = {};"));
+        assert!(!bundle.contains("atob("));
+        assert!(!bundle.contains("initSync("));
+        assert!(bundle.contains("document.currentScript"));
+        assert!(bundle.contains("window.__seekdeepBundleSource"));
+        assert!(bundle.contains(r"replace(/client(\.web)?\.js$/, 'client_bg.wasm')"));
+        assert!(
+            bundle.contains("__seekdeep_probe_wasm({ module_or_path: sidecar.href }).then(() => {")
+        );
+        let ready = bundle.find("const ready =").unwrap();
+        let compatibility = bundle.find("applyClientRuntime").unwrap();
+        let handoff = bundle
+            .find("window.__ModuleLoader__.load({ id: \"@seekdeep-ai/seekdeep-client-runtime\", factory: require => { __seekdeep_probe_wasm.installStoreProduce(require('immer').produce); return __seekdeep_probe_wasm; }, ready })")
+            .unwrap();
+        assert!(ready < compatibility && compatibility < handoff);
     }
 
     #[test]

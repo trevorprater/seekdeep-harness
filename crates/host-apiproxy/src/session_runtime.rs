@@ -1193,7 +1193,7 @@ impl SessionApiProxyRuntime {
                         .agents
                         .get(session.id())
                         .map(|agent| agent.scope_key());
-                    let view = runtime.history_view(&event, &session.events(), scope);
+                    let view = runtime.history_view(&event, &session.events_shared(), scope);
                     let Ok(wire_event) = serde_json::from_value(serde_json::to_value(&*event)?)
                     else {
                         tracing::warn!(session = %session.id(), "API Proxy could not encode a committed Session event");

@@ -360,7 +360,9 @@ impl SurfaceState {
 }
 
 struct SessionInner {
-    log: Vec<SessionEvent>,
+    /// Shared so a snapshot is one reference count; an append copies the log only while a
+    /// snapshot is still alive.
+    log: Arc<Vec<SessionEvent>>,
     surface: SurfaceState,
     appending: bool,
 }
@@ -402,7 +404,7 @@ impl Session {
             invalid("session seed length exceeds the supported event sequence range")
         })?;
         let mut inner = SessionInner {
-            log: Vec::new(),
+            log: Arc::new(Vec::new()),
             surface: SurfaceState::default(),
             appending: false,
         };
@@ -411,7 +413,7 @@ impl Session {
                 validate_envelope(&event, inner.log.len())?;
                 let mut next_surface = inner.surface.clone();
                 next_surface.apply(&event, &inner.log)?;
-                inner.log.push(event);
+                Arc::make_mut(&mut inner.log).push(event);
                 inner.surface = next_surface;
             }
             if inner
@@ -432,7 +434,7 @@ impl Session {
                 };
                 let mut next_surface = inner.surface.clone();
                 next_surface.apply(&event, &inner.log)?;
-                inner.log.push(event);
+                Arc::make_mut(&mut inner.log).push(event);
                 inner.surface = next_surface;
             }
         }
@@ -472,7 +474,23 @@ impl Session {
     /// Detached immutable snapshot of the append-only log.
     #[must_use]
     pub fn events(&self) -> Vec<SessionEvent> {
+        (*self.inner.lock().log).clone()
+    }
+
+    /// Immutable snapshot of the append-only log that shares the live storage.
+    ///
+    /// Taking it costs one reference count; readers that run on every event (listeners,
+    /// transport views) use this instead of [`Session::events`] so a long session is not
+    /// copied per streamed chunk.
+    #[must_use]
+    pub fn events_shared(&self) -> Arc<Vec<SessionEvent>> {
         self.inner.lock().log.clone()
+    }
+
+    /// Number of committed events.
+    #[must_use]
+    pub fn events_len(&self) -> usize {
+        self.inner.lock().log.len()
     }
 
     /// Current model-visible surface sequence numbers.
@@ -547,7 +565,7 @@ impl Session {
             None => None,
         };
         let mut inner = self.inner.lock();
-        inner.log.push(event.clone());
+        Arc::make_mut(&mut inner.log).push(event.clone());
         inner.surface = next_surface;
         inner.appending = false;
         drop(inner);
