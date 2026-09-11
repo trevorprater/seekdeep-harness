@@ -427,8 +427,8 @@ impl ClientModuleHost {
     /// `target` is the request path with its optional query. A bundle built with a browser
     /// pair (`client.web.js` beside `client_bg.wasm`) is served as that lean script plus the
     /// sidecar; otherwise the self-contained `client.js` is served. Sidecar responses to a
-    /// revision-addressed URL (`?rev=`) are immutable so the browser keeps both the bytes and
-    /// its compiled module across loads.
+    /// content-addressed URL (`?v=` from the script's own hash of the module, or `?rev=`) are
+    /// immutable so the browser keeps both the bytes and its compiled module across loads.
     pub fn serve(&self, method: &Method, target: &str) -> BundleResponse {
         if method != Method::GET && method != Method::HEAD {
             return BundleResponse::empty(StatusCode::METHOD_NOT_ALLOWED);
@@ -470,8 +470,11 @@ impl ClientModuleHost {
                 status: StatusCode::OK,
                 content_type: Some(resource.content_type()),
                 immutable: resource == BundleResource::Sidecar
-                    && query
-                        .is_some_and(|query| query.split('&').any(|pair| pair.starts_with("rev="))),
+                    && query.is_some_and(|query| {
+                        query
+                            .split('&')
+                            .any(|pair| pair.starts_with("rev=") || pair.starts_with("v="))
+                    }),
                 body,
             },
             Err(_) => BundleResponse::empty(StatusCode::NOT_FOUND),
