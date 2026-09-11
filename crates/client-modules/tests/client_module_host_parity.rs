@@ -314,6 +314,14 @@ fn bundle_route_serves_the_browser_pair_and_revisions_cover_the_sidecar() {
         "a revision-addressed sidecar is immutable"
     );
     assert!(
+        host.serve(
+            &hyper::Method::GET,
+            &format!("/plugins/{name}/client_bg.wasm?v=7037807198c2")
+        )
+        .immutable,
+        "a content-addressed sidecar is immutable"
+    );
+    assert!(
         !host
             .serve(
                 &hyper::Method::GET,
